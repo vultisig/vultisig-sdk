@@ -42,10 +42,7 @@ const evmSameChainCoins = {
   },
 } as const
 
-function minimalGeneralQuote(
-  dstAmount: string,
-  provider: 'kyber' | '1inch'
-): GeneralSwapQuote {
+function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch'): GeneralSwapQuote {
   const base = {
     dstAmount,
     tx: {
@@ -57,9 +54,7 @@ function minimalGeneralQuote(
       },
     },
   }
-  return provider === 'kyber'
-    ? { ...base, provider: 'kyber' }
-    : { ...base, provider: '1inch' }
+  return provider === 'kyber' ? { ...base, provider: 'kyber' } : { ...base, provider: '1inch' }
 }
 
 function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
@@ -136,9 +131,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('Kyber unavailable'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
-      minimalNativeQuote(swapChain, '100')
-    )
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100'))
 
     const quote = await findSwapQuote({
       ...evmSameChainCoins,
@@ -152,14 +145,10 @@ describe('findSwapQuote parallel selection', () => {
   })
 
   it('does not let a malformed provider amount hide a succeeding one', async () => {
-    vi.mocked(getKyberSwapQuote).mockResolvedValue(
-      minimalGeneralQuote('not-a-number', 'kyber')
-    )
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('not-a-number', 'kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
-      minimalNativeQuote(swapChain, '100')
-    )
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100'))
 
     const quote = await findSwapQuote({
       ...evmSameChainCoins,
@@ -190,7 +179,7 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('kyber')
   })
 
-  it('when all providers fail, propagates the first fetcher-order rejection', async () => {
+  it('when all providers fail, reports every attempted provider', async () => {
     const mayaError = 'maya last error'
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('first fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('second fail'))
@@ -207,7 +196,32 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow('first fail')
+    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, THORChain, MayaChain.')
+  })
+
+  it('omits noisy provider errors from the all-fail message', async () => {
+    const longKyberError = `kyber ${'x'.repeat(220)}`
+
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error(longKyberError))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+
+    try {
+      await findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+      throw new Error('Expected findSwapQuote to fail')
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error
+      }
+
+      expect(error.message).toBe('No swap route found after trying KyberSwap, 1inch, LiFi, THORChain, MayaChain.')
+      expect(error.message).not.toContain(longKyberError)
+      expect(error.message).not.toContain('inch fail')
+    }
   })
 
   it('maps dust threshold on any provider to the user-facing message (Maya in this setup)', async () => {
