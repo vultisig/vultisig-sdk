@@ -104,6 +104,54 @@ describe('getEvmContractCallInfo', () => {
     }
   })
 
+  it('decodes setApprovalForAll offline (NFT marketplace approval)', async () => {
+    const fetchSpy = vi.spyOn(signaturesModule, 'getEvmContractCallSignatures')
+
+    const iface = new Interface(['function setApprovalForAll(address,bool)'])
+    const calldata = iface.encodeFunctionData('setApprovalForAll', [SPENDER, true])
+
+    const info = await getEvmContractCallInfo(calldata)
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(info?.functionSignature).toBe('setApprovalForAll(address,bool)')
+    expect(info?.actionLabel).toBe('Token Approval')
+  })
+
+  it('decodes THORChain depositWithExpiry offline as Cross-Chain Swap', async () => {
+    const fetchSpy = vi.spyOn(signaturesModule, 'getEvmContractCallSignatures')
+
+    const sig = 'depositWithExpiry(address,address,uint256,string,uint256)'
+    const iface = new Interface([`function ${sig}`])
+    const vault = '0x3333333333333333333333333333333333333333'
+    const asset = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2' // WETH
+    const memo = '=:BTC.BTC:bc1qxyz:0/1/0'
+    const calldata = iface.encodeFunctionData('depositWithExpiry', [vault, asset, 10n ** 18n, memo, 1_700_000_000n])
+
+    const info = await getEvmContractCallInfo(calldata)
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(info?.functionSignature).toBe(sig)
+    expect(info?.actionLabel).toBe('Cross-Chain Swap')
+  })
+
+  it('disambiguates Aave withdraw (3 args) from WETH withdraw (1 arg)', async () => {
+    const aaveIface = new Interface(['function withdraw(address,uint256,address)'])
+    const aaveCalldata = aaveIface.encodeFunctionData('withdraw', [
+      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+      1_000_000n,
+      RECIPIENT,
+    ])
+
+    const wethIface = new Interface(['function withdraw(uint256)'])
+    const wethCalldata = wethIface.encodeFunctionData('withdraw', [10n ** 18n])
+
+    const aaveInfo = await getEvmContractCallInfo(aaveCalldata)
+    const wethInfo = await getEvmContractCallInfo(wethCalldata)
+
+    expect(aaveInfo?.actionLabel).toBe('Lending Withdraw')
+    expect(wethInfo?.actionLabel).toBe('Unwrap WETH')
+  })
+
   it('falls back to 4byte when a known selector has corrupt arguments', async () => {
     // Valid `transfer` selector but truncated argument data (only 1 byte after).
     const corrupt = '0xa9059cbb00'

@@ -28,11 +28,14 @@ export type EvmActionLabel =
   | 'Token Approval'
   | 'Token Transfer'
   | 'Token Swap'
+  | 'Cross-Chain Swap'
   | 'Wrap ETH'
   | 'Unwrap WETH'
   | 'Stake'
   | 'Claim Rewards'
   | 'Exit Stake'
+  | 'Lending Supply'
+  | 'Lending Withdraw'
   | 'NFT Transfer'
   | 'Multicall'
 
@@ -57,6 +60,11 @@ export const commonEvmSelectors: Readonly<Record<string, CommonEvmSelector>> = {
   },
   '0xd505accf': {
     signature: 'permit(address,address,uint256,uint256,uint8,bytes32,bytes32)',
+    actionLabel: 'Token Approval',
+  },
+  // ERC-721 / ERC-1155 marketplace approval (OpenSea, Blur, Magic Eden)
+  '0xa22cb465': {
+    signature: 'setApprovalForAll(address,bool)',
     actionLabel: 'Token Approval',
   },
 
@@ -118,6 +126,22 @@ export const commonEvmSelectors: Readonly<Record<string, CommonEvmSelector>> = {
   '0x3593564c': {
     signature: 'execute(bytes,bytes[],uint256)',
     actionLabel: 'Token Swap',
+  },
+
+  // THORChain Router (cross-chain native swaps)
+  '0x44bc937b': {
+    signature: 'depositWithExpiry(address,address,uint256,string,uint256)',
+    actionLabel: 'Cross-Chain Swap',
+  },
+
+  // Aave V3 lending
+  '0x617ba037': {
+    signature: 'supply(address,uint256,address,uint16)',
+    actionLabel: 'Lending Supply',
+  },
+  '0x69328dec': {
+    signature: 'withdraw(address,uint256,address)',
+    actionLabel: 'Lending Withdraw',
   },
 
   // WETH wrap / unwrap
