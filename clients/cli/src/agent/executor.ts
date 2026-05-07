@@ -185,14 +185,10 @@ export class AgentExecutor {
     switch (action.type) {
       case 'get_balances':
         return this.getBalances(params)
-      case 'add_chain':
-        return this.addChain(params)
-      case 'remove_chain':
-        return this.removeChain(params)
-      case 'add_coin':
-        return this.addCoin(params)
-      case 'remove_coin':
-        return this.removeCoin(params)
+      case 'vault_chain':
+        return this.vaultChain(params)
+      case 'vault_coin':
+        return this.vaultCoin(params)
       case 'build_send_tx':
         return this.buildSendTx(params)
       case 'build_swap_tx':
@@ -204,10 +200,8 @@ export class AgentExecutor {
         return this.signTx(params)
       case 'get_address_book':
         return this.getAddressBook(params)
-      case 'address_book_add':
-        return this.addAddressBookEntry(params)
-      case 'address_book_remove':
-        return this.removeAddressBookEntry(params)
+      case 'address_book':
+        return this.addressBook(params)
       case 'search_token':
         return this.searchToken(params)
       case 'list_vaults':
@@ -266,8 +260,37 @@ export class AgentExecutor {
   // Chain & Token Management
   // ============================================================================
 
-  private async addChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Backend may send a single chain or a batch via `chains` array
+  // vault_chain dispatcher — backend shape:
+  //   { action: "add" | "remove", chains: [{ chain }] }
+  // Single-chain (`chain` only) and legacy string arrays are tolerated for
+  // forward compatibility / hand-rolled callers.
+  private async vaultChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const action = params.action as string | undefined
+    switch (action) {
+      case 'add':
+        return this.addChainImpl(params)
+      case 'remove':
+        return this.removeChainImpl(params)
+      default:
+        throw new Error(`vault_chain: unknown action: ${action ?? '(missing)'}`)
+    }
+  }
+
+  // vault_coin dispatcher — backend shape:
+  //   { action: "add" | "remove", coins: [{ chain, ticker, contract_address?, decimals?, ... }] }
+  private async vaultCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const action = params.action as string | undefined
+    switch (action) {
+      case 'add':
+        return this.addCoinImpl(params)
+      case 'remove':
+        return this.removeCoinImpl(params)
+      default:
+        throw new Error(`vault_coin: unknown action: ${action ?? '(missing)'}`)
+    }
+  }
+
+  private async addChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const chains = params.chains as any[] | undefined
     if (chains && Array.isArray(chains)) {
       const results: { chain: string; address: string }[] = []
@@ -282,7 +305,6 @@ export class AgentExecutor {
       return { added: results }
     }
 
-    // Single chain format
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
@@ -291,7 +313,20 @@ export class AgentExecutor {
     return { chain: chain.toString(), address, added: true }
   }
 
-  private async removeChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async removeChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const chains = params.chains as any[] | undefined
+    if (chains && Array.isArray(chains)) {
+      const results: { chain: string }[] = []
+      for (const c of chains) {
+        const name = typeof c === 'string' ? c : c.chain
+        const chain = resolveChain(name)
+        if (!chain) throw new Error(`Unknown chain: ${name}`)
+        await this.vault.removeChain(chain)
+        results.push({ chain: chain.toString() })
+      }
+      return { removed: results }
+    }
+
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
@@ -299,15 +334,15 @@ export class AgentExecutor {
     return { chain: chain.toString(), removed: true }
   }
 
-  private async addCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Backend may send a single token or a batch via `tokens` array
-    const tokens = params.tokens as any[] | undefined
-    if (tokens && Array.isArray(tokens)) {
+  private async addCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    // Backend sends `coins` (vault_coin); legacy/hand-rolled callers may pass `tokens`.
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
       const results: { chain: string; symbol: string }[] = []
-      for (const t of tokens) {
+      for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
-        const symbol = t.symbol || t.ticker || ''
+        const symbol = t.ticker || t.symbol || ''
         await this.vault.addToken(chain, {
           id: (t.contract_address || t.contractAddress || '') as string,
           symbol,
@@ -326,7 +361,7 @@ export class AgentExecutor {
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
 
-    const symbol = (params.symbol || params.ticker) as string
+    const symbol = (params.ticker || params.symbol) as string
     await this.vault.addToken(chain, {
       id: (params.contract_address || params.contractAddress || '') as string,
       symbol,
@@ -338,12 +373,35 @@ export class AgentExecutor {
     return { chain: chain.toString(), symbol, added: true }
   }
 
-  private async removeCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
+      const results: { chain: string; tokenId: string }[] = []
+      for (const t of coins) {
+        const chain = resolveChain(t.chain)
+        if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
+        const tokenId = (t.contract_address || t.contractAddress || t.token_id || t.id) as string
+        if (!tokenId) {
+          throw new Error(
+            `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
+          )
+        }
+        await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId })
+      }
+      return { removed: results }
+    }
+
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
 
-    const tokenId = (params.token_id || params.id || params.contract_address) as string
+    const tokenId = (params.contract_address || params.contractAddress || params.token_id || params.id) as
+      | string
+      | undefined
+    if (!tokenId) {
+      throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
+    }
     await this.vault.removeToken(chain, tokenId)
     return { chain: chain.toString(), removed: true }
   }
@@ -1571,14 +1629,91 @@ export class AgentExecutor {
     return (await this.vultisig.getAddressBook(chain)) as unknown as Record<string, unknown>
   }
 
-  private async addAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('address_book_add is not yet implemented locally. The backend may handle this action server-side.')
+  // address_book dispatcher — backend shape:
+  //   { action: "add" | "remove", entry: { name, chain, address } }
+  private async addressBook(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const action = params.action as string | undefined
+    switch (action) {
+      case 'add':
+        return this.addAddressBookImpl(params)
+      case 'remove':
+        return this.removeAddressBookImpl(params)
+      default:
+        throw new Error(`address_book: unknown action: ${action ?? '(missing)'}`)
+    }
   }
 
-  private async removeAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error(
-      'address_book_remove is not yet implemented locally. The backend may handle this action server-side.'
-    )
+  private async addAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
+      throw new Error(
+        'address_book add requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+      )
+    }
+    const entry = params.entry as { name?: unknown; chain?: unknown; address?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book add: missing entry')
+    }
+    const chainName = entry.chain as string | undefined
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (!chain) throw new Error(`address_book add: unknown chain: ${chainName ?? '(missing)'}`)
+    const address = entry.address as string | undefined
+    if (!address) throw new Error('address_book add: entry.address is required')
+    const name = (entry.name as string | undefined) ?? ''
+
+    await this.vultisig.addAddressBookEntry([
+      {
+        chain,
+        address,
+        name,
+        source: 'saved',
+        dateAdded: Date.now(),
+      },
+    ])
+    return { added: { chain: chain.toString(), address, name } }
+  }
+
+  private async removeAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
+      throw new Error(
+        'address_book remove requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+      )
+    }
+    const entry = params.entry as { chain?: unknown; address?: unknown; name?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book remove: missing entry')
+    }
+    const chainName = entry.chain as string | undefined
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (!chain) throw new Error(`address_book remove: unknown chain: ${chainName ?? '(missing)'}`)
+
+    // Agent often emits `{chain, name}` without resolving the address itself.
+    // Look the entry up by name in the saved book so name-based removal works
+    // without forcing the model to call get_address_book first. The SDK
+    // dedupes saved entries by (chain, address) only — name is not unique —
+    // so refuse ambiguous matches rather than silently deleting the first.
+    let address = entry.address as string | undefined
+    if (!address) {
+      const name = entry.name as string | undefined
+      if (!name) {
+        throw new Error('address_book remove: entry.address or entry.name is required')
+      }
+      const book = await this.vultisig.getAddressBook(chain)
+      const lower = name.toLowerCase()
+      const matches = book.saved.filter(e => e.name.toLowerCase() === lower && e.chain === chain)
+      if (matches.length === 0) {
+        throw new Error(`address_book remove: no saved entry named "${name}" on ${chainName}`)
+      }
+      if (matches.length > 1) {
+        const addrs = matches.map(m => m.address).join(', ')
+        throw new Error(
+          `address_book remove: ambiguous name "${name}" on ${chainName} — multiple addresses: ${addrs}. Specify entry.address explicitly.`
+        )
+      }
+      address = matches[0].address
+    }
+
+    await this.vultisig.removeAddressBookEntry([{ chain, address }])
+    return { removed: { chain: chain.toString(), address } }
   }
 
   // ============================================================================

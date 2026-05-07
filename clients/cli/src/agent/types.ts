@@ -327,12 +327,9 @@ export type ActionResult = {
 
 /** Actions that auto-execute without user confirmation */
 export const AUTO_EXECUTE_ACTIONS = new Set([
-  'add_chain',
-  'add_coin',
-  'remove_coin',
-  'remove_chain',
-  'address_book_add',
-  'address_book_remove',
+  'vault_chain',
+  'vault_coin',
+  'address_book',
   'get_address_book',
   'get_balances',
   'search_token',
