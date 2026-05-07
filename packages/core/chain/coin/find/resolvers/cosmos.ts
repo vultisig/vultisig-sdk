@@ -27,7 +27,19 @@ export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({ address,
 
   return without(
     coins.map(({ denom, ticker }) => {
-      const coinTicker = ticker || denom.split(/[-./]/)[1]?.toUpperCase()
+      // #428: use the LAST slash-segment of the denom, not the second
+      // element. factory/{addr}/{subdenom} shaped denoms (THORChain
+      // factory tokens, etc.) put the meaningful ticker at index 2; the
+      // legacy split(/[-./]/)[1] form would resolve to the creator
+      // address.
+      //
+      // Semantics intentionally mirror the metadata resolver
+      // (packages/core/chain/coin/token/metadata/resolvers/cosmos.ts
+      // deriveTicker for the `factory/` branch): only split on `/`, NOT
+      // on `.` or `-`. That preserves dotted suffixes (`usdc.v2` -> `USDC.V2`,
+      // not `V2`) and hyphenated tails (yield-bearing tokens like
+      // `factory/.../yA-USDC`) instead of stripping them.
+      const coinTicker = ticker || denom.split('/').at(-1)?.toUpperCase()
 
       if (!coinTicker) {
         console.error(`Failed to extract ticker from ${denom}`)
