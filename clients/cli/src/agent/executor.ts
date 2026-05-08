@@ -69,6 +69,16 @@ export class AgentExecutor {
   /** Owning SDK (optional); used for address book backed by app storage */
   private vultisig: Vultisig | undefined
   private pendingPayloads = new Map<string, StoredPayload>()
+  /**
+   * Buffered legs for a 2-leg mcp-ts execute_* envelope (approve + main).
+   * Populated by storeServerTransaction when both `approvalTxArgs` and
+   * `txArgs` are present; consumed and cleared by signMultiLeg.
+   */
+  private pendingLegs: Array<{
+    txArgs: any
+    parent: any
+    kind: 'approve' | 'main'
+  }> = []
   private password: string | null = null
   private verbose: boolean
   private stateStore: VaultStateStore | null = null
@@ -100,17 +110,33 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    // mcp-ts execute_swap emits two-leg flows (approvalTxArgs + txArgs).
-    // sdk-cli only handles single-tx envelopes today; reject loudly so we
-    // never half-broadcast the swap leg without the prerequisite approve.
-    // Multi-leg sequencing is tracked under task
-    // 070526-sdk-cli-mcp-ts-envelope-parity.md Phase B.
-    if (txReadyData?.approvalTxArgs) {
+    // mcp-ts execute_swap / execute_contract_call may emit a 2-leg envelope
+    // carrying both `approvalTxArgs` (ERC-20 approve) and `txArgs` (the main
+    // swap/call). Stash both legs and store a `__multiLeg` marker payload;
+    // signTxFromBuffer routes through signMultiLeg, which signs+broadcasts
+    // the approve leg, waits for the receipt, then signs+broadcasts the main
+    // leg. Mirrors vultiagent's useTransactionFlow (Pattern 3 — see task
+    // 080526-sdk-cli-multileg-sequencer.md).
+    if (txReadyData?.approvalTxArgs && txReadyData?.txArgs) {
+      const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
+      this.pendingLegs = [
+        {
+          txArgs: txReadyData.approvalTxArgs,
+          parent: txReadyData,
+          kind: 'approve',
+        },
+        { txArgs: txReadyData.txArgs, parent: txReadyData, kind: 'main' },
+      ]
+      this.pendingPayloads.clear()
+      this.pendingPayloads.set('latest', {
+        payload: { __serverTx: true, __multiLeg: true, ...txReadyData },
+        coin: { chain, address: '', decimals: 18, ticker: '' },
+        chain,
+        timestamp: Date.now(),
+      })
       if (this.verbose)
-        process.stderr.write(
-          `[executor] skipping multi-leg execute_swap envelope (approvalTxArgs present): not yet supported in sdk-cli — Phase B\n`
-        )
-      return false
+        process.stderr.write(`[executor] stored multi-leg envelope: chain=${chain}, legs=2 (approve, main)\n`)
+      return true
     }
     const nestedTx = extractNestedTx(txReadyData)
     if (nestedTx?.status === 'error' || nestedTx?.error) {
@@ -385,12 +411,23 @@ export class AgentExecutor {
         throw new Error('Pending transaction is not a server-built tx (no __serverTx flag).')
       }
 
+      // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
+      // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
+      // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
+      // chain that's a programming error, not a missing branch.
+      let result: Record<string, unknown> | undefined
+      if (payload.__multiLeg) {
+        if (this.pendingLegs.length !== 2) {
+          throw new Error(`signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`)
+        }
+        result = await this.signMultiLeg(payload, chain, {})
+      }
+
       // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
       // since the server-built tx format doesn't match signServerTx's EVM assumptions.
       // Only the quote/prepare phase falls back to signServerTx — once signing starts,
       // failures must propagate to avoid double-submitting a broadcast transaction.
-      let result: Record<string, unknown> | undefined
-      if (chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
+      if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
         try {
           result = await this.buildAndSignSolanaSwapLocally(payload)
         } catch (e: any) {
@@ -548,6 +585,103 @@ export class AgentExecutor {
       await this.releaseEvmLock(chain)
       throw err
     }
+  }
+
+  /**
+   * Sign and broadcast a 2-leg ERC-20 approve + main flow originating from
+   * mcp-ts `execute_*` envelopes that carry both `approvalTxArgs` and
+   * `txArgs`. Mirrors vultiagent's `useTransactionFlow`: leg 1 (approve) is
+   * signed and broadcast first, the receipt is awaited, then leg 2 (main)
+   * is signed and broadcast. Fails closed if the approve doesn't confirm
+   * — the main leg is NEVER broadcast against a stale or failed allowance.
+   *
+   * Phase B is intentionally EVM-only; non-EVM 2-leg flows are not a real
+   * shape on mcp-ts today (Pattern 1 / Pattern 2 multi-leg flows are split
+   * server-side via sequence_id and don't traverse this path).
+   */
+  private async signMultiLeg(
+    _payload: any,
+    chain: Chain,
+    params: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const [approveLeg, mainLeg] = this.pendingLegs
+
+    // Synthesize a single-leg envelope from approvalTxArgs by promoting it
+    // to txArgs and stripping approvalTxArgs / __multiLeg. signServerTx's
+    // existing extractNestedTx (.txArgs.tx) walks the synthesized shape.
+    const approveEnvelope = {
+      ...approveLeg.parent,
+      txArgs: approveLeg.txArgs,
+      approvalTxArgs: undefined,
+      __multiLeg: undefined,
+    }
+    const approveResult = await this.signServerTx(approveEnvelope, chain, params)
+    const approveTxHash = approveResult.tx_hash as string | undefined
+    if (!approveTxHash) {
+      throw new Error('signMultiLeg: approve leg returned no tx_hash')
+    }
+
+    if (this.verbose)
+      process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
+
+    try {
+      await this.waitForEvmReceipt(chain, approveTxHash, { timeoutSec: 90 })
+    } catch (err: any) {
+      // Surface the approve hash so the operator can inspect it on the
+      // explorer — a failed wait does NOT mean the approve was lost; it may
+      // still confirm later. The main leg is held back regardless.
+      this.pendingLegs = []
+      throw new Error(`signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`)
+    }
+
+    if (this.verbose) process.stderr.write(`[signMultiLeg] approve confirmed, broadcasting main leg\n`)
+
+    const mainEnvelope = {
+      ...mainLeg.parent,
+      txArgs: mainLeg.txArgs,
+      approvalTxArgs: undefined,
+      __multiLeg: undefined,
+    }
+    const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+    this.pendingLegs = []
+
+    return {
+      tx_hash: mainResult.tx_hash,
+      approval_tx_hash: approveTxHash,
+      chain: mainResult.chain,
+      status: 'pending',
+      explorer_url: mainResult.explorer_url,
+    }
+  }
+
+  /**
+   * Poll vault.getTxStatus until the EVM tx confirms or the timeout fires.
+   * Mirrors VaultBase's private `waitForConfirmation` (used by `vault.swap`
+   * for its own approve-before-swap flow) — kept at the executor layer here
+   * so we can stub it from unit tests without exposing private SDK methods.
+   *
+   * Throws on timeout or on receipt status === 'error' (revert). Returns on
+   * success.
+   */
+  private async waitForEvmReceipt(chain: Chain, txHash: string, opts: { timeoutSec: number }): Promise<void> {
+    const intervalMs = 3_000
+    const deadline = Date.now() + opts.timeoutSec * 1_000
+    while (Date.now() < deadline) {
+      try {
+        const result = await (this.vault as any).getTxStatus({ chain, txHash })
+        if (result?.status === 'success') return
+        if (result?.status === 'error') {
+          throw new Error(`approve tx reverted (${txHash})`)
+        }
+      } catch (e: any) {
+        // Re-throw revert failures; treat other errors (network, RPC) as
+        // transient and keep polling until the deadline.
+        if (e?.message?.includes('reverted')) throw e
+      }
+      await new Promise(r => setTimeout(r, intervalMs))
+    }
+    throw new Error(`approve tx ${txHash} not confirmed within ${opts.timeoutSec}s`)
   }
 
   /**
@@ -1156,9 +1290,10 @@ function resolveChainFromTxReady(txReadyData: any): Chain | null {
  * mcp-ts (execute_*) wraps the tx one level deeper:
  *   - txArgs.tx (execute_send / execute_contract_call output)
  *
- * Multi-leg envelopes (mcp-ts execute_swap with approvalTxArgs) are NOT
- * extracted here — see storeServerTransaction's approvalTxArgs guard
- * and Phase B of 070526-sdk-cli-mcp-ts-envelope-parity.md.
+ * Multi-leg mcp-ts envelopes (execute_swap with both `approvalTxArgs`
+ * and `txArgs`) are NOT extracted here — they're stashed by
+ * storeServerTransaction and routed through signMultiLeg, which
+ * synthesizes single-leg envelopes per leg and re-enters this helper.
  */
 export function extractNestedTx(txReadyData: any): any {
   return txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx || txReadyData?.txArgs?.tx
