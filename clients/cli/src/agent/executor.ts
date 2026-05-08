@@ -118,7 +118,29 @@ export class AgentExecutor {
     // leg. Mirrors vultiagent's useTransactionFlow (Pattern 3 — see task
     // 080526-sdk-cli-multileg-sequencer.md).
     if (txReadyData?.approvalTxArgs && txReadyData?.txArgs) {
-      const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
+      // Validate both legs resolve to the same chain before buffering. A
+      // malformed envelope where approvalTxArgs.chain ≠ txArgs.chain (or
+      // either disagrees with the parent) would otherwise be silently
+      // coerced to whichever chain signServerTx picks first via its
+      // `chain || from_chain || txArgs.chain` precedence — the approve
+      // leg would broadcast against the wrong allowance state. Fail
+      // closed: reject upfront, never half-broadcast across chains.
+      const approvalChain = resolveChainFromTxReady(txReadyData.approvalTxArgs)
+      const mainChain = resolveChainFromTxReady(txReadyData.txArgs)
+      const parentChain = resolveChainFromTxReady(txReadyData)
+      if (
+        !approvalChain ||
+        !mainChain ||
+        approvalChain !== mainChain ||
+        (parentChain && parentChain !== approvalChain)
+      ) {
+        if (this.verbose)
+          process.stderr.write(
+            `[executor] rejecting multi-leg envelope with inconsistent chain metadata: parent=${parentChain ?? 'unresolved'} approval=${approvalChain ?? 'unresolved'} main=${mainChain ?? 'unresolved'}\n`
+          )
+        return false
+      }
+      const chain = approvalChain
       // M3: enforce the "Phase B is EVM-only" comment in code. signMultiLeg
       // assumes EIP-1559 broadcast + receipt semantics via signServerTx +
       // waitForEvmReceipt; non-EVM 2-leg flows are not a real shape on mcp-ts

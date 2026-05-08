@@ -270,6 +270,60 @@ describe('AgentExecutor — multi-leg sequencer (Phase B)', () => {
     expect((recent.data as any).error).toMatch(/expected 2 pending legs/i)
   })
 
+  it('rejects multi-leg envelope with mismatched leg chains', () => {
+    const executor = new AgentExecutor(createMockVault())
+    // Malformed envelope: approve says BSC, main says Polygon. Without the
+    // chain-consistency check at storeServerTransaction, signServerTx's
+    // `chain || from_chain || txArgs.chain` precedence would silently coerce
+    // both legs to the parent chain. Defense-in-depth against a shape that
+    // mcp-ts doesn't emit today but a compromised middleware could craft.
+    const mismatched = {
+      chain: 'BSC',
+      from_chain: 'BSC',
+      stepperConfig: { flow: 'swap', steps: [] },
+      approvalTxArgs: {
+        chain: 'BSC',
+        chain_id: '56',
+        from: '0xsender',
+        tx: APPROVE_TX,
+      },
+      txArgs: {
+        chain: 'Polygon', // ← MISMATCH with approve
+        chain_id: '137',
+        from: '0xsender',
+        tx: SWAP_TX,
+      },
+    }
+    expect(executor.storeServerTransaction(mismatched)).toBe(false)
+    expect((executor as any).pendingLegs).toHaveLength(0)
+  })
+
+  it('rejects multi-leg envelope when parent chain disagrees with legs', () => {
+    const executor = new AgentExecutor(createMockVault())
+    // Parent says Ethereum, both legs say Polygon. Even though the legs
+    // agree with each other, the parent disagreement is a malformed-shape
+    // signal — reject rather than guess which one to trust.
+    const parentMismatch = {
+      chain: 'Ethereum',
+      from_chain: 'Ethereum',
+      stepperConfig: { flow: 'swap', steps: [] },
+      approvalTxArgs: {
+        chain: 'Polygon',
+        chain_id: '137',
+        from: '0xsender',
+        tx: APPROVE_TX,
+      },
+      txArgs: {
+        chain: 'Polygon',
+        chain_id: '137',
+        from: '0xsender',
+        tx: SWAP_TX,
+      },
+    }
+    expect(executor.storeServerTransaction(parentMismatch)).toBe(false)
+    expect((executor as any).pendingLegs).toHaveLength(0)
+  })
+
   it('rejects multi-leg envelope on non-EVM chain (Phase B is EVM-only)', () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
