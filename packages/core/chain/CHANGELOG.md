@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 1.6.0
+
+### Minor Changes
+
+- [#423](https://github.com/vultisig/vultisig-sdk/pull/423) [`613004f`](https://github.com/vultisig/vultisig-sdk/commit/613004f5fbce2658a439296ca249d3e031a58078) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add a static lookup table of common EVM function selectors (`chains/evm/contract/commonSelectors.ts`) with human-readable action labels, and consult it as an offline fast-path in `getEvmContractCallInfo` before falling back to the 4byte API. Covers ERC-20 approvals/transfers/permit, Uniswap V2 / V3 / Universal Router swaps, ERC-721/1155 approvals and transfers, WETH wrap/unwrap, Synthetix-style staking, multicall, THORChain Router cross-chain swaps, and Aave V3 supply/withdraw. Resolved entries expose an optional `actionLabel` (e.g. "Token Approval", "Token Swap", "Cross-Chain Swap", "Lending Supply", "NFT Transfer") on the returned info.
+
+### Patch Changes
+
+- [#427](https://github.com/vultisig/vultisig-sdk/pull/427) [`6b75472`](https://github.com/vultisig/vultisig-sdk/commit/6b7547288f8594fcf8a9c71e46a5163d6b6cd727) Thanks [@realpaaao](https://github.com/realpaaao)! - Preserve known THORChain single-segment denoms such as `tcy` during Cosmos coin discovery, let Solana standard RPC relay retry for its normal validity window, and keep Solana broadcast verification from treating unknown signatures as confirmed pending transactions.
+
+- [#418](https://github.com/vultisig/vultisig-sdk/pull/418) [`2e1bfb8`](https://github.com/vultisig/vultisig-sdk/commit/2e1bfb85417787a7cc5d497d35f6e76d2bb5a41a) Thanks [@premiumjibles](https://github.com/premiumjibles)! - Report all attempted swap quote provider failures with short provider-attributed messages.
+
 ## 1.5.3
 
 ### Patch Changes
