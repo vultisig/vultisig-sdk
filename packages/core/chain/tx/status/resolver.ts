@@ -12,6 +12,7 @@ export type TxReceiptInfo = {
 
 export type TxStatusResult = {
   status: TxStatus
+  isKnown?: boolean
   receipt?: TxReceiptInfo
 }
 
