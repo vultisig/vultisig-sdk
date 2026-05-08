@@ -1,83 +1,15 @@
-// Unit tests for client-side tool dispatch (RecentAction conversion,
-// registry drift guard, depth cap, SSE parser routing).
+// Unit tests for client-side tool dispatch (registry drift guard, depth cap,
+// SSE parser routing, dispatch chain serialization, queue state contracts).
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { actionResultToRecentAction, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
-import type { ActionResult } from '../types'
-
-describe('actionResultToRecentAction', () => {
-  const convert = actionResultToRecentAction
-
-  it('converts successful ActionResult to RecentAction with data', () => {
-    const actionResult: ActionResult = {
-      action: 'vault_coin',
-      action_id: 'call-1',
-      success: true,
-      data: { chain: 'Base', ticker: 'USDC' },
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'vault_coin',
-      success: true,
-      data: { chain: 'Base', ticker: 'USDC' },
-    })
-  })
-
-  it('converts successful ActionResult with no data to RecentAction with empty data', () => {
-    const actionResult: ActionResult = {
-      action: 'create_vault',
-      action_id: 'call-2',
-      success: true,
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'create_vault',
-      success: true,
-      data: {},
-    })
-  })
-
-  it('converts failed ActionResult, folding error into data', () => {
-    const actionResult: ActionResult = {
-      action: 'sign_typed_data',
-      action_id: 'call-3',
-      success: false,
-      error: 'Password required',
-      code: AgentErrorCode.PASSWORD_REQUIRED,
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'sign_typed_data',
-      success: false,
-      data: {
-        error: 'Password required',
-        code: AgentErrorCode.PASSWORD_REQUIRED,
-      },
-    })
-  })
-
-  it('preserves existing data fields when folding error', () => {
-    const actionResult: ActionResult = {
-      action: 'vault_coin',
-      action_id: 'call-4',
-      success: false,
-      data: { requested: 'USDC' },
-      error: 'invalid contract',
-    }
-    const recent = convert(actionResult)
-    expect(recent.data).toEqual({
-      requested: 'USDC',
-      error: 'invalid contract',
-    })
-  })
-})
+import { CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
   // Locks the registry surface — drift is caught at test time, not runtime.
-  // Backend collapsed the CRUD pairs (add_/remove_) into action-discriminator
-  // tools (vault_coin, vault_chain, address_book) in agent-backend#167.
+  // Discriminator tools (vault_coin / vault_chain / address_book) carry an
+  // inner `action: 'add' | 'remove'` so two-letter CRUD is one tool name on
+  // the wire, matching the agent-backend's `clientSideToolNames`.
   const EXPECTED_ENTRIES = ['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book']
 
   it('has exactly the expected tool names', () => {
@@ -98,9 +30,9 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     expect(registry).not.toHaveProperty('sign_tx')
   })
 
-  it('maps each tool name to the matching Action.type (1:1 identity mapping)', () => {
-    for (const [toolName, actionType] of Object.entries(registry)) {
-      expect(actionType).toBe(toolName)
+  it('every registry entry is a callable dispatcher function', () => {
+    for (const value of Object.values(registry)) {
+      expect(typeof value).toBe('function')
     }
   })
 })
@@ -142,10 +74,10 @@ describe('processMessageLoop — depth cap', () => {
 
 // PB1 — session.ts:onClientSideToolCall must serialize dispatches in SSE
 // arrival order. Without this, two parallel dispatches race on (a) shared
-// vault state (vault_chain add → vault_coin add) and (b) the single-slot
-// password resolver (silent hang in pipe-UI mode). These tests pin the
-// chain pattern itself; the manual E2E in the PR description verifies it
-// lands inside session.ts.
+// vault state (vault_chain → vault_coin) and (b) the single-slot password
+// resolver (silent hang in pipe-UI mode). These tests pin the chain
+// pattern itself; the manual E2E in the PR description verifies it lands
+// inside session.ts.
 describe('PB1 — serialized dispatch chain pattern', () => {
   // Reproduce the exact chain shape from session.ts so the contract is
   // visible at the test level — any code change in session.ts that
@@ -353,7 +285,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
         type: 'tool-input-available',
         toolCallId: 'c1',
         toolName: 'vault_coin',
-        input: { action: 'add', coins: [{ chain: 'Base', ticker: 'USDC' }] },
+        input: { tokens: [{ chain: 'Base', ticker: 'USDC' }] },
         clientExecuted: true,
       }),
       { onClientSideToolCall, onToolProgress }
@@ -361,8 +293,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
     expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'vault_coin', {
-      action: 'add',
-      coins: [{ chain: 'Base', ticker: 'USDC' }],
+      tokens: [{ chain: 'Base', ticker: 'USDC' }],
     })
     expect(onToolProgress).toHaveBeenCalled()
   })
