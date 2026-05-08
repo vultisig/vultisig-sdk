@@ -25,9 +25,9 @@ import type { VaultBase } from '@/index'
 
 import type { SwapPrepareResult, SwapQuoteResult } from '../../src/vault/swap-types'
 import { createSigningPayload, validateSignatureFormat } from './helpers/signing-helpers'
-import { loadTestVault, verifyTestVault } from './helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from './helpers/test-vault'
 
-describe('E2E: Swap Transactions (Production)', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Swap Transactions (Production)', () => {
   let vault: VaultBase
 
   beforeAll(async () => {

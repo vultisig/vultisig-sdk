@@ -13,12 +13,12 @@
  * - Falls back to public test vault (read-only tests only - NEVER fund these addresses!)
  */
 
-import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, EvmGasInfo, VaultBase } from '@/index'
 
-describe('E2E: Multi-Chain Coverage (Production)', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Multi-Chain Coverage (Production)', () => {
   let vault: VaultBase
 
   beforeAll(async () => {
