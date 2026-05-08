@@ -160,7 +160,7 @@ yarn test:all
 | `yarn quality:health` | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors |
 | `yarn quality:docs` | Run Markdown syntax and local-link checks |
 | `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
-| `yarn check:agent` | Run the same static gates as CI sequentially after verifying repo-local ESLint and TypeScript |
+| `yarn check:agent` | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
 | `yarn docs` | Generate TypeDoc API documentation |
 
@@ -170,7 +170,7 @@ yarn test:all
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` — same gates as CI: typecheck, lint, knip, Prettier; agents can use `yarn check:agent` for a sequential run with setup guidance)
+5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core static gates with setup guidance; run `yarn check:ci` before relying on full CI parity)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
