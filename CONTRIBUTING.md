@@ -128,6 +128,7 @@ yarn test:all
 | `yarn typecheck` | Run TypeScript type checking |
 | `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript |
 | `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
+| `yarn quality:contracts` | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
 | `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
 | `yarn check:agent` | Run the same static gates as CI sequentially after verifying repo-local ESLint and TypeScript |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
@@ -179,6 +180,7 @@ Every PR runs:
 - Prettier (`yarn format:check` on SDK, Rujira, CLI, examples)
 - TypeScript type checking
 - Knip (unused exports / dead code in analyzed workspaces)
+- Packaged SDK contract smoke (`yarn quality:contracts` inside `yarn check:ci`: tarball exports, temp consumer imports/types, CLI dist `--help` and `schema`)
 - Unit tests (387+ tests)
 - Integration tests (`yarn test:integration` — same suite as CI job "Integration Tests (Vitest)")
 - SDK build verification
