@@ -2,10 +2,16 @@
   "aliveStatusCodes": [200, 206, 429],
   "ignorePatterns": [
     {
-      "pattern": "^https?://"
+      "pattern": "^mailto:"
     },
     {
-      "pattern": "^mailto:"
+      "pattern": "^http://localhost(?::\\d+)?(?:/|$)"
+    },
+    {
+      "pattern": "^https://abe\\.vultisig\\.com"
+    },
+    {
+      "pattern": "^https://github\\.com/vultisig/dkls23-rs"
     }
   ],
   "retryCount": 2,
