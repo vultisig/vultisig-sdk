@@ -360,7 +360,6 @@ git push --force
 ## Additional Resources
 
 - [E2E Test README](./README.md) - How to run tests
-- [CONTINUE_E2E_TESTS.md](../../../../docs/testing/CONTINUE_E2E_TESTS.md) - Development history
 - [Main SDK README](../../README.md) - SDK documentation
 - [Vultisig Documentation](https://docs.vultisig.com) - General Vultisig docs
 
