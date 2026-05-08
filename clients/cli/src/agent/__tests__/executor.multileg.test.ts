@@ -269,4 +269,67 @@ describe('AgentExecutor — multi-leg sequencer (Phase B)', () => {
     expect(recent.success).toBe(false)
     expect((recent.data as any).error).toMatch(/expected 2 pending legs/i)
   })
+
+  it('rejects multi-leg envelope on non-EVM chain (Phase B is EVM-only)', () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+    // Solana envelope shape with both keys populated — should not enter
+    // the multi-leg path because waitForEvmReceipt's EIP-1559 receipt
+    // semantics don't translate. M3: code-level enforcement of the
+    // "Phase B is EVM-only" comment.
+    const solanaMultiLeg = {
+      chain: 'Solana',
+      from_chain: 'Solana',
+      stepperConfig: { flow: 'swap', steps: [] },
+      approvalTxArgs: { chain: 'Solana', from: '0xsender', tx: APPROVE_TX },
+      txArgs: { chain: 'Solana', from: '0xsender', tx: SWAP_TX },
+    }
+    expect(executor.storeServerTransaction(solanaMultiLeg)).toBe(false)
+    expect((executor as any).pendingLegs).toHaveLength(0)
+  })
+
+  it('clears pendingLegs when signServerTx throws on the approve leg (H1)', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    // Approve leg's signServerTx throws (e.g. RPC down, keysign failure).
+    // The receipt-wait catch wouldn't fire; the only thing that clears state
+    // is the outer try/finally added in PR review fix H1.
+    vi.spyOn(executor as any, 'signServerTx').mockRejectedValueOnce(new Error('rpc unreachable'))
+
+    expect(executor.storeServerTransaction(makeMultiLegEnvelope())).toBe(true)
+    expect((executor as any).pendingLegs).toHaveLength(2)
+
+    const recent = await executor.signTxFromBuffer('call-1')
+    expect(recent.success).toBe(false)
+    // pendingLegs MUST be empty after any throw — symmetric with the
+    // receipt-wait failure path.
+    expect((executor as any).pendingLegs).toHaveLength(0)
+  })
+
+  it('clears pendingLegs when signServerTx throws on the main leg (H1)', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    // Approve succeeds, receipt confirms, then main-leg signServerTx throws
+    // (e.g. nonce mismatch on the second broadcast). Without H1's outer
+    // try/finally, this path leaks pendingLegs state.
+    const signSpy = vi
+      .spyOn(executor as any, 'signServerTx')
+      .mockResolvedValueOnce({
+        tx_hash: '0xapprove-ok',
+        chain: 'BSC',
+        status: 'pending',
+        explorer_url: '',
+      })
+      .mockRejectedValueOnce(new Error('nonce mismatch'))
+    vi.spyOn(executor as any, 'waitForEvmReceipt').mockResolvedValue(undefined)
+
+    expect(executor.storeServerTransaction(makeMultiLegEnvelope())).toBe(true)
+
+    const recent = await executor.signTxFromBuffer('call-1')
+    expect(recent.success).toBe(false)
+    expect(signSpy).toHaveBeenCalledTimes(2) // both legs were attempted
+    expect((executor as any).pendingLegs).toHaveLength(0)
+  })
 })

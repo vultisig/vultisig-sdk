@@ -119,6 +119,19 @@ export class AgentExecutor {
     // 080526-sdk-cli-multileg-sequencer.md).
     if (txReadyData?.approvalTxArgs && txReadyData?.txArgs) {
       const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
+      // M3: enforce the "Phase B is EVM-only" comment in code. signMultiLeg
+      // assumes EIP-1559 broadcast + receipt semantics via signServerTx +
+      // waitForEvmReceipt; non-EVM 2-leg flows are not a real shape on mcp-ts
+      // today and would silently misbehave if forced through this path.
+      // Reject loudly rather than fall through to the single-leg branch
+      // (which would extract main-leg txArgs and silently drop the approve).
+      if (!EVM_CHAINS.has(chain)) {
+        if (this.verbose)
+          process.stderr.write(
+            `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
+          )
+        return false
+      }
       this.pendingLegs = [
         {
           txArgs: txReadyData.approvalTxArgs,
@@ -606,52 +619,72 @@ export class AgentExecutor {
   ): Promise<Record<string, unknown>> {
     const [approveLeg, mainLeg] = this.pendingLegs
 
-    // Synthesize a single-leg envelope from approvalTxArgs by promoting it
-    // to txArgs and stripping approvalTxArgs / __multiLeg. signServerTx's
-    // existing extractNestedTx (.txArgs.tx) walks the synthesized shape.
-    const approveEnvelope = {
-      ...approveLeg.parent,
-      txArgs: approveLeg.txArgs,
-      approvalTxArgs: undefined,
-      __multiLeg: undefined,
-    }
-    const approveResult = await this.signServerTx(approveEnvelope, chain, params)
-    const approveTxHash = approveResult.tx_hash as string | undefined
-    if (!approveTxHash) {
-      throw new Error('signMultiLeg: approve leg returned no tx_hash')
-    }
-
-    if (this.verbose)
-      process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
-
+    // H1: outer try/finally guarantees pendingLegs is cleared on ANY throw —
+    // signServerTx for either leg, waitForEvmReceipt timeout/revert, or the
+    // tx_hash invariant. Without this, an exception during leg-1 broadcast
+    // (RPC down, keysign failure) leaves stale 2-leg state behind. The
+    // receipt-wait still has its own try/catch below to wrap the error with
+    // the approve hash for operator diagnosis.
     try {
-      await this.waitForEvmReceipt(chain, approveTxHash, { timeoutSec: 90 })
-    } catch (err: any) {
-      // Surface the approve hash so the operator can inspect it on the
-      // explorer — a failed wait does NOT mean the approve was lost; it may
-      // still confirm later. The main leg is held back regardless.
+      // Synthesize a single-leg envelope from approvalTxArgs by promoting it
+      // to txArgs and stripping the multi-leg markers. M2: explicitly nil out
+      // sibling tx fields (swap_tx / send_tx / top-level tx) inherited via
+      // the parent spread so extractNestedTx's precedence — `swap_tx ||
+      // send_tx || tx || txArgs.tx` — can't pick a stale sibling if mcp-ts
+      // ever emits a hybrid envelope. signServerTx's extractNestedTx walks
+      // the synthesized shape and picks `.txArgs.tx` cleanly.
+      const approveEnvelope = {
+        ...approveLeg.parent,
+        txArgs: approveLeg.txArgs,
+        approvalTxArgs: undefined,
+        __multiLeg: undefined,
+        swap_tx: undefined,
+        send_tx: undefined,
+        tx: undefined,
+      }
+      const approveResult = await this.signServerTx(approveEnvelope, chain, params)
+      const approveTxHash = approveResult.tx_hash as string | undefined
+      if (!approveTxHash) {
+        throw new Error('signMultiLeg: approve leg returned no tx_hash')
+      }
+
+      if (this.verbose)
+        process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
+
+      try {
+        await this.waitForEvmReceipt(chain, approveTxHash, { timeoutSec: 90 })
+      } catch (err: any) {
+        // Surface the approve hash so the operator can inspect it on the
+        // explorer — a failed wait does NOT mean the approve was lost; it may
+        // still confirm later. The main leg is held back regardless.
+        throw new Error(`signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`)
+      }
+
+      if (this.verbose) process.stderr.write(`[signMultiLeg] approve confirmed, broadcasting main leg\n`)
+
+      const mainEnvelope = {
+        ...mainLeg.parent,
+        txArgs: mainLeg.txArgs,
+        approvalTxArgs: undefined,
+        __multiLeg: undefined,
+        swap_tx: undefined,
+        send_tx: undefined,
+        tx: undefined,
+      }
+      const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+      return {
+        tx_hash: mainResult.tx_hash,
+        approval_tx_hash: approveTxHash,
+        chain: mainResult.chain,
+        status: 'pending',
+        explorer_url: mainResult.explorer_url,
+      }
+    } finally {
+      // Always clear, success or throw — symmetric with the receipt-wait
+      // catch's clear-and-rethrow. A persistent pendingLegs array would
+      // confuse future signTxFromBuffer calls and complicate retry flows.
       this.pendingLegs = []
-      throw new Error(`signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`)
-    }
-
-    if (this.verbose) process.stderr.write(`[signMultiLeg] approve confirmed, broadcasting main leg\n`)
-
-    const mainEnvelope = {
-      ...mainLeg.parent,
-      txArgs: mainLeg.txArgs,
-      approvalTxArgs: undefined,
-      __multiLeg: undefined,
-    }
-    const mainResult = await this.signServerTx(mainEnvelope, chain, params)
-
-    this.pendingLegs = []
-
-    return {
-      tx_hash: mainResult.tx_hash,
-      approval_tx_hash: approveTxHash,
-      chain: mainResult.chain,
-      status: 'pending',
-      explorer_url: mainResult.explorer_url,
     }
   }
 
