@@ -1,0 +1,25 @@
+{
+  "config": {
+    "default": false,
+    "MD018": true,
+    "MD019": true,
+    "MD020": true,
+    "MD021": true,
+    "MD042": true,
+    "MD051": true
+  },
+  "globs": [
+    "*.md",
+    ".github/**/*.md",
+    "clients/**/*.md",
+    "docs/**/*.md",
+    "examples/**/*.md",
+    "packages/**/*.md",
+    "#node_modules",
+    "#docs/api",
+    "#docs/plans",
+    "#skills",
+    "#tasks",
+    "#**/CHANGELOG.md"
+  ]
+}
