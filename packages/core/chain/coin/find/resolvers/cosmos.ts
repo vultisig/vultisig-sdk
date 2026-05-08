@@ -27,19 +27,38 @@ export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({ address,
 
   return without(
     coins.map(({ denom, ticker }) => {
-      // #428: use the LAST slash-segment of the denom, not the second
-      // element. factory/{addr}/{subdenom} shaped denoms (THORChain
-      // factory tokens, etc.) put the meaningful ticker at index 2; the
-      // legacy split(/[-./]/)[1] form would resolve to the creator
-      // address.
+      // #428: ticker fallback for denoms that lack metadata. Tiered by
+      // denom shape - they aren't all the same:
       //
-      // Semantics intentionally mirror the metadata resolver
-      // (packages/core/chain/coin/token/metadata/resolvers/cosmos.ts
-      // deriveTicker for the `factory/` branch): only split on `/`, NOT
-      // on `.` or `-`. That preserves dotted suffixes (`usdc.v2` -> `USDC.V2`,
-      // not `V2`) and hyphenated tails (yield-bearing tokens like
-      // `factory/.../yA-USDC`) instead of stripping them.
-      const coinTicker = ticker || denom.split('/').at(-1)?.toUpperCase()
+      // 1. factory/{addr}/{subdenom} (THORChain factory tokens etc.) -
+      //    use slash-last. The legacy `split(/[-./]/)[1]` would resolve
+      //    to the creator address. Slash-last also preserves dotted
+      //    suffixes (`usdc.v2` -> `USDC.V2`) and hyphenated tails
+      //    (`yA-USDC` -> `YA-USDC`), mirroring the metadata resolver's
+      //    deriveTicker semantics
+      //    (packages/core/chain/coin/token/metadata/resolvers/cosmos.ts).
+      //
+      // 2. THORChain secured assets / dotted IBC (`btc-btc`,
+      //    `eth-usdc-0xa0b...`, `foo/bar`) - the legacy `[-./]` split is
+      //    correct, `[1]` resolves to the asset ticker (`btc`/`usdc`/
+      //    `bar`). Switching ALL denoms to slash-last would regress
+      //    these because `btc-btc` contains no `/` - `.at(-1)` would
+      //    surface the entire denom (`BTC-BTC`).
+      //
+      // 3. Single-token (no separator, e.g. `mysterytoken`) - the
+      //    `[-./]` split returns `[1] = undefined`, so we fall back to
+      //    the denom itself uppercased. Strictly better than silently
+      //    dropping the coin from the user's balance list.
+      const factoryTail = denom.startsWith('factory/')
+        ? denom.split('/').at(-1)
+        : undefined
+      const legacyMid = denom.split(/[-./]/)[1]
+      const coinTicker = (
+        ticker ||
+        factoryTail ||
+        legacyMid ||
+        denom
+      )?.toUpperCase()
 
       if (!coinTicker) {
         console.error(`Failed to extract ticker from ${denom}`)

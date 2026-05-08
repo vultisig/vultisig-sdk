@@ -141,6 +141,54 @@ describe('findCosmosCoins', () => {
     ])
   })
 
+  // #428 apotheosis CR: THORChain secured-asset shapes (`btc-btc`,
+  // `eth-usdc-...`) contain no `/`, so a naive slash-last fallback
+  // (`denom.split('/').at(-1)`) regresses their tickers - `btc-btc`
+  // would surface as "BTC-BTC" instead of "BTC", `eth-usdc-arbitrum`
+  // as "ETH-USDC-ARBITRUM" instead of "USDC". Tier 2 of the fallback
+  // (legacy [-./] split, [1]) keeps these working.
+  it('keeps THORChain secured-asset btc-btc fallback as BTC (apotheosis CR)', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'rune', amount: '1' },
+      { denom: 'btc-btc', amount: '4' },
+    ])
+    getCosmosTokenMetadataMock.mockRejectedValue(new Error('no metadata'))
+
+    const coins = await findCosmosCoins({
+      address: 'thor1address',
+      chain: Chain.THORChain,
+    })
+
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'btc-btc',
+        ticker: 'BTC',
+        logo: 'btc',
+      }),
+    ])
+  })
+
+  it('keeps THORChain secured-asset eth-usdc-... fallback as USDC (apotheosis CR)', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'rune', amount: '1' },
+      { denom: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', amount: '4' },
+    ])
+    getCosmosTokenMetadataMock.mockRejectedValue(new Error('no metadata'))
+
+    const coins = await findCosmosCoins({
+      address: 'thor1address',
+      chain: Chain.THORChain,
+    })
+
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        ticker: 'USDC',
+        logo: 'usdc',
+      }),
+    ])
+  })
+
   // #428 codex-adversarial note: explicitly pin the unknown-1-segment
   // behavior change. Old code returned undefined ticker -> coin dropped
   // (console.error). New code uses denom.toUpperCase() as fallback. This
