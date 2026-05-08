@@ -85,6 +85,9 @@ We use ESLint and Prettier for code formatting:
 # Check linting
 yarn lint
 
+# Run agent-friendly local static checks with setup guidance
+yarn check:agent
+
 # Auto-fix linting issues
 yarn lint:fix
 
@@ -123,8 +126,10 @@ yarn test:all
 | `yarn lint:fix` | Auto-fix linting issues |
 | `yarn format` | Format code with Prettier |
 | `yarn typecheck` | Run TypeScript type checking |
+| `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript |
 | `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
 | `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
+| `yarn check:agent` | Run the same static gates as CI sequentially after verifying repo-local ESLint and TypeScript |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
 | `yarn docs` | Generate TypeDoc API documentation |
 
@@ -134,7 +139,7 @@ yarn test:all
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` — same gates as CI: typecheck, lint, knip, Prettier)
+5. Ensure quality checks pass (`yarn check` — same gates as CI: typecheck, lint, knip, Prettier; agents can use `yarn check:agent` for a sequential run with setup guidance)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
@@ -179,6 +184,17 @@ Every PR runs:
 - SDK build verification
 
 Pre-commit hooks (via Husky) run lint-staged on changed files.
+
+### Browser Example Checks
+
+Before finishing changes that touch `examples/browser` or `examples/shared`, run:
+
+```bash
+yarn typecheck:example-browser
+yarn check:agent
+```
+
+Both commands use repo-local binaries. If dependencies are missing or TypeScript is too old for `ignoreDeprecations: "6.0"`, they print the setup command instead of falling through to ambiguous `command not found` or `TS5103` failures.
 
 ## Release Process
 
