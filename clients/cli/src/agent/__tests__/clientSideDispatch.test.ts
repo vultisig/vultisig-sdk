@@ -7,15 +7,10 @@ import { CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
   // Locks the registry surface — drift is caught at test time, not runtime.
-  const EXPECTED_ENTRIES = [
-    'sign_typed_data',
-    'add_coin',
-    'remove_coin',
-    'add_chain',
-    'remove_chain',
-    'address_book_add',
-    'address_book_remove',
-  ]
+  // Discriminator tools (vault_coin / vault_chain / address_book) carry an
+  // inner `action: 'add' | 'remove'` so two-letter CRUD is one tool name on
+  // the wire, matching the agent-backend's `clientSideToolNames`.
+  const EXPECTED_ENTRIES = ['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book']
 
   it('has exactly the expected tool names', () => {
     expect(Object.keys(registry).sort()).toEqual(EXPECTED_ENTRIES.slice().sort())
@@ -79,7 +74,7 @@ describe('processMessageLoop — depth cap', () => {
 
 // PB1 — session.ts:onClientSideToolCall must serialize dispatches in SSE
 // arrival order. Without this, two parallel dispatches race on (a) shared
-// vault state (add_chain → add_coin) and (b) the single-slot password
+// vault state (vault_chain → vault_coin) and (b) the single-slot password
 // resolver (silent hang in pipe-UI mode). These tests pin the chain
 // pattern itself; the manual E2E in the PR description verifies it lands
 // inside session.ts.
@@ -289,7 +284,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-available',
         toolCallId: 'c1',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         input: { tokens: [{ chain: 'Base', ticker: 'USDC' }] },
         clientExecuted: true,
       }),
@@ -297,7 +292,9 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     )
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
-    expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'add_coin', { tokens: [{ chain: 'Base', ticker: 'USDC' }] })
+    expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'vault_coin', {
+      tokens: [{ chain: 'Base', ticker: 'USDC' }],
+    })
     expect(onToolProgress).toHaveBeenCalled()
   })
 
@@ -331,7 +328,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
         JSON.stringify({
           type: 'tool-input-available',
           toolCallId: 'c',
-          toolName: 'add_coin',
+          toolName: 'vault_coin',
           input: {},
           clientExecuted: v,
         }),
@@ -351,7 +348,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-start',
         toolCallId: 'c',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         clientExecuted: true, // even if present, only tool-input-available should trigger dispatch
       }),
       { onClientSideToolCall }
@@ -369,13 +366,13 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-available',
         toolCallId: 'c',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         input: null,
         clientExecuted: true,
       }),
       { onClientSideToolCall }
     )
 
-    expect(onClientSideToolCall).toHaveBeenCalledWith('c', 'add_coin', {})
+    expect(onClientSideToolCall).toHaveBeenCalledWith('c', 'vault_coin', {})
   })
 })

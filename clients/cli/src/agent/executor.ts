@@ -100,14 +100,27 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    const nestedTx = txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx
+    // mcp-ts execute_swap emits two-leg flows (approvalTxArgs + txArgs).
+    // sdk-cli only handles single-tx envelopes today; reject loudly so we
+    // never half-broadcast the swap leg without the prerequisite approve.
+    // Multi-leg sequencing is tracked under task
+    // 070526-sdk-cli-mcp-ts-envelope-parity.md Phase B.
+    if (txReadyData?.approvalTxArgs) {
+      if (this.verbose)
+        process.stderr.write(
+          `[executor] skipping multi-leg execute_swap envelope (approvalTxArgs present): not yet supported in sdk-cli — Phase B\n`
+        )
+      return false
+    }
+    const nestedTx = extractNestedTx(txReadyData)
     if (nestedTx?.status === 'error' || nestedTx?.error) {
       if (this.verbose)
         process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
       return false
     }
     if (!nestedTx) {
-      if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
+      if (this.verbose)
+        process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx/txArgs.tx found in data\n`)
       return false
     }
 
@@ -152,94 +165,191 @@ export class AgentExecutor {
   // Chain & Token Management
   // ============================================================================
 
-  async addChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('add_chain', async () => {
-      // Backend may send a single chain or a batch via `chains` array
-      const chains = input.chains as any[] | undefined
-      if (chains && Array.isArray(chains)) {
-        const results: { chain: string; address: string }[] = []
-        for (const c of chains) {
-          const name = typeof c === 'string' ? c : c.chain
-          const chain = resolveChain(name)
-          if (!chain) throw new Error(`Unknown chain: ${name}`)
-          await this.vault.addChain(chain)
-          const address = await this.vault.address(chain)
-          results.push({ chain: chain.toString(), address })
-        }
-        return { added: results }
+  // vault_chain dispatcher — backend shape:
+  //   { action: "add" | "remove", chains: [{ chain }] }
+  // Discriminator wrapper: routes to addChain / removeChain so the resulting
+  // RecentAction is tagged tool: 'vault_chain' (matching what the agent emits)
+  // rather than the per-action method's tool name.
+  async vaultChain(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('vault_chain', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addChainImpl(input)
+        case 'remove':
+          return this.removeChainImpl(input)
+        default:
+          throw new Error(`vault_chain: unknown action: ${action ?? '(missing)'}`)
       }
-
-      // Single chain format
-      const chainName = input.chain as string
-      const chain = resolveChain(chainName)
-      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-      await this.vault.addChain(chain)
-      const address = await this.vault.address(chain)
-      return { chain: chain.toString(), address, added: true }
     })
+  }
+
+  // vault_coin dispatcher — backend shape:
+  //   { action: "add" | "remove", coins: [{ chain, ticker, contract_address?, ... }] }
+  async vaultCoin(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('vault_coin', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addCoinImpl(input)
+        case 'remove':
+          return this.removeCoinImpl(input)
+        default:
+          throw new Error(`vault_coin: unknown action: ${action ?? '(missing)'}`)
+      }
+    })
+  }
+
+  // address_book dispatcher — backend shape:
+  //   { action: "add" | "remove", entry: { name, chain, address } }
+  async addressBook(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addAddressBookImpl(input)
+        case 'remove':
+          return this.removeAddressBookImpl(input)
+        default:
+          throw new Error(`address_book: unknown action: ${action ?? '(missing)'}`)
+      }
+    })
+  }
+
+  async addChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('add_chain', () => this.addChainImpl(input))
+  }
+
+  // Backend `vault_chain { action: "add", chains: [...] }` and legacy
+  // single-chain calls both flow through this impl. The public `addChain`
+  // wrapper above tags results as `tool: 'add_chain'`; the new `vaultChain`
+  // wrapper (above) tags them as `tool: 'vault_chain'`.
+  private async addChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const chains = params.chains as any[] | undefined
+    if (chains && Array.isArray(chains)) {
+      const results: { chain: string; address: string }[] = []
+      for (const c of chains) {
+        const name = typeof c === 'string' ? c : c.chain
+        const chain = resolveChain(name)
+        if (!chain) throw new Error(`Unknown chain: ${name}`)
+        await this.vault.addChain(chain)
+        const address = await this.vault.address(chain)
+        results.push({ chain: chain.toString(), address })
+      }
+      return { added: results }
+    }
+
+    const chainName = params.chain as string
+    const chain = resolveChain(chainName)
+    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+    await this.vault.addChain(chain)
+    const address = await this.vault.address(chain)
+    return { chain: chain.toString(), address, added: true }
+  }
+
+  private async removeChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const chains = params.chains as any[] | undefined
+    if (chains && Array.isArray(chains)) {
+      const results: { chain: string }[] = []
+      for (const c of chains) {
+        const name = typeof c === 'string' ? c : c.chain
+        const chain = resolveChain(name)
+        if (!chain) throw new Error(`Unknown chain: ${name}`)
+        await this.vault.removeChain(chain)
+        results.push({ chain: chain.toString() })
+      }
+      return { removed: results }
+    }
+
+    const chainName = params.chain as string
+    const chain = resolveChain(chainName)
+    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+    await this.vault.removeChain(chain)
+    return { chain: chain.toString(), removed: true }
+  }
+
+  private async addCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    // Backend sends `coins` (vault_coin); legacy/hand-rolled callers may pass `tokens`.
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
+      const results: { chain: string; symbol: string }[] = []
+      for (const t of coins) {
+        const chain = resolveChain(t.chain)
+        if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
+        const symbol = t.ticker || t.symbol || ''
+        await this.vault.addToken(chain, {
+          id: (t.contract_address || t.contractAddress || '') as string,
+          symbol,
+          name: (t.name || symbol) as string,
+          decimals: t.decimals ?? 18,
+          contractAddress: (t.contract_address || t.contractAddress) as string,
+          chainId: chain.toString(),
+        } as any)
+        results.push({ chain: chain.toString(), symbol })
+      }
+      return { added: results }
+    }
+
+    // Single token format
+    const chainName = params.chain as string
+    const chain = resolveChain(chainName)
+    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+
+    const symbol = (params.ticker || params.symbol) as string
+    await this.vault.addToken(chain, {
+      id: (params.contract_address || params.contractAddress || '') as string,
+      symbol,
+      name: (params.name || symbol) as string,
+      decimals: (params.decimals as number) ?? 18,
+      contractAddress: (params.contract_address || params.contractAddress) as string,
+      chainId: chain.toString(),
+    } as any)
+    return { chain: chain.toString(), symbol, added: true }
+  }
+
+  private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
+      const results: { chain: string; tokenId: string }[] = []
+      for (const t of coins) {
+        const chain = resolveChain(t.chain)
+        if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
+        const tokenId = (t.contract_address || t.contractAddress || t.token_id || t.id) as string
+        if (!tokenId) {
+          throw new Error(
+            `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
+          )
+        }
+        await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId })
+      }
+      return { removed: results }
+    }
+
+    const chainName = params.chain as string
+    const chain = resolveChain(chainName)
+    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
+
+    const tokenId = (params.contract_address || params.contractAddress || params.token_id || params.id) as
+      | string
+      | undefined
+    if (!tokenId) {
+      throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
+    }
+    await this.vault.removeToken(chain, tokenId)
+    return { chain: chain.toString(), removed: true }
   }
 
   async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('remove_chain', async () => {
-      const chainName = input.chain as string
-      const chain = resolveChain(chainName)
-      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-      await this.vault.removeChain(chain)
-      return { chain: chain.toString(), removed: true }
-    })
+    return this.runTool('remove_chain', () => this.removeChainImpl(input))
   }
 
   async addCoin(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('add_coin', async () => {
-      // Backend may send a single token or a batch via `tokens` array
-      const tokens = input.tokens as any[] | undefined
-      if (tokens && Array.isArray(tokens)) {
-        const results: { chain: string; symbol: string }[] = []
-        for (const t of tokens) {
-          const chain = resolveChain(t.chain)
-          if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
-          const symbol = t.symbol || t.ticker || ''
-          await this.vault.addToken(chain, {
-            id: (t.contract_address || t.contractAddress || '') as string,
-            symbol,
-            name: (t.name || symbol) as string,
-            decimals: t.decimals ?? 18,
-            contractAddress: (t.contract_address || t.contractAddress) as string,
-            chainId: chain.toString(),
-          } as any)
-          results.push({ chain: chain.toString(), symbol })
-        }
-        return { added: results }
-      }
-
-      // Single token format
-      const chainName = input.chain as string
-      const chain = resolveChain(chainName)
-      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-
-      const symbol = (input.symbol || input.ticker) as string
-      await this.vault.addToken(chain, {
-        id: (input.contract_address || input.contractAddress || '') as string,
-        symbol,
-        name: (input.name || symbol) as string,
-        decimals: (input.decimals as number) ?? 18,
-        contractAddress: (input.contract_address || input.contractAddress) as string,
-        chainId: chain.toString(),
-      } as any)
-      return { chain: chain.toString(), symbol, added: true }
-    })
+    return this.runTool('add_coin', () => this.addCoinImpl(input))
   }
 
   async removeCoin(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('remove_coin', async () => {
-      const chainName = input.chain as string
-      const chain = resolveChain(chainName)
-      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-
-      const tokenId = (input.token_id || input.id || input.contract_address) as string
-      await this.vault.removeToken(chain, tokenId)
-      return { chain: chain.toString(), removed: true }
-    })
+    return this.runTool('remove_coin', () => this.removeCoinImpl(input))
   }
 
   // ============================================================================
@@ -307,14 +417,20 @@ export class AgentExecutor {
     defaultChain: Chain,
     params: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const swapTx = serverTxData.swap_tx || serverTxData.send_tx || serverTxData.tx
+    const swapTx = extractNestedTx(serverTxData)
     if (!swapTx?.to) {
       throw new Error('Server transaction missing required fields (to)')
     }
 
-    // Resolve chain from action params, tx data, or stored default
-    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain) as string | undefined
-    const chainId = (serverTxData.chain_id || swapTx.chainId) as string | number | undefined
+    // Resolve chain from action params, tx data, or stored default.
+    // mcp-ts nests chain / chain_id under txArgs; mcp-go puts them at top level.
+    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain || serverTxData.txArgs?.chain) as
+      | string
+      | undefined
+    const chainId = (serverTxData.chain_id || serverTxData.txArgs?.chain_id || swapTx.chainId) as
+      | string
+      | number
+      | undefined
     let chain = defaultChain
     if (chainName) {
       chain = resolveChain(chainName) || defaultChain
@@ -860,20 +976,89 @@ export class AgentExecutor {
   // for read; mutating writes have no local implementation yet.
   // ============================================================================
 
-  async addressBookAdd(_toolCallId: string, _input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('address_book_add', async () => {
-      throw new Error(
-        'address_book_add is not yet implemented locally. The backend may handle this action server-side.'
-      )
-    })
+  async addressBookAdd(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book_add', () => this.addAddressBookImpl(input))
   }
 
-  async addressBookRemove(_toolCallId: string, _input: Record<string, unknown>): Promise<RecentAction> {
-    return this.runTool('address_book_remove', async () => {
+  async addressBookRemove(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book_remove', () => this.removeAddressBookImpl(input))
+  }
+
+  // Backend `address_book { action: "add", entry: {...} }` flows through
+  // this impl. The public `addressBookAdd` wrapper above tags results as
+  // `tool: 'address_book_add'`; the new `addressBook` wrapper tags them as
+  // `tool: 'address_book'` (matching the discriminator tool the backend emits).
+  private async addAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
       throw new Error(
-        'address_book_remove is not yet implemented locally. The backend may handle this action server-side.'
+        'address_book add requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
       )
-    })
+    }
+    const entry = params.entry as { name?: unknown; chain?: unknown; address?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book add: missing entry')
+    }
+    const chainName = entry.chain as string | undefined
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (!chain) throw new Error(`address_book add: unknown chain: ${chainName ?? '(missing)'}`)
+    const address = entry.address as string | undefined
+    if (!address) throw new Error('address_book add: entry.address is required')
+    const name = (entry.name as string | undefined) ?? ''
+
+    await this.vultisig.addAddressBookEntry([
+      {
+        chain,
+        address,
+        name,
+        source: 'saved',
+        dateAdded: Date.now(),
+      },
+    ])
+    return { added: { chain: chain.toString(), address, name } }
+  }
+
+  private async removeAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
+      throw new Error(
+        'address_book remove requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+      )
+    }
+    const entry = params.entry as { chain?: unknown; address?: unknown; name?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book remove: missing entry')
+    }
+    const chainName = entry.chain as string | undefined
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (!chain) throw new Error(`address_book remove: unknown chain: ${chainName ?? '(missing)'}`)
+
+    // Agent often emits `{chain, name}` without resolving the address itself.
+    // Look the entry up by name in the saved book so name-based removal works
+    // without forcing the model to call get_address_book first. The SDK
+    // dedupes saved entries by (chain, address) only — name is not unique —
+    // so refuse ambiguous matches rather than silently deleting the first.
+    let address = entry.address as string | undefined
+    if (!address) {
+      const name = entry.name as string | undefined
+      if (!name) {
+        throw new Error('address_book remove: entry.address or entry.name is required')
+      }
+      const book = await this.vultisig.getAddressBook(chain)
+      const lower = name.toLowerCase()
+      const matches = book.saved.filter(e => e.name.toLowerCase() === lower && e.chain === chain)
+      if (matches.length === 0) {
+        throw new Error(`address_book remove: no saved entry named "${name}" on ${chainName}`)
+      }
+      if (matches.length > 1) {
+        const addrs = matches.map(m => m.address).join(', ')
+        throw new Error(
+          `address_book remove: ambiguous name "${name}" on ${chainName} — multiple addresses: ${addrs}. Specify entry.address explicitly.`
+        )
+      }
+      address = matches[0].address
+    }
+
+    await this.vultisig.removeAddressBookEntry([{ chain, address }])
+    return { removed: { chain: chain.toString(), address } }
   }
 }
 
@@ -943,12 +1128,40 @@ function resolveChainFromTxReady(txReadyData: any): Chain | null {
     const chain = resolveChainId(txReadyData.chain_id)
     if (chain) return chain
   }
-  const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
+  // mcp-ts execute_* envelopes nest chain / chain_id under txArgs.
+  if (txReadyData.txArgs?.chain) {
+    const chain = resolveChain(txReadyData.txArgs.chain)
+    if (chain) return chain
+  }
+  if (txReadyData.txArgs?.chain_id) {
+    const chain = resolveChainId(txReadyData.txArgs.chain_id)
+    if (chain) return chain
+  }
+  const swapTx = extractNestedTx(txReadyData)
   if (swapTx?.chainId) {
     const chain = resolveChainId(swapTx.chainId)
     if (chain) return chain
   }
   return null
+}
+
+/**
+ * Extract the signable transaction object from a tx_ready envelope.
+ *
+ * mcp-go (build_*) emits the tx at top level under one of three keys:
+ *   - swap_tx   (build_swap_tx output)
+ *   - send_tx   (per-chain build_*_send output)
+ *   - tx        (build_evm_tx output)
+ *
+ * mcp-ts (execute_*) wraps the tx one level deeper:
+ *   - txArgs.tx (execute_send / execute_contract_call output)
+ *
+ * Multi-leg envelopes (mcp-ts execute_swap with approvalTxArgs) are NOT
+ * extracted here — see storeServerTransaction's approvalTxArgs guard
+ * and Phase B of 070526-sdk-cli-mcp-ts-envelope-parity.md.
+ */
+export function extractNestedTx(txReadyData: any): any {
+  return txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx || txReadyData?.txArgs?.tx
 }
 
 /**

@@ -29,9 +29,7 @@ describe('verifyBroadcastByHash', () => {
     getTxHashMock.mockResolvedValue('0xdeadbeef')
     getTxStatusMock.mockResolvedValue({ status: 'pending' })
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: originalError }),
-    ).resolves.toBeUndefined()
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBeUndefined()
 
     expect(getTxHashMock).toHaveBeenCalledTimes(1)
     expect(getTxHashMock).toHaveBeenCalledWith({ chain, tx })
@@ -42,14 +40,20 @@ describe('verifyBroadcastByHash', () => {
     })
   })
 
+  it("rethrows original error when status is 'pending' but tx is unknown", async () => {
+    const originalError = new Error('broadcast boom')
+    getTxHashMock.mockResolvedValue('0xdeadbeef')
+    getTxStatusMock.mockResolvedValue({ status: 'pending', isKnown: false })
+
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
+  })
+
   it("swallows error when status is 'success'", async () => {
     const originalError = new Error('duplicate tx')
     getTxHashMock.mockResolvedValue('0xabc')
     getTxStatusMock.mockResolvedValue({ status: 'success' })
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: originalError }),
-    ).resolves.toBeUndefined()
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBeUndefined()
   })
 
   it("rethrows original error when status is 'error'", async () => {
@@ -57,9 +61,7 @@ describe('verifyBroadcastByHash', () => {
     getTxHashMock.mockResolvedValue('0xabc')
     getTxStatusMock.mockResolvedValue({ status: 'error' })
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: originalError }),
-    ).rejects.toBe(originalError)
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
   })
 
   it('rethrows original error when getTxStatus throws', async () => {
@@ -67,18 +69,14 @@ describe('verifyBroadcastByHash', () => {
     getTxHashMock.mockResolvedValue('0xabc')
     getTxStatusMock.mockRejectedValue(new Error('rpc down'))
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: originalError }),
-    ).rejects.toBe(originalError)
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
   })
 
   it('rethrows original error when getTxHash throws', async () => {
     const originalError = new Error('original')
     getTxHashMock.mockRejectedValue(new Error('hash boom'))
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: originalError }),
-    ).rejects.toBe(originalError)
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
 
     expect(getTxStatusMock).not.toHaveBeenCalled()
   })
@@ -87,8 +85,6 @@ describe('verifyBroadcastByHash', () => {
     getTxHashMock.mockResolvedValue('0xabc')
     getTxStatusMock.mockResolvedValue({ status: 'error' })
 
-    await expect(
-      verifyBroadcastByHash({ chain, tx, error: 'string-error' }),
-    ).rejects.toBe('string-error')
+    await expect(verifyBroadcastByHash({ chain, tx, error: 'string-error' })).rejects.toBe('string-error')
   })
 })

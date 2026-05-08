@@ -34,18 +34,17 @@ const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
 //
 // Must stay aligned with backend's `clientSideToolNames`. `sign_tx` uses
 // the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only.
+// create_policy / delete_policy are mobile-only. The CRUD trio
+// (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
+// discriminator that each wrapper method switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<
   string,
   (executor: AgentExecutor, toolCallId: string, input: Record<string, unknown>) => Promise<RecentAction>
 > = {
   sign_typed_data: (ex, id, input) => ex.signTypedData(id, input),
-  add_coin: (ex, id, input) => ex.addCoin(id, input),
-  remove_coin: (ex, id, input) => ex.removeCoin(id, input),
-  add_chain: (ex, id, input) => ex.addChain(id, input),
-  remove_chain: (ex, id, input) => ex.removeChain(id, input),
-  address_book_add: (ex, id, input) => ex.addressBookAdd(id, input),
-  address_book_remove: (ex, id, input) => ex.addressBookRemove(id, input),
+  vault_coin: (ex, id, input) => ex.vaultCoin(id, input),
+  vault_chain: (ex, id, input) => ex.vaultChain(id, input),
+  address_book: (ex, id, input) => ex.addressBook(id, input),
 }
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
@@ -285,8 +284,9 @@ export class AgentSession {
     let serverTxStoredFromStream = 0
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
-    // this, ordering-sensitive flows (add_chain → add_coin) race and the
-    // single-slot password resolver hangs when two dispatches both prompt.
+    // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
+    // and the single-slot password resolver hangs when two dispatches both
+    // prompt.
     let dispatchChain: Promise<void> = Promise.resolve()
 
     // Send via SSE stream. CR2: 401/403 retry happens at the request

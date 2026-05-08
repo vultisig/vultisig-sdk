@@ -28,15 +28,13 @@ type VerifyInput<T extends Chain> = {
  * yet, network error) falls through to re-throwing the original error —
  * verification is a safety net, never a new failure mode.
  */
-export const verifyBroadcastByHash = async <T extends Chain>({
-  chain,
-  tx,
-  error,
-}: VerifyInput<T>): Promise<void> => {
+export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error }: VerifyInput<T>): Promise<void> => {
   try {
     const hash = await getTxHash({ chain, tx })
     const result = await getTxStatus({ chain, hash })
-    if (result.status === 'pending' || result.status === 'success') {
+    const isKnownPending = result.status === 'pending' && result.isKnown !== false
+
+    if (result.status === 'success' || isKnownPending) {
       return
     }
   } catch {
