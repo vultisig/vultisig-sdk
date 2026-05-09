@@ -1,5 +1,24 @@
 # @vultisig/cli
 
+## 0.22.5
+
+### Patch Changes
+
+- [#409](https://github.com/vultisig/vultisig-sdk/pull/409) [`64a8c44`](https://github.com/vultisig/vultisig-sdk/commit/64a8c445d97b7588d6650fdeadb3b4d38e1bfddd) Thanks [@neavra](https://github.com/neavra)! - Migrate fully to the client-side tool path. The legacy `actions` SSE channel
+  consumption was dropped in the previous release; this release also deletes
+  the `executor.dispatch()` chokepoint and the per-tool methods that only the
+  chokepoint reached. The wire shape (`recent_actions`, `tx_ready`,
+  `tool-input-available`) is unchanged for users.
+
+  Internal: `Action`, `ActionResult`, `SSEActions` types removed;
+  `SendMessageResponse.actions` and the `actions` SSE event variant removed
+  from public types. CLI now consumes only `tool-input-available` for
+  client-side tool calls and `tx_ready` for transaction signing.
+
+- Updated dependencies [[`1132ae5`](https://github.com/vultisig/vultisig-sdk/commit/1132ae51f8e4d5b8ca8a1855af9ea51031b574e9)]:
+  - @vultisig/core-chain@1.6.1
+  - @vultisig/sdk@0.22.5
+
 ## 0.22.4
 
 ### Patch Changes

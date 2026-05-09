@@ -6,6 +6,7 @@
  */
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { existsSync } from 'fs'
 import fs from 'fs/promises'
 import { resolve } from 'path'
 import { expect } from 'vitest'
@@ -41,6 +42,18 @@ export const TEST_VAULT_CONFIG = {
 }
 
 /**
+ * Whether the test vault fixture exists. Use as the predicate for
+ * `describe.skipIf(!HAS_TEST_VAULT_FIXTURE)` so E2E suites skip cleanly
+ * on environments where the fixture isn't provisioned (CI without
+ * secrets, fresh dev clones) instead of failing with a cryptic ENOENT.
+ *
+ * The fixture was deliberately removed from git in commit `e3811eea`
+ * for security; see `tests/e2e/SECURITY.md` for setup or set
+ * `TEST_VAULT_PATH` to an existing `.vult` file.
+ */
+export const HAS_TEST_VAULT_FIXTURE = existsSync(TEST_VAULT_CONFIG.path)
+
+/**
  * Load test vault with instance-scoped configuration
  *
  * Creates an SDK instance with explicit dependencies and loads a test vault.
@@ -73,6 +86,17 @@ export async function loadTestVault(): Promise<{
   })
 
   await sdk.initialize()
+
+  // Defensive: callers should already gate via `describe.skipIf(!HAS_TEST_VAULT_FIXTURE)`.
+  // If they didn't, surface a clear setup pointer instead of vitest's raw ENOENT.
+  if (!HAS_TEST_VAULT_FIXTURE) {
+    throw new Error(
+      `Test vault fixture missing at ${TEST_VAULT_CONFIG.path}. ` +
+        `See packages/sdk/tests/e2e/SECURITY.md for setup, or set TEST_VAULT_PATH ` +
+        `to an existing .vult file. To skip cleanly when the fixture isn't available, ` +
+        `wrap the suite with describe.skipIf(!HAS_TEST_VAULT_FIXTURE).`
+    )
+  }
 
   // Load vault from file
   const vaultContent = await fs.readFile(TEST_VAULT_CONFIG.path, 'utf-8')

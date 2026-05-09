@@ -12,7 +12,7 @@
  * - Vault credentials MUST be loaded from environment variables (TEST_VAULT_PATH, TEST_VAULT_PASSWORD)
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
-import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -26,7 +26,7 @@ const TOKENS = {
   USDT_POLYGON: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
 } as const
 
-describe('E2E: Fiat Value Service (Production)', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Fiat Value Service (Production)', () => {
   let vault: VaultBase
 
   beforeAll(async () => {
