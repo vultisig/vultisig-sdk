@@ -13,13 +13,13 @@
  * - See tests/e2e/SECURITY.md and .env.example for setup instructions
  */
 
-import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { VaultBase } from '@/index'
 
-describe('E2E: Balance Operations (Production)', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Balance Operations (Production)', () => {
   let vault: VaultBase
 
   beforeAll(async () => {
