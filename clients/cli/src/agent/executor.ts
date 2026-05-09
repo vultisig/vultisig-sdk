@@ -7,7 +7,7 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -453,7 +453,10 @@ export class AgentExecutor {
       let result: Record<string, unknown> | undefined
       if (payload.__multiLeg) {
         if (this.pendingLegs.length !== 2) {
-          throw new Error(`signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`)
+          throw new VaultError(
+            VaultErrorCode.InvalidConfig,
+            `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
+          )
         }
         result = await this.signMultiLeg(payload, chain, {})
       }
@@ -667,7 +670,7 @@ export class AgentExecutor {
       const approveResult = await this.signServerTx(approveEnvelope, chain, params)
       const approveTxHash = approveResult.tx_hash as string | undefined
       if (!approveTxHash) {
-        throw new Error('signMultiLeg: approve leg returned no tx_hash')
+        throw new VaultError(VaultErrorCode.BroadcastFailed, 'signMultiLeg: approve leg returned no tx_hash')
       }
 
       if (this.verbose)
@@ -677,9 +680,16 @@ export class AgentExecutor {
         await this.waitForEvmReceipt(chain, approveTxHash, { timeoutSec: 90 })
       } catch (err: any) {
         // Surface the approve hash so the operator can inspect it on the
-        // explorer — a failed wait does NOT mean the approve was lost; it may
+        // explorer - a failed wait does NOT mean the approve was lost; it may
         // still confirm later. The main leg is held back regardless.
-        throw new Error(`signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`)
+        // Map to VaultErrorCode.Timeout so normalizeAgentError surfaces a
+        // typed timeout to callers and keeps the approve hash in the message
+        // for explorer-side diagnosis.
+        throw new VaultError(
+          VaultErrorCode.Timeout,
+          `signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`,
+          err instanceof Error ? err : undefined
+        )
       }
 
       if (this.verbose) process.stderr.write(`[signMultiLeg] approve confirmed, broadcasting main leg\n`)
@@ -727,16 +737,19 @@ export class AgentExecutor {
         const result = await (this.vault as any).getTxStatus({ chain, txHash })
         if (result?.status === 'success') return
         if (result?.status === 'error') {
-          throw new Error(`approve tx reverted (${txHash})`)
+          // Typed BroadcastFailed lets callers distinguish a revert (the tx
+          // mined but reverted on-chain) from a generic timeout below.
+          throw new VaultError(VaultErrorCode.BroadcastFailed, `approve tx reverted (${txHash})`)
         }
       } catch (e: any) {
         // Re-throw revert failures; treat other errors (network, RPC) as
         // transient and keep polling until the deadline.
+        if (e instanceof VaultError && e.code === VaultErrorCode.BroadcastFailed) throw e
         if (e?.message?.includes('reverted')) throw e
       }
       await new Promise(r => setTimeout(r, intervalMs))
     }
-    throw new Error(`approve tx ${txHash} not confirmed within ${opts.timeoutSec}s`)
+    throw new VaultError(VaultErrorCode.Timeout, `approve tx ${txHash} not confirmed within ${opts.timeoutSec}s`)
   }
 
   /**
