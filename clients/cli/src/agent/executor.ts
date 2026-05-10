@@ -6,6 +6,8 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
 import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
@@ -179,6 +181,33 @@ export class AgentExecutor {
         process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
       return false
     }
+
+    // Phase D: non-EVM envelopes carry tx fields directly under `txArgs.*`
+    // (not under `txArgs.tx`), so `extractNestedTx` returns undefined for
+    // them. If we have an envelope with the expected non-EVM shape AND
+    // the resolved chain is non-EVM, accept it — signServerTx will
+    // dispatch via parseNonEvmEnvelope + vault.send.
+    if (!nestedTx && txReadyData && typeof txReadyData === 'object') {
+      const txArgs = txReadyData.txArgs
+      if (txArgs && typeof txArgs === 'object' && typeof txArgs.to === 'string' && typeof txArgs.amount === 'string') {
+        const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
+        if (getChainKind(chain) !== 'evm') {
+          this.pendingPayloads.clear()
+          this.pendingPayloads.set('latest', {
+            payload: { __serverTx: true, ...txReadyData },
+            coin: { chain, address: '', decimals: 18, ticker: '' },
+            chain,
+            timestamp: Date.now(),
+          })
+          if (this.verbose)
+            process.stderr.write(
+              `[executor] Stored non-EVM server tx for chain ${chain} (kind=${getChainKind(chain)})\n`
+            )
+          return true
+        }
+      }
+    }
+
     if (!nestedTx) {
       if (this.verbose)
         process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx/txArgs.tx found in data\n`)
@@ -484,10 +513,85 @@ export class AgentExecutor {
   }
 
   /**
-   * Sign and broadcast a server-built transaction (raw EVM tx from tx_ready SSE).
-   * Uses vault.prepareSendTx with memo field to carry the calldata.
+   * Dispatch a server-built tx_ready envelope to the chain-kind-specific
+   * signer. EVM stays in `signEvmServerTx` (the existing PR #422 + PR #435
+   * code, with EVM nonce/lock plumbing). Non-EVM kinds parse the envelope
+   * via `parseNonEvmEnvelope` and route through `vault.send`, which is
+   * already chain-agnostic via `VaultBase.prepareSendTx` virtuals.
+   *
+   * Phase D — see task `100526-sdk-cli-non-evm-signing.md`.
    */
   private async signServerTx(
+    serverTxData: any,
+    defaultChain: Chain,
+    params: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const chain = resolveChainFromTxReady(serverTxData) || defaultChain
+    const chainKind = getChainKind(chain)
+
+    if (chainKind === 'evm') {
+      return this.signEvmServerTx(serverTxData, defaultChain, params)
+    }
+
+    return this.signNonEvmServerTx(serverTxData, chain)
+  }
+
+  /**
+   * Non-EVM signing path: parse the agent's tx_ready envelope into a
+   * `vault.send`-shaped argument bag and call through. The SDK already
+   * handles per-chain prepare/sign/broadcast internally via
+   * `VaultBase.prepareSendTx` virtuals — sdk-cli only owns envelope
+   * parsing here, not chain-specific signing logic.
+   */
+  private async signNonEvmServerTx(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
+    const args = parseNonEvmEnvelope(serverTxData, chain)
+    if (this.verbose)
+      process.stderr.write(
+        `[sign_non_evm_server_tx] chain=${chain}, to=${args.to}, amount=${args.amount}${args.symbol ? ` ${args.symbol}` : ''}, memo=${args.memo ? `"${args.memo}"` : '(none)'}\n`
+      )
+
+    // Unlock vault if encrypted (mirrors signEvmServerTx).
+    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
+      if (this.password) {
+        await (this.vault as any).unlock?.(this.password)
+      }
+    }
+
+    const result = await this.vault.send({
+      chain,
+      to: args.to,
+      amount: args.amount,
+      symbol: args.symbol,
+      memo: args.memo,
+    })
+
+    if (result.dryRun) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'signNonEvmServerTx: vault.send unexpectedly returned dryRun result'
+      )
+    }
+
+    // Clean up pending payloads after successful sign (parity with EVM path).
+    this.pendingPayloads.clear()
+
+    const broadcast = result as Extract<typeof result, { dryRun: false }>
+    const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, broadcast.txHash)
+    return {
+      tx_hash: broadcast.txHash,
+      chain: chain.toString(),
+      status: 'pending',
+      explorer_url: explorerUrl,
+    }
+  }
+
+  /**
+   * Sign and broadcast a server-built EVM transaction (raw EVM tx from
+   * tx_ready SSE). Uses vault.prepareSendTx with memo field to carry the
+   * calldata, plus EVM-specific nonce/lock plumbing that Phase B's
+   * `signMultiLeg` depends on for back-to-back approve+main broadcasts.
+   */
+  private async signEvmServerTx(
     serverTxData: any,
     defaultChain: Chain,
     params: Record<string, unknown>
@@ -1365,6 +1469,103 @@ function resolveChainFromTxReady(txReadyData: any): Chain | null {
  */
 export function extractNestedTx(txReadyData: any): any {
   return txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx || txReadyData?.txArgs?.tx
+}
+
+/**
+ * Argument bag for `vault.send`, parsed from a non-EVM tx_ready envelope.
+ */
+export type NonEvmSendArgs = {
+  chain: Chain
+  to: string
+  /** Decimal amount string (human units), suitable for `vault.send`. */
+  amount: string
+  /** Optional token symbol; omit for native sends. */
+  symbol?: string
+  memo?: string
+}
+
+/**
+ * Parse a tx_ready envelope from the agent into `vault.send`-shaped args.
+ *
+ * mcp-ts emits a uniform shape for execute_send across non-EVM chains:
+ *
+ *     {
+ *       chain: "<Chain>",
+ *       resolved: { labels: { token_resolved: "<SYMBOL>", ... } },
+ *       txArgs: {
+ *         chain: "<Chain>", tx_encoding: "<utxo-psbt|solana-tx|cosmos-msg>",
+ *         from: "...", to: "...",
+ *         amount: "<base-unit integer string>",
+ *         memo: "<optional>",
+ *         // chain-specific extras (fee_rate, denom, sequence, ...) ignored
+ *         // here — the SDK refreshes them at sign time.
+ *       }
+ *     }
+ *
+ * `amount` is ALWAYS base-unit integer (sats / lamports / uatom-equiv /
+ * wei) — confirmed via live envelope capture across BTC, SOL, RUNE on
+ * 2026-05-10. We convert to a decimal string before passing to
+ * `vault.send`, which then re-parses to bigint via the chain's native
+ * decimals. Round-trip is lossless via viem's `formatUnits` /
+ * `parseUnits`.
+ *
+ * Throws `VaultError(NotImplemented)` for chain-kinds Phase D PR 0
+ * doesn't yet wire (`ripple`, `tron`). The dispatch caller should
+ * never reach those branches today (envelopes for those chains hit the
+ * stale-CLI-build error pre-PR-D), but the throw is defensive.
+ */
+export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSendArgs {
+  const txArgs = serverTxData?.txArgs ?? serverTxData
+  if (!txArgs || typeof txArgs !== 'object') {
+    throw new VaultError(VaultErrorCode.InvalidConfig, 'parseNonEvmEnvelope: envelope missing txArgs')
+  }
+
+  const to: string | undefined = typeof txArgs.to === 'string' ? txArgs.to : undefined
+  if (!to) {
+    throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'to' field for ${chain}`)
+  }
+
+  const amountRaw: string | undefined = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
+  if (!amountRaw) {
+    throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'amount' field for ${chain}`)
+  }
+
+  // Convert base units (e.g. "1000" sats) → decimal string ("0.00001")
+  // using the chain's native fee-coin decimals. vault.send's parseAmount
+  // re-multiplies by the same decimals to recover bigint base units.
+  const decimals = chainFeeCoin[chain]?.decimals
+  if (decimals === undefined) {
+    throw new VaultError(
+      VaultErrorCode.UnsupportedChain,
+      `parseNonEvmEnvelope: no native decimals registered for ${chain}`
+    )
+  }
+
+  let amountDecimal: string
+  try {
+    amountDecimal = formatUnits(BigInt(amountRaw), decimals)
+  } catch (err: any) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `parseNonEvmEnvelope: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
+    )
+  }
+
+  // Token symbol — for native sends, leave undefined (vault.send defaults
+  // to native). resolved.labels.token_resolved is the agent-resolved
+  // symbol; for native it equals the chain's native ticker (BTC/SOL/RUNE).
+  // Phase D PR 0 only wires native sends; non-native (e.g. SPL, TRC-20)
+  // is PR 1+ scope.
+  let symbol: string | undefined
+  const tokenResolved = serverTxData?.resolved?.labels?.token_resolved
+  const nativeTicker = chainFeeCoin[chain]?.ticker
+  if (typeof tokenResolved === 'string' && tokenResolved !== nativeTicker) {
+    symbol = tokenResolved
+  }
+
+  const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
+
+  return { chain, to, amount: amountDecimal, symbol, memo }
 }
 
 /**
