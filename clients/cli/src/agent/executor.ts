@@ -16,6 +16,55 @@ import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
 import type { RecentAction } from './types'
 
+/**
+ * THORChain swap-memo chain codes → SDK Chain enum. Used to resolve the
+ * destination chain encoded in `=:CHAIN.ASSET:DEST::v0:slippage` memos
+ * back to a Chain enum so vault.swap can dispatch.
+ *
+ * Reference: https://docs.thorchain.org/concepts/memos
+ * Maya uses similar codes — additions here cover both ecosystems.
+ */
+const THOR_MEMO_CHAIN_TO_ENUM: Record<string, Chain> = {
+  BTC: Chain.Bitcoin,
+  ETH: Chain.Ethereum,
+  BSC: Chain.BSC,
+  AVAX: Chain.Avalanche,
+  BCH: Chain.BitcoinCash,
+  LTC: Chain.Litecoin,
+  DOGE: Chain.Dogecoin,
+  GAIA: Chain.Cosmos,
+  THOR: Chain.THORChain,
+  RUNE: Chain.THORChain,
+  XRP: Chain.Ripple,
+  DASH: Chain.Dash,
+  ZEC: Chain.Zcash,
+  MAYA: Chain.MayaChain,
+  CACAO: Chain.MayaChain,
+}
+
+/**
+ * THORChain abbreviated asset shortcuts → expanded `CHAIN.ASSET`. THORChain
+ * memos accept both full (`XRP.XRP`) and abbreviated (`x`) notation for
+ * common native assets to fit within the 250-byte memo limit when paired
+ * with long destination addresses. Reference:
+ * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
+ */
+const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
+  b: 'BTC.BTC',
+  e: 'ETH.ETH',
+  s: 'BSC.BNB',
+  a: 'AVAX.AVAX',
+  c: 'BCH.BCH',
+  l: 'LTC.LTC',
+  d: 'DOGE.DOGE',
+  g: 'GAIA.ATOM',
+  r: 'THOR.RUNE',
+  x: 'XRP.XRP',
+  cacao: 'MAYA.CACAO',
+  dash: 'DASH.DASH',
+  zec: 'ZEC.ZEC',
+}
+
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
   'Ethereum',
@@ -542,20 +591,36 @@ export class AgentExecutor {
    * handles per-chain prepare/sign/broadcast internally via
    * `VaultBase.prepareSendTx` virtuals — sdk-cli only owns envelope
    * parsing here, not chain-specific signing logic.
+   *
+   * THORChain / MayaChain MsgDeposit envelopes (msg_type='deposit',
+   * to='') are routed through `vault.swap` because the agent's intent
+   * is a swap — the memo (`=:CHAIN.ASSET:DEST::v0:slippage`) carries
+   * the routing. We parse the memo to reconstruct vault.swap's
+   * fromChain / fromSymbol / toChain / toSymbol / amount args. The SDK
+   * then builds the MsgDeposit cosmos tx internally. Vultiagent uses an
+   * equivalent custom helper (`buildSignBroadcastThorchainLpDeposit`);
+   * we reuse the public `vault.swap` surface to avoid expanding the SDK.
    */
   private async signNonEvmServerTx(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
-    const args = parseNonEvmEnvelope(serverTxData, chain)
-    if (this.verbose)
-      process.stderr.write(
-        `[sign_non_evm_server_tx] chain=${chain}, to=${args.to}, amount=${args.amount}${args.symbol ? ` ${args.symbol}` : ''}, memo=${args.memo ? `"${args.memo}"` : '(none)'}\n`
-      )
-
     // Unlock vault if encrypted (mirrors signEvmServerTx).
     if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
       if (this.password) {
         await (this.vault as any).unlock?.(this.password)
       }
     }
+
+    // THORChain / MayaChain MsgDeposit branch — agent emitted a swap
+    // envelope sourcing from the cosmos chain natively.
+    const txArgs = serverTxData?.txArgs ?? {}
+    if (txArgs.msg_type === 'deposit' && (chain === Chain.THORChain || chain === Chain.MayaChain)) {
+      return this.signThorMsgDepositSwap(serverTxData, chain)
+    }
+
+    const args = parseNonEvmEnvelope(serverTxData, chain)
+    if (this.verbose)
+      process.stderr.write(
+        `[sign_non_evm_server_tx] chain=${chain}, to=${args.to}, amount=${args.amount}${args.symbol ? ` ${args.symbol}` : ''}, memo=${args.memo ? `"${args.memo}"` : '(none)'}\n`
+      )
 
     const result = await this.vault.send({
       chain,
@@ -573,6 +638,111 @@ export class AgentExecutor {
     }
 
     // Clean up pending payloads after successful sign (parity with EVM path).
+    this.pendingPayloads.clear()
+
+    const broadcast = result as Extract<typeof result, { dryRun: false }>
+    const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, broadcast.txHash)
+    return {
+      tx_hash: broadcast.txHash,
+      chain: chain.toString(),
+      status: 'pending',
+      explorer_url: explorerUrl,
+    }
+  }
+
+  /**
+   * Sign and broadcast a THORChain / MayaChain MsgDeposit-style swap
+   * envelope by reconstructing `vault.swap` args from the memo.
+   *
+   * The agent emits envelopes shaped:
+   *   { txArgs: { chain: 'THORChain', tx_encoding: 'cosmos-msg',
+   *               to: '', amount: '<base>', denom: 'rune',
+   *               memo: '=:DEST_CHAIN.DEST_ASSET:DEST_ADDR::v0:slippage_bps',
+   *               msg_type: 'deposit' } }
+   *
+   * The memo is THORChain's standard swap memo. We parse out the
+   * destination chain + asset, look up the corresponding `Chain` enum,
+   * then call `vault.swap` which builds the MsgDeposit internally.
+   *
+   * The destination address in the memo is honored by THORChain at
+   * settlement time (output is sent to that address regardless of where
+   * the vault holds an address on the destination chain).
+   */
+  private async signThorMsgDepositSwap(
+    serverTxData: any,
+    chain: Chain
+  ): Promise<Record<string, unknown>> {
+    const txArgs = serverTxData?.txArgs ?? {}
+    const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
+    if (!memo.startsWith('=:')) {
+      throw new VaultError(
+        VaultErrorCode.NotImplemented,
+        `signThorMsgDepositSwap: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
+          `LP / non-swap MsgDeposit flows route through different SDK helpers (Phase E follow-up).`
+      )
+    }
+
+    // Parse memo `=:DEST_CHAIN.DEST_ASSET:DEST_ADDR[::v0:slippage_bps]`
+    // THORChain accepts both full (`XRP.XRP`) and abbreviated (`x`) asset
+    // notation to fit memos within the 250-byte limit. Expand the shorthand
+    // before splitting on `.`.
+    const memoBody = memo.slice(2) // strip leading '=:'
+    const parts = memoBody.split(':')
+    let chainAsset = parts[0]
+    if (chainAsset && !chainAsset.includes('.')) {
+      const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
+      if (expanded) chainAsset = expanded
+    }
+    if (!chainAsset || !chainAsset.includes('.')) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositSwap: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
+      )
+    }
+    const [destChainCode, destAssetRaw] = chainAsset.split('.')
+    // THORChain memo chain codes: BTC, ETH, BSC, AVAX, BCH, LTC, DOGE, GAIA, BNB, RUNE, XRP, ...
+    // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...").
+    // For Phase D scope we only need the symbol; if the user is swapping
+    // to a token, the toToken ticker is the part before `-`.
+    const destAsset = destAssetRaw?.split('-')[0] ?? ''
+
+    const toChain = THOR_MEMO_CHAIN_TO_ENUM[destChainCode]
+    if (!toChain) {
+      throw new VaultError(
+        VaultErrorCode.UnsupportedChain,
+        `signThorMsgDepositSwap: unsupported destination chain code '${destChainCode}' in memo '${memo}'.`
+      )
+    }
+
+    // From-asset: derived from the source chain's native ticker (RUNE on
+    // THORChain, CACAO on MayaChain).
+    const fromSymbol = chain === Chain.THORChain ? 'RUNE' : 'CACAO'
+
+    // Convert base-units amount → decimal string for vault.swap.
+    const amountRaw: string = typeof txArgs.amount === 'string' ? txArgs.amount : '0'
+    const decimals = chainFeeCoin[chain]?.decimals ?? 8
+    const amountDecimal = formatUnits(BigInt(amountRaw), decimals)
+
+    if (this.verbose)
+      process.stderr.write(
+        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${destAsset}@${toChain}, amount=${amountDecimal}, memo='${memo}'\n`
+      )
+
+    const result = await this.vault.swap({
+      fromChain: chain,
+      fromSymbol,
+      toChain,
+      toSymbol: destAsset,
+      amount: amountDecimal,
+    })
+
+    if (result.dryRun) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        'signThorMsgDepositSwap: vault.swap unexpectedly returned dryRun result'
+      )
+    }
+
     this.pendingPayloads.clear()
 
     const broadcast = result as Extract<typeof result, { dryRun: false }>
