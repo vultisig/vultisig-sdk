@@ -63,8 +63,13 @@ export const waitForSetupMessageInAny = async ({
     const namespaces = messageIds
       .map(id => (id === undefined ? '<default>' : id))
       .join(', ')
-    throw new Error(
-      `setup message not found in any of the polled namespaces: ${namespaces}`,
+    // Attach `cause` via Object.assign instead of `new Error(msg, { cause })`
+    // because the SDK targets ES2021, whose ErrorConstructor type doesn't carry
+    // the `cause` option (added in ES2022). Engine support is unconditional.
+    throw Object.assign(
+      new Error(
+        `setup message not found in any of the polled namespaces: ${namespaces}`
+      ),
       { cause }
     )
   }
