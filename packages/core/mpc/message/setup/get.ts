@@ -40,8 +40,8 @@ type WaitForSetupMessageInAnyInput = {
  * in parallel. Different platforms write the shared setup to different namespaces
  * (Android/pre-#4246-iOS use the default; post-#4246 iOS uses `p-ecdsa`), so a
  * cross-platform joiner has to look in all of them. Resolves with the first
- * namespace to return the bytes; rejects (AggregateError) only if every
- * namespace fails.
+ * namespace to return the bytes; throws an `Error` (with the per-namespace
+ * `AggregateError` attached as `cause`) only if every namespace fails.
  */
 export const waitForSetupMessageInAny = async ({
   serverUrl,
@@ -50,11 +50,22 @@ export const waitForSetupMessageInAny = async ({
 }: WaitForSetupMessageInAnyInput): Promise<{
   foundAt: string | undefined
   setupMessage: string
-}> =>
-  Promise.any(
-    messageIds.map(messageId =>
-      waitForSetupMessage({ serverUrl, sessionId, messageId }).then(
-        setupMessage => ({ foundAt: messageId, setupMessage })
+}> => {
+  try {
+    return await Promise.any(
+      messageIds.map(messageId =>
+        waitForSetupMessage({ serverUrl, sessionId, messageId }).then(
+          setupMessage => ({ foundAt: messageId, setupMessage })
+        )
       )
     )
-  )
+  } catch (cause) {
+    const namespaces = messageIds
+      .map(id => (id === undefined ? '<default>' : id))
+      .join(', ')
+    throw new Error(
+      `setup message not found in any of the polled namespaces: ${namespaces}`,
+      { cause }
+    )
+  }
+}
