@@ -11,6 +11,7 @@
   "ignoreFiles": [
     "packages/core/**",
     "packages/lib/**",
+    ".config/eslint-health.config.mjs",
     "packages/mpc-native/app.plugin.js",
     "scripts/**",
     "testdata/**"
