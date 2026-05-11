@@ -96,4 +96,19 @@ describe('lookupKnownEvmContract', () => {
     expect(lookupKnownEvmContract(swapRouter02Base, { chain: EvmChain.Base })?.label).toBe('Uniswap V3 SwapRouter02')
     expect(lookupKnownEvmContract(swapRouter02Base, { chain: EvmChain.Ethereum })).toBeNull()
   })
+
+  it('routes BSC and Avalanche SwapRouter02 to their per-chain entries', () => {
+    // Each Uniswap V3 SwapRouter02 deployment is a separate entry — verify
+    // the BSC and Avalanche addresses don't leak across chains.
+    const swapRouter02Bsc = '0xb971ef87ede563556b2ed4b1c0b0019111dd85d2'
+    const swapRouter02Avalanche = '0xbb00ff08d01d300023c629e8ffffcb65a5a578ce'
+
+    expect(lookupKnownEvmContract(swapRouter02Bsc, { chain: EvmChain.BSC })?.label).toBe('Uniswap V3 SwapRouter02')
+    expect(lookupKnownEvmContract(swapRouter02Bsc, { chain: EvmChain.Ethereum })).toBeNull()
+
+    expect(lookupKnownEvmContract(swapRouter02Avalanche, { chain: EvmChain.Avalanche })?.label).toBe(
+      'Uniswap V3 SwapRouter02'
+    )
+    expect(lookupKnownEvmContract(swapRouter02Avalanche, { chain: EvmChain.BSC })).toBeNull()
+  })
 })

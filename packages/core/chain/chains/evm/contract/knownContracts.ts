@@ -81,6 +81,20 @@ export const knownEvmContracts: Readonly<Record<string, KnownEvmContract>> = {
     chains: ['Base'],
   },
 
+  // Uniswap V3 SwapRouter02 — BSC deployment.
+  '0xb971ef87ede563556b2ed4b1c0b0019111dd85d2': {
+    label: 'Uniswap V3 SwapRouter02',
+    category: 'DEX Router',
+    chains: ['BSC'],
+  },
+
+  // Uniswap V3 SwapRouter02 — Avalanche deployment.
+  '0xbb00ff08d01d300023c629e8ffffcb65a5a578ce': {
+    label: 'Uniswap V3 SwapRouter02',
+    category: 'DEX Router',
+    chains: ['Avalanche'],
+  },
+
   // 1inch Aggregation Router V5. Same address on most supported chains, but
   // not zkSync Era (different V5 router) — left unscoped because we don't
   // currently route on zkSync; tighten if that changes.
