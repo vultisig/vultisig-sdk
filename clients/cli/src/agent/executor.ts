@@ -722,7 +722,14 @@ export class AgentExecutor {
     // exploit this because the substitution is constrained to addresses
     // THORChain associates with the source signer (i.e. the vault).
     const vaultDestAddress = await this.vault.address(toChain)
-    if (parsed.destAddress && parsed.destAddress !== vaultDestAddress) {
+    // EVM addresses are case-insensitive on-chain — TrustWallet wallet-core
+    // returns EIP-55 checksummed form, but THORChain memos can carry either
+    // case depending on quote source. Normalize both sides for EVM
+    // destinations to avoid false-positive rejections on legitimate
+    // self-swaps. Non-EVM chains use case-sensitive base58/bech32/etc.
+    // encodings — leave those untouched.
+    const normalizeForCompare = (addr: string): string => (EVM_CHAINS.has(toChain) ? addr.toLowerCase() : addr)
+    if (parsed.destAddress && normalizeForCompare(parsed.destAddress) !== normalizeForCompare(vaultDestAddress)) {
       throw new VaultError(
         VaultErrorCode.NotImplemented,
         `signThorMsgDepositSwap: memo destination '${parsed.destAddress}' does not match vault address '${vaultDestAddress}' on ${toChain}. ` +
@@ -744,16 +751,7 @@ export class AgentExecutor {
         `signThorMsgDepositSwap: missing or non-string 'amount' field on ${chain} envelope`
       )
     }
-    const decimals = chainFeeCoin[chain]?.decimals ?? 8
-    let amountDecimal: string
-    try {
-      amountDecimal = formatUnits(BigInt(amountRaw), decimals)
-    } catch (err: any) {
-      throw new VaultError(
-        VaultErrorCode.InvalidAmount,
-        `signThorMsgDepositSwap: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
-      )
-    }
+    const amountDecimal = convertBaseUnitsToDecimal(chain, amountRaw, 'signThorMsgDepositSwap')
 
     if (this.verbose)
       process.stderr.write(
@@ -1726,6 +1724,46 @@ export type NonEvmSendArgs = {
  */
 const MAX_AMOUNT_DIGITS = 26
 
+/**
+ * Convert a base-unit integer-string amount → decimal string using the
+ * chain's native fee-coin decimals. Used by both `parseNonEvmEnvelope`
+ * (non-EVM send dispatch) and `signThorMsgDepositSwap` (RUNE/CACAO swap
+ * dispatch). Keeping the validation logic in one place ensures both paths
+ * fail closed identically on:
+ *
+ * 1. **Magnitude-bug envelopes** — amount strings longer than 26 digits
+ *    (10^26 wei = 10^8 ETH = ~$300B). Defensive bound against quote-side
+ *    bugs producing magnitude-wrong envelopes.
+ * 2. **Unregistered chain decimals** — `chainFeeCoin[chain]?.decimals`
+ *    must not silently fall back to a default. A missing registry entry
+ *    on a chain this dispatcher claims to support is a real bug; we
+ *    throw `UnsupportedChain` instead of substituting 8 and producing a
+ *    magnitude-wrong swap.
+ * 3. **Non-numeric / overflow amounts** — `BigInt()` parse failures are
+ *    surfaced as `InvalidAmount` with context.
+ */
+function convertBaseUnitsToDecimal(chain: Chain, amountRaw: string, context: string): string {
+  if (amountRaw.length > MAX_AMOUNT_DIGITS) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `${context}: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
+        'Likely a quote-side bug. Refusing to sign.'
+    )
+  }
+  const decimals = chainFeeCoin[chain]?.decimals
+  if (decimals === undefined) {
+    throw new VaultError(VaultErrorCode.UnsupportedChain, `${context}: no native decimals registered for ${chain}`)
+  }
+  try {
+    return formatUnits(BigInt(amountRaw), decimals)
+  } catch (err: any) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `${context}: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
+    )
+  }
+}
+
 export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSendArgs {
   const txArgs = serverTxData?.txArgs ?? serverTxData
   if (!txArgs || typeof txArgs !== 'object') {
@@ -1741,34 +1779,11 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   if (!amountRaw) {
     throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'amount' field for ${chain}`)
   }
-  if (amountRaw.length > MAX_AMOUNT_DIGITS) {
-    throw new VaultError(
-      VaultErrorCode.InvalidAmount,
-      `parseNonEvmEnvelope: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
-        'Likely a quote-side bug. Refusing to sign.'
-    )
-  }
 
   // Convert base units (e.g. "1000" sats) → decimal string ("0.00001")
   // using the chain's native fee-coin decimals. vault.send's parseAmount
   // re-multiplies by the same decimals to recover bigint base units.
-  const decimals = chainFeeCoin[chain]?.decimals
-  if (decimals === undefined) {
-    throw new VaultError(
-      VaultErrorCode.UnsupportedChain,
-      `parseNonEvmEnvelope: no native decimals registered for ${chain}`
-    )
-  }
-
-  let amountDecimal: string
-  try {
-    amountDecimal = formatUnits(BigInt(amountRaw), decimals)
-  } catch (err: any) {
-    throw new VaultError(
-      VaultErrorCode.InvalidAmount,
-      `parseNonEvmEnvelope: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
-    )
-  }
+  const amountDecimal = convertBaseUnitsToDecimal(chain, amountRaw, 'parseNonEvmEnvelope')
 
   // Token symbol — for native sends, leave undefined (vault.send defaults
   // to native). resolved.labels.token_resolved is the agent-resolved
