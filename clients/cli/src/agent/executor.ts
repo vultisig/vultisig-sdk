@@ -29,6 +29,8 @@ const THOR_MEMO_CHAIN_TO_ENUM: Record<string, Chain> = {
   ETH: Chain.Ethereum,
   BSC: Chain.BSC,
   AVAX: Chain.Avalanche,
+  BASE: Chain.Base, // L2 — THORChain routinely quotes Base destinations (PR #439 review finding 1)
+  ARB: Chain.Arbitrum, // L1-via-bridge path (PR #439 review finding 1)
   BCH: Chain.BitcoinCash,
   LTC: Chain.Litecoin,
   DOGE: Chain.Dogecoin,
@@ -63,6 +65,9 @@ const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
   cacao: 'MAYA.CACAO',
   dash: 'DASH.DASH',
   zec: 'ZEC.ZEC',
+  // BASE / ARB don't have documented single-letter shortcuts; THORChain
+  // emits these as the full CHAIN.ASSET form in memos. Listed in
+  // THOR_MEMO_CHAIN_TO_ENUM only.
 }
 
 // EVM chains that use nonce-based transaction ordering
@@ -609,9 +614,23 @@ export class AgentExecutor {
       }
     }
 
+    const txArgs = serverTxData?.txArgs ?? {}
+
+    // Defense-in-depth: the dispatcher resolved `chain` from the outer
+    // envelope; cross-check that the inner `txArgs.chain` agrees. A
+    // malformed envelope where these disagree could otherwise silently
+    // route through the wrong chain-kind signer. Mirror of Phase B's
+    // per-leg chain-consistency check (executor.ts:170 in PR #435).
+    // Per PR #439 review finding 5.
+    if (typeof txArgs.chain === 'string' && txArgs.chain !== chain) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `signNonEvmServerTx: dispatcher chain '${chain}' disagrees with envelope chain '${txArgs.chain}'`
+      )
+    }
+
     // THORChain / MayaChain MsgDeposit branch — agent emitted a swap
     // envelope sourcing from the cosmos chain natively.
-    const txArgs = serverTxData?.txArgs ?? {}
     if (txArgs.msg_type === 'deposit' && (chain === Chain.THORChain || chain === Chain.MayaChain)) {
       return this.signThorMsgDepositSwap(serverTxData, chain)
     }
@@ -692,6 +711,16 @@ export class AgentExecutor {
     // address into the broadcast memo, so any mismatch here would misroute
     // funds without warning. Phase D self-swaps remain supported (BTC
     // tests confirmed 3.565 XRP arrived at the vault's own XRP address).
+    //
+    // **Empty `destAddress` semantics** (PR #439 review finding 2):
+    // THORChain treats an empty DEST in a swap memo as "refund to source"
+    // — the chain substitutes its own record of the user's address on the
+    // destination chain. The leading-truthiness check intentionally skips
+    // the equality assertion in that case: vault.swap's substitution will
+    // land at the vault's own dest address (which IS the right address),
+    // so there's nothing to compare against. A malicious party can't
+    // exploit this because the substitution is constrained to addresses
+    // THORChain associates with the source signer (i.e. the vault).
     const vaultDestAddress = await this.vault.address(toChain)
     if (parsed.destAddress && parsed.destAddress !== vaultDestAddress) {
       throw new VaultError(
@@ -1676,17 +1705,27 @@ export type NonEvmSendArgs = {
  *     }
  *
  * `amount` is ALWAYS base-unit integer (sats / lamports / uatom-equiv /
- * wei) — confirmed via live envelope capture across BTC, SOL, RUNE on
- * 2026-05-10. We convert to a decimal string before passing to
- * `vault.send`, which then re-parses to bigint via the chain's native
+ * wei) **by contract** — confirmed via live envelope capture across BTC,
+ * SOL, RUNE on 2026-05-10. We convert to a decimal string before passing
+ * to `vault.send`, which then re-parses to bigint via the chain's native
  * decimals. Round-trip is lossless via viem's `formatUnits` /
  * `parseUnits`.
+ *
+ * **Defensive amount-length bound** (per PR #439 review finding 4): if
+ * THORChain or mcp-ts ever returns a 26+ digit amount (10^26 wei = 10^8
+ * ETH = ~$300B at current prices; well past any plausible legitimate
+ * value), bail rather than try to format. This catches quote-side bugs
+ * that would otherwise produce a magnitude-wrong envelope. The bound is
+ * deliberately generous — even the largest realistic transfer fits
+ * comfortably.
  *
  * Throws `VaultError(NotImplemented)` for chain-kinds Phase D PR 0
  * doesn't yet wire (`ripple`, `tron`). The dispatch caller should
  * never reach those branches today (envelopes for those chains hit the
  * stale-CLI-build error pre-PR-D), but the throw is defensive.
  */
+const MAX_AMOUNT_DIGITS = 26
+
 export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSendArgs {
   const txArgs = serverTxData?.txArgs ?? serverTxData
   if (!txArgs || typeof txArgs !== 'object') {
@@ -1701,6 +1740,13 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   const amountRaw: string | undefined = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
   if (!amountRaw) {
     throw new VaultError(VaultErrorCode.InvalidConfig, `parseNonEvmEnvelope: missing 'amount' field for ${chain}`)
+  }
+  if (amountRaw.length > MAX_AMOUNT_DIGITS) {
+    throw new VaultError(
+      VaultErrorCode.InvalidAmount,
+      `parseNonEvmEnvelope: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
+        'Likely a quote-side bug. Refusing to sign.'
+    )
   }
 
   // Convert base units (e.g. "1000" sats) → decimal string ("0.00001")

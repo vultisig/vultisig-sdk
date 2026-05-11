@@ -191,5 +191,36 @@ describe('parseNonEvmEnvelope', () => {
         expect((err as VaultError).code).toBe(VaultErrorCode.InvalidConfig)
       }
     })
+
+    // PR #439 review finding 4: defensive bound against quote-side bugs
+    // that would otherwise produce a magnitude-wrong envelope.
+    it('throws on amount string longer than 26 digits', () => {
+      const oversized = {
+        chain: 'Bitcoin',
+        txArgs: {
+          chain: 'Bitcoin',
+          to: 'bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2',
+          amount: '1' + '0'.repeat(26), // 27 digits = past the 26-digit bound
+        },
+      }
+      expect(() => parseNonEvmEnvelope(oversized, Chain.Bitcoin)).toThrow(/exceeds 26-digit safety bound/)
+    })
+
+    it('accepts a 26-digit amount (right at the bound)', () => {
+      // sanity-check the boundary — 26 digits of '9' is right at the edge.
+      // Math: 10^26 wei = ~10^8 ETH = unrealistic but technically valid.
+      const atBound = {
+        chain: 'Ethereum',
+        txArgs: {
+          chain: 'Ethereum',
+          to: '0x0000000000000000000000000000000000000001',
+          amount: '9'.repeat(26),
+        },
+      }
+      // Note: this would currently route through the EVM dispatcher in
+      // production, not parseNonEvmEnvelope — but the parser itself must
+      // accept the boundary case to not over-reject.
+      expect(() => parseNonEvmEnvelope(atBound, Chain.Ethereum)).not.toThrow(/exceeds 26-digit/)
+    })
   })
 })
