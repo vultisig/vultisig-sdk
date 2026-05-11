@@ -11,7 +11,7 @@ import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
 import { sendMpcRelayMessage } from '../message/relay/send'
 import { fromMpcServerMessage, toMpcServerMessage } from '../message/server'
-import { waitForSetupMessage } from '../message/setup/get'
+import { waitForSetupMessage, waitForSetupMessageInAny } from '../message/setup/get'
 import { uploadMpcSetupMessage } from '../message/setup/upload'
 import { combineReshareCommittee } from '../reshareCommittee'
 import { sleep } from '@vultisig/lib-utils/sleep'
@@ -184,10 +184,24 @@ export class DKLS {
     }
   }
 
-  public async prepareKeygenSetup(): Promise<void> {
+  public async prepareKeygenSetup(
+    setupMessageId?: string,
+    mirrorSetupMessageIds: string[] = []
+  ): Promise<void> {
     if (this.setupMessage.length > 0) {
       return
     }
+    // The setup will be advertised at every namespace in `allSetupMessageIds`.
+    // - Initiator: writes the same encrypted bytes to each.
+    // - Joiner: races a poll across all of them, then back-fills any namespace
+    //   the bytes weren't already at. This makes us interop with peers that
+    //   pick a different namespace by convention (Android default, iOS DKLS
+    //   p-ecdsa, iOS Schnorr p-eddsa).
+    const allSetupMessageIds: (string | undefined)[] = [
+      setupMessageId,
+      ...mirrorSetupMessageIds,
+    ]
+
     if (this.isInitiateDevice) {
       const threshold = getKeygenThreshold(this.keygenCommittee.length)
       this.setupMessage = (await ensureMpcEngine()).dkls.keygenSetup(
@@ -200,26 +214,46 @@ export class DKLS {
         this.hexEncryptionKey
       )
 
-      await uploadMpcSetupMessage({
-        serverUrl: this.serverURL,
-        message: encryptedSetupMsg,
-        sessionId: this.sessionId,
-      })
+      for (const messageId of allSetupMessageIds) {
+        await uploadMpcSetupMessage({
+          serverUrl: this.serverURL,
+          message: encryptedSetupMsg,
+          sessionId: this.sessionId,
+          messageId,
+        })
+      }
       console.log('uploaded setup message successfully')
       return
     }
 
-    const encodedEncryptedSetupMsg = await waitForSetupMessage({
-      serverUrl: this.serverURL,
-      sessionId: this.sessionId,
-    })
+    const { foundAt, setupMessage: encodedEncryptedSetupMsg } =
+      await waitForSetupMessageInAny({
+        serverUrl: this.serverURL,
+        sessionId: this.sessionId,
+        messageIds: allSetupMessageIds,
+      })
     this.setupMessage = fromMpcServerMessage(
       encodedEncryptedSetupMsg,
       this.hexEncryptionKey
     )
+    // Back-fill the namespaces the setup wasn't at, so other joiners polling
+    // under a different convention (e.g. iOS Schnorr at "p-eddsa") still see it.
+    for (const messageId of allSetupMessageIds) {
+      if (messageId === foundAt) continue
+      await uploadMpcSetupMessage({
+        serverUrl: this.serverURL,
+        message: encodedEncryptedSetupMsg,
+        sessionId: this.sessionId,
+        messageId,
+      })
+    }
   }
 
-  private async startKeygen(attempt: number, messageId?: string) {
+  private async startKeygen(
+    attempt: number,
+    messageId?: string,
+    setupMessageId?: string
+  ) {
     console.log('startKeygen attempt:', attempt)
     console.log('session id:', this.sessionId)
     this.isKeygenComplete = false
@@ -228,11 +262,12 @@ export class DKLS {
     try {
       if (this.setupMessage.length === 0) {
         if (this.isInitiateDevice && attempt === 0) {
-          await this.prepareKeygenSetup()
+          await this.prepareKeygenSetup(setupMessageId)
         } else {
           const encodedEncryptedSetupMsg = await waitForSetupMessage({
             serverUrl: this.serverURL,
             sessionId: this.sessionId,
+            messageId: setupMessageId,
           })
           this.setupMessage = fromMpcServerMessage(
             encodedEncryptedSetupMsg,
@@ -288,11 +323,14 @@ export class DKLS {
     }
   }
 
-  public async startKeygenWithRetry(messageId?: string) {
+  public async startKeygenWithRetry(
+    messageId?: string,
+    setupMessageId?: string
+  ) {
     await initializeMpcLib('ecdsa')
     for (let i = 0; i < 3; i++) {
       try {
-        const result = await this.startKeygen(i, messageId)
+        const result = await this.startKeygen(i, messageId, setupMessageId)
         return result
       } catch (error) {
         console.error('DKLS keygen error:', error)
@@ -307,7 +345,8 @@ export class DKLS {
   private async startReshare(
     dklsKeyshare: string | undefined,
     attempt: number,
-    messageId?: string
+    messageId?: string,
+    setupMessageId?: string
   ) {
     console.log('startReshare dkls, attempt:', attempt)
     this.isKeygenComplete = false
@@ -355,12 +394,14 @@ export class DKLS {
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
           sessionId: this.sessionId,
+          messageId: setupMessageId,
         })
         console.log('uploaded setup message successfully')
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverUrl: this.serverURL,
           sessionId: this.sessionId,
+          messageId: setupMessageId,
         })
         setupMessage = fromMpcServerMessage(
           encodedEncryptedSetupMsg,
@@ -404,12 +445,18 @@ export class DKLS {
 
   public async startReshareWithRetry(
     keyshare: string | undefined,
-    messageId?: string
+    messageId?: string,
+    setupMessageId?: string
   ) {
     await initializeMpcLib('ecdsa')
     for (let i = 0; i < 3; i++) {
       try {
-        const result = await this.startReshare(keyshare, i, messageId)
+        const result = await this.startReshare(
+          keyshare,
+          i,
+          messageId,
+          setupMessageId
+        )
         return result
       } catch (error) {
         console.error('DKLS reshare error:', error)
