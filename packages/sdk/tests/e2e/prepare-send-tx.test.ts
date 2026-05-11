@@ -35,12 +35,12 @@
  */
 
 import { e2ePrepareSendSkipReason } from '@helpers/prepare-send-skip'
-import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase } from '@/index'
 
-describe('E2E: prepareSendTx() - Transaction Preparation', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: prepareSendTx() - Transaction Preparation', () => {
   let vault: VaultBase
 
   beforeAll(async () => {

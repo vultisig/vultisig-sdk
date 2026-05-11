@@ -180,7 +180,6 @@ export type SendMessageResponse = {
   message: ConversationMessage
   title?: string
   suggestions?: Suggestion[]
-  actions?: Action[]
   policy_ready?: PolicyReady
   install_required?: InstallRequired
   transactions?: Array<Transaction | TxReadyPayload>
@@ -193,15 +192,6 @@ export type Suggestion = {
   plugin_id?: string
   title: string
   description?: string
-}
-
-export type Action = {
-  id: string
-  type: string
-  title: string
-  description?: string
-  params?: Record<string, unknown>
-  auto_execute?: boolean
 }
 
 export type PolicyReady = {
@@ -290,7 +280,6 @@ export type UsageInfo = {
 export type SSETextDelta = { delta: string }
 export type SSEToolProgress = { tool: string; status: 'running' | 'done'; label?: string }
 export type SSETitle = { title: string }
-export type SSEActions = { actions: Action[] }
 export type SSESuggestions = { suggestions: Suggestion[] }
 export type SSETxReady = TxReadyPayload
 export type SSEPolicyReady = PolicyReady
@@ -302,7 +291,6 @@ export type SSEEvent =
   | { type: 'text_delta'; data: SSETextDelta }
   | { type: 'tool_progress'; data: SSEToolProgress }
   | { type: 'title'; data: SSETitle }
-  | { type: 'actions'; data: SSEActions }
   | { type: 'suggestions'; data: SSESuggestions }
   | { type: 'tx_ready'; data: SSETxReady }
   | { type: 'policy_ready'; data: SSEPolicyReady }
@@ -310,48 +298,6 @@ export type SSEEvent =
   | { type: 'message'; data: SSEMessage }
   | { type: 'error'; data: SSEError }
   | { type: 'done'; data: Record<string, never> }
-
-// ============================================================================
-// Action Execution
-// ============================================================================
-
-export type ActionResult = {
-  action: string
-  action_id: string
-  success: boolean
-  data?: Record<string, unknown>
-  error?: string
-  /** Present when success is false */
-  code?: AgentErrorCode
-}
-
-/** Actions that auto-execute without user confirmation */
-export const AUTO_EXECUTE_ACTIONS = new Set([
-  'add_chain',
-  'add_coin',
-  'remove_coin',
-  'remove_chain',
-  'address_book_add',
-  'address_book_remove',
-  'get_address_book',
-  'get_balances',
-  'search_token',
-  'list_vaults',
-  'build_swap_tx',
-  'build_send_tx',
-  'build_custom_tx',
-  'build_tx',
-  'sign_tx',
-  'sign_typed_data',
-  'read_evm_contract',
-  'scan_tx',
-  'thorchain_pool_info',
-  'thorchain_add_liquidity',
-  'thorchain_remove_liquidity',
-])
-
-/** Actions that require vault password */
-export const PASSWORD_REQUIRED_ACTIONS = new Set(['sign_tx', 'sign_typed_data', 'build_custom_tx'])
 
 // ============================================================================
 // Pipe Interface (--via-agent mode) Event Types

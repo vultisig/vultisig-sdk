@@ -5,8 +5,9 @@
  * - Authentication with backend
  * - Conversation management
  * - Message sending and SSE streaming
- * - Action execution loop
- * - Result reporting back to backend
+ * - Client-side tool dispatch (`tool-input-available` SSE events) and
+ *   tx_ready synthesis (server-built transactions buffered then signed)
+ * - RecentAction reporting back to backend via `context.recent_actions`
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -19,46 +20,35 @@ import { authenticateVault } from './auth'
 import { AgentClient } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
-import type {
-  Action,
-  ActionResult,
-  AgentConfig,
-  ConversationMessage,
-  MessageContext,
-  RecentAction,
-  UICallbacks,
-} from './types'
-import { PASSWORD_REQUIRED_ACTIONS } from './types'
+import type { AgentConfig, ConversationMessage, MessageContext, RecentAction, UICallbacks } from './types'
 
-// Client-side tool name → Action.type routed through executor.executeAction.
-// Must stay aligned with the backend's `clientSideToolNames`. Unknown tools
-// surface as `[cli] unimplemented client-side tool` (not silent).
-// `sign_tx` uses the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only.
-export const CLIENT_SIDE_TOOL_DISPATCH: Record<string, string> = {
-  sign_typed_data: 'sign_typed_data',
-  add_coin: 'add_coin',
-  remove_coin: 'remove_coin',
-  add_chain: 'add_chain',
-  remove_chain: 'remove_chain',
-  address_book_add: 'address_book_add',
-  address_book_remove: 'address_book_remove',
+// Tools that prompt for the vault password before dispatch. `sign_tx` is
+// reached via tx_ready synthesis (not a registry tool name) but uses the
+// same gate via `runPasswordGatedTool('sign_tx', …)` below.
+const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+
+// Client-side tool dispatch table. Each entry maps an inbound
+// `tool-input-available` toolName to the matching per-tool executor method.
+// The factory is invoked lazily so the executor pointer is captured at
+// dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
+//
+// Must stay aligned with backend's `clientSideToolNames`. `sign_tx` uses
+// the tx_ready channel instead; create_vault / plugin_install /
+// create_policy / delete_policy are mobile-only. The CRUD trio
+// (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
+// discriminator that each wrapper method switches on internally.
+export const CLIENT_SIDE_TOOL_DISPATCH: Record<
+  string,
+  (executor: AgentExecutor, toolCallId: string, input: Record<string, unknown>) => Promise<RecentAction>
+> = {
+  sign_typed_data: (ex, id, input) => ex.signTypedData(id, input),
+  vault_coin: (ex, id, input) => ex.vaultCoin(id, input),
+  vault_chain: (ex, id, input) => ex.vaultChain(id, input),
+  address_book: (ex, id, input) => ex.addressBook(id, input),
 }
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
-
-// Exported for tests. Folds error/code into data so the RecentAction wire
-// shape is a single {tool, success, data} tuple.
-export function actionResultToRecentAction(r: ActionResult): RecentAction {
-  if (r.success) {
-    return { tool: r.action, success: true, data: r.data ?? {} }
-  }
-  const data: Record<string, unknown> = { ...(r.data ?? {}) }
-  if (r.error) data.error = r.error
-  if (r.code) data.code = r.code
-  return { tool: r.action, success: false, data }
-}
 
 export class AgentSession {
   private client: AgentClient
@@ -294,8 +284,9 @@ export class AgentSession {
     let serverTxStoredFromStream = 0
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
-    // this, ordering-sensitive flows (add_chain → add_coin) race and the
-    // single-slot password resolver hangs when two dispatches both prompt.
+    // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
+    // and the single-slot password resolver hangs when two dispatches both
+    // prompt.
     let dispatchChain: Promise<void> = Promise.resolve()
 
     // Send via SSE stream. CR2: 401/403 retry happens at the request
@@ -390,27 +381,35 @@ export class AgentSession {
       ui.onAssistantMessage(displayText)
     }
 
-    // tx_ready → synth sign_tx → executeActions. Result threaded via recent_actions.
+    // tx_ready → synthetic sign_tx → executor.signTxFromBuffer.
+    // Routed straight to the executor (no Action wrapper); result is
+    // pushed onto pendingToolResults and recursed for the next turn.
+    //
+    // Backend contract: the agent emits at most one tx_ready per stream
+    // turn. storeServerTransaction overwrites a single 'latest' buffer
+    // slot — if the backend ever emits two tx_ready events in one turn,
+    // only the last would be signed. That is not a currently supported
+    // flow; multi-leg sequences use separate turns via recursion.
     if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
         process.stderr.write(
           `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
         )
-      const signAction: Action = {
-        id: `tx_sign_${Date.now()}`,
-        type: 'sign_tx',
-        title: 'Sign transaction',
-        params: {},
-        auto_execute: true,
+      // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
+      const signToolCallId = `tx_sign_${Date.now()}`
+      const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
+        this.executor.signTxFromBuffer(signToolCallId)
+      )
+      this.pendingToolResults.push(recent)
+      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it.
+      if (recent.success && recent.data) {
+        const txHash = recent.data.tx_hash as string | undefined
+        const chain = recent.data.chain as string | undefined
+        const explorerUrl = recent.data.explorer_url as string | undefined
+        if (txHash) ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
       }
-      const results = await this.executeActions([signAction], ui)
-      if (results.length > 0) {
-        for (const result of results) {
-          this.pendingToolResults.push(actionResultToRecentAction(result))
-        }
-        await this.processMessageLoop(null, ui, depth + 1)
-        return
-      }
+      await this.processMessageLoop(null, ui, depth + 1)
+      return
     }
 
     // Client-side tool results accumulated — recurse to deliver them.
@@ -422,7 +421,66 @@ export class AgentSession {
     ui.onDone()
   }
 
-  // Routes client-side tool calls through executeAction. Missing registry
+  /**
+   * Wrap a per-tool dispatch with the password-prompt gate (for tools in
+   * {@link PASSWORD_REQUIRED_TOOLS}) and `ui.onToolCall` /
+   * `ui.onToolResult` lifecycle events. Returns the `RecentAction` produced
+   * by the executor (or a synthetic failure `RecentAction` if the password
+   * prompt was declined).
+   */
+  private async runPasswordGatedTool(
+    toolName: string,
+    toolCallId: string,
+    ui: UICallbacks,
+    body: () => Promise<RecentAction>,
+    input?: Record<string, unknown>
+  ): Promise<RecentAction> {
+    // Delay caching the prompted password until after body() succeeds so a
+    // wrong password triggers a re-prompt on the next call rather than
+    // staying silently locked in to a bad value.
+    let promptedPassword: string | undefined
+    if (PASSWORD_REQUIRED_TOOLS.has(toolName) && !this.config.password) {
+      try {
+        promptedPassword = await ui.requestPassword()
+        this.executor.setPassword(promptedPassword)
+      } catch {
+        const failure: RecentAction = {
+          tool: toolName,
+          success: false,
+          data: { error: 'Password not provided', code: AgentErrorCode.PASSWORD_REQUIRED },
+        }
+        ui.onToolCall(toolCallId, toolName, input)
+        ui.onToolResult(
+          toolCallId,
+          toolName,
+          false,
+          failure.data,
+          'Password not provided',
+          AgentErrorCode.PASSWORD_REQUIRED
+        )
+        return failure
+      }
+    }
+
+    ui.onToolCall(toolCallId, toolName, input)
+    let recent: RecentAction
+    try {
+      recent = await body()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      recent = { tool: toolName, success: false, data: { error: message } }
+    }
+    const errorMsg = (recent.data?.error as string | undefined) ?? undefined
+    const errorCode = (recent.data?.code as AgentErrorCode | undefined) ?? undefined
+    ui.onToolResult(toolCallId, toolName, recent.success, recent.data, errorMsg, errorCode)
+    // Only persist the prompted password once the tool call proves it's usable.
+    if (promptedPassword && recent.success) {
+      this.config.password = promptedPassword
+    }
+    return recent
+  }
+
+  // Routes client-side tool calls through the per-tool registry. Missing
   // entries surface as a visible `[cli] unimplemented` warning + failure
   // RecentAction (never silent).
   private async dispatchClientSideTool(
@@ -431,8 +489,8 @@ export class AgentSession {
     input: Record<string, unknown>,
     ui: UICallbacks
   ): Promise<void> {
-    const actionType = CLIENT_SIDE_TOOL_DISPATCH[toolName]
-    if (!actionType) {
+    const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
+    if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
       this.pendingToolResults.push({
         tool: toolName,
@@ -442,92 +500,31 @@ export class AgentSession {
       return
     }
 
-    const action: Action = {
-      id: toolCallId,
-      type: actionType,
-      title: toolName,
-      params: input,
-      auto_execute: true,
-    }
-
+    let recent: RecentAction
     try {
-      const results = await this.executeActions([action], ui)
-      const result = results[0]
-      if (result) {
-        const recent = actionResultToRecentAction(result)
-        // Echo protocol markers (__*, pm_order_ref) back so server-side
-        // handlers like autoSubmitPolymarketOrder can find them.
-        if (recent.data === undefined) recent.data = {}
-        for (const key of Object.keys(input)) {
-          if (key.startsWith('__') || key === 'pm_order_ref') {
-            recent.data[key] = input[key]
-          }
-        }
-        this.pendingToolResults.push(recent)
-      }
+      recent = await this.runPasswordGatedTool(
+        toolName,
+        toolCallId,
+        ui,
+        () => handler(this.executor, toolCallId, input),
+        input
+      )
     } catch (err) {
+      // Handlers wrap their own errors; this catch only fires if the
+      // RecentAction adapter (`runTool`) itself blows up unexpectedly.
       const message = err instanceof Error ? err.message : String(err)
-      this.pendingToolResults.push({
-        tool: toolName,
-        success: false,
-        data: { error: message },
-      })
-    }
-  }
-
-  /**
-   * Execute a list of actions, handling password requirements.
-   */
-  private async executeActions(actions: Action[], ui: UICallbacks): Promise<ActionResult[]> {
-    const results: ActionResult[] = []
-
-    for (const action of actions) {
-      if (!this.executor.shouldAutoExecute(action)) {
-        continue
-      }
-
-      // Handle password requirement
-      if (PASSWORD_REQUIRED_ACTIONS.has(action.type)) {
-        if (!this.config.password) {
-          try {
-            const password = await ui.requestPassword()
-            this.executor.setPassword(password)
-            this.config.password = password
-          } catch {
-            results.push({
-              action: action.type,
-              action_id: action.id,
-              success: false,
-              error: 'Password not provided',
-              code: AgentErrorCode.PASSWORD_REQUIRED,
-            })
-            continue
-          }
-        }
-      }
-
-      // Notify UI that action is executing
-      ui.onToolCall(action.id, action.type, action.params)
-
-      // Execute
-      const result = await this.executor.executeAction(action)
-      results.push(result)
-
-      // Notify UI of result
-      ui.onToolResult(action.id, action.type, result.success, result.data, result.error, result.code)
-
-      // If sign_tx succeeded, emit tx status
-      if (action.type === 'sign_tx' && result.success && result.data) {
-        const txHash = result.data.tx_hash as string
-        const chain = result.data.chain as string
-        const explorerUrl = result.data.explorer_url as string
-        if (txHash) {
-          ui.onTxStatus(txHash, chain, 'pending', explorerUrl)
-        }
-      }
+      recent = { tool: toolName, success: false, data: { error: message } }
     }
 
-    return results
+    // Echo protocol markers (__*, pm_order_ref) back so server-side
+    // handlers like autoSubmitPolymarketOrder can find them.
+    if (recent.data === undefined) recent.data = {}
+    for (const key of Object.keys(input)) {
+      if (key.startsWith('__') || key === 'pm_order_ref') {
+        recent.data[key] = input[key]
+      }
+    }
+    this.pendingToolResults.push(recent)
   }
 
   /**

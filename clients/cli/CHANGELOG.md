@@ -1,5 +1,33 @@
 # @vultisig/cli
 
+## 0.22.5
+
+### Patch Changes
+
+- [#409](https://github.com/vultisig/vultisig-sdk/pull/409) [`64a8c44`](https://github.com/vultisig/vultisig-sdk/commit/64a8c445d97b7588d6650fdeadb3b4d38e1bfddd) Thanks [@neavra](https://github.com/neavra)! - Migrate fully to the client-side tool path. The legacy `actions` SSE channel
+  consumption was dropped in the previous release; this release also deletes
+  the `executor.dispatch()` chokepoint and the per-tool methods that only the
+  chokepoint reached. The wire shape (`recent_actions`, `tx_ready`,
+  `tool-input-available`) is unchanged for users.
+
+  Internal: `Action`, `ActionResult`, `SSEActions` types removed;
+  `SendMessageResponse.actions` and the `actions` SSE event variant removed
+  from public types. CLI now consumes only `tool-input-available` for
+  client-side tool calls and `tx_ready` for transaction signing.
+
+- Updated dependencies [[`1132ae5`](https://github.com/vultisig/vultisig-sdk/commit/1132ae51f8e4d5b8ca8a1855af9ea51031b574e9)]:
+  - @vultisig/core-chain@1.6.1
+  - @vultisig/sdk@0.22.5
+
+## 0.22.4
+
+### Patch Changes
+
+- [#422](https://github.com/vultisig/vultisig-sdk/pull/422) [`a0a8496`](https://github.com/vultisig/vultisig-sdk/commit/a0a8496b0b87722910bfb9f44c940c4981b25faf) Thanks [@neavra](https://github.com/neavra)! - CLI agent executor now recognizes the mcp-ts `execute_*` tx_ready envelope shape (`txArgs.tx`) for `execute_send` and `execute_contract_call`. Previously the executor only handled mcp-go's older shapes (`swap_tx` / `send_tx` / `tx`) and silently skipped every mcp-ts payload, leaving local-dev parity broken against production. Multi-leg `execute_swap` envelopes (carrying `approvalTxArgs`) are explicitly rejected for now — multi-leg sequencing is a follow-up.
+
+- Updated dependencies [[`6b75472`](https://github.com/vultisig/vultisig-sdk/commit/6b7547288f8594fcf8a9c71e46a5163d6b6cd727), [`613004f`](https://github.com/vultisig/vultisig-sdk/commit/613004f5fbce2658a439296ca249d3e031a58078), [`2e1bfb8`](https://github.com/vultisig/vultisig-sdk/commit/2e1bfb85417787a7cc5d497d35f6e76d2bb5a41a)]:
+  - @vultisig/core-chain@1.6.0
+
 ## 0.22.3
 
 ### Patch Changes

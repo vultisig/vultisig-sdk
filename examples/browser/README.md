@@ -205,8 +205,12 @@ The example includes specialized components for secure vault operations:
 ### Type Checking
 
 ```bash
-yarn typecheck
+yarn typecheck:example-browser
 ```
+
+Run this from the repository root before finishing changes to `examples/browser` or
+`examples/shared`. It checks the shared example package first, then the browser
+example, using the repo-local TypeScript toolchain pinned by Yarn.
 
 ### Building for Production
 

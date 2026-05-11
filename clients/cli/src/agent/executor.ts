@@ -1,18 +1,18 @@
 /**
  * Agent Action Executor
  *
- * Executes actions returned by the agent-backend locally.
- * Handles balance queries, transaction building, signing, and broadcasting.
+ * Per-tool handlers invoked from `dispatchClientSideTool` (client-side tool
+ * path) and `signTxFromBuffer` (tx_ready synthesis path) in session.ts.
+ * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
+ * to be flushed into the next outbound `context.recent_actions`.
  */
-import type { GetThorchainPoolsOptions, VaultAddressMap } from '@vultisig/core-chain/chains/cosmos/thor/lp'
-import type { EvmChain, VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, evmCall, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import type { VaultBase, Vultisig } from '@vultisig/sdk'
+import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
-import type { Action, ActionResult } from './types'
-import { AUTO_EXECUTE_ACTIONS, PASSWORD_REQUIRED_ACTIONS } from './types'
+import type { RecentAction } from './types'
 
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
@@ -69,6 +69,16 @@ export class AgentExecutor {
   /** Owning SDK (optional); used for address book backed by app storage */
   private vultisig: Vultisig | undefined
   private pendingPayloads = new Map<string, StoredPayload>()
+  /**
+   * Buffered legs for a 2-leg mcp-ts execute_* envelope (approve + main).
+   * Populated by storeServerTransaction when both `approvalTxArgs` and
+   * `txArgs` are present; consumed and cleared by signMultiLeg.
+   */
+  private pendingLegs: Array<{
+    txArgs: any
+    parent: any
+    kind: 'approve' | 'main'
+  }> = []
   private password: string | null = null
   private verbose: boolean
   private stateStore: VaultStateStore | null = null
@@ -100,14 +110,78 @@ export class AgentExecutor {
       process.stderr.write(
         `[executor] storeServerTransaction called, keys: ${Object.keys(txReadyData || {}).join(',')}\n`
       )
-    const nestedTx = txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx
+    // mcp-ts execute_swap / execute_contract_call may emit a 2-leg envelope
+    // carrying both `approvalTxArgs` (ERC-20 approve) and `txArgs` (the main
+    // swap/call). Stash both legs and store a `__multiLeg` marker payload;
+    // signTxFromBuffer routes through signMultiLeg, which signs+broadcasts
+    // the approve leg, waits for the receipt, then signs+broadcasts the main
+    // leg. Mirrors vultiagent's useTransactionFlow (Pattern 3 — see task
+    // 080526-sdk-cli-multileg-sequencer.md).
+    if (txReadyData?.approvalTxArgs && txReadyData?.txArgs) {
+      // Validate both legs resolve to the same chain before buffering. A
+      // malformed envelope where approvalTxArgs.chain ≠ txArgs.chain (or
+      // either disagrees with the parent) would otherwise be silently
+      // coerced to whichever chain signServerTx picks first via its
+      // `chain || from_chain || txArgs.chain` precedence — the approve
+      // leg would broadcast against the wrong allowance state. Fail
+      // closed: reject upfront, never half-broadcast across chains.
+      const approvalChain = resolveChainFromTxReady(txReadyData.approvalTxArgs)
+      const mainChain = resolveChainFromTxReady(txReadyData.txArgs)
+      const parentChain = resolveChainFromTxReady(txReadyData)
+      if (
+        !approvalChain ||
+        !mainChain ||
+        approvalChain !== mainChain ||
+        (parentChain && parentChain !== approvalChain)
+      ) {
+        if (this.verbose)
+          process.stderr.write(
+            `[executor] rejecting multi-leg envelope with inconsistent chain metadata: parent=${parentChain ?? 'unresolved'} approval=${approvalChain ?? 'unresolved'} main=${mainChain ?? 'unresolved'}\n`
+          )
+        return false
+      }
+      const chain = approvalChain
+      // M3: enforce the "Phase B is EVM-only" comment in code. signMultiLeg
+      // assumes EIP-1559 broadcast + receipt semantics via signServerTx +
+      // waitForEvmReceipt; non-EVM 2-leg flows are not a real shape on mcp-ts
+      // today and would silently misbehave if forced through this path.
+      // Reject loudly rather than fall through to the single-leg branch
+      // (which would extract main-leg txArgs and silently drop the approve).
+      if (!EVM_CHAINS.has(chain)) {
+        if (this.verbose)
+          process.stderr.write(
+            `[executor] rejecting multi-leg envelope on non-EVM chain ${chain}: signMultiLeg is EVM-only\n`
+          )
+        return false
+      }
+      this.pendingLegs = [
+        {
+          txArgs: txReadyData.approvalTxArgs,
+          parent: txReadyData,
+          kind: 'approve',
+        },
+        { txArgs: txReadyData.txArgs, parent: txReadyData, kind: 'main' },
+      ]
+      this.pendingPayloads.clear()
+      this.pendingPayloads.set('latest', {
+        payload: { __serverTx: true, __multiLeg: true, ...txReadyData },
+        coin: { chain, address: '', decimals: 18, ticker: '' },
+        chain,
+        timestamp: Date.now(),
+      })
+      if (this.verbose)
+        process.stderr.write(`[executor] stored multi-leg envelope: chain=${chain}, legs=2 (approve, main)\n`)
+      return true
+    }
+    const nestedTx = extractNestedTx(txReadyData)
     if (nestedTx?.status === 'error' || nestedTx?.error) {
       if (this.verbose)
         process.stderr.write(`[executor] skipping error tx_ready: ${nestedTx.error || 'unknown error'}\n`)
       return false
     }
     if (!nestedTx) {
-      if (this.verbose) process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx found in data\n`)
+      if (this.verbose)
+        process.stderr.write(`[executor] storeServerTransaction: no swap_tx/send_tx/tx/txArgs.tx found in data\n`)
       return false
     }
 
@@ -133,128 +207,85 @@ export class AgentExecutor {
     return this.pendingPayloads.has('latest')
   }
 
-  shouldAutoExecute(action: Action): boolean {
-    return action.auto_execute === true || AUTO_EXECUTE_ACTIONS.has(action.type)
-  }
-
-  requiresPassword(action: Action): boolean {
-    return PASSWORD_REQUIRED_ACTIONS.has(action.type)
-  }
-
   /**
-   * Execute a single action and return the result.
+   * Wrap a per-tool handler body with normalised success/failure → RecentAction
+   * conversion. Replaces the legacy executeAction → ActionResult adapter that
+   * the dispatch chokepoint used before this refactor.
    */
-  async executeAction(action: Action): Promise<ActionResult> {
+  private async runTool(toolName: string, body: () => Promise<Record<string, unknown>>): Promise<RecentAction> {
     try {
-      const data = await this.dispatch(action)
-      return {
-        action: action.type,
-        action_id: action.id,
-        success: true,
-        data,
-      }
+      const data = await body()
+      return { tool: toolName, success: true, data }
     } catch (err: unknown) {
       const { code, message } = normalizeAgentError(err)
-      return {
-        action: action.type,
-        action_id: action.id,
-        success: false,
-        error: message,
-        code,
-      }
+      return { tool: toolName, success: false, data: { error: message, code } }
     }
-  }
-
-  private async dispatch(action: Action): Promise<Record<string, unknown>> {
-    if (this.verbose) process.stderr.write(`[dispatch] action.type=${action.type} action.id=${action.id}\n`)
-    const params = action.params || {}
-
-    switch (action.type) {
-      case 'get_balances':
-        return this.getBalances(params)
-      case 'add_chain':
-        return this.addChain(params)
-      case 'remove_chain':
-        return this.removeChain(params)
-      case 'add_coin':
-        return this.addCoin(params)
-      case 'remove_coin':
-        return this.removeCoin(params)
-      case 'build_send_tx':
-        return this.buildSendTx(params)
-      case 'build_swap_tx':
-        return this.buildSwapTx(params)
-      case 'build_tx':
-      case 'build_custom_tx':
-        return this.buildTx(params)
-      case 'sign_tx':
-        return this.signTx(params)
-      case 'get_address_book':
-        return this.getAddressBook(params)
-      case 'address_book_add':
-        return this.addAddressBookEntry(params)
-      case 'address_book_remove':
-        return this.removeAddressBookEntry(params)
-      case 'search_token':
-        return this.searchToken(params)
-      case 'list_vaults':
-        return this.listVaults()
-      case 'sign_typed_data':
-        return this.signTypedData(params)
-      case 'scan_tx':
-        return this.scanTx(params)
-      case 'read_evm_contract':
-        return this.readEvmContract(params)
-      case 'thorchain_pool_info':
-        return this.thorchainPoolInfo(params)
-      case 'thorchain_add_liquidity':
-        return this.thorchainAddLiquidity(params)
-      case 'thorchain_remove_liquidity':
-        return this.thorchainRemoveLiquidity(params)
-      default:
-        throw new Error(
-          `Action type '${action.type}' is not implemented locally. The backend may handle this action server-side.`
-        )
-    }
-  }
-
-  // ============================================================================
-  // Balance & Portfolio
-  // ============================================================================
-
-  private async getBalances(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const chainFilter = params.chain as string | undefined
-    const tickerFilter = params.ticker as string | undefined
-
-    const balanceRecord = await this.vault.balances()
-    let entries = Object.entries(balanceRecord).map(([key, b]: [string, any]) => ({
-      chain: b.chainId || key.split(':')[0] || '',
-      symbol: b.symbol || '',
-      amount: b.formattedAmount || b.amount?.toString() || '0',
-      decimals: b.decimals || 18,
-      raw_amount: b.amount?.toString(),
-    }))
-
-    if (chainFilter) {
-      const chain = resolveChain(chainFilter)
-      if (chain) {
-        entries = entries.filter(b => b.chain.toLowerCase() === chain.toLowerCase())
-      }
-    }
-
-    if (tickerFilter) {
-      entries = entries.filter(b => b.symbol.toLowerCase() === tickerFilter.toLowerCase())
-    }
-
-    return { balances: entries }
   }
 
   // ============================================================================
   // Chain & Token Management
   // ============================================================================
 
-  private async addChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Backend may send a single chain or a batch via `chains` array
+  // vault_chain dispatcher — backend shape:
+  //   { action: "add" | "remove", chains: [{ chain }] }
+  // Discriminator wrapper: routes to addChain / removeChain so the resulting
+  // RecentAction is tagged tool: 'vault_chain' (matching what the agent emits)
+  // rather than the per-action method's tool name.
+  async vaultChain(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('vault_chain', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addChainImpl(input)
+        case 'remove':
+          return this.removeChainImpl(input)
+        default:
+          throw new Error(`vault_chain: unknown action: ${action ?? '(missing)'}`)
+      }
+    })
+  }
+
+  // vault_coin dispatcher — backend shape:
+  //   { action: "add" | "remove", coins: [{ chain, ticker, contract_address?, ... }] }
+  async vaultCoin(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('vault_coin', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addCoinImpl(input)
+        case 'remove':
+          return this.removeCoinImpl(input)
+        default:
+          throw new Error(`vault_coin: unknown action: ${action ?? '(missing)'}`)
+      }
+    })
+  }
+
+  // address_book dispatcher — backend shape:
+  //   { action: "add" | "remove", entry: { name, chain, address } }
+  async addressBook(toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book', async () => {
+      const action = input.action as string | undefined
+      switch (action) {
+        case 'add':
+          return this.addAddressBookImpl(input)
+        case 'remove':
+          return this.removeAddressBookImpl(input)
+        default:
+          throw new Error(`address_book: unknown action: ${action ?? '(missing)'}`)
+      }
+    })
+  }
+
+  async addChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('add_chain', () => this.addChainImpl(input))
+  }
+
+  // Backend `vault_chain { action: "add", chains: [...] }` and legacy
+  // single-chain calls both flow through this impl. The public `addChain`
+  // wrapper above tags results as `tool: 'add_chain'`; the new `vaultChain`
+  // wrapper (above) tags them as `tool: 'vault_chain'`.
+  private async addChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const chains = params.chains as any[] | undefined
     if (chains && Array.isArray(chains)) {
       const results: { chain: string; address: string }[] = []
@@ -269,7 +300,6 @@ export class AgentExecutor {
       return { added: results }
     }
 
-    // Single chain format
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
@@ -278,7 +308,20 @@ export class AgentExecutor {
     return { chain: chain.toString(), address, added: true }
   }
 
-  private async removeChain(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async removeChainImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const chains = params.chains as any[] | undefined
+    if (chains && Array.isArray(chains)) {
+      const results: { chain: string }[] = []
+      for (const c of chains) {
+        const name = typeof c === 'string' ? c : c.chain
+        const chain = resolveChain(name)
+        if (!chain) throw new Error(`Unknown chain: ${name}`)
+        await this.vault.removeChain(chain)
+        results.push({ chain: chain.toString() })
+      }
+      return { removed: results }
+    }
+
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
@@ -286,20 +329,20 @@ export class AgentExecutor {
     return { chain: chain.toString(), removed: true }
   }
 
-  private async addCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Backend may send a single token or a batch via `tokens` array
-    const tokens = params.tokens as any[] | undefined
-    if (tokens && Array.isArray(tokens)) {
+  private async addCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    // Backend sends `coins` (vault_coin); legacy/hand-rolled callers may pass `tokens`.
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
       const results: { chain: string; symbol: string }[] = []
-      for (const t of tokens) {
+      for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
-        const symbol = t.symbol || t.ticker || ''
+        const symbol = t.ticker || t.symbol || ''
         await this.vault.addToken(chain, {
           id: (t.contract_address || t.contractAddress || '') as string,
           symbol,
           name: (t.name || symbol) as string,
-          decimals: t.decimals || 18,
+          decimals: t.decimals ?? 18,
           contractAddress: (t.contract_address || t.contractAddress) as string,
           chainId: chain.toString(),
         } as any)
@@ -313,594 +356,119 @@ export class AgentExecutor {
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
 
-    const symbol = (params.symbol || params.ticker) as string
+    const symbol = (params.ticker || params.symbol) as string
     await this.vault.addToken(chain, {
       id: (params.contract_address || params.contractAddress || '') as string,
       symbol,
       name: (params.name || symbol) as string,
-      decimals: (params.decimals as number) || 18,
+      decimals: (params.decimals as number) ?? 18,
       contractAddress: (params.contract_address || params.contractAddress) as string,
       chainId: chain.toString(),
     } as any)
     return { chain: chain.toString(), symbol, added: true }
   }
 
-  private async removeCoin(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
+    if (coins && Array.isArray(coins)) {
+      const results: { chain: string; tokenId: string }[] = []
+      for (const t of coins) {
+        const chain = resolveChain(t.chain)
+        if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
+        const tokenId = (t.contract_address || t.contractAddress || t.token_id || t.id) as string
+        if (!tokenId) {
+          throw new Error(
+            `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
+          )
+        }
+        await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId })
+      }
+      return { removed: results }
+    }
+
     const chainName = params.chain as string
     const chain = resolveChain(chainName)
     if (!chain) throw new Error(`Unknown chain: ${chainName}`)
 
-    const tokenId = (params.token_id || params.id || params.contract_address) as string
+    const tokenId = (params.contract_address || params.contractAddress || params.token_id || params.id) as
+      | string
+      | undefined
+    if (!tokenId) {
+      throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
+    }
     await this.vault.removeToken(chain, tokenId)
     return { chain: chain.toString(), removed: true }
   }
 
-  // ============================================================================
-  // Transaction Building
-  // ============================================================================
-
-  private async buildSendTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const chainName = (params.chain || params.from_chain) as string
-    const chain = resolveChain(chainName)
-    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-
-    const symbol = (params.symbol || params.ticker) as string
-    const toAddress = (params.address || params.to || params.destination) as string
-    const amountStr = params.amount as string
-
-    if (!toAddress) throw new Error('Destination address is required')
-    if (!amountStr) throw new Error('Amount is required')
-
-    // Acquire chain lock for EVM nonce management (released in signTx)
-    await this.acquireEvmLockIfNeeded(chain)
-
-    try {
-      const address = await this.vault.address(chain)
-      const balance = await this.vault.balance(chain, params.token_id as string | undefined)
-
-      const coin: AccountCoin = {
-        chain,
-        address,
-        decimals: balance.decimals,
-        ticker: symbol || balance.symbol,
-        id: params.token_id as string | undefined,
-      }
-
-      // Parse amount
-      const amount = parseAmount(amountStr, balance.decimals)
-
-      const memo = params.memo as string | undefined
-      const payload = await this.vault.prepareSendTx({
-        coin,
-        receiver: toAddress,
-        amount,
-        memo,
-      })
-
-      // Patch EVM nonce if local state is ahead of on-chain
-      await this.patchEvmNonce(chain, payload)
-
-      const messageHashes = await this.vault.extractMessageHashes(payload)
-
-      // Store payload only after build fully succeeds (including hash extraction)
-      this.pendingPayloads.clear()
-      const payloadId = `tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      this.pendingPayloads.set(payloadId, {
-        payload,
-        coin,
-        chain,
-        timestamp: Date.now(),
-      })
-      this.pendingPayloads.set('latest', {
-        payload,
-        coin,
-        chain,
-        timestamp: Date.now(),
-      })
-
-      return {
-        keysign_payload: payloadId,
-        from_chain: chain.toString(),
-        from_symbol: coin.ticker,
-        amount: amountStr,
-        sender: address,
-        destination: toAddress,
-        memo: memo || undefined,
-        message_hashes: messageHashes,
-        tx_details: {
-          chain: chain.toString(),
-          from: address,
-          to: toAddress,
-          amount: amountStr,
-          symbol: coin.ticker,
-        },
-      }
-    } catch (err) {
-      await this.releaseEvmLock(chain)
-      throw err
-    }
+  async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('remove_chain', () => this.removeChainImpl(input))
   }
 
-  private async buildSwapTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (this.verbose)
-      process.stderr.write(`[build_swap_tx] called with params: ${JSON.stringify(params).slice(0, 500)}\n`)
-    const fromChainName = (params.from_chain || params.chain) as string
-    const toChainName = params.to_chain as string
-    const fromChain = resolveChain(fromChainName)
-    const toChain = toChainName ? resolveChain(toChainName) : null
-    if (!fromChain) throw new Error(`Unknown from_chain: ${fromChainName}`)
-
-    // Acquire chain lock for EVM nonce management (released in signTx)
-    await this.acquireEvmLockIfNeeded(fromChain)
-
-    try {
-      const amountStr = params.amount as string
-      const fromSymbol = (params.from_symbol || params.from_token || '') as string
-      const toSymbol = (params.to_symbol || params.to_token || '') as string
-      const fromToken = (params.from_contract || params.from_token_id) as string | undefined
-      const toToken = (params.to_contract || params.to_token_id) as string | undefined
-
-      const fromCoin = { chain: fromChain, token: fromToken || undefined }
-      const toCoin = {
-        chain: toChain || fromChain,
-        token: toToken || undefined,
-      }
-
-      // Get quote
-      const quote = await this.vault.getSwapQuote({
-        fromCoin: fromCoin as any,
-        toCoin: toCoin as any,
-        amount: amountStr,
-      })
-
-      // Prepare the actual swap transaction
-      const swapResult = await this.vault.prepareSwapTx({
-        fromCoin: fromCoin as any,
-        toCoin: toCoin as any,
-        amount: amountStr,
-        swapQuote: quote,
-        autoApprove: true,
-      })
-
-      const chain = fromChain
-      const payload = swapResult.keysignPayload
-
-      // Patch EVM nonce if local state is ahead of on-chain
-      await this.patchEvmNonce(chain, payload)
-
-      const messageHashes = await this.vault.extractMessageHashes(payload)
-
-      // Store payload only after build fully succeeds (including hash extraction)
-      this.pendingPayloads.clear()
-      const payloadId = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      this.pendingPayloads.set(payloadId, {
-        payload,
-        coin: { chain, address: '', decimals: 18, ticker: fromSymbol },
-        chain,
-        timestamp: Date.now(),
-      })
-      this.pendingPayloads.set('latest', {
-        payload,
-        coin: { chain, address: '', decimals: 18, ticker: fromSymbol },
-        chain,
-        timestamp: Date.now(),
-      })
-
-      return {
-        keysign_payload: payloadId,
-        from_chain: fromChain.toString(),
-        to_chain: (toChain || fromChain).toString(),
-        from_symbol: fromSymbol,
-        to_symbol: toSymbol,
-        amount: amountStr,
-        estimated_output: (quote as any).estimatedOutput?.toString(),
-        provider: (quote as any).provider,
-        message_hashes: messageHashes,
-      }
-    } catch (err) {
-      await this.releaseEvmLock(fromChain)
-      throw err
-    }
+  async addCoin(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('add_coin', () => this.addCoinImpl(input))
   }
 
-  // ============================================================================
-  // THORChain LP (RUNE-side asym add / remove via prepareSendTx + memo)
-  // ============================================================================
-
-  /**
-   * Pool stats from Midgard (no signing). Optional `pool` filters to one row.
-   */
-  private async thorchainPoolInfo(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const { assertValidPoolId, getThorchainPools, thorchainMidgardBaseUrl } =
-      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
-
-    const statusRaw = params.status
-    let poolFetchOpts: GetThorchainPoolsOptions = {}
-    if (statusRaw === null || String(statusRaw).toLowerCase() === 'all') {
-      poolFetchOpts = { status: null }
-    } else if (statusRaw !== undefined) {
-      poolFetchOpts = { status: String(statusRaw) }
-    }
-
-    const pools = await getThorchainPools(poolFetchOpts)
-
-    const poolArg = params.pool as string | undefined
-    if (poolArg) {
-      const normalized = poolArg.trim().toUpperCase()
-      assertValidPoolId(normalized)
-      const row = pools.find(p => p.asset.toUpperCase() === normalized)
-      return {
-        found: !!row,
-        pool_id: normalized,
-        summary: row ?? null,
-        midgard: thorchainMidgardBaseUrl,
-      }
-    }
-
-    const limitRaw = params.limit
-    const limit = Math.min(500, Math.max(1, typeof limitRaw === 'number' ? limitRaw : Number(limitRaw) || 80))
-    return {
-      pools: pools.slice(0, limit),
-      total: pools.length,
-      midgard: thorchainMidgardBaseUrl,
-    }
-  }
-
-  private async thorchainAddLiquidity(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const { assertValidPoolId, buildThorchainLpAddPayload, resolvePairedAddressForLpAdd } =
-      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
-    const { getThorchainInboundAddress } =
-      await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
-
-    const pool = this.normalizeThorchainPoolId(params.pool as string, assertValidPoolId)
-    const amountStr = String(params.amount ?? '').trim()
-    if (!amountStr) {
-      throw new Error('amount is required (RUNE amount as a decimal string, e.g. "0.25")')
-    }
-    if (!/^\d+(\.\d+)?$/.test(amountStr)) {
-      throw new Error('amount must be a positive decimal string (no sign or scientific notation), e.g. "0.25"')
-    }
-    const [, frac = ''] = amountStr.split('.')
-    if (frac.length > 8) {
-      throw new Error('RUNE amount supports at most 8 decimal places')
-    }
-    const amountRuneBaseUnits = parseAmount(amountStr, 8)
-    if (amountRuneBaseUnits <= 0n) {
-      throw new Error('amount must be greater than zero')
-    }
-
-    let pairedAddress = (params.paired_address as string | undefined)?.trim() || undefined
-    const autoPairRaw = params.auto_pair ?? params.autoPair
-    const autoPairDisabled =
-      autoPairRaw === false ||
-      autoPairRaw === 0 ||
-      (typeof autoPairRaw === 'string' && ['false', '0'].includes(autoPairRaw.toLowerCase()))
-    const autoPair = !pairedAddress && !autoPairDisabled
-    if (autoPair) {
-      const vaultAddresses = await this.buildVaultAddressMap()
-      pairedAddress =
-        resolvePairedAddressForLpAdd({
-          pool,
-          side: 'rune',
-          vaultAddresses,
-        }) || undefined
-    }
-
-    const lpPayload = buildThorchainLpAddPayload({
-      pool,
-      amountRuneBaseUnits: amountRuneBaseUnits.toString(),
-      ...(pairedAddress ? { pairedAddress } : {}),
-    })
-
-    const receiver = await this.getThorchainNativeInboundAddress(getThorchainInboundAddress)
-    const address = await this.vault.address(Chain.THORChain)
-    const coin: AccountCoin = {
-      chain: Chain.THORChain,
-      address,
-      decimals: 8,
-      ticker: 'RUNE',
-    }
-
-    const payload = await this.vault.prepareSendTx({
-      coin,
-      receiver,
-      amount: BigInt(lpPayload.amount),
-      memo: lpPayload.memo,
-    })
-
-    const messageHashes = await this.vault.extractMessageHashes(payload)
-
-    this.pendingPayloads.clear()
-    const payloadId = `tc_lp_add_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    this.pendingPayloads.set(payloadId, {
-      payload,
-      coin,
-      chain: Chain.THORChain,
-      timestamp: Date.now(),
-    })
-    this.pendingPayloads.set('latest', {
-      payload,
-      coin,
-      chain: Chain.THORChain,
-      timestamp: Date.now(),
-    })
-
-    return {
-      keysign_payload: payloadId,
-      chain: 'THORChain',
-      pool: lpPayload.pool,
-      memo: lpPayload.memo,
-      amount_rune: amountStr,
-      paired_address: pairedAddress,
-      inbound_receiver: receiver,
-      sender: address,
-      message_hashes: messageHashes,
-    }
-  }
-
-  private async thorchainRemoveLiquidity(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const { assertValidPoolId, buildThorchainLpRemovePayload } =
-      await import('@vultisig/core-chain/chains/cosmos/thor/lp')
-    const { getThorchainInboundAddress } =
-      await import('@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress')
-
-    const pool = this.normalizeThorchainPoolId(params.pool as string, assertValidPoolId)
-
-    let basisPoints: number | undefined
-    if (params.basis_points != null) {
-      basisPoints = Number(params.basis_points)
-    } else if (params.basisPoints != null) {
-      basisPoints = Number(params.basisPoints)
-    }
-    if (basisPoints == null && params.withdraw_percent != null) {
-      const pct = Number(params.withdraw_percent)
-      if (Number.isFinite(pct)) {
-        basisPoints = Math.round(pct * 100)
-      }
-    }
-    if (basisPoints == null || !Number.isInteger(basisPoints)) {
-      throw new Error('basis_points (integer 1–10000) or withdraw_percent (0.01–100, maps to basis points) is required')
-    }
-
-    let withdrawToAsset = (params.withdraw_to_asset as string | undefined)?.trim()
-    if (!withdrawToAsset && params.withdrawToAsset) {
-      withdrawToAsset = String(params.withdrawToAsset).trim()
-    }
-    if (withdrawToAsset) {
-      withdrawToAsset = withdrawToAsset.toUpperCase()
-    }
-
-    const lpPayload = buildThorchainLpRemovePayload({
-      pool,
-      basisPoints,
-      ...(withdrawToAsset ? { withdrawToAsset } : {}),
-    })
-
-    const receiver = await this.getThorchainNativeInboundAddress(getThorchainInboundAddress)
-    const address = await this.vault.address(Chain.THORChain)
-    const coin: AccountCoin = {
-      chain: Chain.THORChain,
-      address,
-      decimals: 8,
-      ticker: 'RUNE',
-    }
-
-    const payload = await this.vault.prepareSendTx({
-      coin,
-      receiver,
-      amount: BigInt(lpPayload.amount),
-      memo: lpPayload.memo,
-    })
-
-    const messageHashes = await this.vault.extractMessageHashes(payload)
-
-    this.pendingPayloads.clear()
-    const payloadId = `tc_lp_rm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    this.pendingPayloads.set(payloadId, {
-      payload,
-      coin,
-      chain: Chain.THORChain,
-      timestamp: Date.now(),
-    })
-    this.pendingPayloads.set('latest', {
-      payload,
-      coin,
-      chain: Chain.THORChain,
-      timestamp: Date.now(),
-    })
-
-    return {
-      keysign_payload: payloadId,
-      chain: 'THORChain',
-      pool: lpPayload.pool,
-      memo: lpPayload.memo,
-      basis_points: basisPoints,
-      withdraw_to_asset: withdrawToAsset || undefined,
-      dust_rune_base_units: lpPayload.amount,
-      inbound_receiver: receiver,
-      sender: address,
-      message_hashes: messageHashes,
-    }
-  }
-
-  private normalizeThorchainPoolId(raw: string | undefined, assertValidPoolId: (pool: string) => void): string {
-    const pool = String(raw ?? '').trim()
-    if (!pool) {
-      throw new Error('pool is required (e.g. "BTC.BTC")')
-    }
-    const upper = pool.toUpperCase()
-    assertValidPoolId(upper)
-    return upper
-  }
-
-  private async buildVaultAddressMap(): Promise<VaultAddressMap> {
-    const map: VaultAddressMap = {}
-    for (const c of this.vault.chains) {
-      try {
-        map[c] = await this.vault.address(c)
-      } catch {
-        // omit chains that cannot produce an address
-      }
-    }
-    return map
-  }
-
-  /** THORChain protocol vault for native RUNE deposits (SWAP/LP memos). Matches SDK e2e fixture. */
-  private static readonly THORCHAIN_RUNE_DEPOSIT_ADDRESS = 'thor1g98cy3n9mmjrpn0sxmn63lztelera37n8n67c0'
-
-  private async getThorchainNativeInboundAddress(
-    getInbound: () => Promise<Array<{ chain: string; address?: string }>>
-  ): Promise<string> {
-    const rows = await getInbound()
-    const thor = rows.find(r => r.chain.toUpperCase() === 'THOR')
-    if (thor?.address) {
-      return thor.address
-    }
-    // THORNode mainnet responses no longer always include `chain: "THOR"`; native RUNE
-    // memos still go to the protocol inbound vault address (same as historical clients / SDK tests).
-    if (this.verbose) {
-      process.stderr.write(
-        `[thorchain_lp] THOR inbound row missing; using static RUNE deposit vault ${AgentExecutor.THORCHAIN_RUNE_DEPOSIT_ADDRESS}\n`
-      )
-    }
-    return AgentExecutor.THORCHAIN_RUNE_DEPOSIT_ADDRESS
-  }
-
-  private async buildTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // EVM contract call with function_name + typed params
-    if (params.function_name && params.contract_address) {
-      return this.buildContractCallTx(params)
-    }
-
-    // If this has raw contract call data (hex payload from MCP), treat it as a server-built tx
-    if (params.data || params.calldata || params.hex_payload) {
-      const txData = {
-        to: params.to || params.address || params.contract,
-        value: params.value || '0',
-        data: params.data || params.calldata || params.hex_payload,
-        chain: params.chain,
-        chain_id: params.chain_id,
-      }
-
-      // Store as a server-style tx for sign_tx to pick up
-      const stored = this.storeServerTransaction({
-        tx: txData,
-        chain: params.chain,
-        from_chain: params.chain,
-      })
-      if (!stored) {
-        throw new Error('Could not stage calldata transaction for signing (invalid or empty tx payload)')
-      }
-
-      const chain = resolveChain(params.chain as string) || Chain.Ethereum
-      const address = await this.vault.address(chain)
-
-      return {
-        status: 'ready',
-        chain: chain.toString(),
-        from: address,
-        to: txData.to,
-        value: txData.value,
-        has_calldata: true,
-        message: 'Transaction built. Ready to sign.',
-      }
-    }
-
-    // If we got here with contract_address but no function_name,
-    // the params are incomplete for a contract call.
-    if (params.contract_address && !params.function_name) {
-      const provided = Object.keys(params).join(', ')
-      throw new Error(
-        `build_custom_tx requires function_name and params for contract calls. ` +
-          `Got: ${provided}. Missing: function_name, params.`
-      )
-    }
-
-    throw new Error(
-      `build_custom_tx: unrecognized params shape. ` +
-        `Expected function_name + contract_address for ABI-encoding. ` +
-        `Server-built calldata should arrive via tx_ready, not via action params. ` +
-        `Got keys: ${Object.keys(params).join(', ')}`
-    )
-  }
-
-  /**
-   * Build, sign, and broadcast an EVM contract call transaction from structured params.
-   * Encodes function_name + typed params into ABI calldata, then signs via signServerTx.
-   */
-  private async buildContractCallTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const chainName = (params.chain || 'Ethereum') as string
-    const chain = resolveChain(chainName)
-    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-
-    const contractAddress = params.contract_address as string
-    const functionName = params.function_name as string
-    const typedParams = params.params as Array<{ type: string; value: string }> | undefined
-    const value = (params.value || '0') as string
-
-    // ABI-encode the function call
-    const calldata = await encodeContractCall(functionName, typedParams || [])
-
-    if (this.verbose)
-      process.stderr.write(
-        `[build_contract_tx] ${functionName}(${(typedParams || []).map(p => p.type).join(',')}) on ${contractAddress} chain=${chain}\n`
-      )
-
-    // Store as server-style tx and sign via the proven signServerTx path
-    const serverTxData = {
-      __serverTx: true,
-      tx: {
-        to: contractAddress,
-        value,
-        data: calldata,
-      },
-      chain: chainName,
-      from_chain: chainName,
-    }
-
-    this.pendingPayloads.set('latest', {
-      payload: serverTxData,
-      coin: { chain, address: '', decimals: 18, ticker: '' },
-      chain,
-      timestamp: Date.now(),
-    })
-
-    // Sign and broadcast
-    return this.signServerTx(serverTxData, chain, { chain: chainName })
+  async removeCoin(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('remove_coin', () => this.removeCoinImpl(input))
   }
 
   // ============================================================================
   // Transaction Signing
   // ============================================================================
 
-  private async signTx(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    if (this.verbose) process.stderr.write(`[sign_tx] params: ${JSON.stringify(params).slice(0, 500)}\n`)
-    if (this.verbose)
-      process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
+  /**
+   * Sign and broadcast a transaction previously buffered by
+   * {@link storeServerTransaction} via the `tx_ready` SSE channel. Returns
+   * a `RecentAction` to be flushed in the next `context.recent_actions`.
+   *
+   * Replaces the legacy `signTx(action.params)` path: there is no longer an
+   * action wrapper, no `keysign_payload` lookup (the buffer always uses
+   * the `'latest'` slot), and no SDK-built keysignPayload branch (the live
+   * client-side tools no longer produce SDK-built payloads — those went
+   * away with `buildSendTx`/`buildSwapTx`).
+   */
+  async signTxFromBuffer(_toolCallId: string): Promise<RecentAction> {
+    return this.runTool('sign_tx', async () => {
+      if (this.verbose)
+        process.stderr.write(`[sign_tx] pendingPayloads keys: ${[...this.pendingPayloads.keys()].join(', ')}\n`)
 
-    // Find the pending payload
-    const payloadId = (params.keysign_payload || params.payload_id || 'latest') as string
-    const stored = this.pendingPayloads.get(payloadId)
+      const stored = this.pendingPayloads.get('latest')
+      if (!stored) {
+        throw new Error('No pending transaction to sign. Build a transaction first.')
+      }
 
-    if (!stored) {
-      throw new Error('No pending transaction to sign. Build a transaction first.')
-    }
+      const { payload, chain } = stored
 
-    const { payload, chain } = stored
+      if (!payload.__serverTx) {
+        // Live client-side tool path doesn't produce SDK-built keysign payloads;
+        // every signable payload arrives via tx_ready (server-built).
+        throw new Error('Pending transaction is not a server-built tx (no __serverTx flag).')
+      }
 
-    // Server-built transaction (from tx_ready SSE event)
-    if (payload.__serverTx) {
+      // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
+      // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
+      // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
+      // chain that's a programming error, not a missing branch.
+      let result: Record<string, unknown> | undefined
+      if (payload.__multiLeg) {
+        if (this.pendingLegs.length !== 2) {
+          throw new VaultError(
+            VaultErrorCode.InvalidConfig,
+            `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
+          )
+        }
+        result = await this.signMultiLeg(payload, chain, {})
+      }
+
       // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
       // since the server-built tx format doesn't match signServerTx's EVM assumptions.
       // Only the quote/prepare phase falls back to signServerTx — once signing starts,
       // failures must propagate to avoid double-submitting a broadcast transaction.
-      let result: Record<string, unknown> | undefined
-      if (chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
+      if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
         try {
           result = await this.buildAndSignSolanaSwapLocally(payload)
         } catch (e: any) {
-          // Only fall back if the error is from the quote/prepare phase (before signing).
-          // Sign/broadcast errors must propagate — retrying could double-submit on-chain.
           if (e._phase === 'prepare') {
             if (this.verbose)
               process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
@@ -909,74 +477,10 @@ export class AgentExecutor {
           }
         }
       }
-      if (!result) result = await this.signServerTx(payload, chain, params)
+      if (!result) result = await this.signServerTx(payload, chain, {})
       if (payload.sequence_id) result.sequence_id = payload.sequence_id
       return result
-    }
-
-    // SDK-built transaction (from local buildSwapTx/buildSendTx)
-    return this.signSdkTx(payload, chain, payloadId)
-  }
-
-  /**
-   * Sign and broadcast an SDK-built transaction (keysign payload from local build methods).
-   */
-  private async signSdkTx(payload: any, chain: Chain, _payloadId: string): Promise<Record<string, unknown>> {
-    try {
-      // Unlock vault if needed
-      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-        if (this.password) {
-          await (this.vault as any).unlock?.(this.password)
-        }
-      }
-
-      // Refresh gas estimate before signing — base fee may have risen since build time
-      await this.patchEvmGas(chain, payload)
-
-      // Extract message hashes and sign
-      const messageHashes = await this.vault.extractMessageHashes(payload)
-
-      const signature = await this.vault.sign(
-        {
-          transaction: payload,
-          chain: (payload as any).coin?.chain || chain,
-          messageHashes,
-        },
-        {}
-      )
-
-      // Broadcast
-      const txHash = await this.vault.broadcastTx({
-        chain,
-        keysignPayload: payload,
-        signature,
-      })
-
-      // Record nonce and broadcast timestamp — tx is already broadcast so
-      // don't convert a successful send into an error if persistence fails
-      this.evmLastBroadcast.set(chain.toString(), Date.now())
-      try {
-        this.recordEvmNonceFromPayload(chain, payload, messageHashes.length)
-      } catch (nonceErr) {
-        console.warn(`[nonce] failed to persist nonce for ${chain}:`, nonceErr)
-      }
-      await this.releaseEvmLock(chain)
-
-      // Clean up all pending payloads after successful sign
-      this.pendingPayloads.clear()
-
-      const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, txHash)
-
-      return {
-        tx_hash: txHash,
-        chain: chain.toString(),
-        status: 'pending',
-        explorer_url: explorerUrl,
-      }
-    } catch (err) {
-      await this.releaseEvmLock(chain)
-      throw err
-    }
+    })
   }
 
   /**
@@ -988,14 +492,20 @@ export class AgentExecutor {
     defaultChain: Chain,
     params: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const swapTx = serverTxData.swap_tx || serverTxData.send_tx || serverTxData.tx
+    const swapTx = extractNestedTx(serverTxData)
     if (!swapTx?.to) {
       throw new Error('Server transaction missing required fields (to)')
     }
 
-    // Resolve chain from action params, tx data, or stored default
-    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain) as string | undefined
-    const chainId = (serverTxData.chain_id || swapTx.chainId) as string | number | undefined
+    // Resolve chain from action params, tx data, or stored default.
+    // mcp-ts nests chain / chain_id under txArgs; mcp-go puts them at top level.
+    const chainName = (params.chain || serverTxData.chain || serverTxData.from_chain || serverTxData.txArgs?.chain) as
+      | string
+      | undefined
+    const chainId = (serverTxData.chain_id || serverTxData.txArgs?.chain_id || swapTx.chainId) as
+      | string
+      | number
+      | undefined
     let chain = defaultChain
     if (chainName) {
       chain = resolveChain(chainName) || defaultChain
@@ -1113,6 +623,133 @@ export class AgentExecutor {
       await this.releaseEvmLock(chain)
       throw err
     }
+  }
+
+  /**
+   * Sign and broadcast a 2-leg ERC-20 approve + main flow originating from
+   * mcp-ts `execute_*` envelopes that carry both `approvalTxArgs` and
+   * `txArgs`. Mirrors vultiagent's `useTransactionFlow`: leg 1 (approve) is
+   * signed and broadcast first, the receipt is awaited, then leg 2 (main)
+   * is signed and broadcast. Fails closed if the approve doesn't confirm
+   * — the main leg is NEVER broadcast against a stale or failed allowance.
+   *
+   * Phase B is intentionally EVM-only; non-EVM 2-leg flows are not a real
+   * shape on mcp-ts today (Pattern 1 / Pattern 2 multi-leg flows are split
+   * server-side via sequence_id and don't traverse this path).
+   */
+  private async signMultiLeg(
+    _payload: any,
+    chain: Chain,
+    params: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const [approveLeg, mainLeg] = this.pendingLegs
+
+    // H1: outer try/finally guarantees pendingLegs is cleared on ANY throw —
+    // signServerTx for either leg, waitForEvmReceipt timeout/revert, or the
+    // tx_hash invariant. Without this, an exception during leg-1 broadcast
+    // (RPC down, keysign failure) leaves stale 2-leg state behind. The
+    // receipt-wait still has its own try/catch below to wrap the error with
+    // the approve hash for operator diagnosis.
+    try {
+      // Synthesize a single-leg envelope from approvalTxArgs by promoting it
+      // to txArgs and stripping the multi-leg markers. M2: explicitly nil out
+      // sibling tx fields (swap_tx / send_tx / top-level tx) inherited via
+      // the parent spread so extractNestedTx's precedence — `swap_tx ||
+      // send_tx || tx || txArgs.tx` — can't pick a stale sibling if mcp-ts
+      // ever emits a hybrid envelope. signServerTx's extractNestedTx walks
+      // the synthesized shape and picks `.txArgs.tx` cleanly.
+      const approveEnvelope = {
+        ...approveLeg.parent,
+        txArgs: approveLeg.txArgs,
+        approvalTxArgs: undefined,
+        __multiLeg: undefined,
+        swap_tx: undefined,
+        send_tx: undefined,
+        tx: undefined,
+      }
+      const approveResult = await this.signServerTx(approveEnvelope, chain, params)
+      const approveTxHash = approveResult.tx_hash as string | undefined
+      if (!approveTxHash) {
+        throw new VaultError(VaultErrorCode.BroadcastFailed, 'signMultiLeg: approve leg returned no tx_hash')
+      }
+
+      if (this.verbose)
+        process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
+
+      try {
+        await this.waitForEvmReceipt(chain, approveTxHash, { timeoutSec: 90 })
+      } catch (err: any) {
+        // Surface the approve hash so the operator can inspect it on the
+        // explorer - a failed wait does NOT mean the approve was lost; it may
+        // still confirm later. The main leg is held back regardless.
+        // Map to VaultErrorCode.Timeout so normalizeAgentError surfaces a
+        // typed timeout to callers and keeps the approve hash in the message
+        // for explorer-side diagnosis.
+        throw new VaultError(
+          VaultErrorCode.Timeout,
+          `signMultiLeg: approve leg ${approveTxHash} did not confirm: ${err?.message ?? err}`,
+          err instanceof Error ? err : undefined
+        )
+      }
+
+      if (this.verbose) process.stderr.write(`[signMultiLeg] approve confirmed, broadcasting main leg\n`)
+
+      const mainEnvelope = {
+        ...mainLeg.parent,
+        txArgs: mainLeg.txArgs,
+        approvalTxArgs: undefined,
+        __multiLeg: undefined,
+        swap_tx: undefined,
+        send_tx: undefined,
+        tx: undefined,
+      }
+      const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+      return {
+        tx_hash: mainResult.tx_hash,
+        approval_tx_hash: approveTxHash,
+        chain: mainResult.chain,
+        status: 'pending',
+        explorer_url: mainResult.explorer_url,
+      }
+    } finally {
+      // Always clear, success or throw — symmetric with the receipt-wait
+      // catch's clear-and-rethrow. A persistent pendingLegs array would
+      // confuse future signTxFromBuffer calls and complicate retry flows.
+      this.pendingLegs = []
+    }
+  }
+
+  /**
+   * Poll vault.getTxStatus until the EVM tx confirms or the timeout fires.
+   * Mirrors VaultBase's private `waitForConfirmation` (used by `vault.swap`
+   * for its own approve-before-swap flow) — kept at the executor layer here
+   * so we can stub it from unit tests without exposing private SDK methods.
+   *
+   * Throws on timeout or on receipt status === 'error' (revert). Returns on
+   * success.
+   */
+  private async waitForEvmReceipt(chain: Chain, txHash: string, opts: { timeoutSec: number }): Promise<void> {
+    const intervalMs = 3_000
+    const deadline = Date.now() + opts.timeoutSec * 1_000
+    while (Date.now() < deadline) {
+      try {
+        const result = await (this.vault as any).getTxStatus({ chain, txHash })
+        if (result?.status === 'success') return
+        if (result?.status === 'error') {
+          // Typed BroadcastFailed lets callers distinguish a revert (the tx
+          // mined but reverted on-chain) from a generic timeout below.
+          throw new VaultError(VaultErrorCode.BroadcastFailed, `approve tx reverted (${txHash})`)
+        }
+      } catch (e: any) {
+        // Re-throw revert failures; treat other errors (network, RPC) as
+        // transient and keep polling until the deadline.
+        if (e instanceof VaultError && e.code === VaultErrorCode.BroadcastFailed) throw e
+        if (e?.message?.includes('reverted')) throw e
+      }
+      await new Promise(r => setTimeout(r, intervalMs))
+    }
+    throw new VaultError(VaultErrorCode.Timeout, `approve tx ${txHash} not confirmed within ${opts.timeoutSec}s`)
   }
 
   /**
@@ -1439,43 +1076,45 @@ export class AgentExecutor {
    * - Payloads array: { payloads: [{id, domain, types, message, primaryType, chain}, ...] }
    *   Used by Polymarket which requires signing both an Order and a ClobAuth.
    */
-  private async signTypedData(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    // Unlock vault once before signing
-    if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
-      if (this.password) {
-        await (this.vault as any).unlock?.(this.password)
-      }
-    }
-
-    // Handle payloads array format (e.g. Polymarket: order + auth)
-    const payloads = params.payloads as Array<Record<string, unknown>> | undefined
-    if (payloads && Array.isArray(payloads)) {
-      if (this.verbose) process.stderr.write(`[sign_typed_data] payloads mode, ${payloads.length} items\n`)
-      const signatures: Array<Record<string, unknown>> = []
-
-      for (let i = 0; i < payloads.length; i++) {
-        const payload = payloads[i]
-        const id = (payload.id || payload.name || 'default') as string
-        // Add delay between sequential MPC signing sessions to let VultiServer
-        // co-signer release the previous session before starting the next one
-        if (i > 0) {
-          if (this.verbose) process.stderr.write(`[sign_typed_data] waiting 5s between MPC sessions...\n`)
-          await new Promise(r => setTimeout(r, 5000))
+  async signTypedData(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('sign_typed_data', async () => {
+      // Unlock vault once before signing
+      if (this.vault.isEncrypted && !(this.vault as any).isUnlocked?.()) {
+        if (this.password) {
+          await (this.vault as any).unlock?.(this.password)
         }
-        const sig = await this.signSingleTypedData(payload)
-        signatures.push({ id, ...sig })
-        if (this.verbose) process.stderr.write(`[sign_typed_data] signed payload "${id}"\n`)
       }
 
-      return {
-        signatures,
-        pm_order_ref: params.pm_order_ref,
-        auto_submit: !!(params.__pm_auto_submit || params.auto_submit),
-      }
-    }
+      // Handle payloads array format (e.g. Polymarket: order + auth)
+      const payloads = input.payloads as Array<Record<string, unknown>> | undefined
+      if (payloads && Array.isArray(payloads)) {
+        if (this.verbose) process.stderr.write(`[sign_typed_data] payloads mode, ${payloads.length} items\n`)
+        const signatures: Array<Record<string, unknown>> = []
 
-    // Flat format: domain, types, message, primaryType at top level
-    return this.signSingleTypedData(params)
+        for (let i = 0; i < payloads.length; i++) {
+          const payload = payloads[i]
+          const id = (payload.id || payload.name || 'default') as string
+          // Add delay between sequential MPC signing sessions to let VultiServer
+          // co-signer release the previous session before starting the next one
+          if (i > 0) {
+            if (this.verbose) process.stderr.write(`[sign_typed_data] waiting 5s between MPC sessions...\n`)
+            await new Promise(r => setTimeout(r, 5000))
+          }
+          const sig = await this.signSingleTypedData(payload)
+          signatures.push({ id, ...sig })
+          if (this.verbose) process.stderr.write(`[sign_typed_data] signed payload "${id}"\n`)
+        }
+
+        return {
+          signatures,
+          pm_order_ref: input.pm_order_ref,
+          auto_submit: !!(input.__pm_auto_submit || input.auto_submit),
+        }
+      }
+
+      // Flat format: domain, types, message, primaryType at top level
+      return this.signSingleTypedData(input)
+    })
   }
 
   /**
@@ -1534,189 +1173,100 @@ export class AgentExecutor {
 
   // ============================================================================
   // Address Book
+  //
+  // Live client-side tools — server-side `address_book_*` runs through MCP
+  // for read; mutating writes have no local implementation yet.
   // ============================================================================
 
-  private async getAddressBook(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async addressBookAdd(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book_add', () => this.addAddressBookImpl(input))
+  }
+
+  async addressBookRemove(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
+    return this.runTool('address_book_remove', () => this.removeAddressBookImpl(input))
+  }
+
+  // Backend `address_book { action: "add", entry: {...} }` flows through
+  // this impl. The public `addressBookAdd` wrapper above tags results as
+  // `tool: 'address_book_add'`; the new `addressBook` wrapper tags them as
+  // `tool: 'address_book'` (matching the discriminator tool the backend emits).
+  private async addAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.vultisig) {
       throw new Error(
-        'get_address_book requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+        'address_book add requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
       )
     }
-
-    const chainName = (params.chain as string | undefined) || (params.chain_name as string | undefined)
+    const entry = params.entry as { name?: unknown; chain?: unknown; address?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book add: missing entry')
+    }
+    const chainName = entry.chain as string | undefined
     const chain = chainName ? resolveChain(chainName) : undefined
-    if (chainName && !chain) {
-      throw new Error(`Unknown chain: ${chainName}`)
-    }
+    if (!chain) throw new Error(`address_book add: unknown chain: ${chainName ?? '(missing)'}`)
+    const address = entry.address as string | undefined
+    if (!address) throw new Error('address_book add: entry.address is required')
+    const name = (entry.name as string | undefined) ?? ''
 
-    return (await this.vultisig.getAddressBook(chain)) as unknown as Record<string, unknown>
+    await this.vultisig.addAddressBookEntry([
+      {
+        chain,
+        address,
+        name,
+        source: 'saved',
+        dateAdded: Date.now(),
+      },
+    ])
+    return { added: { chain: chain.toString(), address, name } }
   }
 
-  private async addAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('address_book_add is not yet implemented locally. The backend may handle this action server-side.')
-  }
-
-  private async removeAddressBookEntry(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error(
-      'address_book_remove is not yet implemented locally. The backend may handle this action server-side.'
-    )
-  }
-
-  // ============================================================================
-  // Token Search & Other
-  // ============================================================================
-
-  private async searchToken(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const query = String(params.query ?? params.q ?? '')
-      .trim()
-      .toLowerCase()
-    if (!query) {
-      return { tokens: [] as unknown[] }
+  private async removeAddressBookImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (!this.vultisig) {
+      throw new Error(
+        'address_book remove requires the CLI SDK instance. Ensure AgentConfig.vultisig is set when creating the session.'
+      )
     }
-
-    const limit = 20
-    const chainName = params.chain as string | undefined
-
-    const tokenMatchesQuery = (t: { ticker: string; contractAddress?: string; priceProviderId?: string }) => {
-      const tick = t.ticker.toLowerCase()
-      const addr = (t.contractAddress ?? '').toLowerCase()
-      const pid = (t.priceProviderId ?? '').toLowerCase()
-      return tick.includes(query) || addr.includes(query) || pid.includes(query)
+    const entry = params.entry as { chain?: unknown; address?: unknown; name?: unknown } | undefined
+    if (!entry || typeof entry !== 'object') {
+      throw new Error('address_book remove: missing entry')
     }
+    const chainName = entry.chain as string | undefined
+    const chain = chainName ? resolveChain(chainName) : undefined
+    if (!chain) throw new Error(`address_book remove: unknown chain: ${chainName ?? '(missing)'}`)
 
-    if (chainName) {
-      const chain = resolveChain(chainName)
-      if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-      const tokens = VultisigSdk.getKnownTokens(chain).filter(tokenMatchesQuery).slice(0, limit)
-      return { tokens }
-    }
-
-    const out: ReturnType<typeof VultisigSdk.getKnownTokens> = []
-    for (const c of Object.values(Chain) as Chain[]) {
-      for (const t of VultisigSdk.getKnownTokens(c)) {
-        if (!tokenMatchesQuery(t)) continue
-        out.push(t)
-        if (out.length >= limit) return { tokens: out }
+    // Agent often emits `{chain, name}` without resolving the address itself.
+    // Look the entry up by name in the saved book so name-based removal works
+    // without forcing the model to call get_address_book first. The SDK
+    // dedupes saved entries by (chain, address) only — name is not unique —
+    // so refuse ambiguous matches rather than silently deleting the first.
+    let address = entry.address as string | undefined
+    if (!address) {
+      const name = entry.name as string | undefined
+      if (!name) {
+        throw new Error('address_book remove: entry.address or entry.name is required')
       }
-    }
-    return { tokens: out }
-  }
-
-  private async listVaults(): Promise<Record<string, unknown>> {
-    return {
-      vaults: [
-        {
-          name: this.vault.name,
-          id: this.vault.id,
-          type: this.vault.type,
-          chains: this.vault.chains.map(c => c.toString()),
-        },
-      ],
-    }
-  }
-
-  private async scanTx(_params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    throw new Error('scan_tx is not yet implemented locally. The backend may handle this action server-side.')
-  }
-
-  private async readEvmContract(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const chainName = params.chain as string | undefined
-    if (!chainName) throw new Error('read_evm_contract requires chain')
-
-    const contractRaw =
-      (params.contract_address as string | undefined) || (params.contractAddress as string | undefined)
-    if (!contractRaw) throw new Error('read_evm_contract requires contract_address')
-
-    const functionName = (params.function_name as string | undefined) || (params.functionName as string | undefined)
-    if (!functionName) throw new Error('read_evm_contract requires function_name')
-
-    const chain = resolveChain(chainName)
-    if (!chain) throw new Error(`Unknown chain: ${chainName}`)
-    if (!EVM_CHAINS.has(chain)) {
-      throw new Error(`read_evm_contract only supports EVM chains (got ${chain})`)
+      const book = await this.vultisig.getAddressBook(chain)
+      const lower = name.toLowerCase()
+      const matches = book.saved.filter(e => e.name.toLowerCase() === lower && e.chain === chain)
+      if (matches.length === 0) {
+        throw new Error(`address_book remove: no saved entry named "${name}" on ${chainName}`)
+      }
+      if (matches.length > 1) {
+        const addrs = matches.map(m => m.address).join(', ')
+        throw new Error(
+          `address_book remove: ambiguous name "${name}" on ${chainName} — multiple addresses: ${addrs}. Specify entry.address explicitly.`
+        )
+      }
+      address = matches[0].address
     }
 
-    const callParams = (params.params as Array<{ type: string; value: string }> | undefined) ?? []
-    const data = (await encodeContractCall(functionName, callParams)) as `0x${string}`
-
-    const addr = contractRaw.startsWith('0x') ? contractRaw : `0x${contractRaw}`
-    const to = addr as `0x${string}`
-
-    const from = params.from as `0x${string}` | undefined
-    const result = await evmCall(chain as EvmChain, { to, data, from })
-
-    return { result }
+    await this.vultisig.removeAddressBookEntry([{ chain, address }])
+    return { removed: { chain: chain.toString(), address } }
   }
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/**
- * ABI-encode a contract function call from structured params.
- * Produces 4-byte selector + encoded arguments.
- */
-async function encodeContractCall(
-  functionName: string,
-  params: Array<{ type: string; value: string }>
-): Promise<string> {
-  // Build the function signature: e.g. "approve(address,uint256)"
-  // Strip existing parens if the LLM passed a full signature like "approve(address,uint256)"
-  // to avoid doubling: "approve(address,uint256)(address,uint256)"
-  const baseName = functionName.includes('(') ? functionName.split('(')[0] : functionName
-  const types = params.map(p => p.type)
-  const sig = `${baseName}(${types.join(',')})`
-
-  // Compute 4-byte selector via keccak256
-  const selector = await keccak256Selector(sig)
-
-  // ABI-encode each parameter (32-byte padded)
-  let encoded = ''
-  for (const param of params) {
-    encoded += abiEncodeParam(param.type, param.value)
-  }
-
-  return '0x' + selector + encoded
-}
-
-/**
- * Compute the 4-byte function selector from a function signature.
- * Uses keccak256 (SHA3-256).
- */
-async function keccak256Selector(sig: string): Promise<string> {
-  const { keccak_256 } = await import('@noble/hashes/sha3')
-  const hash = keccak_256(new TextEncoder().encode(sig))
-  return Buffer.from(hash).toString('hex').slice(0, 8)
-}
-
-/**
- * ABI-encode a single parameter value to 32 bytes (hex, no 0x prefix).
- */
-function abiEncodeParam(type: string, value: string): string {
-  if (type === 'address') {
-    // Remove 0x prefix, left-pad to 64 hex chars
-    const addr = value.startsWith('0x') ? value.slice(2) : value
-    return addr.toLowerCase().padStart(64, '0')
-  }
-  if (type.startsWith('uint') || type.startsWith('int')) {
-    // Convert to bigint, then to hex, left-pad to 64 hex chars
-    const n = BigInt(value)
-    const hex = n.toString(16)
-    return hex.padStart(64, '0')
-  }
-  if (type === 'bool') {
-    return (value === 'true' || value === '1' ? '1' : '0').padStart(64, '0')
-  }
-  if (type === 'bytes32') {
-    const b = value.startsWith('0x') ? value.slice(2) : value
-    return b.padEnd(64, '0')
-  }
-  // For bytes and string, use dynamic encoding (offset + length + data)
-  // For now, just left-pad simple values
-  const b = value.startsWith('0x') ? value.slice(2) : Buffer.from(value).toString('hex')
-  return b.padStart(64, '0')
-}
 
 function resolveChain(name: string): Chain | null {
   if (!name) return null
@@ -1764,12 +1314,6 @@ function resolveChain(name: string): Chain | null {
   return null
 }
 
-function parseAmount(amountStr: string, decimals: number): bigint {
-  const [whole, frac = ''] = amountStr.split('.')
-  const paddedFrac = frac.slice(0, decimals).padEnd(decimals, '0')
-  return BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt(paddedFrac || '0')
-}
-
 /**
  * Try to resolve a Chain from tx_ready SSE data fields.
  */
@@ -1786,12 +1330,41 @@ function resolveChainFromTxReady(txReadyData: any): Chain | null {
     const chain = resolveChainId(txReadyData.chain_id)
     if (chain) return chain
   }
-  const swapTx = txReadyData.swap_tx || txReadyData.send_tx || txReadyData.tx
+  // mcp-ts execute_* envelopes nest chain / chain_id under txArgs.
+  if (txReadyData.txArgs?.chain) {
+    const chain = resolveChain(txReadyData.txArgs.chain)
+    if (chain) return chain
+  }
+  if (txReadyData.txArgs?.chain_id) {
+    const chain = resolveChainId(txReadyData.txArgs.chain_id)
+    if (chain) return chain
+  }
+  const swapTx = extractNestedTx(txReadyData)
   if (swapTx?.chainId) {
     const chain = resolveChainId(swapTx.chainId)
     if (chain) return chain
   }
   return null
+}
+
+/**
+ * Extract the signable transaction object from a tx_ready envelope.
+ *
+ * mcp-go (build_*) emits the tx at top level under one of three keys:
+ *   - swap_tx   (build_swap_tx output)
+ *   - send_tx   (per-chain build_*_send output)
+ *   - tx        (build_evm_tx output)
+ *
+ * mcp-ts (execute_*) wraps the tx one level deeper:
+ *   - txArgs.tx (execute_send / execute_contract_call output)
+ *
+ * Multi-leg mcp-ts envelopes (execute_swap with both `approvalTxArgs`
+ * and `txArgs`) are NOT extracted here — they're stashed by
+ * storeServerTransaction and routed through signMultiLeg, which
+ * synthesizes single-leg envelopes per leg and re-enters this helper.
+ */
+export function extractNestedTx(txReadyData: any): any {
+  return txReadyData?.swap_tx || txReadyData?.send_tx || txReadyData?.tx || txReadyData?.txArgs?.tx
 }
 
 /**

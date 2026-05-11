@@ -1,90 +1,16 @@
-// Unit tests for client-side tool dispatch (RecentAction conversion,
-// registry drift guard, depth cap, SSE parser routing).
+// Unit tests for client-side tool dispatch (registry drift guard, depth cap,
+// SSE parser routing, dispatch chain serialization, queue state contracts).
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { actionResultToRecentAction, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
-import type { ActionResult } from '../types'
-
-describe('actionResultToRecentAction', () => {
-  const convert = actionResultToRecentAction
-
-  it('converts successful ActionResult to RecentAction with data', () => {
-    const actionResult: ActionResult = {
-      action: 'add_coin',
-      action_id: 'call-1',
-      success: true,
-      data: { chain: 'Base', ticker: 'USDC' },
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'add_coin',
-      success: true,
-      data: { chain: 'Base', ticker: 'USDC' },
-    })
-  })
-
-  it('converts successful ActionResult with no data to RecentAction with empty data', () => {
-    const actionResult: ActionResult = {
-      action: 'create_vault',
-      action_id: 'call-2',
-      success: true,
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'create_vault',
-      success: true,
-      data: {},
-    })
-  })
-
-  it('converts failed ActionResult, folding error into data', () => {
-    const actionResult: ActionResult = {
-      action: 'sign_typed_data',
-      action_id: 'call-3',
-      success: false,
-      error: 'Password required',
-      code: AgentErrorCode.PASSWORD_REQUIRED,
-    }
-    const recent = convert(actionResult)
-    expect(recent).toEqual({
-      tool: 'sign_typed_data',
-      success: false,
-      data: {
-        error: 'Password required',
-        code: AgentErrorCode.PASSWORD_REQUIRED,
-      },
-    })
-  })
-
-  it('preserves existing data fields when folding error', () => {
-    const actionResult: ActionResult = {
-      action: 'add_coin',
-      action_id: 'call-4',
-      success: false,
-      data: { requested: 'USDC' },
-      error: 'invalid contract',
-    }
-    const recent = convert(actionResult)
-    expect(recent.data).toEqual({
-      requested: 'USDC',
-      error: 'invalid contract',
-    })
-  })
-})
+import { CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
   // Locks the registry surface — drift is caught at test time, not runtime.
-  const EXPECTED_ENTRIES = [
-    'sign_typed_data',
-    'add_coin',
-    'remove_coin',
-    'add_chain',
-    'remove_chain',
-    'address_book_add',
-    'address_book_remove',
-  ]
+  // Discriminator tools (vault_coin / vault_chain / address_book) carry an
+  // inner `action: 'add' | 'remove'` so two-letter CRUD is one tool name on
+  // the wire, matching the agent-backend's `clientSideToolNames`.
+  const EXPECTED_ENTRIES = ['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book']
 
   it('has exactly the expected tool names', () => {
     expect(Object.keys(registry).sort()).toEqual(EXPECTED_ENTRIES.slice().sort())
@@ -104,9 +30,9 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     expect(registry).not.toHaveProperty('sign_tx')
   })
 
-  it('maps each tool name to the matching Action.type (1:1 identity mapping)', () => {
-    for (const [toolName, actionType] of Object.entries(registry)) {
-      expect(actionType).toBe(toolName)
+  it('every registry entry is a callable dispatcher function', () => {
+    for (const value of Object.values(registry)) {
+      expect(typeof value).toBe('function')
     }
   })
 })
@@ -148,7 +74,7 @@ describe('processMessageLoop — depth cap', () => {
 
 // PB1 — session.ts:onClientSideToolCall must serialize dispatches in SSE
 // arrival order. Without this, two parallel dispatches race on (a) shared
-// vault state (add_chain → add_coin) and (b) the single-slot password
+// vault state (vault_chain → vault_coin) and (b) the single-slot password
 // resolver (silent hang in pipe-UI mode). These tests pin the chain
 // pattern itself; the manual E2E in the PR description verifies it lands
 // inside session.ts.
@@ -358,7 +284,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-available',
         toolCallId: 'c1',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         input: { tokens: [{ chain: 'Base', ticker: 'USDC' }] },
         clientExecuted: true,
       }),
@@ -366,7 +292,9 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     )
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
-    expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'add_coin', { tokens: [{ chain: 'Base', ticker: 'USDC' }] })
+    expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'vault_coin', {
+      tokens: [{ chain: 'Base', ticker: 'USDC' }],
+    })
     expect(onToolProgress).toHaveBeenCalled()
   })
 
@@ -400,7 +328,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
         JSON.stringify({
           type: 'tool-input-available',
           toolCallId: 'c',
-          toolName: 'add_coin',
+          toolName: 'vault_coin',
           input: {},
           clientExecuted: v,
         }),
@@ -420,7 +348,7 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-start',
         toolCallId: 'c',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         clientExecuted: true, // even if present, only tool-input-available should trigger dispatch
       }),
       { onClientSideToolCall }
@@ -438,13 +366,13 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
       JSON.stringify({
         type: 'tool-input-available',
         toolCallId: 'c',
-        toolName: 'add_coin',
+        toolName: 'vault_coin',
         input: null,
         clientExecuted: true,
       }),
       { onClientSideToolCall }
     )
 
-    expect(onClientSideToolCall).toHaveBeenCalledWith('c', 'add_coin', {})
+    expect(onClientSideToolCall).toHaveBeenCalledWith('c', 'vault_coin', {})
   })
 })

@@ -547,8 +547,9 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
 
   if (isJsonOutput()) {
     const activeVault = ctx.getActiveVault()
+    const sorted = [...vaults].sort((a, b) => (a.id === activeVault?.id ? -1 : b.id === activeVault?.id ? 1 : 0))
     outputJson({
-      vaults: vaults.map(v => ({
+      vaults: sorted.map(v => ({
         id: v.id,
         name: v.name,
         type: v.type,
