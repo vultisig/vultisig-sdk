@@ -35,9 +35,6 @@ export const getCompiledTxsForBlockaidInput = ({
     walletCore,
   })
 
-  // Blockaid doesn't support Cardano (see simulationChains/validationChains),
-  // so the sync `getEncodedSigningInputs` is safe here — it would only throw
-  // for Cardano payloads, which never reach this code path.
   const inputs = getEncodedSigningInputs({
     keysignPayload: payload,
     walletCore,

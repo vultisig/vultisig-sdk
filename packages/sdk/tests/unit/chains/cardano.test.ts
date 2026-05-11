@@ -53,8 +53,7 @@ const MINIMAL_BODY_HEX = 'a10200'
 // Blake2b-256 of MINIMAL_BODY_HEX. Pinned here so the iOS byte-parity test
 // (`CardanoSignedTxBuilderTests.testBodyHashMatchesSdkCardanoTxBodyHash`)
 // can lock to the same hex — drift on either side fails one of these tests.
-const MINIMAL_BODY_HASH_HEX =
-  'e643da0cf5d24591cb32b2a5e658b2c4659f39ce35c981f62e0abc28e065ada7'
+const MINIMAL_BODY_HASH_HEX = 'e643da0cf5d24591cb32b2a5e658b2c4659f39ce35c981f62e0abc28e065ada7'
 
 describe('cardano / buildSignedCardanoTx', () => {
   it('wraps a pre-signed body with witness + is_valid=true + null aux', () => {

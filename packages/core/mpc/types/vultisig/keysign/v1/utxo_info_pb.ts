@@ -10,7 +10,46 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keysign/v1/utxo_info.proto.
  */
 export const file_vultisig_keysign_v1_utxo_info: GenFile = /*@__PURE__*/
-  fileDesc("CiN2dWx0aXNpZy9rZXlzaWduL3YxL3V0eG9faW5mby5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSI3CghVdHhvSW5mbxIMCgRoYXNoGAEgASgJEg4KBmFtb3VudBgCIAEoAxINCgVpbmRleBgDIAEoDUJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
+  fileDesc("CiN2dWx0aXNpZy9rZXlzaWduL3YxL3V0eG9faW5mby5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSJOChFDYXJkYW5vVG9rZW5Bc3NldBIRCglwb2xpY3lfaWQYASABKAkSFgoOYXNzZXRfbmFtZV9oZXgYAiABKAkSDgoGYW1vdW50GAMgASgJIncKCFV0eG9JbmZvEgwKBGhhc2gYASABKAkSDgoGYW1vdW50GAIgASgDEg0KBWluZGV4GAMgASgNEj4KDmNhcmRhbm9fdG9rZW5zGAQgAygLMiYudnVsdGlzaWcua2V5c2lnbi52MS5DYXJkYW5vVG9rZW5Bc3NldEJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
+
+/**
+ * CardanoTokenAsset describes a Cardano native asset present on a UTXO.
+ * Native assets are identified by (policy_id, asset_name) with integer
+ * quantities. See https://docs.cardano.org/developer-resources/native-tokens.
+ *
+ * @generated from message vultisig.keysign.v1.CardanoTokenAsset
+ */
+export type CardanoTokenAsset = Message<"vultisig.keysign.v1.CardanoTokenAsset"> & {
+  /**
+   * Hex-encoded policy id (28 bytes / 56 hex chars).
+   *
+   * @generated from field: string policy_id = 1;
+   */
+  policyId: string;
+
+  /**
+   * Hex-encoded asset name (0..32 bytes / 0..64 hex chars). Empty for the
+   * unnamed asset under a policy.
+   *
+   * @generated from field: string asset_name_hex = 2;
+   */
+  assetNameHex: string;
+
+  /**
+   * Token quantity in the asset's base units, as a decimal string to fit
+   * values outside int64 range.
+   *
+   * @generated from field: string amount = 3;
+   */
+  amount: string;
+};
+
+/**
+ * Describes the message vultisig.keysign.v1.CardanoTokenAsset.
+ * Use `create(CardanoTokenAssetSchema)` to create a new message.
+ */
+export const CardanoTokenAssetSchema: GenMessage<CardanoTokenAsset> = /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_utxo_info, 0);
 
 /**
  * @generated from message vultisig.keysign.v1.UtxoInfo
@@ -22,6 +61,11 @@ export type UtxoInfo = Message<"vultisig.keysign.v1.UtxoInfo"> & {
   hash: string;
 
   /**
+   * For UTXO chains other than Cardano, this is the UTXO amount in the
+   * chain's smallest unit (e.g. satoshis). For Cardano, this is the
+   * lovelace amount on the UTXO; per-UTXO native assets live in
+   * cardano_tokens.
+   *
    * @generated from field: int64 amount = 2;
    */
   amount: bigint;
@@ -30,6 +74,14 @@ export type UtxoInfo = Message<"vultisig.keysign.v1.UtxoInfo"> & {
    * @generated from field: uint32 index = 3;
    */
   index: number;
+
+  /**
+   * Cardano-only: native assets carried by this UTXO. Empty for non-Cardano
+   * chains and for ADA-only UTXOs.
+   *
+   * @generated from field: repeated vultisig.keysign.v1.CardanoTokenAsset cardano_tokens = 4;
+   */
+  cardanoTokens: CardanoTokenAsset[];
 };
 
 /**
@@ -37,5 +89,5 @@ export type UtxoInfo = Message<"vultisig.keysign.v1.UtxoInfo"> & {
  * Use `create(UtxoInfoSchema)` to create a new message.
  */
 export const UtxoInfoSchema: GenMessage<UtxoInfo> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_utxo_info, 0);
+  messageDesc(file_vultisig_keysign_v1_utxo_info, 1);
 

@@ -51,7 +51,7 @@ import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgor
 import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
 import { getSevenZip } from '@vultisig/core-mpc/compression/getSevenZip'
 import { keysign } from '@vultisig/core-mpc/keysign'
-import { getEncodedSigningInputsAsync } from '@vultisig/core-mpc/keysign/signingInputs'
+import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
@@ -179,7 +179,7 @@ async function main() {
     chainPublicKeys: vault.chainPublicKeys,
   })
 
-  const inputs = await getEncodedSigningInputsAsync({
+  const inputs = getEncodedSigningInputs({
     keysignPayload,
     walletCore,
     publicKey,

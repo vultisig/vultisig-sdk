@@ -1,13 +1,12 @@
 import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
-import { getCardanoExtendedUtxos } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
-import { AsyncSigningInputsResolver } from '../resolver'
+import { SigningInputsResolver } from '../resolver'
 
 /**
  * Lovelace floor we attach to the recipient output of a CNT send. Cardano
@@ -28,7 +27,7 @@ const amountToBytes = (amount: bigint): Uint8Array => {
   return Uint8Array.from(Buffer.from(padded, 'hex'))
 }
 
-export const getCardanoSigningInputs: AsyncSigningInputsResolver<'cardano'> = async ({
+export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({
   keysignPayload,
   walletCore,
 }) => {
@@ -58,19 +57,6 @@ export const getCardanoSigningInputs: AsyncSigningInputsResolver<'cardano'> = as
       })()
     : undefined
 
-  // For CNT sends, fetch extended UTXOs from Koios so each TxInput can carry
-  // its per-UTXO `tokenAmount`. Without that data the planner can't reconcile
-  // a TokenBundle output against the inputs and produces an invalid plan
-  // (or, with no plan at all, a body with `fee = 0`). Both MPC peers fetch
-  // independently — Koios returns the same UTXO set for the same address so
-  // the planner picks identical body bytes on both sides.
-  const extendedUtxos = isTokenSend
-    ? await getCardanoExtendedUtxos(coin.address)
-    : []
-  const extendedByOutPoint = new Map(
-    extendedUtxos.map(u => [`${u.hash}:${u.index}`, u] as const)
-  )
-
   // `transferMessage.amount` is the lovelace value of the recipient output.
   // For an ADA send it's the user-typed amount. For a CNT send the user-typed
   // amount is denominated in the token's base units (e.g. 665000 = 0.665 USDM),
@@ -95,16 +81,23 @@ export const getCardanoSigningInputs: AsyncSigningInputsResolver<'cardano'> = as
     }),
     ttl: Long.fromString(ttl.toString()),
 
-    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index }) => {
-      const tokenAmounts = isTokenSend
-        ? extendedByOutPoint.get(`${hash}:${index}`)?.assets.map(asset =>
-            TW.Cardano.Proto.TokenAmount.create({
-              policyId: asset.policy_id,
-              assetNameHex: asset.asset_name ?? '',
-              amount: amountToBytes(BigInt(asset.quantity)),
-            })
-          )
-        : undefined
+    // Per-UTXO token data is carried on the wire (`UtxoInfo.cardano_tokens`).
+    // The initiator fetches once from Koios when building the keysign payload
+    // and serialises the assets into the proto; both MPC peers read identical
+    // bytes here, so `AnySigner.plan(...)` picks the same selection on both
+    // sides (largest-first deterministic — see WalletCore Cardano/Signer.cpp
+    // `selectInputsSimpleNative` / `selectInputsSimpleToken`).
+    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index, cardanoTokens }) => {
+      const tokenAmounts =
+        isTokenSend && cardanoTokens.length > 0
+          ? cardanoTokens.map(asset =>
+              TW.Cardano.Proto.TokenAmount.create({
+                policyId: asset.policyId,
+                assetNameHex: asset.assetNameHex,
+                amount: amountToBytes(BigInt(asset.amount)),
+              })
+            )
+          : undefined
 
       return TW.Cardano.Proto.TxInput.create({
         outPoint: TW.Cardano.Proto.OutPoint.create({
