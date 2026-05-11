@@ -1,5 +1,20 @@
 # @vultisig/core-mpc
 
+## 1.2.10
+
+### Patch Changes
+
+- Updated dependencies [[`e3dc2e8`](https://github.com/vultisig/vultisig-sdk/commit/e3dc2e828b3e4f95b293d4493bddbc176bbb3bb7)]:
+  - @vultisig/core-chain@1.7.0
+
+## 1.2.9
+
+### Patch Changes
+
+- [#419](https://github.com/vultisig/vultisig-sdk/pull/419) [`e434998`](https://github.com/vultisig/vultisig-sdk/commit/e434998069e6af9664db045c5e91c5d5f35feef6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Browser and Electron example vault UX after QA; secure vault join/create/import flows; MPC session and server coordination fixes.
+
+- [#438](https://github.com/vultisig/vultisig-sdk/pull/438) [`7eca3db`](https://github.com/vultisig/vultisig-sdk/commit/7eca3db2b5455e651ae3201633b9f9dcffbc6447) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - mpc/keygen: support multi-namespace DKLS setup messages and propagate `is_tss_batch` so parallel batched keygen interops with Android (uses default namespace) and iOS (uses `p-ecdsa`/`p-eddsa` after iOS PR [#4246](https://github.com/vultisig/vultisig-sdk/issues/4246)). `DKLS.prepareKeygenSetup` now accepts a list of mirror `message_id` namespaces — initiator writes to all, joiner races a poll across them and back-fills the rest. `DKLS.startReshareWithRetry` accepts a `setupMessageId` so reshare's setup matches per-protocol exchange channels. Regenerated `KeygenMessage` and `ReshareMessage` protos pick up the upstream `is_tss_batch` field.
+
 ## 1.2.8
 
 ### Patch Changes

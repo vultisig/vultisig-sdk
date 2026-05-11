@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Vault management
   listVaults: () => ipcRenderer.invoke('vault:list'),
-  createFastVault: (options: { name: string; password: string; email: string }) =>
+  createFastVault: (options: { name: string; password: string; email: string; createTimeoutMs?: number }) =>
     ipcRenderer.invoke('vault:createFast', options),
   verifyVault: (vaultId: string, code: string) => ipcRenderer.invoke('vault:verify', vaultId, code),
   resendVaultVerification: (options: { vaultId: string; email: string; password: string }) =>
@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     chains?: string[]
     usePhantomSolanaPath?: boolean
     tssBatching?: boolean
+    importTimeoutMs?: number
   }) => ipcRenderer.invoke('vault:createFastFromSeedphrase', options),
   createSecureVaultFromSeedphrase: (options: {
     mnemonic: string
@@ -66,6 +67,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getValue: (vaultId: string, chain: string, tokenId?: string, currency?: string) =>
     ipcRenderer.invoke('vault:getValue', vaultId, chain, tokenId, currency),
   getTotalValue: (vaultId: string, currency?: string) => ipcRenderer.invoke('vault:getTotalValue', vaultId, currency),
+  refreshPortfolioPrices: (vaultId: string) => ipcRenderer.invoke('vault:refreshPortfolioPrices', vaultId),
 
   // Discount tier
   getDiscountTier: (vaultId: string) => ipcRenderer.invoke('vault:getDiscountTier', vaultId),

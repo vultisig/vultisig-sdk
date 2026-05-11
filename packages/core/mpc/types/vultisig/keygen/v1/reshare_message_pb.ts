@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keygen/v1/reshare_message.proto.
  */
 export const file_vultisig_keygen_v1_reshare_message: GenFile = /*@__PURE__*/
-  fileDesc("Cih2dWx0aXNpZy9rZXlnZW4vdjEvcmVzaGFyZV9tZXNzYWdlLnByb3RvEhJ2dWx0aXNpZy5rZXlnZW4udjEimAIKDlJlc2hhcmVNZXNzYWdlEhIKCnNlc3Npb25faWQYASABKAkSFgoOaGV4X2NoYWluX2NvZGUYAiABKAkSFAoMc2VydmljZV9uYW1lGAMgASgJEhgKEHB1YmxpY19rZXlfZWNkc2EYBCABKAkSEwoLb2xkX3BhcnRpZXMYBSADKAkSGgoSZW5jcnlwdGlvbl9rZXlfaGV4GAYgASgJEhoKEnVzZV92dWx0aXNpZ19yZWxheRgHIAEoCBIaChJvbGRfcmVzaGFyZV9wcmVmaXgYCCABKAkSEgoKdmF1bHRfbmFtZRgJIAEoCRItCghsaWJfdHlwZRgUIAEoDjIbLnZ1bHRpc2lnLmtleWdlbi52MS5MaWJUeXBlQlIKEnZ1bHRpc2lnLmtleWdlbi52MVo3Z2l0aHViLmNvbS92dWx0aXNpZy9jb21tb25kYXRhL2dvL3Z1bHRpc2lnL2tleWdlbi92MTt2MboCAlZTYgZwcm90bzM", [file_vultisig_keygen_v1_lib_type_message]);
+  fileDesc("Cih2dWx0aXNpZy9rZXlnZW4vdjEvcmVzaGFyZV9tZXNzYWdlLnByb3RvEhJ2dWx0aXNpZy5rZXlnZW4udjEirgIKDlJlc2hhcmVNZXNzYWdlEhIKCnNlc3Npb25faWQYASABKAkSFgoOaGV4X2NoYWluX2NvZGUYAiABKAkSFAoMc2VydmljZV9uYW1lGAMgASgJEhgKEHB1YmxpY19rZXlfZWNkc2EYBCABKAkSEwoLb2xkX3BhcnRpZXMYBSADKAkSGgoSZW5jcnlwdGlvbl9rZXlfaGV4GAYgASgJEhoKEnVzZV92dWx0aXNpZ19yZWxheRgHIAEoCBIaChJvbGRfcmVzaGFyZV9wcmVmaXgYCCABKAkSEgoKdmF1bHRfbmFtZRgJIAEoCRIUCgxpc190c3NfYmF0Y2gYCiABKAgSLQoIbGliX3R5cGUYFCABKA4yGy52dWx0aXNpZy5rZXlnZW4udjEuTGliVHlwZUJSChJ2dWx0aXNpZy5rZXlnZW4udjFaN2dpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlnZW4vdjE7djG6AgJWU2IGcHJvdG8z", [file_vultisig_keygen_v1_lib_type_message]);
 
 /**
  * @generated from message vultisig.keygen.v1.ReshareMessage
@@ -62,6 +62,13 @@ export type ReshareMessage = Message<"vultisig.keygen.v1.ReshareMessage"> & {
    * @generated from field: string vault_name = 9;
    */
   vaultName: string;
+
+  /**
+   * Initiator opts the ceremony into parallel ECDSA+EdDSA reshare
+   *
+   * @generated from field: bool is_tss_batch = 10;
+   */
+  isTssBatch: boolean;
 
   /**
    * Default to GG20

@@ -420,7 +420,12 @@ function App() {
               onTabOpen={handleTabOpen}
             />
             {activeVault ? (
-              <Vault vault={activeVault} onVaultDeleted={handleVaultDeleted} onVaultRenamed={handleVaultRenamed} />
+              <Vault
+                key={activeVault.id}
+                vault={activeVault}
+                onVaultDeleted={handleVaultDeleted}
+                onVaultRenamed={handleVaultRenamed}
+              />
             ) : (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center text-gray-500">

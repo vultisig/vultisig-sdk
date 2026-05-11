@@ -22,6 +22,12 @@ export enum VaultErrorCode {
   CreateFailed = 'CREATE_FAILED',
   Timeout = 'TIMEOUT',
   InvalidAmount = 'INVALID_AMOUNT',
+  /** Examples / IPC: vault id not present in local SDK store */
+  VaultNotFound = 'VAULT_NOT_FOUND',
+  /** Browser-only flows where `document` is unavailable */
+  BrowserDocumentRequired = 'BROWSER_DOCUMENT_REQUIRED',
+  /** User dismissed an in-page password prompt */
+  PasswordEntryCancelled = 'PASSWORD_ENTRY_CANCELLED',
 }
 
 /**

@@ -40,7 +40,12 @@ declare global {
 
       // Vault management
       listVaults(): Promise<VaultInfo[]>
-      createFastVault(options: { name: string; password: string; email: string }): Promise<{ vaultId: string }>
+      createFastVault(options: {
+        name: string
+        password: string
+        email: string
+        createTimeoutMs?: number
+      }): Promise<{ vaultId: string }>
       verifyVault(vaultId: string, code: string): Promise<VaultInfo>
       resendVaultVerification(options: { vaultId: string; email: string; password: string }): Promise<void>
       createSecureVault(options: {
@@ -66,6 +71,7 @@ declare global {
         chains?: string[]
         usePhantomSolanaPath?: boolean
         tssBatching?: boolean
+        importTimeoutMs?: number
       }): Promise<{ vaultId: string }>
       createSecureVaultFromSeedphrase(options: {
         mnemonic: string
@@ -102,6 +108,7 @@ declare global {
       setCurrency(vaultId: string, currency: string): Promise<void>
       getValue(vaultId: string, chain: string, tokenId?: string, currency?: string): Promise<ValueResult>
       getTotalValue(vaultId: string, currency?: string): Promise<ValueResult>
+      refreshPortfolioPrices(vaultId: string): Promise<void>
 
       // Discount tier
       getDiscountTier(vaultId: string): Promise<DiscountTier>
@@ -273,6 +280,7 @@ export class ElectronSDKAdapter implements ISDKAdapter {
         name: options.name,
         password: options.password,
         email: options.email,
+        createTimeoutMs: options.createTimeoutMs,
       })
     )
   }
@@ -324,6 +332,7 @@ export class ElectronSDKAdapter implements ISDKAdapter {
         chains: options.chains,
         usePhantomSolanaPath: options.usePhantomSolanaPath,
         tssBatching: options.tssBatching,
+        importTimeoutMs: options.importTimeoutMs,
       })
     )
   }
@@ -401,6 +410,10 @@ export class ElectronSDKAdapter implements ISDKAdapter {
 
   async getTotalValue(vaultId: string, currency?: FiatCurrency): Promise<ValueResult> {
     return window.electronAPI.getTotalValue(vaultId, currency)
+  }
+
+  async refreshPortfolioPrices(vaultId: string): Promise<void> {
+    return window.electronAPI.refreshPortfolioPrices(vaultId)
   }
 
   // ===== Swap =====
