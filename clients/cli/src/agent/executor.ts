@@ -664,53 +664,40 @@ export class AgentExecutor {
    * destination chain + asset, look up the corresponding `Chain` enum,
    * then call `vault.swap` which builds the MsgDeposit internally.
    *
-   * The destination address in the memo is honored by THORChain at
-   * settlement time (output is sent to that address regardless of where
-   * the vault holds an address on the destination chain).
+   * IMPORTANT — destination address handling: `vault.swap` re-derives the
+   * destination address from `vault.address(toChain)` when fetching the
+   * native swap quote (see `findSwapQuote` → `getNativeSwapQuote` —
+   * `destination: to.address`). It does NOT honor the destination address
+   * encoded in the envelope's memo. As a fund-safety guard we therefore
+   * require the memo's destination address to match the vault's own
+   * destination address (self-swap) and throw otherwise — see Phase D
+   * review F1. Cross-account routing must wait on a Phase E SDK extension
+   * that lets `vault.swap` accept a user-supplied destination.
    */
-  private async signThorMsgDepositSwap(
-    serverTxData: any,
-    chain: Chain
-  ): Promise<Record<string, unknown>> {
+  private async signThorMsgDepositSwap(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
     const txArgs = serverTxData?.txArgs ?? {}
     const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
-    if (!memo.startsWith('=:')) {
-      throw new VaultError(
-        VaultErrorCode.NotImplemented,
-        `signThorMsgDepositSwap: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
-          `LP / non-swap MsgDeposit flows route through different SDK helpers (Phase E follow-up).`
-      )
-    }
+    const parsed = parseThorSwapMemo(memo)
 
-    // Parse memo `=:DEST_CHAIN.DEST_ASSET:DEST_ADDR[::v0:slippage_bps]`
-    // THORChain accepts both full (`XRP.XRP`) and abbreviated (`x`) asset
-    // notation to fit memos within the 250-byte limit. Expand the shorthand
-    // before splitting on `.`.
-    const memoBody = memo.slice(2) // strip leading '=:'
-    const parts = memoBody.split(':')
-    let chainAsset = parts[0]
-    if (chainAsset && !chainAsset.includes('.')) {
-      const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
-      if (expanded) chainAsset = expanded
-    }
-    if (!chainAsset || !chainAsset.includes('.')) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `signThorMsgDepositSwap: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
-      )
-    }
-    const [destChainCode, destAssetRaw] = chainAsset.split('.')
-    // THORChain memo chain codes: BTC, ETH, BSC, AVAX, BCH, LTC, DOGE, GAIA, BNB, RUNE, XRP, ...
-    // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...").
-    // For Phase D scope we only need the symbol; if the user is swapping
-    // to a token, the toToken ticker is the part before `-`.
-    const destAsset = destAssetRaw?.split('-')[0] ?? ''
-
-    const toChain = THOR_MEMO_CHAIN_TO_ENUM[destChainCode]
+    const toChain = THOR_MEMO_CHAIN_TO_ENUM[parsed.destChainCode]
     if (!toChain) {
       throw new VaultError(
         VaultErrorCode.UnsupportedChain,
-        `signThorMsgDepositSwap: unsupported destination chain code '${destChainCode}' in memo '${memo}'.`
+        `signThorMsgDepositSwap: unsupported destination chain code '${parsed.destChainCode}' in memo '${memo}'.`
+      )
+    }
+
+    // Fund-safety: require memo destination to equal the vault's own
+    // destination address. vault.swap silently substitutes the vault's
+    // address into the broadcast memo, so any mismatch here would misroute
+    // funds without warning. Phase D self-swaps remain supported (BTC
+    // tests confirmed 3.565 XRP arrived at the vault's own XRP address).
+    const vaultDestAddress = await this.vault.address(toChain)
+    if (parsed.destAddress && parsed.destAddress !== vaultDestAddress) {
+      throw new VaultError(
+        VaultErrorCode.NotImplemented,
+        `signThorMsgDepositSwap: memo destination '${parsed.destAddress}' does not match vault address '${vaultDestAddress}' on ${toChain}. ` +
+          `Phase D only supports self-swaps; cross-account routing requires a Phase E SDK extension that passes the user-supplied destination through to vault.swap.`
       )
     }
 
@@ -718,21 +705,37 @@ export class AgentExecutor {
     // THORChain, CACAO on MayaChain).
     const fromSymbol = chain === Chain.THORChain ? 'RUNE' : 'CACAO'
 
-    // Convert base-units amount → decimal string for vault.swap.
-    const amountRaw: string = typeof txArgs.amount === 'string' ? txArgs.amount : '0'
+    // Convert base-units amount → decimal string for vault.swap. We refuse
+    // to fall through with a default (e.g. '0') because that would mask
+    // malformed envelopes by silently submitting a zero-value swap.
+    const amountRaw = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
+    if (!amountRaw) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositSwap: missing or non-string 'amount' field on ${chain} envelope`
+      )
+    }
     const decimals = chainFeeCoin[chain]?.decimals ?? 8
-    const amountDecimal = formatUnits(BigInt(amountRaw), decimals)
+    let amountDecimal: string
+    try {
+      amountDecimal = formatUnits(BigInt(amountRaw), decimals)
+    } catch (err: any) {
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `signThorMsgDepositSwap: failed to convert amount '${amountRaw}' for ${chain}: ${err?.message ?? err}`
+      )
+    }
 
     if (this.verbose)
       process.stderr.write(
-        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${destAsset}@${toChain}, amount=${amountDecimal}, memo='${memo}'\n`
+        `[sign_thor_msg_deposit_swap] ${fromSymbol}@${chain} → ${parsed.destAsset}@${toChain}, amount=${amountDecimal}, memo='${memo}'\n`
       )
 
     const result = await this.vault.swap({
       fromChain: chain,
       fromSymbol,
       toChain,
-      toSymbol: destAsset,
+      toSymbol: parsed.destAsset,
       amount: amountDecimal,
     })
 
@@ -1736,6 +1739,73 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
 
   return { chain, to, amount: amountDecimal, symbol, memo }
+}
+
+/**
+ * Parsed shape of a THORChain swap memo (`=:CHAIN.ASSET:DEST[::v0:slippage]`).
+ *
+ * - `destChainCode` is the raw memo chain prefix (`XRP`, `ETH`, ...).
+ *   Caller is responsible for mapping it to a `Chain` enum via
+ *   `THOR_MEMO_CHAIN_TO_ENUM` and rejecting unsupported codes.
+ * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
+ *   (`USDC-0X...`) is stripped because vault.swap takes the ticker.
+ * - `destAddress` is the user-supplied destination on the destination
+ *   chain. May be empty when the memo omits it (THORChain treats this
+ *   as "refund to source"); callers should still validate against the
+ *   vault's own destination address before broadcasting since vault.swap
+ *   silently substitutes its own address into the broadcast memo.
+ */
+export type ParsedThorSwapMemo = {
+  destChainCode: string
+  destAsset: string
+  destAddress: string
+}
+
+/**
+ * Parse a THORChain swap memo into its destination-routing components.
+ *
+ * Accepts the shorthand notation documented at
+ * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
+ * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...) — common shortcuts let memos
+ * fit inside THORChain's 250-byte limit when paired with long EVM
+ * destination addresses.
+ *
+ * Throws `VaultError(NotImplemented)` for non-swap memos (anything that
+ * doesn't start with the `=:` swap prefix — e.g. LP `+:POOL` or `-:POOL`,
+ * which are deferred to Phase E). Throws `VaultError(InvalidConfig)`
+ * when the swap memo is structurally malformed (no CHAIN.ASSET segment).
+ */
+export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
+  if (!memo.startsWith('=:')) {
+    throw new VaultError(
+      VaultErrorCode.NotImplemented,
+      `parseThorSwapMemo: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
+        `LP / non-swap MsgDeposit flows route through different SDK helpers (Phase E follow-up).`
+    )
+  }
+
+  const memoBody = memo.slice(2) // strip leading '=:'
+  const parts = memoBody.split(':')
+
+  let chainAsset = parts[0]
+  if (chainAsset && !chainAsset.includes('.')) {
+    const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
+    if (expanded) chainAsset = expanded
+  }
+  if (!chainAsset || !chainAsset.includes('.')) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
+    )
+  }
+
+  const [destChainCode, destAssetRaw] = chainAsset.split('.')
+  // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...");
+  // for vault.swap we only need the ticker (part before `-`).
+  const destAsset = destAssetRaw?.split('-')[0] ?? ''
+  const destAddress = typeof parts[1] === 'string' ? parts[1] : ''
+
+  return { destChainCode, destAsset, destAddress }
 }
 
 /**
