@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 0.22.6
+
+### Patch Changes
+
+- [#419](https://github.com/vultisig/vultisig-sdk/pull/419) [`e434998`](https://github.com/vultisig/vultisig-sdk/commit/e434998069e6af9664db045c5e91c5d5f35feef6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Browser and Electron example vault UX after QA; secure vault join/create/import flows; MPC session and server coordination fixes.
+
 ## 0.22.5
 
 ### Patch Changes
