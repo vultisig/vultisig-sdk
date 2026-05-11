@@ -31,7 +31,7 @@ vultisig-sdk/packages/mpc-native/android/libs/
 ## Prerequisites
 
 - Rust toolchain with Android targets
-- [cargo-ndk](https://github.com/nickelpack/cargo-ndk): `cargo install cargo-ndk`
+- [cargo-ndk](https://github.com/bbqsrc/cargo-ndk): `cargo install cargo-ndk`
 - Android NDK (set `ANDROID_NDK_HOME`)
 - SWIG (`brew install swig` on macOS)
 - CMake 3.22+
