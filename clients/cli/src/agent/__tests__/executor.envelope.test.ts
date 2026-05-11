@@ -135,7 +135,14 @@ describe('AgentExecutor.storeServerTransaction', () => {
     expect(executor.storeServerTransaction(env)).toBe(true)
   })
 
-  it('rejects mcp-ts execute_swap multi-leg envelope (approvalTxArgs present)', () => {
+  // Phase B (multi-leg sequencer): mcp-ts execute_swap envelopes carrying
+  // both `approvalTxArgs` and `txArgs` are now ACCEPTED — they're stashed
+  // as 2 legs and routed through signMultiLeg by signTxFromBuffer. The
+  // detailed multi-leg behavior is covered in executor.multileg.test.ts;
+  // this case just locks the envelope-acceptance contract here so a future
+  // regression that re-introduces the old rejection guard is caught at the
+  // shape-parity layer.
+  it('accepts mcp-ts execute_swap multi-leg envelope (approvalTxArgs + txArgs)', () => {
     const executor = makeExecutor()
     const env = {
       chain: 'BSC',
@@ -154,8 +161,8 @@ describe('AgentExecutor.storeServerTransaction', () => {
         tx: SAMPLE_TX,
       },
     }
-    expect(executor.storeServerTransaction(env)).toBe(false)
-    expect(executor.hasPendingTransaction()).toBe(false)
+    expect(executor.storeServerTransaction(env)).toBe(true)
+    expect(executor.hasPendingTransaction()).toBe(true)
   })
 
   it('rejects empty / null payloads', () => {

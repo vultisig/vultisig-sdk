@@ -21,9 +21,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import type { VaultBase } from '@/index'
 
 import type { SwapQuoteResult } from '../../src/vault/swap-types'
-import { loadTestVault, verifyTestVault } from './helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from './helpers/test-vault'
 
-describe('E2E: Swap Quotes (Production)', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Swap Quotes (Production)', () => {
   let vault: VaultBase
 
   beforeAll(async () => {

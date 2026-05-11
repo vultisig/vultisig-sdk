@@ -24,7 +24,7 @@
  * - Vault credentials loaded from environment variables
  */
 
-import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import * as bitcoin from 'bitcoinjs-lib'
 import { createHash } from 'crypto'
 import { keccak256, Transaction } from 'ethers'
@@ -40,7 +40,7 @@ function doubleSha256(data: Buffer): Buffer {
   return createHash('sha256').update(createHash('sha256').update(data).digest()).digest()
 }
 
-describe('E2E: Arbitrary Transaction Signing with ethers.js and bitcoinjs-lib', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Arbitrary Transaction Signing with ethers.js and bitcoinjs-lib', () => {
   let vault: VaultBase
   let vaultEthAddress: string
   let vaultBtcAddress: string

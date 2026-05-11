@@ -27,14 +27,14 @@
 
 import { e2ePrepareSendSkipReason } from '@helpers/prepare-send-skip'
 import { createSigningPayload, TEST_AMOUNTS, TEST_RECEIVERS, validateSignatureFormat } from '@helpers/signing-helpers'
-import { loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
 import { readFile } from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase, Vultisig } from '@/index'
 import { MemoryStorage } from '@/storage/MemoryStorage'
 
-describe('E2E: Fast Signing - Transaction Signing', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Fast Signing - Transaction Signing', () => {
   let vault: VaultBase
 
   beforeAll(async () => {
