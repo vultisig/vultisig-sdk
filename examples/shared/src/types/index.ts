@@ -43,6 +43,13 @@ export type CreateFastVaultFromSeedphraseOptions = {
   chains?: string[]
   usePhantomSolanaPath?: boolean
   tssBatching?: boolean
+  /** Cancels in-process work when aborted (browser SDK path). */
+  signal?: AbortSignal
+  /**
+   * Electron main-process timeout (ms) for the same operation over IPC, where `AbortSignal` cannot cross the bridge.
+   * Prefer `signal` when calling the SDK directly.
+   */
+  importTimeoutMs?: number
   onProgress?: (step: ProgressStep) => void
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
 }
@@ -139,6 +146,12 @@ export type CreateFastVaultOptions = {
   name: string
   password: string
   email: string
+  signal?: AbortSignal
+  /**
+   * Electron main-process timeout (ms) for the same operation over IPC, where `AbortSignal` cannot cross the bridge.
+   * Prefer `signal` when calling the SDK directly.
+   */
+  createTimeoutMs?: number
   onProgress?: (step: ProgressStep) => void
 }
 
@@ -243,8 +256,10 @@ export type MaxSendAmountResult = {
   maxSendable: string
 }
 
-// Fiat currency type
-export type FiatCurrency = 'usd' | 'eur' | 'gbp' | 'jpy' | 'cny' | 'aud' | 'cad' | 'chf' | 'sgd' | 'sek'
+// Fiat currency — single source of truth for runtime checks + typing
+export const FIAT_CURRENCIES = ['usd', 'eur', 'gbp', 'jpy', 'cny', 'aud', 'cad', 'chf', 'sgd', 'sek'] as const
+
+export type FiatCurrency = (typeof FIAT_CURRENCIES)[number]
 
 // Discount tier type (based on VULT token + Thorguard NFT holdings)
 export type DiscountTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'ultimate' | null

@@ -15,6 +15,10 @@ type BalanceEntry = {
   tokenId?: string
 }
 
+function formatErr(err: unknown): string {
+  return err instanceof Error ? err.message : 'Request failed'
+}
+
 export default function VaultBalance({ vault }: VaultBalanceProps) {
   const sdk = useSDKAdapter()
 
@@ -22,6 +26,8 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [includeTokens, setIncludeTokens] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [chainErrors, setChainErrors] = useState<Record<string, string>>({})
+  const [tokenBalanceFailures, setTokenBalanceFailures] = useState(0)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const handleRefresh = async () => {
@@ -32,9 +38,13 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
 
     setIsLoading(true)
     setError(null)
+    setChainErrors({})
+    setTokenBalanceFailures(0)
 
     try {
       const entries: BalanceEntry[] = []
+      const nativeErrors: Record<string, string> = {}
+      let tokenFails = 0
 
       for (const chain of vault.chains) {
         if (signal.aborted) break
@@ -56,16 +66,35 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
                 entries.push({ chain, balance: tokenBalance, tokenId: token.id })
               } catch (err) {
                 console.error(`Failed to get balance for ${token.symbol}:`, err)
+                tokenFails += 1
               }
             }
           }
         } catch (err) {
           console.error(`Failed to get balance for ${chain}:`, err)
+          nativeErrors[chain] = formatErr(err)
         }
       }
 
       if (!signal.aborted) {
         setBalances(entries)
+        setChainErrors(nativeErrors)
+        setTokenBalanceFailures(tokenFails)
+
+        const failedChains = Object.keys(nativeErrors)
+        if (entries.length === 0 && vault.chains.length > 0) {
+          if (failedChains.length > 0) {
+            setError(
+              failedChains.length === vault.chains.length
+                ? 'Could not load balances. Network or RPC endpoints may be blocked or unavailable.'
+                : `Could not load balances for: ${failedChains.join(', ')}.`
+            )
+          } else {
+            setError(null)
+          }
+        } else {
+          setError(null)
+        }
       }
     } catch (err) {
       if (!signal.aborted) {
@@ -118,6 +147,22 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
 
       {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
 
+      {balances.length > 0 && Object.keys(chainErrors).length > 0 && (
+        <div className="text-amber-900 text-sm bg-amber-50 p-3 rounded border border-amber-200">
+          <span className="font-medium">Some chains could not be refreshed.</span>{' '}
+          {Object.entries(chainErrors)
+            .map(([ch, msg]) => `${ch}: ${msg}`)
+            .join(' · ')}
+        </div>
+      )}
+
+      {balances.length > 0 && tokenBalanceFailures > 0 && (
+        <div className="text-amber-900 text-sm bg-amber-50 p-3 rounded border border-amber-200">
+          {tokenBalanceFailures} token balance{tokenBalanceFailures !== 1 ? 's' : ''} could not be loaded. Retry refresh
+          or check the console for details.
+        </div>
+      )}
+
       {isLoading && balances.length === 0 ? (
         <div className="flex items-center justify-center py-16">
           <Spinner size="large" />
@@ -134,10 +179,16 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Balances Loaded</h3>
-          <p className="text-gray-500 mb-4">Click &quot;Refresh&quot; to load balances for all chains.</p>
-          <Button variant="primary" onClick={handleRefresh}>
-            Load Balances
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            {error ? 'Balance refresh failed' : 'No Balances Loaded'}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {error
+              ? 'Use Refresh to try again after checking your connection or any blocking extensions.'
+              : 'Click &quot;Refresh&quot; to load balances for all chains.'}
+          </p>
+          <Button variant="primary" onClick={handleRefresh} isLoading={isLoading}>
+            {error ? 'Retry' : 'Load Balances'}
           </Button>
         </div>
       ) : (

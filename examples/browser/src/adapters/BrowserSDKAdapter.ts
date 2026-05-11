@@ -167,6 +167,7 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       name: options.name,
       password: options.password,
       email: options.email,
+      signal: options.signal,
       onProgress: options.onProgress
         ? step => {
             options.onProgress!({
@@ -255,6 +256,7 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       chains: options.chains as Chain[],
       usePhantomSolanaPath: options.usePhantomSolanaPath,
       tssBatching: options.tssBatching,
+      signal: options.signal,
       onProgress: step => {
         const progressStep: ProgressStep = {
           message: step.message,
@@ -437,6 +439,11 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       amount: total.amount,
       currency: (currency || total.currency || 'usd') as FiatCurrency,
     }
+  }
+
+  async refreshPortfolioPrices(vaultId: string): Promise<void> {
+    const vault = await this.getVault(vaultId)
+    await vault.updateValues('all')
   }
 
   // ===== Swap =====

@@ -14,6 +14,9 @@ type SeedphraseImporterProps = {
   onVaultCreated: (vault: VaultInfo) => void
 }
 
+/** Safety net if import never resolves (relay OK but MPC stalls). SDK also bounds inbound relay waits. */
+const FAST_SEED_IMPORT_UI_TIMEOUT_MS = 8 * 60 * 1000
+
 type Step = 'seedphrase' | 'form' | 'verify' | 'qr' | 'keygen' | 'complete'
 
 export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporterProps) {
@@ -109,8 +112,10 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
     setIsLoading(true)
     setKeygenProgress(null)
 
+    const abortController = new AbortController()
+    let uiTimeoutId: ReturnType<typeof setTimeout> | undefined
     try {
-      const result = await sdk.createFastVaultFromSeedphrase({
+      const importPromise = sdk.createFastVaultFromSeedphrase({
         mnemonic: mnemonic.trim().toLowerCase(),
         name: formData.name,
         email: formData.email,
@@ -118,14 +123,32 @@ export default function SeedphraseImporter({ onVaultCreated }: SeedphraseImporte
         discoverChains,
         usePhantomSolanaPath,
         tssBatching: true,
+        signal: abortController.signal,
+        importTimeoutMs: FAST_SEED_IMPORT_UI_TIMEOUT_MS,
         onProgress: setKeygenProgress,
       })
+
+      const result = await Promise.race([
+        importPromise,
+        new Promise<never>((_, reject) => {
+          uiTimeoutId = setTimeout(() => {
+            abortController.abort()
+            reject(
+              new Error(
+                `Import timed out after ${FAST_SEED_IMPORT_UI_TIMEOUT_MS / 60000} minutes. ` +
+                  'The MPC key import may be stalled on the relay or server. Try again later, or contact support if this persists.'
+              )
+            )
+          }, FAST_SEED_IMPORT_UI_TIMEOUT_MS)
+        }),
+      ])
 
       setVaultId(result.vaultId)
       setStep('verify')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed')
     } finally {
+      if (uiTimeoutId !== undefined) clearTimeout(uiTimeoutId)
       setIsLoading(false)
     }
   }

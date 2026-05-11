@@ -14,7 +14,7 @@ import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -201,16 +201,11 @@ export class JoinSecureVaultService {
 
     // Fresh keygen only: joiners call /start too so no one runs DKLS before the relay opens the session.
     // (Key-import joiners must NOT call /start — only the initiator does — or import hangs.)
-    const { error: startErr } = await attempt(
-      startMpcSession({
-        serverUrl: this.relayUrl,
-        sessionId: qrParams.sessionId,
-        devices: allDevices,
-      })
-    )
-    if (startErr) {
-      console.warn('startMpcSession (join keygen):', startErr)
-    }
+    await startMpcSessionWithRetry({
+      serverUrl: this.relayUrl,
+      sessionId: qrParams.sessionId,
+      devices: allDevices,
+    })
 
     const dkls = new DKLS(
       { create: true }, // Keygen mode
