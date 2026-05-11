@@ -28,23 +28,25 @@ describe('knownEvmContracts', () => {
     }
   })
 
-  it('every declared category is used by at least one entry', () => {
-    const declared: KnownEvmContractCategory[] = [
-      'DEX Router',
-      'DEX Aggregator',
-      'Token Approval Helper',
-      'Cross-Chain Bridge',
-      'Lending Protocol',
-      'NFT Marketplace',
-    ]
+  it('every declared category is either used or explicitly reserved', () => {
+    // Record<UnionType, …> over a manual array so adding a category to
+    // KnownEvmContractCategory forces an explicit policy decision here at
+    // compile time instead of silently passing.
+    const categoryPolicy: Record<KnownEvmContractCategory, 'required' | 'reserved'> = {
+      'DEX Router': 'required',
+      'DEX Aggregator': 'required',
+      'Token Approval Helper': 'required',
+      'Cross-Chain Bridge': 'required',
+      'Lending Protocol': 'required',
+      // Reserved for future entries (OpenSea Seaport etc.) — not yet wired.
+      'NFT Marketplace': 'reserved',
+    }
     const used = new Set(Object.values(knownEvmContracts).map(e => e.category))
-    for (const category of declared) {
-      // Categories that no entry uses are dead enum members; remove them or
-      // add a representative entry.
-      if (category === 'NFT Marketplace') {
-        // Reserved for future entries (OpenSea Seaport etc.) — not yet wired.
-        continue
-      }
+    // Single localized cast at the iteration boundary — the policy object's
+    // keys are exactly KnownEvmContractCategory by construction.
+    const categories = Object.keys(categoryPolicy) as KnownEvmContractCategory[]
+    for (const category of categories) {
+      if (categoryPolicy[category] === 'reserved') continue
       expect(used.has(category)).toBe(true)
     }
   })
