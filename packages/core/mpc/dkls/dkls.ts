@@ -33,6 +33,8 @@ export class DKLS {
   private sequenceNo: number = 0
   private inboundSequenceNo: number = 0
   private cache: Record<string, string> = {}
+  /** Updated when inbound relay traffic arrives; used for idle stall detection (not wall-clock session cap). */
+  private lastRelayProgressAt: number = Date.now()
   private setupMessage: Uint8Array = new Uint8Array()
   private pendingKeyImportSession: {
     session: MpcSession<MpcKeyshare>
@@ -120,9 +122,16 @@ export class DKLS {
 
   private async processInbound(
     session: MpcSession<unknown>,
-    start: number,
     messageId?: string
   ): Promise<boolean> {
+    // Guard empty relay polls and error retries: without this, `parsedMessages.length === 0`
+    // recurses indefinitely while HTTP stays "healthy" but no MPC messages arrive.
+    // Uses last inbound activity — slow ceremonies keep receiving traffic and reset the clock.
+    if (Date.now() - this.lastRelayProgressAt > this.timeoutMs * 2) {
+      console.log('timeout')
+      this.isKeygenComplete = true
+      return false
+    }
     try {
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
@@ -133,8 +142,9 @@ export class DKLS {
       if (parsedMessages.length === 0) {
         // no message to download, backoff for 100ms
         await sleep(100)
-        return await this.processInbound(session, start, messageId)
+        return await this.processInbound(session, messageId)
       }
+      this.lastRelayProgressAt = Date.now()
       for (const msg of parsedMessages) {
         const cacheKey = `${msg.session_id}-${msg.from}-${msg.hash}`
         if (this.cache[cacheKey]) {
@@ -165,18 +175,12 @@ export class DKLS {
           messageId,
         })
       }
-      const end = Date.now()
-      if (end - start > this.timeoutMs * 2) {
-        console.log('timeout')
-        this.isKeygenComplete = true
-        return false
-      }
       await sleep(100)
-      return await this.processInbound(session, start, messageId)
+      return await this.processInbound(session, messageId)
     } catch (error) {
       console.error('processInbound error:', error)
       await sleep(100)
-      return await this.processInbound(session, start, messageId)
+      return await this.processInbound(session, messageId)
     }
   }
 
@@ -294,9 +298,9 @@ export class DKLS {
         throw new Error('Invalid keygen operation')
       }
       try {
-        const start = Date.now()
+        this.lastRelayProgressAt = Date.now()
         const outbound = this.processOutbound(session, messageId)
-        const inbound = this.processInbound(session, start, messageId)
+        const inbound = this.processInbound(session, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
           const keyShare = await session.finish()
@@ -411,9 +415,9 @@ export class DKLS {
       )
 
       try {
-        const start = Date.now()
+        this.lastRelayProgressAt = Date.now()
         const outbound = this.processOutbound(session, messageId)
-        const inbound = this.processInbound(session, start, messageId)
+        const inbound = this.processInbound(session, messageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
           const keyShare = await session.finish()
@@ -571,9 +575,9 @@ export class DKLS {
       }
       try {
         const exchangeMessageId = protocolMessageId
-        const start = Date.now()
+        this.lastRelayProgressAt = Date.now()
         const outbound = this.processOutbound(session, exchangeMessageId)
-        const inbound = this.processInbound(session, start, exchangeMessageId)
+        const inbound = this.processInbound(session, exchangeMessageId)
         const [, inboundResult] = await Promise.all([outbound, inbound])
         if (inboundResult) {
           const keyShare = await session.finish()

@@ -165,7 +165,7 @@ Click "Refresh" to update your tier after acquiring more VULT tokens.
 
 ## Project Structure
 
-See [BROWSER_EXAMPLE_IMPLEMENTATION.md](../../docs/plans/BROWSER_EXAMPLE_IMPLEMENTATION.md) for detailed architecture and implementation guide.
+The browser example is a Vite workspace that consumes the local SDK package through Yarn workspaces.
 
 ## Key Features
 

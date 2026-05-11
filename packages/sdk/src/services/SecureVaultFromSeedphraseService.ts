@@ -21,14 +21,13 @@ import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
 import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { attempt } from '@vultisig/lib-utils/attempt'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { DEFAULT_CHAINS } from '../constants'
@@ -342,16 +341,11 @@ export class SecureVaultFromSeedphraseService {
       message: 'All devices ready! Starting key import...',
     })
 
-    const { error: startErr } = await attempt(
-      startMpcSession({
-        serverUrl: this.relayUrl,
-        sessionId,
-        devices: allDevices,
-      })
-    )
-    if (startErr) {
-      console.warn('startMpcSession (seedphrase import):', startErr)
-    }
+    await startMpcSessionWithRetry({
+      serverUrl: this.relayUrl,
+      sessionId,
+      devices: allDevices,
+    })
 
     const dkls = new DKLS(
       { keyimport: true },

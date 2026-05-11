@@ -6,6 +6,18 @@ import Button from '../common/Button'
 import Input from '../common/Input'
 import Modal from '../common/Modal'
 
+const FAST_VAULT_CREATE_TIMEOUT_MS = 9 * 60 * 1000
+
+function formatUserFacingError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message
+  }
+  if (typeof err === 'string' && err) {
+    return err
+  }
+  return fallback
+}
+
 type VaultCreatorProps = {
   onVaultCreated: (vault: VaultInfo) => void
 }
@@ -25,6 +37,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
   })
   const [verificationCode, setVerificationCode] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [progressHint, setProgressHint] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,6 +60,10 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
     }
 
     setIsLoading(true)
+    setProgressHint(null)
+
+    const abortController = new AbortController()
+    const timeoutId = globalThis.setTimeout(() => abortController.abort(), FAST_VAULT_CREATE_TIMEOUT_MS)
 
     try {
       // createFastVault returns just the vaultId - vault is returned from verifyVault
@@ -54,15 +71,32 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
         name: formData.name,
         password: formData.password,
         email: formData.email,
+        signal: abortController.signal,
+        createTimeoutMs: FAST_VAULT_CREATE_TIMEOUT_MS,
+        onProgress: s => setProgressHint(s.message),
       })
 
+      const id = typeof result?.vaultId === 'string' ? result.vaultId.trim() : ''
+      if (!id) {
+        setError('Vault creation finished without a vault id. Please try again or contact support if this persists.')
+        return
+      }
+
       // Fast vaults always require email verification
-      setVaultId(result.vaultId)
+      setVaultId(id)
       setStep('verify')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create vault')
+      if (abortController.signal.aborted) {
+        setError(
+          `Vault creation exceeded ${FAST_VAULT_CREATE_TIMEOUT_MS / 60000} minutes and was stopped. Check your network and try again.`
+        )
+      } else {
+        setError(formatUserFacingError(err, 'Failed to create vault'))
+      }
     } finally {
+      globalThis.clearTimeout(timeoutId)
       setIsLoading(false)
+      setProgressHint(null)
     }
   }
 
@@ -94,6 +128,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
     setFormData({ name: '', email: '', password: '', confirmPassword: '' })
     setVerificationCode('')
     setError(null)
+    setProgressHint(null)
   }
 
   return (
@@ -102,7 +137,7 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
         Create Fast Vault
       </Button>
 
-      <Modal isOpen={isOpen} onClose={handleClose} title="Create Fast Vault">
+      <Modal isOpen={isOpen} onClose={handleClose} title="Create Fast Vault" preventClose={isLoading}>
         {step === 'form' ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
@@ -141,6 +176,9 @@ export default function VaultCreator({ onVaultCreated }: VaultCreatorProps) {
               placeholder="Re-enter password"
               required
             />
+            {progressHint && !error && (
+              <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">{progressHint}</div>
+            )}
             {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
             <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>
               Create Vault

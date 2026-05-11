@@ -1,3 +1,4 @@
+import { VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 import { useState } from 'react'
 
 import { useFileAdapter, useSDKAdapter } from '../../adapters'
@@ -10,6 +11,41 @@ type VaultImporterProps = {
   onVaultImported: (vaults: VaultInfo[]) => void
 }
 
+type FileImportIssue = { fileName: string; message: string }
+
+function describeVaultImportFailure(error: unknown): string {
+  if (error instanceof VaultImportError) {
+    switch (error.code) {
+      case VaultImportErrorCode.INVALID_PASSWORD:
+        return 'Wrong password — could not decrypt this vault file.'
+      case VaultImportErrorCode.PASSWORD_REQUIRED:
+        return 'Password required for this encrypted vault.'
+      case VaultImportErrorCode.INVALID_FILE_FORMAT:
+        return 'Invalid or unrecognized vault file format.'
+      case VaultImportErrorCode.CORRUPTED_DATA:
+        return 'Vault data appears corrupted or incomplete.'
+      case VaultImportErrorCode.UNSUPPORTED_FORMAT:
+        return 'This vault format is not supported.'
+      default:
+        return error.message
+    }
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'Import failed.'
+}
+
+function formatAllFailedSummary(failures: FileImportIssue[]): string {
+  if (failures.length === 0) {
+    return 'No vaults were imported.'
+  }
+  if (failures.length === 1) {
+    return `${failures[0].fileName}: ${failures[0].message}`
+  }
+  return ['Could not import any vaults:', ...failures.map(f => `• ${f.fileName}: ${f.message}`)].join('\n')
+}
+
 export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
   const sdk = useSDKAdapter()
   const fileAdapter = useFileAdapter()
@@ -17,6 +53,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [postImportWarnings, setPostImportWarnings] = useState<FileImportIssue[] | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([])
   const [passwordPrompt, setPasswordPrompt] = useState<{
     fileName: string
@@ -35,6 +72,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
       if (!result.canceled && result.files.length > 0) {
         setSelectedFiles(result.files)
         setError(null)
+        setPostImportWarnings(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select files')
@@ -44,6 +82,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setPostImportWarnings(null)
 
     if (selectedFiles.length === 0) {
       setError('Please select at least one vault file')
@@ -54,44 +93,52 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
 
     try {
       const importedVaults: VaultInfo[] = []
+      const failures: FileImportIssue[] = []
 
-      // Import each file
       for (const file of selectedFiles) {
         try {
-          // Read file content via adapter
           const content = await fileAdapter.readFile(file)
 
           let password: string | undefined = undefined
 
-          // Check if vault is encrypted
           const isEncrypted = await sdk.isVaultEncrypted(content)
           if (isEncrypted) {
-            // Ask for password using a promise
             const passwordResult = await new Promise<string | null>(resolve => {
               setPasswordPrompt({ fileName: file.name, resolve })
             })
 
             if (!passwordResult) {
-              throw new Error('Password required for encrypted vault')
+              failures.push({
+                fileName: file.name,
+                message: 'Password was skipped or cancelled — encrypted vault was not imported.',
+              })
+              continue
             }
             password = passwordResult
           }
 
-          // Import vault through SDK adapter
           const importedVault = await sdk.importVault(content, password)
           importedVaults.push(importedVault)
         } catch (fileError) {
           console.error(`Failed to import ${file.name}:`, fileError)
-          // Continue with other files instead of failing completely
+          failures.push({
+            fileName: file.name,
+            message: describeVaultImportFailure(fileError),
+          })
         }
       }
 
       if (importedVaults.length === 0) {
-        throw new Error('Failed to import any vaults. Check file format.')
+        setError(formatAllFailedSummary(failures))
+        return
       }
 
       onVaultImported(importedVaults)
-      handleClose()
+      if (failures.length > 0) {
+        setPostImportWarnings(failures)
+      } else {
+        handleClose()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import vaults')
     } finally {
@@ -119,6 +166,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
     setIsOpen(false)
     setSelectedFiles([])
     setError(null)
+    setPostImportWarnings(null)
     setPasswordPrompt(null)
     setPasswordInput('')
   }
@@ -154,9 +202,31 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
             </div>
           )}
 
-          {error && <div className="text-error text-sm bg-red-50 p-3 rounded">{error}</div>}
+          {error && <div className="text-error text-sm bg-red-50 p-3 rounded whitespace-pre-wrap">{error}</div>}
 
-          <Button type="submit" variant="primary" fullWidth isLoading={isLoading} disabled={selectedFiles.length === 0}>
+          {postImportWarnings && postImportWarnings.length > 0 && (
+            <div className="text-amber-900 text-sm bg-amber-50 p-3 rounded border border-amber-200">
+              <strong>Some files could not be imported</strong>
+              <ul className="mt-2 list-disc pl-5 space-y-1">
+                {postImportWarnings.map((w, index) => (
+                  <li key={`${w.fileName}-${index}`}>
+                    <span className="font-medium">{w.fileName}</span>: {w.message}
+                  </li>
+                ))}
+              </ul>
+              <Button type="button" className="mt-3" variant="secondary" fullWidth onClick={handleClose}>
+                Done
+              </Button>
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            fullWidth
+            isLoading={isLoading}
+            disabled={selectedFiles.length === 0 || !!postImportWarnings}
+          >
             Import {selectedFiles.length > 1 ? `${selectedFiles.length} Vaults` : 'Vault'}
           </Button>
         </form>
@@ -178,7 +248,7 @@ export default function VaultImporter({ onVaultImported }: VaultImporterProps) {
           />
           <div className="flex justify-end space-x-2">
             <Button variant="secondary" onClick={handlePasswordCancel}>
-              Skip
+              Cancel
             </Button>
             <Button onClick={handlePasswordSubmit} disabled={!passwordInput}>
               Submit
