@@ -474,6 +474,11 @@
       "import": "./dist/chains/evm/contract/commonSelectors.js",
       "default": "./dist/chains/evm/contract/commonSelectors.js"
     },
+    "./chains/evm/contract/knownContracts": {
+      "types": "./dist/chains/evm/contract/knownContracts.d.ts",
+      "import": "./dist/chains/evm/contract/knownContracts.js",
+      "default": "./dist/chains/evm/contract/knownContracts.js"
+    },
     "./chains/evm/contract/universalRouter/decode": {
       "types": "./dist/chains/evm/contract/universalRouter/decode.d.ts",
       "import": "./dist/chains/evm/contract/universalRouter/decode.js",
