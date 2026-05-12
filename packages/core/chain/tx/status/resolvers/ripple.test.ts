@@ -86,6 +86,23 @@ describe('getRippleTxStatus', () => {
     expect(result).toEqual({ status: 'pending', isKnown: false })
   })
 
+  it('returns isKnown:false on response missing `result` field (CR finding)', async () => {
+    // A `{}` payload from a misbehaving RPC has no `result`. Pre-fix this
+    // bypassed the !response guard and crashed at destructure time. Now
+    // it routes through the same safe path as txnNotFound.
+    mocks.request.mockResolvedValue({})
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result).toEqual({ status: 'pending', isKnown: false })
+  })
+
+  it('returns isKnown:false on response with null result', async () => {
+    mocks.request.mockResolvedValue({ result: null })
+
+    const result = await getRippleTxStatus({ chain: OtherChain.Ripple, hash })
+    expect(result).toEqual({ status: 'pending', isKnown: false })
+  })
+
   it('omits receipt when Fee is missing on success', async () => {
     mocks.request.mockResolvedValue({
       result: {

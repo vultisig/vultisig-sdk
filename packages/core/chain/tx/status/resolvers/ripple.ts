@@ -17,13 +17,18 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({
     })
   )
 
-  if (error || !response) {
-    // The chain says it doesn't know this hash — either the tx was
-    // rejected at preflight and never made it on-chain, or there's a
-    // transient RPC error. Either way, mark `isKnown: false` so the
-    // verify-by-hash safety net does NOT swallow broadcast errors for
-    // this case. Mirrors `solana.ts:19`. The status itself stays
-    // `'pending'` so status-polling UI can re-query later.
+  if (
+    error ||
+    !response ||
+    typeof response.result !== 'object' ||
+    response.result === null
+  ) {
+    // The chain says it doesn't know this hash, OR the response is
+    // shaped unexpectedly (e.g. malformed payload `{}` without `result`).
+    // Either case: mark `isKnown: false` so the verify-by-hash safety
+    // net does NOT swallow broadcast errors. Mirrors `solana.ts:19`.
+    // Status itself stays `'pending'` so status-polling UI can re-query
+    // later.
     return { status: 'pending', isKnown: false }
   }
 
