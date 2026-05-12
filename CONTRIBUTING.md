@@ -159,6 +159,7 @@ yarn test:all
 | `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
 | `yarn quality:health` | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors |
 | `yarn quality:docs` | Run Markdown syntax and local-link checks |
+| `yarn quality:contracts` | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
 | `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
 | `yarn check:agent` | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
@@ -211,6 +212,7 @@ Every PR runs:
 - TypeScript type checking
 - Knip (unused exports / dead code in analyzed workspaces)
 - Code health detectors for architecture, duplication, complexity, secrets, critical dependency advisories, and Markdown syntax
+- Packaged SDK contract smoke (`yarn quality:contracts` inside `yarn check:ci`: tarball exports, temp consumer imports/types, CLI dist `--help` and `schema`)
 - Unit tests (387+ tests)
 - Integration tests (`yarn test:integration` — same suite as CI job "Integration Tests (Vitest)")
 - SDK build verification

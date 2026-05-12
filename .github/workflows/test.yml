@@ -117,7 +117,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Run static quality gate
+      - name: Run static quality gate (lint, types, knip, Prettier, SDK/CLI contracts)
         run: yarn check:ci
 
   test-summary:
