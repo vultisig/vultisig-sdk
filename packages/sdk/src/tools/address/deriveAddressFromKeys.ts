@@ -9,6 +9,18 @@ type DeriveAddressFromKeysInput = {
   ecdsaPublicKey?: string
   eddsaPublicKey?: string
   hexChainCode: string
+  /**
+   * Optional map of pre-derived hardened pubkeys keyed by chain name (e.g. `{ Terra: '03c7...' }`).
+   * When present for the requested chain, the derivation BIP32 re-walk is skipped and this pubkey
+   * is used directly — enabling correct addresses for hardened-only chains like Terra/TerraClassic
+   * in contexts where only the root pubkey + chain code are available (MCP / agent-backend).
+   *
+   * `Terra` is automatically aliased to `TerraClassic` (both share BIP44 coin_type 330).
+   *
+   * When absent or when the map does not contain an entry for the requested chain, the existing
+   * non-hardened BIP32 fallback is used unchanged — existing callers are unaffected.
+   */
+  chainPublicKeys?: Partial<Record<Chain, string>>
 }
 
 type DeriveAddressFromKeysResult = {
@@ -51,6 +63,17 @@ export const deriveAddressFromKeys = async (
     )
   }
 
+  // Terra and TerraClassic share BIP44 coin_type 330 and the same hardened-derived pubkey.
+  // Mirror the alias from addressDerivation.ts so callers only need to supply 'Terra'.
+  const resolvedChainPublicKeys: Partial<Record<Chain, string>> | undefined = (() => {
+    const keys = input.chainPublicKeys
+    if (!keys) return undefined
+    if (keys[Chain.Terra] && !keys[Chain.TerraClassic]) {
+      return { ...keys, [Chain.TerraClassic]: keys[Chain.Terra] }
+    }
+    return keys
+  })()
+
   let publicKey: ReturnType<typeof getPublicKey>
   try {
     publicKey = getPublicKey({
@@ -61,6 +84,7 @@ export const deriveAddressFromKeys = async (
         ecdsa: input.ecdsaPublicKey ?? '',
         eddsa: input.eddsaPublicKey ?? '',
       },
+      chainPublicKeys: resolvedChainPublicKeys,
     })
   } catch (err) {
     throw new Error(
