@@ -27,8 +27,13 @@ type Cw20TokenInfo = {
 
 const decimalsFromMeta = (meta: DenomMetadata): number | null => {
   if (!meta.denom_units || !meta.display) return null
-  const unit = meta.denom_units.find(u => u.denom === (meta.symbol || meta.display))
-  return unit?.exponent ?? null
+  const byDisplay = meta.denom_units.find(u => u.denom === meta.display)
+  if (byDisplay) return byDisplay.exponent
+  if (meta.symbol) {
+    const bySymbol = meta.denom_units.find(u => u.denom === meta.symbol)
+    if (bySymbol) return bySymbol.exponent
+  }
+  return null
 }
 
 const deriveTicker = (denom: string, meta: DenomMetadata): string => {

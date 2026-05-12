@@ -6,7 +6,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: (...args: unknown[]) => queryUrlMock(...args),
 }))
 
-import { Chain } from '../../../../Chain'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { getCosmosTokenMetadata } from './cosmos'
 
 describe('getCosmosTokenMetadata', () => {
