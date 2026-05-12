@@ -9,6 +9,8 @@
 import type { Mock } from 'vitest'
 import { vi } from 'vitest'
 
+import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
+
 /**
  * Default server endpoints
  */
@@ -97,8 +99,17 @@ export function createVultisigServerMock(): Mock {
     const urlString = url.toString()
     const method = options?.method || 'GET'
 
-    // FastVault: Create/Setup vault
-    if (urlString.includes('/vault') && method === 'POST' && !urlString.includes('/sign')) {
+    const pathname = (() => {
+      try {
+        const p = new URL(urlString).pathname.replace(/\/$/, '')
+        return p || '/'
+      } catch {
+        return urlString.split('?')[0].replace(/\/$/, '') || '/'
+      }
+    })()
+
+    // FastVault: Create/Setup vault (POST exactly /vault)
+    if (method === 'POST' && pathname === '/vault' && !urlString.includes('/sign')) {
       return createMockResponse(200, mockVaultCreationResponse())
     }
 
@@ -112,8 +123,8 @@ export function createVultisigServerMock(): Mock {
       return createMockResponse(200, { status: 'sent' })
     }
 
-    // FastVault: Get vault from server
-    if (urlString.includes('/vault/') && method === 'POST') {
+    // FastVault: Get vault from server (POST /vault/{id}, not create root)
+    if (method === 'POST' && /^\/vault\/[^/]+$/.test(pathname)) {
       return createMockResponse(200, {
         password: 'encrypted_vault_data',
         vaultData: {},
@@ -165,13 +176,13 @@ export function createFailingServerMock(errorType: 'network' | 'timeout' | '500'
   fetchMock.mockImplementation(async () => {
     switch (errorType) {
       case 'network':
-        throw new Error('Network request failed')
+        throw new VaultError(VaultErrorCode.NetworkError, 'Network request failed')
       case 'timeout':
-        throw new Error('Request timeout')
+        throw new VaultError(VaultErrorCode.Timeout, 'Request timeout')
       case '500':
         return createMockResponse(500, { error: 'Internal Server Error' })
       default:
-        throw new Error('Unknown error')
+        throw new VaultError(VaultErrorCode.NotImplemented, 'Unknown error')
     }
   })
 
@@ -235,7 +246,7 @@ function getStatusText(status: number): string {
  */
 export function setupServerMocks() {
   const mockFetch = createVultisigServerMock()
-  global.fetch = mockFetch as any
+  vi.stubGlobal('fetch', mockFetch as typeof fetch)
   return mockFetch
 }
 
@@ -244,6 +255,7 @@ export function setupServerMocks() {
  */
 export function resetServerMocks() {
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
 }
 
 /**
@@ -273,13 +285,17 @@ export function assertEndpointCalled(mock: Mock, urlPattern: string, method: str
 
   if (times !== undefined) {
     if (matchingCalls.length !== times) {
-      throw new Error(
+      throw new VaultError(
+        VaultErrorCode.CreateFailed,
         `Expected ${urlPattern} (${method}) to be called ${times} times, but was called ${matchingCalls.length} times`
       )
     }
   } else {
     if (matchingCalls.length === 0) {
-      throw new Error(`Expected ${urlPattern} (${method}) to be called at least once, but was never called`)
+      throw new VaultError(
+        VaultErrorCode.CreateFailed,
+        `Expected ${urlPattern} (${method}) to be called at least once, but was never called`
+      )
     }
   }
 

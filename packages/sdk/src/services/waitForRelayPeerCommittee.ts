@@ -1,6 +1,8 @@
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { VaultError, VaultErrorCode } from '../vault/VaultError'
+
 /**
  * Poll the message relay until `requiredDevices` unique peers have joined, then return a sorted committee list.
  * Used by secure vault creation and secure seedphrase import (same relay semantics).
@@ -21,7 +23,7 @@ export async function waitForRelayPeerCommittee(params: {
 
   while (Date.now() - startTime < maxWaitTime) {
     if (signal?.aborted) {
-      throw new Error('Operation aborted')
+      throw new VaultError(VaultErrorCode.OperationAborted, 'Operation aborted')
     }
 
     try {
@@ -29,10 +31,12 @@ export async function waitForRelayPeerCommittee(params: {
       const allPeers = await queryUrl<string[]>(url)
       const uniquePeers = withoutDuplicates(allPeers)
 
-      if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-        const newDevices = uniquePeers.slice(lastJoinedCount)
-        for (const device of newDevices) {
-          onDeviceJoined(device, uniquePeers.length, requiredDevices)
+      if (uniquePeers.length > lastJoinedCount) {
+        if (onDeviceJoined) {
+          const newDevices = uniquePeers.slice(lastJoinedCount)
+          for (const device of newDevices) {
+            onDeviceJoined(device, uniquePeers.length, requiredDevices)
+          }
         }
         lastJoinedCount = uniquePeers.length
       }

@@ -25,6 +25,7 @@ import { without } from '@vultisig/lib-utils/array/without'
 
 import { randomUUID } from '../crypto'
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
+import { VaultError, VaultErrorCode } from '../vault/VaultError'
 import { buildKeygenPairingQrPayload } from './buildKeygenPairingQrPayload'
 import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
@@ -289,7 +290,10 @@ export class SecureVaultCreationService {
         })
       },
       createTimeoutError: (lastJoinedCount, requiredDevices) =>
-        new Error(`Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`),
+        new VaultError(
+          VaultErrorCode.Timeout,
+          `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
+        ),
     })
 
     // Step 5: Start MPC session

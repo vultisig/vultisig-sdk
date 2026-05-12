@@ -411,6 +411,11 @@
       "import": "./dist/keysign/send/build.js",
       "default": "./dist/keysign/send/build.js"
     },
+    "./keysign/send/cosmosWasm": {
+      "types": "./dist/keysign/send/cosmosWasm.d.ts",
+      "import": "./dist/keysign/send/cosmosWasm.js",
+      "default": "./dist/keysign/send/cosmosWasm.js"
+    },
     "./keysign/send/getSendFeeEstimate": {
       "types": "./dist/keysign/send/getSendFeeEstimate.d.ts",
       "import": "./dist/keysign/send/getSendFeeEstimate.js",
