@@ -25,7 +25,11 @@ type Input = {
   publicKey?: PublicKey
 }
 
-const resolvers: Record<ChainKind, SigningInputsResolver<any>> = {
+/** Exported for alignment tests: every {@link ChainKind} must map to a resolver and a TW signing-input class. */
+export const signingInputResolversByChainKind: Record<
+  ChainKind,
+  SigningInputsResolver<any>
+> = {
   bittensor: getBittensorSigningInputs,
   cardano: getCardanoSigningInputs,
   cosmos: getCosmosSigningInputs,
@@ -38,13 +42,13 @@ const resolvers: Record<ChainKind, SigningInputsResolver<any>> = {
   ton: getTonSigningInputs,
   utxo: getUtxoSigningInputs,
   tron: getTronSigningInputs,
-} as Record<ChainKind, SigningInputsResolver<any>>
+}
 
 export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
 
-  const signingInputs = resolvers[chainKind](input as any)
+  const signingInputs = signingInputResolversByChainKind[chainKind](input as any)
 
   // Bittensor returns pre-encoded Uint8Array (custom extrinsic builder, not TW proto)
   if (chainKind === 'bittensor' || chainKind === 'qbtc') {
