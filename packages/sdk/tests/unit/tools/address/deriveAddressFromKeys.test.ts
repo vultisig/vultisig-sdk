@@ -183,8 +183,10 @@ describe('deriveAddressFromKeys', () => {
       )
     })
 
-    it('chainPublicKeys for unrelated chain does not affect Terra derivation (fallback)', async () => {
-      // Ethereum pubkey is present but Terra is not — Terra should fall back to BIP32
+    it('chainPublicKeys for unrelated chain: map is NOT forwarded so BIP32 fallback runs', async () => {
+      // Ethereum pubkey is present but Terra is not — Terra should fall back to BIP32 derivation.
+      // We must not forward the partial map to getPublicKey because it would throw
+      // "Chain public key not found" (it treats any non-empty map as authoritative).
       const ethOnlyKeys = { [Chain.Ethereum]: '02ethpubkey' }
       mockDeriveAddress.mockReturnValueOnce('terra1nonhardened')
       await deriveAddressFromKeys({
@@ -193,14 +195,30 @@ describe('deriveAddressFromKeys', () => {
         hexChainCode: 'chain_code_hex',
         chainPublicKeys: ethOnlyKeys,
       })
-      // The map is forwarded as-is (getPublicKey will throw "Chain public key not found"
-      // because chainPublicKeys is non-empty but has no Terra entry — that's intentional
-      // and matches getPublicKey's contract; callers must either supply the right chain
-      // or omit chainPublicKeys entirely)
+      // chainPublicKeys must be undefined so the non-hardened BIP32 fallback runs
       expect(mockGetPublicKey).toHaveBeenCalledWith(
         expect.objectContaining({
           chain: Chain.Terra,
-          chainPublicKeys: ethOnlyKeys,
+          chainPublicKeys: undefined,
+        })
+      )
+    })
+
+    it('TerraClassic key reverse-aliases to Terra', async () => {
+      // Caller supplies TerraClassic but queries Terra — reverse alias must kick in
+      mockDeriveAddress.mockReturnValueOnce(terraFundedAddress)
+      await deriveAddressFromKeys({
+        chain: Chain.Terra,
+        ecdsaPublicKey: 'root_pubkey_hex',
+        hexChainCode: 'chain_code_hex',
+        chainPublicKeys: { [Chain.TerraClassic]: terraHardenedPubkey },
+      })
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: Chain.Terra,
+          chainPublicKeys: expect.objectContaining({
+            [Chain.Terra]: terraHardenedPubkey,
+          }),
         })
       )
     })

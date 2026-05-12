@@ -64,14 +64,27 @@ export const deriveAddressFromKeys = async (
   }
 
   // Terra and TerraClassic share BIP44 coin_type 330 and the same hardened-derived pubkey.
-  // Mirror the alias from addressDerivation.ts so callers only need to supply 'Terra'.
+  // Mirror the alias from addressDerivation.ts so callers only need to supply one direction.
+  // We also filter the map to only include the requested chain: getPublicKey treats any
+  // non-empty map as authoritative and throws "Chain public key not found" when the chain
+  // is absent, so we must not forward a partial map for an unrelated chain.
   const resolvedChainPublicKeys: Partial<Record<Chain, string>> | undefined = (() => {
     const keys = input.chainPublicKeys
     if (!keys) return undefined
-    if (keys[Chain.Terra] && !keys[Chain.TerraClassic]) {
-      return { ...keys, [Chain.TerraClassic]: keys[Chain.Terra] }
+
+    // Apply bidirectional Terra ↔ TerraClassic alias (same coin_type 330).
+    const aliased: Partial<Record<Chain, string>> = { ...keys }
+    if (aliased[Chain.Terra] && !aliased[Chain.TerraClassic]) {
+      aliased[Chain.TerraClassic] = aliased[Chain.Terra]
+    } else if (aliased[Chain.TerraClassic] && !aliased[Chain.Terra]) {
+      aliased[Chain.Terra] = aliased[Chain.TerraClassic]
     }
-    return keys
+
+    // Only forward the map when the requested chain has an entry.
+    // When absent, let getPublicKey run its normal non-hardened BIP32 derivation.
+    if (!aliased[input.chain]) return undefined
+
+    return aliased
   })()
 
   let publicKey: ReturnType<typeof getPublicKey>
