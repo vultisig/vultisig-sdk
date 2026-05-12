@@ -229,9 +229,7 @@ describe('deriveAddressFromKeys', () => {
         ecdsaPublicKey: '02hex',
         hexChainCode: 'cafe',
       })
-      expect(mockGetPublicKey).toHaveBeenCalledWith(
-        expect.objectContaining({ chainPublicKeys: undefined })
-      )
+      expect(mockGetPublicKey).toHaveBeenCalledWith(expect.objectContaining({ chainPublicKeys: undefined }))
     })
   })
 })
