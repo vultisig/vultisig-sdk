@@ -18,7 +18,13 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({
   )
 
   if (error || !response) {
-    return { status: 'pending' }
+    // The chain says it doesn't know this hash — either the tx was
+    // rejected at preflight and never made it on-chain, or there's a
+    // transient RPC error. Either way, mark `isKnown: false` so the
+    // verify-by-hash safety net does NOT swallow broadcast errors for
+    // this case. Mirrors `solana.ts:19`. The status itself stays
+    // `'pending'` so status-polling UI can re-query later.
+    return { status: 'pending', isKnown: false }
   }
 
   const { validated, meta, tx_json } = response.result as {
@@ -49,5 +55,6 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({
     return { status, receipt }
   }
 
-  return { status: 'pending' }
+  // Genuinely in the ledger but not yet validated — XRPL knows about it.
+  return { status: 'pending', isKnown: true }
 }
