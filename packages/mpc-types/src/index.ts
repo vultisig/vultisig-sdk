@@ -79,8 +79,12 @@ export interface MpcSchnorrKeygenResult {
 // Per-algorithm engine interfaces
 // ---------------------------------------------------------------------------
 
-/** DKLS (ECDSA) MPC engine — handles keygen, signing, reshare, refresh, and key import. */
-export interface DklsEngine {
+/**
+ * Shared MPC engine surface for a single curve family (DKLS ECDSA or Schnorr EdDSA):
+ * keygen, signing, reshare, and key import. {@link DklsEngine} and {@link SchnorrEngine} extend this
+ * with algorithm-specific session factories.
+ */
+export interface MpcPerAlgorithmEngineBase {
   // --- Keygen ---
 
   /** Create a keygen setup message to distribute to all parties. */
@@ -97,28 +101,6 @@ export interface DklsEngine {
   createKeygenSession(
     setup: Uint8Array,
     localPartyId: string
-  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
-
-  /**
-   * Create a keygen session for key refresh (rotating shares without changing the public key).
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createRefreshSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    oldKeyshare: MpcKeyshare
-  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
-
-  /**
-   * Create a keygen session for migrating a key from a legacy format.
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createMigrateSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    localUI: Uint8Array,
-    publicKey: Uint8Array,
-    rootChainCode: Uint8Array
   ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
 
   // --- Signing ---
@@ -197,30 +179,37 @@ export interface DklsEngine {
   ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
 }
 
+/** DKLS (ECDSA) MPC engine — handles keygen, signing, reshare, refresh, and key import. */
+export interface DklsEngine extends MpcPerAlgorithmEngineBase {
+  /**
+   * Create a keygen session for key refresh (rotating shares without changing the public key).
+   * May return a Promise in native implementations that require async initialization.
+   */
+  createRefreshSession(
+    setup: Uint8Array,
+    localPartyId: string,
+    oldKeyshare: MpcKeyshare
+  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
+
+  /**
+   * Create a keygen session for migrating a key from a legacy format.
+   * May return a Promise in native implementations that require async initialization.
+   */
+  createMigrateSession(
+    setup: Uint8Array,
+    localPartyId: string,
+    localUI: Uint8Array,
+    publicKey: Uint8Array,
+    rootChainCode: Uint8Array
+  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
+}
+
 /**
  * Schnorr (EdDSA) MPC engine — handles keygen, signing, reshare, and key import.
  * Structurally similar to {@link DklsEngine} but lacks key refresh and makes
  * migration optional (not all EdDSA implementations support it).
  */
-export interface SchnorrEngine {
-  // --- Keygen ---
-
-  /** Create a keygen setup message to distribute to all parties. */
-  keygenSetup(
-    keyId: Uint8Array | null | undefined,
-    threshold: number,
-    partyIds: string[]
-  ): Uint8Array
-
-  /**
-   * Create a keygen session from a setup message.
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createKeygenSession(
-    setup: Uint8Array,
-    localPartyId: string
-  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
-
+export interface SchnorrEngine extends MpcPerAlgorithmEngineBase {
   /**
    * Create a keygen session for migrating a key from a legacy format.
    * Optional — not all Schnorr implementations support migration.
@@ -232,81 +221,6 @@ export interface SchnorrEngine {
     localUI: Uint8Array,
     publicKey: Uint8Array,
     rootChainCode: Uint8Array
-  ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
-
-  // --- Signing ---
-
-  /** Create a sign setup message to distribute to signing parties. */
-  signSetup(
-    keyId: Uint8Array,
-    chainPath: string,
-    messageHash: Uint8Array | null | undefined,
-    partyIds: string[]
-  ): Uint8Array
-
-  /** Extract the message hash from a sign setup message. */
-  signSetupMessageHash(setupMsg: Uint8Array): Uint8Array | undefined
-
-  /** Extract the key ID from a sign setup message. */
-  signSetupKeyId(setupMsg: Uint8Array): Uint8Array | undefined
-
-  /**
-   * Create a signing session.
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createSignSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    keyshare: MpcKeyshare
-  ): MpcSession<Uint8Array> | Promise<MpcSession<Uint8Array>>
-
-  // --- Keyshare ---
-
-  /** Deserialize a keyshare from bytes (inverse of {@link MpcKeyshare.toBytes}). */
-  keyshareFromBytes(bytes: Uint8Array): MpcKeyshare
-
-  // --- Reshare ---
-
-  /** Create a reshare (quorum change) setup message. */
-  reshareSetup(
-    keyshare: MpcKeyshare,
-    allPartyIds: string[],
-    oldIndices: Uint8Array,
-    threshold: number,
-    newIndices: Uint8Array
-  ): Uint8Array
-
-  /**
-   * Create a reshare session. Pass `null` for keyshare when joining as a new party.
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createReshareSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    keyshare: MpcKeyshare | null
-  ): MpcSession<MpcKeyshare | undefined> | Promise<MpcSession<MpcKeyshare | undefined>>
-
-  // --- Key Import ---
-
-  /**
-   * Create a key import initiator session. Returns the session and setup message to
-   * distribute to other parties. Only the initiator calls this method.
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createKeyImportInitiator(
-    privateKey: Uint8Array,
-    rootChainCode: Uint8Array | null | undefined,
-    threshold: number,
-    partyIds: string[]
-  ): { session: MpcSession<MpcKeyshare>; setup: Uint8Array } | Promise<{ session: MpcSession<MpcKeyshare>; setup: Uint8Array }>
-
-  /**
-   * Create a key import session (non-initiator party).
-   * May return a Promise in native implementations that require async initialization.
-   */
-  createKeyImportSession(
-    setup: Uint8Array,
-    localPartyId: string
   ): MpcSession<MpcKeyshare> | Promise<MpcSession<MpcKeyshare>>
 }
 
