@@ -23,13 +23,13 @@
  */
 
 import { validateSignatureFormat } from '@helpers/signing-helpers'
-import { loadTestVault, verifyTestVault } from '@helpers/test-vault'
+import { HAS_TEST_VAULT_FIXTURE, loadTestVault, verifyTestVault } from '@helpers/test-vault'
 import { createHash, randomBytes } from 'crypto'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase } from '@/index'
 
-describe('E2E: signBytes - Raw Bytes Signing', () => {
+describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: signBytes - Raw Bytes Signing', () => {
   let vault: VaultBase
 
   beforeAll(async () => {

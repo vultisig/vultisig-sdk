@@ -1,3 +1,4 @@
+import { type ParsedKeygenQR, parseKeygenQR } from '@vultisig/sdk'
 import { useRef, useState } from 'react'
 
 import { useSDKAdapter } from '../../adapters'
@@ -56,22 +57,26 @@ export default function SecureVaultJoiner({ onVaultCreated }: SecureVaultJoinerP
     setError(null)
 
     // Validation
-    if (!formData.qrPayload.trim()) {
+    const trimmedPayload = formData.qrPayload.trim()
+    if (!trimmedPayload) {
       setError('QR payload is required')
       return
     }
 
-    // Try to parse the QR payload to detect if seedphrase is needed
+    let parsedQr: ParsedKeygenQR
     try {
-      // The QR payload is base64 encoded, check if it contains KEYIMPORT libType
-      const decoded = atob(formData.qrPayload.trim())
-      if (decoded.includes('KEYIMPORT') && !formData.mnemonic.trim()) {
-        setShowMnemonic(true)
-        setError('This session requires a seedphrase to join')
-        return
-      }
-    } catch {
-      // If we can't decode, just proceed and let the SDK handle it
+      parsedQr = await parseKeygenQR(trimmedPayload)
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Could not read this QR payload. Paste the full vultisig:// link.'
+      setError(msg.startsWith('Invalid QR payload:') ? msg : `Invalid QR payload: ${msg}`)
+      return
+    }
+
+    if (parsedQr.libType === 'KEYIMPORT' && !formData.mnemonic.trim()) {
+      setShowMnemonic(true)
+      setError('This session requires a seedphrase to join')
+      return
     }
 
     setIsLoading(true)
@@ -82,7 +87,7 @@ export default function SecureVaultJoiner({ onVaultCreated }: SecureVaultJoinerP
 
     try {
       const result = await withAbortSignal(
-        sdk.joinSecureVault(formData.qrPayload.trim(), {
+        sdk.joinSecureVault(trimmedPayload, {
           mnemonic: formData.mnemonic.trim() || undefined,
           password: formData.password || undefined,
           onProgress: (progressStep: ProgressStep) => {

@@ -20,7 +20,7 @@ import { sequentialKeyImportWithServer } from '@vultisig/core-mpc/fast/api/seque
 import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/keygenComplete'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
 import { toLibType } from '@vultisig/core-mpc/types/utils/libType'
 import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
@@ -203,7 +203,7 @@ export class FastVaultFromSeedphraseService {
     const devices = await this.waitForPeers(sessionId, localPartyId, signal)
 
     // Step 8: Start MPC session
-    await startMpcSession({
+    await startMpcSessionWithRetry({
       serverUrl: this.serverUrl,
       sessionId,
       devices,

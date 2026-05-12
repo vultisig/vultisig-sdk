@@ -119,6 +119,12 @@ export class Schnorr {
     start: number,
     messageId?: string
   ): Promise<boolean> {
+    // Same as DKLS: empty relay polls must honor elapsed time or we spin forever.
+    if (Date.now() - start > this.timeoutMs) {
+      console.log('timeout')
+      this.isKeygenComplete = true
+      return false
+    }
     try {
       const parsedMessages = await getMpcRelayMessages({
         serverUrl: this.serverURL,
@@ -158,13 +164,6 @@ export class Schnorr {
           messageHash: msg.hash,
           messageId,
         })
-      }
-      const end = Date.now()
-      // timeout after configured duration
-      if (end - start > this.timeoutMs) {
-        console.log('timeout')
-        this.isKeygenComplete = true
-        return false
       }
       await sleep(100)
       return await this.processInbound(session, start, messageId)

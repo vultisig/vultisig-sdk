@@ -17,7 +17,7 @@ import { MldsaKeygen } from '@vultisig/core-mpc/mldsa/mldsaKeygen'
 import { MldsaKeysign } from '@vultisig/core-mpc/mldsa/mldsaKeysign'
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
-import { startMpcSession } from '@vultisig/core-mpc/session/startMpcSession'
+import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
 import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
@@ -247,7 +247,7 @@ export class ServerManager {
     })
 
     // Step 4: Start MPC session
-    await startMpcSession({
+    await startMpcSessionWithRetry({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
@@ -456,7 +456,7 @@ export class ServerManager {
 
     const devices = await this.waitForPeers(sessionId, localPartyId, options.signal)
 
-    await startMpcSession({
+    await startMpcSessionWithRetry({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
@@ -623,7 +623,7 @@ export class ServerManager {
 
     const devices = await this.waitForPeers(sessionId, localPartyId, signal)
 
-    await startMpcSession({
+    await startMpcSessionWithRetry({
       serverUrl: this.config.messageRelay,
       sessionId,
       devices,
@@ -722,7 +722,7 @@ export class ServerManager {
 
         const mldsaDevices = await this.waitForPeers(mldsaSessionId, signingLocalPartyId, signal)
 
-        await startMpcSession({
+        await startMpcSessionWithRetry({
           serverUrl: this.config.messageRelay,
           sessionId: mldsaSessionId,
           devices: mldsaDevices,

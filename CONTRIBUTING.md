@@ -95,6 +95,35 @@ yarn lint:fix
 yarn format
 ```
 
+## Code Health Detectors
+
+The repo has an additional `quality:health` suite for decay patterns that lint,
+typecheck, tests, and Knip do not catch directly:
+
+- `dependency-cruiser` enforces circular dependency and package-boundary rules in
+  `.config/dependency-cruiser.cjs`.
+- `jscpd` tracks source-level copy/paste drift with a 1% duplicated-line
+  threshold in `.config/jscpd.json`.
+- `eslint-plugin-sonarjs` runs high-confidence complexity and bug-prone pattern
+  rules through `.config/eslint-health.config.mjs`.
+- `secretlint` scans text sources for committed secrets using
+  `.config/secretlintrc.json` and `.config/secretlintignore`.
+- `markdownlint-cli2` and `markdown-link-check` catch broken Markdown syntax and
+  local documentation links while ignoring external URLs to keep CI stable.
+- `yarn npm audit --severity critical` blocks newly introduced critical
+  dependency advisories; current high-severity advisories are tracked as a
+  follow-up cleanup task.
+
+Run the full local suite with:
+
+```bash
+yarn quality:health
+```
+
+CI runs the stable subset through `yarn check:ci`. External Markdown links are
+not checked in CI because network failures are noisy; `quality:docs` still checks
+all local Markdown links.
+
 ## Testing
 
 ```bash
@@ -128,9 +157,11 @@ yarn test:all
 | `yarn typecheck` | Run TypeScript type checking |
 | `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript |
 | `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
+| `yarn quality:health` | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors |
+| `yarn quality:docs` | Run Markdown syntax and local-link checks |
 | `yarn quality:contracts` | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
 | `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
-| `yarn check:agent` | Run the same static gates as CI sequentially after verifying repo-local ESLint and TypeScript |
+| `yarn check:agent` | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript |
 | `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
 | `yarn docs` | Generate TypeDoc API documentation |
 
@@ -140,7 +171,7 @@ yarn test:all
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
 4. Ensure tests pass (`yarn test`)
-5. Ensure quality checks pass (`yarn check` — same gates as CI: typecheck, lint, knip, Prettier; agents can use `yarn check:agent` for a sequential run with setup guidance)
+5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core static gates with setup guidance; run `yarn check:ci` before relying on full CI parity)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
 7. Commit with a descriptive message
 8. Push to your fork
@@ -168,7 +199,7 @@ WASM binaries ship with `packages/lib/*` and are bundled into `@vultisig/sdk`. R
 
 | Workflow | Trigger | Description |
 |----------|---------|-------------|
-| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, knip, Prettier check, Codecov |
+| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, knip, Prettier, code health detectors, Codecov |
 | `release-pr.yml` | Push to main | Auto-creates "Version Packages" PR when changesets exist |
 | `release.yml` | Merge version PR | npm publish, GitHub release, Vercel deploy, docs sync, Discord notify |
 | `release-manual.yml` | Manual dispatch | Force-run release steps (Vercel, docs sync, Discord) |
@@ -180,6 +211,7 @@ Every PR runs:
 - Prettier (`yarn format:check` on SDK, Rujira, CLI, examples)
 - TypeScript type checking
 - Knip (unused exports / dead code in analyzed workspaces)
+- Code health detectors for architecture, duplication, complexity, secrets, critical dependency advisories, and Markdown syntax
 - Packaged SDK contract smoke (`yarn quality:contracts` inside `yarn check:ci`: tarball exports, temp consumer imports/types, CLI dist `--help` and `schema`)
 - Unit tests (387+ tests)
 - Integration tests (`yarn test:integration` — same suite as CI job "Integration Tests (Vitest)")

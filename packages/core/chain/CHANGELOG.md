@@ -1,5 +1,19 @@
 # @vultisig/core-chain
 
+## 1.7.0
+
+### Minor Changes
+
+- [#441](https://github.com/vultisig/vultisig-sdk/pull/441) [`e3dc2e8`](https://github.com/vultisig/vultisig-sdk/commit/e3dc2e828b3e4f95b293d4493bddbc176bbb3bb7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(chain/evm): static known-contract label registry for offline transaction-intent display
+
+  Adds `chains/evm/contract/knownContracts.ts` mapping well-known EVM contract addresses (Uniswap V2/V3 routers, 1inch V5/V6, Permit2, THORChain Router, Aave V3 Pool) to human-readable labels and categories. Complements `commonSelectors.ts`: that table labels what function is being called, this one labels who is being called (and lets UIs label spender-style address arguments). Lookup is offline, case-insensitive, and optionally chain-scoped.
+
+## 1.6.1
+
+### Patch Changes
+
+- [#431](https://github.com/vultisig/vultisig-sdk/pull/431) [`1132ae5`](https://github.com/vultisig/vultisig-sdk/commit/1132ae51f8e4d5b8ca8a1855af9ea51031b574e9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix cosmos denom resolver picking wrong segment for 3-part factory denoms
+
 ## 1.6.0
 
 ### Minor Changes

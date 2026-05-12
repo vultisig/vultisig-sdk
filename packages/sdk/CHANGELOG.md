@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 0.22.6
+
+### Patch Changes
+
+- [#419](https://github.com/vultisig/vultisig-sdk/pull/419) [`e434998`](https://github.com/vultisig/vultisig-sdk/commit/e434998069e6af9664db045c5e91c5d5f35feef6) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Browser and Electron example vault UX after QA; secure vault join/create/import flows; MPC session and server coordination fixes.
+
+## 0.22.5
+
+### Patch Changes
+
+- [#431](https://github.com/vultisig/vultisig-sdk/pull/431) [`1132ae5`](https://github.com/vultisig/vultisig-sdk/commit/1132ae51f8e4d5b8ca8a1855af9ea51031b574e9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix cosmos denom resolver picking wrong segment for 3-part factory denoms
+
 ## 0.22.3
 
 ### Patch Changes
