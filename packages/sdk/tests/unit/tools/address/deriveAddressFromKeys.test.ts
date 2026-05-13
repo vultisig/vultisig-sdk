@@ -231,5 +231,33 @@ describe('deriveAddressFromKeys', () => {
       })
       expect(mockGetPublicKey).toHaveBeenCalledWith(expect.objectContaining({ chainPublicKeys: undefined }))
     })
+
+    it('explicit empty chainPublicKeys entry throws instead of silently falling back', async () => {
+      // Regression guard: an empty string is a caller error, not a "key absent" signal.
+      // Before the fix, `if (!aliased[input.chain])` treated '' as falsy and fell back
+      // to non-hardened BIP32 derivation, returning the wrong address silently.
+      await expect(
+        deriveAddressFromKeys({
+          chain: Chain.Terra,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Terra]: '' },
+        })
+      ).rejects.toThrow(/Invalid chainPublicKeys entry for Terra: pubkey must be non-empty/)
+      // getPublicKey must NOT have been called — we should have thrown before reaching it
+      expect(mockGetPublicKey).not.toHaveBeenCalled()
+    })
+
+    it('whitespace-only chainPublicKeys entry also throws', async () => {
+      await expect(
+        deriveAddressFromKeys({
+          chain: Chain.Terra,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Terra]: '   ' },
+        })
+      ).rejects.toThrow(/Invalid chainPublicKeys entry for Terra: pubkey must be non-empty/)
+      expect(mockGetPublicKey).not.toHaveBeenCalled()
+    })
   })
 })

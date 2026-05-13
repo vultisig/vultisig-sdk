@@ -74,15 +74,21 @@ export const deriveAddressFromKeys = async (
 
     // Apply bidirectional Terra ↔ TerraClassic alias (same coin_type 330).
     const aliased: Partial<Record<Chain, string>> = { ...keys }
-    if (aliased[Chain.Terra] && !aliased[Chain.TerraClassic]) {
+    if (aliased[Chain.Terra] && !(Chain.TerraClassic in aliased)) {
       aliased[Chain.TerraClassic] = aliased[Chain.Terra]
-    } else if (aliased[Chain.TerraClassic] && !aliased[Chain.Terra]) {
+    } else if (aliased[Chain.TerraClassic] && !(Chain.Terra in aliased)) {
       aliased[Chain.Terra] = aliased[Chain.TerraClassic]
     }
 
     // Only forward the map when the requested chain has an entry.
     // When absent, let getPublicKey run its normal non-hardened BIP32 derivation.
-    if (!aliased[input.chain]) return undefined
+    if (!(input.chain in aliased)) return undefined
+
+    // An explicitly empty pubkey is a caller error — fail fast rather than silently
+    // falling back to non-hardened derivation, which would produce the wrong address.
+    if (!aliased[input.chain]?.trim()) {
+      throw new Error(`Invalid chainPublicKeys entry for ${input.chain}: pubkey must be non-empty`)
+    }
 
     return aliased
   })()
