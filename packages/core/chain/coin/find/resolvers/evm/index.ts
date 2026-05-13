@@ -7,11 +7,52 @@ import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { queryOneInch } from '@vultisig/core-chain/coin/find/resolvers/evm/queryOneInch'
 import { vult } from '@vultisig/core-chain/coin/knownTokens'
 import { OneInchToken } from '@vultisig/core-chain/coin/oneInch/token'
+import { getEvmTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/evm'
 import { without } from '@vultisig/lib-utils/array/without'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { NoDataError } from '@vultisig/lib-utils/error/NoDataError'
 import { hexToNumber } from '@vultisig/lib-utils/hex/hexToNumber'
 import { Address } from 'viem'
+
+type GetDiscoveredEvmCoinInput = {
+  address: string
+  chain: EvmChain
+  tokenAddress: string
+  token?: OneInchToken
+}
+
+const getDiscoveredEvmCoin = async ({
+  address,
+  chain,
+  tokenAddress,
+  token,
+}: GetDiscoveredEvmCoinInput): Promise<AccountCoin | undefined> => {
+  if (token) {
+    return {
+      chain,
+      id: token.address,
+      decimals: token.decimals,
+      logo: token.logoURI,
+      ticker: token.symbol,
+      address,
+    }
+  }
+
+  const metadataResult = await attempt(() =>
+    getEvmTokenMetadata({ chain, id: tokenAddress })
+  )
+
+  if ('error' in metadataResult) {
+    return undefined
+  }
+
+  return {
+    chain,
+    id: tokenAddress,
+    address,
+    ...metadataResult.data,
+  }
+}
 
 export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
   address,
@@ -54,29 +95,32 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
 
   let discoveredCoins: AccountCoin[] = []
   if (nonZeroBalanceTokenAddresses.length > 0) {
-    const tokenInfoData = await queryOneInch<Record<string, OneInchToken>>(
-      `/token/v1.2/${oneInchChainId}/custom?addresses=${nonZeroBalanceTokenAddresses.join(',')}`
-    )
-    const tokens = without(
-      nonZeroBalanceTokenAddresses.map(
-        tokenAddress => tokenInfoData[tokenAddress]
-      ),
-      undefined
+    const tokenInfoResult = await attempt(
+      queryOneInch<Record<string, OneInchToken>>(
+        `/token/v1.2/${oneInchChainId}/custom?addresses=${nonZeroBalanceTokenAddresses.join(',')}`
+      )
     )
 
+    let tokenInfoData: Record<string, OneInchToken> = {}
+    if ('data' in tokenInfoResult) {
+      tokenInfoData = tokenInfoResult.data ?? {}
+    } else if (!(tokenInfoResult.error instanceof NoDataError)) {
+      throw tokenInfoResult.error
+    }
+
     discoveredCoins = without(
-      tokens.map(token => {
-        if (token.logoURI && token.providers.includes('CoinGecko')) {
-          return {
-            chain,
-            id: token.address,
-            decimals: token.decimals,
-            logo: token.logoURI,
-            ticker: token.symbol,
+      await Promise.all(
+        nonZeroBalanceTokenAddresses.map(tokenAddress =>
+          getDiscoveredEvmCoin({
             address,
-          }
-        }
-      }),
+            chain,
+            tokenAddress,
+            token:
+              tokenInfoData[tokenAddress] ??
+              tokenInfoData[tokenAddress.toLowerCase()],
+          })
+        )
+      ),
       undefined
     )
   }
