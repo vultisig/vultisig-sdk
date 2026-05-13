@@ -125,9 +125,7 @@ describe('AgentExecutor — LP MsgDeposit dispatch (Phase E)', () => {
   it('routes MayaChain LP memos with CACAO base units passed through verbatim', async () => {
     const vault = createMsgDepositVault()
     // Override address mock to a Maya address; default mock is fine for dispatch.
-    ;(vault as any).address = vi
-      .fn()
-      .mockResolvedValue('maya1l8tqmlnzhxn30sd03cmq98uju95tw6ucxgkre6')
+    ;(vault as any).address = vi.fn().mockResolvedValue('maya1l8tqmlnzhxn30sd03cmq98uju95tw6ucxgkre6')
     ;(vault as any).signMsgDeposit = vi.fn().mockResolvedValue({
       chain: Chain.MayaChain,
       txHash: 'CACAOTXHASH',
@@ -171,6 +169,11 @@ describe('AgentExecutor — LP MsgDeposit dispatch (Phase E)', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-loan-reject')
     expect(recent.success).toBe(false)
+    // Pin the rejection reason: the LOAN prefix should fail at the
+    // memo-prefix dispatch, not somewhere upstream (e.g. magnitude or
+    // chain-disagreement). Without this, a regression that throws for
+    // a different reason would silently satisfy success === false.
+    expect(String(recent.data?.error ?? '')).toMatch(/not supported|NOT_IMPLEMENTED/i)
     expect((vault as any).signMsgDeposit).not.toHaveBeenCalled()
   })
 
@@ -181,6 +184,7 @@ describe('AgentExecutor — LP MsgDeposit dispatch (Phase E)', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-empty-memo')
     expect(recent.success).toBe(false)
+    expect(String(recent.data?.error ?? '')).toMatch(/not supported|NOT_IMPLEMENTED/i)
     expect((vault as any).signMsgDeposit).not.toHaveBeenCalled()
   })
 
@@ -194,7 +198,97 @@ describe('AgentExecutor — LP MsgDeposit dispatch (Phase E)', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-magnitude-bug')
     expect(recent.success).toBe(false)
+    // Pin the rejection reason — fails at the 26-digit safety bound
+    // (executor.ts:828), not at memo-prefix dispatch or downstream.
+    expect(String(recent.data?.error ?? '')).toMatch(/INVALID_AMOUNT|safety bound/i)
     expect((vault as any).signMsgDeposit).not.toHaveBeenCalled()
+  })
+
+  it('passes LP add memo with affiliate fee segments verbatim', async () => {
+    // THORChain LP memos can carry affiliate fee segments
+    // (`+:POOL:PAIRED:AFFILIATE:FEE`). The executor treats memo as
+    // opaque pass-through, so the affiliate / fee segments must reach
+    // vault.signMsgDeposit byte-for-byte. Guards against a future
+    // regression that introduces structural memo parsing in the
+    // executor.
+    const vault = createMsgDepositVault()
+    const executor = new AgentExecutor(vault)
+    const memo = '+:BTC.BTC:bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2:thor1aff:50'
+    const envelope = makeLpEnvelope({ memo, amount: '500000000' })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-lp-add-affiliate')
+    expect(recent.success).toBe(true)
+    expect((vault as any).signMsgDeposit).toHaveBeenCalledWith({
+      chain: Chain.THORChain,
+      amountBaseUnits: '500000000',
+      memo,
+    })
+  })
+
+  it('passes LP remove memo with withdrawToAsset + affiliate segments verbatim', async () => {
+    const vault = createMsgDepositVault()
+    const executor = new AgentExecutor(vault)
+    const memo = '-:BTC.BTC:10000:BTC:thor1aff:25'
+    const envelope = makeLpEnvelope({ memo, amount: '2000000' })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-lp-remove-affiliate')
+    expect(recent.success).toBe(true)
+    expect((vault as any).signMsgDeposit).toHaveBeenCalledWith({
+      chain: Chain.THORChain,
+      amountBaseUnits: '2000000',
+      memo,
+    })
+  })
+
+  it('rejects MsgDeposit envelope when outer chain disagrees with inner txArgs.chain', async () => {
+    // executor.ts:625 throws when txArgs.chain disagrees with the
+    // dispatcher's resolved chain. This guard runs BEFORE the
+    // MsgDeposit prefix branch (executor.ts:636), so an envelope where
+    // both chains support MsgDeposit (e.g. outer MayaChain, inner
+    // THORChain) fails at the cross-check rather than silently routing
+    // through the wrong chain. Pin the precedence.
+    const vault = createMsgDepositVault()
+    const executor = new AgentExecutor(vault)
+    const envelope: Record<string, unknown> = {
+      chain: 'MayaChain',
+      from_chain: 'MayaChain',
+      txArgs: {
+        chain: 'THORChain', // mismatched
+        tx_encoding: 'cosmos-msg',
+        from: 'thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm',
+        to: '',
+        amount: '10000000',
+        denom: 'rune',
+        memo: '+:BTC.BTC',
+        msg_type: 'deposit',
+      },
+    }
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-chain-disagree')
+    expect(recent.success).toBe(false)
+    expect(String(recent.data?.error ?? '')).toMatch(/disagrees/i)
+    expect((vault as any).signMsgDeposit).not.toHaveBeenCalled()
+    expect((vault as any).swap).not.toHaveBeenCalled()
+  })
+
+  it('unlocks an encrypted vault before LP dispatch', async () => {
+    // executor.ts:611-615 guards the LP/swap dispatch behind a vault
+    // unlock when isEncrypted && !isUnlocked(). All other tests use
+    // isEncrypted: false; this one verifies the unlock branch fires for
+    // LP envelopes specifically (pre-existing executor infra; gap was
+    // test-only).
+    const vault = createMsgDepositVault()
+    ;(vault as any).isEncrypted = true
+    ;(vault as any).isUnlocked = vi.fn().mockReturnValue(false)
+    ;(vault as any).unlock = vi.fn().mockResolvedValue(undefined)
+    const executor = new AgentExecutor(vault)
+    executor.setPassword('pw')
+    const envelope = makeLpEnvelope({ memo: '+:BTC.BTC' })
+    expect(executor.storeServerTransaction(envelope)).toBe(true)
+    const recent = await executor.signTxFromBuffer('call-encrypted-lp')
+    expect(recent.success).toBe(true)
+    expect((vault as any).unlock).toHaveBeenCalledWith('pw')
+    expect((vault as any).signMsgDeposit).toHaveBeenCalled()
   })
 
   it('regression — swap memo (=:CHAIN.ASSET:DEST) still routes to vault.swap (Phase D)', async () => {

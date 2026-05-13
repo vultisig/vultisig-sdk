@@ -1,11 +1,14 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetPublicKey, mockGetWalletCore, mockGetChainSpecific } = vi.hoisted(() => ({
-  mockGetPublicKey: vi.fn(),
-  mockGetWalletCore: vi.fn(),
-  mockGetChainSpecific: vi.fn(),
-}))
+const { mockGetPublicKey, mockGetWalletCore, mockGetThorchainChainSpecific, mockGetMayaChainSpecific } = vi.hoisted(
+  () => ({
+    mockGetPublicKey: vi.fn(),
+    mockGetWalletCore: vi.fn(),
+    mockGetThorchainChainSpecific: vi.fn(),
+    mockGetMayaChainSpecific: vi.fn(),
+  })
+)
 
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
@@ -13,8 +16,11 @@ vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
 vi.mock('@/context/wasmRuntime', () => ({
   getWalletCore: mockGetWalletCore,
 }))
-vi.mock('@vultisig/core-mpc/keysign/chainSpecific', () => ({
-  getChainSpecific: mockGetChainSpecific,
+vi.mock('@vultisig/core-mpc/keysign/chainSpecific/resolvers/thor', () => ({
+  getThorchainChainSpecific: mockGetThorchainChainSpecific,
+}))
+vi.mock('@vultisig/core-mpc/keysign/chainSpecific/resolvers/maya', () => ({
+  getMayaChainSpecific: mockGetMayaChainSpecific,
 }))
 
 import { prepareThorchainMsgDepositTxFromKeys } from '@/tools/prep/thorchainMsgDeposit'
@@ -55,9 +61,16 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
     vi.clearAllMocks()
     mockGetWalletCore.mockResolvedValue(mockWalletCore)
     mockGetPublicKey.mockReturnValue(mockPublicKey)
-    mockGetChainSpecific.mockResolvedValue({
-      case: 'thorchainSpecific',
-      value: { isDeposit: true, accountNumber: 1n, sequence: 0n, fee: 2000000n },
+    mockGetThorchainChainSpecific.mockResolvedValue({
+      isDeposit: true,
+      accountNumber: 1n,
+      sequence: 0n,
+      fee: 2000000n,
+    })
+    mockGetMayaChainSpecific.mockResolvedValue({
+      isDeposit: true,
+      accountNumber: 1n,
+      sequence: 0n,
     })
   })
 
@@ -74,13 +87,14 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
     expect(result.vaultPublicKeyEcdsa).toBe(baseIdentity.ecdsaPublicKey)
     expect(result.vaultLocalPartyId).toBe(baseIdentity.localPartyId)
 
-    expect(mockGetChainSpecific).toHaveBeenCalledTimes(1)
-    expect(mockGetChainSpecific).toHaveBeenCalledWith(
+    expect(mockGetThorchainChainSpecific).toHaveBeenCalledTimes(1)
+    expect(mockGetThorchainChainSpecific).toHaveBeenCalledWith(
       expect.objectContaining({
         walletCore: mockWalletCore,
         isDeposit: true,
       })
     )
+    expect(mockGetMayaChainSpecific).not.toHaveBeenCalled()
   })
 
   it('preserves LP add memo with paired_address verbatim', async () => {
@@ -104,10 +118,6 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
   })
 
   it('builds a MayaChain MsgDeposit payload with CACAO 10-decimal coin', async () => {
-    mockGetChainSpecific.mockResolvedValueOnce({
-      case: 'mayaSpecific',
-      value: { isDeposit: true, accountNumber: 1n, sequence: 0n },
-    })
     const result = await prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
       coin: mayaCoin,
       amountBaseUnits: 10_000_000_000n, // 1 CACAO
@@ -116,9 +126,22 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
     expect(result.toAddress).toBe('')
     expect(result.toAmount).toBe('10000000000')
     expect(result.memo).toBe('+:BTC.BTC')
-    expect(mockGetChainSpecific).toHaveBeenCalledWith(
-      expect.objectContaining({ isDeposit: true })
+    // Pin both isDeposit flag AND that the keysign payload's coin
+    // carries the MayaChain enum — and that we hit the Maya resolver,
+    // not the THOR one. A regression that mis-dispatches by chain
+    // would fail both assertions.
+    expect(mockGetMayaChainSpecific).toHaveBeenCalledTimes(1)
+    expect(mockGetMayaChainSpecific).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isDeposit: true,
+        keysignPayload: expect.objectContaining({
+          coin: expect.objectContaining({ chain: Chain.MayaChain }),
+        }),
+      })
     )
+    expect(mockGetThorchainChainSpecific).not.toHaveBeenCalled()
+    // The blockchainSpecific case discriminator is set to mayaSpecific.
+    expect(result.blockchainSpecific?.case).toBe('mayaSpecific')
   })
 
   it('rejects non-THORChain/MayaChain chain', async () => {

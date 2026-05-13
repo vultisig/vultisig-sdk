@@ -1747,8 +1747,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * The memo carries the routing — LP add (`+:POOL[:PAIRED]`),
    * LP remove (`-:POOL:BPS[:ASSET]`), or other deposit-style intents.
    * `amountBaseUnits` is the native asset in base units (RUNE: 1e8 per
-   * unit; CACAO: 1e10 per unit) and is passed through verbatim — no
-   * fee-deduction refinement.
+   * unit; CACAO: 1e10 per unit) and is passed through verbatim.
+   *
+   * **No balance-fee refinement.** Unlike `send`, this method does not
+   * cap `amountBaseUnits` at `balance - fee`. LP amounts are
+   * caller-controlled (asymmetric deposit size for `+:`, dust constant
+   * for `-:`) and must pass through untouched, so the helper skips
+   * `refineKeysignAmount`. Callers are responsible for ensuring
+   * sufficient balance; insufficient-funds surfaces at broadcast time,
+   * not at preflight. (For preflight, query `vault.balance(chain)`
+   * separately before calling this method.)
    *
    * @example
    * ```typescript
@@ -1773,9 +1781,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       )
     }
     const amountBaseUnits =
-      typeof params.amountBaseUnits === 'string'
-        ? BigInt(params.amountBaseUnits)
-        : params.amountBaseUnits
+      typeof params.amountBaseUnits === 'string' ? BigInt(params.amountBaseUnits) : params.amountBaseUnits
     if (amountBaseUnits <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'signMsgDeposit: amountBaseUnits must be greater than zero')
     }

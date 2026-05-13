@@ -3,12 +3,18 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
-import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
+// Import THOR/Maya resolvers directly rather than going through the
+// `keysign/chainSpecific` barrel — the barrel imports every chain's
+// resolver (TON, Tron, Polkadot, …), which pulls in their per-chain
+// configs. Tests that mock `chainFeeCoin` for a subset of chains
+// (e.g. EVM-only) then crash at module load with
+// `Cannot read properties of undefined (reading 'decimals')` because
+// the TON config reads `chainFeeCoin[Chain.Ton].decimals` eagerly.
+// Direct imports keep this helper's transitive surface minimal.
+import { getMayaChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/resolvers/maya'
+import { getThorchainChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific/resolvers/thor'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Buffer } from 'buffer'
 
 import { getWalletCore } from '../../context/wasmRuntime'
@@ -84,11 +90,14 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
     libType: identity.libType,
   })
 
-  keysignPayload.blockchainSpecific = await getChainSpecific({
-    keysignPayload,
-    walletCore,
-    isDeposit: true,
-  })
+  // Dispatch directly to the per-chain resolver so we don't pull the
+  // full `getChainSpecific` barrel (see import comment).
+  const resolver = coin.chain === Chain.THORChain ? getThorchainChainSpecific : getMayaChainSpecific
+  const value = await resolver({ keysignPayload, walletCore, isDeposit: true })
+  keysignPayload.blockchainSpecific = {
+    case: coin.chain === Chain.THORChain ? 'thorchainSpecific' : 'mayaSpecific',
+    value: value as any,
+  }
 
   return keysignPayload
 }

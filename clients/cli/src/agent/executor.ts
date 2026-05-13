@@ -834,9 +834,7 @@ export class AgentExecutor {
     }
 
     if (this.verbose)
-      process.stderr.write(
-        `[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`
-      )
+      process.stderr.write(`[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`)
 
     const result = await this.vault.signMsgDeposit({ chain, amountBaseUnits: amountRaw, memo })
     this.pendingPayloads.clear()
