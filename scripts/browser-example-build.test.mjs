@@ -79,9 +79,14 @@ async function runWithDiagnostics(command, args, options = {}) {
     }
     setTimeout(() => {
       try {
-        child.kill('SIGKILL')
+        if (isWin) child.kill('SIGKILL')
+        else process.kill(-child.pid, 'SIGKILL')
       } catch {
-        /* ignore */
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          /* ignore */
+        }
       }
     }, 10_000).unref?.()
   }, timeoutMs)
