@@ -1780,8 +1780,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         `signMsgDeposit: only THORChain and MayaChain supported, got ${chain}`
       )
     }
-    const amountBaseUnits =
-      typeof params.amountBaseUnits === 'string' ? BigInt(params.amountBaseUnits) : params.amountBaseUnits
+    let amountBaseUnits: bigint
+    try {
+      amountBaseUnits =
+        typeof params.amountBaseUnits === 'string' ? BigInt(params.amountBaseUnits) : params.amountBaseUnits
+    } catch (error) {
+      // BigInt('1.5'), BigInt(''), BigInt('abc'), etc. throw raw SyntaxError.
+      // Wrap so the public SDK surface keeps the VaultError contract — MCP /
+      // agent callers that hit this method directly (vs the CLI executor,
+      // which pre-validates with MAX_AMOUNT_DIGITS) get a coded error.
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `signMsgDeposit: amountBaseUnits "${params.amountBaseUnits}" is not a valid integer base-unit string`,
+        error instanceof Error ? error : undefined
+      )
+    }
     if (amountBaseUnits <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'signMsgDeposit: amountBaseUnits must be greater than zero')
     }
