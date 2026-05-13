@@ -241,11 +241,6 @@
       "import": "./dist/keysign/chainSpecific/resolvers/solana/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/solana/index.js"
     },
-    "./keysign/chainSpecific/resolvers/solana/refine": {
-      "types": "./dist/keysign/chainSpecific/resolvers/solana/refine.d.ts",
-      "import": "./dist/keysign/chainSpecific/resolvers/solana/refine.js",
-      "default": "./dist/keysign/chainSpecific/resolvers/solana/refine.js"
-    },
     "./keysign/chainSpecific/resolvers/sui": {
       "types": "./dist/keysign/chainSpecific/resolvers/sui/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/sui/index.js",

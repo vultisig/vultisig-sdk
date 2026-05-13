@@ -9,7 +9,8 @@ import { applySharedExports } from './generate-shared-exports.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(scriptDir, '..')
-const emitRoot = path.join(repoRoot, '.shared-dist-temp', 'packages')
+const emitTempRoot = path.join(repoRoot, '.shared-dist-temp')
+const emitRoot = path.join(emitTempRoot, 'packages')
 
 const syncTargets = [
   {
@@ -43,6 +44,8 @@ const syncTargets = [
     packageJson: 'packages/mpc-wasm/package.json',
   },
 ]
+
+rmSync(emitTempRoot, { recursive: true, force: true })
 
 const tsc = spawnSync('yarn', ['exec', 'tsc', '--project', '.config/tsconfig.shared-publish.json'], {
   cwd: repoRoot,
