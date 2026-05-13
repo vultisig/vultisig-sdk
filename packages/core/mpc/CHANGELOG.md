@@ -1,5 +1,16 @@
 # @vultisig/core-mpc
 
+## 1.2.11
+
+### Patch Changes
+
+- [#457](https://github.com/vultisig/vultisig-sdk/pull/457) [`680119e`](https://github.com/vultisig/vultisig-sdk/commit/680119e7392921b8aeaf859c85e811fb40a25054) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add regression tests and drift guards for Bitcoin PSBT compilation, ChainKind signing-input alignment, generated protobuf headers, and CLI agent action names aligned with AGENTS.md.
+
+- [#456](https://github.com/vultisig/vultisig-sdk/pull/456) [`b36eb62`](https://github.com/vultisig/vultisig-sdk/commit/b36eb62842051b8b2bae06f1e123a5ebcf6cad88) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Terra CW20 metadata resolution and build CW20 token sends as CosmWasm execute transfers.
+
+- Updated dependencies [[`5102976`](https://github.com/vultisig/vultisig-sdk/commit/5102976d7c13fa9578bbbc6e5122526cefc1ec66), [`b36eb62`](https://github.com/vultisig/vultisig-sdk/commit/b36eb62842051b8b2bae06f1e123a5ebcf6cad88)]:
+  - @vultisig/core-chain@1.7.1
+
 ## 1.2.10
 
 ### Patch Changes
