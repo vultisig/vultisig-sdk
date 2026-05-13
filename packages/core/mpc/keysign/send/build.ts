@@ -10,9 +10,12 @@ import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
+import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+
+import { getCosmosWasmTokenTransferPayload } from './cosmosWasm'
 
 export type BuildSendKeysignPayloadInput = {
   coin: AccountCoin
@@ -42,14 +45,16 @@ export const buildSendKeysignPayload = async ({
   libType,
   feeSettings,
 }: BuildSendKeysignPayloadInput) => {
-  const hexPublicKey =
-    hexPublicKeyOverride ??
-    (publicKey
-      ? Buffer.from(publicKey.data()).toString('hex')
-      : undefined)
+  const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
     throw new Error('buildSendKeysignPayload requires publicKey or hexPublicKeyOverride')
   }
+
+  const cosmosWasmTokenTransferPayload = getCosmosWasmTokenTransferPayload({
+    coin,
+    receiver,
+    amount,
+  })
 
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
@@ -63,13 +68,25 @@ export const buildSendKeysignPayload = async ({
     vaultPublicKeyEcdsa: vaultId,
     libType,
     utxoInfo: await getKeysignUtxoInfo(coin),
+    contractPayload: cosmosWasmTokenTransferPayload
+      ? {
+          case: 'wasmExecuteContractPayload',
+          value: cosmosWasmTokenTransferPayload,
+        }
+      : undefined,
   })
 
-  keysignPayload.blockchainSpecific = await getChainSpecific({
-    keysignPayload,
-    feeSettings,
-    walletCore,
-  })
+  keysignPayload.blockchainSpecific = cosmosWasmTokenTransferPayload
+    ? await getChainSpecific({
+        keysignPayload,
+        walletCore,
+        transactionType: TransactionType.GENERIC_CONTRACT,
+      })
+    : await getChainSpecific({
+        keysignPayload,
+        feeSettings,
+        walletCore,
+      })
 
   const balance = await getCoinBalance(coin)
 
