@@ -100,4 +100,23 @@ describe('findEvmCoins', () => {
       id: tokenAddress,
     })
   })
+
+  it('propagates non-NoDataError from on-chain metadata fallback', async () => {
+    const address = '0x5555555555555555555555555555555555555555'
+    const tokenAddress = '0x6666666666666666666666666666666666666666'
+
+    queryOneInchMock
+      .mockResolvedValueOnce({
+        [tokenAddress]: '1',
+      })
+      .mockResolvedValueOnce({})
+    getEvmTokenMetadataMock.mockRejectedValueOnce(new Error('rpc down'))
+
+    await expect(
+      findEvmCoins({
+        chain: EvmChain.Optimism,
+        address,
+      })
+    ).rejects.toThrow('rpc down')
+  })
 })

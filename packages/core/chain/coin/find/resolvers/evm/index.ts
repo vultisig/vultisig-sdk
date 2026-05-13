@@ -43,7 +43,10 @@ const getDiscoveredEvmCoin = async ({
   )
 
   if ('error' in metadataResult) {
-    return undefined
+    if (metadataResult.error instanceof NoDataError) {
+      return undefined
+    }
+    throw metadataResult.error
   }
 
   return {
