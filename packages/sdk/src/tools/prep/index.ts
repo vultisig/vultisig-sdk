@@ -3,4 +3,8 @@ export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmo
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
+export {
+  prepareThorchainMsgDepositTxFromKeys,
+  type PrepareThorchainMsgDepositTxFromKeysParams,
+} from './thorchainMsgDeposit'
 export type { VaultIdentity } from './types'

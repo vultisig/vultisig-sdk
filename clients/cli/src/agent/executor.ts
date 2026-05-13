@@ -629,10 +629,24 @@ export class AgentExecutor {
       )
     }
 
-    // THORChain / MayaChain MsgDeposit branch — agent emitted a swap
-    // envelope sourcing from the cosmos chain natively.
+    // THORChain / MayaChain MsgDeposit branch — agent emitted a deposit
+    // envelope sourcing from the cosmos chain natively. Dispatch by memo
+    // prefix: `=:` is a swap (Phase D), `+:` / `-:` are LP add/remove
+    // (Phase E). Anything else is loan / validator ops, out of scope.
     if (txArgs.msg_type === 'deposit' && (chain === Chain.THORChain || chain === Chain.MayaChain)) {
-      return this.signThorMsgDepositSwap(serverTxData, chain)
+      const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
+      if (memo.startsWith('=:')) {
+        return this.signThorMsgDepositSwap(serverTxData, chain)
+      }
+      if (memo.startsWith('+:') || memo.startsWith('-:')) {
+        return this.signThorMsgDepositLp(serverTxData, chain)
+      }
+      throw new VaultError(
+        VaultErrorCode.NotImplemented,
+        `signNonEvmServerTx: MsgDeposit memo prefix not supported on ${chain}: '${memo}'. ` +
+          `Supported prefixes: '=:' (swap), '+:' (LP add), '-:' (LP remove). ` +
+          `Loan / validator ops are out of scope.`
+      )
     }
 
     const args = parseNonEvmEnvelope(serverTxData, chain)
@@ -779,6 +793,57 @@ export class AgentExecutor {
     const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, broadcast.txHash)
     return {
       tx_hash: broadcast.txHash,
+      chain: chain.toString(),
+      status: 'pending',
+      explorer_url: explorerUrl,
+    }
+  }
+
+  /**
+   * Sign and broadcast a THORChain / MayaChain MsgDeposit envelope whose
+   * memo is an LP add (`+:POOL[:PAIRED]`) or remove (`-:POOL:BPS[:ASSET]`).
+   *
+   * The agent emits the same `cosmos-msg / msg_type: deposit` envelope as
+   * the swap path; only the memo prefix differs. The memo is opaque
+   * pass-through — sdk-cli doesn't parse pool / paired address / bps
+   * because the SDK doesn't need to, the on-chain handler does.
+   *
+   * Uses `vault.signMsgDeposit` which builds a THORChainDeposit cosmos
+   * message via the SDK's keysign payload pipeline. Amount is consumed
+   * as base units directly (no decimal conversion) since the agent
+   * already emits RUNE / CACAO in base units.
+   */
+  private async signThorMsgDepositLp(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
+    const txArgs = serverTxData?.txArgs ?? {}
+    const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
+    const amountRaw: string | undefined = typeof txArgs.amount === 'string' ? txArgs.amount : undefined
+    if (!amountRaw) {
+      throw new VaultError(
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositLp: missing or non-string 'amount' field on ${chain} envelope`
+      )
+    }
+    // Defense against magnitude-bug envelopes (mirrors parseNonEvmEnvelope's
+    // 26-digit cap). Pass base units through to vault.signMsgDeposit verbatim.
+    if (amountRaw.length > MAX_AMOUNT_DIGITS) {
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `signThorMsgDepositLp: amount '${amountRaw}' for ${chain} exceeds ${MAX_AMOUNT_DIGITS}-digit safety bound. ` +
+          'Likely a quote-side bug. Refusing to sign.'
+      )
+    }
+
+    if (this.verbose)
+      process.stderr.write(
+        `[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`
+      )
+
+    const result = await this.vault.signMsgDeposit({ chain, amountBaseUnits: amountRaw, memo })
+    this.pendingPayloads.clear()
+
+    const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, result.txHash)
+    return {
+      tx_hash: result.txHash,
       chain: chain.toString(),
       status: 'pending',
       explorer_url: explorerUrl,
@@ -1841,7 +1906,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
     throw new VaultError(
       VaultErrorCode.NotImplemented,
       `parseThorSwapMemo: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
-        `LP / non-swap MsgDeposit flows route through different SDK helpers (Phase E follow-up).`
+        `LP memos (+:/-:) route through signThorMsgDepositLp; loan / validator ops out of scope.`
     )
   }
 
