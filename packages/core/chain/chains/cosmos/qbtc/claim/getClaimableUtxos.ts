@@ -8,28 +8,51 @@ type GetClaimableUtxosInput = {
   btcAddress: string
 }
 
+type QbtcUtxoResponse = {
+  utxo?: {
+    txid: string
+    vout: number
+    amount: string
+    entitled_amount: string
+  }
+}
+
 /**
- * Asks the QBTC chain whether a given UTXO is still claimable
- * (i.e. registered + unclaimed) via `GET /qbtc/v1/utxo/{txid}/{vout}`.
+ * Asks the QBTC chain how much of a given UTXO is still claimable via
+ * `GET /qbtc/v1/utxo/{txid}/{vout}`.
  *
- * - 200 → claimable
- * - 404 → already claimed or never registered
- * - other → propagated as a hard error so transient network failures
- *   don't silently drop UTXOs from the user's list.
+ * The chain returns the UTXO record with its remaining `entitled_amount`
+ * even after a full payout — `entitled_amount` is `"0"` once consumed.
+ * So a 200 alone is not enough; we have to inspect the body. 404 still
+ * happens for UTXOs the chain has never registered.
+ *
+ * Returns `null` when the UTXO is no longer claimable; otherwise returns
+ * the remaining entitled amount in satoshis. Other non-2xx responses
+ * propagate so transient network failures don't silently drop UTXOs.
  */
-const isUtxoClaimableOnChain = async ({
+const getOnChainEntitledAmount = async ({
   txid,
   vout,
 }: {
   txid: string
   vout: number
-}): Promise<boolean> => {
+}): Promise<bigint | null> => {
   const response = await fetch(`${qbtcRestUrl}/qbtc/v1/utxo/${txid}/${vout}`)
-  if (response.ok) return true
-  if (response.status === 404) return false
-  throw new Error(
-    `Failed to verify UTXO ${txid}:${vout} on QBTC chain (${response.status} ${response.statusText})`
-  )
+
+  if (response.status === 404) return null
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to verify UTXO ${txid}:${vout} on QBTC chain (${response.status} ${response.statusText})`
+    )
+  }
+
+  const body: QbtcUtxoResponse = await response.json()
+  const entitled = body.utxo?.entitled_amount
+  if (entitled === undefined) return null
+
+  const remaining = BigInt(entitled)
+  return remaining > 0n ? remaining : null
 }
 
 /**
@@ -40,6 +63,10 @@ const isUtxoClaimableOnChain = async ({
  * appear "spendable" after the QBTC chain has consumed it. Cross-checking
  * against the chain's UTXO endpoint (btcq-org/qbtc#141) prevents the user
  * from selecting a stale entry and burning ~90s on a no-op claim.
+ *
+ * The returned `amount` reflects the chain's remaining `entitled_amount`,
+ * not the Blockchair-reported BTC value — partial payouts on a UTXO would
+ * otherwise mislead the user about what they're about to claim.
  */
 export const getClaimableUtxos = async ({
   btcAddress,
@@ -51,17 +78,21 @@ export const getClaimableUtxos = async ({
 
   const btcUtxos = response.data[btcAddress]?.utxo ?? []
 
-  const candidates: ClaimableUtxo[] = btcUtxos.map(
-    ({ transaction_hash, index, value }) => ({
-      txid: transaction_hash,
-      vout: index,
-      amount: value,
-    })
+  const entitledAmounts = await Promise.all(
+    btcUtxos.map(({ transaction_hash, index }) =>
+      getOnChainEntitledAmount({ txid: transaction_hash, vout: index })
+    )
   )
 
-  const claimableFlags = await Promise.all(
-    candidates.map(({ txid, vout }) => isUtxoClaimableOnChain({ txid, vout }))
-  )
-
-  return candidates.filter((_, i) => claimableFlags[i])
+  return btcUtxos.flatMap(({ transaction_hash, index }, i) => {
+    const remaining = entitledAmounts[i]
+    if (remaining === null) return []
+    return [
+      {
+        txid: transaction_hash,
+        vout: index,
+        amount: Number(remaining),
+      },
+    ]
+  })
 }
