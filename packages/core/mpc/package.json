@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.2.10",
+  "version": "1.2.11",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -410,6 +410,11 @@
       "types": "./dist/keysign/send/build.d.ts",
       "import": "./dist/keysign/send/build.js",
       "default": "./dist/keysign/send/build.js"
+    },
+    "./keysign/send/cosmosWasm": {
+      "types": "./dist/keysign/send/cosmosWasm.d.ts",
+      "import": "./dist/keysign/send/cosmosWasm.js",
+      "default": "./dist/keysign/send/cosmosWasm.js"
     },
     "./keysign/send/getSendFeeEstimate": {
       "types": "./dist/keysign/send/getSendFeeEstimate.d.ts",
@@ -974,7 +979,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.7",
-    "@vultisig/core-chain": "1.7.0",
+    "@vultisig/core-chain": "1.7.1",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
