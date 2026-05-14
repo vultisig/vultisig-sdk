@@ -27,6 +27,7 @@ import type {
   ValueResult,
   VaultInfo,
 } from '@vultisig/examples-shared'
+import { SDKAdapterEventSubscriptionBase } from '@vultisig/examples-shared/adapters'
 
 // Declare the window.electronAPI type
 declare global {
@@ -181,19 +182,7 @@ declare global {
 /**
  * Electron SDK Adapter - wraps IPC bridge for electron environment
  */
-export class ElectronSDKAdapter implements ISDKAdapter {
-  private progressCallbacks = new Set<(step: ProgressStep) => void>()
-  private qrCallbacks = new Set<(qrPayload: string) => void>()
-  private deviceCallbacks = new Set<(data: DeviceJoinedData) => void>()
-  private signingProgressCallbacks = new Set<(step: ProgressStep) => void>()
-  private vaultChangedCallbacks = new Set<(vault: VaultInfo | null) => void>()
-  private balanceUpdatedCallbacks = new Set<(data: { chain: string; tokenId?: string }) => void>()
-  private chainChangedCallbacks = new Set<(data: { chain: string; action: 'added' | 'removed' }) => void>()
-  private txBroadcastCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private txConfirmedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private txFailedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private errorCallbacks = new Set<(error: Error) => void>()
-
+export class ElectronSDKAdapter extends SDKAdapterEventSubscriptionBase implements ISDKAdapter {
   private async withOperationCallbacks<T>(
     callbacks: {
       onProgress?: (step: ProgressStep) => void
@@ -223,49 +212,50 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   }
 
   constructor() {
+    super()
     // Subscribe to IPC events and forward to callbacks
     window.electronAPI.onVaultCreationProgress(({ step }) => {
-      this.progressCallbacks.forEach(cb => cb(step))
+      this.emitProgress(step)
     })
 
     window.electronAPI.onQrCodeReady(({ qrPayload }) => {
-      this.qrCallbacks.forEach(cb => cb(qrPayload))
+      this.emitQrCodeReady(qrPayload)
     })
 
     window.electronAPI.onDeviceJoined(({ deviceId, totalJoined, required }) => {
-      this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
+      this.emitDeviceJoined({ deviceId, totalJoined, required })
     })
 
     window.electronAPI.onSigningProgress(({ step }) => {
-      this.signingProgressCallbacks.forEach(cb => cb(step))
+      this.emitSigningProgress(step)
     })
 
     window.electronAPI.onBalanceUpdated(data => {
-      this.balanceUpdatedCallbacks.forEach(cb => cb(data))
+      this.emitBalanceUpdated(data)
     })
 
     window.electronAPI.onChainChanged(data => {
-      this.chainChangedCallbacks.forEach(cb => cb(data))
+      this.emitChainChanged(data)
     })
 
     window.electronAPI.onTransactionBroadcast(data => {
-      this.txBroadcastCallbacks.forEach(cb => cb(data))
+      this.emitTransactionBroadcast(data)
     })
 
     window.electronAPI.onTransactionConfirmed(data => {
-      this.txConfirmedCallbacks.forEach(cb => cb(data))
+      this.emitTransactionConfirmed(data)
     })
 
     window.electronAPI.onTransactionFailed(data => {
-      this.txFailedCallbacks.forEach(cb => cb(data))
+      this.emitTransactionFailed(data)
     })
 
     window.electronAPI.onError(({ message }) => {
-      this.errorCallbacks.forEach(cb => cb(new Error(message)))
+      this.emitError(new Error(message))
     })
 
     window.electronAPI.onVaultChanged(({ vault }) => {
-      this.vaultChangedCallbacks.forEach(cb => cb(vault))
+      this.emitVaultChanged(vault)
     })
   }
 
@@ -504,62 +494,6 @@ export class ElectronSDKAdapter implements ISDKAdapter {
   async setActiveVault(vaultId: string): Promise<void> {
     await window.electronAPI.setActiveVault(vaultId)
     const vault = await this.getActiveVault()
-    this.vaultChangedCallbacks.forEach(cb => cb(vault))
-  }
-
-  // ===== Events =====
-  onProgress(callback: (step: ProgressStep) => void): () => void {
-    this.progressCallbacks.add(callback)
-    return () => this.progressCallbacks.delete(callback)
-  }
-
-  onQrCodeReady(callback: (qrPayload: string) => void): () => void {
-    this.qrCallbacks.add(callback)
-    return () => this.qrCallbacks.delete(callback)
-  }
-
-  onDeviceJoined(callback: (data: DeviceJoinedData) => void): () => void {
-    this.deviceCallbacks.add(callback)
-    return () => this.deviceCallbacks.delete(callback)
-  }
-
-  onSigningProgress(callback: (step: ProgressStep) => void): () => void {
-    this.signingProgressCallbacks.add(callback)
-    return () => this.signingProgressCallbacks.delete(callback)
-  }
-
-  onVaultChanged(callback: (vault: VaultInfo | null) => void): () => void {
-    this.vaultChangedCallbacks.add(callback)
-    return () => this.vaultChangedCallbacks.delete(callback)
-  }
-
-  onBalanceUpdated(callback: (data: { chain: string; tokenId?: string }) => void): () => void {
-    this.balanceUpdatedCallbacks.add(callback)
-    return () => this.balanceUpdatedCallbacks.delete(callback)
-  }
-
-  onChainChanged(callback: (data: { chain: string; action: 'added' | 'removed' }) => void): () => void {
-    this.chainChangedCallbacks.add(callback)
-    return () => this.chainChangedCallbacks.delete(callback)
-  }
-
-  onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txBroadcastCallbacks.add(callback)
-    return () => this.txBroadcastCallbacks.delete(callback)
-  }
-
-  onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txConfirmedCallbacks.add(callback)
-    return () => this.txConfirmedCallbacks.delete(callback)
-  }
-
-  onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txFailedCallbacks.add(callback)
-    return () => this.txFailedCallbacks.delete(callback)
-  }
-
-  onError(callback: (error: Error) => void): () => void {
-    this.errorCallbacks.add(callback)
-    return () => this.errorCallbacks.delete(callback)
+    this.emitVaultChanged(vault)
   }
 }

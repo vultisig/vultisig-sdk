@@ -8,9 +8,6 @@
  * 4. Runs DKLS (ECDSA) + Schnorr (EdDSA) keygen
  */
 
-import { create, toBinary } from '@bufbuild/protobuf'
-import { toCompressedString } from '@vultisig/core-chain/utils/protobuf/toCompressedString'
-import { getSevenZip } from '@vultisig/core-mpc/compression/getSevenZip'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
@@ -20,17 +17,17 @@ import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/key
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
-import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { without } from '@vultisig/lib-utils/array/without'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { randomUUID } from '../crypto'
 import { TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
+import { VaultError, VaultErrorCode } from '../vault/VaultError'
+import { buildKeygenPairingQrPayload } from './buildKeygenPairingQrPayload'
+import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
 /**
  * Progress step during secure vault creation
@@ -171,79 +168,15 @@ export class SecureVaultCreationService {
     vaultName: string
     tssBatching?: boolean
   }): Promise<string> {
-    // Create KeygenMessage protobuf
-    const keygenMessage = create(KeygenMessageSchema, {
+    return buildKeygenPairingQrPayload({
       sessionId: params.sessionId,
+      hexEncryptionKey: params.hexEncryptionKey,
       hexChainCode: params.hexChainCode,
-      serviceName: params.localPartyId,
-      encryptionKeyHex: params.hexEncryptionKey,
-      useVultisigRelay: true,
+      localPartyId: params.localPartyId,
       vaultName: params.vaultName,
       libType: LibType.DKLS,
+      tssBatching: params.tssBatching,
     })
-
-    // Serialize to binary
-    const binary = toBinary(KeygenMessageSchema, keygenMessage)
-
-    // Compress with 7-zip (LZMA)
-    const sevenZip = await getSevenZip()
-    const compressedData = toCompressedString({ sevenZip, binary })
-
-    // Build URL for mobile app
-    const tssBatchingParam = params.tssBatching ? '&tssBatching=1' : ''
-    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}${tssBatchingParam}`
-
-    return qrPayload
-  }
-
-  /**
-   * Wait for peer devices to join the session
-   */
-  private async waitForPeers(
-    sessionId: string,
-    localPartyId: string,
-    requiredDevices: number,
-    signal?: AbortSignal,
-    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-  ): Promise<string[]> {
-    const maxWaitTime = 300000 // 5 minutes for multi-device setup
-    const checkInterval = 2000
-    const startTime = Date.now()
-    let lastJoinedCount = 0
-
-    while (Date.now() - startTime < maxWaitTime) {
-      // Check for abort
-      if (signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      try {
-        const url = `${this.relayUrl}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
-
-        // Notify about new devices
-        if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-          const newDevices = uniquePeers.slice(lastJoinedCount)
-          for (const device of newDevices) {
-            onDeviceJoined(device, uniquePeers.length, requiredDevices)
-          }
-          lastJoinedCount = uniquePeers.length
-        }
-
-        // Check if we have enough devices
-        if (uniquePeers.length >= requiredDevices) {
-          // Must match JoinSecureVaultService: sorted committee so all parties use identical order
-          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-        }
-
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-      }
-    }
-
-    throw new Error(`Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`)
   }
 
   /**
@@ -337,12 +270,12 @@ export class SecureVaultCreationService {
       devicesRequired: devices,
     })
 
-    const allDevices = await this.waitForPeers(
+    const allDevices = await waitForRelayPeerCommittee({
+      relayUrl: this.relayUrl,
       sessionId,
-      localPartyId,
-      devices,
+      requiredDevices: devices,
       signal,
-      (deviceId, total, required) => {
+      onDeviceJoined: (deviceId, total, required) => {
         // Notify via callback
         if (onDeviceJoined) {
           onDeviceJoined(deviceId, total, required)
@@ -355,8 +288,13 @@ export class SecureVaultCreationService {
           devicesJoined: total,
           devicesRequired: required,
         })
-      }
-    )
+      },
+      createTimeoutError: (lastJoinedCount, requiredDevices) =>
+        new VaultError(
+          VaultErrorCode.Timeout,
+          `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
+        ),
+    })
 
     // Step 5: Start MPC session
     reportProgress({
