@@ -19,5 +19,5 @@
   "minTokens": 120,
   "mode": "strict",
   "reporters": ["console"],
-  "threshold": 1
+  "threshold": 0
 }

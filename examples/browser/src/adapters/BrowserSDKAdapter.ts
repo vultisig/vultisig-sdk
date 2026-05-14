@@ -7,7 +7,6 @@ import type {
   CreateSecureVaultFromSeedphraseOptions,
   CreateSecureVaultOptions,
   CreateSecureVaultResult,
-  DeviceJoinedData,
   DiscountTier,
   ExportOptions,
   FiatCurrency,
@@ -17,7 +16,6 @@ import type {
   JoinSecureVaultResult,
   MaxSendAmountResult,
   PrepareSwapParams,
-  ProgressStep,
   SeedphraseValidation,
   SendTxParams,
   SwapQuoteResult,
@@ -27,38 +25,24 @@ import type {
   ValueResult,
   VaultInfo,
 } from '@vultisig/examples-shared'
+import { SDKAdapterEventSubscriptionBase } from '@vultisig/examples-shared/adapters'
 import type { Chain, Token, VaultBase, Vultisig } from '@vultisig/sdk'
 
 /**
  * Browser SDK Adapter - wraps direct SDK instance for browser environment
  */
-export class BrowserSDKAdapter implements ISDKAdapter {
+export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implements ISDKAdapter {
   private sdk: Vultisig
-  private progressCallbacks = new Set<(step: ProgressStep) => void>()
-  private qrCallbacks = new Set<(qrPayload: string) => void>()
-  private deviceCallbacks = new Set<(data: DeviceJoinedData) => void>()
-  private signingProgressCallbacks = new Set<(step: ProgressStep) => void>()
-  private vaultChangedCallbacks = new Set<(vault: VaultInfo | null) => void>()
-  private balanceUpdatedCallbacks = new Set<(data: { chain: string; tokenId?: string }) => void>()
-  private chainChangedCallbacks = new Set<(data: { chain: string; action: 'added' | 'removed' }) => void>()
-  private txBroadcastCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private txConfirmedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private txFailedCallbacks = new Set<(data: { chain: string; txHash: string }) => void>()
-  private errorCallbacks = new Set<(error: Error) => void>()
   private activeVaultId: string | null = null
   private vaultCache = new Map<string, VaultBase>()
 
   constructor(sdk: Vultisig) {
+    super()
     this.sdk = sdk
 
     // Subscribe to SDK-level events
     this.sdk.on('vaultCreationProgress', ({ step }) => {
-      const progressStep: ProgressStep = {
-        message: step.message,
-        progress: step.progress,
-        phase: step.step, // Map SDK's 'step' to our 'phase'
-      }
-      this.progressCallbacks.forEach(cb => cb(progressStep))
+      this.emitProgressFromSdkStep(step)
     })
   }
 
@@ -80,48 +64,43 @@ export class BrowserSDKAdapter implements ISDKAdapter {
   // Subscribe to vault-level events
   private subscribeToVaultEvents(vault: VaultBase): void {
     vault.on('signingProgress', ({ step }) => {
-      const progressStep: ProgressStep = {
-        message: step.message,
-        progress: step.progress,
-        phase: step.step, // Map SDK's 'step' to our 'phase'
-      }
-      this.signingProgressCallbacks.forEach(cb => cb(progressStep))
+      this.emitSigningProgress(this.mapSdkProgressToStep(step))
     })
 
     vault.on('qrCodeReady', ({ qrPayload }) => {
-      this.qrCallbacks.forEach(cb => cb(qrPayload))
+      this.emitQrCodeReady(qrPayload)
     })
 
     vault.on('deviceJoined', ({ deviceId, totalJoined, required }) => {
-      this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
+      this.emitDeviceJoined({ deviceId, totalJoined, required })
     })
 
     vault.on('balanceUpdated', ({ chain, tokenId }) => {
-      this.balanceUpdatedCallbacks.forEach(cb => cb({ chain: chain as string, tokenId }))
+      this.emitBalanceUpdated({ chain: chain as string, tokenId })
     })
 
     vault.on('chainAdded', ({ chain }) => {
-      this.chainChangedCallbacks.forEach(cb => cb({ chain: chain as string, action: 'added' }))
+      this.emitChainChanged({ chain: chain as string, action: 'added' })
     })
 
     vault.on('chainRemoved', ({ chain }) => {
-      this.chainChangedCallbacks.forEach(cb => cb({ chain: chain as string, action: 'removed' }))
+      this.emitChainChanged({ chain: chain as string, action: 'removed' })
     })
 
     vault.on('transactionBroadcast', ({ chain, txHash }) => {
-      this.txBroadcastCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
+      this.emitTransactionBroadcast({ chain: chain as string, txHash })
     })
 
     vault.on('transactionConfirmed', ({ chain, txHash }) => {
-      this.txConfirmedCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
+      this.emitTransactionConfirmed({ chain: chain as string, txHash })
     })
 
     vault.on('transactionFailed', ({ chain, txHash }) => {
-      this.txFailedCallbacks.forEach(cb => cb({ chain: chain as string, txHash }))
+      this.emitTransactionFailed({ chain: chain as string, txHash })
     })
 
     vault.on('error', error => {
-      this.errorCallbacks.forEach(cb => cb(error))
+      this.emitError(error)
     })
   }
 
@@ -170,11 +149,7 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       signal: options.signal,
       onProgress: options.onProgress
         ? step => {
-            options.onProgress!({
-              message: step.message,
-              progress: step.progress,
-              phase: step.step, // Map SDK's 'step' to our 'phase'
-            })
+            options.onProgress!(this.mapSdkProgressToStep(step))
           }
         : undefined,
     })
@@ -200,11 +175,7 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       threshold: options.threshold,
       onProgress: options.onProgress
         ? step => {
-            options.onProgress!({
-              message: step.message,
-              progress: step.progress,
-              phase: step.step, // Map SDK's 'step' to our 'phase'
-            })
+            options.onProgress!(this.mapSdkProgressToStep(step))
           }
         : undefined,
       onQRCodeReady: (qrPayload: string) => {
@@ -258,14 +229,8 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       tssBatching: options.tssBatching,
       signal: options.signal,
       onProgress: step => {
-        const progressStep: ProgressStep = {
-          message: step.message,
-          progress: step.progress,
-          phase: step.step,
-        }
-        // Emit to global callbacks (for event log)
-        this.progressCallbacks.forEach(cb => cb(progressStep))
-        // Emit to component callback (for UI state)
+        const progressStep = this.mapSdkProgressToStep(step)
+        this.emitProgress(progressStep)
         options.onProgress?.(progressStep)
       },
       onChainDiscovery: options.onChainDiscovery,
@@ -287,26 +252,16 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       usePhantomSolanaPath: options.usePhantomSolanaPath,
       tssBatching: options.tssBatching,
       onProgress: step => {
-        const progressStep: ProgressStep = {
-          message: step.message,
-          progress: step.progress,
-          phase: step.step,
-        }
-        // Emit to global callbacks (for event log)
-        this.progressCallbacks.forEach(cb => cb(progressStep))
-        // Emit to component callback (for UI state)
+        const progressStep = this.mapSdkProgressToStep(step)
+        this.emitProgress(progressStep)
         options.onProgress?.(progressStep)
       },
       onQRCodeReady: qrPayload => {
-        // Emit to global callbacks (for event log)
-        this.qrCallbacks.forEach(cb => cb(qrPayload))
-        // Emit to component callback (for UI state)
+        this.emitQrCodeReady(qrPayload)
         options.onQRCodeReady?.(qrPayload)
       },
       onDeviceJoined: (deviceId, totalJoined, required) => {
-        // Emit to global callbacks (for event log)
-        this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
-        // Emit to component callback (for UI state)
+        this.emitDeviceJoined({ deviceId, totalJoined, required })
         options.onDeviceJoined?.(deviceId, totalJoined, required)
       },
       onChainDiscovery: options.onChainDiscovery,
@@ -326,22 +281,14 @@ export class BrowserSDKAdapter implements ISDKAdapter {
       devices: options.devices ?? 2,
       onProgress: options.onProgress
         ? step => {
-            const progressStep: ProgressStep = {
-              message: step.message,
-              progress: step.progress,
-              phase: step.step,
-            }
-            // Emit to global callbacks (for event log)
-            this.progressCallbacks.forEach(cb => cb(progressStep))
-            // Emit to component callback (for UI state)
+            const progressStep = this.mapSdkProgressToStep(step)
+            this.emitProgress(progressStep)
             options.onProgress?.(progressStep)
           }
         : undefined,
       onDeviceJoined: options.onDeviceJoined
         ? (deviceId, totalJoined, required) => {
-            // Emit to global callbacks (for event log)
-            this.deviceCallbacks.forEach(cb => cb({ deviceId, totalJoined, required }))
-            // Emit to component callback (for UI state)
+            this.emitDeviceJoined({ deviceId, totalJoined, required })
             options.onDeviceJoined?.(deviceId, totalJoined, required)
           }
         : undefined,
@@ -654,62 +601,6 @@ export class BrowserSDKAdapter implements ISDKAdapter {
     this.activeVaultId = vaultId
     const vault = await this.getVault(vaultId)
     await this.sdk.setActiveVault(vault)
-    this.vaultChangedCallbacks.forEach(cb => cb(this.vaultToInfo(vault)))
-  }
-
-  // ===== Events =====
-  onProgress(callback: (step: ProgressStep) => void): () => void {
-    this.progressCallbacks.add(callback)
-    return () => this.progressCallbacks.delete(callback)
-  }
-
-  onQrCodeReady(callback: (qrPayload: string) => void): () => void {
-    this.qrCallbacks.add(callback)
-    return () => this.qrCallbacks.delete(callback)
-  }
-
-  onDeviceJoined(callback: (data: DeviceJoinedData) => void): () => void {
-    this.deviceCallbacks.add(callback)
-    return () => this.deviceCallbacks.delete(callback)
-  }
-
-  onSigningProgress(callback: (step: ProgressStep) => void): () => void {
-    this.signingProgressCallbacks.add(callback)
-    return () => this.signingProgressCallbacks.delete(callback)
-  }
-
-  onVaultChanged(callback: (vault: VaultInfo | null) => void): () => void {
-    this.vaultChangedCallbacks.add(callback)
-    return () => this.vaultChangedCallbacks.delete(callback)
-  }
-
-  onBalanceUpdated(callback: (data: { chain: string; tokenId?: string }) => void): () => void {
-    this.balanceUpdatedCallbacks.add(callback)
-    return () => this.balanceUpdatedCallbacks.delete(callback)
-  }
-
-  onChainChanged(callback: (data: { chain: string; action: 'added' | 'removed' }) => void): () => void {
-    this.chainChangedCallbacks.add(callback)
-    return () => this.chainChangedCallbacks.delete(callback)
-  }
-
-  onTransactionBroadcast(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txBroadcastCallbacks.add(callback)
-    return () => this.txBroadcastCallbacks.delete(callback)
-  }
-
-  onTransactionConfirmed(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txConfirmedCallbacks.add(callback)
-    return () => this.txConfirmedCallbacks.delete(callback)
-  }
-
-  onTransactionFailed(callback: (data: { chain: string; txHash: string }) => void): () => void {
-    this.txFailedCallbacks.add(callback)
-    return () => this.txFailedCallbacks.delete(callback)
-  }
-
-  onError(callback: (error: Error) => void): () => void {
-    this.errorCallbacks.add(callback)
-    return () => this.errorCallbacks.delete(callback)
+    this.emitVaultChanged(this.vaultToInfo(vault))
   }
 }
