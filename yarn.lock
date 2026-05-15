@@ -7081,7 +7081,7 @@ __metadata:
     commander: "npm:^14.0.3"
     dotenv: "npm:^17.3.1"
     esbuild: "npm:^0.27.4"
-    ora: "npm:^9.3.0"
+    ora: "npm:^9.4.0"
     qrcode-terminal: "npm:^0.12.0"
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.21.0"
@@ -16375,9 +16375,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ora@npm:^9.3.0":
-  version: 9.3.0
-  resolution: "ora@npm:9.3.0"
+"ora@npm:^9.4.0":
+  version: 9.4.0
+  resolution: "ora@npm:9.4.0"
   dependencies:
     chalk: "npm:^5.6.2"
     cli-cursor: "npm:^5.0.0"
@@ -16385,9 +16385,9 @@ __metadata:
     is-interactive: "npm:^2.0.0"
     is-unicode-supported: "npm:^2.1.0"
     log-symbols: "npm:^7.0.1"
-    stdin-discarder: "npm:^0.3.1"
+    stdin-discarder: "npm:^0.3.2"
     string-width: "npm:^8.1.0"
-  checksum: 10c0/1d25c0f43e20389757285f740686958bce78ccb9d03dda190ecc92ae585cbc498fa54cf13933fea2f96cb97a0be82e927cf0fd8c96217459f9c43d915a380531
+  checksum: 10c0/8f2d7a8869cd68607797ac0ffe9f5cdceeb6009437672510d9920aea794cdd055164e3fe804248624c4940a71b22f94f1ffd94ce8fecf0746baef97a5c121a91
   languageName: node
   linkType: hard
 
@@ -19200,7 +19200,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"stdin-discarder@npm:^0.3.1":
+"stdin-discarder@npm:^0.3.2":
   version: 0.3.2
   resolution: "stdin-discarder@npm:0.3.2"
   checksum: 10c0/5dbaba9efbcb447a4450d5ae19794641ea9166abe96dc4b5547a109db1bb6e8bdb17bbe1029e02ca8d9d8ee996b7c7cbcce12b12c18c121871cd4f574292381a
