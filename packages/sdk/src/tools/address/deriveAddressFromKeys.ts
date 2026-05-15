@@ -1,14 +1,14 @@
-import { Chain } from '@vultisig/core-chain/Chain'
-import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
-import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { Chain } from "@vultisig/core-chain/Chain";
+import { deriveAddress } from "@vultisig/core-chain/publicKey/address/deriveAddress";
+import { getPublicKey } from "@vultisig/core-chain/publicKey/getPublicKey";
 
-import { getWalletCore } from '../../context/wasmRuntime'
+import { getWalletCore } from "../../context/wasmRuntime";
 
 type DeriveAddressFromKeysInput = {
-  chain: Chain
-  ecdsaPublicKey?: string
-  eddsaPublicKey?: string
-  hexChainCode: string
+  chain: Chain;
+  ecdsaPublicKey?: string;
+  eddsaPublicKey?: string;
+  hexChainCode: string;
   /**
    * Optional map of pre-derived hardened pubkeys keyed by chain name (e.g. `{ Terra: '03c7...' }`).
    * When present for the requested chain, the derivation BIP32 re-walk is skipped and this pubkey
@@ -20,13 +20,13 @@ type DeriveAddressFromKeysInput = {
    * When absent or when the map does not contain an entry for the requested chain, the existing
    * non-hardened BIP32 fallback is used unchanged — existing callers are unaffected.
    */
-  chainPublicKeys?: Partial<Record<Chain, string>>
-}
+  chainPublicKeys?: Partial<Record<Chain, string>>;
+};
 
 type DeriveAddressFromKeysResult = {
-  chain: Chain
-  address: string
-}
+  chain: Chain;
+  address: string;
+};
 
 /**
  * Derive a wallet address for a chain from raw ECDSA/EdDSA public keys and chain code.
@@ -45,22 +45,24 @@ type DeriveAddressFromKeysResult = {
  * ```
  */
 export const deriveAddressFromKeys = async (
-  input: DeriveAddressFromKeysInput
+  input: DeriveAddressFromKeysInput,
 ): Promise<DeriveAddressFromKeysResult> => {
   if (!input.ecdsaPublicKey && !input.eddsaPublicKey) {
-    throw new Error('At least one public key (ecdsaPublicKey or eddsaPublicKey) is required')
+    throw new Error(
+      "At least one public key (ecdsaPublicKey or eddsaPublicKey) is required",
+    );
   }
   if (!input.hexChainCode) {
-    throw new Error('hexChainCode is required for address derivation')
+    throw new Error("hexChainCode is required for address derivation");
   }
 
-  let walletCore: Awaited<ReturnType<typeof getWalletCore>>
+  let walletCore: Awaited<ReturnType<typeof getWalletCore>>;
   try {
-    walletCore = await getWalletCore()
+    walletCore = await getWalletCore();
   } catch (err) {
     throw new Error(
-      `Failed to initialize WalletCore for address derivation: ${err instanceof Error ? err.message : String(err)}`
-    )
+      `Failed to initialize WalletCore for address derivation: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // Terra and TerraClassic share BIP44 coin_type 330 and the same hardened-derived pubkey.
@@ -68,47 +70,55 @@ export const deriveAddressFromKeys = async (
   // We also filter the map to only include the requested chain: getPublicKey treats any
   // non-empty map as authoritative and throws "Chain public key not found" when the chain
   // is absent, so we must not forward a partial map for an unrelated chain.
-  const resolvedChainPublicKeys: Partial<Record<Chain, string>> | undefined = (() => {
-    const keys = input.chainPublicKeys
-    if (!keys) return undefined
+  const resolvedChainPublicKeys: Partial<Record<Chain, string>> | undefined =
+    (() => {
+      const keys = input.chainPublicKeys;
+      if (!keys) return undefined;
 
-    // Apply bidirectional Terra ↔ TerraClassic alias (same coin_type 330).
-    const aliased: Partial<Record<Chain, string>> = { ...keys }
-    if (aliased[Chain.Terra] && !(Chain.TerraClassic in aliased)) {
-      aliased[Chain.TerraClassic] = aliased[Chain.Terra]
-    } else if (aliased[Chain.TerraClassic] && !(Chain.Terra in aliased)) {
-      aliased[Chain.Terra] = aliased[Chain.TerraClassic]
-    }
+      // Validate all present entries before any alias logic.
+      // An explicitly empty pubkey is a caller error — fail fast rather than silently
+      // falling back to non-hardened derivation, which would produce the wrong address.
+      // This must happen before alias expansion so that e.g. { Terra: "" } while
+      // requesting TerraClassic is caught here rather than silently bypassed.
+      for (const [chain, pubkey] of Object.entries(keys) as [Chain, string][]) {
+        if (pubkey !== undefined && !pubkey.trim()) {
+          throw new Error(
+            `Invalid chainPublicKeys entry for ${chain}: pubkey must be non-empty`,
+          );
+        }
+      }
 
-    // Only forward the map when the requested chain has an entry.
-    // When absent, let getPublicKey run its normal non-hardened BIP32 derivation.
-    if (!(input.chain in aliased)) return undefined
+      // Apply bidirectional Terra ↔ TerraClassic alias (same coin_type 330).
+      const aliased: Partial<Record<Chain, string>> = { ...keys };
+      if (aliased[Chain.Terra] && !(Chain.TerraClassic in aliased)) {
+        aliased[Chain.TerraClassic] = aliased[Chain.Terra];
+      } else if (aliased[Chain.TerraClassic] && !(Chain.Terra in aliased)) {
+        aliased[Chain.Terra] = aliased[Chain.TerraClassic];
+      }
 
-    // An explicitly empty pubkey is a caller error — fail fast rather than silently
-    // falling back to non-hardened derivation, which would produce the wrong address.
-    if (!aliased[input.chain]?.trim()) {
-      throw new Error(`Invalid chainPublicKeys entry for ${input.chain}: pubkey must be non-empty`)
-    }
+      // Only forward the map when the requested chain has an entry.
+      // When absent, let getPublicKey run its normal non-hardened BIP32 derivation.
+      if (!(input.chain in aliased)) return undefined;
 
-    return aliased
-  })()
+      return aliased;
+    })();
 
-  let publicKey: ReturnType<typeof getPublicKey>
+  let publicKey: ReturnType<typeof getPublicKey>;
   try {
     publicKey = getPublicKey({
       chain: input.chain,
       walletCore,
       hexChainCode: input.hexChainCode,
       publicKeys: {
-        ecdsa: input.ecdsaPublicKey ?? '',
-        eddsa: input.eddsaPublicKey ?? '',
+        ecdsa: input.ecdsaPublicKey ?? "",
+        eddsa: input.eddsaPublicKey ?? "",
       },
       chainPublicKeys: resolvedChainPublicKeys,
-    })
+    });
   } catch (err) {
     throw new Error(
-      `Failed to derive public key for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`
-    )
+      `Failed to derive public key for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   try {
@@ -116,10 +126,12 @@ export const deriveAddressFromKeys = async (
       chain: input.chain,
       publicKey,
       walletCore,
-    })
+    });
 
-    return { chain: input.chain, address }
+    return { chain: input.chain, address };
   } catch (err) {
-    throw new Error(`Failed to derive address for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(
+      `Failed to derive address for ${input.chain}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-}
+};
