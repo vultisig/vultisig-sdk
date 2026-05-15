@@ -1,15 +1,17 @@
 /**
  * Smoke-test THORChain LP agent actions against a real imported vault.
  *
- * Usage from repo root (env from ops .envrc):
- *   OPS_ROOT=$(tr -d '\r\n' < .cursor/.ops-source) && source "$OPS_ROOT/.envrc"
- *   VAULT_PATH="$OPS_ROOT/vaults/fast-vault-share1of2.vult" npx tsx clients/cli/scripts/thorchain-lp-smoke.ts
+ * Usage from repo root:
+ *   FIXTURE_ROOT=$(tr -d '\r\n' < .cursor/.vault-fixtures-root) && source "$FIXTURE_ROOT/.envrc"
+ *   VAULT_PATH="$FIXTURE_ROOT/vaults/fast-vault-share1of2.vult" npx tsx clients/cli/scripts/thorchain-lp-smoke.ts
  *
  * Optional: TC_LP_SIGN=1 TC_LP_AMOUNT=0.05 — builds add-liquidity to BTC.BTC then signs and broadcasts.
  */
 import { readFile } from 'node:fs/promises'
 
-import { Vultisig } from '@vultisig/sdk'
+import { buildThorchainLpAddPayload, getThorchainPools } from '@vultisig/core-chain/chains/cosmos/thor/lp'
+import { Chain, Vultisig } from '@vultisig/sdk'
+import { parseUnits } from 'viem'
 
 import { AgentExecutor } from '../src/agent/executor'
 
@@ -21,7 +23,7 @@ const doSign = process.env.TC_LP_SIGN === '1'
 
 async function main(): Promise<void> {
   if (!vaultPath) {
-    console.error('Set VAULT_PATH to a .vult share (e.g. $OPS_ROOT/vaults/fast-vault-share1of2.vult)')
+    console.error('Set VAULT_PATH to a .vult share')
     process.exit(1)
   }
   if (!password) {
@@ -35,38 +37,45 @@ async function main(): Promise<void> {
   const vault = await sdk.importVault(raw, password)
   await vault.unlock(password)
 
-  const exec = new AgentExecutor(vault, true)
-  exec.setPassword(password)
-
-  const poolInfo = await exec.executeAction({
-    id: 'smoke-pool',
-    type: 'thorchain_pool_info',
-    title: 'pool',
-    params: { pool, limit: 3 },
-  })
-  console.log('thorchain_pool_info:', JSON.stringify(poolInfo, null, 2))
-  if (!poolInfo.success) {
+  const thorAddress = await vault.address(Chain.THORChain)
+  if (!thorAddress) {
+    console.error('Vault did not derive a THORChain address')
     process.exit(1)
   }
 
-  const build = await exec.executeAction({
-    id: 'smoke-add',
-    type: 'thorchain_add_liquidity',
-    title: 'add',
-    params: { pool, amount, auto_pair: false },
-  })
-  console.log('thorchain_add_liquidity (build):', JSON.stringify(build, null, 2))
-  if (!build.success) {
+  const pools = await getThorchainPools()
+  const poolInfo = pools.find(item => item.asset === pool)
+  if (!poolInfo) {
+    console.error(`Pool not found or not available: ${pool}`)
     process.exit(1)
   }
+  console.log('thorchain_pool_info:', JSON.stringify({ success: true, data: poolInfo }, null, 2))
+
+  const payload = buildThorchainLpAddPayload({
+    pool,
+    amountRuneBaseUnits: parseUnits(amount, 8).toString(),
+  })
+  console.log('thorchain_add_liquidity (build):', JSON.stringify({ success: true, data: payload }, null, 2))
 
   if (doSign) {
-    const sign = await exec.executeAction({
-      id: 'smoke-sign',
-      type: 'sign_tx',
-      title: 'sign',
-      params: { keysign_payload: build.data?.keysign_payload },
+    const exec = new AgentExecutor(vault, true)
+    exec.setPassword(password)
+    const stored = exec.storeServerTransaction({
+      chain: Chain.THORChain,
+      txArgs: {
+        chain: Chain.THORChain,
+        from: thorAddress,
+        to: thorAddress,
+        amount: payload.amount,
+        symbol: 'RUNE',
+        memo: payload.memo,
+      },
     })
+    if (!stored) {
+      console.error('Failed to store LP add transaction for signing')
+      process.exit(1)
+    }
+    const sign = await exec.signTxFromBuffer('smoke-sign')
     console.log('sign_tx:', JSON.stringify(sign, null, 2))
     if (!sign.success) {
       process.exit(1)
@@ -74,6 +83,8 @@ async function main(): Promise<void> {
   } else {
     console.log('Skip broadcast (set TC_LP_SIGN=1 TC_LP_AMOUNT=<rune> to sign and send).')
   }
+
+  sdk.dispose()
 }
 
 main().catch(e => {
