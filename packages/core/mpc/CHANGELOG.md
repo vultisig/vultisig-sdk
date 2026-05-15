@@ -1,5 +1,11 @@
 # @vultisig/core-mpc
 
+## 1.2.12
+
+### Patch Changes
+
+- [#466](https://github.com/vultisig/vultisig-sdk/pull/466) [`af16c0d`](https://github.com/vultisig/vultisig-sdk/commit/af16c0d8f59fd9b339f1a6b41229f105bd81820f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Clean shared package build output before generating package exports so removed modules do not leave stale subpath entries.
+
 ## 1.2.11
 
 ### Patch Changes
