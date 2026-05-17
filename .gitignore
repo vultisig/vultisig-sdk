@@ -109,3 +109,7 @@ upstream/
 packages/trading-bot/
 .beads/
 packages/expo-mpc/
+
+# Cursor / Codex (local IDE agent config; not pushed to remote)
+.cursor/
+.codex/
