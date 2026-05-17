@@ -203,7 +203,7 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
   [Chain.QBTC]: {
     ticker: 'QBTC',
     logo: 'qbtc',
-    decimals: 6,
+    decimals: 8,
     priceProviderId: 'qbtc-testnet',
   },
 }
