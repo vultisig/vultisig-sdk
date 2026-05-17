@@ -1,5 +1,13 @@
 # @vultisig/core-chain
 
+## 1.7.1
+
+### Patch Changes
+
+- [#455](https://github.com/vultisig/vultisig-sdk/pull/455) [`5102976`](https://github.com/vultisig/vultisig-sdk/commit/5102976d7c13fa9578bbbc6e5122526cefc1ec66) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize THORChain/MayaChain native swap asset ids: single-segment denoms and simple `x/…` paths map to `THOR.<ticker>` / `MAYA.<ticker>`; secured `chain-symbol-0x…` denoms map to `CHAIN.SYMBOL` notation using the canonical `nativeSwapChainIds` mapping. Full `CHAIN.SYMBOL` strings and unrecognized complex denoms remain unchanged.
+
+- [#456](https://github.com/vultisig/vultisig-sdk/pull/456) [`b36eb62`](https://github.com/vultisig/vultisig-sdk/commit/b36eb62842051b8b2bae06f1e123a5ebcf6cad88) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Terra CW20 metadata resolution and build CW20 token sends as CosmWasm execute transfers.
+
 ## 1.7.0
 
 ### Minor Changes

@@ -1742,6 +1742,83 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
+   * Sign and broadcast a THORChain / MayaChain `MsgDeposit`.
+   *
+   * The memo carries the routing — LP add (`+:POOL[:PAIRED]`),
+   * LP remove (`-:POOL:BPS[:ASSET]`), or other deposit-style intents.
+   * `amountBaseUnits` is the native asset in base units (RUNE: 1e8 per
+   * unit; CACAO: 1e10 per unit) and is passed through verbatim.
+   *
+   * **No balance-fee refinement.** Unlike `send`, this method does not
+   * cap `amountBaseUnits` at `balance - fee`. LP amounts are
+   * caller-controlled (asymmetric deposit size for `+:`, dust constant
+   * for `-:`) and must pass through untouched, so the helper skips
+   * `refineKeysignAmount`. Callers are responsible for ensuring
+   * sufficient balance; insufficient-funds surfaces at broadcast time,
+   * not at preflight. (For preflight, query `vault.balance(chain)`
+   * separately before calling this method.)
+   *
+   * @example
+   * ```typescript
+   * // LP add: deposit 1 RUNE asymmetric into the BTC.BTC pool
+   * const result = await vault.signMsgDeposit({
+   *   chain: Chain.THORChain,
+   *   amountBaseUnits: 100_000_000n,
+   *   memo: '+:BTC.BTC',
+   * })
+   * ```
+   */
+  async signMsgDeposit(params: {
+    chain: Chain
+    amountBaseUnits: string | bigint
+    memo: string
+  }): Promise<{ chain: Chain; txHash: string }> {
+    const { chain, memo } = params
+    if (chain !== Chain.THORChain && chain !== Chain.MayaChain) {
+      throw new VaultError(
+        VaultErrorCode.UnsupportedChain,
+        `signMsgDeposit: only THORChain and MayaChain supported, got ${chain}`
+      )
+    }
+    let amountBaseUnits: bigint
+    try {
+      amountBaseUnits =
+        typeof params.amountBaseUnits === 'string' ? BigInt(params.amountBaseUnits) : params.amountBaseUnits
+    } catch (error) {
+      // BigInt('1.5'), BigInt(''), BigInt('abc'), etc. throw raw SyntaxError.
+      // Wrap so the public SDK surface keeps the VaultError contract — MCP /
+      // agent callers that hit this method directly (vs the CLI executor,
+      // which pre-validates with MAX_AMOUNT_DIGITS) get a coded error.
+      throw new VaultError(
+        VaultErrorCode.InvalidAmount,
+        `signMsgDeposit: amountBaseUnits "${params.amountBaseUnits}" is not a valid integer base-unit string`,
+        error instanceof Error ? error : undefined
+      )
+    }
+    if (amountBaseUnits <= 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, 'signMsgDeposit: amountBaseUnits must be greater than zero')
+    }
+    if (!memo) {
+      throw new VaultError(VaultErrorCode.InvalidConfig, 'signMsgDeposit: memo is required')
+    }
+
+    const tokenInfo = this.resolveTokenInfo(chain)
+    const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
+
+    const keysignPayload = await this.transactionBuilder.prepareThorchainMsgDepositTx({
+      coin,
+      amountBaseUnits,
+      memo,
+    })
+    const messageHashes = await this.extractMessageHashes(keysignPayload)
+    const signature = await this.sign({ transaction: keysignPayload, chain, messageHashes })
+    return {
+      chain,
+      txHash: await this.broadcastTx({ chain, keysignPayload, signature }),
+    }
+  }
+
+  /**
    * Call an EVM smart contract function. Set dryRun for payload without signing.
    *
    * @example

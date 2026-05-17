@@ -21,6 +21,8 @@ export enum VaultErrorCode {
   BroadcastFailed = 'BROADCAST_FAILED',
   CreateFailed = 'CREATE_FAILED',
   Timeout = 'TIMEOUT',
+  /** Caller cancelled via AbortSignal */
+  OperationAborted = 'OPERATION_ABORTED',
   InvalidAmount = 'INVALID_AMOUNT',
   /** Examples / IPC: vault id not present in local SDK store */
   VaultNotFound = 'VAULT_NOT_FOUND',

@@ -17,8 +17,19 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({
     })
   )
 
-  if (error || !response) {
-    return { status: 'pending' }
+  if (
+    error ||
+    !response ||
+    typeof response.result !== 'object' ||
+    response.result === null
+  ) {
+    // The chain says it doesn't know this hash, OR the response is
+    // shaped unexpectedly (e.g. malformed payload `{}` without `result`).
+    // Either case: mark `isKnown: false` so the verify-by-hash safety
+    // net does NOT swallow broadcast errors. Mirrors `solana.ts:19`.
+    // Status itself stays `'pending'` so status-polling UI can re-query
+    // later.
+    return { status: 'pending', isKnown: false }
   }
 
   const { validated, meta, tx_json } = response.result as {
@@ -49,5 +60,6 @@ export const getRippleTxStatus: TxStatusResolver<OtherChain.Ripple> = async ({
     return { status, receipt }
   }
 
-  return { status: 'pending' }
+  // Genuinely in the ledger but not yet validated — XRPL knows about it.
+  return { status: 'pending', isKnown: true }
 }

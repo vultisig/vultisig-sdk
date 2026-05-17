@@ -23,6 +23,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 import { prepareContractCallTxFromKeys } from '../../tools/prep/contractCall'
 import { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from '../../tools/prep/cosmos'
 import { prepareSendTxFromKeys } from '../../tools/prep/send'
+import { prepareThorchainMsgDepositTxFromKeys } from '../../tools/prep/thorchainMsgDeposit'
 import { vaultDataToIdentity } from '../../tools/prep/types'
 import type { ContractCallTxParams } from '../../types/contractCall'
 import type { CosmosSigningOptions, SignAminoInput, SignDirectInput } from '../../types/cosmos'
@@ -94,6 +95,25 @@ export class TransactionBuilder {
     const walletCore = await this.wasmProvider.getWalletCore()
     return this.wrapAsVaultError('send transaction', () =>
       prepareSendTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
+    )
+  }
+
+  /**
+   * Prepare a THORChain / MayaChain `MsgDeposit` keysign payload.
+   *
+   * Used for LP add (`+:POOL[:PAIRED]`), LP remove (`-:POOL:BPS[:ASSET]`),
+   * and any other MsgDeposit-shape envelope where the memo carries the
+   * routing. The cosmos signing-input resolver branches on `isDeposit: true`
+   * to emit a `THORChainDeposit` proto message rather than the default send.
+   */
+  async prepareThorchainMsgDepositTx(params: {
+    coin: AccountCoin
+    amountBaseUnits: bigint
+    memo: string
+  }): Promise<KeysignPayload> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    return this.wrapAsVaultError('thorchain MsgDeposit transaction', () =>
+      prepareThorchainMsgDepositTxFromKeys(vaultDataToIdentity(this.vaultData), params, walletCore)
     )
   }
 
