@@ -13,7 +13,10 @@ type UtxoRef = {
 }
 
 type BuildMsgClaimWithProofInput = {
-  /** QBTC bech32 address of the claimer. */
+  /**
+   * QBTC bech32 address of the claimer (mint destination). Payload-only —
+   * no longer the cosmos signer since btcq-org/qbtc#171.
+   */
   claimer: string
   /** UTXOs to include in the claim (1-50, no duplicates). */
   utxos: UtxoRef[]
@@ -32,6 +35,13 @@ type BuildMsgClaimWithProofInput = {
    * Returned by the proof service as `pub_key_hash_sha256`.
    */
   pubKeyHashSha256: string
+  /**
+   * QBTC bech32 address of the cosmos tx signer (broadcaster). Required
+   * since btcq-org/qbtc#171 — the address derived from
+   * `signer_infos[0].pub_key` must equal this value. For wallet flows where
+   * the user signs the cosmos tx themselves, set `broadcaster === claimer`.
+   */
+  broadcaster: string
 }
 
 const isHex = (value: string) => /^[0-9a-f]+$/i.test(value)
@@ -47,13 +57,22 @@ const assertHex = (value: string, name: string, expectedLength: number) => {
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
   const {
+    claimer,
     utxos,
     proof,
     messageHash,
     addressHash,
     qbtcAddressHash,
     pubKeyHashSha256,
+    broadcaster,
   } = input
+
+  if (claimer.length === 0) {
+    throw new Error('claimer is required')
+  }
+  if (broadcaster.length === 0) {
+    throw new Error('broadcaster is required')
+  }
 
   if (utxos.length === 0 || utxos.length > 50) {
     throw new Error(`UTXOs count must be 1-50, got ${utxos.length}`)
@@ -103,7 +122,8 @@ const buildMsgClaimWithProof = (
     protoString(4, input.messageHash),
     protoString(5, input.addressHash),
     protoString(6, input.qbtcAddressHash),
-    protoString(7, input.pubKeyHashSha256)
+    protoString(7, input.pubKeyHashSha256),
+    protoString(9, input.broadcaster)
   )
 }
 
