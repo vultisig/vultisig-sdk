@@ -10,6 +10,7 @@ const validInput = {
   addressHash: 'cc'.repeat(20),
   qbtcAddressHash: 'dd'.repeat(32),
   pubKeyHashSha256: 'ee'.repeat(32),
+  broadcaster: 'qbtc1abc',
 }
 
 describe('validateClaimInput', () => {
@@ -99,6 +100,18 @@ describe('validateClaimInput', () => {
       validateClaimInput({ ...validInput, pubKeyHashSha256: 'aa'.repeat(16) })
     ).toThrow('pub_key_hash_sha256 must be 64 hex chars')
   })
+
+  it('rejects empty broadcaster', () => {
+    expect(() =>
+      validateClaimInput({ ...validInput, broadcaster: '' })
+    ).toThrow('broadcaster is required')
+  })
+
+  it('rejects empty claimer', () => {
+    expect(() => validateClaimInput({ ...validInput, claimer: '' })).toThrow(
+      'claimer is required'
+    )
+  })
 })
 
 describe('buildClaimTxBody', () => {
@@ -118,5 +131,14 @@ describe('buildClaimTxBody', () => {
     }
     const result = buildClaimTxBody(input)
     expect(result.length).toBeGreaterThan(0)
+  })
+
+  it('encodes broadcaster as proto field 9', () => {
+    const result = buildClaimTxBody({
+      ...validInput,
+      broadcaster: 'qbtc1broadcaster',
+    })
+    // Proto field 9 with wire type 2 (length-delimited) → tag byte 0x4a
+    expect(Array.from(result)).toContain(0x4a)
   })
 })
