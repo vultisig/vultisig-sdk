@@ -1,5 +1,27 @@
 # @vultisig/sdk
 
+## 0.23.0
+
+### Minor Changes
+
+- [#464](https://github.com/vultisig/vultisig-sdk/pull/464) [`a6db82f`](https://github.com/vultisig/vultisig-sdk/commit/a6db82fd103ea8eea01a084cc8fbd787367db437) Thanks [@neavra](https://github.com/neavra)! - feat(sdk/vault): `signMsgDeposit` for THORChain/MayaChain LP add/remove; sdk-cli dispatches LP memos through it
+
+  Adds `vault.signMsgDeposit({chain, amountBaseUnits, memo})` to `VaultBase`, building a `THORChainDeposit` cosmos message via the existing keysign pipeline (passes `isDeposit: true` through `getChainSpecific`). Memo is opaque pass-through — LP add (`+:POOL[:PAIRED]`), LP remove (`-:POOL:BPS[:ASSET]`), and any future deposit-style intent flow through the same surface.
+
+  sdk-cli's `signNonEvmServerTx` now dispatches THORChain/MayaChain MsgDeposit envelopes by memo prefix: `=:` continues to route through `vault.swap` (Phase D), `+:` and `-:` route through the new `signThorMsgDepositLp` → `vault.signMsgDeposit`. Unsupported prefixes (LOAN, BOND, etc.) throw `NotImplemented` with the offending memo in the error message. Phase E in the envelope-parity progression; previously these memos threw at `parseThorSwapMemo`.
+
+### Patch Changes
+
+- [#459](https://github.com/vultisig/vultisig-sdk/pull/459) [`fde60dc`](https://github.com/vultisig/vultisig-sdk/commit/fde60dcc9f9822e21c2dbaeaacb9afb45cff0955) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Deduplicate vault flows, example adapters, and server mocks; set jscpd threshold to 0%. Add `VaultErrorCode.OperationAborted` and typed errors in shared test mocks.
+
+## 0.22.7
+
+### Patch Changes
+
+- [#457](https://github.com/vultisig/vultisig-sdk/pull/457) [`680119e`](https://github.com/vultisig/vultisig-sdk/commit/680119e7392921b8aeaf859c85e811fb40a25054) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add regression tests and drift guards for Bitcoin PSBT compilation, ChainKind signing-input alignment, generated protobuf headers, and CLI agent action names aligned with AGENTS.md.
+
+- [#456](https://github.com/vultisig/vultisig-sdk/pull/456) [`b36eb62`](https://github.com/vultisig/vultisig-sdk/commit/b36eb62842051b8b2bae06f1e123a5ebcf6cad88) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Terra CW20 metadata resolution and build CW20 token sends as CosmWasm execute transfers.
+
 ## 0.22.6
 
 ### Patch Changes

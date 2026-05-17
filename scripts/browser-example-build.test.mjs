@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { existsSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -10,30 +10,134 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const browserExampleRoot = path.join(repoRoot, 'examples/browser')
 const requireFromBrowserExample = createRequire(path.join(repoRoot, 'examples/browser/package.json'))
 
+const isWin = process.platform === 'win32'
+
 /** Strip ANSI so Vite TTY output like `Local\u001b[22m:` still parses. */
 function stripAnsi(text) {
   return text.replace(/\u001b\[[\d;]*m/g, '')
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    shell: process.platform === 'win32',
-  })
-
-  assert.equal(
-    result.status,
-    0,
-    [`${command} ${args.join(' ')} failed`, result.stdout.trim(), result.stderr.trim()].filter(Boolean).join('\n\n')
-  )
+function quoteArg(arg) {
+  const s = String(arg)
+  if (/[\s"']/.test(s)) return `"${s.replaceAll('"', '\\"')}"`
+  return s
 }
 
+function formatShellCommand(command, args) {
+  return [command, ...args.map(quoteArg)].join(' ')
+}
+
+function tail(text, maxChars = 24_000) {
+  const t = text.trimEnd()
+  if (t.length <= maxChars) return t
+  return `…(truncated, showing last ${maxChars} chars)…\n${t.slice(-maxChars)}`
+}
+
+/**
+ * Run a child process with a wall-clock timeout, periodic heartbeat on stderr,
+ * and an error that names the full command plus recent stdout/stderr.
+ */
+async function runWithDiagnostics(command, args, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 180_000
+  const cwd = options.cwd ?? repoRoot
+  const fullCommand = formatShellCommand(command, args)
+  const label = options.label ?? fullCommand
+
+  const child = spawn(command, args, {
+    cwd,
+    shell: isWin,
+    detached: !isWin,
+    env: { ...process.env, ...options.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  let stdout = ''
+  let stderr = ''
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', chunk => {
+    stdout += chunk
+  })
+  child.stderr.on('data', chunk => {
+    stderr += chunk
+  })
+
+  const started = Date.now()
+  let timedOut = false
+  const heartbeat = setInterval(() => {
+    const elapsedSec = Math.round((Date.now() - started) / 1000)
+    console.error(`[browser-example-build.test] still running after ${elapsedSec}s: ${label}`)
+  }, 30_000)
+
+  const killTimer = setTimeout(() => {
+    timedOut = true
+    try {
+      if (isWin) child.kill()
+      else process.kill(-child.pid, 'SIGTERM')
+    } catch {
+      child.kill('SIGTERM')
+    }
+    setTimeout(() => {
+      try {
+        if (isWin) child.kill('SIGKILL')
+        else process.kill(-child.pid, 'SIGKILL')
+      } catch {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 10_000).unref?.()
+  }, timeoutMs)
+
+  try {
+    const { code, signal } = await new Promise((resolve, reject) => {
+      child.once('error', reject)
+      child.once('close', (exitCode, exitSignal) => {
+        resolve({ code: exitCode, signal: exitSignal })
+      })
+    })
+
+    const ok = code === 0 && !signal
+    if (ok) return
+
+    const outcome = timedOut
+      ? `timed out after ${timeoutMs}ms (process reported code=${code}, signal=${signal ?? 'none'})`
+      : `exited with code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}`
+
+    throw new Error(
+      [
+        `Child command failed: ${fullCommand}`,
+        `Outcome: ${outcome}`,
+        '',
+        '--- stdout (tail) ---',
+        tail(stdout),
+        '',
+        '--- stderr (tail) ---',
+        tail(stderr),
+      ].join('\n')
+    )
+  } finally {
+    clearTimeout(killTimer)
+    clearInterval(heartbeat)
+  }
+}
+
+test.after(async () => {
+  await runWithDiagnostics('yarn', ['build:shared'], {
+    timeoutMs: 300_000,
+    label: formatShellCommand('yarn', ['build:shared']) + ' (suite teardown: restore shared dist)',
+  })
+})
+
 function startDevServer() {
-  const child = spawn('yarn', ['workspace', '@vultisig/example-browser', 'dev', '--host', '127.0.0.1', '--port', '0'], {
+  const devArgs = ['workspace', '@vultisig/example-browser', 'dev', '--host', '127.0.0.1', '--port', '0']
+  const fullDevCommand = formatShellCommand('yarn', devArgs)
+  const child = spawn('yarn', devArgs, {
     cwd: repoRoot,
-    detached: process.platform !== 'win32',
-    shell: process.platform === 'win32',
+    detached: !isWin,
+    shell: isWin,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
@@ -44,7 +148,17 @@ function startDevServer() {
   const waitForUrl = new Promise((resolve, reject) => {
     const startTimeoutMs = 180_000
     const timeout = setTimeout(() => {
-      reject(new Error(`Timed out waiting for browser example dev server\n\n${output.trim()}`))
+      reject(
+        new Error(
+          [
+            `Timed out waiting for browser example dev server (${startTimeoutMs}ms).`,
+            `Child command: ${fullDevCommand}`,
+            '',
+            '--- recent combined stdout/stderr (tail) ---',
+            tail(output),
+          ].join('\n')
+        )
+      )
     }, startTimeoutMs)
 
     const onData = chunk => {
@@ -61,7 +175,17 @@ function startDevServer() {
     child.stderr.on('data', onData)
     child.once('exit', code => {
       clearTimeout(timeout)
-      reject(new Error(`Browser example dev server exited with ${code}\n\n${output.trim()}`))
+      reject(
+        new Error(
+          [
+            `Browser example dev server exited with code ${code}.`,
+            `Child command: ${fullDevCommand}`,
+            '',
+            '--- recent combined stdout/stderr (tail) ---',
+            tail(output),
+          ].join('\n')
+        )
+      )
     })
     child.once('error', error => {
       clearTimeout(timeout)
@@ -76,7 +200,7 @@ function startDevServer() {
       child.stderr.destroy()
       if (child.killed) return
 
-      if (process.platform === 'win32') {
+      if (isWin) {
         child.kill()
       } else {
         process.kill(-child.pid, 'SIGTERM')
@@ -93,17 +217,29 @@ async function assertWasmResponse(baseUrl, pathname) {
   assert.ok((await response.arrayBuffer()).byteLength > 0, `expected ${pathname} to have a non-empty body`)
 }
 
-test('browser example prepare recreates missing shared package artifacts', { timeout: 180_000 }, () => {
+test('browser example prepare recreates missing shared package artifacts', { timeout: 540_000 }, async () => {
   const mpcWasmDist = path.join(repoRoot, 'packages/mpc-wasm/dist')
   rmSync(mpcWasmDist, { recursive: true, force: true })
 
-  run('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'])
-
-  assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
+  try {
+    await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'], {
+      timeoutMs: 180_000,
+      label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk']),
+    })
+    assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
+  } finally {
+    await runWithDiagnostics('yarn', ['build:shared'], {
+      timeoutMs: 300_000,
+      label: formatShellCommand('yarn', ['build:shared']) + ' (restore after prepare test)',
+    })
+  }
 })
 
-test('browser example builds against the local SDK workspace package', { timeout: 180_000 }, () => {
-  run('yarn', ['workspace', '@vultisig/example-browser', 'build'])
+test('browser example builds against the local SDK workspace package', { timeout: 240_000 }, async () => {
+  await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'build'], {
+    timeoutMs: 180_000,
+    label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'build']),
+  })
 
   assert.match(requireFromBrowserExample.resolve('@vultisig/sdk'), /packages[/\\]sdk[/\\]dist/)
   assert.match(requireFromBrowserExample.resolve('@vultisig/sdk/vite'), /packages[/\\]sdk[/\\]dist[/\\]vite/)

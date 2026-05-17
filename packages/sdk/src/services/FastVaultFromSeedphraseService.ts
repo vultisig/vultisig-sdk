@@ -27,11 +27,11 @@ import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEn
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { DEFAULT_CHAINS } from '../constants'
 import type { SdkContext } from '../context/SdkContext'
 import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
+import { prepareSeedphraseImportPrelude } from '../seedphrase/prepareSeedphraseImportPrelude'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { ChainDiscoveryResult, CreateFastVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
@@ -82,7 +82,7 @@ export class FastVaultFromSeedphraseService {
     verificationRequired: boolean
     discoveredChains?: ChainDiscoveryResult[]
   }> {
-    const { mnemonic, name, password, email, signal, onProgress, onChainDiscovery } = options
+    const { mnemonic, name, password, email, signal, onProgress } = options
     const tssBatching = resolveTssBatching(this.context.config, options.tssBatching)
 
     const reportProgress = (step: VaultCreationStep) => {
@@ -92,52 +92,25 @@ export class FastVaultFromSeedphraseService {
       onProgress?.(step)
     }
 
-    // Step 1: Validate mnemonic
-    reportProgress({
-      step: 'initializing',
-      progress: 5,
-      message: 'Validating seedphrase...',
-    })
-
-    const validation = await this.validator.validate(mnemonic)
-    if (!validation.valid) {
-      throw new VaultError(VaultErrorCode.InvalidConfig, `Invalid mnemonic: ${validation.error}`)
-    }
-
-    // Step 2: Derive master keys
-    reportProgress({
-      step: 'initializing',
-      progress: 10,
-      message: 'Deriving master keys...',
-    })
-
-    const masterKeys = await this.keyDeriver.deriveMasterKeys(mnemonic)
-
-    // Step 3: Run optional chain discovery
-    let discoveredChains: ChainDiscoveryResult[] | undefined
-    let usePhantomSolanaPath = options.usePhantomSolanaPath ?? false
-
-    if (options.discoverChains) {
-      reportProgress({
-        step: 'fetching_balances',
-        progress: 15,
-        message: 'Discovering chains with balances...',
-      })
-
-      const discoveryResult = await this.discoveryService.discoverChains(mnemonic, {
-        config: { chains: options.chainsToScan },
-        onProgress: onChainDiscovery,
-      })
-      discoveredChains = discoveryResult.results
-      // Use discovered Phantom path preference unless explicitly set in options
-      if (options.usePhantomSolanaPath === undefined) {
-        usePhantomSolanaPath = discoveryResult.usePhantomSolanaPath
+    const { masterKeys, discoveredChains, usePhantomSolanaPath, chainsToImport } = await prepareSeedphraseImportPrelude(
+      {
+        mnemonic,
+        discoverChains: options.discoverChains,
+        chains: options.chains,
+        chainsToScan: options.chainsToScan,
+        usePhantomSolanaPath: options.usePhantomSolanaPath,
+        onChainDiscovery: options.onChainDiscovery,
+        validator: this.validator,
+        keyDeriver: this.keyDeriver,
+        discoveryService: this.discoveryService,
+        reportProgress,
+        progressLabels: {
+          validating: { progress: 5, message: 'Validating seedphrase...' },
+          derivingKeys: { progress: 10, message: 'Deriving master keys...' },
+          discoveringChains: { progress: 15, message: 'Discovering chains with balances...' },
+        },
       }
-    }
-
-    // Determine which chains to import
-    const chainsToImport =
-      options.chains ?? discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? DEFAULT_CHAINS
+    )
 
     // Step 4: Generate session parameters
     reportProgress({

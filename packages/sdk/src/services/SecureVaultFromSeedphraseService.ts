@@ -11,10 +11,7 @@
  * 7. Run per-chain key imports (DKLS or Schnorr based on chain type)
  * 8. Optionally discover chains with balances
  */
-import { create, toBinary } from '@bufbuild/protobuf'
 import type { Chain } from '@vultisig/core-chain/Chain'
-import { toCompressedString } from '@vultisig/core-chain/utils/protobuf/toCompressedString'
-import { getSevenZip } from '@vultisig/core-mpc/compression/getSevenZip'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
 import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
@@ -22,24 +19,23 @@ import { setKeygenComplete, waitForKeygenComplete } from '@vultisig/core-mpc/key
 import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
-import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { generateHexChainCode } from '@vultisig/core-mpc/utils/generateHexChainCode'
 import { generateHexEncryptionKey } from '@vultisig/core-mpc/utils/generateHexEncryptionKey'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { DEFAULT_CHAINS } from '../constants'
 import type { SdkContext } from '../context/SdkContext'
 import { randomUUID } from '../crypto'
 import { ChainDiscoveryService } from '../seedphrase/ChainDiscoveryService'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
+import { prepareSeedphraseImportPrelude } from '../seedphrase/prepareSeedphraseImportPrelude'
 import { SeedphraseValidator } from '../seedphrase/SeedphraseValidator'
 import type { ChainDiscoveryResult, CreateSecureVaultFromSeedphraseOptions } from '../seedphrase/types'
 import type { VaultCreationStep } from '../types'
 import { getChainBatchMessageIds, resolveTssBatching, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
+import { buildKeygenPairingQrPayload } from './buildKeygenPairingQrPayload'
+import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
 /**
  * SecureVaultFromSeedphraseService
@@ -80,101 +76,6 @@ export class SecureVaultFromSeedphraseService {
   }
 
   /**
-   * Generate QR code payload for mobile app pairing (key import)
-   *
-   * Creates a compressed protobuf payload in the format:
-   * vultisig://?type=NewVault&tssType=Keygen&jsonData=<compressed_base64>
-   */
-  private async generateQRPayload(params: {
-    sessionId: string
-    hexEncryptionKey: string
-    hexChainCode: string
-    localPartyId: string
-    vaultName: string
-    chains: string[]
-    tssBatching?: boolean
-  }): Promise<string> {
-    // Create KeygenMessage protobuf
-    // For key import, include chains field so mobile apps know which chains to import
-    const keygenMessage = create(KeygenMessageSchema, {
-      sessionId: params.sessionId,
-      hexChainCode: params.hexChainCode,
-      serviceName: params.localPartyId,
-      encryptionKeyHex: params.hexEncryptionKey,
-      useVultisigRelay: true,
-      vaultName: params.vaultName,
-      libType: LibType.KEYIMPORT,
-      chains: params.chains,
-    })
-
-    // Serialize to binary
-    const binary = toBinary(KeygenMessageSchema, keygenMessage)
-
-    // Compress with 7-zip (LZMA)
-    const sevenZip = await getSevenZip()
-    const compressedData = toCompressedString({ sevenZip, binary })
-
-    // Build URL for mobile app
-    const tssBatchingParam = params.tssBatching ? '&tssBatching=1' : ''
-    const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${encodeURIComponent(compressedData)}${tssBatchingParam}`
-
-    return qrPayload
-  }
-
-  /**
-   * Wait for peer devices to join the session
-   */
-  private async waitForPeers(
-    sessionId: string,
-    localPartyId: string,
-    requiredDevices: number,
-    signal?: AbortSignal,
-    onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
-  ): Promise<string[]> {
-    const maxWaitTime = 300000 // 5 minutes for multi-device setup
-    const checkInterval = 2000
-    const startTime = Date.now()
-    let lastJoinedCount = 0
-
-    while (Date.now() - startTime < maxWaitTime) {
-      // Check for abort
-      if (signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      try {
-        const url = `${this.relayUrl}/${sessionId}`
-        const allPeers = await queryUrl<string[]>(url)
-        const uniquePeers = withoutDuplicates(allPeers)
-
-        // Notify about new devices
-        if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-          const newDevices = uniquePeers.slice(lastJoinedCount)
-          for (const device of newDevices) {
-            onDeviceJoined(device, uniquePeers.length, requiredDevices)
-          }
-          lastJoinedCount = uniquePeers.length
-        }
-
-        // Check if we have enough devices
-        if (uniquePeers.length >= requiredDevices) {
-          // Must match JoinSecureVaultService: sorted committee so all parties use identical order
-          return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-        }
-
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-      } catch {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-      }
-    }
-
-    throw new VaultError(
-      VaultErrorCode.Timeout,
-      `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
-    )
-  }
-
-  /**
    * Create a SecureVault from a seedphrase
    *
    * @param options - Creation options
@@ -195,7 +96,6 @@ export class SecureVaultFromSeedphraseService {
       onProgress,
       onQRCodeReady,
       onDeviceJoined,
-      onChainDiscovery,
     } = options
     const tssBatching = resolveTssBatching(this.context.config, options.tssBatching)
 
@@ -216,52 +116,25 @@ export class SecureVaultFromSeedphraseService {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'Threshold cannot exceed number of devices')
     }
 
-    // Step 1: Validate mnemonic
-    reportProgress({
-      step: 'initializing',
-      progress: 5,
-      message: 'Validating seedphrase...',
-    })
-
-    const validation = await this.validator.validate(mnemonic)
-    if (!validation.valid) {
-      throw new VaultError(VaultErrorCode.InvalidConfig, `Invalid mnemonic: ${validation.error}`)
-    }
-
-    // Step 2: Derive master keys
-    reportProgress({
-      step: 'initializing',
-      progress: 10,
-      message: 'Deriving master keys...',
-    })
-
-    const masterKeys = await this.keyDeriver.deriveMasterKeys(mnemonic)
-
-    // Step 3: Run optional chain discovery
-    let discoveredChains: ChainDiscoveryResult[] | undefined
-    let usePhantomSolanaPath = options.usePhantomSolanaPath ?? false
-
-    if (options.discoverChains) {
-      reportProgress({
-        step: 'fetching_balances',
-        progress: 15,
-        message: 'Discovering chains with balances...',
-      })
-
-      const discoveryResult = await this.discoveryService.discoverChains(mnemonic, {
-        config: { chains: options.chainsToScan },
-        onProgress: onChainDiscovery,
-      })
-      discoveredChains = discoveryResult.results
-      // Use discovered Phantom path preference unless explicitly set in options
-      if (options.usePhantomSolanaPath === undefined) {
-        usePhantomSolanaPath = discoveryResult.usePhantomSolanaPath
+    const { masterKeys, discoveredChains, usePhantomSolanaPath, chainsToImport } = await prepareSeedphraseImportPrelude(
+      {
+        mnemonic,
+        discoverChains: options.discoverChains,
+        chains: options.chains,
+        chainsToScan: options.chainsToScan,
+        usePhantomSolanaPath: options.usePhantomSolanaPath,
+        onChainDiscovery: options.onChainDiscovery,
+        validator: this.validator,
+        keyDeriver: this.keyDeriver,
+        discoveryService: this.discoveryService,
+        reportProgress,
+        progressLabels: {
+          validating: { progress: 5, message: 'Validating seedphrase...' },
+          derivingKeys: { progress: 10, message: 'Deriving master keys...' },
+          discoveringChains: { progress: 15, message: 'Discovering chains with balances...' },
+        },
       }
-    }
-
-    // Determine which chains to import
-    const chainsToImport =
-      options.chains ?? discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? DEFAULT_CHAINS
+    )
 
     // Step 4: Generate session parameters
     reportProgress({
@@ -282,12 +155,13 @@ export class SecureVaultFromSeedphraseService {
       message: 'Generating QR code for device pairing...',
     })
 
-    const qrPayload = await this.generateQRPayload({
+    const qrPayload = await buildKeygenPairingQrPayload({
       sessionId,
       hexEncryptionKey,
       hexChainCode,
       localPartyId,
       vaultName: name,
+      libType: LibType.KEYIMPORT,
       chains: chainsToImport,
       tssBatching,
     })
@@ -317,12 +191,12 @@ export class SecureVaultFromSeedphraseService {
       message: `Waiting for ${devices} devices to join...`,
     })
 
-    const allDevices = await this.waitForPeers(
+    const allDevices = await waitForRelayPeerCommittee({
+      relayUrl: this.relayUrl,
       sessionId,
-      localPartyId,
-      devices,
+      requiredDevices: devices,
       signal,
-      (deviceId, total, required) => {
+      onDeviceJoined: (deviceId, total, required) => {
         if (onDeviceJoined) {
           onDeviceJoined(deviceId, total, required)
         }
@@ -331,8 +205,13 @@ export class SecureVaultFromSeedphraseService {
           progress: 30 + Math.floor((total / required) * 15),
           message: `${total}/${required} devices joined...`,
         })
-      }
-    )
+      },
+      createTimeoutError: (lastJoinedCount, requiredDevices) =>
+        new VaultError(
+          VaultErrorCode.Timeout,
+          `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
+        ),
+    })
 
     // Step 8: Start MPC session
     reportProgress({
