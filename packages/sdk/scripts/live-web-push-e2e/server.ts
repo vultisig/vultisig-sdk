@@ -161,105 +161,127 @@ async function main(): Promise<void> {
     console.log('')
   })
 
-  const server = createServer(async (req, res) => {
+  const handleAckRequest = async (evt: string | null, req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (evt === 'push') {
+      acks.push = true
+      try {
+        const raw = await readBody(req)
+        if (raw.trim()) {
+          const o = JSON.parse(raw) as { title?: unknown; swShowNotificationOk?: unknown }
+          if (typeof o.title === 'string') verification.lastPushTitle = o.title
+          if (typeof o.swShowNotificationOk === 'boolean')
+            verification.lastSwShowNotificationOk = o.swShowNotificationOk
+        }
+      } catch {
+        /* ignore malformed body */
+      }
+    } else if (evt === 'click') {
+      acks.click = true
+    }
+    res.writeHead(204).end()
+  }
+
+  const writeVerification = (res: ServerResponse): void => {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        pushAck: acks.push,
+        clickAck: acks.click,
+        wsReceived: verification.wsReceived,
+        wsVaultName: verification.wsVaultName,
+        wsQrPrefix: verification.wsQrPrefix,
+        lastPushTitle: verification.lastPushTitle,
+        lastSwShowNotificationOk: verification.lastSwShowNotificationOk,
+        wsConnectionState: push.connectionState,
+        successMode,
+      })
+    )
+  }
+
+  const writeConfig = (res: ServerResponse): void => {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        vaultId,
+        notificationUrl,
+        browserPartyName,
+      })
+    )
+  }
+
+  const proxyVapidPublicKey = async (res: ServerResponse): Promise<void> => {
+    const r = await fetch(`${notificationUrl}/vapid-public-key`)
+    const text = await r.text()
+    const ct = r.headers.get('content-type') || 'application/json'
+    res.writeHead(r.status, { 'Content-Type': ct })
+    res.end(text)
+  }
+
+  const registerBrowser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const raw = await readBody(req)
+    const body = JSON.parse(raw) as { subscription?: { endpoint: string; keys?: { p256dh: string; auth: string } } }
+    if (!body.subscription?.endpoint) {
+      res.writeHead(400).end('missing subscription')
+      return
+    }
+    const token = JSON.stringify(body.subscription)
+    await push.registerDevice({
+      vaultId,
+      partyName: browserPartyName,
+      token,
+      deviceType: 'web',
+    })
+    if (wsToken !== token) {
+      push.disconnect()
+      push.connect({ vaultId, partyName: browserPartyName, token })
+      wsToken = token
+      console.log('Node: connected WebSocket for live verification (same token as browser registration).')
+    }
+    res.writeHead(200).end('ok')
+  }
+
+  const triggerNotification = async (res: ServerResponse): Promise<void> => {
+    await push.notifyVaultMembers({
+      vaultId,
+      vaultName: notifyVaultName,
+      localPartyId: SENDER_PARTY,
+      qrCodeData: `sdk-live-e2e:${Date.now()}`,
+    })
+    res.writeHead(200).end('ok')
+  }
+
+  const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url || '/', 'http://127.0.0.1')
 
     try {
       if (req.method === 'POST' && url.pathname === '/ack') {
-        const evt = url.searchParams.get('evt')
-        if (evt === 'push') {
-          acks.push = true
-          try {
-            const raw = await readBody(req)
-            if (raw.trim()) {
-              const o = JSON.parse(raw) as { title?: unknown; swShowNotificationOk?: unknown }
-              if (typeof o.title === 'string') verification.lastPushTitle = o.title
-              if (typeof o.swShowNotificationOk === 'boolean') {
-                verification.lastSwShowNotificationOk = o.swShowNotificationOk
-              }
-            }
-          } catch {
-            /* ignore malformed body */
-          }
-        } else if (evt === 'click') {
-          acks.click = true
-        }
-        res.writeHead(204).end()
+        await handleAckRequest(url.searchParams.get('evt'), req, res)
         return
       }
 
       if (req.method === 'GET' && url.pathname === '/api/verification') {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            pushAck: acks.push,
-            clickAck: acks.click,
-            wsReceived: verification.wsReceived,
-            wsVaultName: verification.wsVaultName,
-            wsQrPrefix: verification.wsQrPrefix,
-            lastPushTitle: verification.lastPushTitle,
-            lastSwShowNotificationOk: verification.lastSwShowNotificationOk,
-            wsConnectionState: push.connectionState,
-            successMode,
-          })
-        )
+        writeVerification(res)
         return
       }
 
       if (req.method === 'GET' && url.pathname === '/config') {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(
-          JSON.stringify({
-            vaultId,
-            notificationUrl,
-            browserPartyName,
-          })
-        )
+        writeConfig(res)
         return
       }
 
       /** Same-origin VAPID fetch (avoids browser CORS / wrong base URL issues) */
       if (req.method === 'GET' && url.pathname === '/api/vapid-public-key') {
-        const r = await fetch(`${notificationUrl}/vapid-public-key`)
-        const text = await r.text()
-        const ct = r.headers.get('content-type') || 'application/json'
-        res.writeHead(r.status, { 'Content-Type': ct })
-        res.end(text)
+        await proxyVapidPublicKey(res)
         return
       }
 
       if (req.method === 'POST' && url.pathname === '/api/register-browser') {
-        const raw = await readBody(req)
-        const body = JSON.parse(raw) as { subscription?: { endpoint: string; keys?: { p256dh: string; auth: string } } }
-        if (!body.subscription?.endpoint) {
-          res.writeHead(400).end('missing subscription')
-          return
-        }
-        const token = JSON.stringify(body.subscription)
-        await push.registerDevice({
-          vaultId,
-          partyName: browserPartyName,
-          token,
-          deviceType: 'web',
-        })
-        if (wsToken !== token) {
-          push.disconnect()
-          push.connect({ vaultId, partyName: browserPartyName, token })
-          wsToken = token
-          console.log('Node: connected WebSocket for live verification (same token as browser registration).')
-        }
-        res.writeHead(200).end('ok')
+        await registerBrowser(req, res)
         return
       }
 
       if (req.method === 'POST' && url.pathname === '/api/trigger-notify') {
-        await push.notifyVaultMembers({
-          vaultId,
-          vaultName: notifyVaultName,
-          localPartyId: SENDER_PARTY,
-          qrCodeData: `sdk-live-e2e:${Date.now()}`,
-        })
-        res.writeHead(200).end('ok')
+        await triggerNotification(res)
         return
       }
 
@@ -273,6 +295,10 @@ async function main(): Promise<void> {
       const msg = e instanceof Error ? e.message : String(e)
       if (!res.headersSent) res.writeHead(500).end(msg)
     }
+  }
+
+  const server = createServer((req, res) => {
+    void handleRequest(req, res)
   })
 
   const port = Number(process.env.PUSH_E2E_PORT || '0') || 0
