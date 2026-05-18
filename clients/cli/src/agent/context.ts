@@ -10,6 +10,35 @@ import { Chain } from '@vultisig/sdk'
 import type { BalanceInfo, CoinInfo, MessageContext } from './types'
 
 /**
+ * Set `context.chain_public_keys` from the vault's per-chain hardened-derived
+ * pubkeys, if any. KeyImport/seedphrase vaults carry these for chains whose
+ * address can't be derived from the root ECDSA key (Solana, Sui, Polkadot,
+ * Terra, …); standard MPC vaults have none.
+ *
+ * agent-backend reads this off `req.Context.ChainPublicKeys`, persists it on
+ * the conversation, and forwards it to MCP tools so derivation uses the
+ * hardened path instead of the wrong BIP32 fallback. The field is left unset
+ * (not `{}`) when there's nothing to send so `omitempty` semantics hold and
+ * the backend's "no chain keys" branch is taken.
+ */
+function applyChainPublicKeys(vault: VaultBase, context: MessageContext): void {
+  const raw = vault.data.chainPublicKeys
+  if (!raw) return
+
+  const serialized: Record<string, string> = {}
+  for (const chain of Object.keys(raw)) {
+    const pubkey = (raw as Record<string, unknown>)[chain]
+    if (typeof pubkey === 'string' && pubkey.length > 0) {
+      serialized[chain] = pubkey
+    }
+  }
+
+  if (Object.keys(serialized).length > 0) {
+    context.chain_public_keys = serialized
+  }
+}
+
+/**
  * Build the full message context from vault state.
  * This is sent with each message to give the AI agent full visibility into the wallet.
  */
@@ -19,6 +48,8 @@ export async function buildMessageContext(vault: VaultBase): Promise<MessageCont
     vault_name: vault.name,
     mldsa_public_key: vault.publicKeyMldsa,
   }
+
+  applyChainPublicKeys(vault, context)
 
   // Gather addresses for all active chains
   try {
@@ -102,6 +133,8 @@ export async function buildMinimalContext(vault: VaultBase): Promise<MessageCont
     vault_address: vault.publicKeys.ecdsa,
     vault_name: vault.name,
   }
+
+  applyChainPublicKeys(vault, context)
 
   try {
     const chains = vault.chains
