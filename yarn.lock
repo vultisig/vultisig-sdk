@@ -11171,15 +11171,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint-plugin-storybook@npm:^10.3.0":
-  version: 10.3.5
-  resolution: "eslint-plugin-storybook@npm:10.3.5"
+"eslint-plugin-storybook@npm:^10.4.0":
+  version: 10.4.0
+  resolution: "eslint-plugin-storybook@npm:10.4.0"
   dependencies:
     "@typescript-eslint/utils": "npm:^8.48.0"
   peerDependencies:
     eslint: ">=8"
-    storybook: ^10.3.5
-  checksum: 10c0/87e59a052b1006b9d1047388ffeedf12bb74d1e58dea01644c20606f79eaa91734a7fda9ab35ebf8fe76c7ab3875a07619c0a6d85e28cce95197cec19f6c7383
+    storybook: ^10.4.0
+  checksum: 10c0/70391c7a8896990e091432cf58a90eaf01823d72b16fdf7c4c6e72a0466bc2ad45c24bad41b3da8e205a8db23a21f0c0b0d32ad7be01d1e7c26ee52b24bbcf99
   languageName: node
   linkType: hard
 
@@ -21078,7 +21078,7 @@ __metadata:
     eslint-plugin-react-hooks: "npm:^7.0.1"
     eslint-plugin-simple-import-sort: "npm:^13.0.0"
     eslint-plugin-sonarjs: "npm:^4.0.3"
-    eslint-plugin-storybook: "npm:^10.3.0"
+    eslint-plugin-storybook: "npm:^10.4.0"
     eslint-plugin-unused-imports: "npm:^4.4.1"
     globals: "npm:^17.6.0"
     husky: "npm:^9.1.7"
