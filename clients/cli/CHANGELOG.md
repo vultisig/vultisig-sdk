@@ -1,5 +1,19 @@
 # @vultisig/cli
 
+## 0.24.1
+
+### Patch Changes
+
+- [#481](https://github.com/vultisig/vultisig-sdk/pull/481) [`4c98524`](https://github.com/vultisig/vultisig-sdk/commit/4c9852427abccd276759927f990bf22a7ef50513) Thanks [@neavra](https://github.com/neavra)! - agent: forward vault `chain_public_keys` in the chat request context
+
+  The CLI agent client now sends the vault's per-chain hardened-derived public
+  keys (`vault.data.chainPublicKeys`) to agent-backend, nested in the message
+  `context` as `chain_public_keys`. This matches agent-backend's
+  `MessageContext.ChainPublicKeys` contract and closes the last parity gap with
+  vultiagent-app: hardened-derivation chains (Solana, Sui, Polkadot, Terra) now
+  get the correct address via the CLI agent path instead of the fallback BIP32
+  derivation. Standard MPC vaults omit the field entirely (no empty `{}`).
+
 ## 0.24.0
 
 ### Patch Changes
