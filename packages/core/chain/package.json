@@ -1695,7 +1695,7 @@
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
-    "@trustwallet/wallet-core": "^4.6.7",
+    "@trustwallet/wallet-core": "^4.6.9",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-utils": "0.10.1",
     "bip32": "^5.0.1",
