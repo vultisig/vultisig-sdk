@@ -1,5 +1,19 @@
 # @vultisig/core-chain
 
+## 2.0.0
+
+### Major Changes
+
+- [#478](https://github.com/vultisig/vultisig-sdk/pull/478) [`2174118`](https://github.com/vultisig/vultisig-sdk/commit/2174118523eacfb97e04ecfa8de96f22059afe99) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - qbtc: add required `broadcaster` field to `BuildMsgClaimWithProofInput` (proto field 9). Mirrors the chain-side signer rework in btcq-org/qbtc#171 - `claimer` is now payload-only (mint destination), while `broadcaster` is the cosmos tx signer. Callers must populate `broadcaster` (typically equal to `claimer` for wallet flows where the user's own MLDSA key signs the tx).
+
+  BREAKING CHANGE: `BuildMsgClaimWithProofInput` now requires a new `broadcaster: string` field. Existing callers will fail at TypeScript compile-time (or runtime if TS is bypassed) until updated. For wallet flows pass `broadcaster === claimer`.
+
+### Patch Changes
+
+- [#467](https://github.com/vultisig/vultisig-sdk/pull/467) [`2d85653`](https://github.com/vultisig/vultisig-sdk/commit/2d85653c23379bc39bb579acf83d7998070b9ed4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Discover non-zero EVM tokens even when OneInch metadata lacks a logo or CoinGecko provider, with on-chain metadata fallback when token metadata is missing.
+
+- [#474](https://github.com/vultisig/vultisig-sdk/pull/474) [`37c2f82`](https://github.com/vultisig/vultisig-sdk/commit/37c2f82379725ac4ac4d63679afea5c3ac1b7683) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Refresh vulnerable dependency paths for high-severity audit cleanup.
+
 ## 1.7.1
 
 ### Patch Changes
