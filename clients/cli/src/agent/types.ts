@@ -123,6 +123,13 @@ export type MessageContext = {
   addresses?: Record<string, string>
   coins?: CoinInfo[]
   address_book?: AddressBookEntry[]
+  // Per-chain hardened-derived public keys for KeyImport/seedphrase vaults
+  // (Solana, Sui, Polkadot, Terra, …) whose addresses can't be derived from
+  // the root ECDSA key alone. Keys are Chain enum names, values hex pubkeys.
+  // agent-backend reads this from req.Context.ChainPublicKeys, persists it on
+  // the conversation, and forwards it to MCP tools so address derivation uses
+  // the hardened path. Omitted entirely for standard MPC vaults.
+  chain_public_keys?: Record<string, string>
   // Client-side tool results from the previous turn. Post-PR-#119 return
   // channel (replaces top-level action_result).
   recent_actions?: RecentAction[]
