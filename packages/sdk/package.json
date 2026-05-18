@@ -201,7 +201,7 @@
     "event-target-polyfill": "^0.0.3",
     "events": "^3.3.0",
     "i18next": "^26.0.8",
-    "i18next-http-backend": "^3.0.2",
+    "i18next-http-backend": "^4.0.0",
     "isomorphic-fetch": "^3.0.0",
     "node-fetch": "^3.3.2",
     "path-browserify": "^1.0.1",
