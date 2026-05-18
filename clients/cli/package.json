@@ -21,10 +21,11 @@
     "cli:interactive": "npx tsx src/index.ts --interactive",
     "repl": "npx tsx src/index.ts --interactive",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude 'tests/e2e/**'",
-    "test:watch": "vitest --exclude 'tests/e2e/**'",
+    "test": "vitest run --exclude 'tests/e2e/**' --exclude 'tests/fund-safety/**'",
+    "test:watch": "vitest --exclude 'tests/e2e/**' --exclude 'tests/fund-safety/**'",
     "test:e2e": "vitest run tests/e2e/",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test:fund-safety": "FUND_SAFETY_E2E=1 vitest run tests/fund-safety/"
   },
   "keywords": [
     "vultisig",
