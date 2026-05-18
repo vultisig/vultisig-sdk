@@ -36,8 +36,7 @@ function jsRelToImportPath(rel) {
   return `./dist/${rel}`
 }
 
-export function applySharedExports(packageJsonPath, distDir) {
-  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+export function generateSharedExports(distDir) {
   const byKey = new Map()
 
   walkJsFiles(distDir, rel => {
@@ -53,9 +52,7 @@ export function applySharedExports(packageJsonPath, distDir) {
 
   byKey.set('./package.json', './package.json')
 
-  const exportsField = Object.fromEntries(
-    [...byKey.entries()].sort(([a], [b]) => a.localeCompare(b))
-  )
+  const exportsField = Object.fromEntries([...byKey.entries()].sort(([a], [b]) => a.localeCompare(b)))
 
   const sevenShim = path.join(distDir, 'compression/getSevenZip.js')
   const sevenBrowser = path.join(distDir, 'compression/getSevenZip.browser.js')
@@ -72,6 +69,96 @@ export function applySharedExports(packageJsonPath, distDir) {
     }
   }
 
-  pkg.exports = exportsField
+  return exportsField
+}
+
+function readPackageJson(packageJsonPath) {
+  return JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+}
+
+function exportValueKey(value) {
+  return JSON.stringify(value)
+}
+
+export function diffSharedExports(packageJsonPath, distDir) {
+  const pkg = readPackageJson(packageJsonPath)
+  const actual = pkg.exports ?? {}
+  const expected = generateSharedExports(distDir)
+  const actualKeys = new Set(Object.keys(actual))
+  const expectedKeys = new Set(Object.keys(expected))
+
+  const missing = Object.keys(expected).filter(key => !actualKeys.has(key))
+  const extra = Object.keys(actual).filter(key => !expectedKeys.has(key))
+  const mismatched = Object.keys(expected)
+    .filter(key => actualKeys.has(key))
+    .filter(key => exportValueKey(actual[key]) !== exportValueKey(expected[key]))
+    .map(key => ({ key, actual: actual[key], expected: expected[key] }))
+
+  return {
+    packageJsonPath,
+    missing,
+    extra,
+    mismatched,
+  }
+}
+
+export function hasSharedExportDiff(diff) {
+  return diff.missing.length > 0 || diff.extra.length > 0 || diff.mismatched.length > 0
+}
+
+function formatExportValue(value) {
+  return JSON.stringify(value)
+}
+
+function formatSharedExportDiff(diff, { relativeTo = process.cwd(), regenerateCommand = 'yarn build:shared' } = {}) {
+  const packagePath = path.relative(relativeTo, diff.packageJsonPath)
+  const lines = [
+    `[shared-exports] ${packagePath} has stale generated exports.`,
+    `Run \`${regenerateCommand}\` to regenerate shared dist files and package export maps.`,
+  ]
+
+  if (diff.missing.length > 0) {
+    lines.push('', 'Missing exports:')
+    for (const key of diff.missing) {
+      lines.push(`  + ${key}`)
+    }
+  }
+
+  if (diff.extra.length > 0) {
+    lines.push('', 'Extra exports:')
+    for (const key of diff.extra) {
+      lines.push(`  - ${key}`)
+    }
+  }
+
+  if (diff.mismatched.length > 0) {
+    lines.push('', 'Mismatched exports:')
+    for (const { key, actual, expected } of diff.mismatched) {
+      lines.push(`  * ${key}`)
+      lines.push(`    expected: ${formatExportValue(expected)}`)
+      lines.push(`    actual:   ${formatExportValue(actual)}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+export function checkSharedExports(packageJsonPath, distDir, options) {
+  const message = getSharedExportDiffMessage(packageJsonPath, distDir, options)
+  if (message) {
+    throw new Error(message)
+  }
+}
+
+export function getSharedExportDiffMessage(packageJsonPath, distDir, options) {
+  const diff = diffSharedExports(packageJsonPath, distDir)
+  if (!hasSharedExportDiff(diff)) return null
+
+  return formatSharedExportDiff(diff, options)
+}
+
+export function applySharedExports(packageJsonPath, distDir) {
+  const pkg = readPackageJson(packageJsonPath)
+  pkg.exports = generateSharedExports(distDir)
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
 }
