@@ -66,7 +66,7 @@
     "knip": "knip --config .config/knip.json",
     "knip:fix": "knip --config .config/knip.json --fix --allow-remove-files",
     "quality:architecture": "depcruise --config .config/dependency-cruiser.cjs --output-type err .",
-    "quality:audit": "yarn npm audit --recursive --all --severity critical",
+    "quality:audit": "yarn npm audit --recursive --all --severity high",
     "quality:complexity": "node scripts/run-eslint.mjs --config .config/eslint-health.config.mjs 'packages/sdk/**/*.{js,jsx,ts,tsx}' 'packages/rujira/**/*.{js,jsx,ts,tsx}' 'packages/client-shared/**/*.{js,jsx,ts,tsx}' 'packages/mpc-types/src/**/*.ts' 'packages/core/mpc/**/*.ts' 'clients/**/*.{js,jsx,ts,tsx}' 'examples/**/*.{js,jsx,ts,tsx}'",
     "quality:docs": "yarn quality:docs:markdown && yarn quality:docs:links",
     "quality:docs:links": "git ls-files '*.md' ':!:docs/api/**' ':!:tasks/**' ':!:packages/**/CHANGELOG.md' ':!:clients/**/CHANGELOG.md' | xargs -n 1 markdown-link-check -q -c .config/markdown-link-check.json",
