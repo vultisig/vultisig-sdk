@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-electron",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -19,7 +19,7 @@
     "@vultisig/examples-shared": "workspace:*",
     "@vultisig/sdk": "workspace:*",
     "qrcode.react": "^4.2.0",
-    "react": "^19.2.4",
+    "react": "^19.2.6",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {

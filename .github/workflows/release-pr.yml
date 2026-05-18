@@ -46,7 +46,7 @@ jobs:
 
       - name: Create/Update Version PR
         if: steps.changesets-check.outputs.exists == 'true'
-        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1
+        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1
         with:
           version: yarn changeset:version
           title: "chore: version packages"
