@@ -161,7 +161,7 @@
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.4.0",
     "secretlint": "^13.0.0",
-    "syncpack": "^14.2.0",
+    "syncpack": "^15.2.0",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.17",
     "typescript": "^6.0.3",
