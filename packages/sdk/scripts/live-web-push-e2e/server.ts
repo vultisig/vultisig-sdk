@@ -219,7 +219,13 @@ async function main(): Promise<void> {
 
   const registerBrowser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const raw = await readBody(req)
-    const body = JSON.parse(raw) as { subscription?: { endpoint: string; keys?: { p256dh: string; auth: string } } }
+    let body: { subscription?: { endpoint: string; keys?: { p256dh: string; auth: string } } }
+    try {
+      body = JSON.parse(raw) as { subscription?: { endpoint: string; keys?: { p256dh: string; auth: string } } }
+    } catch {
+      res.writeHead(400).end('invalid JSON')
+      return
+    }
     if (!body.subscription?.endpoint) {
       res.writeHead(400).end('missing subscription')
       return
@@ -251,9 +257,9 @@ async function main(): Promise<void> {
   }
 
   const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const url = new URL(req.url || '/', 'http://127.0.0.1')
-
     try {
+      const url = new URL(req.url || '/', 'http://127.0.0.1')
+
       if (req.method === 'POST' && url.pathname === '/ack') {
         await handleAckRequest(url.searchParams.get('evt'), req, res)
         return

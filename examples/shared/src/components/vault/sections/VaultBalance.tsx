@@ -65,9 +65,14 @@ async function loadBalanceEntries(
       entries.push({ chain, balance })
 
       if (includeTokens) {
-        const tokenResult = await loadTokenBalances(sdk, vault.id, chain, signal)
-        entries.push(...tokenResult.entries)
-        tokenFailures += tokenResult.failures
+        try {
+          const tokenResult = await loadTokenBalances(sdk, vault.id, chain, signal)
+          entries.push(...tokenResult.entries)
+          tokenFailures += tokenResult.failures
+        } catch (err) {
+          console.error(`Failed to load tokens for ${chain}:`, err)
+          tokenFailures += 1
+        }
       }
     } catch (err) {
       console.error(`Failed to get balance for ${chain}:`, err)
