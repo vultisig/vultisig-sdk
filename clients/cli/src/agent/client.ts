@@ -149,7 +149,11 @@ export class AgentClient {
     req: SendMessageRequest,
     callbacks: {
       onTextDelta?: (delta: string) => void
-      onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // `ok` is set only on the terminal ('done') frame: false when the
+      // tool's output payload is an error ({"status":"error"} / {"error"}),
+      // true on a clean result, undefined when the stream carries no output
+      // (older backends) so the consumer can fall back to its prior default.
+      onToolProgress?: (tool: string, status: 'running' | 'done', label?: string, ok?: boolean) => void
       // Fired for `tool-input-available` with `clientExecuted: true`.
       // Client runs the tool and ships the result via recent_actions.
       // Sync-only: callers must dispatch async work themselves (push to a
@@ -267,7 +271,11 @@ export class AgentClient {
     result: SSEStreamResult,
     callbacks: {
       onTextDelta?: (delta: string) => void
-      onToolProgress?: (tool: string, status: 'running' | 'done', label?: string) => void
+      // `ok` is set only on the terminal ('done') frame: false when the
+      // tool's output payload is an error ({"status":"error"} / {"error"}),
+      // true on a clean result, undefined when the stream carries no output
+      // (older backends) so the consumer can fall back to its prior default.
+      onToolProgress?: (tool: string, status: 'running' | 'done', label?: string, ok?: boolean) => void
       // Fired for `tool-input-available` with `clientExecuted: true`.
       // Client runs the tool and ships the result via recent_actions.
       // Sync-only: callers must dispatch async work themselves (push to a
@@ -338,8 +346,29 @@ export class AgentClient {
             callbacks.onClientSideToolCall(callId, toolName, input)
           }
 
+          // On the terminal frame, derive real success from the tool's
+          // output payload. Server-executed tools (execute_send,
+          // execute_swap, …) signal failure via {"status":"error"} or an
+          // {"error":...} field while still emitting tool-output-available;
+          // without this the CLI reported every finished tool as success
+          // (fund-safety bug #B — a failed send looked successful).
+          let ok: boolean | undefined
+          if (status === 'done') {
+            const out = parsed.output
+            if (out != null) {
+              if (typeof out === 'object') {
+                const o = out as Record<string, unknown>
+                ok = !(o.status === 'error' || 'error' in o)
+              } else if (typeof out === 'string') {
+                ok = !(out.includes('"status":"error"') || /^\s*error\b/i.test(out))
+              } else {
+                ok = true
+              }
+            }
+          }
+
           if (status && toolName) {
-            callbacks.onToolProgress?.(toolName, status, label)
+            callbacks.onToolProgress?.(toolName, status, label, ok)
           }
           if (status === 'done' && callId) toolNameByCallId.delete(callId)
           break

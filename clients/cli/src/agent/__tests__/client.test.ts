@@ -230,8 +230,9 @@ describe('AgentClient.sendMessageStream', () => {
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
 
     expect(onToolProgress).toHaveBeenCalledTimes(2)
-    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', undefined)
-    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined)
+    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', undefined, undefined)
+    // clean {"ok":true} output (no error markers) → ok=true on the done frame
+    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined, true)
   })
 
   it('legacy tool_progress events with inline status still route unchanged', async () => {
@@ -246,8 +247,9 @@ describe('AgentClient.sendMessageStream', () => {
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
 
     expect(onToolProgress).toHaveBeenCalledTimes(2)
-    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', 'fetching')
-    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined)
+    expect(onToolProgress).toHaveBeenNthCalledWith(1, 'get_balance', 'running', 'fetching', undefined)
+    // legacy 'done' with no output payload → ok=undefined (consumer falls back)
+    expect(onToolProgress).toHaveBeenNthCalledWith(2, 'get_balance', 'done', undefined, undefined)
   })
 
   it('ignores v1 tool_progress frames where tool is not a string', async () => {
@@ -271,5 +273,52 @@ describe('AgentClient.sendMessageStream', () => {
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
 
     expect(onError).toHaveBeenCalledWith('boom', AgentErrorCode.UNKNOWN_ERROR)
+  })
+})
+
+describe('AgentClient — honest tool success (fund-safety #B)', () => {
+  const originalFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  // Drive a tool through its lifecycle and capture the terminal
+  // onToolProgress('done', …, ok) the consumer relies on for success.
+  async function lastDoneOk(outputFrame: object): Promise<boolean | undefined> {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-start","toolCallId":"t1","toolName":"execute_send"}\n\n',
+      `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 't1', ...outputFrame })}\n\n`,
+    ])
+    const calls: Array<{ status: string; ok?: boolean }> = []
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream(
+      'c1',
+      { public_key: 'pk', content: 'hi' },
+      { onToolProgress: (_t, status, _l, ok) => calls.push({ status, ok }) }
+    )
+    return calls.find(c => c.status === 'done')?.ok
+  }
+
+  it('reports ok=false when the tool output is {"status":"error"}', async () => {
+    expect(
+      await lastDoneOk({ output: { status: 'error', error: 'execute_send (EVM): invalid address' } })
+    ).toBe(false)
+  })
+
+  it('reports ok=false when the tool output has an {"error"} field', async () => {
+    expect(await lastDoneOk({ output: { error: "isn't enough balance" } })).toBe(false)
+  })
+
+  it('reports ok=true for a clean tool output', async () => {
+    expect(await lastDoneOk({ output: { tx_hash: '0xabc', status: 'pending' } })).toBe(true)
+  })
+
+  it('reports ok=undefined when no output is present (older-backend fallback)', async () => {
+    expect(await lastDoneOk({})).toBeUndefined()
+  })
+
+  it('detects an error in a stringified output payload', async () => {
+    expect(await lastDoneOk({ output: '{"status":"error","error":"boom"}' })).toBe(false)
   })
 })

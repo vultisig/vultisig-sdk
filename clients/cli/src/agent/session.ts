@@ -297,11 +297,22 @@ export class AgentSession {
     // spliced batch so callers can retry the queue.
     const callbacks = {
       onTextDelta: (delta: string) => ui.onTextDelta(delta),
-      onToolProgress: (tool: string, status: 'running' | 'done', label?: string) => {
+      onToolProgress: (tool: string, status: 'running' | 'done', label?: string, ok?: boolean) => {
         if (status === 'running') {
           ui.onToolCall(`mcp-${tool}`, tool)
         } else {
-          ui.onToolResult(`mcp-${tool}`, tool, true, { label })
+          // `ok ?? true`: only report failure when the stream positively
+          // identified an error payload; absent output (older backends)
+          // keeps the prior optimistic default so this can't regress
+          // legitimate successes (fund-safety bug #B fix).
+          const success = ok ?? true
+          ui.onToolResult(
+            `mcp-${tool}`,
+            tool,
+            success,
+            { label },
+            success ? undefined : `${tool} reported an error`
+          )
         }
       },
       onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
