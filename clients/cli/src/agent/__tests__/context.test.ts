@@ -23,9 +23,7 @@ function mockVault(chainPublicKeys?: Record<string, string | undefined>): VaultB
 
 describe('buildMessageContext — chain_public_keys', () => {
   it('forwards a vault that has chain_public_keys', async () => {
-    const ctx = await buildMessageContext(
-      mockVault({ Solana: 'sol-pub', Terra: 'terra-pub' })
-    )
+    const ctx = await buildMessageContext(mockVault({ Solana: 'sol-pub', Terra: 'terra-pub' }))
     expect(ctx.chain_public_keys).toEqual({ Solana: 'sol-pub', Terra: 'terra-pub' })
   })
 
@@ -41,9 +39,7 @@ describe('buildMessageContext — chain_public_keys', () => {
   })
 
   it('drops chains with undefined/empty pubkeys', async () => {
-    const ctx = await buildMessageContext(
-      mockVault({ Solana: 'sol-pub', Sui: undefined, Polkadot: '' })
-    )
+    const ctx = await buildMessageContext(mockVault({ Solana: 'sol-pub', Sui: undefined, Polkadot: '' }))
     expect(ctx.chain_public_keys).toEqual({ Solana: 'sol-pub' })
   })
 
