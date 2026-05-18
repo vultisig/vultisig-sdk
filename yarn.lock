@@ -12478,6 +12478,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"globals@npm:^17.6.0":
+  version: 17.6.0
+  resolution: "globals@npm:17.6.0"
+  checksum: 10c0/cf94fb4329cc5c68cf81018fd68324f413181ee169f0235b0b33b82bc93fe7825a21beea951f83a80e8e4bbdad9c0c80515a145b5fd4b5cb52f2a80db899a93f
+  languageName: node
+  linkType: hard
+
 "globalthis@npm:^1.0.1, globalthis@npm:^1.0.4":
   version: 1.0.4
   resolution: "globalthis@npm:1.0.4"
@@ -21099,7 +21106,7 @@ __metadata:
     eslint-plugin-sonarjs: "npm:^4.0.3"
     eslint-plugin-storybook: "npm:^10.3.0"
     eslint-plugin-unused-imports: "npm:^4.4.1"
-    globals: "npm:^17.4.0"
+    globals: "npm:^17.6.0"
     husky: "npm:^9.1.7"
     jscpd: "npm:^4.0.9"
     knip: "npm:^6.7.0"
