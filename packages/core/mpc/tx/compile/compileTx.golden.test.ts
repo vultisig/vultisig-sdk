@@ -256,7 +256,7 @@ describe('compileTx golden vectors', () => {
       )
     )
 
-    expect(compiledOutput.encoded).toBe(signedByWalletCore.encoded)
+    expect(compiledOutput.encoded).toEqual(signedByWalletCore.encoded)
   })
 
   it('matches WalletCore for a Cosmos protobuf MsgSend', () => {
