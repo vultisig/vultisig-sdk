@@ -1,6 +1,7 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
@@ -48,6 +49,7 @@ import type {
   CoinPricesParams,
   CoinPricesResult,
   CoinPricesWithChangeResult,
+  DiscoveredToken,
   FeeCoinInfo,
   TokenInfo,
 } from './types/tokens'
@@ -1116,6 +1118,35 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   // === STATIC TOKEN REGISTRY METHODS ===
+
+  /**
+   * Discover the tokens an address actually holds on a chain
+   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, …).
+   *
+   * Vault-FREE: takes a raw `{ chain, address }` and returns
+   * `DiscoveredToken[]`. The instance method `vault.discoverTokens()`
+   * is just `getAddress` + this same `findCoins` call — exposing it
+   * statically lets callers that only hold a derived address (the
+   * agent, a portfolio screen) discover tokens without constructing a
+   * full SDK Vault. No new logic; the mapping mirrors
+   * `TokenDiscoveryService.discoverTokens` exactly.
+   *
+   * @param params - `{ chain, address }`
+   * @returns Tokens with non-zero balance at that address
+   */
+  static async discoverTokens(params: { chain: Chain; address: string }): Promise<DiscoveredToken[]> {
+    const coins = await coreFindCoins({
+      address: params.address,
+      chain: params.chain,
+    })
+    return coins.map(coin => ({
+      chain: coin.chain,
+      contractAddress: coin.id ?? '',
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+    }))
+  }
 
   /**
    * Get known tokens for a chain from the built-in registry.
