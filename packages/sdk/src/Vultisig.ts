@@ -44,7 +44,13 @@ import {
   VaultData,
 } from './types'
 import type { SiteScanResult } from './types/security'
-import type { CoinPricesParams, CoinPricesResult, CoinPricesWithChangeResult, FeeCoinInfo, TokenInfo } from './types/tokens'
+import type {
+  CoinPricesParams,
+  CoinPricesResult,
+  CoinPricesWithChangeResult,
+  FeeCoinInfo,
+  TokenInfo,
+} from './types/tokens'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -1188,9 +1194,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Map of token ID to `{ price, change24h? }` (change24h is
    *          absent when CoinGecko has no datum for that id)
    */
-  static async getCoinPricesWithChange(
-    params: CoinPricesParams
-  ): Promise<CoinPricesWithChangeResult> {
+  static async getCoinPricesWithChange(params: CoinPricesParams): Promise<CoinPricesWithChangeResult> {
     return coreCoinPricesWithChange({
       ids: params.ids,
       fiatCurrency: (params.fiatCurrency ?? 'usd') as any,

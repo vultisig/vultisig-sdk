@@ -655,7 +655,15 @@ export type {
 } from './cosmos'
 
 // Token registry & chain data types
-export type { CoinPricesParams, CoinPricesResult, CoinPricesWithChangeResult, CoinPriceWithChange, DiscoveredToken, FeeCoinInfo, TokenInfo } from './tokens'
+export type {
+  CoinPricesParams,
+  CoinPricesResult,
+  CoinPricesWithChangeResult,
+  CoinPriceWithChange,
+  DiscoveredToken,
+  FeeCoinInfo,
+  TokenInfo,
+} from './tokens'
 
 // Security scanning types
 export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './security'
