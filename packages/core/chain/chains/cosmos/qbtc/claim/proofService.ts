@@ -113,6 +113,9 @@ const assertValidClaimProofResponse = (
       'Invalid proof service response: invalid pub_key_hash_sha256'
     )
   }
+  if (data.tx_hash !== undefined && !isHexWithLength(data.tx_hash, 64)) {
+    throw new Error('Invalid proof service response: invalid tx_hash')
+  }
 }
 
 /**

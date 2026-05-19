@@ -170,13 +170,22 @@ describe('generateClaimProof', () => {
   })
 
   it('forwards broadcast=true and the returned tx_hash', async () => {
-    mockFetch({ ...validResponse, tx_hash: 'ABCDEF0123' })
+    const validTxHash = 'AB'.repeat(32)
+    mockFetch({ ...validResponse, tx_hash: validTxHash })
 
     const result = await generateClaimProof({ ...validInput, broadcast: true })
 
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.broadcast).toBe(true)
-    expect(result.tx_hash).toBe('ABCDEF0123')
+    expect(result.tx_hash).toBe(validTxHash)
+  })
+
+  it('throws when tx_hash is present but not 64 hex chars', async () => {
+    mockFetch({ ...validResponse, tx_hash: 'too-short' })
+
+    await expect(
+      generateClaimProof({ ...validInput, broadcast: true })
+    ).rejects.toThrow('Invalid proof service response: invalid tx_hash')
   })
 })
