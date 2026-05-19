@@ -332,9 +332,7 @@ export const decodeUniversalRouterExecute = (calldata: string): UniversalRouterS
     // sequence. The first swap leg's amountIn/amountInMax only covers that
     // leg (wrong when the swap is multi-hop or exact-out), so prefer the
     // wrap amount whenever it isn't a "use router balance" sentinel.
-    if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL) {
-      amountIn = wrapEthAmount
-    } else if (amountIn === CONTRACT_BALANCE_SENTINEL) {
+    if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL || amountIn === CONTRACT_BALANCE_SENTINEL) {
       amountIn = wrapEthAmount
     }
   }
