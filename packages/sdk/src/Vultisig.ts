@@ -3,6 +3,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -43,7 +44,7 @@ import {
   VaultData,
 } from './types'
 import type { SiteScanResult } from './types/security'
-import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
+import type { CoinPricesParams, CoinPricesResult, CoinPricesWithChangeResult, FeeCoinInfo, TokenInfo } from './types/tokens'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -1170,6 +1171,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static async getCoinPrices(params: CoinPricesParams): Promise<CoinPricesResult> {
     return coreCoinPrices({
+      ids: params.ids,
+      fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
+    })
+  }
+
+  /**
+   * Fetch current prices AND 24h % change for tokens by CoinGecko IDs.
+   *
+   * Use this when you need the 24h change (e.g. a price widget's
+   * −3.97% indicator). For price-only lookups prefer `getCoinPrices`
+   * — it has a stable `Record<string, number>` contract and slightly
+   * lighter payload.
+   *
+   * @param params - Price lookup parameters
+   * @returns Map of token ID to `{ price, change24h? }` (change24h is
+   *          absent when CoinGecko has no datum for that id)
+   */
+  static async getCoinPricesWithChange(
+    params: CoinPricesParams
+  ): Promise<CoinPricesWithChangeResult> {
+    return coreCoinPricesWithChange({
       ids: params.ids,
       fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
     })
