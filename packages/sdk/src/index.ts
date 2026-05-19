@@ -226,7 +226,7 @@ export {
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
 
-export type { CoinPriceWithChange, CoinPricesParams, CoinPricesResult, CoinPricesWithChangeResult, DiscoveredToken, FeeCoinInfo, TokenInfo } from './types'
+export type { CoinPricesParams, CoinPricesResult, CoinPricesWithChangeResult, CoinPriceWithChange, DiscoveredToken, FeeCoinInfo, TokenInfo } from './types'
 
 // ============================================================================
 // PUBLIC API - Security Scanning
