@@ -959,10 +959,20 @@
       "import": "./dist/coin/price/getCoinPrices.js",
       "default": "./dist/coin/price/getCoinPrices.js"
     },
+    "./coin/price/getCoinPricesWithChange": {
+      "types": "./dist/coin/price/getCoinPricesWithChange.d.ts",
+      "import": "./dist/coin/price/getCoinPricesWithChange.js",
+      "default": "./dist/coin/price/getCoinPricesWithChange.js"
+    },
     "./coin/price/queryCoingeickoPrices": {
       "types": "./dist/coin/price/queryCoingeickoPrices.d.ts",
       "import": "./dist/coin/price/queryCoingeickoPrices.js",
       "default": "./dist/coin/price/queryCoingeickoPrices.js"
+    },
+    "./coin/price/queryCoingeickoPricesWithChange": {
+      "types": "./dist/coin/price/queryCoingeickoPricesWithChange.d.ts",
+      "import": "./dist/coin/price/queryCoingeickoPricesWithChange.js",
+      "default": "./dist/coin/price/queryCoingeickoPricesWithChange.js"
     },
     "./coin/token/metadata": {
       "types": "./dist/coin/token/metadata/index.d.ts",
