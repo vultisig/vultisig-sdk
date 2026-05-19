@@ -76,11 +76,20 @@ type GetCosmosStakingGasLimitInput = {
  * chain. Overestimating is safe — the chain only charges for `gas_used` —
  * but underestimating runs out of gas mid-execution, so we leave headroom
  * and scale by msg count.
+ *
+ * `msgCount` must be a finite non-negative integer. `BigInt()` throws a
+ * `RangeError` on floats / NaN / Infinity, so guard at the boundary with
+ * a clearer message before the conversion.
  */
 export const getCosmosStakingGasLimit = ({
   chain,
   msgCount = 1,
 }: GetCosmosStakingGasLimitInput): bigint => {
+  if (!Number.isInteger(msgCount) || msgCount < 0) {
+    throw new Error(
+      `getCosmosStakingGasLimit: msgCount must be a non-negative integer, got ${msgCount}`
+    )
+  }
   const base = cosmosStakingGasLimitRecord[chain]
   const n = BigInt(Math.max(1, msgCount))
   return base + ((n - 1n) * base) / 4n
