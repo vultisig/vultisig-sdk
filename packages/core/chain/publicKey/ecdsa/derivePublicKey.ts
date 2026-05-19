@@ -45,13 +45,11 @@ const getDerivePathBytes = (derivePath: string): number[] => {
     if (!segment || segment === 'm') {
       continue
     }
-    const isHardened = segment.endsWith("'")
     const index = parseInt(segment.replaceAll("'", ''), 10)
-    const maxIndex = isHardened ? hardenedOffset - 1 : 0xffffffff
-    if (isNaN(index) || index < 0 || index > maxIndex) {
+    if (isNaN(index) || index < 0 || index > 0xffffffff) {
       throw new Error(`Invalid path segment: ${segment}`)
     }
-    pathBuf.push(isHardened ? index + hardenedOffset : index)
+    pathBuf.push(index)
   }
 
   return pathBuf
