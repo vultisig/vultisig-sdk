@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-browser",
-  "version": "0.1.41",
+  "version": "0.1.42",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "@vultisig/sdk": "workspace:*",
     "process": "^0.11.10",
     "qrcode.react": "^4.2.0",
-    "react": "^19.2.4",
+    "react": "^19.2.6",
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
