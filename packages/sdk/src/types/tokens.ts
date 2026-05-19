@@ -27,6 +27,7 @@ export type DiscoveredToken = {
   decimals: number
   logo?: string
   balance?: string
+  isHidden?: boolean
 }
 
 /** Parameters for price lookup */
