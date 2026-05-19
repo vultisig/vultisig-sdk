@@ -74,7 +74,7 @@ function base58TronDecode(address: string): string {
   }
 }
 
-async function fetchTRC20TokenBalance(contractAddress: string, walletAddress: string): Promise<number> {
+async function fetchTRC20TokenBalance(contractAddress: string, walletAddress: string): Promise<bigint> {
   // Add "41" prefix after padding with zeros
   const paddedWalletAddress = '0000000000000000000000' + walletAddress.slice(2)
 
@@ -101,16 +101,16 @@ async function fetchTRC20TokenBalance(contractAddress: string, walletAddress: st
   return await intRpcCall('eth_call', params)
 }
 
-async function intRpcCall(method: string, params: any[]): Promise<number> {
+async function intRpcCall(method: string, params: any[]): Promise<bigint> {
   return await sendRPCRequest(method, params, (result: any) => {
     if (typeof result === 'number') {
-      return result
+      return BigInt(result)
     }
 
     if (typeof result === 'string') {
       // Remove '0x' prefix if present
       const hexString = result.startsWith('0x') ? result.slice(2) : result
-      return parseInt(hexString, 16)
+      return hexString ? BigInt(`0x${hexString}`) : 0n
     }
 
     throw {
