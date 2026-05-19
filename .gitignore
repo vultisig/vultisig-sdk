@@ -113,3 +113,4 @@ packages/expo-mpc/
 # Cursor / Codex (local IDE agent config; not pushed to remote)
 .cursor/
 .codex/
+.agents/

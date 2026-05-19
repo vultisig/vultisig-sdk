@@ -131,6 +131,48 @@ const waitForTxInclusion = async ({
   )
 }
 
+type WaitForClaimTxResultInput = {
+  /** Transaction hash (hex, upper-case) returned by the broadcaster. */
+  txHash: string
+  /** Max time to wait for inclusion. Defaults to 30 s. */
+  inclusionTimeoutMs?: number
+  /** Poll interval. Defaults to 1 s. */
+  inclusionPollIntervalMs?: number
+}
+
+/**
+ * Polls the chain for an already-broadcast claim tx (e.g. one submitted by
+ * the proof service via `generateClaimProof({ broadcast: true })`) and parses
+ * the `claim_with_proof` event into a {@link ClaimTxResponse}.
+ *
+ * Mirrors the wait-and-parse half of {@link broadcastClaimTx} so callers who
+ * didn't broadcast the tx themselves can still show real claim amounts.
+ */
+export const waitForClaimTxResult = async ({
+  txHash,
+  inclusionTimeoutMs = 30_000,
+  inclusionPollIntervalMs = 1_000,
+}: WaitForClaimTxResultInput): Promise<ClaimTxResponse> => {
+  const included = await waitForTxInclusion({
+    txHash,
+    timeoutMs: inclusionTimeoutMs,
+    intervalMs: inclusionPollIntervalMs,
+  })
+
+  if (typeof included.code !== 'number') {
+    throw new Error(
+      `QBTC claim tx ${txHash}: missing code on included tx_response`
+    )
+  }
+
+  if (included.code !== 0) {
+    const log = included.raw_log || included.log
+    throw new Error(`QBTC claim tx error: ${log}`)
+  }
+
+  return parseClaimResultFromEvents(included.events, txHash)
+}
+
 /**
  * Broadcasts a signed MsgClaimWithProof transaction to the QBTC chain
  * via the REST API (following the restOnlyChains pattern).
