@@ -175,8 +175,8 @@ describe('generateClaimProof', () => {
   it('throws when tx_hash is present but not 64 hex chars', async () => {
     mockFetch({ ...validResponse, tx_hash: 'too-short' })
 
-    await expect(
-      generateClaimProof({ ...validInput, broadcast: true })
-    ).rejects.toThrow('Invalid proof service response: invalid tx_hash')
+    await expect(generateClaimProof({ ...validInput, broadcast: true })).rejects.toThrow(
+      'Invalid proof service response: invalid tx_hash'
+    )
   })
 })

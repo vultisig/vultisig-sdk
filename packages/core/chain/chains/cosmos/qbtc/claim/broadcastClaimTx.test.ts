@@ -233,8 +233,8 @@ describe('waitForClaimTxResult', () => {
       okJson({ tx_response: { code: 5, raw_log: 'address mismatch' } })
     ) as typeof fetch
 
-    await expect(
-      waitForClaimTxResult({ txHash, ...fastPolling })
-    ).rejects.toThrow(/QBTC claim tx error: address mismatch/)
+    await expect(waitForClaimTxResult({ txHash, ...fastPolling })).rejects.toThrow(
+      /QBTC claim tx error: address mismatch/
+    )
   })
 })

@@ -139,9 +139,7 @@ export const waitForClaimTxResult = async ({
   })
 
   if (typeof included.code !== 'number') {
-    throw new Error(
-      `QBTC claim tx ${txHash}: missing code on included tx_response`
-    )
+    throw new Error(`QBTC claim tx ${txHash}: missing code on included tx_response`)
   }
 
   if (included.code !== 0) {
