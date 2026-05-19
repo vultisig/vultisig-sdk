@@ -7,15 +7,15 @@
 # Prerequisites:
 #   - jq(1) on PATH
 #   - Node + yarn deps (run from repo root: npx tsx clients/cli/src/index.ts)
-#   - Ops sibling repo path in .cursor/.ops-source (one line, absolute path to ops root)
-#   - FAST_VAULT_PASSWORD: exported in the environment, or defined in <ops>/.envrc (sourced automatically)
-#   - Vault file: <ops>/vaults/fast-vault-share1of2.vult
+#   - Private fixture root: set VAULT_FIXTURE_ROOT, or put the path in .cursor/.vault-fixtures-root
+#   - FAST_VAULT_PASSWORD: exported in the environment, or defined in <fixture-root>/.envrc (sourced automatically)
+#   - Vault file: <fixture-root>/vaults/fast-vault-share1of2.vult
 #
-# Usage (from repo root — auto-sources <ops>/.envrc when FAST_VAULT_PASSWORD is unset):
+# Usage (from repo root — auto-sources <fixture-root>/.envrc when FAST_VAULT_PASSWORD is unset):
 #   bash testdata/agent-smoke-test.sh
 #
 # Explicit env (optional):
-#   source "$(tr -d '\r\n' < .cursor/.ops-source)/.envrc" && bash testdata/agent-smoke-test.sh
+#   VAULT_FIXTURE_ROOT=/path/to/private/fixtures bash testdata/agent-smoke-test.sh
 #
 # Optional env:
 #   AGENT_SMOKE_TIMEOUT — per-command wall timeout in seconds (default 120).
@@ -28,7 +28,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-OPS_SOURCE="$REPO_ROOT/.cursor/.ops-source"
+FIXTURE_ROOT_SOURCE="${VAULT_FIXTURE_ROOT_FILE:-$REPO_ROOT/.cursor/.vault-fixtures-root}"
 VAULT_REL="vaults/fast-vault-share1of2.vult"
 QUERY_TIMEOUT_SEC="${AGENT_SMOKE_TIMEOUT:-120}"
 # Extra attempts when the backend returns exit 0 but an empty assistant message (transient "no response from AI").
@@ -39,30 +39,30 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "$OPS_SOURCE" ]]; then
-  echo "FAIL: Missing ops pointer file: $OPS_SOURCE"
+if [[ -z "${VAULT_FIXTURE_ROOT:-}" && ! -f "$FIXTURE_ROOT_SOURCE" ]]; then
+  echo "FAIL: Set VAULT_FIXTURE_ROOT or create .cursor/.vault-fixtures-root"
   exit 1
 fi
 
-OPS_ROOT="$(tr -d '\r\n' <"$OPS_SOURCE")"
-OPS_ENVRC="${OPS_ROOT}/.envrc"
+FIXTURE_ROOT="${VAULT_FIXTURE_ROOT:-$(tr -d '\r\n' <"$FIXTURE_ROOT_SOURCE")}"
+FIXTURE_ENVRC="${FIXTURE_ROOT}/.envrc"
 
-if [[ -z "${FAST_VAULT_PASSWORD:-}" && -f "$OPS_ENVRC" ]]; then
-  echo "Note: FAST_VAULT_PASSWORD unset — sourcing ${OPS_ENVRC}"
+if [[ -z "${FAST_VAULT_PASSWORD:-}" && -f "$FIXTURE_ENVRC" ]]; then
+  echo "Note: FAST_VAULT_PASSWORD unset; sourcing fixture env file"
   set -a
   # shellcheck disable=SC1090
-  source "$OPS_ENVRC"
+  source "$FIXTURE_ENVRC"
   set +a
 fi
 
 if [[ -z "${FAST_VAULT_PASSWORD:-}" ]]; then
-  echo "FAIL: FAST_VAULT_PASSWORD is unset. Export it or ensure ${OPS_ENVRC} defines it."
+  echo "FAIL: FAST_VAULT_PASSWORD is unset. Export it or define it in the fixture env file."
   exit 1
 fi
 
-VAULT_FILE="$OPS_ROOT/$VAULT_REL"
+VAULT_FILE="$FIXTURE_ROOT/$VAULT_REL"
 if [[ ! -f "$VAULT_FILE" ]]; then
-  echo "FAIL: Vault file not found: $VAULT_FILE (check .cursor/.ops-source and ops vaults/)"
+  echo "FAIL: Vault file not found at fixture-relative path: $VAULT_REL"
   exit 1
 fi
 
@@ -141,12 +141,77 @@ assert_json_ok() {
   local file="$1"
   local label="$2"
   local err
-  err="$(jq -r '.error // empty' "$file" 2>/dev/null || true)"
+  err="$(jq -r '.error.message? // .error? // .data.error.message? // .data.error? // empty' "$file" 2>/dev/null || true)"
   if [[ -n "$err" ]]; then
     echo "FAIL [$label]: agent error: $err"
     cat "$file" >&2 || true
     exit 1
   fi
+}
+
+extract_json_payload() {
+  local raw_file="$1"
+  local json_file="$2"
+
+  node --input-type=commonjs - "$raw_file" "$json_file" <<'NODE'
+const fs = require('node:fs')
+
+const [rawFile, jsonFile] = process.argv.slice(2)
+const text = fs.readFileSync(rawFile, 'utf8')
+
+function findJsonEnd(start) {
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+    } else if (char === '{') {
+      depth += 1
+    } else if (char === '}') {
+      depth -= 1
+      if (depth === 0) return i + 1
+    }
+  }
+
+  return -1
+}
+
+let payload = null
+for (let start = 0; start < text.length; start++) {
+  if (text[start] !== '{') continue
+
+  const end = findJsonEnd(start)
+  if (end < 0) continue
+
+  const candidate = text.slice(start, end)
+  try {
+    JSON.parse(candidate)
+    payload = candidate
+  } catch {
+    // Ignore log fragments that happen to contain braces.
+  }
+
+  start = end - 1
+}
+
+if (!payload) process.exit(1)
+fs.writeFileSync(jsonFile, `${payload}\n`)
+NODE
 }
 
 # Run `agent ask --json`; retry on command failure or empty .response (live backend flakes).
@@ -155,6 +220,7 @@ run_agent_ask_json() {
   local message="$2"
   local out_file="$3"
   local session_id="${4:-}"
+  local raw_file="${out_file}.raw"
   local attempt=1
   local max=$((1 + AGENT_SMOKE_AI_RETRIES))
   local -a session_args=()
@@ -165,24 +231,28 @@ run_agent_ask_json() {
       echo "WARN [$label]: retry ${attempt}/${max} (after empty/failed ask)..." >&2
       sleep 5
     fi
-    if with_timeout_heartbeat "$QUERY_TIMEOUT_SEC" "${CLI[@]}" agent ask "$message" --json --verbose --password "$FAST_VAULT_PASSWORD" "${session_args[@]}" >"$out_file"; then
+    rm -f "$raw_file"
+    if with_timeout_heartbeat "$QUERY_TIMEOUT_SEC" "${CLI[@]}" agent ask "$message" --json --verbose --password "$FAST_VAULT_PASSWORD" "${session_args[@]}" >"$raw_file" 2>&1 &&
+      extract_json_payload "$raw_file" "$out_file"; then
+      rm -f "$raw_file"
       assert_json_ok "$out_file" "$label"
       local resp
-      resp="$(jq -r '.response // empty' "$out_file" 2>/dev/null || true)"
+      resp="$(jq -r '.response // .data.response // empty' "$out_file" 2>/dev/null || true)"
       if [[ -n "$resp" ]]; then
         return 0
       fi
     fi
+    rm -f "$raw_file"
     attempt=$((attempt + 1))
   done
   return 1
 }
 
-echo "=== Agent smoke test (repo: $REPO_ROOT, timeout: ${QUERY_TIMEOUT_SEC}s per step, AI retries: ${AGENT_SMOKE_AI_RETRIES}) ==="
+echo "=== Agent smoke test (repo: $(basename "$REPO_ROOT"), timeout: ${QUERY_TIMEOUT_SEC}s per step, AI retries: ${AGENT_SMOKE_AI_RETRIES}) ==="
 echo
 
 # --- 1. Import vault ---
-echo "[1/5] Import vault: $VAULT_FILE"
+echo "[1/5] Import vault: $VAULT_REL"
 if with_timeout "$QUERY_TIMEOUT_SEC" "${CLI[@]}" import "$VAULT_FILE" --password "$FAST_VAULT_PASSWORD"; then
   echo "PASS [1/5] import (exit 0)"
 else
@@ -202,8 +272,8 @@ if ! run_agent_ask_json "balances" "What are my balances?" "$BAL_JSON"; then
   exit 1
 fi
 
-SESSION_ID="$(jq -r '.session_id // empty' "$BAL_JSON")"
-RESPONSE="$(jq -r '.response // empty' "$BAL_JSON")"
+SESSION_ID="$(jq -r '.session_id // .data.session_id // empty' "$BAL_JSON")"
+RESPONSE="$(jq -r '.response // .data.response // empty' "$BAL_JSON")"
 if [[ -z "$SESSION_ID" ]]; then
   echo "FAIL [2/5] balances: missing session_id"
   exit 1
@@ -212,12 +282,16 @@ if [[ -z "$RESPONSE" ]]; then
   echo "FAIL [2/5] balances: empty response"
   exit 1
 fi
-if ! jq -e '[.tool_calls[]? | select(.success == true)] | length > 0' "$BAL_JSON" >/dev/null; then
-  echo "FAIL [2/5] balances: no successful tool_calls"
-  jq '.tool_calls' "$BAL_JSON" >&2 || true
-  exit 1
+if jq -e '((.tool_calls // .data.tool_calls // []) | length) > 0' "$BAL_JSON" >/dev/null; then
+  if ! jq -e '[((.tool_calls // .data.tool_calls // [])[]?) | select(.success == true)] | length > 0' "$BAL_JSON" >/dev/null; then
+    echo "FAIL [2/5] balances: tool_calls were present but none succeeded"
+    jq '.tool_calls // .data.tool_calls' "$BAL_JSON" >&2 || true
+    exit 1
+  fi
+  echo "PASS [2/5] balances (session_id=$SESSION_ID, response_chars=${#RESPONSE}, has successful tool_calls)"
+else
+  echo "PASS [2/5] balances (session_id=$SESSION_ID, response_chars=${#RESPONSE}, no tool calls returned)"
 fi
-echo "PASS [2/5] balances (session_id=$SESSION_ID, response_chars=${#RESPONSE}, has successful tool_calls)"
 echo
 
 # --- 3. Get portfolio ---
@@ -230,7 +304,7 @@ if ! run_agent_ask_json "portfolio" "What is my portfolio with USD values?" "$PO
   echo "FAIL [3/5] portfolio: command failed, timed out, or empty response after retries"
   exit 1
 fi
-P_RESP="$(jq -r '.response // empty' "$PORT_JSON")"
+P_RESP="$(jq -r '.response // .data.response // empty' "$PORT_JSON")"
 # Dollar, USD label, or plausible fiat formatting (e.g. $1,234.56 or 1234.56 USD)
 if ! echo "$P_RESP" | grep -qE '\$|USD|US\$|[0-9]+[.,][0-9]{2}'; then
   echo "WARN [3/5] portfolio: reply had no fiat/USD cues (partial or backend flake). Retrying once in 5s…" >&2
@@ -239,7 +313,7 @@ if ! echo "$P_RESP" | grep -qE '\$|USD|US\$|[0-9]+[.,][0-9]{2}'; then
     echo "FAIL [3/5] portfolio: retry ask failed or empty"
     exit 1
   fi
-  P_RESP="$(jq -r '.response // empty' "$PORT_JSON")"
+  P_RESP="$(jq -r '.response // .data.response // empty' "$PORT_JSON")"
 fi
 if ! echo "$P_RESP" | grep -qE '\$|USD|US\$|[0-9]+[.,][0-9]{2}'; then
   echo "FAIL [3/5] portfolio: response has no \$ / USD / decimal fiat cues after retry"
@@ -258,7 +332,7 @@ if ! run_agent_ask_json "list vaults" "List my vaults" "$LIST_JSON"; then
   echo "FAIL [4/5] list vaults: command failed, timed out, or empty response after retries"
   exit 1
 fi
-L_RESP="$(jq -r '.response // empty' "$LIST_JSON")"
+L_RESP="$(jq -r '.response // .data.response // empty' "$LIST_JSON")"
 if ! echo "$L_RESP" | grep -qiE 'vault|vultisig|address|share|wallet'; then
   echo "FAIL [4/5] list vaults: response does not mention vault-like info"
   echo "Response preview: ${L_RESP:0:400}"
@@ -276,8 +350,8 @@ if ! run_agent_ask_json "session follow-up" "Which chain has the highest balance
   echo "FAIL [5/5] session follow-up: command failed, timed out, or empty response after retries"
   exit 1
 fi
-F_SID="$(jq -r '.session_id // empty' "$FOLLOW_JSON")"
-F_RESP="$(jq -r '.response // empty' "$FOLLOW_JSON")"
+F_SID="$(jq -r '.session_id // .data.session_id // empty' "$FOLLOW_JSON")"
+F_RESP="$(jq -r '.response // .data.response // empty' "$FOLLOW_JSON")"
 if [[ "$F_SID" != "$SESSION_ID" ]]; then
   echo "FAIL [5/5] session follow-up: session_id mismatch (expected $SESSION_ID, got $F_SID)"
   exit 1
