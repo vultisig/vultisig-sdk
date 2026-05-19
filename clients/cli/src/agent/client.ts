@@ -39,6 +39,27 @@ function v1StatusFromType(type: string | null): 'running' | 'done' | undefined {
   }
 }
 
+/**
+ * Derive real tool success from the terminal-frame output payload
+ * (fund-safety bug #B). Returns false when the payload signals an error
+ * ({"status":"error"} / {"error":...} / stringified), true on a clean
+ * result, and undefined when there's nothing to judge (not the 'done'
+ * frame, or no output — older backends) so the consumer keeps its prior
+ * optimistic default. Extracted from handleSSEEvent to keep that
+ * function under the cognitive-complexity budget.
+ */
+function deriveToolDoneOk(status: 'running' | 'done' | undefined, output: unknown): boolean | undefined {
+  if (status !== 'done' || output == null) return undefined
+  if (typeof output === 'object') {
+    const o = output as Record<string, unknown>
+    return !(o.status === 'error' || 'error' in o)
+  }
+  if (typeof output === 'string') {
+    return !(output.includes('"status":"error"') || /^\s*error\b/i.test(output))
+  }
+  return true
+}
+
 function sseErrorToMessage(value: unknown): string {
   if (value == null) return ''
   if (typeof value === 'string') return value
@@ -346,26 +367,12 @@ export class AgentClient {
             callbacks.onClientSideToolCall(callId, toolName, input)
           }
 
-          // On the terminal frame, derive real success from the tool's
-          // output payload. Server-executed tools (execute_send,
-          // execute_swap, …) signal failure via {"status":"error"} or an
-          // {"error":...} field while still emitting tool-output-available;
-          // without this the CLI reported every finished tool as success
-          // (fund-safety bug #B — a failed send looked successful).
-          let ok: boolean | undefined
-          if (status === 'done') {
-            const out = parsed.output
-            if (out != null) {
-              if (typeof out === 'object') {
-                const o = out as Record<string, unknown>
-                ok = !(o.status === 'error' || 'error' in o)
-              } else if (typeof out === 'string') {
-                ok = !(out.includes('"status":"error"') || /^\s*error\b/i.test(out))
-              } else {
-                ok = true
-              }
-            }
-          }
+          // Real success comes from the terminal-frame output payload —
+          // server tools (execute_send/execute_swap) signal failure via
+          // {"status":"error"}/{"error"} while still emitting
+          // tool-output-available. Without this the CLI reported every
+          // finished tool as success (fund-safety bug #B).
+          const ok = deriveToolDoneOk(status, parsed.output)
 
           if (status && toolName) {
             callbacks.onToolProgress?.(toolName, status, label, ok)
