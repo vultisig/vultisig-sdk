@@ -14,10 +14,10 @@
     "**/tasks/**",
     "**/CHANGELOG.md",
     "packages/mpc-native/ios/**",
-    "../packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts"
+    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts"
   ],
   "_ignoreReasons": {
-    "../packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts": "React Native intentionally carries an SDK override mirror of the core Lifi quote implementation so Rollup can swap the transport-specific module at bundle time."
+    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts": "React Native intentionally carries an SDK override mirror of the core Lifi quote implementation so Rollup can swap the transport-specific module at bundle time."
   },
   "minLines": 45,
   "minTokens": 120,
