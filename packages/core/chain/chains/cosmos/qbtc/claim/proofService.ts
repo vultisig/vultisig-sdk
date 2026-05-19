@@ -42,6 +42,16 @@ type GenerateClaimProofInput = {
   chainId: string
   /** Proof service base URL. Defaults to {@link defaultProofServiceUrl}. */
   baseUrl?: string
+  /**
+   * If true, the proof service signs and broadcasts the resulting
+   * `MsgClaimWithProof` itself — using its own pre-funded broadcaster account.
+   * Intended for first-time claimers whose own bech32 address doesn't yet
+   * exist on chain (so they can't sign a SignDoc the chain will accept).
+   * When true, the response carries `tx_hash`.
+   *
+   * Wired up server-side by [btcq-org/qbtc#158](https://github.com/btcq-org/qbtc/pull/158).
+   */
+  broadcast?: boolean
 }
 
 type GenerateClaimProofResponse = {
@@ -64,6 +74,13 @@ type GenerateClaimProofResponse = {
   utxos: UtxoRef[]
   /** QBTC claimer address. */
   claimer_address: string
+  /**
+   * Set only when the request had `broadcast: true` and the proof service
+   * successfully submitted the claim tx on the caller's behalf. The hash
+   * matches what `cosmos.tx.v1beta1.BroadcastTxResponse.txhash` would have
+   * returned for a self-broadcast.
+   */
+  tx_hash?: string
 }
 
 export type { GenerateClaimProofResponse as ClaimProofResult }
@@ -113,6 +130,7 @@ export const generateClaimProof = async ({
   claimerAddress,
   chainId,
   baseUrl = defaultProofServiceUrl,
+  broadcast,
 }: GenerateClaimProofInput): Promise<GenerateClaimProofResponse> => {
   const controller = new AbortController()
   const timeout = setTimeout(
@@ -132,6 +150,7 @@ export const generateClaimProof = async ({
         utxos: utxos.map(({ txid, vout }) => ({ txid, vout })),
         claimer_address: claimerAddress,
         chain_id: chainId,
+        ...(broadcast ? { broadcast: true } : {}),
       }),
     })
 
