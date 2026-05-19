@@ -301,9 +301,7 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
   }
 
   it('reports ok=false when the tool output is {"status":"error"}', async () => {
-    expect(
-      await lastDoneOk({ output: { status: 'error', error: 'execute_send (EVM): invalid address' } })
-    ).toBe(false)
+    expect(await lastDoneOk({ output: { status: 'error', error: 'execute_send (EVM): invalid address' } })).toBe(false)
   })
 
   it('reports ok=false when the tool output has an {"error"} field', async () => {

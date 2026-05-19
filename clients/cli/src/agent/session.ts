@@ -306,13 +306,7 @@ export class AgentSession {
           // keeps the prior optimistic default so this can't regress
           // legitimate successes (fund-safety bug #B fix).
           const success = ok ?? true
-          ui.onToolResult(
-            `mcp-${tool}`,
-            tool,
-            success,
-            { label },
-            success ? undefined : `${tool} reported an error`
-          )
+          ui.onToolResult(`mcp-${tool}`, tool, success, { label }, success ? undefined : `${tool} reported an error`)
         }
       },
       onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
