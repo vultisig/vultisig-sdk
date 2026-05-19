@@ -3,9 +3,7 @@ import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 
 import { TxHashResolver } from '../resolver'
 
-export const getSuiTxHash: TxHashResolver<OtherChain.Sui> = async ({
-  unsignedTx,
-}) => {
+export const getSuiTxHash: TxHashResolver<OtherChain.Sui> = async ({ unsignedTx }) => {
   const client = getSuiClient()
 
   const {

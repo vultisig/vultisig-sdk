@@ -1,5 +1,5 @@
-import { match } from '@vultisig/lib-utils/match'
 import { TW } from '@trustwallet/wallet-core'
+import { match } from '@vultisig/lib-utils/match'
 
 import { EvmChain } from '../../../../../Chain'
 import { toEvmTwAmount } from '../../tw/toEvmTwAmount'
@@ -13,18 +13,10 @@ export type GetEvmTwFeeFieldsInput = {
 }
 
 type TwFeeFields =
-  | Pick<
-      TW.Ethereum.Proto.SigningInput,
-      'txMode' | 'maxFeePerGas' | 'maxInclusionFeePerGas'
-    >
+  | Pick<TW.Ethereum.Proto.SigningInput, 'txMode' | 'maxFeePerGas' | 'maxInclusionFeePerGas'>
   | Pick<TW.Ethereum.Proto.SigningInput, 'gasLimit' | 'gasPrice' | 'txMode'>
 
-export const getEvmTwFeeFields = ({
-  chain,
-  maxFeePerGasWei,
-  priorityFee,
-  gasLimit,
-}: GetEvmTwFeeFieldsInput) => {
+export const getEvmTwFeeFields = ({ chain, maxFeePerGasWei, priorityFee, gasLimit }: GetEvmTwFeeFieldsInput) => {
   const feeFormat = evmChainTxFeeFormat[chain]
 
   return match<EvmTxFeeFormat, TwFeeFields>(feeFormat, {

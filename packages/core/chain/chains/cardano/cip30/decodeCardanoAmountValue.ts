@@ -1,6 +1,5 @@
-import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
-
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
 import { cardanoCborEncoder } from './cborEncoder'
 
@@ -40,8 +39,7 @@ const toBigInt = (value: unknown): bigint | null => {
  * went through a re-encode pass elsewhere. Arrays and scalars are rejected.
  */
 const isMultiassetShape = (value: unknown): boolean =>
-  value instanceof Map ||
-  (typeof value === 'object' && value !== null && !Array.isArray(value))
+  value instanceof Map || (typeof value === 'object' && value !== null && !Array.isArray(value))
 
 const multiassetHasEntries = (value: unknown): boolean => {
   if (value instanceof Map) return value.size > 0
@@ -85,9 +83,7 @@ const tryDecode = (amountHex: string): CardanoValueRequirement | null => {
   return { lovelace, hasAssets: false }
 }
 
-export const decodeCardanoAmountValue = (
-  amountHex: string
-): CardanoValueRequirement | null => {
+export const decodeCardanoAmountValue = (amountHex: string): CardanoValueRequirement | null => {
   const result = attempt(() => tryDecode(amountHex))
   if ('error' in result) return null
   return result.data ?? null

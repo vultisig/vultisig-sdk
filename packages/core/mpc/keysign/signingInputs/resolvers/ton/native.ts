@@ -34,9 +34,7 @@ export const toSafeComment = (payload: string): string => {
 export const validateTonComment = (memo: string): void => {
   const bytes = new TextEncoder().encode(memo)
   if (bytes.length > tonCommentMaxBytes) {
-    throw new Error(
-      `TON memo must be at most ${tonCommentMaxBytes} bytes (got ${bytes.length})`
-    )
+    throw new Error(`TON memo must be at most ${tonCommentMaxBytes} bytes (got ${bytes.length})`)
   }
 }
 
@@ -51,9 +49,7 @@ export const buildNativeTonTransfer = ({
       : TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY) |
     TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
-  const amount = sendMaxAmount
-    ? Long.ZERO
-    : Long.fromString(keysignPayload.toAmount)
+  const amount = sendMaxAmount ? Long.ZERO : Long.fromString(keysignPayload.toAmount)
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,
@@ -72,8 +68,7 @@ export const buildNativeTonTransferFromMessage = ({
   bounceable,
 }: BuildNativeTonTransferFromMessageInput): TW.TheOpenNetwork.Proto.Transfer => {
   const mode =
-    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY |
-    TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
+    TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY | TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,

@@ -29,5 +29,4 @@ const resolvers: Record<ChainKind, CoinBalanceResolver<any>> = {
   qbtc: getQbtcCoinBalance,
 }
 
-export const getCoinBalance: CoinBalanceResolver = async input =>
-  resolvers[getChainKind(input.chain)](input)
+export const getCoinBalance: CoinBalanceResolver = async input => resolvers[getChainKind(input.chain)](input)

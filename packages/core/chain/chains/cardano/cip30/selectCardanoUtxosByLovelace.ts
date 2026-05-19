@@ -24,9 +24,7 @@ export const selectCardanoUtxosByLovelace = <T extends CardanoCoinSelectionUtxo>
   utxos,
   targetLovelace,
 }: SelectCardanoUtxosByLovelaceInput<T>): T[] | null => {
-  const sorted = [...utxos].sort((a, b) =>
-    a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : 0
-  )
+  const sorted = [...utxos].sort((a, b) => (a.amount > b.amount ? -1 : a.amount < b.amount ? 1 : 0))
   let total = 0n
   const picked: T[] = []
   for (const u of sorted) {

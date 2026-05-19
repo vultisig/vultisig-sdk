@@ -18,8 +18,6 @@ export const getCosmosChainId = (chain: CosmosChain): string => {
   return cosmosChainId[chain]
 }
 
-export const getCosmosChainByChainId = (
-  chainId: string
-): CosmosChain | undefined => {
+export const getCosmosChainByChainId = (chainId: string): CosmosChain | undefined => {
   return mirrorRecord(cosmosChainId)[chainId]
 }

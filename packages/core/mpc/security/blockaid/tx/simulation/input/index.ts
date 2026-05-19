@@ -7,17 +7,11 @@ import { BlockaidTxSimulationInput } from '@vultisig/core-chain/security/blockai
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
-import {
-  BlockaidTxSimulationInputResolver,
-  BlockaidTxSimulationInputResolverInput,
-} from './resolver'
+import { BlockaidTxSimulationInputResolver, BlockaidTxSimulationInputResolverInput } from './resolver'
 import { getEvmBlockaidTxSimulationInput } from './resolvers/evm'
 import { getSolanaBlockaidTxSimulationInput } from './resolvers/solana'
 
-const resolvers: Record<
-  BlockaidSimulationSupportedChainKind,
-  BlockaidTxSimulationInputResolver<any>
-> = {
+const resolvers: Record<BlockaidSimulationSupportedChainKind, BlockaidTxSimulationInputResolver<any>> = {
   solana: getSolanaBlockaidTxSimulationInput,
   evm: getEvmBlockaidTxSimulationInput,
 }

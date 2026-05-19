@@ -100,10 +100,7 @@ export class MldsaKeygen {
     }
   }
 
-  private async processInbound(
-    session: KeygenSession,
-    start: number
-  ): Promise<boolean> {
+  private async processInbound(session: KeygenSession, start: number): Promise<boolean> {
     try {
       const elapsed = Date.now() - start
       if (elapsed > this.timeoutMs * 2) {
@@ -129,10 +126,7 @@ export class MldsaKeygen {
           continue
         }
 
-        const decryptedMessage = fromMpcServerMessage(
-          msg.body,
-          this.hexEncryptionKey
-        )
+        const decryptedMessage = fromMpcServerMessage(msg.body, this.hexEncryptionKey)
         const isFinish = session.inputMessage(decryptedMessage)
         if (isFinish) {
           await sleep(1000)
@@ -167,17 +161,9 @@ export class MldsaKeygen {
     try {
       if (this.isInitiateDevice && attempt === 0) {
         const threshold = getKeygenThreshold(this.keygenCommittee.length)
-        this.setupMessage = KeygenSession.setup(
-          mldsaLevel,
-          undefined,
-          threshold,
-          this.keygenCommittee
-        )
+        this.setupMessage = KeygenSession.setup(mldsaLevel, undefined, threshold, this.keygenCommittee)
 
-        const encryptedSetupMsg = toMpcServerMessage(
-          this.setupMessage,
-          this.hexEncryptionKey
-        )
+        const encryptedSetupMsg = toMpcServerMessage(this.setupMessage, this.hexEncryptionKey)
         await uploadMpcSetupMessage({
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
@@ -190,10 +176,7 @@ export class MldsaKeygen {
           sessionId: this.sessionId,
           messageId: this.setupMessageId,
         })
-        this.setupMessage = fromMpcServerMessage(
-          encodedEncryptedSetupMsg,
-          this.hexEncryptionKey
-        )
+        this.setupMessage = fromMpcServerMessage(encodedEncryptedSetupMsg, this.hexEncryptionKey)
       }
 
       const session = new KeygenSession(this.setupMessage, this.localPartyId)

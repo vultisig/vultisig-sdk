@@ -148,25 +148,17 @@ const stonfiV2PtonWalletAddresses = [
  * only handles `create_vault` / `create_pool`. See file-level comment for
  * the dynamic-resolution recipe.
  */
-const dedustNativeVaultAddresses = [
-  'EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_',
-] as const
+const dedustNativeVaultAddresses = ['EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_'] as const
 
-const normalizeAddress = (address: string): string =>
-  Address.parse(address).toString()
+const normalizeAddress = (address: string): string => Address.parse(address).toString()
 
-const buildAddressSet = (
-  addresses: readonly string[]
-): ReadonlySet<string> => new Set(addresses.map(normalizeAddress))
+const buildAddressSet = (addresses: readonly string[]): ReadonlySet<string> => new Set(addresses.map(normalizeAddress))
 
 /** STON.fi v2 router addresses on TON mainnet (jetton-swap destinations). */
-export const STONFI_V2_ROUTERS: ReadonlySet<string> =
-  buildAddressSet(stonfiV2RouterAddresses)
+export const STONFI_V2_ROUTERS: ReadonlySet<string> = buildAddressSet(stonfiV2RouterAddresses)
 
 /** STON.fi v2 pTON wallet addresses on TON mainnet (TON-swap destinations). */
-export const STONFI_V2_PTON_WALLETS: ReadonlySet<string> = buildAddressSet(
-  stonfiV2PtonWalletAddresses
-)
+export const STONFI_V2_PTON_WALLETS: ReadonlySet<string> = buildAddressSet(stonfiV2PtonWalletAddresses)
 
 /**
  * DeDust mainnet TON Native Vault addresses — the destinations for the
@@ -174,8 +166,7 @@ export const STONFI_V2_PTON_WALLETS: ReadonlySet<string> = buildAddressSet(
  * DEDUST_NATIVE_SWAP classification so the keysign UI only labels a
  * message as a "swap" when it's actually addressed to a real vault.
  */
-export const DEDUST_NATIVE_VAULTS: ReadonlySet<string> =
-  buildAddressSet(dedustNativeVaultAddresses)
+export const DEDUST_NATIVE_VAULTS: ReadonlySet<string> = buildAddressSet(dedustNativeVaultAddresses)
 
 /**
  * Returns whether `address` matches any entry in `routerSet`. Both sides are
@@ -183,10 +174,7 @@ export const DEDUST_NATIVE_VAULTS: ReadonlySet<string> =
  * the same address compare as equal. Returns false on null/undefined or any
  * unparseable address.
  */
-export const isKnownRouterAddress = (
-  address: string | null | undefined,
-  routerSet: ReadonlySet<string>
-): boolean => {
+export const isKnownRouterAddress = (address: string | null | undefined, routerSet: ReadonlySet<string>): boolean => {
   if (!address) return false
   try {
     return routerSet.has(normalizeAddress(address))

@@ -2,13 +2,8 @@ type CombineReshareCommitteeInput = {
   keygenCommittee: string[]
   oldKeygenCommittee: string[]
 }
-export const combineReshareCommittee = ({
-  keygenCommittee,
-  oldKeygenCommittee,
-}: CombineReshareCommitteeInput) => {
-  const allCommittee = Array.from(
-    new Set([...keygenCommittee, ...oldKeygenCommittee])
-  )
+export const combineReshareCommittee = ({ keygenCommittee, oldKeygenCommittee }: CombineReshareCommitteeInput) => {
+  const allCommittee = Array.from(new Set([...keygenCommittee, ...oldKeygenCommittee]))
 
   const newCommitteeIdx: number[] = []
   const oldCommitteeIdx: number[] = []

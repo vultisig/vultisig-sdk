@@ -1,8 +1,8 @@
+import { Chain } from '@vultisig/core-chain/Chain'
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { minUtxo } from '../minUtxo'
-import { Chain } from '@vultisig/core-chain/Chain'
 import type { ChainPlainUtxo } from '../tx/ChainPlainUtxo'
 
 type DashAddressUtxo = {
@@ -20,9 +20,7 @@ type DashRpcResponse = {
   id: string
 }
 
-export const getDashUtxos = async (
-  address: string
-): Promise<ChainPlainUtxo[]> => {
+export const getDashUtxos = async (address: string): Promise<ChainPlainUtxo[]> => {
   const response = await queryUrl<DashRpcResponse>(`${rootApiUrl}/dash/`, {
     body: {
       jsonrpc: '1.0',

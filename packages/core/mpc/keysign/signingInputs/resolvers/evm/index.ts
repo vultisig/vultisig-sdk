@@ -1,9 +1,6 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
-import {
-  getEvmTwFeeFields,
-  GetEvmTwFeeFieldsInput,
-} from '@vultisig/core-chain/chains/evm/tx/fee/tw/getEvmTwFeeFields'
+import { getEvmTwFeeFields, GetEvmTwFeeFieldsInput } from '@vultisig/core-chain/chains/evm/tx/fee/tw/getEvmTwFeeFields'
 import { incrementKeysignPayloadNonce } from './incrementKeysignPayloadNonce'
 import { getEvmTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwChainId'
 import { getEvmTwNonce } from '@vultisig/core-chain/chains/evm/tx/tw/getEvmTwNonce'
@@ -24,13 +21,9 @@ import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
 import { getErc20ApproveSigningInput } from './erc20'
 
-const memoToTxData = (memo: string) =>
-  memo.startsWith('0x') ? toEvmTxData(memo) : Buffer.from(memo, 'utf8')
+const memoToTxData = (memo: string) => (memo.startsWith('0x') ? toEvmTxData(memo) : Buffer.from(memo, 'utf8'))
 
-export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
-  keysignPayload,
-  walletCore,
-}) => {
+export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'evm'>(keysignPayload)
   const coin = assertField(keysignPayload, 'coin')
 
@@ -43,19 +36,14 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
     })
 
     const restOfSigningInputs = getEvmSigningInputs({
-      keysignPayload: incrementKeysignPayloadNonce(
-        create(KeysignPayloadSchema, restOfKeysignPayload)
-      ),
+      keysignPayload: incrementKeysignPayloadNonce(create(KeysignPayloadSchema, restOfKeysignPayload)),
       walletCore,
     })
 
     return [approveSigningInput, ...restOfSigningInputs]
   }
 
-  const evmSpecific = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'ethereumSpecific'
-  )
+  const evmSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'ethereumSpecific')
 
   const { nonce } = evmSpecific
 
@@ -79,10 +67,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
 
   const getTransaction = (): TW.Ethereum.Proto.ITransaction => {
     if (swapPayload) {
-      return matchRecordUnion<
-        KeysignSwapPayload,
-        TW.Ethereum.Proto.ITransaction
-      >(swapPayload, {
+      return matchRecordUnion<KeysignSwapPayload, TW.Ethereum.Proto.ITransaction>(swapPayload, {
         native: ({ fromCoin, fromAmount, vaultAddress, expirationTime }) => {
           const { isNativeToken } = shouldBePresent(fromCoin)
 
@@ -97,8 +82,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
             }
           }
 
-          const abiFunction =
-            walletCore.EthereumAbiFunction.createWithString('depositWithExpiry')
+          const abiFunction = walletCore.EthereumAbiFunction.createWithString('depositWithExpiry')
 
           abiFunction.addParamAddress(
             toTwAddress({
@@ -123,22 +107,20 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
           const data = walletCore.EthereumAbi.encode(abiFunction)
 
           return {
-            contractGeneric:
-              TW.Ethereum.Proto.Transaction.ContractGeneric.create({
-                amount: toEvmTwAmount(0),
-                data,
-              }),
+            contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({
+              amount: toEvmTwAmount(0),
+              data,
+            }),
           }
         },
         general: ({ quote }) => {
           const { data, value } = shouldBePresent(quote?.tx)
 
           return {
-            contractGeneric:
-              TW.Ethereum.Proto.Transaction.ContractGeneric.create({
-                amount: toEvmTwAmount(value),
-                data: toEvmTxData(data),
-              }),
+            contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({
+              amount: toEvmTwAmount(value),
+              data: toEvmTxData(data),
+            }),
           }
         },
       })
@@ -150,9 +132,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({
       return {
         transfer: TW.Ethereum.Proto.Transaction.Transfer.create({
           amount,
-          data: keysignPayload.memo
-            ? memoToTxData(shouldBePresent(keysignPayload.memo))
-            : undefined,
+          data: keysignPayload.memo ? memoToTxData(shouldBePresent(keysignPayload.memo)) : undefined,
         }),
       }
     }

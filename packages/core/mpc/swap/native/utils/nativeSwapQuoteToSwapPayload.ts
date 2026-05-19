@@ -2,10 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import {
-  nativeSwapPayloadCase,
-  nativeSwapStreamingInterval,
-} from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import { nativeSwapPayloadCase, nativeSwapStreamingInterval } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { parseThorchainSwapMemoStreaming } from '@vultisig/core-chain/swap/native/utils/parseThorchainSwapMemoStreaming'
@@ -23,21 +20,14 @@ type Input = {
   amount: bigint
 }
 
-export const nativeSwapQuoteToSwapPayload = ({
-  quote,
-  fromCoin,
-  amount,
-  toCoin,
-}: Input): CommKeysignSwapPayload => {
+export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }: Input): CommKeysignSwapPayload => {
   const isAffiliate = !!quote.fees.affiliate && Number(quote.fees.affiliate) > 0
 
   const { streamingInterval, streamingQuantity } =
     quote.swapChain === Chain.THORChain
       ? parseThorchainSwapMemoStreaming(quote.memo)
       : {
-          streamingInterval: String(
-            nativeSwapStreamingInterval[quote.swapChain]
-          ),
+          streamingInterval: String(nativeSwapStreamingInterval[quote.swapChain]),
           streamingQuantity: '0',
         }
 
@@ -52,15 +42,8 @@ export const nativeSwapQuoteToSwapPayload = ({
       vaultAddress: quote.inbound_address ?? fromCoin.address,
       routerAddress: quote.router,
       fromAmount: amount.toString(),
-      toAmountDecimal: fromChainAmount(
-        quote.expected_amount_out,
-        toDecimals
-      ).toFixed(toDecimals),
-      expirationTime: BigInt(
-        Math.round(
-          convertDuration(addMinutes(Date.now(), 15).getTime(), 'ms', 's')
-        )
-      ),
+      toAmountDecimal: fromChainAmount(quote.expected_amount_out, toDecimals).toFixed(toDecimals),
+      expirationTime: BigInt(Math.round(convertDuration(addMinutes(Date.now(), 15).getTime(), 'ms', 's'))),
       streamingInterval,
       streamingQuantity,
       toAmountLimit: '0',

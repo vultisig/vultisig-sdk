@@ -1,7 +1,7 @@
 import { rootApiUrl } from '@vultisig/core-config'
-import { sleep } from '@vultisig/lib-utils/sleep'
 import { NoDataError } from '@vultisig/lib-utils/error/NoDataError'
 import { assertFetchResponse } from '@vultisig/lib-utils/fetch/assertFetchResponse'
+import { sleep } from '@vultisig/lib-utils/sleep'
 
 let lastRequestAt: number | null = null
 const minTimeGap = 500

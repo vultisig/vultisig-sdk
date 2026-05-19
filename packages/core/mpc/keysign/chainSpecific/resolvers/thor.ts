@@ -8,9 +8,7 @@ import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/bl
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../resolver'
 
-export const getThorchainChainSpecific: GetChainSpecificResolver<
-  'thorchainSpecific'
-> = async ({
+export const getThorchainChainSpecific: GetChainSpecificResolver<'thorchainSpecific'> = async ({
   keysignPayload,
   transactionType = TransactionType.UNSPECIFIED,
   isDeposit,

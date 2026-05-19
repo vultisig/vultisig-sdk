@@ -31,9 +31,7 @@ describe('addLpMemo', () => {
         pool: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
         pairedAddress: '0xabcdef1234567890abcdef1234567890abcdef12',
       })
-    ).toBe(
-      '+:ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48:0xabcdef1234567890abcdef1234567890abcdef12'
-    )
+    ).toBe('+:ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48:0xabcdef1234567890abcdef1234567890abcdef12')
   })
 
   it('never includes an affiliate suffix — matches iOS and vultisig-windows extension', () => {
@@ -55,29 +53,21 @@ describe('addLpMemo', () => {
   it('rejects pairedAddress containing colons (memo injection guard)', () => {
     // A malicious or bug-y caller that passes `addr:ss:1000` would otherwise
     // produce `+:BTC.BTC:addr:ss:1000` which smuggles in an affiliate.
-    expect(() =>
-      addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'addr:ss:1000' })
-    ).toThrow(/must not contain `:`/)
+    expect(() => addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'addr:ss:1000' })).toThrow(/must not contain `:`/)
   })
 
   it('rejects pairedAddress containing whitespace', () => {
-    expect(() =>
-      addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'bc1q addr' })
-    ).toThrow(/must not contain whitespace/)
+    expect(() => addLpMemo({ pool: 'BTC.BTC', pairedAddress: 'bc1q addr' })).toThrow(/must not contain whitespace/)
   })
 })
 
 describe('removeLpMemo', () => {
   it('emits a 100% withdraw memo for 10000 bps', () => {
-    expect(removeLpMemo({ pool: 'BTC.BTC', basisPoints: 10000 })).toBe(
-      '-:BTC.BTC:10000'
-    )
+    expect(removeLpMemo({ pool: 'BTC.BTC', basisPoints: 10000 })).toBe('-:BTC.BTC:10000')
   })
 
   it('emits a partial withdraw memo for 2500 bps', () => {
-    expect(removeLpMemo({ pool: 'ETH.ETH', basisPoints: 2500 })).toBe(
-      '-:ETH.ETH:2500'
-    )
+    expect(removeLpMemo({ pool: 'ETH.ETH', basisPoints: 2500 })).toBe('-:ETH.ETH:2500')
   })
 
   it('appends withdrawToAsset suffix when provided', () => {
@@ -110,14 +100,9 @@ describe('removeLpMemo', () => {
     ).toBe('-:BTC.BTC:10000')
   })
 
-  it.each([0, -1, 10001, 1.5, NaN])(
-    'rejects out-of-range or non-integer basisPoints (%s)',
-    bps => {
-      expect(() =>
-        removeLpMemo({ pool: 'BTC.BTC', basisPoints: bps })
-      ).toThrow(/basisPoints/)
-    }
-  )
+  it.each([0, -1, 10001, 1.5, NaN])('rejects out-of-range or non-integer basisPoints (%s)', bps => {
+    expect(() => removeLpMemo({ pool: 'BTC.BTC', basisPoints: bps })).toThrow(/basisPoints/)
+  })
 
   it('never includes an affiliate suffix', () => {
     const memo = removeLpMemo({ pool: 'BTC.BTC', basisPoints: 10000 })

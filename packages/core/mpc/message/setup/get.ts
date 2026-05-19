@@ -8,11 +8,7 @@ type GetMpcSetupMessageInput = {
   messageId?: string
 }
 
-const getMpcSetupMessage = async ({
-  serverUrl,
-  sessionId,
-  messageId,
-}: GetMpcSetupMessageInput) =>
+const getMpcSetupMessage = async ({ serverUrl, sessionId, messageId }: GetMpcSetupMessageInput) =>
   queryUrl(`${serverUrl}/setup-message/${sessionId}`, {
     headers: withoutUndefinedFields({
       message_id: messageId,
@@ -20,9 +16,7 @@ const getMpcSetupMessage = async ({
     responseType: 'text',
   })
 
-export const waitForSetupMessage = async (
-  input: GetMpcSetupMessageInput
-): Promise<string> =>
+export const waitForSetupMessage = async (input: GetMpcSetupMessageInput): Promise<string> =>
   retry({
     func: () => getMpcSetupMessage(input),
     attempts: 50,
@@ -54,23 +48,17 @@ export const waitForSetupMessageInAny = async ({
   try {
     return await Promise.any(
       messageIds.map(messageId =>
-        waitForSetupMessage({ serverUrl, sessionId, messageId }).then(
-          setupMessage => ({ foundAt: messageId, setupMessage })
-        )
+        waitForSetupMessage({ serverUrl, sessionId, messageId }).then(setupMessage => ({
+          foundAt: messageId,
+          setupMessage,
+        }))
       )
     )
   } catch (cause) {
-    const namespaces = messageIds
-      .map(id => (id === undefined ? '<default>' : id))
-      .join(', ')
+    const namespaces = messageIds.map(id => (id === undefined ? '<default>' : id)).join(', ')
     // Attach `cause` via Object.assign instead of `new Error(msg, { cause })`
     // because the SDK targets ES2021, whose ErrorConstructor type doesn't carry
     // the `cause` option (added in ES2022). Engine support is unconditional.
-    throw Object.assign(
-      new Error(
-        `setup message not found in any of the polled namespaces: ${namespaces}`
-      ),
-      { cause }
-    )
+    throw Object.assign(new Error(`setup message not found in any of the polled namespaces: ${namespaces}`), { cause })
   }
 }

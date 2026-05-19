@@ -7,18 +7,13 @@ import { TokenMetadataResolver } from '@vultisig/core-chain/coin/token/metadata/
  * Resolves Cardano native token metadata from the Koios `asset_info` endpoint.
  * The `id` field is expected in `policy_id.asset_name` format (both hex).
  */
-export const getCardanoTokenMetadata: TokenMetadataResolver<
-  OtherChain.Cardano
-> = async ({ id }) => {
+export const getCardanoTokenMetadata: TokenMetadataResolver<OtherChain.Cardano> = async ({ id }) => {
   const { policyId, assetName } = fromCardanoAssetId(id)
   const info = await getCardanoAssetInfo({ policyId, assetName })
 
   const registry = info.token_registry_metadata
 
-  const ticker =
-    registry?.ticker?.trim() ||
-    info.asset_name_ascii?.trim() ||
-    assetName.slice(0, 8).toUpperCase()
+  const ticker = registry?.ticker?.trim() || info.asset_name_ascii?.trim() || assetName.slice(0, 8).toUpperCase()
 
   const decimals = registry?.decimals ?? 0
 

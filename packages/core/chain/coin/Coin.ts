@@ -41,11 +41,8 @@ export type CoinAmount = {
 }
 
 export const areEqualCoins = (one: CoinKey, another: CoinKey): boolean =>
-  one.chain === another.chain &&
-  one.id?.toLowerCase() === another.id?.toLowerCase()
+  one.chain === another.chain && one.id?.toLowerCase() === another.id?.toLowerCase()
 
-export const coinKeyToString = ({ chain, id }: CoinKey): string =>
-  without([chain, id], undefined).join(':')
+export const coinKeyToString = ({ chain, id }: CoinKey): string => without([chain, id], undefined).join(':')
 
-export const extractCoinKey = <T extends CoinKey>(coin: T): CoinKey =>
-  pick(coin, ['chain', 'id'])
+export const extractCoinKey = <T extends CoinKey>(coin: T): CoinKey => pick(coin, ['chain', 'id'])

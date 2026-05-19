@@ -8,15 +8,10 @@ export type AccountCoinKey<T extends Chain = Chain> = CoinKey<T> & {
   address: string
 }
 
-export type AccountCoin<T extends Chain = Chain> = CoinMetadata &
-  AccountCoinKey<T>
+export type AccountCoin<T extends Chain = Chain> = CoinMetadata & AccountCoinKey<T>
 
-export const extractAccountCoinKey = <T extends AccountCoinKey>(
-  coin: T
-): AccountCoinKey => pick(coin, ['chain', 'id', 'address'])
+export const extractAccountCoinKey = <T extends AccountCoinKey>(coin: T): AccountCoinKey =>
+  pick(coin, ['chain', 'id', 'address'])
 
-export const accountCoinKeyToString = ({
-  chain,
-  id,
-  address,
-}: AccountCoinKey): string => without([chain, id, address], undefined).join(':')
+export const accountCoinKeyToString = ({ chain, id, address }: AccountCoinKey): string =>
+  without([chain, id, address], undefined).join(':')

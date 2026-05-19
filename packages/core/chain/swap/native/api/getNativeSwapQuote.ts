@@ -45,7 +45,6 @@ const requestNativeSwapQuote = async ({
   streamingQuantity,
   affiliateBps,
   referral,
-  from,
 }: {
   swapChain: NativeSwapChain
   swapBaseUrl: string
@@ -57,7 +56,6 @@ const requestNativeSwapQuote = async ({
   streamingQuantity?: number
   affiliateBps?: number
   referral?: string
-  from: AccountCoin
 }): Promise<NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse> => {
   const params = new URLSearchParams({
     from_asset: fromAsset,
@@ -65,9 +63,7 @@ const requestNativeSwapQuote = async ({
     amount: chainAmount.toString(),
     destination,
     streaming_interval: String(streamingInterval),
-    ...(streamingQuantity !== undefined
-      ? { streaming_quantity: String(streamingQuantity) }
-      : {}),
+    ...(streamingQuantity !== undefined ? { streaming_quantity: String(streamingQuantity) } : {}),
     ...(affiliateBps !== undefined
       ? buildAffiliateParams({
           swapChain,
@@ -89,9 +85,7 @@ const assertOkQuote = (
   if ('error' in result) {
     if (isInError(result.error, 'not enough asset to pay for fees')) {
       const { ticker } = chainFeeCoin[from.chain]
-      throw new Error(
-        t('not_enough_asset_to_cover_gas_fees', { asset: ticker })
-      )
+      throw new Error(t('not_enough_asset_to_cover_gas_fees', { asset: ticker }))
     }
     throw new Error(result.error)
   }
@@ -126,7 +120,6 @@ export const getNativeSwapQuote = async ({
       streamingInterval: nativeSwapStreamingInterval[swapChain],
       affiliateBps,
       referral,
-      from,
     })
 
     return {
@@ -145,22 +138,17 @@ export const getNativeSwapQuote = async ({
     streamingInterval: nativeSwapStreamingInterval[swapChain],
     affiliateBps,
     referral,
-    from,
   })
 
   const rapid = assertOkQuote(rapidResult, from)
 
   const totalBps = rapid.fees.total_bps
-  if (
-    totalBps === undefined ||
-    totalBps <= THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS
-  ) {
+  if (totalBps === undefined || totalBps <= THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS) {
     return { ...rapid, swapChain }
   }
 
   const streamingQuantity =
-    rapid.max_streaming_quantity !== undefined &&
-    rapid.max_streaming_quantity > 0
+    rapid.max_streaming_quantity !== undefined && rapid.max_streaming_quantity > 0
       ? rapid.max_streaming_quantity
       : undefined
 
@@ -177,21 +165,15 @@ export const getNativeSwapQuote = async ({
       streamingQuantity,
       affiliateBps,
       referral,
-      from,
     })
     streaming = assertOkQuote(streamingRes, from)
   } catch (error) {
-    console.warn(
-      '[thorchain] streaming quote failed after elevated rapid slippage; using rapid quote',
-      error
-    )
+    console.warn('[thorchain] streaming quote failed after elevated rapid slippage; using rapid quote', error)
     return { ...rapid, swapChain }
   }
 
   try {
-    if (
-      BigInt(streaming.expected_amount_out) > BigInt(rapid.expected_amount_out)
-    ) {
+    if (BigInt(streaming.expected_amount_out) > BigInt(rapid.expected_amount_out)) {
       return { ...streaming, swapChain }
     }
   } catch {

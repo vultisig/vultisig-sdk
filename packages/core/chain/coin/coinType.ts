@@ -1,17 +1,14 @@
-import { Chain } from '@vultisig/core-chain/Chain'
-import { match } from '@vultisig/lib-utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { CoinType } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { match } from '@vultisig/lib-utils/match'
 
 type Input = {
   walletCore: WalletCore
   chain: Chain
 }
 
-export const getCoinType = ({
-  walletCore: { CoinType },
-  chain,
-}: Input): CoinType =>
+export const getCoinType = ({ walletCore: { CoinType }, chain }: Input): CoinType =>
   match(chain, {
     [Chain.THORChain]: () => CoinType.thorchain,
     [Chain.MayaChain]: () => CoinType.thorchain,

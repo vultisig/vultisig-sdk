@@ -1,8 +1,5 @@
 import { blake2b } from '@noble/hashes/blake2b'
-import {
-  PublicKey,
-  WalletCore,
-} from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { PublicKey, WalletCore } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 type Input = {
   publicKey: PublicKey

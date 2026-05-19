@@ -10,11 +10,12 @@ afterEach(() => {
 })
 
 const mockFetch = (body: unknown, status = 200) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 
@@ -27,9 +28,7 @@ describe('checkProofServiceHealth', () => {
     })
 
     expect(result).toBe(true)
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      'http://localhost:8090/health'
-    )
+    expect(globalThis.fetch).toHaveBeenCalledWith('http://localhost:8090/health')
   })
 
   it('returns false when not healthy', async () => {
@@ -55,9 +54,7 @@ describe('checkProofServiceHealth', () => {
   })
 
   it('returns false on non-OK response', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response('', { status: 503 })
-    ) as typeof fetch
+    globalThis.fetch = vi.fn(async () => new Response('', { status: 503 })) as typeof fetch
 
     const result = await checkProofServiceHealth({
       baseUrl: 'http://localhost:8090',
@@ -142,21 +139,15 @@ describe('generateClaimProof', () => {
   })
 
   it('throws on non-OK response', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response('proof verification failed', { status: 400 })
-    ) as typeof fetch
+    globalThis.fetch = vi.fn(async () => new Response('proof verification failed', { status: 400 })) as typeof fetch
 
-    await expect(generateClaimProof(validInput)).rejects.toThrow(
-      'Proof service error (400): proof verification failed'
-    )
+    await expect(generateClaimProof(validInput)).rejects.toThrow('Proof service error (400): proof verification failed')
   })
 
   it('throws on invalid response fields', async () => {
     mockFetch({ ...validResponse, message_hash: 'not-hex' })
 
-    await expect(generateClaimProof(validInput)).rejects.toThrow(
-      'Invalid proof service response: invalid message_hash'
-    )
+    await expect(generateClaimProof(validInput)).rejects.toThrow('Invalid proof service response: invalid message_hash')
   })
 
   it('omits broadcast from the request body when not requested', async () => {

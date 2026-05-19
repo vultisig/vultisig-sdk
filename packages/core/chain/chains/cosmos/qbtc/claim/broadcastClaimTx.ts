@@ -55,28 +55,13 @@ type FetchTxResponseShape = {
 
 const claimWithProofEventType = 'claim_with_proof'
 
-const findEventAttr = (
-  events: TxEvent[] | undefined,
-  type: string,
-  key: string
-): string | undefined =>
-  events
-    ?.find(e => e.type === type)
-    ?.attributes?.find(a => a.key === key)?.value
+const findEventAttr = (events: TxEvent[] | undefined, type: string, key: string): string | undefined =>
+  events?.find(e => e.type === type)?.attributes?.find(a => a.key === key)?.value
 
-const parseClaimResultFromEvents = (
-  events: TxEvent[] | undefined,
-  txHash: string
-): ClaimTxResponse => ({
-  totalAmountClaimed: BigInt(
-    findEventAttr(events, claimWithProofEventType, 'total_amount') ?? '0'
-  ),
-  utxosClaimed: Number(
-    findEventAttr(events, claimWithProofEventType, 'utxos_claimed') ?? '0'
-  ),
-  utxosSkipped: Number(
-    findEventAttr(events, claimWithProofEventType, 'utxos_skipped') ?? '0'
-  ),
+const parseClaimResultFromEvents = (events: TxEvent[] | undefined, txHash: string): ClaimTxResponse => ({
+  totalAmountClaimed: BigInt(findEventAttr(events, claimWithProofEventType, 'total_amount') ?? '0'),
+  utxosClaimed: Number(findEventAttr(events, claimWithProofEventType, 'utxos_claimed') ?? '0'),
+  utxosSkipped: Number(findEventAttr(events, claimWithProofEventType, 'utxos_skipped') ?? '0'),
   txHash,
 })
 
@@ -111,24 +96,18 @@ const waitForTxInclusion = async ({
     if (response.ok) {
       const data: FetchTxResponseShape = await response.json()
       if (data.tx_response) return data.tx_response
-      throw new Error(
-        `QBTC claim tx ${txHash}: missing tx_response on inclusion query`
-      )
+      throw new Error(`QBTC claim tx ${txHash}: missing tx_response on inclusion query`)
     }
 
     if (response.status !== 404) {
       const text = await response.text()
-      throw new Error(
-        `QBTC claim inclusion query failed (${response.status}): ${text}`
-      )
+      throw new Error(`QBTC claim inclusion query failed (${response.status}): ${text}`)
     }
 
     await sleep(intervalMs)
   }
 
-  throw new Error(
-    `QBTC claim tx ${txHash} not included within ${timeoutMs}ms`
-  )
+  throw new Error(`QBTC claim tx ${txHash} not included within ${timeoutMs}ms`)
 }
 
 type WaitForClaimTxResultInput = {
@@ -230,9 +209,7 @@ export const broadcastClaimTx = async ({
   })
 
   if (typeof included.code !== 'number') {
-    throw new Error(
-      `QBTC claim tx ${txHash}: missing code on included tx_response`
-    )
+    throw new Error(`QBTC claim tx ${txHash}: missing code on included tx_response`)
   }
 
   if (included.code !== 0) {

@@ -7,9 +7,7 @@ type TriggerConstantContractResponse = {
   constant_result?: string[]
 }
 
-export const getTronTokenMetadata: TokenMetadataResolver<
-  OtherChain.Tron
-> = async ({ id }) => {
+export const getTronTokenMetadata: TokenMetadataResolver<OtherChain.Tron> = async ({ id }) => {
   const url = 'https://api.trongrid.io/wallet/triggerconstantcontract'
   const ownerAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb'
 

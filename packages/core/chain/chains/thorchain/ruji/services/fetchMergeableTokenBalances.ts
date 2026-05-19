@@ -25,9 +25,7 @@ type TokenBalance = {
   sizeAmountChain: string
 }
 
-export const fetchMergeableTokenBalances = async (
-  thorAddr: string
-): Promise<TokenBalance[]> => {
+export const fetchMergeableTokenBalances = async (thorAddr: string): Promise<TokenBalance[]> => {
   const { data, errors } = await queryUrl<Gql>(rujiraGraphQlEndpoint, {
     body: {
       query: `

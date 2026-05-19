@@ -74,25 +74,19 @@ const evmDefaultChainInfo: Record<EvmChain, ViemChain> = {
   [EvmChain.Sei]: sei,
 }
 
-const evmChainId: Record<EvmChain, string> = recordMap(
-  evmDefaultChainInfo,
-  chain => numberToHex(chain.id)
-)
+const evmChainId: Record<EvmChain, string> = recordMap(evmDefaultChainInfo, chain => numberToHex(chain.id))
 
-export const evmChainInfo = recordMap(
-  evmDefaultChainInfo,
-  (chain, chainKey) => {
-    const rpcUrl = evmChainRpcUrls[chainKey]
+export const evmChainInfo = recordMap(evmDefaultChainInfo, (chain, chainKey) => {
+  const rpcUrl = evmChainRpcUrls[chainKey]
 
-    return {
-      ...chain,
-      rpcUrls: {
-        ...chain.rpcUrls,
-        default: { http: [rpcUrl] },
-      },
-    }
+  return {
+    ...chain,
+    rpcUrls: {
+      ...chain.rpcUrls,
+      default: { http: [rpcUrl] },
+    },
   }
-)
+})
 
 export const getEvmChainId = (chain: EvmChain): string => {
   return evmChainId[chain]

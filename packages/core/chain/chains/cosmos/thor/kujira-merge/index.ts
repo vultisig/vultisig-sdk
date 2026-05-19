@@ -2,22 +2,11 @@ import { makeRecord } from '@vultisig/lib-utils/record/makeRecord'
 
 import { KnownCoinMetadata } from '../../../../coin/Coin'
 
-const kujiraCoinsMigratedToThorChain = [
-  'kuji',
-  'rkuji',
-  'fuzn',
-  'nstk',
-  'wink',
-  'lvn',
-] as const
+const kujiraCoinsMigratedToThorChain = ['kuji', 'rkuji', 'fuzn', 'nstk', 'wink', 'lvn'] as const
 
-type KujiraCoinMigratedToThorChain =
-  (typeof kujiraCoinsMigratedToThorChain)[number]
+type KujiraCoinMigratedToThorChain = (typeof kujiraCoinsMigratedToThorChain)[number]
 
-export const kujiraCoinThorChainMergeContracts: Record<
-  KujiraCoinMigratedToThorChain,
-  string
-> = {
+export const kujiraCoinThorChainMergeContracts: Record<KujiraCoinMigratedToThorChain, string> = {
   kuji: 'thor14hj2tavq8fpesdwxxcu44rty3hh90vhujrvcmstl4zr3txmfvw9s3p2nzy',
   rkuji: 'thor1yyca08xqdgvjz0psg56z67ejh9xms6l436u8y58m82npdqqhmmtqrsjrgh',
   fuzn: 'thor1suhgf5svhu4usrurvxzlgn54ksxmn8gljarjtxqnapv8kjnp4nrsw5xx2d',
@@ -63,7 +52,7 @@ export const kujiraCoinsMigratedToThorChainMetadata: Record<
   },
 }
 
-export const kujiraCoinMigratedToThorChainDestinationId: Record<
-  KujiraCoinMigratedToThorChain,
-  string
-> = makeRecord(kujiraCoinsMigratedToThorChain, id => `thor.${id}`)
+export const kujiraCoinMigratedToThorChainDestinationId: Record<KujiraCoinMigratedToThorChain, string> = makeRecord(
+  kujiraCoinsMigratedToThorChain,
+  id => `thor.${id}`
+)

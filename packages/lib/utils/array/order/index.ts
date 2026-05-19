@@ -1,10 +1,6 @@
 import { Order } from '../../order/Order'
 
-export const order = <T>(
-  array: T[],
-  getValue: (item: T) => number,
-  order: Order
-) => {
+export const order = <T>(array: T[], getValue: (item: T) => number, order: Order) => {
   return [...array].sort((a, b) => {
     if (order === 'asc') {
       return getValue(a) - getValue(b)

@@ -9,9 +9,7 @@ import { SigningInputsResolver } from '../resolver'
 
 const suiContractAddress = '0x2::sui::SUI'
 
-export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({
-  keysignPayload,
-}) => {
+export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { coins, referenceGasPrice, gasBudget } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
@@ -27,21 +25,15 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({
       version: Long.fromString(coin.version),
     })
 
-  const gasCoins = coins
-    .filter(c => c.coinType === suiContractAddress)
-    .map(createObjectRef)
+  const gasCoins = coins.filter(c => c.coinType === suiContractAddress).map(createObjectRef)
 
   const baseInput = {
     referenceGasPrice: Long.fromString(referenceGasPrice),
     signer: coin.address,
-    gasBudget: gasBudget
-      ? Long.fromString(gasBudget)
-      : Long.fromBigInt(suiGasBudget),
+    gasBudget: gasBudget ? Long.fromString(gasBudget) : Long.fromBigInt(suiGasBudget),
   }
 
-  const inputCoins = coins
-    .filter(c => c.coinType === coinType)
-    .map(createObjectRef)
+  const inputCoins = coins.filter(c => c.coinType === coinType).map(createObjectRef)
 
   if (coin.id) {
     return [

@@ -110,9 +110,7 @@ export type GetThorchainPoolsOptions = {
  * By default returns only `status=available` pools — the only ones that
  * accept LP adds. Pass `{ status: null }` to fetch every pool regardless.
  */
-export const getThorchainPools = async (
-  options: GetThorchainPoolsOptions = {}
-): Promise<ThorchainPoolSummary[]> => {
+export const getThorchainPools = async (options: GetThorchainPoolsOptions = {}): Promise<ThorchainPoolSummary[]> => {
   const status = options.status === undefined ? 'available' : options.status
   const url =
     status === null
@@ -120,9 +118,7 @@ export const getThorchainPools = async (
       : `${thorchainMidgardBaseUrl}/v2/pools?status=${encodeURIComponent(status)}`
   const raw = await queryUrl<unknown>(url)
   if (!Array.isArray(raw)) {
-    throw new Error(
-      `getThorchainPools: expected an array from ${url}, got ${typeof raw}`
-    )
+    throw new Error(`getThorchainPools: expected an array from ${url}, got ${typeof raw}`)
   }
   return (raw as RawPool[]).map(normalizePool)
 }

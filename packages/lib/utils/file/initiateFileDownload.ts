@@ -4,10 +4,7 @@ type InitiateFileDownloadInput = {
   blob: Blob
 } & NameProp
 
-export const initiateFileDownload = ({
-  blob,
-  name,
-}: InitiateFileDownloadInput) => {
+export const initiateFileDownload = ({ blob, name }: InitiateFileDownloadInput) => {
   const url = URL.createObjectURL(blob)
 
   const anchor = document.createElement('a')

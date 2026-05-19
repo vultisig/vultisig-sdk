@@ -6,15 +6,7 @@
  * @see https://datatracker.ietf.org/doc/html/rfc8152
  * @see https://cips.cardano.org/cip/CIP-0008
  */
-import {
-  cborArray,
-  cborBytes,
-  cborMap,
-  cborNegint,
-  cborText,
-  cborUint,
-  concat,
-} from './cardanoCborPrimitives'
+import { cborArray, cborBytes, cborMap, cborNegint, cborText, cborUint } from './cardanoCborPrimitives'
 
 /**
  * Build the protected headers for a CIP-8 COSE_Sign1:
@@ -34,10 +26,7 @@ const buildProtectedHeaders = (addressBytes: Uint8Array): Uint8Array =>
  *
  *     ["Signature1", protected_bytes, external_aad, payload]
  */
-export const buildSigStructure = (
-  protectedBytes: Uint8Array,
-  payload: Uint8Array
-): Uint8Array =>
+export const buildSigStructure = (protectedBytes: Uint8Array, payload: Uint8Array): Uint8Array =>
   cborArray([
     cborText('Signature1'),
     cborBytes(protectedBytes),
@@ -62,11 +51,7 @@ type BuildCoseSign1Input = {
  * Also returns the `protectedSerialized` bytes needed to compute the
  * Sig_structure before signing.
  */
-export const buildCoseSign1 = ({
-  addressBytes,
-  payload,
-  signature,
-}: BuildCoseSign1Input): Uint8Array => {
+export const buildCoseSign1 = ({ addressBytes, payload, signature }: BuildCoseSign1Input): Uint8Array => {
   const protectedSerialized = buildProtectedHeaders(addressBytes)
   return cborArray([
     cborBytes(protectedSerialized),
@@ -80,9 +65,7 @@ export const buildCoseSign1 = ({
  * Return the serialized protected headers for a given address.
  * Used by the caller to build the Sig_structure before MPC signing.
  */
-export const buildProtectedHeaderBytes = (
-  addressBytes: Uint8Array
-): Uint8Array => buildProtectedHeaders(addressBytes)
+export const buildProtectedHeaderBytes = (addressBytes: Uint8Array): Uint8Array => buildProtectedHeaders(addressBytes)
 
 type BuildCoseKeyInput = {
   /** 32-byte Ed25519 public key (raw bytes). */

@@ -10,8 +10,5 @@ export function bigIntMax(...values: bigint[]): bigint {
     throw new Error('No arguments provided to bigIntMax')
   }
 
-  return values.reduce(
-    (max, current) => (current > max ? current : max),
-    values[0]
-  )
+  return values.reduce((max, current) => (current > max ? current : max), values[0])
 }

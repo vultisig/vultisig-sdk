@@ -3,14 +3,14 @@
  *
  * Handles CLI configuration files and environment variables
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 
 /**
  * CLI Configuration
  */
-export interface CLIConfig {
+export type CLIConfig = {
   version: number
   initialized: boolean
   initializedAt?: string

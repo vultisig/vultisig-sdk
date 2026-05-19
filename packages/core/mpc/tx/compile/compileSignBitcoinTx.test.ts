@@ -27,10 +27,7 @@ import { encodeDERSignature } from '../../derSignature'
 import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
-const TEST_PUBKEY = Buffer.from(
-  '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
-  'hex'
-)
+const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
 const EXPECTED_BITCOINJS_RAW_TX =
   '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff01905f010000000000160014751e76e8199196d454941c45d1b3a323f1433bd60247304402204f69fe236b040aa999563dd909273ee088df86e6e1c0c46a083399384c02fc12022038870510658d27312b253380b3b2bbfb1b5db4423399561a3e5737e1540f825b01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179800000000'
 

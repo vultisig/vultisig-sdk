@@ -7,19 +7,13 @@ import { BlockaidTxValidationInput } from '@vultisig/core-chain/security/blockai
 import { getKeysignChain } from '@vultisig/core-mpc/keysign/utils/getKeysignChain'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
-import {
-  BlockaidTxValidationInputResolver,
-  BlockaidTxValidationInputResolverInput,
-} from './resolver'
+import { BlockaidTxValidationInputResolver, BlockaidTxValidationInputResolverInput } from './resolver'
 import { getEvmBlockaidTxValidationInput } from './resolvers/evm'
 import { getSolanaBlockaidTxValidationInput } from './resolvers/solana'
 import { getSuiBlockaidTxValidationInput } from './resolvers/sui'
 import { getUtxoBlockaidTxValidationInput } from './resolvers/utxo'
 
-const resolvers: Record<
-  BlockaidValidationSupportedChainKind,
-  BlockaidTxValidationInputResolver<any>
-> = {
+const resolvers: Record<BlockaidValidationSupportedChainKind, BlockaidTxValidationInputResolver<any>> = {
   evm: getEvmBlockaidTxValidationInput,
   utxo: getUtxoBlockaidTxValidationInput,
   solana: getSolanaBlockaidTxValidationInput,

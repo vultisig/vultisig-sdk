@@ -1,7 +1,16 @@
 node_modules/
+# Generated build output; formatting source before build is the contract.
 dist/
-packages/core/
-**/lib/
+**/dist/
+# Generated protobuf TypeScript; update upstream proto files and regenerate.
+**/*_pb.ts
+# wasm-pack outputs; keep generated bindings untouched.
+packages/lib/dkls/vs_wasm*.js
+packages/lib/dkls/vs_wasm*.d.ts
+packages/lib/mldsa/vs_wasm*.js
+packages/lib/mldsa/vs_wasm*.d.ts
+packages/lib/schnorr/vs_schnorr_wasm*.js
+packages/lib/schnorr/vs_schnorr_wasm*.d.ts
 archived/
 coverage/
 **/coverage/

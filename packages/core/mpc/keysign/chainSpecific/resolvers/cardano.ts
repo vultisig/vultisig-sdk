@@ -8,9 +8,7 @@ import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { getKeysignAmount } from '../../utils/getKeysignAmount'
 import { GetChainSpecificResolver } from '../resolver'
 
-export const getCardanoChainSpecific: GetChainSpecificResolver<
-  'cardano'
-> = async ({ keysignPayload }) => {
+export const getCardanoChainSpecific: GetChainSpecificResolver<'cardano'> = async ({ keysignPayload }) => {
   const amount = getKeysignAmount(keysignPayload)
 
   const currentSlot = await getCardanoCurrentSlot()

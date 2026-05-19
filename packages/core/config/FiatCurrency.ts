@@ -1,15 +1,4 @@
-export const fiatCurrencies = [
-  'usd',
-  'eur',
-  'gbp',
-  'chf',
-  'jpy',
-  'cny',
-  'cad',
-  'aud',
-  'sgd',
-  'sek',
-] as const
+export const fiatCurrencies = ['usd', 'eur', 'gbp', 'chf', 'jpy', 'cny', 'cad', 'aud', 'sgd', 'sek'] as const
 export type FiatCurrency = (typeof fiatCurrencies)[number]
 
 export const defaultFiatCurrency: FiatCurrency = 'usd'

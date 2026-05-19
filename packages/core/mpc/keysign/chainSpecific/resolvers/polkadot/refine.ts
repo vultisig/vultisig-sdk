@@ -7,10 +7,7 @@ import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { getPreSigningOutput } from '@vultisig/core-mpc/keysign/preSigningOutput'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { PolkadotSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -68,13 +65,12 @@ export const refinePolkadotChainSpecific = async ({
   allSignatures.add(zeroSignature)
   publicKeys.add(publicKeyData)
 
-  const compiledWithSignature =
-    walletCore.TransactionCompiler.compileWithSignatures(
-      coinType,
-      txInputData,
-      allSignatures,
-      publicKeys
-    )
+  const compiledWithSignature = walletCore.TransactionCompiler.compileWithSignatures(
+    coinType,
+    txInputData,
+    allSignatures,
+    publicKeys
+  )
 
   const output = decodeSigningOutput(Chain.Polkadot, compiledWithSignature)
 

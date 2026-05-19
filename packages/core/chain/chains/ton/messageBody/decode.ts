@@ -1,11 +1,6 @@
 import { Address, Cell, Slice } from '@ton/core'
 
-import {
-  DEDUST_NATIVE_VAULTS,
-  isKnownRouterAddress,
-  STONFI_V2_PTON_WALLETS,
-  STONFI_V2_ROUTERS,
-} from './knownRouters'
+import { DEDUST_NATIVE_VAULTS, isKnownRouterAddress, STONFI_V2_PTON_WALLETS, STONFI_V2_ROUTERS } from './knownRouters'
 import { TonOp } from './opcodes'
 import { TonMessageBodyIntent, TonSwapIntent } from './types'
 
@@ -86,10 +81,7 @@ type TonSwapOffer = {
   offerAmount: bigint
 }
 
-const parseStonfiV2Swap = (
-  payload: Cell,
-  offer: TonSwapOffer
-): TonSwapIntent | null =>
+const parseStonfiV2Swap = (payload: Cell, offer: TonSwapOffer): TonSwapIntent | null =>
   safeDecode(() => {
     const slice = payload.beginParse()
 
@@ -181,10 +173,7 @@ const parseDedustSwapParams = (slice: Slice) => {
   return receiverAddress
 }
 
-const parseDedustSwap = (
-  payload: Cell,
-  offer: TonSwapOffer
-): TonSwapIntent | null =>
+const parseDedustSwap = (payload: Cell, offer: TonSwapOffer): TonSwapIntent | null =>
   safeDecode(() => {
     const slice = payload.beginParse()
 
@@ -227,10 +216,8 @@ const parseDedustSwap = (
  * STON.fi swap opcode is forgeable and can be used to mislabel a transfer to
  * an attacker as a swap.
  */
-const parseStonfiSwapPayload = (
-  payload: Cell,
-  offer: TonSwapOffer
-): TonSwapIntent | null => parseStonfiV2Swap(payload, offer)
+const parseStonfiSwapPayload = (payload: Cell, offer: TonSwapOffer): TonSwapIntent | null =>
+  parseStonfiV2Swap(payload, offer)
 
 const parsePtonTransferSwap = (slice: Slice): TonSwapIntent | null =>
   safeDecode(() => {
@@ -280,9 +267,7 @@ const parseJettonTransfer = (slice: Slice): TonMessageBodyIntent | null => {
       queryId,
       amount,
       destination: innerDestination,
-      responseDestination: responseDestination
-        ? formatAddress(responseDestination)
-        : null,
+      responseDestination: responseDestination ? formatAddress(responseDestination) : null,
       forwardTonAmount,
     }
   })
@@ -303,9 +288,7 @@ const parseNftTransfer = (slice: Slice): TonMessageBodyIntent | null => {
       kind: 'nftTransfer',
       queryId,
       newOwner: formatAddress(newOwner),
-      responseDestination: responseDestination
-        ? formatAddress(responseDestination)
-        : null,
+      responseDestination: responseDestination ? formatAddress(responseDestination) : null,
       forwardAmount,
     }
   })

@@ -7,18 +7,13 @@ type ToMpcLibKeyshareInput = {
   signatureAlgorithm: SignatureAlgorithm
 }
 
-export const toMpcLibKeyshare = ({
-  keyShare,
-  signatureAlgorithm,
-}: ToMpcLibKeyshareInput) => {
+export const toMpcLibKeyshare = ({ keyShare, signatureAlgorithm }: ToMpcLibKeyshareInput) => {
   if (signatureAlgorithm === 'mldsa') {
     throw new Error(
       'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine. ' +
-      'Route MLDSA keyshares through packages/core/mpc/mldsa/ instead.'
+        'Route MLDSA keyshares through packages/core/mpc/mldsa/ instead.'
     )
   }
   const engineKey = signatureAlgorithm === 'eddsa' ? 'schnorr' : 'dkls'
-  return getMpcEngine()[engineKey].keyshareFromBytes(
-    Buffer.from(keyShare, 'base64')
-  )
+  return getMpcEngine()[engineKey].keyshareFromBytes(Buffer.from(keyShare, 'base64'))
 }

@@ -29,58 +29,23 @@ export type {
   ThorchainLpAddPayload,
   ThorchainLpRemovePayload,
 } from './payload'
-export {
-  buildThorchainLpAddPayload,
-  buildThorchainLpRemovePayload,
-} from './payload'
-export type {
-  GetThorchainPoolsOptions,
-  ThorchainPoolSummary,
-} from './pools'
-export {
-  assertValidPoolId,
-  getThorchainPools,
-  isValidPoolId,
-  thorchainMidgardBaseUrl,
-} from './pools'
+export { buildThorchainLpAddPayload, buildThorchainLpRemovePayload } from './payload'
+export type { GetThorchainPoolsOptions, ThorchainPoolSummary } from './pools'
+export { assertValidPoolId, getThorchainPools, isValidPoolId, thorchainMidgardBaseUrl } from './pools'
 export type { GetThorchainLpPositionInput } from './position'
+export { getThorchainLpPosition, getThorchainLpPositionFromThornode } from './position'
 export type { ThorchainLpPosition } from './types'
-export {
-  getThorchainLpPosition,
-  getThorchainLpPositionFromThornode,
-} from './position'
-export {
-  assertPoolDepositable,
-  getThorchainMimir,
-  poolPauseMimirKey,
-} from './validation'
+export { assertPoolDepositable, getThorchainMimir, poolPauseMimirKey } from './validation'
 
 // v2 additions
-export type { VaultAddressMap } from './pairing'
-export {
-  resolvePairedAddressForLpAdd,
-} from './pairing'
-export type { LpSide } from './pairing'
-export { lpChainMap, chainPrefixToChain, chainToLpPrefix } from './lpChainMap'
-export type { PoolState, SlippageResult, EstimateLpAddResult } from './math'
-export {
-  getLiquidityUnits,
-  getPoolShare,
-  getLpAddSlippage,
-  estimateLpAdd,
-} from './math'
-export { getThorchainLpPositions } from './positions'
-export type {
-  LpWithdrawReadiness,
-} from './lockup'
-export {
-  getThorchainLpLockupSeconds,
-  getLpWithdrawReadiness,
-  THORCHAIN_BLOCK_TIME_SECONDS,
-} from './lockup'
 export type { LpHaltStatus } from './halts'
-export {
-  getThorchainLpHaltStatus,
-  getThorchainLpHaltStatusAll,
-  getThorchainLpPoolPauseStatus,
-} from './halts'
+export { getThorchainLpHaltStatus, getThorchainLpHaltStatusAll, getThorchainLpPoolPauseStatus } from './halts'
+export type { LpWithdrawReadiness } from './lockup'
+export { getLpWithdrawReadiness, getThorchainLpLockupSeconds, THORCHAIN_BLOCK_TIME_SECONDS } from './lockup'
+export { chainPrefixToChain, chainToLpPrefix, lpChainMap } from './lpChainMap'
+export type { EstimateLpAddResult, PoolState, SlippageResult } from './math'
+export { estimateLpAdd, getLiquidityUnits, getLpAddSlippage, getPoolShare } from './math'
+export type { VaultAddressMap } from './pairing'
+export type { LpSide } from './pairing'
+export { resolvePairedAddressForLpAdd } from './pairing'
+export { getThorchainLpPositions } from './positions'

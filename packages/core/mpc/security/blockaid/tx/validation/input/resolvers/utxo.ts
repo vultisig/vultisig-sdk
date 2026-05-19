@@ -6,9 +6,11 @@ import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxValidationInputResolver } from '../resolver'
 
-export const getUtxoBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
-  UtxoChain.Bitcoin
-> = ({ payload, walletCore, chain }) => {
+export const getUtxoBlockaidTxValidationInput: BlockaidTxValidationInputResolver<UtxoChain.Bitcoin> = ({
+  payload,
+  walletCore,
+  chain,
+}) => {
   const { address } = getKeysignCoin(payload)
 
   const compiledTxs = getCompiledTxsForBlockaidInput({
@@ -16,9 +18,7 @@ export const getUtxoBlockaidTxValidationInput: BlockaidTxValidationInputResolver
     walletCore,
   })
 
-  const [transaction] = compiledTxs.map(
-    compiledTx => decodeSigningOutput(chain, compiledTx).encoded
-  )
+  const [transaction] = compiledTxs.map(compiledTx => decodeSigningOutput(chain, compiledTx).encoded)
 
   return {
     chain: chain.toLowerCase(),

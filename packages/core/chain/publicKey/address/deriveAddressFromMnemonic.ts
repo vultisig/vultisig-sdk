@@ -1,6 +1,6 @@
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
-import { WalletCore } from '@trustwallet/wallet-core'
 
 type DeriveAddressFromMnemonicInput = {
   chain: Chain
@@ -8,11 +8,7 @@ type DeriveAddressFromMnemonicInput = {
   walletCore: WalletCore
 }
 
-export const deriveAddressFromMnemonic = ({
-  chain,
-  mnemonic,
-  walletCore,
-}: DeriveAddressFromMnemonicInput): string => {
+export const deriveAddressFromMnemonic = ({ chain, mnemonic, walletCore }: DeriveAddressFromMnemonicInput): string => {
   const hdWallet = walletCore.HDWallet.createWithMnemonic(mnemonic, '')
 
   const coinType = getCoinType({ chain, walletCore })

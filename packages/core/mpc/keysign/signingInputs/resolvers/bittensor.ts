@@ -16,24 +16,14 @@ import { resolvePolkadotToAddress } from '../../utils/resolvePolkadotToAddress'
  * This allows compileTx to extract callData and signedExtra to assemble the final extrinsic,
  * while getPreSigningHashes can extract the payload to hash for signing.
  */
-const encodeBittensorTxInput = (
-  callData: Uint8Array,
-  signedExtra: Uint8Array,
-  payload: Uint8Array
-): Uint8Array => {
+const encodeBittensorTxInput = (callData: Uint8Array, signedExtra: Uint8Array, payload: Uint8Array): Uint8Array => {
   const callDataLen = new Uint8Array(4)
   new DataView(callDataLen.buffer).setUint32(0, callData.length, true)
 
   const signedExtraLen = new Uint8Array(4)
   new DataView(signedExtraLen.buffer).setUint32(0, signedExtra.length, true)
 
-  return concatBytes(
-    callDataLen,
-    callData,
-    signedExtraLen,
-    signedExtra,
-    payload
-  )
+  return concatBytes(callDataLen, callData, signedExtraLen, signedExtra, payload)
 }
 
 export const decodeBittensorTxInput = (
@@ -41,18 +31,12 @@ export const decodeBittensorTxInput = (
 ): { callData: Uint8Array; signedExtra: Uint8Array; payload: Uint8Array } => {
   let offset = 0
 
-  const callDataLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(
-    offset,
-    true
-  )
+  const callDataLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true)
   offset += 4
   const callData = data.slice(offset, offset + callDataLen)
   offset += callDataLen
 
-  const signedExtraLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(
-    offset,
-    true
-  )
+  const signedExtraLen = new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(offset, true)
   offset += 4
   const signedExtra = data.slice(offset, offset + signedExtraLen)
   offset += signedExtraLen
@@ -74,17 +58,8 @@ export const getBittensorSigningInputs = ({
     walletCore,
   })
 
-  const {
-    recentBlockHash,
-    nonce,
-    currentBlockNumber,
-    specVersion,
-    transactionVersion,
-    genesisHash,
-  } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'polkadotSpecific'
-  )
+  const { recentBlockHash, nonce, currentBlockNumber, specVersion, transactionVersion, genesisHash } =
+    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'polkadotSpecific')
 
   const params: BittensorSigningParams = {
     toAddress,
@@ -97,8 +72,7 @@ export const getBittensorSigningInputs = ({
     transactionVersion,
   }
 
-  const { callData, signedExtra, payload } =
-    buildBittensorSigningPayload(params)
+  const { callData, signedExtra, payload } = buildBittensorSigningPayload(params)
 
   return [encodeBittensorTxInput(callData, signedExtra, payload)]
 }

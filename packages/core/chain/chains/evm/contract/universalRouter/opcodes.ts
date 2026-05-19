@@ -33,12 +33,10 @@ export const V4Action = {
  * Sentinel address V4 and this decoder use to represent native ETH. Zero
  * address matches the Currency.unwrap convention in v4-core.
  */
-export const NATIVE_TOKEN_ADDRESS =
-  '0x0000000000000000000000000000000000000000'
+export const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 /**
  * Sentinel sometimes passed as amountIn to signal "use the router's full
  * balance of the input token". Shows up in both V3/V2 and V4 swaps.
  */
-export const CONTRACT_BALANCE_SENTINEL =
-  1n << 255n
+export const CONTRACT_BALANCE_SENTINEL = 1n << 255n

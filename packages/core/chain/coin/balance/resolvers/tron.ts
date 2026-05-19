@@ -27,11 +27,7 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
       })
 
       // Extract balance, handling different possible response formats
-      const balance =
-        data.result?.balance ??
-        data.balance ??
-        data.result?.balance?.toString() ??
-        '0'
+      const balance = data.result?.balance ?? data.balance ?? data.result?.balance?.toString() ?? '0'
 
       return BigInt(balance ?? '0')
     } catch (error) {
@@ -46,10 +42,7 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
       const hexContractAddress = base58TronDecode(shouldBePresent(input.id))
 
       // Fetch TRC20 token balance using EVM service
-      const balance = await fetchTRC20TokenBalance(
-        `0x${hexContractAddress}`,
-        `0x${hexAddress}`
-      )
+      const balance = await fetchTRC20TokenBalance(`0x${hexContractAddress}`, `0x${hexAddress}`)
 
       return BigInt(balance ?? '0')
     } catch (error) {
@@ -81,10 +74,7 @@ function base58TronDecode(address: string): string {
   }
 }
 
-async function fetchTRC20TokenBalance(
-  contractAddress: string,
-  walletAddress: string
-): Promise<number> {
+async function fetchTRC20TokenBalance(contractAddress: string, walletAddress: string): Promise<number> {
   // Add "41" prefix after padding with zeros
   const paddedWalletAddress = '0000000000000000000000' + walletAddress.slice(2)
 
@@ -130,11 +120,7 @@ async function intRpcCall(method: string, params: any[]): Promise<number> {
   })
 }
 
-async function sendRPCRequest<T>(
-  method: string,
-  params: any[],
-  decode: (result: any) => T
-): Promise<T> {
+async function sendRPCRequest<T>(method: string, params: any[], decode: (result: any) => T): Promise<T> {
   const payload = {
     jsonrpc: '2.0',
     method: method,

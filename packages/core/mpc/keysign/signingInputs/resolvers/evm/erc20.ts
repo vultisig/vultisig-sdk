@@ -15,18 +15,10 @@ type Input = {
   walletCore: WalletCore
 }
 
-export const getErc20ApproveSigningInput = ({
-  keysignPayload,
-  walletCore,
-}: Input) => {
-  const { amount, spender } = shouldBePresent(
-    keysignPayload.erc20ApprovePayload
-  )
+export const getErc20ApproveSigningInput = ({ keysignPayload, walletCore }: Input) => {
+  const { amount, spender } = shouldBePresent(keysignPayload.erc20ApprovePayload)
 
-  const amountHex = Buffer.from(
-    stripHexPrefix(bigIntToHex(BigInt(amount))),
-    'hex'
-  )
+  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(amount))), 'hex')
 
   const coin = shouldBePresent(keysignPayload.coin)
   const chain = coin.chain as EvmChain

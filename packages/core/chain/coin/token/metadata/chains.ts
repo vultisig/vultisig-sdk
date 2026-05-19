@@ -10,8 +10,6 @@ export const chainsWithTokenMetadataDiscovery = [
   ...Object.values(CosmosChain),
 ] as const
 
-export type ChainWithTokenMetadataDiscovery =
-  (typeof chainsWithTokenMetadataDiscovery)[number]
+export type ChainWithTokenMetadataDiscovery = (typeof chainsWithTokenMetadataDiscovery)[number]
 
-export type ChainKindWithTokenMetadataDiscovery =
-  DeriveChainKind<ChainWithTokenMetadataDiscovery>
+export type ChainKindWithTokenMetadataDiscovery = DeriveChainKind<ChainWithTokenMetadataDiscovery>

@@ -1,7 +1,4 @@
-export const groupItems = <T, K extends string | number>(
-  items: T[],
-  getKey: (item: T) => K
-): Record<K, T[]> => {
+export const groupItems = <T, K extends string | number>(items: T[], getKey: (item: T) => K): Record<K, T[]> => {
   const result = {} as Record<K, T[]>
 
   items.forEach(item => {

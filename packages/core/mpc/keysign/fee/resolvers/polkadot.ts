@@ -4,10 +4,7 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { FeeAmountResolver } from '../resolver'
 
 export const getPolkadotFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
-  const { gas } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'polkadotSpecific'
-  )
+  const { gas } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'polkadotSpecific')
 
   return gas || polkadotConfig.fee
 }

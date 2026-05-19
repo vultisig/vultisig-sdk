@@ -34,8 +34,7 @@ export const getRippleCoinBalance: CoinBalanceResolver = async input => {
   const totalBalance = BigInt(account_data.Balance)
   const { reserve_base, reserve_inc } = shouldBePresent(validated_ledger)
 
-  const totalReserve =
-    BigInt(reserve_base) + BigInt(account_data.OwnerCount) * BigInt(reserve_inc)
+  const totalReserve = BigInt(reserve_base) + BigInt(account_data.OwnerCount) * BigInt(reserve_inc)
   const spendableBalance = totalBalance - totalReserve
 
   return spendableBalance > 0 ? spendableBalance : BigInt(0)

@@ -5,15 +5,7 @@ import {
   SignBitcoin,
   SignBitcoinSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
-import {
-  address as btcAddress,
-  Network,
-  networks,
-  opcodes,
-  Psbt,
-  script as bscript,
-  Transaction,
-} from 'bitcoinjs-lib'
+import { address as btcAddress, Network, networks, opcodes, Psbt, script as bscript, Transaction } from 'bitcoinjs-lib'
 
 /** Supported script types for PSBT decomposition. */
 type ScriptType = 'p2wpkh' | 'p2sh-p2wpkh' | 'p2pkh' | 'p2tr' | 'p2wsh' | 'unknown'
@@ -22,10 +14,7 @@ type ScriptType = 'p2wpkh' | 'p2sh-p2wpkh' | 'p2pkh' | 'p2tr' | 'p2wsh' | 'unkno
  * Detect the script type from a scriptPubKey buffer.
  * See https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki
  */
-const detectScriptType = (
-  scriptPubKey: Buffer,
-  redeemScript?: Uint8Array
-): ScriptType => {
+const detectScriptType = (scriptPubKey: Buffer, redeemScript?: Uint8Array): ScriptType => {
   // P2WPKH: OP_0 PUSH_20 <20-byte-hash> (22 bytes)
   if (scriptPubKey.length === 22 && scriptPubKey[0] === 0x00 && scriptPubKey[1] === 0x14) {
     return 'p2wpkh'
@@ -76,9 +65,7 @@ const isOpReturn = (script: Buffer): boolean => {
 const getOpReturnHex = (script: Buffer): string | undefined => {
   const chunks = bscript.decompile(script)
   if (!chunks || chunks[0] !== opcodes.OP_RETURN) return undefined
-  const dataChunks = chunks
-    .slice(1)
-    .filter((chunk): chunk is Buffer => Buffer.isBuffer(chunk))
+  const dataChunks = chunks.slice(1).filter((chunk): chunk is Buffer => Buffer.isBuffer(chunk))
   if (dataChunks.length === 0) return undefined
   return Buffer.concat(dataChunks).toString('hex')
 }
@@ -109,8 +96,7 @@ export const buildSignBitcoinFromPsbt = ({
   const anyInputHasBip32 = psbt.data.inputs.some(
     inp =>
       (inp.bip32Derivation && inp.bip32Derivation.length > 0) ||
-      (inp.tapBip32Derivation &&
-        inp.tapBip32Derivation.length > 0)
+      (inp.tapBip32Derivation && inp.tapBip32Derivation.length > 0)
   )
 
   const inputs = psbt.txInputs.map((txInput, i) => {
@@ -128,9 +114,7 @@ export const buildSignBitcoinFromPsbt = ({
       // in the sighash, causing excess fees if the actual UTXO is worth more.
       // See https://blog.trezor.io/details-of-the-multisig-change-address-issue-and-its-mitigation-6370ad73ed2a
       if (inputData.nonWitnessUtxo) {
-        const prevTx = Transaction.fromBuffer(
-          Buffer.from(inputData.nonWitnessUtxo)
-        )
+        const prevTx = Transaction.fromBuffer(Buffer.from(inputData.nonWitnessUtxo))
         // BIP-174: verify nonWitnessUtxo txid matches the input's prevout hash
         const prevTxId = prevTx.getId()
         const expectedTxId = Buffer.from(txInput.hash).reverse().toString('hex')
@@ -149,21 +133,15 @@ export const buildSignBitcoinFromPsbt = ({
         }
       }
     } else if (inputData.nonWitnessUtxo) {
-      const prevTx = Transaction.fromBuffer(
-        Buffer.from(inputData.nonWitnessUtxo)
-      )
+      const prevTx = Transaction.fromBuffer(Buffer.from(inputData.nonWitnessUtxo))
       const prevOutput = prevTx.outs[txInput.index]
       if (!prevOutput) {
-        throw new Error(
-          `Input #${i}: nonWitnessUtxo has no output at index ${txInput.index}`
-        )
+        throw new Error(`Input #${i}: nonWitnessUtxo has no output at index ${txInput.index}`)
       }
       scriptPubKey = Buffer.from(prevOutput.script)
       inputValue = BigInt(prevOutput.value)
     } else {
-      throw new Error(
-        `Input #${i} missing both witnessUtxo and nonWitnessUtxo`
-      )
+      throw new Error(`Input #${i} missing both witnessUtxo and nonWitnessUtxo`)
     }
 
     if (inputValue < 0n) {
@@ -176,8 +154,7 @@ export const buildSignBitcoinFromPsbt = ({
     // This gives a clearer error at decomposition time.
     const hasBip32 =
       (inputData.bip32Derivation && inputData.bip32Derivation.length > 0) ||
-      (inputData.tapBip32Derivation &&
-        inputData.tapBip32Derivation.length > 0)
+      (inputData.tapBip32Derivation && inputData.tapBip32Derivation.length > 0)
     const isOurs = anyInputHasBip32 ? !!hasBip32 : true
 
     if (isOurs && !SUPPORTED_SCRIPT_TYPES.has(scriptType)) {
@@ -187,16 +164,12 @@ export const buildSignBitcoinFromPsbt = ({
         p2wsh: 'P2WSH requires BIP-143 with the full witnessScript as scriptCode.',
         unknown: `Unrecognized scriptPubKey: ${scriptPubKey.toString('hex')}`,
       }
-      throw new Error(
-        `Input #${i}: unsupported script type '${scriptType}' for signing. ${hints[scriptType] ?? ''}`
-      )
+      throw new Error(`Input #${i}: unsupported script type '${scriptType}' for signing. ${hints[scriptType] ?? ''}`)
     }
 
     const sighashType = inputData.sighashType ?? 1 // SIGHASH_ALL
 
-    const redeemScript = inputData.redeemScript
-      ? Buffer.from(inputData.redeemScript).toString('hex')
-      : undefined
+    const redeemScript = inputData.redeemScript ? Buffer.from(inputData.redeemScript).toString('hex') : undefined
 
     return create(BitcoinInputSchema, {
       hash: Buffer.from(txInput.hash).reverse().toString('hex'),
@@ -211,7 +184,7 @@ export const buildSignBitcoinFromPsbt = ({
     })
   })
 
-  const outputs = psbt.txOutputs.map((txOutput, outputIndex) => {
+  const outputs = psbt.txOutputs.map(txOutput => {
     const script = Buffer.from(txOutput.script)
     const opReturn = isOpReturn(script)
 

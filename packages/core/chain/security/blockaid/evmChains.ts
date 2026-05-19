@@ -17,6 +17,4 @@ export const blockaidEvmChain = {
 
 export type BlockaidSupportedEvmChain = keyof typeof blockaidEvmChain
 
-export const blockaidSupportedEvmChains = Object.keys(
-  blockaidEvmChain
-) as BlockaidSupportedEvmChain[]
+export const blockaidSupportedEvmChains = Object.keys(blockaidEvmChain) as BlockaidSupportedEvmChain[]

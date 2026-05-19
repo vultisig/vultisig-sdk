@@ -8,11 +8,7 @@ type GetErc721BalanceInput = {
   accountAddress: Address
 }
 
-export const getErc721Balance = async ({
-  chain,
-  address,
-  accountAddress,
-}: GetErc721BalanceInput) => {
+export const getErc721Balance = async ({ chain, address, accountAddress }: GetErc721BalanceInput) => {
   const publicClient = getEvmClient(chain)
 
   return publicClient.readContract({

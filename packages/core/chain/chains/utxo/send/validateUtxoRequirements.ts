@@ -20,20 +20,11 @@ type Input = {
   skipDustCheck?: boolean
 }
 
-export const validateUtxoRequirements = ({
-  amount,
-  balance,
-  chain,
-  fee,
-  skipDustCheck,
-}: Input): string | undefined => {
+export const validateUtxoRequirements = ({ amount, balance, chain, fee, skipDustCheck }: Input): string | undefined => {
   const { decimals, ticker } = chainFeeCoin[chain]
 
   if (amount < minUtxo[chain]) {
-    const formattedAmount = formatAmount(
-      fromChainAmount(minUtxo[chain], decimals),
-      { ticker }
-    )
+    const formattedAmount = formatAmount(fromChainAmount(minUtxo[chain], decimals), { ticker })
     return `Minimum send amount is ${formattedAmount}. ${chain} requires this to prevent spam.`
   }
 
@@ -41,8 +32,7 @@ export const validateUtxoRequirements = ({
     return
   }
 
-  const remainingBalance =
-    fee != null ? balance - amount - fee : balance - amount
+  const remainingBalance = fee != null ? balance - amount - fee : balance - amount
 
   if (remainingBalance === 0n) {
     return

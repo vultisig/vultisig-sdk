@@ -8,9 +8,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     const e = bsRaw.EthereumSpecific ?? bsRaw.ethereumSpecific
     return {
       ethereumSpecific: {
-        maxFeePerGasWei: bigishToString(
-          e.max_fee_per_gas_wei ?? e.maxFeePerGasWei
-        ),
+        maxFeePerGasWei: bigishToString(e.max_fee_per_gas_wei ?? e.maxFeePerGasWei),
         priorityFee: bigishToString(e.priority_fee ?? e.priorityFee),
         nonce: BigInt(e.nonce),
         gasLimit: bigishToString(e.gas_limit ?? e.gasLimit),
@@ -27,9 +25,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         accountNumber: numberOrUndefined(c.account_number ?? c.accountNumber),
         gas: numberOrUndefined(c.gas),
         sequence: numberOrUndefined(c.sequence),
-        transactionType: numberOrUndefined(
-          c.transaction_type ?? c.transactionType
-        ),
+        transactionType: numberOrUndefined(c.transaction_type ?? c.transactionType),
         ibcDenomTrace: ibc
           ? {
               baseDenom: ibc.base_denom ?? ibc.baseDenom,
@@ -48,9 +44,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
       rippleSpecific: {
         sequence: numberOrUndefined(r.sequence),
         gas: numberOrUndefined(r.gas),
-        lastLedgerSequence: numberOrUndefined(
-          r.last_ledger_sequence ?? r.lastLedgerSequence
-        ),
+        lastLedgerSequence: numberOrUndefined(r.last_ledger_sequence ?? r.lastLedgerSequence),
       },
     }
   }
@@ -73,12 +67,8 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
   if (bsRaw.ThorchainSpecific || bsRaw.thorchainSpecific) {
     const t = bsRaw.ThorchainSpecific ?? bsRaw.thorchainSpecific
 
-    const hasIsDeposit =
-      (t.is_deposit ?? t.isDeposit) !== undefined &&
-      (t.is_deposit ?? t.isDeposit) !== null
-    const isDepositVal = hasIsDeposit
-      ? Boolean(t.is_deposit ?? t.isDeposit)
-      : undefined
+    const hasIsDeposit = (t.is_deposit ?? t.isDeposit) !== undefined && (t.is_deposit ?? t.isDeposit) !== null
+    const isDepositVal = hasIsDeposit ? Boolean(t.is_deposit ?? t.isDeposit) : undefined
 
     const txTypeSrc = t.transaction_type ?? t.transactionType
     const hasTxType = txTypeSrc !== undefined && txTypeSrc !== null
@@ -113,9 +103,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     return {
       tonSpecific: {
         sendMaxAmount: booleanOrUndefined(t.send_max_amount ?? t.sendMaxAmount),
-        sequenceNumber: numberOrUndefined(
-          t.sequence_number ?? t.sequenceNumber
-        ),
+        sequenceNumber: numberOrUndefined(t.sequence_number ?? t.sequenceNumber),
         expireAt: numberOrUndefined(t.expire_at ?? t.expireAt),
         bounceable: booleanOrUndefined(t.bounceable),
       },

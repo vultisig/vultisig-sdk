@@ -3,8 +3,6 @@ import { OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { TxStatusResolver } from '../resolver'
 import { getUtxoTxStatus } from './utxo'
 
-export const getCardanoTxStatus: TxStatusResolver<
-  OtherChain.Cardano
-> = async input => {
+export const getCardanoTxStatus: TxStatusResolver<OtherChain.Cardano> = async input => {
   return getUtxoTxStatus(input as { chain: UtxoBasedChain; hash: string })
 }

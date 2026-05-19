@@ -21,14 +21,10 @@ type TonTransactionsResponse = {
   transactions: Array<TonTransaction>
 }
 
-export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({
-  hash,
-}) => {
+export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash }) => {
   const url = `${rootApiUrl}/ton/v3/transactionsByMessage?msg_hash=${hash}&direction=in&limit=1`
 
-  const { data: response, error } = await attempt(
-    queryUrl<TonTransactionsResponse>(url)
-  )
+  const { data: response, error } = await attempt(queryUrl<TonTransactionsResponse>(url))
 
   if (error || !response || response.transactions.length === 0) {
     return { status: 'pending' }
@@ -54,10 +50,10 @@ export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({
   const receipt =
     feeStr != null && feeStr !== ''
       ? {
-        feeAmount: BigInt(feeStr),
-        feeDecimals: feeCoin.decimals,
-        feeTicker: feeCoin.ticker,
-      }
+          feeAmount: BigInt(feeStr),
+          feeDecimals: feeCoin.decimals,
+          feeTicker: feeCoin.ticker,
+        }
       : undefined
 
   return { status, receipt }

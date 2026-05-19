@@ -19,9 +19,7 @@ export const getNativeSwapDecimals = (coin: CoinKey) => {
       return chainFeeCoin[coin.chain].decimals
     }
 
-    const known = coin.id
-      ? knownTokensIndex[coin.chain][coin.id.toLowerCase()]
-      : undefined
+    const known = coin.id ? knownTokensIndex[coin.chain][coin.id.toLowerCase()] : undefined
 
     if (known) {
       return known.decimals

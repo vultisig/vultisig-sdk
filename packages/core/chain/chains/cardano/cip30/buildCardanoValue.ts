@@ -9,24 +9,19 @@ export type CardanoNativeAsset = {
 
 const hexPattern = /^[0-9a-fA-F]*$/
 
-const hexToBytes = (hex: string): Uint8Array =>
-  Uint8Array.from(Buffer.from(stripHexPrefix(hex), 'hex'))
+const hexToBytes = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(stripHexPrefix(hex), 'hex'))
 
 const assertEvenHex = (field: string, value: string) => {
   const stripped = stripHexPrefix(value)
   if (stripped.length === 0 || stripped.length % 2 !== 0 || !hexPattern.test(stripped)) {
-    throw new Error(
-      `buildCardanoValue: ${field} must be non-empty even-length hex, got ${JSON.stringify(value)}`
-    )
+    throw new Error(`buildCardanoValue: ${field} must be non-empty even-length hex, got ${JSON.stringify(value)}`)
   }
 }
 
 const assertNonNegativeQuantity = (value: string) => {
   const parsed = attemptBigInt(value)
   if (parsed === null || parsed < 0n) {
-    throw new Error(
-      `buildCardanoValue: quantity must be a non-negative integer, got ${JSON.stringify(value)}`
-    )
+    throw new Error(`buildCardanoValue: quantity must be a non-negative integer, got ${JSON.stringify(value)}`)
   }
   return parsed
 }
@@ -68,9 +63,7 @@ export const buildCardanoValue = (
     if (a.asset_name.length > 0) {
       const stripped = stripHexPrefix(a.asset_name)
       if (stripped.length % 2 !== 0 || !hexPattern.test(stripped)) {
-        throw new Error(
-          `buildCardanoValue: asset_name must be even-length hex, got ${JSON.stringify(a.asset_name)}`
-        )
+        throw new Error(`buildCardanoValue: asset_name must be even-length hex, got ${JSON.stringify(a.asset_name)}`)
       }
     }
     const quantity = assertNonNegativeQuantity(a.quantity)

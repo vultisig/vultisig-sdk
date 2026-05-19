@@ -142,28 +142,28 @@ yarn test:all
 
 ## Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `yarn build:sdk` | Build the SDK with all workspace dependencies |
-| `yarn build:rujira` | Build the Rujira package |
-| `yarn test` | Run SDK tests |
-| `yarn test:rujira` | Run Rujira tests |
-| `yarn test:unit` | Run unit tests only |
-| `yarn test:integration` | Run integration tests |
-| `yarn test:e2e` | Run end-to-end tests (requires vault) |
-| `yarn lint` | Run ESLint across all packages |
-| `yarn lint:fix` | Auto-fix linting issues |
-| `yarn format` | Format code with Prettier |
-| `yarn typecheck` | Run TypeScript type checking |
-| `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript |
-| `yarn knip` | Find unused exports and unreachable files (see `.config/knip.json`) |
-| `yarn quality:health` | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors |
-| `yarn quality:docs` | Run Markdown syntax and local-link checks |
-| `yarn quality:contracts` | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
-| `yarn check` | Run typecheck, lint, knip, and Prettier check in parallel |
-| `yarn check:agent` | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript |
-| `yarn build:shared` | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages |
-| `yarn docs` | Generate TypeDoc API documentation |
+| Script                           | Description                                                                                                                                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `yarn build:sdk`                 | Build the SDK with all workspace dependencies                                                                                                                                               |
+| `yarn build:rujira`              | Build the Rujira package                                                                                                                                                                    |
+| `yarn test`                      | Run SDK tests                                                                                                                                                                               |
+| `yarn test:rujira`               | Run Rujira tests                                                                                                                                                                            |
+| `yarn test:unit`                 | Run unit tests only                                                                                                                                                                         |
+| `yarn test:integration`          | Run integration tests                                                                                                                                                                       |
+| `yarn test:e2e`                  | Run end-to-end tests (requires vault)                                                                                                                                                       |
+| `yarn lint`                      | Run ESLint across all packages                                                                                                                                                              |
+| `yarn lint:fix`                  | Auto-fix linting issues                                                                                                                                                                     |
+| `yarn format`                    | Format code with Prettier                                                                                                                                                                   |
+| `yarn typecheck`                 | Run TypeScript type checking                                                                                                                                                                |
+| `yarn typecheck:example-browser` | Type-check `examples/shared` and the browser example with repo-local TypeScript                                                                                                             |
+| `yarn knip`                      | Find unused exports and unreachable files (see `.config/knip.jsonc`)                                                                                                                        |
+| `yarn quality:health`            | Run architecture, duplication, complexity, secrets, dependency audit, and docs health detectors                                                                                             |
+| `yarn quality:docs`              | Run Markdown syntax and local-link checks                                                                                                                                                   |
+| `yarn quality:contracts`         | SDK tarball export validation, temp packed-consumer import/type smoke, and CLI dist `--help` + `schema` JSON (run after `yarn build:sdk` and `yarn cli:build`; included in `yarn check:ci`) |
+| `yarn check`                     | Run typecheck, lint, knip, and Prettier check in parallel                                                                                                                                   |
+| `yarn check:agent`               | Run the core static gate subset sequentially after verifying repo-local ESLint and TypeScript                                                                                               |
+| `yarn build:shared`              | Build shared `@vultisig/core-*` / `@vultisig/lib-*` packages                                                                                                                                |
+| `yarn docs`                      | Generate TypeDoc API documentation                                                                                                                                                          |
 
 ## Pull Request Process
 
@@ -197,16 +197,17 @@ WASM binaries ship with `packages/lib/*` and are bundled into `@vultisig/sdk`. R
 
 ### GitHub Actions Workflows
 
-| Workflow | Trigger | Description |
-|----------|---------|-------------|
-| `test.yml` | PR opened/updated | Unit tests, lint, typecheck, knip, Prettier, code health detectors, Codecov |
-| `release-pr.yml` | Push to main | Auto-creates "Version Packages" PR when changesets exist |
-| `release.yml` | Merge version PR | npm publish, GitHub release, Vercel deploy, docs sync, Discord notify |
-| `release-manual.yml` | Manual dispatch | Force-run release steps (Vercel, docs sync, Discord) |
+| Workflow             | Trigger           | Description                                                                 |
+| -------------------- | ----------------- | --------------------------------------------------------------------------- |
+| `test.yml`           | PR opened/updated | Unit tests, lint, typecheck, knip, Prettier, code health detectors, Codecov |
+| `release-pr.yml`     | Push to main      | Auto-creates "Version Packages" PR when changesets exist                    |
+| `release.yml`        | Merge version PR  | npm publish, GitHub release, Vercel deploy, docs sync, Discord notify       |
+| `release-manual.yml` | Manual dispatch   | Force-run release steps (Vercel, docs sync, Discord)                        |
 
 ### Automated Checks
 
 Every PR runs:
+
 - ESLint
 - Prettier (`yarn format:check` on SDK, Rujira, CLI, examples)
 - TypeScript type checking
@@ -244,6 +245,7 @@ yarn changeset
 ```
 
 This will prompt you to:
+
 1. **Select packages** - Choose which packages your changes affect (`@vultisig/sdk`, `@vultisig/cli`, `@vultisig/rujira`, `@vultisig/core-chain`, `@vultisig/core-config`, `@vultisig/core-mpc`, `@vultisig/lib-utils`, `@vultisig/lib-dkls`, `@vultisig/lib-mldsa`, `@vultisig/lib-schnorr`)
 2. **Select bump type** - Choose the version bump:
    - `patch` - Bug fixes, minor changes (0.1.0 → 0.1.1)
@@ -255,21 +257,21 @@ A markdown file will be created in `.changeset/`. **Commit this file with your P
 
 #### When to Add a Changeset
 
-| Change Type | Needs Changeset? | Bump Type |
-|-------------|------------------|-----------|
-| Bug fix | Yes | `patch` |
-| New feature | Yes | `minor` |
-| Breaking API change | Yes | `major` |
-| Documentation only | No | - |
-| Tests only | No | - |
-| Internal refactor (no API change) | No | - |
-| Dev dependencies | No | - |
+| Change Type                       | Needs Changeset? | Bump Type |
+| --------------------------------- | ---------------- | --------- |
+| Bug fix                           | Yes              | `patch`   |
+| New feature                       | Yes              | `minor`   |
+| Breaking API change               | Yes              | `major`   |
+| Documentation only                | No               | -         |
+| Tests only                        | No               | -         |
+| Internal refactor (no API change) | No               | -         |
+| Dev dependencies                  | No               | -         |
 
 #### Example Changeset
 
 ```markdown
 ---
-"@vultisig/sdk": minor
+'@vultisig/sdk': minor
 ---
 
 Add support for Arbitrum chain with full ERC-20 token transfers
@@ -291,24 +293,25 @@ The release process is automated via the `release.yml` workflow:
 ### Versioning
 
 We follow [Semantic Versioning](https://semver.org/):
+
 - `X.Y.Z` - Stable releases (current)
 - `X.Y.Z-beta.N` - Beta pre-releases
 - `X.Y.Z-alpha.N` - Alpha pre-releases
 
 ### npm Packages
 
-| Package | Description |
-|---------|-------------|
-| `@vultisig/sdk` | Main SDK library |
-| `@vultisig/cli` | Command-line interface |
-| `@vultisig/rujira` | Rujira DEX integration (FIN swaps, deposits, withdrawals, asset registry) |
-| `@vultisig/core-chain` | Shared chain logic package for first-party clients |
-| `@vultisig/core-config` | Shared config/constants package |
-| `@vultisig/core-mpc` | Shared MPC, vault, and keysign package |
-| `@vultisig/lib-utils` | Shared utility helpers package |
-| `@vultisig/lib-dkls` | DKLS WASM bindings |
-| `@vultisig/lib-mldsa` | MLDSA WASM bindings |
-| `@vultisig/lib-schnorr` | Schnorr WASM bindings |
+| Package                 | Description                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `@vultisig/sdk`         | Main SDK library                                                          |
+| `@vultisig/cli`         | Command-line interface                                                    |
+| `@vultisig/rujira`      | Rujira DEX integration (FIN swaps, deposits, withdrawals, asset registry) |
+| `@vultisig/core-chain`  | Shared chain logic package for first-party clients                        |
+| `@vultisig/core-config` | Shared config/constants package                                           |
+| `@vultisig/core-mpc`    | Shared MPC, vault, and keysign package                                    |
+| `@vultisig/lib-utils`   | Shared utility helpers package                                            |
+| `@vultisig/lib-dkls`    | DKLS WASM bindings                                                        |
+| `@vultisig/lib-mldsa`   | MLDSA WASM bindings                                                       |
+| `@vultisig/lib-schnorr` | Schnorr WASM bindings                                                     |
 
 ## Questions?
 

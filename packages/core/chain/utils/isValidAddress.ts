@@ -1,7 +1,7 @@
 import { fromBech32 } from '@cosmjs/encoding'
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
-import { WalletCore } from '@trustwallet/wallet-core'
 
 type Input = {
   chain: Chain
@@ -30,19 +30,11 @@ export const isValidAddress = ({ chain, address, walletCore }: Input) => {
 
   if (chain === Chain.MayaChain) {
     // MayaChain is Cosmos-style Bech32. Accept common account + validator address forms.
-    const mayaHrps = [
-      'maya',
-      'mayavaloper',
-      'mayavalcons',
-      'mayavaloperpub',
-      'mayavalconspub',
-    ] as const
+    const mayaHrps = ['maya', 'mayavaloper', 'mayavalcons', 'mayavaloperpub', 'mayavalconspub'] as const
 
     const a = address.trim()
 
-    return mayaHrps.some(hrp =>
-      walletCore.AnyAddress.isValidBech32(a, coinType, hrp)
-    )
+    return mayaHrps.some(hrp => walletCore.AnyAddress.isValidBech32(a, coinType, hrp))
   }
 
   return walletCore.AnyAddress.isValid(address, coinType)

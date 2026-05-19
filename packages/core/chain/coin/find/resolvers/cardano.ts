@@ -4,9 +4,7 @@ import { getCardanoAddressAssets } from '@vultisig/core-chain/chains/cardano/cli
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 
 /** Discovers Cardano native tokens held at the given address. */
-export const findCardanoCoins: FindCoinsResolver<
-  OtherChain.Cardano
-> = async ({ address, chain }) => {
+export const findCardanoCoins: FindCoinsResolver<OtherChain.Cardano> = async ({ address, chain }) => {
   const assets = await getCardanoAddressAssets(address)
 
   return assets.map(({ policy_id, asset_name, decimals }) => {

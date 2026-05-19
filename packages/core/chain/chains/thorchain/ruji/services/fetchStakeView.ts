@@ -1,9 +1,6 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import {
-  rujiraGraphQlEndpoint,
-  RujiraStakeView,
-} from '../../../cosmos/thor/rujira/config'
+import { rujiraGraphQlEndpoint, RujiraStakeView } from '../../../cosmos/thor/rujira/config'
 
 type RootData = {
   node?: {
@@ -21,12 +18,9 @@ type RootData = {
 }
 type GraphQLResponse<T> = { data?: T; errors?: unknown[] }
 
-const encode = (s: string) =>
-  typeof window === 'undefined' ? Buffer.from(s).toString('base64') : btoa(s)
+const encode = (s: string) => (typeof window === 'undefined' ? Buffer.from(s).toString('base64') : btoa(s))
 
-export async function fetchRujiraStakeView(
-  addr: string
-): Promise<RujiraStakeView> {
+export async function fetchRujiraStakeView(addr: string): Promise<RujiraStakeView> {
   const variables = { id: encode(`Account:${addr}`) }
   const query = `
     query ($id: ID!) {
@@ -40,12 +34,9 @@ export async function fetchRujiraStakeView(
       }
     }`
 
-  const { data, errors } = await queryUrl<GraphQLResponse<RootData>>(
-    rujiraGraphQlEndpoint,
-    {
-      body: { query, variables },
-    }
-  )
+  const { data, errors } = await queryUrl<GraphQLResponse<RootData>>(rujiraGraphQlEndpoint, {
+    body: { query, variables },
+  })
 
   if (errors) throw new Error(`RUJIRA GQL errors: ${JSON.stringify(errors)}`)
 

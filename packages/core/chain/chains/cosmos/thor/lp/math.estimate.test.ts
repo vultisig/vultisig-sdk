@@ -10,11 +10,12 @@ afterEach(() => {
 })
 
 const mockFetch = (body: unknown, status = 200) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 
@@ -112,9 +113,7 @@ describe('estimateLpAdd', () => {
     expect(BigInt(quote.assetShareBaseUnit) > 0n).toBe(true)
     // The ratio of rune/asset share should approximate the pool ratio
     // (1000 RUNE : 0.1 BTC = 10000 rune per asset base unit)
-    const ratio =
-      Number(BigInt(quote.runeShareBaseUnit)) /
-      Number(BigInt(quote.assetShareBaseUnit))
+    const ratio = Number(BigInt(quote.runeShareBaseUnit)) / Number(BigInt(quote.assetShareBaseUnit))
     expect(ratio).toBeGreaterThan(9000)
     expect(ratio).toBeLessThan(11000)
   })

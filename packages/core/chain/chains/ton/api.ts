@@ -25,10 +25,7 @@ type GetJettonWalletInput = {
 }
 
 /** Builds the toncenter v3 jetton wallets query URL, converting addresses to raw format. */
-const getJettonWalletsUrl = ({
-  ownerAddress,
-  jettonMasterAddress,
-}: GetJettonWalletInput): string => {
+const getJettonWalletsUrl = ({ ownerAddress, jettonMasterAddress }: GetJettonWalletInput): string => {
   const rawOwner = tonAddressToRaw(ownerAddress)
   const rawMaster = tonAddressToRaw(jettonMasterAddress)
 
@@ -36,12 +33,8 @@ const getJettonWalletsUrl = ({
 }
 
 /** Resolves the user-friendly jetton wallet address for a given owner and jetton master. */
-export const getJettonWalletAddress = async (
-  input: GetJettonWalletInput
-): Promise<string> => {
-  const response = await queryUrl<JettonWalletResponse>(
-    getJettonWalletsUrl(input)
-  )
+export const getJettonWalletAddress = async (input: GetJettonWalletInput): Promise<string> => {
+  const response = await queryUrl<JettonWalletResponse>(getJettonWalletsUrl(input))
 
   const jettonAddress = response.jetton_wallets[0]?.address
   if (!jettonAddress) {
@@ -53,12 +46,8 @@ export const getJettonWalletAddress = async (
 }
 
 /** Fetches the balance of a specific jetton for a given owner address. */
-export const getJettonBalance = async (
-  input: GetJettonWalletInput
-): Promise<bigint> => {
-  const response = await queryUrl<JettonWalletResponse>(
-    getJettonWalletsUrl(input)
-  )
+export const getJettonBalance = async (input: GetJettonWalletInput): Promise<bigint> => {
+  const response = await queryUrl<JettonWalletResponse>(getJettonWalletsUrl(input))
 
   const balance = response.jetton_wallets[0]?.balance
   return BigInt(balance ?? 0)

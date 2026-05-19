@@ -2,10 +2,7 @@ import { Chain, EvmChain, UtxoChain } from '@vultisig/core-chain/Chain'
 import { DeriveChainKind } from '@vultisig/core-chain/ChainKind'
 import { UtxoFeeSettings } from '@vultisig/core-chain/tx/fee/utxo/UtxoFeeSettings'
 
-export const feeSettingsChains = [
-  ...Object.values(EvmChain),
-  ...Object.values(UtxoChain),
-] as const satisfies Chain[]
+export const feeSettingsChains = [...Object.values(EvmChain), ...Object.values(UtxoChain)] as const satisfies Chain[]
 
 export type FeeSettingsChain = (typeof feeSettingsChains)[number]
 
@@ -16,5 +13,6 @@ export type EvmFeeSettings = {
   gasLimit: bigint
 }
 
-export type FeeSettings<T extends FeeSettingsChainKind = FeeSettingsChainKind> =
-  T extends 'evm' ? EvmFeeSettings : UtxoFeeSettings
+export type FeeSettings<T extends FeeSettingsChainKind = FeeSettingsChainKind> = T extends 'evm'
+  ? EvmFeeSettings
+  : UtxoFeeSettings

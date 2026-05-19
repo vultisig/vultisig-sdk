@@ -20,8 +20,7 @@ type Input = {
   affiliateBps?: number
 }
 
-const getBaseUrl = (chainId: number) =>
-  `${rootApiUrl}/1inch/swap/v6.0/${chainId}/swap`
+const getBaseUrl = (chainId: number) => `${rootApiUrl}/1inch/swap/v6.0/${chainId}/swap`
 
 export const getOneInchSwapQuote = async ({
   account,
@@ -34,12 +33,8 @@ export const getOneInchSwapQuote = async ({
   const chainId = hexToNumber(getEvmChainId(chain))
 
   const params = {
-    src: isFeeCoin({ id: fromCoinId, chain: account.chain })
-      ? evmNativeCoinAddress
-      : fromCoinId,
-    dst: isFeeCoin({ id: toCoinId, chain: account.chain })
-      ? evmNativeCoinAddress
-      : toCoinId,
+    src: isFeeCoin({ id: fromCoinId, chain: account.chain }) ? evmNativeCoinAddress : fromCoinId,
+    dst: isFeeCoin({ id: toCoinId, chain: account.chain }) ? evmNativeCoinAddress : toCoinId,
     amount: amount.toString(),
     from: account.address,
     slippage: 0.5,
@@ -55,8 +50,7 @@ export const getOneInchSwapQuote = async ({
 
   const url = addQueryParams(getBaseUrl(chainId), params)
 
-  const { dstAmount, tx }: OneInchSwapQuoteResponse =
-    await queryUrl<OneInchSwapQuoteResponse>(url)
+  const { dstAmount, tx }: OneInchSwapQuoteResponse = await queryUrl<OneInchSwapQuoteResponse>(url)
 
   return {
     dstAmount,

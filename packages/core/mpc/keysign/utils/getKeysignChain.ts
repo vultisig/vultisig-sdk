@@ -3,6 +3,5 @@ import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/key
 
 import { getKeysignCoin } from './getKeysignCoin'
 
-export const getKeysignChain = <T extends ChainKind = ChainKind>(
-  input: KeysignPayload
-) => getKeysignCoin<ChainOfKind<T>>(input).chain
+export const getKeysignChain = <T extends ChainKind = ChainKind>(input: KeysignPayload) =>
+  getKeysignCoin<ChainOfKind<T>>(input).chain

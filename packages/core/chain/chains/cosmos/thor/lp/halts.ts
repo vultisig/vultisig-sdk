@@ -26,17 +26,12 @@ const buildStatus = (raw: {
   const reasons: string[] = []
   if (raw.halted) reasons.push(`${raw.chain} chain is halted`)
   if (raw.global_trading_paused) reasons.push('global trading paused')
-  if (raw.chain_trading_paused)
-    reasons.push(`${raw.chain} chain trading paused`)
-  if (raw.chain_lp_actions_paused)
-    reasons.push(`${raw.chain} LP actions paused`)
+  if (raw.chain_trading_paused) reasons.push(`${raw.chain} chain trading paused`)
+  if (raw.chain_lp_actions_paused) reasons.push(`${raw.chain} LP actions paused`)
 
   // Deposit gate: any of these block new LP adds
   const depositable =
-    !raw.halted &&
-    !raw.chain_lp_actions_paused &&
-    !raw.chain_trading_paused &&
-    !raw.global_trading_paused
+    !raw.halted && !raw.chain_lp_actions_paused && !raw.chain_trading_paused && !raw.global_trading_paused
 
   // Withdraw gate: halt + lp_actions_paused block withdraws.
   // global_trading_paused may delay but does not block withdraws at the
@@ -64,9 +59,7 @@ const buildStatus = (raw: {
  * Returns one `LpHaltStatus` per chain in `/thorchain/inbound_addresses`.
  * Useful for "which pools can I actually add to right now?" queries.
  */
-export const getThorchainLpHaltStatusAll = async (): Promise<
-  LpHaltStatus[]
-> => {
+export const getThorchainLpHaltStatusAll = async (): Promise<LpHaltStatus[]> => {
   const addresses = await getThorchainInboundAddress()
   return addresses.map(a =>
     buildStatus({
@@ -86,16 +79,12 @@ export const getThorchainLpHaltStatusAll = async (): Promise<
  * Throws when the chain is not in the inbound_addresses response. Prefer
  * `getThorchainLpHaltStatusAll` + filter if you want a nullable result.
  */
-export const getThorchainLpHaltStatus = async (
-  chain: string
-): Promise<LpHaltStatus> => {
+export const getThorchainLpHaltStatus = async (chain: string): Promise<LpHaltStatus> => {
   const all = await getThorchainLpHaltStatusAll()
   const upper = chain.toUpperCase()
   const match = all.find(s => s.chain.toUpperCase() === upper)
   if (!match) {
-    throw new Error(
-      `getThorchainLpHaltStatus: chain ${chain} not found in inbound_addresses`
-    )
+    throw new Error(`getThorchainLpHaltStatus: chain ${chain} not found in inbound_addresses`)
   }
   return match
 }
@@ -120,10 +109,7 @@ export const getThorchainLpHaltStatus = async (
  */
 export const getThorchainLpPoolPauseStatus = async (
   pool: string
-): Promise<
-  | { paused: false }
-  | { paused: true; mimirKey: string; mimirValue: number }
-> => {
+): Promise<{ paused: false } | { paused: true; mimirKey: string; mimirValue: number }> => {
   const mimir = await getThorchainMimir()
   const mimirKey = poolPauseMimirKey(pool)
   const mimirValue = mimir[mimirKey]

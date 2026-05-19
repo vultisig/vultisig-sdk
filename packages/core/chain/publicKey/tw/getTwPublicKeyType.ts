@@ -1,5 +1,5 @@
-import { match } from '@vultisig/lib-utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
+import { match } from '@vultisig/lib-utils/match'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
@@ -13,13 +13,8 @@ type Input = {
 export const getTwPublicKeyType = ({ walletCore, chain }: Input) =>
   match(signatureAlgorithms[getChainKind(chain)], {
     ecdsa: () => walletCore.PublicKeyType.secp256k1,
-    eddsa: () =>
-      chain === Chain.Cardano
-        ? walletCore.PublicKeyType.ed25519Cardano
-        : walletCore.PublicKeyType.ed25519,
+    eddsa: () => (chain === Chain.Cardano ? walletCore.PublicKeyType.ed25519Cardano : walletCore.PublicKeyType.ed25519),
     mldsa: () => {
-      throw new Error(
-        `${chain} uses MLDSA; WalletCore does not expose an MLDSA public key type`
-      )
+      throw new Error(`${chain} uses MLDSA; WalletCore does not expose an MLDSA public key type`)
     },
   })

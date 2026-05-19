@@ -5,12 +5,7 @@ type RetryParams<T> = {
   shouldRetry?: (err: unknown) => boolean
 }
 
-export async function retry<T>({
-  func,
-  attempts = 10,
-  delay,
-  shouldRetry = () => true,
-}: RetryParams<T>): Promise<T> {
+export async function retry<T>({ func, attempts = 10, delay, shouldRetry = () => true }: RetryParams<T>): Promise<T> {
   try {
     const result = await func()
     return result

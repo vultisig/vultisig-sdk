@@ -58,16 +58,12 @@ describe('getSolanaFeeAmount', () => {
   it('computes baseFee + priorityFeeAmount for native SOL', () => {
     // priorityFeeAmount = 1_000_000 µLam/CU * 100_000 CU / 1_000_000 = 100_000 lamports
     // total = 5000 baseFee + 100_000 priority = 105_000
-    expect(getSolanaFeeAmount(buildInput({ priorityFee: '1000000' }))).toBe(
-      105_000n
-    )
+    expect(getSolanaFeeAmount(buildInput({ priorityFee: '1000000' }))).toBe(105_000n)
   })
 
   it('scales priorityFeeAmount with the price', () => {
     // 5_000_000 * 100_000 / 1_000_000 = 500_000 priority + 5000 base = 505_000
-    expect(getSolanaFeeAmount(buildInput({ priorityFee: '5000000' }))).toBe(
-      505_000n
-    )
+    expect(getSolanaFeeAmount(buildInput({ priorityFee: '5000000' }))).toBe(505_000n)
   })
 
   it('adds ATA rent for SPL transfers when recipient ATA is missing', () => {

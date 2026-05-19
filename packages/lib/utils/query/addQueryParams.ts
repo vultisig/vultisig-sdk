@@ -1,9 +1,6 @@
 import { isRecordEmpty } from '../record/isRecordEmpty'
 
-export const addQueryParams = (
-  baseUrl: string,
-  params: Record<string, string | number | boolean>
-) => {
+export const addQueryParams = (baseUrl: string, params: Record<string, string | number | boolean>) => {
   if (isRecordEmpty(params)) {
     return baseUrl
   }

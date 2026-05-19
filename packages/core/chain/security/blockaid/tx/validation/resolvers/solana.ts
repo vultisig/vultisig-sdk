@@ -8,12 +8,8 @@ type SolanaBlockaidScanResponse = {
   }
 }
 
-export const getSolanaTxBlockaidValidation: BlockaidTxValidationResolver =
-  async ({ data }) => {
-    const { result } = await queryBlockaid<SolanaBlockaidScanResponse>(
-      '/solana/message/scan',
-      data
-    )
+export const getSolanaTxBlockaidValidation: BlockaidTxValidationResolver = async ({ data }) => {
+  const { result } = await queryBlockaid<SolanaBlockaidScanResponse>('/solana/message/scan', data)
 
-    return result.validation
-  }
+  return result.validation
+}

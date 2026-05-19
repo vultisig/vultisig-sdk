@@ -7,9 +7,7 @@ const isObject = (obj: any): obj is Record<string, any> => {
 }
 
 const toCamel = (value: string): string => {
-  return value.replace(/([-_][a-z])/gi, $1 =>
-    $1.toUpperCase().replace('-', '').replace('_', '')
-  )
+  return value.replace(/([-_][a-z])/gi, $1 => $1.toUpperCase().replace('-', '').replace('_', ''))
 }
 
 export const toCamelCase = <T>(obj: T): T => {

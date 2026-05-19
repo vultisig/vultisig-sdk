@@ -44,9 +44,7 @@ export const getThorchainMimir = async (): Promise<Record<string, number>> => {
   const url = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/mimir`
   const raw = await queryUrl<unknown>(url)
   if (!raw || typeof raw !== 'object') {
-    throw new Error(
-      `getThorchainMimir: unexpected response shape from ${url}`
-    )
+    throw new Error(`getThorchainMimir: unexpected response shape from ${url}`)
   }
   // thornode /thorchain/mimir returns numeric values, but the JSON could
   // deserialize as number or numeric string depending on the upstream
@@ -86,9 +84,7 @@ export const assertPoolDepositable = async (pool: string): Promise<void> => {
   // Run both checks in parallel — they hit different endpoints so there
   // is no reason to serialize them.
   const [poolRaw, mimir] = await Promise.all([
-    queryUrl<unknown>(
-      `${cosmosRpcUrl[Chain.THORChain]}/thorchain/pool/${encodeURIComponent(pool)}`
-    ),
+    queryUrl<unknown>(`${cosmosRpcUrl[Chain.THORChain]}/thorchain/pool/${encodeURIComponent(pool)}`),
     getThorchainMimir(),
   ])
 
@@ -100,9 +96,7 @@ export const assertPoolDepositable = async (pool: string): Promise<void> => {
     )
   }
   if (status !== 'Available') {
-    throw new Error(
-      `assertPoolDepositable: pool ${pool} status is ${status}, must be Available for LP add`
-    )
+    throw new Error(`assertPoolDepositable: pool ${pool} status is ${status}, must be Available for LP add`)
   }
 
   // Check 2: mimir per-pool PAUSELPDEPOSIT flag

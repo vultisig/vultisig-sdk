@@ -10,9 +10,4 @@
  * Removing this shim would be a breaking package-export change and must wait
  * until a major version bump.
  */
-export {
-  concatBytes,
-  protoBytes,
-  protoString,
-  protoVarint,
-} from '../protoEncoding'
+export { concatBytes, protoBytes, protoString, protoVarint } from '../protoEncoding'

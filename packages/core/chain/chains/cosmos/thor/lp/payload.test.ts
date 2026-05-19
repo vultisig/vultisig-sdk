@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildThorchainLpAddPayload,
-  buildThorchainLpRemovePayload,
-} from './payload'
+import { buildThorchainLpAddPayload, buildThorchainLpRemovePayload } from './payload'
 
 describe('buildThorchainLpAddPayload', () => {
   it('produces a flat pure-asym payload when no pairedAddress is provided', () => {
@@ -66,17 +63,14 @@ describe('buildThorchainLpAddPayload', () => {
     expect('affiliateBps' in payload).toBe(false)
   })
 
-  it.each(['0', '-1', '1.5', '', 'abc'])(
-    'rejects invalid amountRuneBaseUnits (%s)',
-    amount => {
-      expect(() =>
-        buildThorchainLpAddPayload({
-          pool: 'BTC.BTC',
-          amountRuneBaseUnits: amount,
-        })
-      ).toThrow(/amountRuneBaseUnits/)
-    }
-  )
+  it.each(['0', '-1', '1.5', '', 'abc'])('rejects invalid amountRuneBaseUnits (%s)', amount => {
+    expect(() =>
+      buildThorchainLpAddPayload({
+        pool: 'BTC.BTC',
+        amountRuneBaseUnits: amount,
+      })
+    ).toThrow(/amountRuneBaseUnits/)
+  })
 })
 
 describe('buildThorchainLpRemovePayload', () => {
@@ -124,8 +118,6 @@ describe('buildThorchainLpRemovePayload', () => {
   })
 
   it('rejects out-of-range basis points via the underlying memo builder', () => {
-    expect(() =>
-      buildThorchainLpRemovePayload({ pool: 'BTC.BTC', basisPoints: 0 })
-    ).toThrow(/basisPoints/)
+    expect(() => buildThorchainLpRemovePayload({ pool: 'BTC.BTC', basisPoints: 0 })).toThrow(/basisPoints/)
   })
 })

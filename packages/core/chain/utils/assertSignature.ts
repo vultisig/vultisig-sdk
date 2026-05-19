@@ -1,6 +1,6 @@
+import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import { SignatureFormat } from '@vultisig/core-chain/signing/SignatureFormat'
 import { match } from '@vultisig/lib-utils/match'
-import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
 type Input = {
   publicKey: PublicKey
@@ -9,12 +9,7 @@ type Input = {
   signatureFormat: SignatureFormat
 }
 
-export const assertSignature = ({
-  publicKey,
-  message,
-  signature,
-  signatureFormat,
-}: Input) => {
+export const assertSignature = ({ publicKey, message, signature, signatureFormat }: Input) => {
   const isValid = match(signatureFormat, {
     raw: () => publicKey.verify(signature, message),
     rawWithRecoveryId: () => publicKey.verify(signature, message),
@@ -22,8 +17,6 @@ export const assertSignature = ({
   })
 
   if (!isValid) {
-    throw new Error(
-      'Signature verification failed: The provided signature does not match the message or public key.'
-    )
+    throw new Error('Signature verification failed: The provided signature does not match the message or public key.')
   }
 }

@@ -1,9 +1,4 @@
-import {
-  concatBytes,
-  protoBytes,
-  protoString,
-  protoVarint,
-} from '@vultisig/core-chain/chains/cosmos/protoEncoding'
+import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
 const msgClaimWithProofTypeURL = '/qbtc.qbtc.v1.MsgClaimWithProof'
 
@@ -48,24 +43,13 @@ const isHex = (value: string) => /^[0-9a-f]+$/i.test(value)
 
 const assertHex = (value: string, name: string, expectedLength: number) => {
   if (value.length !== expectedLength || !isHex(value)) {
-    throw new Error(
-      `${name} must be ${expectedLength} hex chars, got ${value.length}`
-    )
+    throw new Error(`${name} must be ${expectedLength} hex chars, got ${value.length}`)
   }
 }
 
 /** Validates the claim input against the chain's constraints (Section 5). */
 export const validateClaimInput = (input: BuildMsgClaimWithProofInput) => {
-  const {
-    claimer,
-    utxos,
-    proof,
-    messageHash,
-    addressHash,
-    qbtcAddressHash,
-    pubKeyHashSha256,
-    broadcaster,
-  } = input
+  const { claimer, utxos, proof, messageHash, addressHash, qbtcAddressHash, pubKeyHashSha256, broadcaster } = input
 
   if (claimer.length === 0) {
     throw new Error('claimer is required')
@@ -110,9 +94,7 @@ const encodeUtxoRef = ({ txid, vout }: UtxoRef): Uint8Array =>
   concatBytes(protoString(1, txid), protoVarint(2, BigInt(vout)))
 
 /** Encodes MsgClaimWithProof as protobuf bytes. */
-const buildMsgClaimWithProof = (
-  input: BuildMsgClaimWithProofInput
-): Uint8Array => {
+const buildMsgClaimWithProof = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   const utxoBytes = input.utxos.map(utxo => protoBytes(2, encodeUtxoRef(utxo)))
 
   return concatBytes(
@@ -128,21 +110,14 @@ const buildMsgClaimWithProof = (
 }
 
 /** Wraps MsgClaimWithProof in a Cosmos Any message. */
-export const buildClaimWithProofAny = (
-  input: BuildMsgClaimWithProofInput
-): Uint8Array => {
+export const buildClaimWithProofAny = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   validateClaimInput(input)
   const msg = buildMsgClaimWithProof(input)
-  return concatBytes(
-    protoString(1, msgClaimWithProofTypeURL),
-    protoBytes(2, msg)
-  )
+  return concatBytes(protoString(1, msgClaimWithProofTypeURL), protoBytes(2, msg))
 }
 
 /** Builds the TxBody containing a single MsgClaimWithProof. */
-export const buildClaimTxBody = (
-  input: BuildMsgClaimWithProofInput
-): Uint8Array => {
+export const buildClaimTxBody = (input: BuildMsgClaimWithProofInput): Uint8Array => {
   const anyMsg = buildClaimWithProofAny(input)
   return protoBytes(1, anyMsg)
 }
