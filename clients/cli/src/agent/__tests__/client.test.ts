@@ -319,4 +319,17 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
   it('detects an error in a stringified output payload', async () => {
     expect(await lastDoneOk({ output: '{"status":"error","error":"boom"}' })).toBe(false)
   })
+
+  // CodeRabbit #500: the string path was weaker than the object path.
+  it('detects a stringified {"error":...} with no status field', async () => {
+    expect(await lastDoneOk({ output: '{"error":"boom"}' })).toBe(false)
+  })
+
+  it('detects a stringified status:error with whitespace after the colon', async () => {
+    expect(await lastDoneOk({ output: '{"status": "error", "message": "nope"}' })).toBe(false)
+  })
+
+  it('still treats a clean stringified payload as success', async () => {
+    expect(await lastDoneOk({ output: '{"tx_hash":"0xabc","status":"pending"}' })).toBe(true)
+  })
 })
