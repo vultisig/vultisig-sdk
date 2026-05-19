@@ -12,6 +12,11 @@ vi.mock('@vultisig/core-chain/security/blockaid/site', () => ({
   scanSiteWithBlockaid: vi.fn(),
 }))
 
+vi.mock('@vultisig/core-chain/coin/find', () => ({
+  findCoins: vi.fn(),
+}))
+
+import { findCoins } from '@vultisig/core-chain/coin/find'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 
@@ -162,6 +167,72 @@ describe('Vultisig static methods', () => {
 
       expect(chains1).toEqual(chains2)
       expect(chains1).not.toBe(chains2)
+    })
+  })
+
+  describe('discoverTokens (vault-free)', () => {
+    it('maps findCoins AccountCoin[] to DiscoveredToken[]', async () => {
+      vi.mocked(findCoins).mockResolvedValue([
+        {
+          chain: Chain.Ethereum,
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+          logo: 'usdc.png',
+        },
+        {
+          chain: Chain.Ethereum,
+          id: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+          ticker: 'USDT',
+          decimals: 6,
+        },
+      ] as never)
+
+      const result = await Vultisig.discoverTokens({
+        chain: Chain.Ethereum,
+        address: '0xabc',
+      })
+
+      expect(findCoins).toHaveBeenCalledWith({
+        address: '0xabc',
+        chain: Chain.Ethereum,
+      })
+      expect(result).toEqual([
+        {
+          chain: Chain.Ethereum,
+          contractAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+          logo: 'usdc.png',
+        },
+        {
+          chain: Chain.Ethereum,
+          contractAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+          ticker: 'USDT',
+          decimals: 6,
+          logo: undefined,
+        },
+      ])
+    })
+
+    it('coerces a missing coin id to an empty contractAddress', async () => {
+      vi.mocked(findCoins).mockResolvedValue([{ chain: Chain.Solana, ticker: 'SOL', decimals: 9 }] as never)
+
+      const result = await Vultisig.discoverTokens({
+        chain: Chain.Solana,
+        address: 'soL111',
+      })
+
+      expect(result[0]?.contractAddress).toBe('')
+    })
+
+    it('returns [] when the address holds nothing', async () => {
+      vi.mocked(findCoins).mockResolvedValue([] as never)
+      const result = await Vultisig.discoverTokens({
+        chain: Chain.Ethereum,
+        address: '0xempty',
+      })
+      expect(result).toEqual([])
     })
   })
 
