@@ -1,8 +1,4 @@
-import {
-  Chain,
-  CosmosChain,
-  IbcEnabledCosmosChain,
-} from '@vultisig/core-chain/Chain'
+import { Chain, CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 
 import { areEqualCoins, CoinKey } from '../../coin/Coin'
 
@@ -81,14 +77,9 @@ type GetCosmosStakingGasLimitInput = {
  * `RangeError` on floats / NaN / Infinity, so guard at the boundary with
  * a clearer message before the conversion.
  */
-export const getCosmosStakingGasLimit = ({
-  chain,
-  msgCount = 1,
-}: GetCosmosStakingGasLimitInput): bigint => {
+export const getCosmosStakingGasLimit = ({ chain, msgCount = 1 }: GetCosmosStakingGasLimitInput): bigint => {
   if (!Number.isInteger(msgCount) || msgCount < 0) {
-    throw new Error(
-      `getCosmosStakingGasLimit: msgCount must be a non-negative integer, got ${msgCount}`
-    )
+    throw new Error(`getCosmosStakingGasLimit: msgCount must be a non-negative integer, got ${msgCount}`)
   }
   const base = cosmosStakingGasLimitRecord[chain]
   const n = BigInt(Math.max(1, msgCount))

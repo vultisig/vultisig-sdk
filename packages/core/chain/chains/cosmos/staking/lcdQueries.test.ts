@@ -101,9 +101,7 @@ const status = (code: number): Response => new Response('', { status: code })
 
 describe('getValidatorsUrl', () => {
   it('builds a bare URL against the Terra LCD when no options are passed', () => {
-    expect(getValidatorsUrl('Terra')).toMatch(
-      /\/cosmos\/staking\/v1beta1\/validators$/
-    )
+    expect(getValidatorsUrl('Terra')).toMatch(/\/cosmos\/staking\/v1beta1\/validators$/)
   })
 
   it('appends status and pagination.limit when provided', () => {
@@ -125,17 +123,13 @@ describe('getValidatorsUrl', () => {
   it('points TerraClassic at the classic LCD, not the v2 LCD', () => {
     // Different chains route through different LCD roots; confirm we don't
     // accidentally hardcode the Terra v2 endpoint.
-    expect(getValidatorsUrl('TerraClassic')).not.toEqual(
-      getValidatorsUrl('Terra')
-    )
+    expect(getValidatorsUrl('TerraClassic')).not.toEqual(getValidatorsUrl('Terra'))
   })
 })
 
 describe('getValidatorUrl', () => {
   it('builds the single-validator path with the valoper segment', () => {
-    expect(
-      getValidatorUrl('Terra', 'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w')
-    ).toMatch(
+    expect(getValidatorUrl('Terra', 'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w')).toMatch(
       /\/cosmos\/staking\/v1beta1\/validators\/terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w$/
     )
   })
@@ -156,9 +150,7 @@ describe('getCosmosValidators', () => {
     const validators = await getCosmosValidators('Terra', { fetchImpl })
     expect(validators).toHaveLength(1)
     const v = validators[0] as Validator
-    expect(v.operatorAddress).toBe(
-      'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w'
-    )
+    expect(v.operatorAddress).toBe('terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w')
     expect(v.jailed).toBe(false)
     expect(v.status).toBe('BOND_STATUS_BONDED')
     expect(v.tokens).toBe('200392000000')
@@ -228,9 +220,7 @@ describe('getCosmosValidators', () => {
         pagination: { next_key: 'NEVER_NULL' },
       })
     )
-    await expect(
-      getCosmosValidators('Terra', { fetchImpl })
-    ).rejects.toThrow(/exceeded 50 pages/)
+    await expect(getCosmosValidators('Terra', { fetchImpl })).rejects.toThrow(/exceeded 50 pages/)
   })
 
   it('forwards the status filter into the query string', async () => {
@@ -246,18 +236,14 @@ describe('getCosmosValidators', () => {
 
   it('throws on non-2xx responses', async () => {
     const fetchImpl = mkFetch(() => status(503))
-    await expect(getCosmosValidators('Terra', { fetchImpl })).rejects.toThrow(
-      /LCD 503/
-    )
+    await expect(getCosmosValidators('Terra', { fetchImpl })).rejects.toThrow(/LCD 503/)
   })
 
   it('passes through abort signal', async () => {
-    const fetchImpl = vi.fn(
-      async (_url: string | URL, init?: RequestInit) => {
-        expect(init?.signal).toBeDefined()
-        return okJson({ validators: [], pagination: { next_key: null } })
-      }
-    ) as unknown as typeof fetch
+    const fetchImpl = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      expect(init?.signal).toBeDefined()
+      return okJson({ validators: [], pagination: { next_key: null } })
+    }) as unknown as typeof fetch
     const ac = new AbortController()
     await getCosmosValidators('Terra', { fetchImpl, signal: ac.signal })
     expect(fetchImpl).toHaveBeenCalledOnce()
@@ -267,21 +253,13 @@ describe('getCosmosValidators', () => {
 describe('getCosmosValidator', () => {
   it('unwraps the single-validator response shape', async () => {
     const fetchImpl = mkFetch(() => okJson({ validator: fixtureAllnodes }))
-    const v = await getCosmosValidator(
-      'Terra',
-      'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w',
-      { fetchImpl }
-    )
-    expect(v.operatorAddress).toBe(
-      'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w'
-    )
+    const v = await getCosmosValidator('Terra', 'terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w', { fetchImpl })
+    expect(v.operatorAddress).toBe('terravaloper1q0n2vrlp9eqxlqvwwlz39pn3jx2fmjlk5jrn6w')
     expect(v.description.moniker).toBe('Allnodes')
   })
 
   it('throws on 404 (unknown valoper)', async () => {
     const fetchImpl = mkFetch(() => status(404))
-    await expect(
-      getCosmosValidator('Terra', 'terravaloper1nope', { fetchImpl })
-    ).rejects.toThrow(/LCD 404/)
+    await expect(getCosmosValidator('Terra', 'terravaloper1nope', { fetchImpl })).rejects.toThrow(/LCD 404/)
   })
 })

@@ -342,9 +342,7 @@ export async function getCosmosValidators(
     if (!raw.pagination.next_key) return collected
     paginationKey = raw.pagination.next_key
   }
-  throw new Error(
-    `getCosmosValidators: exceeded ${MAX_PAGES} pages on ${chain} (possible LCD pagination bug)`
-  )
+  throw new Error(`getCosmosValidators: exceeded ${MAX_PAGES} pages on ${chain} (possible LCD pagination bug)`)
 }
 
 export async function getCosmosValidator(
