@@ -19,25 +19,16 @@ const processBody = (body: any) => {
   return JSON.stringify(body)
 }
 
-export function queryUrl(
-  url: string | URL,
-  options: QueryUrlOptions & { responseType: 'none' }
-): Promise<void>
+export function queryUrl(url: string | URL, options: QueryUrlOptions & { responseType: 'none' }): Promise<void>
 
 export function queryUrl<T extends string = string>(
   url: string | URL,
   options: QueryUrlOptions & { responseType: 'text' }
 ): Promise<T>
 
-export function queryUrl<T>(
-  url: string | URL,
-  options?: QueryUrlOptions & { responseType?: 'json' }
-): Promise<T>
+export function queryUrl<T>(url: string | URL, options?: QueryUrlOptions & { responseType?: 'json' }): Promise<T>
 
-export async function queryUrl<T>(
-  url: string | URL,
-  options: QueryUrlOptions = {}
-): Promise<T | string | void> {
+export async function queryUrl<T>(url: string | URL, options: QueryUrlOptions = {}): Promise<T | string | void> {
   const { responseType = 'json', body, headers, method } = options
 
   const response = await fetch(

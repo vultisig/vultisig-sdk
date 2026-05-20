@@ -1,8 +1,6 @@
 import { isEmpty } from '../../array/isEmpty/index.js'
 
-export const asyncFallbackChain = async <T>(
-  ...functions: (() => Promise<T>)[]
-): Promise<T> => {
+export const asyncFallbackChain = async <T>(...functions: (() => Promise<T>)[]): Promise<T> => {
   if (isEmpty(functions)) {
     throw new Error('No functions provided')
   }

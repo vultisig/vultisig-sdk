@@ -16,12 +16,9 @@ export const getMpcRelayMessages = async ({
   sessionId,
   messageId,
 }: GetMpcRelayMessagesInput) =>
-  queryUrl<MpcRelayMessage[]>(
-    `${serverUrl}/message/${sessionId}/${localPartyId}`,
-    {
-      headers: withoutUndefinedFields({
-        message_id: messageId,
-      }),
-      responseType: 'json',
-    }
-  )
+  queryUrl<MpcRelayMessage[]>(`${serverUrl}/message/${sessionId}/${localPartyId}`, {
+    headers: withoutUndefinedFields({
+      message_id: messageId,
+    }),
+    responseType: 'json',
+  })

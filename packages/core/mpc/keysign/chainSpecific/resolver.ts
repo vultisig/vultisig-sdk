@@ -5,19 +5,11 @@ import { Psbt } from 'bitcoinjs-lib'
 
 import { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { FeeSettings } from './FeeSettings'
-import {
-  KeysignChainSpecific,
-  KeysignChainSpecificKey,
-} from './KeysignChainSpecific'
+import { KeysignChainSpecific, KeysignChainSpecificKey } from './KeysignChainSpecific'
 
-type ValueForCase<C extends KeysignChainSpecificKey> = Extract<
-  KeysignChainSpecific,
-  { case: C }
->['value']
+type ValueForCase<C extends KeysignChainSpecificKey> = Extract<KeysignChainSpecific, { case: C }>['value']
 
-export type GetChainSpecificInput<
-  C extends KeysignChainSpecificKey = KeysignChainSpecificKey,
-> = {
+export type GetChainSpecificInput<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
 } & (C extends 'ethereumSpecific'
@@ -52,6 +44,7 @@ export type GetChainSpecificInput<
               }
             : {})
 
-export type GetChainSpecificResolver<
-  C extends KeysignChainSpecificKey = KeysignChainSpecificKey,
-> = Resolver<GetChainSpecificInput<C>, Promise<ValueForCase<C>>>
+export type GetChainSpecificResolver<C extends KeysignChainSpecificKey = KeysignChainSpecificKey> = Resolver<
+  GetChainSpecificInput<C>,
+  Promise<ValueForCase<C>>
+>

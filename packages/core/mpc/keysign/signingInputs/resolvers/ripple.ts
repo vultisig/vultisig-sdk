@@ -7,9 +7,7 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
 import { SigningInputsResolver } from '../resolver'
 
-export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({
-  keysignPayload,
-}) => {
+export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
   const { gas, sequence, lastLedgerSequence } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'rippleSpecific'
@@ -19,17 +17,11 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({
 
   const account = coin.address
 
-  const getPayment = (): Pick<
-    TW.Ripple.Proto.ISigningInput,
-    'opPayment' | 'rawJson'
-  > => {
+  const getPayment = (): Pick<TW.Ripple.Proto.ISigningInput, 'opPayment' | 'rawJson'> => {
     if (keysignPayload.memo) {
       const destinationTag = parseInt(keysignPayload.memo, 10)
 
-      if (
-        !isNaN(destinationTag) &&
-        destinationTag.toString() === keysignPayload.memo
-      ) {
+      if (!isNaN(destinationTag) && destinationTag.toString() === keysignPayload.memo) {
         const payment = TW.Ripple.Proto.OperationPayment.create({
           destination: keysignPayload.toAddress,
           amount: Long.fromString(keysignPayload.toAmount),
@@ -40,9 +32,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({
           opPayment: payment,
         }
       } else {
-        const memoDataHex = Buffer.from(keysignPayload.memo, 'utf8')
-          .toString('hex')
-          .toUpperCase()
+        const memoDataHex = Buffer.from(keysignPayload.memo, 'utf8').toString('hex').toUpperCase()
 
         const txJson = {
           TransactionType: 'Payment',

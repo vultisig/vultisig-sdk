@@ -5,31 +5,18 @@ import { EntityWithTicker } from '@vultisig/lib-utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
 import type { NativeSwapChain, NativeSwapChainId } from '../NativeSwapChain'
-import {
-  nativeSwapChainIds,
-  nativeSwapChains,
-  nativeSwapEnabledChains,
-} from '../NativeSwapChain'
+import { nativeSwapChainIds, nativeSwapChains, nativeSwapEnabledChains } from '../NativeSwapChain'
 
 type NativeSwapDenomChainKey = Lowercase<NativeSwapChainId>
 
-const nativeSwapChainIdValues = Object.values(
-  nativeSwapChainIds
-) as NativeSwapChainId[]
+const nativeSwapChainIdValues = Object.values(nativeSwapChainIds) as NativeSwapChainId[]
 
 const securedAssetDenomChainKeyToSwapId = Object.fromEntries(
-  nativeSwapChainIdValues.map(swapId => [
-    swapId.toLowerCase() as NativeSwapDenomChainKey,
-    swapId,
-  ])
+  nativeSwapChainIdValues.map(swapId => [swapId.toLowerCase() as NativeSwapDenomChainKey, swapId])
 ) as Partial<Record<NativeSwapDenomChainKey, NativeSwapChainId>>
 
-const getSecuredAssetSwapId = (
-  chainKey: string
-): NativeSwapChainId | undefined =>
-  securedAssetDenomChainKeyToSwapId[
-    chainKey.toLowerCase() as NativeSwapDenomChainKey
-  ]
+const getSecuredAssetSwapId = (chainKey: string): NativeSwapChainId | undefined =>
+  securedAssetDenomChainKeyToSwapId[chainKey.toLowerCase() as NativeSwapDenomChainKey]
 
 const formatSecuredAssetRest = (rest: string): string => {
   const evmTail = rest.match(/^(.+)-(0x[0-9a-fA-F]+)$/i)
@@ -77,11 +64,7 @@ const normalizeNativeSwapChainDenom = ({
 }
 
 /** Converts a coin to the asset notation used by THORChain/MayaChain swap APIs */
-export const toNativeSwapAsset = ({
-  chain,
-  id,
-  ticker,
-}: CoinKey & EntityWithTicker): string => {
+export const toNativeSwapAsset = ({ chain, id, ticker }: CoinKey & EntityWithTicker): string => {
   if (!isOneOf(chain, nativeSwapEnabledChains)) {
     throw new Error(`No native swap enabled chain found for ${chain}`)
   }

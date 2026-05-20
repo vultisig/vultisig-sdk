@@ -22,5 +22,4 @@ type ChainInfo = {
 
 const thorchainInboundAddressApi = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/inbound_addresses`
 
-export const getThorchainInboundAddress = (): Promise<ChainInfo[]> =>
-  queryUrl(thorchainInboundAddressApi)
+export const getThorchainInboundAddress = (): Promise<ChainInfo[]> => queryUrl(thorchainInboundAddressApi)

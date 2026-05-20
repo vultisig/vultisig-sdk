@@ -26,10 +26,7 @@ type Input = {
 }
 
 /** Exported for alignment tests: every {@link ChainKind} must map to a resolver and a TW signing-input class. */
-export const signingInputResolversByChainKind: Record<
-  ChainKind,
-  SigningInputsResolver<any>
-> = {
+export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsResolver<any>> = {
   bittensor: getBittensorSigningInputs,
   cardano: getCardanoSigningInputs,
   cosmos: getCosmosSigningInputs,

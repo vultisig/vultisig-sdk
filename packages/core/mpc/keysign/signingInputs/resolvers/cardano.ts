@@ -15,23 +15,15 @@ const amountToBytes = (amount: bigint): Uint8Array => {
   return Uint8Array.from(Buffer.from(padded, 'hex'))
 }
 
-export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({
-  keysignPayload,
-  walletCore,
-}) => {
-  const { sendMaxAmount, ttl, byteFee } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'cardano'
-  )
+export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keysignPayload, walletCore }) => {
+  const { sendMaxAmount, ttl, byteFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'cardano')
 
   const coin = shouldBePresent(keysignPayload.coin)
   const isTokenSend = coin.contractAddress !== ''
 
   const tokenBundle = isTokenSend
     ? (() => {
-        const { policyId, assetName } = fromCardanoAssetId(
-          coin.contractAddress
-        )
+        const { policyId, assetName } = fromCardanoAssetId(coin.contractAddress)
 
         return TW.Cardano.Proto.TokenBundle.create({
           token: [

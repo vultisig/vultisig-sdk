@@ -8,9 +8,7 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 export const getCosmosCoinAmount = (input: KeysignPayload) => {
   const coin = getKeysignCoin<CosmosChain>(input)
 
-  const denom = isFeeCoin(coin)
-    ? cosmosFeeCoinDenom[coin.chain as CosmosChain]
-    : coin.id
+  const denom = isFeeCoin(coin) ? cosmosFeeCoinDenom[coin.chain as CosmosChain] : coin.id
 
   return {
     amount: input.toAmount,

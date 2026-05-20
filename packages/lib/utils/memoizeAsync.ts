@@ -19,10 +19,7 @@ export const memoizeAsync = <T extends (...args: any[]) => Promise<any>>(
 
     const cachedResult = cache.get(key)
 
-    if (
-      !cachedResult ||
-      (cacheTime && cachedResult.updatedAt < Date.now() - cacheTime)
-    ) {
+    if (!cachedResult || (cacheTime && cachedResult.updatedAt < Date.now() - cacheTime)) {
       const result = await func(...args)
       cache.set(key, {
         data: result,

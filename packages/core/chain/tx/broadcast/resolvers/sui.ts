@@ -4,10 +4,7 @@ import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chain, tx }) => {
   try {
     return await getSuiClient().executeTransactionBlock({
       transactionBlock: tx.unsignedTx,

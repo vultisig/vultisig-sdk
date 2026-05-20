@@ -2,9 +2,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type StatusResponse = { data?: { nav_per_share?: string } }
 
-export const fetchNavPerShare = async (
-  contractId: string
-): Promise<number | undefined> => {
+export const fetchNavPerShare = async (contractId: string): Promise<number | undefined> => {
   const url = `https://thorchain.ibs.team/api/cosmwasm/wasm/v1/contract/${contractId}/smart/eyJzdGF0dXMiOiB7fX0=`
 
   try {

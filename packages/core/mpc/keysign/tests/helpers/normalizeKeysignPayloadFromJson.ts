@@ -1,9 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '../../../types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 import {
   TronTransferContractPayloadSchema,
   TronTriggerSmartContractPayloadSchema,
@@ -19,12 +16,7 @@ import {
 } from '../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 import { mapBlockchainSpecific } from '../mappers/mapBlockchainSpecific'
 import { mapSwapPayload } from '../mappers/mapSwapPayload'
-import {
-  bigishToString,
-  booleanOrUndefined,
-  emptyToUndefined,
-  numberOrUndefined,
-} from '../utils'
+import { bigishToString, booleanOrUndefined, emptyToUndefined, numberOrUndefined } from '../utils'
 import { toBlockchainSpecificOneof } from './toBlockchainSpecificOneof'
 
 /**
@@ -54,9 +46,7 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
     address: coinSrc.address,
     decimals: numberOrUndefined(coinSrc.decimals),
     priceProviderId: coinSrc.price_provider_id ?? coinSrc.priceProviderId,
-    isNativeToken: booleanOrUndefined(
-      coinSrc.is_native_token ?? coinSrc.isNativeToken
-    ),
+    isNativeToken: booleanOrUndefined(coinSrc.is_native_token ?? coinSrc.isNativeToken),
     contractAddress: coinSrc.contract_address ?? coinSrc.contractAddress ?? '',
     hexPublicKey: coinSrc.hex_public_key ?? coinSrc.hexPublicKey,
     logo: coinSrc.logo,
@@ -64,14 +54,9 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
 
   const bsContainer = src.BlockchainSpecific ?? src.blockchainSpecific ?? {}
 
-  const bsRaw =
-    bsContainer.BlockchainSpecific ??
-    bsContainer.blockchainSpecific ??
-    bsContainer
+  const bsRaw = bsContainer.BlockchainSpecific ?? bsContainer.blockchainSpecific ?? bsContainer
 
-  const blockchainSpecific = toBlockchainSpecificOneof(
-    mapBlockchainSpecific(bsRaw)
-  )
+  const blockchainSpecific = toBlockchainSpecificOneof(mapBlockchainSpecific(bsRaw))
 
   const sp = src.SwapPayload ?? src.swapPayload
   const swapPayload = mapSwapPayload(sp)
@@ -92,10 +77,8 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
   const approveMapped = approve
     ? {
         amount: bigishToString(approve.amount),
-        routerAddress:
-          approve.router_address ?? approve.routerAddress ?? approve.spender,
-        tokenAddress:
-          approve.token_address ?? approve.tokenAddress ?? coin.contractAddress,
+        routerAddress: approve.router_address ?? approve.routerAddress ?? approve.spender,
+        tokenAddress: approve.token_address ?? approve.tokenAddress ?? coin.contractAddress,
         ...approve,
       }
     : undefined
@@ -138,13 +121,11 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
         ownerAddress: tronTriggerPayload.owner_address,
         contractAddress: tronTriggerPayload.contract_address,
         callValue:
-          tronTriggerPayload.call_value !== null &&
-          tronTriggerPayload.call_value !== undefined
+          tronTriggerPayload.call_value !== null && tronTriggerPayload.call_value !== undefined
             ? String(tronTriggerPayload.call_value)
             : undefined,
         callTokenValue:
-          tronTriggerPayload.call_token_value !== null &&
-          tronTriggerPayload.call_token_value !== undefined
+          tronTriggerPayload.call_token_value !== null && tronTriggerPayload.call_token_value !== undefined
             ? String(tronTriggerPayload.call_token_value)
             : undefined,
         tokenId: tronTriggerPayload.token_id,
@@ -186,10 +167,7 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
           msgs: (aminoSrc.msgs ?? []).map((msg: any) =>
             create(CosmosMsgSchema, {
               type: msg.type,
-              value:
-                typeof msg.value === 'string'
-                  ? msg.value
-                  : JSON.stringify(msg.value),
+              value: typeof msg.value === 'string' ? msg.value : JSON.stringify(msg.value),
             })
           ),
         }),
@@ -226,10 +204,7 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
     blockchainSpecific,
     utxoInfo,
     swapPayload,
-    vaultPublicKeyEcdsa:
-      src.vault_public_key_ecdsa ??
-      src.vaultPublicKeyEcdsa ??
-      src.vault_pub_key_ecdsa,
+    vaultPublicKeyEcdsa: src.vault_public_key_ecdsa ?? src.vaultPublicKeyEcdsa ?? src.vault_pub_key_ecdsa,
     libType: src.lib_type ?? src.libType,
     erc20ApprovePayload: approveMapped,
     approvePayload: approveMapped,

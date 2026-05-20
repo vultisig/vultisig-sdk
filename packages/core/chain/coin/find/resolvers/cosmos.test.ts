@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getAllBalancesMock = vi.fn()
 // #428 codex-adversarial M2: stub getCosmosTokenMetadata so the unit
@@ -22,6 +22,11 @@ import { Chain } from '../../../Chain'
 import { findCosmosCoins } from './cosmos'
 
 describe('findCosmosCoins', () => {
+  beforeEach(() => {
+    getAllBalancesMock.mockReset()
+    getCosmosTokenMetadataMock.mockReset()
+  })
+
   it('keeps known single-segment THORChain denoms like TCY', async () => {
     getAllBalancesMock.mockResolvedValue([
       { denom: 'rune', amount: '1' },
@@ -38,6 +43,7 @@ describe('findCosmosCoins', () => {
     expect(coins).toEqual([
       expect.objectContaining({
         id: 'tcy',
+        decimals: 8,
         ticker: 'TCY',
         logo: 'tcy',
       }),
@@ -210,9 +216,126 @@ describe('findCosmosCoins', () => {
     expect(coins).toEqual([
       expect.objectContaining({
         id: 'mysterytoken',
+        decimals: 8,
         ticker: 'MYSTERYTOKEN',
         logo: 'mysterytoken',
       }),
     ])
+  })
+
+  it('auto-discovers Terra Classic bank denoms with token metadata decimals', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'uluna', amount: '1' },
+      { denom: 'uusd', amount: '2' },
+    ])
+    getCosmosTokenMetadataMock.mockResolvedValue({
+      ticker: 'USTC',
+      decimals: 6,
+      logo: 'ustc',
+      priceProviderId: 'terrausd',
+    })
+
+    const coins = await findCosmosCoins({
+      address: 'terra1address',
+      chain: Chain.TerraClassic,
+    })
+
+    expect(getCosmosTokenMetadataMock).toHaveBeenCalledWith({
+      chain: Chain.TerraClassic,
+      id: 'uusd',
+    })
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'uusd',
+        chain: Chain.TerraClassic,
+        decimals: 6,
+        ticker: 'USTC',
+        logo: 'ustc',
+        priceProviderId: 'terrausd',
+      }),
+    ])
+  })
+
+  it('uses metadata decimals for non-fee Terra denoms', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'uluna', amount: '1' },
+      { denom: 'ibc/NON6DECIMALS', amount: '2' },
+    ])
+    getCosmosTokenMetadataMock.mockResolvedValue({
+      ticker: 'WETH',
+      decimals: 18,
+    })
+
+    const coins = await findCosmosCoins({
+      address: 'terra1address',
+      chain: Chain.Terra,
+    })
+
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'ibc/NON6DECIMALS',
+        decimals: 18,
+        ticker: 'WETH',
+      }),
+    ])
+  })
+
+  it('marks Terra denoms without metadata as hidden instead of dropping them', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'uluna', amount: '1' },
+      { denom: 'factory/terra1creator/uspam', amount: '2' },
+    ])
+    getCosmosTokenMetadataMock.mockRejectedValue(new Error('no metadata'))
+
+    const coins = await findCosmosCoins({
+      address: 'terra1address',
+      chain: Chain.Terra,
+    })
+
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'factory/terra1creator/uspam',
+        decimals: 6,
+        ticker: 'USPAM',
+        isHidden: true,
+      }),
+    ])
+  })
+
+  it('propagates hidden metadata from IBC trace fallback', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'uluna', amount: '1' },
+      { denom: 'ibc/OSMOHASH', amount: '2' },
+    ])
+    getCosmosTokenMetadataMock.mockResolvedValue({
+      ticker: 'osmo',
+      decimals: 6,
+      isHidden: true,
+    })
+
+    const coins = await findCosmosCoins({
+      address: 'terra1address',
+      chain: Chain.Terra,
+    })
+
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: 'ibc/OSMOHASH',
+        ticker: 'OSMO',
+        isHidden: true,
+      }),
+    ])
+  })
+
+  it('keeps non-allowlisted Cosmos chains disabled', async () => {
+    getAllBalancesMock.mockResolvedValue([{ denom: 'uatom', amount: '1' }])
+
+    await expect(
+      findCosmosCoins({
+        address: 'cosmos1address',
+        chain: Chain.Cosmos,
+      })
+    ).resolves.toEqual([])
+    expect(getAllBalancesMock).not.toHaveBeenCalled()
   })
 })

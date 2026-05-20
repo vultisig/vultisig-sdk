@@ -3,9 +3,6 @@ import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpec
 import { FeeAmountResolver } from '../resolver'
 
 export const getQbtcFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
-  const cosmosSpecific = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'cosmosSpecific'
-  )
+  const cosmosSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'cosmosSpecific')
   return cosmosSpecific.gas
 }

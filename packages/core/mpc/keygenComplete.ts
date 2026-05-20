@@ -23,14 +23,8 @@ type WaitKeygenCompleteInput = {
   peers: string[]
 }
 
-const verifyKeygenComplete = async ({
-  serverURL,
-  sessionId,
-  peers,
-}: WaitKeygenCompleteInput) => {
-  const completePeers = await queryUrl<string[]>(
-    `${serverURL}/complete/${sessionId}`
-  )
+const verifyKeygenComplete = async ({ serverURL, sessionId, peers }: WaitKeygenCompleteInput) => {
+  const completePeers = await queryUrl<string[]>(`${serverURL}/complete/${sessionId}`)
 
   // Check whether all items in peers exist in completePeers
   const allPeersComplete = peers.every(peer => completePeers.includes(peer))
@@ -39,11 +33,7 @@ const verifyKeygenComplete = async ({
   }
 }
 
-export const waitForKeygenComplete = async ({
-  serverURL,
-  sessionId,
-  peers,
-}: WaitKeygenCompleteInput) =>
+export const waitForKeygenComplete = async ({ serverURL, sessionId, peers }: WaitKeygenCompleteInput) =>
   retry({
     func: () => verifyKeygenComplete({ serverURL, sessionId, peers }),
     attempts: 10,

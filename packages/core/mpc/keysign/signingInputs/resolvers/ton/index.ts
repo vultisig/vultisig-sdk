@@ -7,36 +7,18 @@ import { getKeysignTwPublicKey } from '../../../tw/getKeysignTwPublicKey'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
 import { buildJettonTransfer } from './jetton'
-import {
-  buildNativeTonTransfer,
-  buildNativeTonTransferFromMessage,
-} from './native'
+import { buildNativeTonTransfer, buildNativeTonTransferFromMessage } from './native'
 
-export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({
-  keysignPayload,
-  walletCore,
-}) => {
+export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPayload, walletCore }) => {
   const coin = getKeysignCoin(keysignPayload)
 
-  const {
-    expireAt,
-    sequenceNumber,
-    bounceable,
-    sendMaxAmount,
-    jettonAddress,
-    isActiveDestination,
-  } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'tonSpecific'
-  )
+  const { expireAt, sequenceNumber, bounceable, sendMaxAmount, jettonAddress, isActiveDestination } =
+    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tonSpecific')
 
-  const isStakeOp =
-    !!keysignPayload.memo && ['d', 'w'].includes(keysignPayload.memo.trim())
+  const isStakeOp = !!keysignPayload.memo && ['d', 'w'].includes(keysignPayload.memo.trim())
 
   const signTonMessages =
-    keysignPayload.signData?.case === 'signTon'
-      ? keysignPayload.signData.value.tonMessages
-      : undefined
+    keysignPayload.signData?.case === 'signTon' ? keysignPayload.signData.value.tonMessages : undefined
 
   const messages =
     signTonMessages && signTonMessages.length > 0 && isFeeCoin(coin)

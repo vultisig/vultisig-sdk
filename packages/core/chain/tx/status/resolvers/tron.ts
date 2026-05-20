@@ -15,9 +15,7 @@ type TronTxInfoResponse = {
   }
 }
 
-export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({
-  hash,
-}) => {
+export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash }) => {
   const url = `${tronRpcUrl}/wallet/gettransactioninfobyid`
 
   const { data: tx, error } = await attempt(

@@ -3,11 +3,7 @@ import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { BlockaidSupportedEvmChain } from '../../evmChains'
 import { BlockaidSimulationSupportedChain } from '../../simulationChains'
-import {
-  BlockaidSimulationForChainKind,
-  BlockaidTxSimulationInput,
-  BlockaidTxSimulationResolver,
-} from './resolver'
+import { BlockaidSimulationForChainKind, BlockaidTxSimulationInput, BlockaidTxSimulationResolver } from './resolver'
 import { getEvmTxBlockaidSimulation } from './resolvers/evm'
 import { getSolanaTxBlockaidSimulation } from './resolvers/solana'
 
@@ -29,20 +25,14 @@ export function getTxBlockaidSimulation(
   input: BlockaidTxSimulationInput<typeof Chain.Solana>
 ): Promise<BlockaidSimulationForChainKind<'solana'>>
 
-export async function getTxBlockaidSimulation<
-  T extends BlockaidSimulationSupportedChain,
->(
+export async function getTxBlockaidSimulation<T extends BlockaidSimulationSupportedChain>(
   input: BlockaidTxSimulationInput<T>
 ): Promise<BlockaidSimulationForChainKind<DeriveChainKind<T>>> {
   const chainKind = getChainKind(input.chain)
 
   if (chainKind === 'solana') {
-    return resolvers.solana(input) as Promise<
-      BlockaidSimulationForChainKind<DeriveChainKind<T>>
-    >
+    return resolvers.solana(input) as Promise<BlockaidSimulationForChainKind<DeriveChainKind<T>>>
   }
 
-  return resolvers.evm(input) as Promise<
-    BlockaidSimulationForChainKind<DeriveChainKind<T>>
-  >
+  return resolvers.evm(input) as Promise<BlockaidSimulationForChainKind<DeriveChainKind<T>>>
 }

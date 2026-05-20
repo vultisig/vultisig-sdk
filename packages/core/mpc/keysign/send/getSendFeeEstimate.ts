@@ -6,25 +6,17 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { buildSendKeysignPayload, BuildSendKeysignPayloadInput } from './build'
 
-export const getSendFeeEstimate = async (
-  input: BuildSendKeysignPayloadInput
-): Promise<bigint> => {
+export const getSendFeeEstimate = async (input: BuildSendKeysignPayloadInput): Promise<bigint> => {
   const keysignPayload = await buildSendKeysignPayload(input)
 
   if (getKeysignChain(keysignPayload) === Chain.QBTC) {
-    const cosmosSpecific = getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
-      'cosmosSpecific'
-    )
+    const cosmosSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'cosmosSpecific')
     return cosmosSpecific.gas
   }
 
   return getFeeAmount({
     keysignPayload,
     walletCore: input.walletCore,
-    publicKey: shouldBePresent(
-      input.publicKey,
-      'publicKey required for fee estimate on this chain'
-    ),
+    publicKey: shouldBePresent(input.publicKey, 'publicKey required for fee estimate on this chain'),
   })
 }

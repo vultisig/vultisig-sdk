@@ -11,7 +11,10 @@ export function setupUserAgent(): void {
   const userAgent = `vultisig-cli/${getVersion()}`
   const originalFetch = globalThis.fetch
 
-  globalThis.fetch = (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): ReturnType<typeof fetch> => {
+  globalThis.fetch = (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1]
+  ): ReturnType<typeof fetch> => {
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
     if (init?.headers) {
       new Headers(init.headers).forEach((value, key) => {

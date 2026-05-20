@@ -7,10 +7,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
-import {
-  chainSpecificRecord,
-  getBlockchainSpecificValue,
-} from '../../../chainSpecific/KeysignChainSpecific'
+import { chainSpecificRecord, getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
 
 export type CosmosChainSpecific =
   | {
@@ -25,9 +22,6 @@ export const getCosmosChainSpecific = (
   const chainKind = getCosmosChainKind(chain)
 
   return {
-    [chainKind]: getBlockchainSpecificValue(
-      blockchainSpecific,
-      chainSpecificRecord[chain]
-    ),
+    [chainKind]: getBlockchainSpecificValue(blockchainSpecific, chainSpecificRecord[chain]),
   } as CosmosChainSpecific
 }

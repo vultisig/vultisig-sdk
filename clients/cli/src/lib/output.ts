@@ -242,7 +242,7 @@ export function printError(message: string): void {
 // Silent-Aware Spinner
 // ============================================================================
 
-export interface SilentAwareSpinner {
+export type SilentAwareSpinner = {
   text: string
   start(): SilentAwareSpinner
   stop(): SilentAwareSpinner

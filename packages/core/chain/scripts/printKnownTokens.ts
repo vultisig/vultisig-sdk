@@ -6,9 +6,7 @@ import { knownTokens } from '../coin/knownTokens'
 
 const main = () => {
   const sorted = sortRecordKeysAlphabetically(
-    recordMap(knownTokens, tokens =>
-      [...tokens].sort((a, b) => a.ticker.localeCompare(b.ticker))
-    )
+    recordMap(knownTokens, tokens => [...tokens].sort((a, b) => a.ticker.localeCompare(b.ticker)))
   )
 
   const output = JSON.stringify(sorted, null, 2)

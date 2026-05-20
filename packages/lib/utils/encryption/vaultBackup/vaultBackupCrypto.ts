@@ -7,11 +7,7 @@ const GCM_TAG_LEN = 16
  * AES-256-GCM encrypt; returns IV and sealed blob (ciphertext || auth tag).
  * Layout matches Android `PBKDF2_MAGIC + salt + iv + cipher.doFinal(plaintext)`.
  */
-export const aes256GcmSeal = (
-  cipherKey: Buffer,
-  plaintext: Buffer,
-  iv?: Buffer
-): { iv: Buffer; sealed: Buffer } => {
+export const aes256GcmSeal = (cipherKey: Buffer, plaintext: Buffer, iv?: Buffer): { iv: Buffer; sealed: Buffer } => {
   const nonce = iv ?? crypto.randomBytes(12)
   if (nonce.length !== 12) {
     throw new Error('AES-GCM IV must be 12 bytes')

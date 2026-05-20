@@ -11,10 +11,7 @@ type CardanoAssetIdParts = {
 const separator = '.'
 
 /** Constructs a Cardano asset ID from policy ID and asset name. */
-export const toCardanoAssetId = ({
-  policyId,
-  assetName,
-}: CardanoAssetIdParts): string =>
+export const toCardanoAssetId = ({ policyId, assetName }: CardanoAssetIdParts): string =>
   `${policyId}${separator}${assetName}`
 
 /** Splits a Cardano asset ID into policy ID and asset name. */

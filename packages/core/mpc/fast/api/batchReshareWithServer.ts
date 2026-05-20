@@ -19,10 +19,7 @@ type Input = {
   vaultBaseUrl?: string
 }
 
-export const batchReshareWithServer = async ({
-  vaultBaseUrl,
-  ...body
-}: Input) =>
+export const batchReshareWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/batch/reshare`, {
     body,
     responseType: 'none',

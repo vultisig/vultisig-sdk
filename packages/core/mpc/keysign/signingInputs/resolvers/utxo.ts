@@ -16,16 +16,10 @@ import { KeysignSwapPayload } from '../../swap/KeysignSwapPayload'
 import { getKeysignChain } from '../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../resolver'
 
-export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({
-  keysignPayload,
-  walletCore,
-}) => {
+export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'utxo'>(keysignPayload)
 
-  const { byteFee, sendMaxAmount } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'utxoSpecific'
-  )
+  const { byteFee, sendMaxAmount } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'utxoSpecific')
 
   const coin = shouldBePresent(keysignPayload.coin)
 
@@ -34,10 +28,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({
     chain,
   })
 
-  const lockScript = walletCore.BitcoinScript.lockScriptForAddress(
-    coin.address,
-    coinType
-  )
+  const lockScript = walletCore.BitcoinScript.lockScriptForAddress(coin.address, coinType)
 
   const scriptType = utxoChainScriptType[chain]
 
@@ -49,16 +40,12 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({
   const scriptKey = Buffer.from(pubKeyHash).toString('hex')
 
   const script = match(scriptType, {
-    wpkh: () =>
-      walletCore.BitcoinScript.buildPayToWitnessPubkeyHash(pubKeyHash).data(),
-    pkh: () =>
-      walletCore.BitcoinScript.buildPayToPublicKeyHash(pubKeyHash).data(),
+    wpkh: () => walletCore.BitcoinScript.buildPayToWitnessPubkeyHash(pubKeyHash).data(),
+    pkh: () => walletCore.BitcoinScript.buildPayToPublicKeyHash(pubKeyHash).data(),
   })
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
-  const amount = swapPayload
-    ? getRecordUnionValue(swapPayload).fromAmount
-    : keysignPayload.toAmount
+  const amount = swapPayload ? getRecordUnionValue(swapPayload).fromAmount : keysignPayload.toAmount
 
   const destinationAddress = swapPayload
     ? matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {

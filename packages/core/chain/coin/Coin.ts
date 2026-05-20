@@ -17,6 +17,7 @@ export type CoinMetadata = {
   decimals: number
   ticker: string
   logo?: string
+  isHidden?: boolean
 }
 
 export type Coin<T extends Chain = Chain> = CoinKey<T> & CoinMetadata
@@ -26,12 +27,7 @@ export type Coin<T extends Chain = Chain> = CoinKey<T> & CoinMetadata
 export type KnownCoinMetadata = RequiredFields<CoinMetadata, 'logo'>
 export type KnownCoin = CoinKey & KnownCoinMetadata
 
-export const coinMetadataFields: (keyof Coin)[] = [
-  'priceProviderId',
-  'decimals',
-  'ticker',
-  'logo',
-]
+export const coinMetadataFields: (keyof Coin)[] = ['priceProviderId', 'decimals', 'ticker', 'logo', 'isHidden']
 
 export type CoinAmount = {
   decimals: number
@@ -39,11 +35,8 @@ export type CoinAmount = {
 }
 
 export const areEqualCoins = (one: CoinKey, another: CoinKey): boolean =>
-  one.chain === another.chain &&
-  one.id?.toLowerCase() === another.id?.toLowerCase()
+  one.chain === another.chain && one.id?.toLowerCase() === another.id?.toLowerCase()
 
-export const coinKeyToString = ({ chain, id }: CoinKey): string =>
-  without([chain, id], undefined).join(':')
+export const coinKeyToString = ({ chain, id }: CoinKey): string => without([chain, id], undefined).join(':')
 
-export const extractCoinKey = <T extends CoinKey>(coin: T): CoinKey =>
-  pick(coin, ['chain', 'id'])
+export const extractCoinKey = <T extends CoinKey>(coin: T): CoinKey => pick(coin, ['chain', 'id'])

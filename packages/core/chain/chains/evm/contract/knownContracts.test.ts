@@ -2,7 +2,7 @@ import { getAddress } from 'ethers'
 import { describe, expect, it } from 'vitest'
 
 import { EvmChain } from '../../../Chain'
-import { knownEvmContracts, type KnownEvmContractCategory, lookupKnownEvmContract } from './knownContracts'
+import { type KnownEvmContractCategory, knownEvmContracts, lookupKnownEvmContract } from './knownContracts'
 
 describe('knownEvmContracts', () => {
   it('every key is a lowercase 0x-prefixed 40-hex-char string', () => {

@@ -8,9 +8,7 @@ import { CoinBalanceResolver } from '../resolver'
 
 const nativeQbtcDenom = 'qbtc'
 
-export const getQbtcCoinBalance: CoinBalanceResolver<
-  typeof Chain.QBTC
-> = async input => {
+export const getQbtcCoinBalance: CoinBalanceResolver<typeof Chain.QBTC> = async input => {
   const denom = isFeeCoin(input) ? nativeQbtcDenom : shouldBePresent(input.id)
   const url = `${qbtcRestUrl}/cosmos/bank/v1beta1/balances/${input.address}`
   const data = await queryUrl<{

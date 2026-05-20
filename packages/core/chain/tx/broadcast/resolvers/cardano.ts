@@ -3,7 +3,6 @@ import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 
 import { submitCardanoCbor } from '../../../chains/cardano/submit/submitCardanoCbor'
-
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { selectEncodedBytes } from './utxo'
@@ -14,9 +13,7 @@ import { selectEncodedBytes } from './utxo'
  */
 const alreadyCommittedCode = 3117
 
-export const broadcastCardanoTx: BroadcastTxResolver<
-  OtherChain.Cardano
-> = async ({ chain, tx }) => {
+export const broadcastCardanoTx: BroadcastTxResolver<OtherChain.Cardano> = async ({ chain, tx }) => {
   const encodedBytes = selectEncodedBytes(chain, tx)
   const cborHex = Buffer.from(encodedBytes).toString('hex')
 
@@ -30,15 +27,7 @@ export const broadcastCardanoTx: BroadcastTxResolver<
 
   const error = errorMessage ?? 'unknown broadcast failure'
 
-  if (
-    isInError(
-      error,
-      'BadInputsUTxO',
-      'timed out',
-      'txn-mempool-conflict',
-      'already known'
-    )
-  ) {
+  if (isInError(error, 'BadInputsUTxO', 'timed out', 'txn-mempool-conflict', 'already known')) {
     return null
   }
 

@@ -4,10 +4,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { suiMinGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import { SuiSpecific } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 import { WalletCore } from '@trustwallet/wallet-core'
 
@@ -60,9 +57,6 @@ export const refineSuiChainSpecific = async ({
 
   return {
     ...chainSpecific,
-    gasBudget: maxBigInt(
-      gasBudgetMultiplier(gasBudget),
-      suiMinGasBudget
-    ).toString(),
+    gasBudget: maxBigInt(gasBudgetMultiplier(gasBudget), suiMinGasBudget).toString(),
   }
 }

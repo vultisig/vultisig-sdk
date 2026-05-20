@@ -1,8 +1,6 @@
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
-export function toBlockchainSpecificOneof(
-  bsRaw: any
-): KeysignPayload['blockchainSpecific'] | undefined {
+export function toBlockchainSpecificOneof(bsRaw: any): KeysignPayload['blockchainSpecific'] | undefined {
   if (!bsRaw) return undefined
   if (bsRaw.case) return bsRaw
 

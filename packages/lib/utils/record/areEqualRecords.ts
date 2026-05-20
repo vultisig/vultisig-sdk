@@ -1,6 +1,4 @@
-export const areEqualRecords = <T extends Record<string, any>>(
-  ...records: T[]
-): boolean => {
+export const areEqualRecords = <T extends Record<string, any>>(...records: T[]): boolean => {
   const [first, ...rest] = records
   const keys = Object.keys(first)
 

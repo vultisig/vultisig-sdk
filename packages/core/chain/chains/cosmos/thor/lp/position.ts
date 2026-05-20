@@ -22,8 +22,7 @@ export type GetThorchainLpPositionInput = {
  * previous implementation string-matched the error message; that worked
  * but was brittle to wording changes. See NeoMakinG's PR #236 review note.
  */
-const isMidgardNotFoundError = (err: unknown): boolean =>
-  err instanceof HttpResponseError && err.status === 404
+const isMidgardNotFoundError = (err: unknown): boolean => err instanceof HttpResponseError && err.status === 404
 
 /**
  * Fetch a single LP position from Midgard.
@@ -102,11 +101,7 @@ export const getThorchainLpPositionFromThornode = async ({
   const pendingAsset = raw.pending_asset ?? '0'
   // Thornode always returns the endpoint with zeroed fields after a full
   // withdraw, so explicitly guard "everything is zero" as "no position".
-  if (
-    !isNonZeroBaseUnit(units) &&
-    !isNonZeroBaseUnit(pendingRune) &&
-    !isNonZeroBaseUnit(pendingAsset)
-  ) {
+  if (!isNonZeroBaseUnit(units) && !isNonZeroBaseUnit(pendingRune) && !isNonZeroBaseUnit(pendingAsset)) {
     return null
   }
   return {
@@ -126,11 +121,7 @@ export const getThorchainLpPositionFromThornode = async ({
     // block height via the dedicated `lastAddHeight` field so lockup
     // checks can use either source.
     dateLastAdded: '0',
-    lastAddHeight:
-      typeof raw.last_add_height === 'number'
-        ? String(raw.last_add_height)
-        : '',
-    isPending:
-      isNonZeroBaseUnit(pendingRune) || isNonZeroBaseUnit(pendingAsset),
+    lastAddHeight: typeof raw.last_add_height === 'number' ? String(raw.last_add_height) : '',
+    isPending: isNonZeroBaseUnit(pendingRune) || isNonZeroBaseUnit(pendingAsset),
   }
 }

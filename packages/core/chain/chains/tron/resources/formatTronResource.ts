@@ -8,11 +8,7 @@ type FormatTronResourceValueInput = {
   unit: string
 }
 
-export const formatTronResourceValue = ({
-  available,
-  total,
-  unit,
-}: FormatTronResourceValueInput): string => {
+export const formatTronResourceValue = ({ available, total, unit }: FormatTronResourceValueInput): string => {
   if (total >= 1000 && unit) {
     const availableK = (available / 1000).toFixed(2)
     const totalK = (total / 1000).toFixed(2)
@@ -48,5 +44,4 @@ export const formatTronWithdrawalTime = (expireTimeMs: number): string => {
 
 export const sunToTrx = (sun: bigint): number => Number(sun) / 1_000_000
 
-export const trxToSun = (trx: number): bigint =>
-  BigInt(Math.round(trx * 1_000_000))
+export const trxToSun = (trx: number): bigint => BigInt(Math.round(trx * 1_000_000))

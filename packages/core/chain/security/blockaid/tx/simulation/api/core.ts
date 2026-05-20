@@ -3,11 +3,7 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { Coin } from '../../../../../coin/Coin'
-import {
-  BlockaidEvmBalanceChange,
-  BlockaidEvmSimulationInfo,
-  BlockaidSolanaSimulationInfo,
-} from '../core'
+import { BlockaidEvmBalanceChange, BlockaidEvmSimulationInfo, BlockaidSolanaSimulationInfo } from '../core'
 
 export type BlockaidSolanaSimulation = {
   account_summary: {
@@ -171,8 +167,7 @@ const groupKeyForAsset = (asset: EvmAssetDiff['asset']): string | null => {
   return address ?? null
 }
 
-const sumRaw = (sides: EvmAssetSide[]): bigint =>
-  sides.reduce((total, side) => total + BigInt(side.raw_value), 0n)
+const sumRaw = (sides: EvmAssetSide[]): bigint => sides.reduce((total, side) => total + BigInt(side.raw_value), 0n)
 
 const usdValueForSides = (sides: EvmAssetSide[]): number => {
   let total = 0
@@ -189,10 +184,7 @@ const usdValueForSides = (sides: EvmAssetSide[]): number => {
 // `Coin.id` is token-only (see core/chain/coin/Coin.ts), and Blockaid sometimes
 // returns the same contract with mismatched casing across diffs; lowercase the
 // ERC20 address so downstream lookups don't depend on whichever case landed first.
-const buildCoinFromAsset = (
-  asset: EvmAssetDiff['asset'],
-  chain: EvmChain
-): Coin => {
+const buildCoinFromAsset = (asset: EvmAssetDiff['asset'], chain: EvmChain): Coin => {
   const base: Coin = {
     decimals: asset.decimals,
     logo: asset.logo_url,

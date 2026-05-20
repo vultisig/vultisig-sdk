@@ -1,17 +1,14 @@
+import { decodeTxRaw } from '@cosmjs/proto-signing'
 import { CosmosChain } from '@vultisig/core-chain/Chain'
-import { computeCosmosTxReceiptFeeAmount } from '@vultisig/core-chain/chains/cosmos/computeCosmosTxReceiptFeeAmount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { computeCosmosTxReceiptFeeAmount } from '@vultisig/core-chain/chains/cosmos/computeCosmosTxReceiptFeeAmount'
 import { sumFeeAmountForCosmosChainFeeDenom } from '@vultisig/core-chain/chains/cosmos/sumFeeAmountForCosmosChainFeeDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { decodeTxRaw } from '@cosmjs/proto-signing'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
-export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({
-  chain,
-  hash,
-}) => {
+export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({ chain, hash }) => {
   const client = await getCosmosClient(chain)
 
   const { data: tx, error } = await attempt(client.getTx(hash))

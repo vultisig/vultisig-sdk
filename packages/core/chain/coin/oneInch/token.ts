@@ -21,10 +21,7 @@ type FromOneInchTokensInput = {
   chain: Chain
 }
 
-export const fromOneInchTokens = ({
-  tokens,
-  chain,
-}: FromOneInchTokensInput): Coin[] => {
+export const fromOneInchTokens = ({ tokens, chain }: FromOneInchTokensInput): Coin[] => {
   const result: Coin[] = []
 
   tokens.forEach(token => {

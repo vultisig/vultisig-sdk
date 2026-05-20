@@ -32,8 +32,7 @@ const encodeCircleMscaWithdraw = ({
   amount: bigint
   walletCore: WalletCore
 }): string => {
-  const transferFunction =
-    walletCore.EthereumAbiFunction.createWithString('transfer')
+  const transferFunction = walletCore.EthereumAbiFunction.createWithString('transfer')
   transferFunction.addParamAddress(
     toTwAddress({
       address: vaultAddress,
@@ -46,8 +45,7 @@ const encodeCircleMscaWithdraw = ({
 
   const transferData = walletCore.EthereumAbi.encode(transferFunction)
 
-  const executeFunction =
-    walletCore.EthereumAbiFunction.createWithString('execute')
+  const executeFunction = walletCore.EthereumAbiFunction.createWithString('execute')
   executeFunction.addParamAddress(
     toTwAddress({
       address: usdc.id,

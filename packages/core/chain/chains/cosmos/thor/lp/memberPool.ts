@@ -9,9 +9,7 @@ export const isNonZeroBaseUnit = (value: string | undefined): boolean => {
   }
 }
 
-export const normalizeMemberPool = (
-  raw: RawMemberPool
-): ThorchainLpPosition => ({
+export const normalizeMemberPool = (raw: RawMemberPool): ThorchainLpPosition => ({
   pool: raw.pool ?? '',
   liquidityUnits: raw.liquidityUnits ?? '0',
   runeAdded: raw.runeAdded ?? '0',
@@ -22,6 +20,5 @@ export const normalizeMemberPool = (
   assetAddress: raw.assetAddress ?? '',
   dateLastAdded: raw.dateLastAdded ?? '0',
   lastAddHeight: '',
-  isPending:
-    isNonZeroBaseUnit(raw.runePending) || isNonZeroBaseUnit(raw.assetPending),
+  isPending: isNonZeroBaseUnit(raw.runePending) || isNonZeroBaseUnit(raw.assetPending),
 })

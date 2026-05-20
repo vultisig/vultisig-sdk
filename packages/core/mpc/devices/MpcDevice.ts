@@ -1,13 +1,4 @@
-export type MpcDevice =
-  | 'windows'
-  | 'mac'
-  | 'linux'
-  | 'iphone'
-  | 'ipad'
-  | 'android'
-  | 'server'
-  | 'extension'
-  | 'sdk'
+export type MpcDevice = 'windows' | 'mac' | 'linux' | 'iphone' | 'ipad' | 'android' | 'server' | 'extension' | 'sdk'
 
 const mpcDeviceName: Record<MpcDevice, string> = {
   windows: 'Windows',
@@ -21,13 +12,7 @@ const mpcDeviceName: Record<MpcDevice, string> = {
   sdk: 'SDK',
 }
 
-export type DeviceType =
-  | 'phone'
-  | 'tablet'
-  | 'desktop'
-  | 'server'
-  | 'browser'
-  | 'sdk'
+export type DeviceType = 'phone' | 'tablet' | 'desktop' | 'server' | 'browser' | 'sdk'
 
 const mpcDeviceType: Record<MpcDevice, DeviceType> = {
   windows: 'desktop',
@@ -55,13 +40,9 @@ export const formatMpcDeviceName = (deviceName: string) => {
   return deviceName
 }
 
-export const mpcDeviceFromDeviceName = (
-  deviceName: string
-): MpcDevice | null => {
+export const mpcDeviceFromDeviceName = (deviceName: string): MpcDevice | null => {
   const lowerCaseDeviceName = deviceName.toLowerCase()
-  if (
-    Object.prototype.hasOwnProperty.call(mpcDeviceType, lowerCaseDeviceName)
-  ) {
+  if (Object.prototype.hasOwnProperty.call(mpcDeviceType, lowerCaseDeviceName)) {
     return lowerCaseDeviceName as MpcDevice
   }
 

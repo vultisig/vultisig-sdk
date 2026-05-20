@@ -1,7 +1,4 @@
-export const bigIntToDecimalString = (
-  amount: bigint,
-  decimals: number
-): string => {
+export const bigIntToDecimalString = (amount: bigint, decimals: number): string => {
   const amountString = amount.toString()
   if (decimals === 0) {
     return amountString

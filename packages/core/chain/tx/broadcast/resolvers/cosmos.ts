@@ -6,10 +6,7 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({ chain, tx }) => {
   const { serialized } = tx
   const { tx_bytes } = JSON.parse(serialized)
   const decodedTxBytes = Buffer.from(tx_bytes, 'base64')

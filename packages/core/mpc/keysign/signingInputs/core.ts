@@ -16,6 +16,4 @@ export const signingInputClasses = {
   qbtc: TW.Cosmos.Proto.SigningInput,
 } as const satisfies Record<ChainKind, unknown>
 
-export type SigningInput<T extends ChainKind> = InstanceType<
-  (typeof signingInputClasses)[T]
->
+export type SigningInput<T extends ChainKind> = InstanceType<(typeof signingInputClasses)[T]>

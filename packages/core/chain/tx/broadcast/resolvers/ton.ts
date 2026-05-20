@@ -7,10 +7,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastTonTx: BroadcastTxResolver<OtherChain.Ton> = async ({ chain, tx }) => {
   const url = `${rootApiUrl}/ton/v2/sendBocReturnHash`
 
   const { error } = await attempt(

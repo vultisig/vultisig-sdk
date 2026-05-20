@@ -11,11 +11,7 @@ const msInUnit: Record<DurationUnit, number> = {
   w: msInWeek,
 }
 
-export const convertDuration = (
-  value: number,
-  from: DurationUnit,
-  to: DurationUnit
-) => {
+export const convertDuration = (value: number, from: DurationUnit, to: DurationUnit) => {
   const result = value * (msInUnit[from] / msInUnit[to])
 
   return result

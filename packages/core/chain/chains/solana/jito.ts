@@ -31,9 +31,7 @@ async function jitoFetch<T = unknown>(url: string, body: unknown): Promise<JitoR
  * Submit a single signed transaction via JITO's sendTransaction endpoint.
  * Provides free MEV protection (private mempool) without requiring a bundle or tip.
  */
-export async function sendJitoTransaction(
-  rawTransaction: Uint8Array
-): Promise<string> {
+export async function sendJitoTransaction(rawTransaction: Uint8Array): Promise<string> {
   const encoded = base58.encode(rawTransaction)
 
   const data = await jitoFetch<string>(`${JITO_BLOCK_ENGINE_URL}/api/v1/transactions`, {
@@ -43,9 +41,7 @@ export async function sendJitoTransaction(
     params: [encoded, { encoding: 'base58' }],
   })
   if (data.error) {
-    throw new Error(
-      `JITO sendTransaction failed: ${JSON.stringify(data.error)}`
-    )
+    throw new Error(`JITO sendTransaction failed: ${JSON.stringify(data.error)}`)
   }
   return data.result
 }

@@ -24,9 +24,7 @@ export const getThorchainLpLockupSeconds = async (): Promise<number> => {
   const mimir = await getThorchainMimir()
   const blocks = mimir['LIQUIDITYLOCKUPBLOCKS']
   if (typeof blocks !== 'number' || !Number.isFinite(blocks) || blocks < 0) {
-    throw new Error(
-      `getThorchainLpLockupSeconds: mimir did not include a valid LIQUIDITYLOCKUPBLOCKS value`
-    )
+    throw new Error(`getThorchainLpLockupSeconds: mimir did not include a valid LIQUIDITYLOCKUPBLOCKS value`)
   }
   return blocks * THORCHAIN_BLOCK_TIME_SECONDS
 }
@@ -62,8 +60,7 @@ export const getLpWithdrawReadiness = async ({
   lockupSeconds?: number
   nowUnix?: number
 }): Promise<LpWithdrawReadiness> => {
-  const lockupSeconds =
-    providedLockupSeconds ?? (await getThorchainLpLockupSeconds())
+  const lockupSeconds = providedLockupSeconds ?? (await getThorchainLpLockupSeconds())
   const lastAdded = Number(position.dateLastAdded)
   if (!Number.isFinite(lastAdded) || lastAdded <= 0) {
     // No valid last-add timestamp — assume withdrawable (fresh / unknown).

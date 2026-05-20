@@ -24,31 +24,18 @@ import {
 import { fromLibType, toLibType } from './libType'
 
 const chainValues = new Set<string>(Object.values(Chain))
-const isChain = (value: unknown): value is Chain =>
-  typeof value === 'string' && chainValues.has(value)
+const isChain = (value: unknown): value is Chain => typeof value === 'string' && chainValues.has(value)
 
 const isoStringToProtoTimestamp = (timestamp: number): Timestamp => {
   const seconds = Math.floor(convertDuration(timestamp, 'ms', 's'))
-  const nanos = convertDuration(
-    timestamp - convertDuration(seconds, 's', 'ms'),
-    'ms',
-    'ns'
-  )
+  const nanos = convertDuration(timestamp - convertDuration(seconds, 's', 'ms'), 'ms', 'ns')
   return create(TimestampSchema, { seconds: BigInt(seconds), nanos })
 }
 
 export const toCommVault = (vault: Vault): CommVault =>
   create(VaultSchema, {
-    ...pick(vault, [
-      'name',
-      'signers',
-      'hexChainCode',
-      'localPartyId',
-      'resharePrefix',
-    ]),
-    createdAt: vault.createdAt
-      ? isoStringToProtoTimestamp(vault.createdAt)
-      : undefined,
+    ...pick(vault, ['name', 'signers', 'hexChainCode', 'localPartyId', 'resharePrefix']),
+    createdAt: vault.createdAt ? isoStringToProtoTimestamp(vault.createdAt) : undefined,
     keyShares: [
       ...toEntries(vault.keyShares).map(({ key, value }) =>
         create(Vault_KeyShareSchema, {
@@ -64,24 +51,23 @@ export const toCommVault = (vault: Vault): CommVault =>
       ),
       ...(vault.publicKeyMldsa && vault.keyShareMldsa
         ? [
-          create(Vault_KeyShareSchema, {
-            publicKey: vault.publicKeyMldsa,
-            keyshare: vault.keyShareMldsa,
-          }),
-        ]
+            create(Vault_KeyShareSchema, {
+              publicKey: vault.publicKeyMldsa,
+              keyshare: vault.keyShareMldsa,
+            }),
+          ]
         : []),
     ],
     publicKeyEcdsa: vault.publicKeys.ecdsa,
     publicKeyEddsa: vault.publicKeys.eddsa,
     publicKeyMldsa44: vault.publicKeyMldsa ?? '',
     libType: toLibType(isKeyImportVault(vault) ? 'KeyImport' : vault.libType),
-    chainPublicKeys: toEntries(vault.chainPublicKeys ?? {}).map(
-      ({ key, value }) =>
-        create(Vault_ChainPublicKeySchema, {
-          publicKey: value,
-          chain: key,
-          isEddsa: signatureAlgorithms[getChainKind(key as Chain)] === 'eddsa',
-        })
+    chainPublicKeys: toEntries(vault.chainPublicKeys ?? {}).map(({ key, value }) =>
+      create(Vault_ChainPublicKeySchema, {
+        publicKey: value,
+        chain: key,
+        isEddsa: signatureAlgorithms[getChainKind(key as Chain)] === 'eddsa',
+      })
     ),
   })
 
@@ -124,19 +110,15 @@ export const fromCommVault = (vault: CommVault): Vault => {
   const keyShares = recordFromKeys(
     signingAlgorithms,
     algorithm =>
-      shouldBePresent(
-        vault.keyShares.find(
-          keyShare => keyShare.publicKey === publicKeys[algorithm]
-        )
-      ).keyshare
+      shouldBePresent(vault.keyShares.find(keyShare => keyShare.publicKey === publicKeys[algorithm])).keyshare
   )
 
   const publicKeyMldsa = vault.publicKeyMldsa44 || undefined
   const keyShareMldsa = vault.publicKeyMldsa44
     ? shouldBePresent(
-      vault.keyShares.find(ks => ks.publicKey === vault.publicKeyMldsa44),
-      `keyshare for MLDSA public key ${vault.publicKeyMldsa44}`
-    ).keyshare
+        vault.keyShares.find(ks => ks.publicKey === vault.publicKeyMldsa44),
+        `keyshare for MLDSA public key ${vault.publicKeyMldsa44}`
+      ).keyshare
     : undefined
 
   vault.keyShares.forEach(keyShare => {
@@ -150,49 +132,28 @@ export const fromCommVault = (vault: CommVault): Vault => {
 
   const chainPublicKeysWithKeyShare = toEntries(allChainPublicKeys)
   const missingPublicKeys = Array.from(
-    new Set(
-      chainPublicKeysWithKeyShare
-        .filter(({ key }) => !(key in chainKeyShares))
-        .map(({ value }) => value)
-    )
+    new Set(chainPublicKeysWithKeyShare.filter(({ key }) => !(key in chainKeyShares)).map(({ value }) => value))
   )
   if (missingPublicKeys.length > 0) {
-    throw new Error(
-      `Backup is missing keyshares for public keys: ${missingPublicKeys.join(', ')}`
-    )
+    throw new Error(`Backup is missing keyshares for public keys: ${missingPublicKeys.join(', ')}`)
   }
-  const chainPublicKeys = chainPublicKeysWithKeyShare.reduce<
-    Partial<Record<Chain, string>>
-  >((acc, { key, value }) => {
+  const chainPublicKeys = chainPublicKeysWithKeyShare.reduce<Partial<Record<Chain, string>>>((acc, { key, value }) => {
     acc[key] = value
     return acc
   }, {})
 
   return {
-    ...pick(vault, [
-      'name',
-      'signers',
-      'hexChainCode',
-      'localPartyId',
-      'resharePrefix',
-      'libType',
-    ]),
-    createdAt: vault.createdAt
-      ? convertDuration(Number(vault.createdAt.seconds), 's', 'ms')
-      : undefined,
+    ...pick(vault, ['name', 'signers', 'hexChainCode', 'localPartyId', 'resharePrefix', 'libType']),
+    createdAt: vault.createdAt ? convertDuration(Number(vault.createdAt.seconds), 's', 'ms') : undefined,
     publicKeys,
     keyShares,
     publicKeyMldsa,
     keyShareMldsa,
-    chainKeyShares:
-      Object.keys(chainKeyShares).length > 0 ? chainKeyShares : undefined,
-    chainPublicKeys:
-      Object.keys(chainPublicKeys).length > 0 ? chainPublicKeys : undefined,
+    chainKeyShares: Object.keys(chainKeyShares).length > 0 ? chainKeyShares : undefined,
+    chainPublicKeys: Object.keys(chainPublicKeys).length > 0 ? chainPublicKeys : undefined,
     libType: fromLibType(vault.libType),
     isBackedUp: false,
     order: 0,
-    lastPasswordVerificationTime: hasServer(vault.signers)
-      ? Date.now()
-      : undefined,
+    lastPasswordVerificationTime: hasServer(vault.signers) ? Date.now() : undefined,
   }
 }

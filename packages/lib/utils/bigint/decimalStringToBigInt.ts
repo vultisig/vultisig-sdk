@@ -1,7 +1,4 @@
-export const decimalStringToBigInt = (
-  decimalString: string,
-  decimals: number
-): bigint => {
+export const decimalStringToBigInt = (decimalString: string, decimals: number): bigint => {
   const trimmed = decimalString.trim()
   if (trimmed === '' || trimmed === '.') {
     throw new Error('Invalid decimal string')
@@ -13,9 +10,7 @@ export const decimalStringToBigInt = (
   const [integerPart, fractionalPart = ''] = absoluteString.split('.')
 
   if (fractionalPart.length > decimals) {
-    throw new Error(
-      `Fractional part exceeds ${decimals} decimals: ${fractionalPart.length}`
-    )
+    throw new Error(`Fractional part exceeds ${decimals} decimals: ${fractionalPart.length}`)
   }
 
   const paddedFractional = fractionalPart.padEnd(decimals, '0')

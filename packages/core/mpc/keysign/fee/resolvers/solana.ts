@@ -8,22 +8,16 @@ import { FeeAmountResolver } from '../resolver'
 const MICRO_LAMPORTS_PER_LAMPORT = 1_000_000n
 
 export const getSolanaFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
-  const { priorityFee, computeLimit, toTokenAssociatedAddress } =
-    getBlockchainSpecificValue(
-      keysignPayload.blockchainSpecific,
-      'solanaSpecific'
-    )
+  const { priorityFee, computeLimit, toTokenAssociatedAddress } = getBlockchainSpecificValue(
+    keysignPayload.blockchainSpecific,
+    'solanaSpecific'
+  )
 
   const priorityFeeAmount =
-    (BigInt(priorityFee) *
-      BigInt(computeLimit ?? solanaConfig.priorityFeeLimit)) /
-    MICRO_LAMPORTS_PER_LAMPORT
+    (BigInt(priorityFee) * BigInt(computeLimit ?? solanaConfig.priorityFeeLimit)) / MICRO_LAMPORTS_PER_LAMPORT
 
   const coin = getKeysignCoin(keysignPayload)
-  const ataRent =
-    !isFeeCoin(coin) && !toTokenAssociatedAddress
-      ? BigInt(solanaConfig.ataRentLamports)
-      : 0n
+  const ataRent = !isFeeCoin(coin) && !toTokenAssociatedAddress ? BigInt(solanaConfig.ataRentLamports) : 0n
 
   return BigInt(solanaConfig.baseFee) + ataRent + priorityFeeAmount
 }

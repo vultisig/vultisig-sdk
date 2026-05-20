@@ -20,10 +20,7 @@ function base58ToHex(address: string): string {
   return Buffer.from(addressBytes).toString('hex')
 }
 
-function buildTrc20TransferParameter(
-  recipientBaseHex: string,
-  amount: bigint
-): string {
+function buildTrc20TransferParameter(recipientBaseHex: string, amount: bigint): string {
   const cleanRecipientHex = recipientBaseHex.replace(/^0x/, '')
   const addressWithoutPrefix = cleanRecipientHex.slice(2)
   const paddedAddressHex = addressWithoutPrefix.padStart(64, '0')
@@ -32,11 +29,7 @@ function buildTrc20TransferParameter(
   return paddedAddressHex + paddedAmountHex
 }
 
-export const getTrc20TransferFee = async ({
-  coin,
-  receiver,
-  amount,
-}: GetTrc20TransferFeeInput): Promise<bigint> => {
+export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20TransferFeeInput): Promise<bigint> => {
   const recipientAddressHex = base58ToHex(receiver)
   const functionSelector = 'transfer(address,uint256)'
 

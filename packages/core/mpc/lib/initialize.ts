@@ -5,13 +5,7 @@ import { prefixErrorWith } from '@vultisig/lib-utils/error/prefixErrorWith'
 import { transformError } from '@vultisig/lib-utils/error/transformError'
 
 const initializeEngine = memoizeAsync(() =>
-  ensureMpcEngine().then(engine =>
-    transformError(
-      engine.initialize(),
-      prefixErrorWith('Failed to initialize MPC lib')
-    )
-  )
+  ensureMpcEngine().then(engine => transformError(engine.initialize(), prefixErrorWith('Failed to initialize MPC lib')))
 )
 
-export const initializeMpcLib = (_algo: SignatureAlgorithm) =>
-  initializeEngine()
+export const initializeMpcLib = (_algo: SignatureAlgorithm) => initializeEngine()

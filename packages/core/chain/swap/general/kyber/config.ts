@@ -16,14 +16,10 @@ export type KyberSwapAffiliateParams = typeof kyberSwapAffiliateConfig & {
   feeReceiver: string
 }
 
-export const hasAffiliateBps = (
-  affiliateBps?: number
-): affiliateBps is number =>
+export const hasAffiliateBps = (affiliateBps?: number): affiliateBps is number =>
   affiliateBps !== undefined && affiliateBps > 0 && affiliateBps < 10000
 
-export const getKyberSwapAffiliateParams = (
-  affiliateBps?: number
-): KyberSwapAffiliateParams | Record<string, never> =>
+export const getKyberSwapAffiliateParams = (affiliateBps?: number): KyberSwapAffiliateParams | Record<string, never> =>
   hasAffiliateBps(affiliateBps)
     ? {
         ...kyberSwapAffiliateConfig,

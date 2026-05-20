@@ -14,41 +14,22 @@ const polkadotSigningPayloadHashThreshold = 256
  *
  * If the payload exceeds 256 bytes, it is blake2b-256 hashed before signing.
  */
-export const constructPolkadotSigningPayload = (
-  payload: PolkadotSignerPayloadJSON
-): Uint8Array => {
+export const constructPolkadotSigningPayload = (payload: PolkadotSignerPayloadJSON): Uint8Array => {
   const method = hexToU8a(payload.method)
   const era = hexToU8a(payload.era)
   const nonce = compactToU8a(parseInt(payload.nonce, 16))
   const tip = compactToU8a(payload.tip ? BigInt(payload.tip) : 0n)
 
   const specVersion = new Uint8Array(4)
-  new DataView(specVersion.buffer).setUint32(
-    0,
-    parseInt(payload.specVersion, 16),
-    true
-  )
+  new DataView(specVersion.buffer).setUint32(0, parseInt(payload.specVersion, 16), true)
 
   const transactionVersion = new Uint8Array(4)
-  new DataView(transactionVersion.buffer).setUint32(
-    0,
-    parseInt(payload.transactionVersion, 16),
-    true
-  )
+  new DataView(transactionVersion.buffer).setUint32(0, parseInt(payload.transactionVersion, 16), true)
 
   const genesisHash = hexToU8a(payload.genesisHash)
   const blockHash = hexToU8a(payload.blockHash)
 
-  const raw = u8aConcat(
-    method,
-    era,
-    nonce,
-    tip,
-    specVersion,
-    transactionVersion,
-    genesisHash,
-    blockHash
-  )
+  const raw = u8aConcat(method, era, nonce, tip, specVersion, transactionVersion, genesisHash, blockHash)
 
   if (raw.length > polkadotSigningPayloadHashThreshold) {
     return blake2AsU8a(raw, 256)

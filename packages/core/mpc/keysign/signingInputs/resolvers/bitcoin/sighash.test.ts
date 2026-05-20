@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Buffer } from 'buffer'
-import {
-  Transaction,
-  Psbt,
-  payments,
-  networks,
-  script as bscript,
-} from 'bitcoinjs-lib'
+import { Transaction, Psbt, payments, networks, script as bscript } from 'bitcoinjs-lib'
 import { create } from '@bufbuild/protobuf'
 import {
   BitcoinInputSchema,
@@ -22,30 +16,14 @@ import { computePreSigningHashes } from './sighash'
  * See https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
  */
 
-const TEST_PUBKEY = Buffer.from(
-  '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
-  'hex'
-)
+const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
 
 /** Get bitcoinjs-lib's sighash for comparison. */
-const getBjsSighash = (
-  psbt: Psbt,
-  inputIndex: number,
-  value: bigint,
-  scriptPubKey: Uint8Array
-) => {
+const getBjsSighash = (psbt: Psbt, inputIndex: number, value: bigint, scriptPubKey: Uint8Array) => {
   const tx = (psbt as any).__CACHE.__TX as Transaction
   const spkBuf = Buffer.from(scriptPubKey)
-  const witnessScript = bscript.compile([
-    0x76,
-    0xa9,
-    spkBuf.subarray(2, 22),
-    0x88,
-    0xac,
-  ])
-  return Buffer.from(
-    tx.hashForWitnessV0(inputIndex, witnessScript, value, Transaction.SIGHASH_ALL)
-  )
+  const witnessScript = bscript.compile([0x76, 0xa9, spkBuf.subarray(2, 22), 0x88, 0xac])
+  return Buffer.from(tx.hashForWitnessV0(inputIndex, witnessScript, value, Transaction.SIGHASH_ALL))
 }
 
 describe('computePreSigningHashes', () => {
@@ -88,14 +66,8 @@ describe('computePreSigningHashes', () => {
 
     // For P2SH-P2WPKH, bitcoinjs-lib uses the redeemScript to derive the witness script
     const tx = (psbt as any).__CACHE.__TX as Transaction
-    const witnessScript = bscript.compile([
-      0x76, 0xa9,
-      p2sh.redeem!.output!.subarray(2, 22),
-      0x88, 0xac,
-    ])
-    const bjsHash = Buffer.from(
-      tx.hashForWitnessV0(0, witnessScript, 200000n, Transaction.SIGHASH_ALL)
-    )
+    const witnessScript = bscript.compile([0x76, 0xa9, p2sh.redeem!.output!.subarray(2, 22), 0x88, 0xac])
+    const bjsHash = Buffer.from(tx.hashForWitnessV0(0, witnessScript, 200000n, Transaction.SIGHASH_ALL))
 
     const [ourHash] = computePreSigningHashes(signBitcoin)
     expect(Buffer.from(ourHash).toString('hex')).toBe(bjsHash.toString('hex'))
@@ -205,9 +177,7 @@ describe('computePreSigningHashes', () => {
       ],
     })
 
-    expect(() => computePreSigningHashes(signBitcoin)).toThrow(
-      'Unsupported script type for BIP-143 sighash: p2tr'
-    )
+    expect(() => computePreSigningHashes(signBitcoin)).toThrow('Unsupported script type for BIP-143 sighash: p2tr')
   })
 
   it('throws for non-SIGHASH_ALL', () => {
@@ -233,9 +203,7 @@ describe('computePreSigningHashes', () => {
       ],
     })
 
-    expect(() => computePreSigningHashes(signBitcoin)).toThrow(
-      'Unsupported sighash type: 0x83'
-    )
+    expect(() => computePreSigningHashes(signBitcoin)).toThrow('Unsupported sighash type: 0x83')
   })
 
   it('throws when no signable inputs', () => {
@@ -260,9 +228,7 @@ describe('computePreSigningHashes', () => {
       ],
     })
 
-    expect(() => computePreSigningHashes(signBitcoin)).toThrow(
-      'No signable inputs'
-    )
+    expect(() => computePreSigningHashes(signBitcoin)).toThrow('No signable inputs')
   })
 
   it('throws when no inputs', () => {
@@ -273,9 +239,7 @@ describe('computePreSigningHashes', () => {
       outputs: [],
     })
 
-    expect(() => computePreSigningHashes(signBitcoin)).toThrow(
-      'SignBitcoin has no inputs'
-    )
+    expect(() => computePreSigningHashes(signBitcoin)).toThrow('SignBitcoin has no inputs')
   })
 
   it('throws for P2SH-P2WPKH without redeemScript', () => {
@@ -301,8 +265,6 @@ describe('computePreSigningHashes', () => {
       ],
     })
 
-    expect(() => computePreSigningHashes(signBitcoin)).toThrow(
-      'P2SH-P2WPKH inputs require redeemScript'
-    )
+    expect(() => computePreSigningHashes(signBitcoin)).toThrow('P2SH-P2WPKH inputs require redeemScript')
   })
 })

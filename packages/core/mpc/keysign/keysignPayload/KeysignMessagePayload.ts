@@ -1,8 +1,5 @@
 import { CustomMessagePayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/custom_message_payload_pb'
-import {
-  KeysignMessage,
-  KeysignPayload,
-} from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignMessage, KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 type KeysignMessagePayloadType = 'custom' | 'keysign'
 

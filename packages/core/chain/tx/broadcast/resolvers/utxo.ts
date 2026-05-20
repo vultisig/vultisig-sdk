@@ -10,9 +10,7 @@ import { SigningOutput } from '../../../tw/signingOutput'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-type UtxoBasedDecodedTx =
-  | SigningOutput<UtxoChain>
-  | SigningOutput<OtherChain.Cardano>
+type UtxoBasedDecodedTx = SigningOutput<UtxoChain> | SigningOutput<OtherChain.Cardano>
 
 type BlockchairBroadcastResponse =
   | {
@@ -27,10 +25,7 @@ type BlockchairBroadcastResponse =
       }
     }
 
-export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({ chain, tx }) => {
   const url = `${getBlockchairBaseUrl(chain)}/push/transaction`
   const encodedBytes = selectEncodedBytes(chain, tx as UtxoBasedDecodedTx)
 
@@ -44,24 +39,13 @@ export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({
     return response.data.transaction_hash
   }
 
-  const error =
-    'context' in response ? response.context.error : extractErrorMsg(response)
+  const error = 'context' in response ? response.context.error : extractErrorMsg(response)
 
-  if (
-    isInError(
-      error,
-      'BadInputsUTxO',
-      'timed out',
-      'txn-mempool-conflict',
-      'already known'
-    )
-  ) {
+  if (isInError(error, 'BadInputsUTxO', 'timed out', 'txn-mempool-conflict', 'already known')) {
     return null
   }
 
-  const broadcastError = new Error(
-    `Failed to broadcast transaction: ${extractErrorMsg(error)}`
-  )
+  const broadcastError = new Error(`Failed to broadcast transaction: ${extractErrorMsg(error)}`)
   await verifyBroadcastByHash({ chain, tx, error: broadcastError })
   return null
 }
@@ -70,21 +54,10 @@ const hasSigningResultV2 = (
   tx: UtxoBasedDecodedTx
 ): tx is SigningOutput<UtxoChain> & {
   signingResultV2: { encoded?: Uint8Array | null }
-} =>
-  tx != null &&
-  typeof tx === 'object' &&
-  'signingResultV2' in tx &&
-  !!(tx as any).signingResultV2
+} => tx != null && typeof tx === 'object' && 'signingResultV2' in tx && !!(tx as any).signingResultV2
 
-export const selectEncodedBytes = (
-  chain: UtxoBasedChain,
-  tx: UtxoBasedDecodedTx
-): Uint8Array => {
-  if (
-    getChainKind(chain) === 'utxo' &&
-    hasSigningResultV2(tx) &&
-    tx.signingResultV2.encoded
-  ) {
+export const selectEncodedBytes = (chain: UtxoBasedChain, tx: UtxoBasedDecodedTx): Uint8Array => {
+  if (getChainKind(chain) === 'utxo' && hasSigningResultV2(tx) && tx.signingResultV2.encoded) {
     return shouldBePresent(tx.signingResultV2.encoded)
   }
   return shouldBePresent(tx.encoded)

@@ -17,18 +17,12 @@ type Input = {
   walletCore: WalletCore
 }
 
-export const getCompiledTxsForBlockaidInput = ({
-  payload,
-  walletCore,
-}: Input) => {
+export const getCompiledTxsForBlockaidInput = ({ payload, walletCore }: Input) => {
   const chain = getKeysignChain(payload)
   const chainKind = getChainKind(chain)
 
   const publicKeyData = getKeysignTwPublicKey(payload)
-  const publicKey = walletCore.PublicKey.createWithData(
-    publicKeyData,
-    getTwPublicKeyType({ walletCore, chain })
-  )
+  const publicKey = walletCore.PublicKey.createWithData(publicKeyData, getTwPublicKeyType({ walletCore, chain }))
 
   const coinType = getCoinType({
     chain,
@@ -78,11 +72,6 @@ export const getCompiledTxsForBlockaidInput = ({
       })
     )
 
-    return walletCore.TransactionCompiler.compileWithSignatures(
-      coinType,
-      txInputData,
-      signatures,
-      publicKeys
-    )
+    return walletCore.TransactionCompiler.compileWithSignatures(coinType, txInputData, signatures, publicKeys)
   })
 }

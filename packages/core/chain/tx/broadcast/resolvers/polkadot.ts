@@ -11,9 +11,7 @@ type RpcResponse = {
   error?: { code: number; message: string }
 }
 
-export const broadcastPolkadotTx: BroadcastTxResolver<
-  OtherChain.Polkadot
-> = async ({ chain, tx }) => {
+export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = async ({ chain, tx }) => {
   const hexWithPrefix = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
 
   try {
@@ -27,18 +25,14 @@ export const broadcastPolkadotTx: BroadcastTxResolver<
     })
 
     if (response.error) {
-      throw new Error(
-        `Polkadot broadcast failed: ${response.error.message ?? `code ${response.error.code}`}`
-      )
+      throw new Error(`Polkadot broadcast failed: ${response.error.message ?? `code ${response.error.code}`}`)
     }
 
     // Per JSON-RPC 2.0 a valid response must have exactly one of `result` /
     // `error`. If both are missing (malformed gateway response, truncated
     // body, …) do not silently assume success — force hash verification.
     if (!response.result) {
-      throw new Error(
-        'Polkadot broadcast failed: missing extrinsic hash in RPC response'
-      )
+      throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
     }
   } catch (error) {
     await verifyBroadcastByHash({ chain, tx, error })

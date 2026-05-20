@@ -15,13 +15,7 @@ export class HttpResponseError extends Error {
   readonly url: string
   readonly body: unknown
 
-  constructor(opts: {
-    message: string
-    status: number
-    statusText: string
-    url: string
-    body: unknown
-  }) {
+  constructor(opts: { message: string; status: number; statusText: string; url: string; body: unknown }) {
     super(opts.message)
     this.name = 'HttpResponseError'
     this.status = opts.status

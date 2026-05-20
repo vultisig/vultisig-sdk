@@ -7,11 +7,13 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
 }))
 
 import { Chain } from '@vultisig/core-chain/Chain'
-import { getCosmosTokenMetadata } from './cosmos'
+
+import { clearCosmosTokenMetadataCacheForTests, getCosmosTokenMetadata } from './cosmos'
 
 describe('getCosmosTokenMetadata', () => {
   beforeEach(() => {
     queryUrlMock.mockReset()
+    clearCosmosTokenMetadataCacheForTests()
   })
 
   it('fetches Terra CW20 metadata from token_info', async () => {
@@ -90,6 +92,178 @@ describe('getCosmosTokenMetadata', () => {
     ).resolves.toEqual({
       ticker: 'nft',
       decimals: 0,
+    })
+  })
+
+  it('preserves known Cosmos token logo and price metadata', async () => {
+    await expect(
+      getCosmosTokenMetadata({
+        chain: Chain.TerraClassic,
+        id: 'uusd',
+      })
+    ).resolves.toEqual({
+      ticker: 'USTC',
+      decimals: 6,
+      logo: 'ustc.png',
+      priceProviderId: 'terrausd',
+    })
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves IBC denom traces through base denom metadata', async () => {
+    queryUrlMock.mockImplementation((url: string) => {
+      if (url.includes('/denoms_metadata/ibc%2FTRACEHASH')) {
+        return Promise.resolve({ metadata: { base: 'ibc/TRACEHASH' } })
+      }
+      if (url.includes('/denoms_metadata?pagination.limit=1000')) {
+        return Promise.resolve({ metadatas: [] })
+      }
+      if (url.includes('/denom_traces/TRACEHASH')) {
+        return Promise.resolve({ denom_trace: { path: 'transfer/channel-1', base_denom: 'uatom' } })
+      }
+      if (url.includes('/denoms_metadata/uatom')) {
+        return Promise.resolve({
+          metadata: {
+            symbol: 'ATOM',
+            display: 'ATOM',
+            denom_units: [
+              {
+                denom: 'uatom',
+                exponent: 0,
+              },
+              {
+                denom: 'ATOM',
+                exponent: 6,
+              },
+            ],
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL ${url}`)
+    })
+
+    await expect(
+      getCosmosTokenMetadata({
+        chain: Chain.Terra,
+        id: 'ibc/TRACEHASH',
+      })
+    ).resolves.toEqual({
+      ticker: 'ATOM',
+      decimals: 6,
+    })
+  })
+
+  it('uses IBC trace ticker fallback as hidden when base metadata is unavailable', async () => {
+    queryUrlMock.mockImplementation((url: string) => {
+      if (url.includes('/denoms_metadata/ibc%2FOSMOHASH')) {
+        return Promise.resolve({ metadata: { base: 'ibc/OSMOHASH' } })
+      }
+      if (url.includes('/denom_traces/OSMOHASH')) {
+        return Promise.resolve({ denom_trace: { path: 'transfer/channel-1', base_denom: 'uosmo' } })
+      }
+      if (url.includes('/denoms_metadata/uosmo')) {
+        return Promise.resolve({ metadata: { base: 'uosmo' } })
+      }
+      if (url.includes('/denoms_metadata?pagination.limit=1000')) {
+        return Promise.resolve({ metadatas: [] })
+      }
+
+      throw new Error(`Unexpected URL ${url}`)
+    })
+
+    await expect(
+      getCosmosTokenMetadata({
+        chain: Chain.Terra,
+        id: 'ibc/OSMOHASH',
+      })
+    ).resolves.toEqual({
+      ticker: 'osmo',
+      decimals: 6,
+      isHidden: true,
+    })
+  })
+
+  it('caches bank denom metadata lookups for 24 hours', async () => {
+    queryUrlMock.mockResolvedValue({
+      metadata: {
+        symbol: 'CACHED',
+        display: 'CACHED',
+        denom_units: [
+          {
+            denom: 'ucached',
+            exponent: 0,
+          },
+          {
+            denom: 'CACHED',
+            exponent: 8,
+          },
+        ],
+      },
+    })
+
+    await getCosmosTokenMetadata({
+      chain: Chain.Cosmos,
+      id: 'ucached',
+    })
+    await getCosmosTokenMetadata({
+      chain: Chain.Cosmos,
+      id: 'ucached',
+    })
+
+    expect(queryUrlMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cache missing bank denom metadata', async () => {
+    queryUrlMock.mockImplementation((url: string) => {
+      if (url.includes('/denoms_metadata/uappears')) {
+        if (
+          queryUrlMock.mock.calls.filter(([calledUrl]) => String(calledUrl).includes('/denoms_metadata/uappears'))
+            .length === 1
+        ) {
+          return Promise.resolve({})
+        }
+
+        return Promise.resolve({
+          metadata: {
+            symbol: 'APPEARS',
+            display: 'APPEARS',
+            denom_units: [
+              {
+                denom: 'uappears',
+                exponent: 0,
+              },
+              {
+                denom: 'APPEARS',
+                exponent: 9,
+              },
+            ],
+          },
+        })
+      }
+      if (url.includes('/denoms_metadata?pagination.limit=1000')) {
+        return Promise.resolve({ metadatas: [] })
+      }
+
+      throw new Error(`Unexpected URL ${url}`)
+    })
+
+    await expect(
+      getCosmosTokenMetadata({
+        chain: Chain.Terra,
+        id: 'uappears',
+      })
+    ).rejects.toThrow('No denom meta information available')
+
+    await expect(
+      getCosmosTokenMetadata({
+        chain: Chain.Terra,
+        id: 'uappears',
+      })
+    ).resolves.toEqual({
+      ticker: 'APPEARS',
+      decimals: 9,
     })
   })
 })

@@ -8,10 +8,7 @@ type QueryCoingeickoPricesInput = {
   fiatCurrency: FiatCurrency
 }
 
-export const queryCoingeickoPrices = async ({
-  url,
-  fiatCurrency,
-}: QueryCoingeickoPricesInput) => {
+export const queryCoingeickoPrices = async ({ url, fiatCurrency }: QueryCoingeickoPricesInput) => {
   const result = await queryUrl<CoinPricesResponse>(url)
 
   return recordMap(result, value => value[fiatCurrency])

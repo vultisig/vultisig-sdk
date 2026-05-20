@@ -11,9 +11,7 @@
  */
 export const cborSkip = (data: Uint8Array, offset: number): number => {
   if (!Number.isInteger(offset) || offset < 0 || offset >= data.length) {
-    throw new Error(
-      `cborSkip: offset ${offset} is out of bounds (data length ${data.length})`
-    )
+    throw new Error(`cborSkip: offset ${offset} is out of bounds (data length ${data.length})`)
   }
   const initial = data[offset]
   const majorType = initial >> 5
@@ -58,21 +56,17 @@ export const cborSkip = (data: Uint8Array, offset: number): number => {
   if (majorType === 6) return cborSkip(data, nextOffset)
 
   // Major type 7: simple values / floats
-  if (additional <= 23) return nextOffset          // simple value in head
-  if (additional === 24) return nextOffset          // 1-byte simple
-  if (additional === 25) return nextOffset          // float16 (2 bytes in arg)
-  if (additional === 26) return nextOffset          // float32 (4 bytes in arg)
-  if (additional === 27) return nextOffset          // float64 (8 bytes in arg)
+  if (additional <= 23) return nextOffset // simple value in head
+  if (additional === 24) return nextOffset // 1-byte simple
+  if (additional === 25) return nextOffset // float16 (2 bytes in arg)
+  if (additional === 26) return nextOffset // float32 (4 bytes in arg)
+  if (additional === 27) return nextOffset // float64 (8 bytes in arg)
 
   throw new Error(`Unsupported CBOR item at offset ${offset}: initial byte 0x${initial.toString(16)}`)
 }
 
 /** Read the argument value and return the offset after the argument. */
-const readArgument = (
-  data: Uint8Array,
-  offset: number,
-  additional: number
-): { value: bigint; nextOffset: number } => {
+const readArgument = (data: Uint8Array, offset: number, additional: number): { value: bigint; nextOffset: number } => {
   const ensureBytes = (needed: number) => {
     const end = offset + 1 + needed
     if (end > data.length) {
@@ -94,25 +88,13 @@ const readArgument = (
   }
   if (additional === 26) {
     ensureBytes(4)
-    const v =
-      (data[offset + 1] << 24) |
-      (data[offset + 2] << 16) |
-      (data[offset + 3] << 8) |
-      data[offset + 4]
+    const v = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4]
     return { value: BigInt(v >>> 0), nextOffset: offset + 5 }
   }
   if (additional === 27) {
     ensureBytes(8)
-    const hi =
-      (data[offset + 1] << 24) |
-      (data[offset + 2] << 16) |
-      (data[offset + 3] << 8) |
-      data[offset + 4]
-    const lo =
-      (data[offset + 5] << 24) |
-      (data[offset + 6] << 16) |
-      (data[offset + 7] << 8) |
-      data[offset + 8]
+    const hi = (data[offset + 1] << 24) | (data[offset + 2] << 16) | (data[offset + 3] << 8) | data[offset + 4]
+    const lo = (data[offset + 5] << 24) | (data[offset + 6] << 16) | (data[offset + 7] << 8) | data[offset + 8]
     return {
       value: (BigInt(hi >>> 0) << 32n) | BigInt(lo >>> 0),
       nextOffset: offset + 9,

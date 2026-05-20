@@ -1,6 +1,6 @@
 import { rootApiUrl } from '@vultisig/core-config'
-import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 
 /** Ogmios submit-transaction RPC shape — see https://ogmios.dev. */
 type OgmiosResponse = {
@@ -33,18 +33,13 @@ export type SubmitCardanoCborResult = {
  * distinguish "already-committed" (`rpcErrorCode === 3117`), mempool conflicts,
  * etc. For the common "submit or throw" shape, use `submitCardanoCborTx`.
  */
-export const submitCardanoCbor = async (
-  cborHex: string
-): Promise<SubmitCardanoCborResult> => {
+export const submitCardanoCbor = async (cborHex: string): Promise<SubmitCardanoCborResult> => {
   const cleaned = cborHex.replace(/^0x/i, '').toLowerCase()
 
   // Direct fetch: `queryUrl` auto-runs assertFetchResponse which throws before
   // we can inspect the raw body or status.
   const controller = new AbortController()
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    cardanoBroadcastTimeoutMs
-  )
+  const timeoutId = setTimeout(() => controller.abort(), cardanoBroadcastTimeoutMs)
 
   const fetchResult = await attempt(() =>
     fetch(cardanoBroadcastUrl, {

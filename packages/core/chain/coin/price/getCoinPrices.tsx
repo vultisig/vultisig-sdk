@@ -11,13 +11,8 @@ type GetCoinPricesInput = {
   fiatCurrency?: FiatCurrency
 }
 
-export const getCoinPrices = async ({
-  ids,
-  fiatCurrency = defaultFiatCurrency,
-}: GetCoinPricesInput) => {
-  const normalizedIds = Array.from(
-    new Set(ids.map(id => id.toLowerCase()).filter(Boolean))
-  )
+export const getCoinPrices = async ({ ids, fiatCurrency = defaultFiatCurrency }: GetCoinPricesInput) => {
+  const normalizedIds = Array.from(new Set(ids.map(id => id.toLowerCase()).filter(Boolean)))
 
   const url = addQueryParams(baseUrl, {
     ids: normalizedIds.join(','),

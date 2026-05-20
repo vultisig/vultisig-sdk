@@ -20,12 +20,8 @@ describe('ChainKind signing-input alignment', () => {
   })
 
   it('every Chain enum value has a resolver and encoder entry', () => {
-    const kindsFromChains = new Set(
-      (Object.values(Chain) as ChainValue[]).map(chain => getChainKind(chain))
-    )
-    const kindsFromRegistry = new Set(
-      Object.keys(signingInputResolversByChainKind) as ChainKind[]
-    )
+    const kindsFromChains = new Set((Object.values(Chain) as ChainValue[]).map(chain => getChainKind(chain)))
+    const kindsFromRegistry = new Set(Object.keys(signingInputResolversByChainKind) as ChainKind[])
     expect(kindsFromRegistry).toEqual(kindsFromChains)
   })
 })

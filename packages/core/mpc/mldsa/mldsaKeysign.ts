@@ -59,10 +59,7 @@ export class MldsaKeysign {
     this.timeoutMs = input.timeoutMs ?? 60000
   }
 
-  private async processOutbound(
-    session: SignSession,
-    messageId: string
-  ): Promise<boolean> {
+  private async processOutbound(session: SignSession, messageId: string): Promise<boolean> {
     try {
       const message = session.outputMessage()
       if (message === undefined) {
@@ -101,11 +98,7 @@ export class MldsaKeysign {
     }
   }
 
-  private async processInbound(
-    session: SignSession,
-    start: number,
-    messageId: string
-  ): Promise<boolean> {
+  private async processInbound(session: SignSession, start: number, messageId: string): Promise<boolean> {
     try {
       const elapsed = Date.now() - start
       if (elapsed > this.timeoutMs * 2) {
@@ -131,10 +124,7 @@ export class MldsaKeysign {
           continue
         }
 
-        const decryptedMessage = fromMpcServerMessage(
-          msg.body,
-          this.hexEncryptionKey
-        )
+        const decryptedMessage = fromMpcServerMessage(msg.body, this.hexEncryptionKey)
         const isFinish = session.inputMessage(decryptedMessage)
         if (isFinish) {
           await sleep(1000)
@@ -174,18 +164,9 @@ export class MldsaKeysign {
     let setupMessage: Uint8Array
 
     if (this.isInitiatingDevice) {
-      setupMessage = SignSession.setup(
-        mldsaLevel,
-        keyId,
-        this.chainPath,
-        messageHash,
-        this.keysignCommittee
-      )
+      setupMessage = SignSession.setup(mldsaLevel, keyId, this.chainPath, messageHash, this.keysignCommittee)
 
-      const encryptedSetupMsg = toMpcServerMessage(
-        setupMessage,
-        this.hexEncryptionKey
-      )
+      const encryptedSetupMsg = toMpcServerMessage(setupMessage, this.hexEncryptionKey)
       await uploadMpcSetupMessage({
         serverUrl: this.serverURL,
         message: encryptedSetupMsg,
@@ -198,10 +179,7 @@ export class MldsaKeysign {
         sessionId: this.sessionId,
         messageId,
       })
-      setupMessage = fromMpcServerMessage(
-        encodedEncryptedSetupMsg,
-        this.hexEncryptionKey
-      )
+      setupMessage = fromMpcServerMessage(encodedEncryptedSetupMsg, this.hexEncryptionKey)
     }
 
     const session = new SignSession(setupMessage, this.localPartyId, keyShare)
@@ -233,9 +211,7 @@ export class MldsaKeysign {
     return results
   }
 
-  public async startKeysignWithRetry(
-    maxRetries = 3
-  ): Promise<MldsaKeysignResult[]> {
+  public async startKeysignWithRetry(maxRetries = 3): Promise<MldsaKeysignResult[]> {
     await initializeMldsaLib()
 
     for (let i = 0; i < maxRetries; i++) {

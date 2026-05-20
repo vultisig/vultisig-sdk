@@ -2,17 +2,10 @@ import { AbiCoder, Interface } from 'ethers'
 import { describe, expect, it } from 'vitest'
 
 import { decodeUniversalRouterExecute } from './decode'
-import {
-  CONTRACT_BALANCE_SENTINEL,
-  NATIVE_TOKEN_ADDRESS,
-  URCommand,
-  V4Action,
-} from './opcodes'
+import { CONTRACT_BALANCE_SENTINEL, NATIVE_TOKEN_ADDRESS, URCommand, V4Action } from './opcodes'
 
 const coder = AbiCoder.defaultAbiCoder()
-const urInterface = new Interface([
-  'function execute(bytes commands, bytes[] inputs, uint256 deadline)',
-])
+const urInterface = new Interface(['function execute(bytes commands, bytes[] inputs, uint256 deadline)'])
 
 const WETH = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -59,25 +52,15 @@ const encodeV3Path = (tokens: string[], fees: number[]): string => {
   return '0x' + parts.join('')
 }
 
-const encodeWrapEthInput = (amount: bigint) =>
-  coder.encode(['address', 'uint256'], [RECIPIENT, amount])
+const encodeWrapEthInput = (amount: bigint) => coder.encode(['address', 'uint256'], [RECIPIENT, amount])
 
-const buildExecuteCalldata = (
-  commands: string,
-  inputs: string[],
-  deadline = 0n
-): string =>
+const buildExecuteCalldata = (commands: string, inputs: string[], deadline = 0n): string =>
   urInterface.encodeFunctionData('execute', [commands, inputs, deadline])
 
 describe('decodeUniversalRouterExecute', () => {
   it('returns null for non-UR calldata', () => {
-    const transferIface = new Interface([
-      'function transfer(address,uint256)',
-    ])
-    const calldata = transferIface.encodeFunctionData('transfer', [
-      RECIPIENT,
-      1n,
-    ])
+    const transferIface = new Interface(['function transfer(address,uint256)'])
+    const calldata = transferIface.encodeFunctionData('transfer', [RECIPIENT, 1n])
     expect(decodeUniversalRouterExecute(calldata)).toBeNull()
   })
 
@@ -95,10 +78,7 @@ describe('decodeUniversalRouterExecute', () => {
       path: [USDC, DAI],
       payerIsUser: true,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V2_SWAP_EXACT_IN),
-      [input]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V2_SWAP_EXACT_IN), [input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -118,10 +98,7 @@ describe('decodeUniversalRouterExecute', () => {
       path: [USDC, DAI],
       payerIsUser: true,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V2_SWAP_EXACT_OUT),
-      [input]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V2_SWAP_EXACT_OUT), [input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -142,10 +119,7 @@ describe('decodeUniversalRouterExecute', () => {
       path,
       payerIsUser: true,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V3_SWAP_EXACT_IN),
-      [input]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V3_SWAP_EXACT_IN), [input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -168,10 +142,7 @@ describe('decodeUniversalRouterExecute', () => {
       path: reversedPath,
       payerIsUser: true,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V3_SWAP_EXACT_OUT),
-      [input]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V3_SWAP_EXACT_OUT), [input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -192,10 +163,10 @@ describe('decodeUniversalRouterExecute', () => {
       path: encodeV3Path([WETH, USDC], [500]),
       payerIsUser: false,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_IN),
-      [wrapInput, swapInput]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_IN), [
+      wrapInput,
+      swapInput,
+    ])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent?.fromToken).toBe(NATIVE_TOKEN_ADDRESS)
@@ -212,10 +183,10 @@ describe('decodeUniversalRouterExecute', () => {
       path: encodeV3Path([WETH, USDC], [500]),
       payerIsUser: false,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_IN),
-      [wrapInput, swapInput]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_IN), [
+      wrapInput,
+      swapInput,
+    ])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent?.amountIn).toBe(5n * 10n ** 18n)
@@ -238,11 +209,7 @@ describe('decodeUniversalRouterExecute', () => {
       [RECIPIENT, 0n] // refund whatever's left
     )
     const calldata = buildExecuteCalldata(
-      commandsFor(
-        URCommand.WRAP_ETH,
-        URCommand.V3_SWAP_EXACT_OUT,
-        URCommand.UNWRAP_WETH
-      ),
+      commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_OUT, URCommand.UNWRAP_WETH),
       [wrapInput, swapInput, unwrapInput]
     )
 
@@ -277,12 +244,7 @@ describe('decodeUniversalRouterExecute', () => {
     })
     const unwrapInput = coder.encode(['address', 'uint256'], [RECIPIENT, 0n])
     const calldata = buildExecuteCalldata(
-      commandsFor(
-        URCommand.WRAP_ETH,
-        URCommand.V3_SWAP_EXACT_OUT,
-        URCommand.V3_SWAP_EXACT_OUT,
-        URCommand.UNWRAP_WETH
-      ),
+      commandsFor(URCommand.WRAP_ETH, URCommand.V3_SWAP_EXACT_OUT, URCommand.V3_SWAP_EXACT_OUT, URCommand.UNWRAP_WETH),
       [wrapInput, leg1, leg2, unwrapInput]
     )
 
@@ -302,14 +264,11 @@ describe('decodeUniversalRouterExecute', () => {
       path: encodeV3Path([USDC, WETH], [500]),
       payerIsUser: true,
     })
-    const unwrapInput = coder.encode(
-      ['address', 'uint256'],
-      [RECIPIENT, 10n ** 17n]
-    )
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V3_SWAP_EXACT_IN, URCommand.UNWRAP_WETH),
-      [swapInput, unwrapInput]
-    )
+    const unwrapInput = coder.encode(['address', 'uint256'], [RECIPIENT, 10n ** 17n])
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V3_SWAP_EXACT_IN, URCommand.UNWRAP_WETH), [
+      swapInput,
+      unwrapInput,
+    ])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent?.fromToken).toBe(USDC.toLowerCase())
@@ -354,14 +313,8 @@ describe('decodeUniversalRouterExecute', () => {
       ]
     )
     const actions = '0x' + V4Action.SWAP_EXACT_IN_SINGLE.toString(16).padStart(2, '0')
-    const v4Input = coder.encode(
-      ['bytes', 'bytes[]'],
-      [actions, [exactInSingleParams]]
-    )
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V4_SWAP),
-      [v4Input]
-    )
+    const v4Input = coder.encode(['bytes', 'bytes[]'], [actions, [exactInSingleParams]])
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V4_SWAP), [v4Input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -397,10 +350,7 @@ describe('decodeUniversalRouterExecute', () => {
     )
     const actions = '0x' + V4Action.SWAP_EXACT_OUT_SINGLE.toString(16).padStart(2, '0')
     const v4Input = coder.encode(['bytes', 'bytes[]'], [actions, [params]])
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V4_SWAP),
-      [v4Input]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V4_SWAP), [v4Input])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent).toEqual({
@@ -430,10 +380,10 @@ describe('decodeUniversalRouterExecute', () => {
       path: encodeV3Path([USDC, DAI], [3000]),
       payerIsUser: true,
     })
-    const calldata = buildExecuteCalldata(
-      commandsFor(URCommand.V3_SWAP_EXACT_IN, URCommand.V3_SWAP_EXACT_IN),
-      [legA, legB]
-    )
+    const calldata = buildExecuteCalldata(commandsFor(URCommand.V3_SWAP_EXACT_IN, URCommand.V3_SWAP_EXACT_IN), [
+      legA,
+      legB,
+    ])
 
     const intent = decodeUniversalRouterExecute(calldata)
     expect(intent?.fromToken).toBe(USDC.toLowerCase())
@@ -487,10 +437,7 @@ describe('decodeUniversalRouterExecute', () => {
 
   it('returns null when execute carries only unsupported commands', () => {
     // 0x02 = PERMIT2_TRANSFER_FROM — we don't decode it and there's no swap.
-    const permitInput = coder.encode(
-      ['address', 'address', 'uint160'],
-      [USDC, RECIPIENT, 1n]
-    )
+    const permitInput = coder.encode(['address', 'address', 'uint160'], [USDC, RECIPIENT, 1n])
     const calldata = buildExecuteCalldata('0x02', [permitInput])
     expect(decodeUniversalRouterExecute(calldata)).toBeNull()
   })

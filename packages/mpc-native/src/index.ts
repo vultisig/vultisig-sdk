@@ -4,14 +4,7 @@
  * Native MPC engine implementation for React Native / Expo.
  * Wraps the Go-based godkls and goschnorr native libraries via Expo modules.
  */
-import type {
-  MpcEngine,
-  DklsEngine,
-  SchnorrEngine,
-  MpcSession,
-  MpcKeyshare,
-  MpcMessage,
-} from '@vultisig/mpc-types'
+import type { DklsEngine, MpcEngine, MpcKeyshare, MpcMessage, MpcSession, SchnorrEngine } from '@vultisig/mpc-types'
 
 import ExpoMpcNative from './ExpoMpcNativeModule'
 
@@ -30,7 +23,7 @@ function toBase64(bytes: Uint8Array): string {
 
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
+    .map(b => b.toString(16).padStart(2, '0'))
     .join('')
 }
 
@@ -163,30 +156,19 @@ class NativeSession<TResult> implements MpcSession<TResult> {
 // ---------------------------------------------------------------------------
 
 class NativeDklsEngine implements DklsEngine {
-  keygenSetup(
-    keyId: Uint8Array | null | undefined,
-    threshold: number,
-    partyIds: string[]
-  ): Uint8Array {
+  keygenSetup(keyId: Uint8Array | null | undefined, threshold: number, partyIds: string[]): Uint8Array {
     const keyIdB64 = keyId ? toBase64(keyId) : null
     const b64 = ExpoMpcNative.dklsKeygenSetup(threshold, keyIdB64, partyIds)
     return fromBase64(b64)
   }
 
-  async createKeygenSession(
-    setup: Uint8Array,
-    localPartyId: string
-  ): Promise<MpcSession<MpcKeyshare>> {
-    const handle = await ExpoMpcNative.createKeygenSession(
-      toBase64(setup),
-      localPartyId
-    )
+  async createKeygenSession(setup: Uint8Array, localPartyId: string): Promise<MpcSession<MpcKeyshare>> {
+    const handle = await ExpoMpcNative.createKeygenSession(toBase64(setup), localPartyId)
     return new NativeSession<MpcKeyshare>(handle, {
-      outputMessage: (h) => ExpoMpcNative.keygenSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
+      outputMessage: h => ExpoMpcNative.keygenSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
-      finish: async (h) => {
+      finish: async h => {
         const result = await ExpoMpcNative.finishKeygen(h)
         // finishKeygen returns raw data (hex/base64), not a native handle.
         // Wrap in a MpcKeyshare-compatible object.
@@ -201,22 +183,14 @@ class NativeDklsEngine implements DklsEngine {
           free: () => {},
         } as unknown as MpcKeyshare
       },
-      free: (h) => ExpoMpcNative.freeKeygenSession(h),
+      free: h => ExpoMpcNative.freeKeygenSession(h),
     })
   }
 
-  createRefreshSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    oldKeyshare: MpcKeyshare
-  ): MpcSession<MpcKeyshare> {
+  createRefreshSession(setup: Uint8Array, localPartyId: string, oldKeyshare: MpcKeyshare): MpcSession<MpcKeyshare> {
     const nativeKs = this._ensureNativeKeyshare(oldKeyshare)
     const isTemporary = !(oldKeyshare instanceof NativeKeyshare && oldKeyshare.kind === 'dkls')
-    const handle = ExpoMpcNative.createKeygenRefreshSession(
-      toBase64(setup),
-      localPartyId,
-      nativeKs.handle
-    )
+    const handle = ExpoMpcNative.createKeygenRefreshSession(toBase64(setup), localPartyId, nativeKs.handle)
     // Free temporary handle after Go has copied the data during session creation
     if (isTemporary) {
       nativeKs.free()
@@ -266,29 +240,20 @@ class NativeDklsEngine implements DklsEngine {
     return b64 ? fromBase64(b64) : undefined
   }
 
-  createSignSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    keyshare: MpcKeyshare
-  ): MpcSession<Uint8Array> {
+  createSignSession(setup: Uint8Array, localPartyId: string, keyshare: MpcKeyshare): MpcSession<Uint8Array> {
     const nativeKs = this._ensureNativeKeyshare(keyshare)
     const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'dkls')
-    const handle = ExpoMpcNative.createSignSession(
-      toBase64(setup),
-      localPartyId,
-      nativeKs.handle
-    )
+    const handle = ExpoMpcNative.createSignSession(toBase64(setup), localPartyId, nativeKs.handle)
     // Free temporary handle after Go has copied the data during session creation
     if (isTemporary) {
       nativeKs.free()
     }
     return new NativeSession<Uint8Array>(handle, {
-      outputMessage: (h) => ExpoMpcNative.signSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.signSessionMessageReceiver(h, m, i),
+      outputMessage: h => ExpoMpcNative.signSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.signSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.signSessionInputMessage(h, m),
-      finish: (h) => fromBase64(ExpoMpcNative.finishSign(h)),
-      free: (h) => ExpoMpcNative.freeSignSession(h),
+      finish: h => fromBase64(ExpoMpcNative.finishSign(h)),
+      free: h => ExpoMpcNative.freeSignSession(h),
     })
   }
 
@@ -352,17 +317,14 @@ class NativeDklsEngine implements DklsEngine {
     }
 
     return new NativeSession<MpcKeyshare | undefined>(handle, {
-      outputMessage: (h) => ExpoMpcNative.qcSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.qcSessionMessageReceiver(h, m, i),
+      outputMessage: h => ExpoMpcNative.qcSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.qcSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.qcSessionInputMessage(h, m),
-      finish: (h) => {
+      finish: h => {
         const resultHandle = ExpoMpcNative.finishQc(h)
-        return resultHandle >= 0
-          ? new NativeKeyshare(resultHandle, null, 'dkls')
-          : undefined
+        return resultHandle >= 0 ? new NativeKeyshare(resultHandle, null, 'dkls') : undefined
       },
-      free: (h) => ExpoMpcNative.freeQcSession(h),
+      free: h => ExpoMpcNative.freeQcSession(h),
     })
   }
 
@@ -382,14 +344,8 @@ class NativeDklsEngine implements DklsEngine {
     return { session, setup: fromBase64(result.setupMessage) }
   }
 
-  async createKeyImportSession(
-    setup: Uint8Array,
-    localPartyId: string
-  ): Promise<MpcSession<MpcKeyshare>> {
-    const handle = await ExpoMpcNative.createDklsKeyImportSession(
-      toBase64(setup),
-      localPartyId
-    )
+  async createKeyImportSession(setup: Uint8Array, localPartyId: string): Promise<MpcSession<MpcKeyshare>> {
+    const handle = await ExpoMpcNative.createDklsKeyImportSession(toBase64(setup), localPartyId)
     return this._makeKeygenSession(handle)
   }
 
@@ -407,11 +363,10 @@ class NativeDklsEngine implements DklsEngine {
 
   private _makeKeygenSession(handle: number): MpcSession<MpcKeyshare> {
     return new NativeSession<MpcKeyshare>(handle, {
-      outputMessage: (h) => ExpoMpcNative.keygenSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
+      outputMessage: h => ExpoMpcNative.keygenSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.keygenSessionMessageReceiver(h, m, i),
       inputMessage: (h, m) => ExpoMpcNative.keygenSessionInputMessage(h, m),
-      finish: async (h) => {
+      finish: async h => {
         const result = await ExpoMpcNative.finishKeygen(h)
         const ksBytes = fromBase64(result.keyshare)
         const pkBytes = fromHex(result.publicKey)
@@ -424,7 +379,7 @@ class NativeDklsEngine implements DklsEngine {
           free: () => {},
         } as unknown as MpcKeyshare
       },
-      free: (h) => ExpoMpcNative.freeKeygenSession(h),
+      free: h => ExpoMpcNative.freeKeygenSession(h),
     })
   }
 }
@@ -434,32 +389,19 @@ class NativeDklsEngine implements DklsEngine {
 // ---------------------------------------------------------------------------
 
 class NativeSchnorrEngine implements SchnorrEngine {
-  keygenSetup(
-    keyId: Uint8Array | null | undefined,
-    threshold: number,
-    partyIds: string[]
-  ): Uint8Array {
+  keygenSetup(keyId: Uint8Array | null | undefined, threshold: number, partyIds: string[]): Uint8Array {
     const keyIdB64 = keyId ? toBase64(keyId) : null
     const b64 = ExpoMpcNative.schnorrKeygenSetup(threshold, keyIdB64, partyIds)
     return fromBase64(b64)
   }
 
-  async createKeygenSession(
-    setup: Uint8Array,
-    localPartyId: string
-  ): Promise<MpcSession<MpcKeyshare>> {
-    const handle = await ExpoMpcNative.createSchnorrKeygenSession(
-      toBase64(setup),
-      localPartyId
-    )
+  async createKeygenSession(setup: Uint8Array, localPartyId: string): Promise<MpcSession<MpcKeyshare>> {
+    const handle = await ExpoMpcNative.createSchnorrKeygenSession(toBase64(setup), localPartyId)
     return new NativeSession<MpcKeyshare>(handle, {
-      outputMessage: (h) =>
-        ExpoMpcNative.schnorrKeygenSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
-      inputMessage: (h, m) =>
-        ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
-      finish: async (h) => {
+      outputMessage: h => ExpoMpcNative.schnorrKeygenSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
+      inputMessage: (h, m) => ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
+      finish: async h => {
         const result = await ExpoMpcNative.finishSchnorrKeygen(h)
         const ksBytes = fromBase64(result.keyshare)
         const pkBytes = fromHex(result.publicKey)
@@ -472,22 +414,12 @@ class NativeSchnorrEngine implements SchnorrEngine {
           free: () => {},
         } as unknown as MpcKeyshare
       },
-      free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
+      free: h => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })
   }
 
-  signSetup(
-    keyId: Uint8Array,
-    chainPath: string,
-    messageHash: Uint8Array,
-    partyIds: string[]
-  ): Uint8Array {
-    const b64 = ExpoMpcNative.schnorrSignSetup(
-      toBase64(keyId),
-      chainPath,
-      toBase64(messageHash),
-      partyIds
-    )
+  signSetup(keyId: Uint8Array, chainPath: string, messageHash: Uint8Array, partyIds: string[]): Uint8Array {
+    const b64 = ExpoMpcNative.schnorrSignSetup(toBase64(keyId), chainPath, toBase64(messageHash), partyIds)
     return fromBase64(b64)
   }
 
@@ -501,30 +433,20 @@ class NativeSchnorrEngine implements SchnorrEngine {
     return b64 ? fromBase64(b64) : undefined
   }
 
-  createSignSession(
-    setup: Uint8Array,
-    localPartyId: string,
-    keyshare: MpcKeyshare
-  ): MpcSession<Uint8Array> {
+  createSignSession(setup: Uint8Array, localPartyId: string, keyshare: MpcKeyshare): MpcSession<Uint8Array> {
     const nativeKs = this._ensureNativeKeyshare(keyshare)
     const isTemporary = !(keyshare instanceof NativeKeyshare && keyshare.kind === 'schnorr')
-    const handle = ExpoMpcNative.createSchnorrSignSession(
-      toBase64(setup),
-      localPartyId,
-      nativeKs.handle
-    )
+    const handle = ExpoMpcNative.createSchnorrSignSession(toBase64(setup), localPartyId, nativeKs.handle)
     // Free temporary handle after Go has copied the data during session creation
     if (isTemporary) {
       nativeKs.free()
     }
     return new NativeSession<Uint8Array>(handle, {
-      outputMessage: (h) => ExpoMpcNative.schnorrSignSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.schnorrSignSessionMessageReceiver(h, m, i),
-      inputMessage: (h, m) =>
-        ExpoMpcNative.schnorrSignSessionInputMessage(h, m),
-      finish: (h) => fromBase64(ExpoMpcNative.finishSchnorrSign(h)),
-      free: (h) => ExpoMpcNative.freeSchnorrSignSession(h),
+      outputMessage: h => ExpoMpcNative.schnorrSignSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.schnorrSignSessionMessageReceiver(h, m, i),
+      inputMessage: (h, m) => ExpoMpcNative.schnorrSignSessionInputMessage(h, m),
+      finish: h => fromBase64(ExpoMpcNative.finishSchnorrSign(h)),
+      free: h => ExpoMpcNative.freeSchnorrSignSession(h),
     })
   }
 
@@ -588,18 +510,14 @@ class NativeSchnorrEngine implements SchnorrEngine {
     }
 
     return new NativeSession<MpcKeyshare | undefined>(handle, {
-      outputMessage: (h) => ExpoMpcNative.schnorrQcSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.schnorrQcSessionMessageReceiver(h, m, i),
-      inputMessage: (h, m) =>
-        ExpoMpcNative.schnorrQcSessionInputMessage(h, m),
-      finish: (h) => {
+      outputMessage: h => ExpoMpcNative.schnorrQcSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.schnorrQcSessionMessageReceiver(h, m, i),
+      inputMessage: (h, m) => ExpoMpcNative.schnorrQcSessionInputMessage(h, m),
+      finish: h => {
         const resultHandle = ExpoMpcNative.finishSchnorrQc(h)
-        return resultHandle >= 0
-          ? new NativeKeyshare(resultHandle, null, 'schnorr')
-          : undefined
+        return resultHandle >= 0 ? new NativeKeyshare(resultHandle, null, 'schnorr') : undefined
       },
-      free: (h) => ExpoMpcNative.freeSchnorrQcSession(h),
+      free: h => ExpoMpcNative.freeSchnorrQcSession(h),
     })
   }
 
@@ -619,14 +537,8 @@ class NativeSchnorrEngine implements SchnorrEngine {
     return { session, setup: fromBase64(result.setupMessage) }
   }
 
-  async createKeyImportSession(
-    setup: Uint8Array,
-    localPartyId: string
-  ): Promise<MpcSession<MpcKeyshare>> {
-    const handle = await ExpoMpcNative.createSchnorrKeyImportSession(
-      toBase64(setup),
-      localPartyId
-    )
+  async createKeyImportSession(setup: Uint8Array, localPartyId: string): Promise<MpcSession<MpcKeyshare>> {
+    const handle = await ExpoMpcNative.createSchnorrKeyImportSession(toBase64(setup), localPartyId)
     return this._makeKeygenSession(handle)
   }
 
@@ -643,13 +555,10 @@ class NativeSchnorrEngine implements SchnorrEngine {
 
   private _makeKeygenSession(handle: number): MpcSession<MpcKeyshare> {
     return new NativeSession<MpcKeyshare>(handle, {
-      outputMessage: (h) =>
-        ExpoMpcNative.schnorrKeygenSessionOutputMessage(h),
-      messageReceiver: (h, m, i) =>
-        ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
-      inputMessage: (h, m) =>
-        ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
-      finish: async (h) => {
+      outputMessage: h => ExpoMpcNative.schnorrKeygenSessionOutputMessage(h),
+      messageReceiver: (h, m, i) => ExpoMpcNative.schnorrKeygenSessionMessageReceiver(h, m, i),
+      inputMessage: (h, m) => ExpoMpcNative.schnorrKeygenSessionInputMessage(h, m),
+      finish: async h => {
         const result = await ExpoMpcNative.finishSchnorrKeygen(h)
         const ksBytes = fromBase64(result.keyshare)
         const pkBytes = fromHex(result.publicKey)
@@ -662,7 +571,7 @@ class NativeSchnorrEngine implements SchnorrEngine {
           free: () => {},
         } as unknown as MpcKeyshare
       },
-      free: (h) => ExpoMpcNative.freeSchnorrKeygenSession(h),
+      free: h => ExpoMpcNative.freeSchnorrKeygenSession(h),
     })
   }
 }
@@ -681,4 +590,4 @@ export class NativeMpcEngine implements MpcEngine {
 }
 
 // Re-export raw native module for direct access (used by apps for keygen flows)
-export { default as ExpoMpcNative } from "./ExpoMpcNativeModule"
+export { default as ExpoMpcNative } from './ExpoMpcNativeModule'

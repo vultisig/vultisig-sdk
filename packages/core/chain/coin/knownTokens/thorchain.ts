@@ -21,12 +21,11 @@ export const thorchainNativeTokensMetadata: Record<string, CoinMetadata> = {
     logo: 'auto.png',
     decimals: 8,
   },
-  'x/nami-index-fixed-thor1yqf5spdv8c4088zmvqsg32eq63fzepsjvntahdk0ek0yjnkt3qdqftp3lc-rcpt':
-    {
-      ticker: 'RJI',
-      logo: 'nami.png',
-      decimals: 8,
-    },
+  'x/nami-index-fixed-thor1yqf5spdv8c4088zmvqsg32eq63fzepsjvntahdk0ek0yjnkt3qdqftp3lc-rcpt': {
+    ticker: 'RJI',
+    logo: 'nami.png',
+    decimals: 8,
+  },
   'x/staking-thor.nami': {
     ticker: 'sNAMI',
     logo: 'nami.png',

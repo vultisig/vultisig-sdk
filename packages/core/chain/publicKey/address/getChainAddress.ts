@@ -1,10 +1,10 @@
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { WalletCore } from '@trustwallet/wallet-core'
 
 type GetChainAddressInput = {
   chain: Chain
@@ -25,9 +25,7 @@ export const getChainAddress = ({
   chainPublicKeys,
 }: GetChainAddressInput): string => {
   if (chain === Chain.QBTC) {
-    return deriveQbtcAddress(
-      shouldBePresent(publicKeyMldsa, 'MLDSA public key')
-    )
+    return deriveQbtcAddress(shouldBePresent(publicKeyMldsa, 'MLDSA public key'))
   }
 
   const publicKey = getPublicKey({

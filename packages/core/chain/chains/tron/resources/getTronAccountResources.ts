@@ -27,19 +27,14 @@ type TronGetAccountResourceResponse = {
   EnergyLimit?: number
 }
 
-export const getTronAccountResources = async (
-  address: string
-): Promise<TronAccountResources> => {
+export const getTronAccountResources = async (address: string): Promise<TronAccountResources> => {
   const [account, resource] = await Promise.all([
     queryUrl<TronGetAccountResponse>(`${tronRpcUrl}/wallet/getaccount`, {
       body: { address, visible: true },
     }),
-    queryUrl<TronGetAccountResourceResponse>(
-      `${tronRpcUrl}/wallet/getaccountresource`,
-      {
-        body: { address, visible: true },
-      }
-    ),
+    queryUrl<TronGetAccountResourceResponse>(`${tronRpcUrl}/wallet/getaccountresource`, {
+      body: { address, visible: true },
+    }),
   ])
 
   const frozenV2 = account.frozenV2 ?? []
@@ -51,9 +46,7 @@ export const getTronAccountResources = async (
   )
 
   const frozenForEnergySun = BigInt(
-    frozenV2
-      .filter(entry => entry.type === 'ENERGY')
-      .reduce((sum, entry) => sum + (entry.amount ?? 0), 0)
+    frozenV2.filter(entry => entry.type === 'ENERGY').reduce((sum, entry) => sum + (entry.amount ?? 0), 0)
   )
 
   const unfreezingEntries: TronUnfreezingEntry[] = (account.unfrozenV2 ?? [])

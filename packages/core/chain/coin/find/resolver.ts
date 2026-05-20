@@ -7,7 +7,4 @@ export type FindCoinsResolverInput<T extends Chain = Chain> = {
   chain: T
 }
 
-export type FindCoinsResolver<T extends Chain = Chain> = Resolver<
-  FindCoinsResolverInput<T>,
-  Promise<AccountCoin[]>
->
+export type FindCoinsResolver<T extends Chain = Chain> = Resolver<FindCoinsResolverInput<T>, Promise<AccountCoin[]>>

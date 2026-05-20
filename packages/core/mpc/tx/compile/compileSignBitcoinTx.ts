@@ -44,10 +44,7 @@ export const compileSignBitcoinTx = (
     // P2SH-P2WPKH: set scriptSig to redeemScript push
     if (input.scriptType === 'p2sh-p2wpkh' && input.redeemScript) {
       const redeemScriptBuf = Buffer.from(input.redeemScript, 'hex')
-      const scriptSig = Buffer.concat([
-        Buffer.from([redeemScriptBuf.length]),
-        redeemScriptBuf,
-      ])
+      const scriptSig = Buffer.concat([Buffer.from([redeemScriptBuf.length]), redeemScriptBuf])
       tx.setInputScript(tx.ins.length - 1, scriptSig)
     }
   }
@@ -74,9 +71,7 @@ export const compileSignBitcoinTx = (
     const hashHex = Buffer.from(hash).toString('hex')
     const sig = signatures[hashHex]
     if (!sig) {
-      throw new Error(
-        `Missing signature for sighash ${hashHex.slice(0, 16)}...`
-      )
+      throw new Error(`Missing signature for sighash ${hashHex.slice(0, 16)}...`)
     }
 
     const derSig = Buffer.from(sig.der_signature, 'hex')
@@ -107,10 +102,7 @@ export const compileSignBitcoinTx = (
     const sigWithHashType = Buffer.concat([derSig, Buffer.from([sighashByte])])
 
     return {
-      witnessItems: [
-        new Uint8Array(sigWithHashType),
-        new Uint8Array(pubKeyBytes),
-      ],
+      witnessItems: [new Uint8Array(sigWithHashType), new Uint8Array(pubKeyBytes)],
     }
   })
 

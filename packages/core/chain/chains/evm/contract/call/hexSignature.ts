@@ -1,2 +1,1 @@
-export const getEvmContractCallHexSignature = (value: string) =>
-  value.slice(0, 10)
+export const getEvmContractCallHexSignature = (value: string) => value.slice(0, 10)

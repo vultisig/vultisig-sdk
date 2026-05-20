@@ -1,0 +1,91 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "exclude": ["dependencies", "devDependencies", "optionalPeerDependencies", "binaries", "unlisted"],
+  "ignoreFiles": [
+    // Temporary package tree created by `yarn check:shared-exports` while
+    // `yarn check` runs Knip concurrently.
+    ".shared-dist-check-*/**",
+    // Health lint config is invoked by `yarn quality:complexity`.
+    ".config/eslint-health.config.mjs",
+    // Standalone maintenance scripts are exercised by explicit script tests.
+    "scripts/**",
+    // Fixture corpus for integration/regression checks.
+    "testdata/**",
+  ],
+  "ignoreIssues": {
+    // Shared package public exports are intentionally broad because consumers
+    // import individual subpaths from the published package maps.
+    "packages/core/**": ["exports", "types", "nsExports", "nsTypes", "duplicates", "enumMembers"],
+    // Shared lib packages expose utility and generated binding surfaces for
+    // downstream packages beyond this repo's direct import graph.
+    "packages/lib/**": ["exports", "types", "nsExports", "nsTypes", "duplicates", "enumMembers"],
+    "packages/sdk/src/types/index.ts": ["exports", "types", "nsExports", "nsTypes"],
+    "packages/sdk/src/vault/index.ts": ["exports", "types", "nsExports", "nsTypes"],
+    "packages/sdk/src/seedphrase/index.ts": ["exports", "types"],
+    "packages/sdk/src/storage/types.ts": ["enumMembers"],
+    "clients/mcp/src/types.ts": ["types", "nsTypes"],
+  },
+  "treatConfigHintsAsErrors": false,
+  "workspaces": {
+    "packages/sdk": {
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": [
+          "tests/unit/vitest.config.ts",
+          "tests/integration/vitest.config.ts",
+          "tests/e2e/vitest.config.ts",
+          "tests/e2e/funded/vitest.config.ts",
+        ],
+      },
+    },
+    "clients/cli": {
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": ["vitest.config.ts"],
+      },
+    },
+    "clients/mcp": {
+      "entry": ["bin/mcp-server.ts"],
+      "project": ["tsconfig.json"],
+      "vitest": {
+        "config": ["vitest.config.ts"],
+      },
+    },
+    "packages/rujira": {
+      "project": ["tsconfig.json"],
+    },
+    "packages/core/chain": {
+      "entry": ["**/*.{ts,tsx}"],
+      "project": ["**/*.{ts,tsx}"],
+    },
+    "packages/core/config": {
+      "entry": ["**/*.ts"],
+      "project": ["**/*.ts"],
+    },
+    "packages/core/mpc": {
+      "entry": ["**/*.ts"],
+      "project": ["**/*.ts"],
+    },
+    "packages/lib/utils": {
+      "entry": ["**/*.{ts,tsx}"],
+      "project": ["**/*.{ts,tsx}"],
+    },
+    "packages/mpc-native": {
+      "entry": ["src/**/*.ts", "app.plugin.js"],
+      "project": ["src/**/*.ts"],
+    },
+    "packages/walletcore-native": {
+      "entry": ["src/**/*.ts"],
+      "project": ["src/**/*.ts"],
+    },
+    "examples/browser": {
+      "project": ["tsconfig.json"],
+    },
+    "examples/electron": {
+      "project": ["tsconfig.json"],
+    },
+    "examples/shared": {
+      "project": ["tsconfig.json"],
+    },
+  },
+}
