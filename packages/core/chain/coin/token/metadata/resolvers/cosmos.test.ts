@@ -7,6 +7,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
 }))
 
 import { Chain } from '@vultisig/core-chain/Chain'
+
 import { clearCosmosTokenMetadataCacheForTests, getCosmosTokenMetadata } from './cosmos'
 
 describe('getCosmosTokenMetadata', () => {

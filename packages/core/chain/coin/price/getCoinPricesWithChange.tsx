@@ -3,10 +3,7 @@ import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import { defaultFiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
 
-import {
-  type CoinPriceWithChange,
-  queryCoingeickoPricesWithChange,
-} from './queryCoingeickoPricesWithChange'
+import { type CoinPriceWithChange, queryCoingeickoPricesWithChange } from './queryCoingeickoPricesWithChange'
 
 const baseUrl = `${rootApiUrl}/coingeicko/api/v3/simple/price`
 
@@ -27,12 +24,8 @@ type GetCoinPricesWithChangeInput = {
 export const getCoinPricesWithChange = async ({
   ids,
   fiatCurrency = defaultFiatCurrency,
-}: GetCoinPricesWithChangeInput): Promise<
-  Record<string, CoinPriceWithChange>
-> => {
-  const normalizedIds = Array.from(
-    new Set(ids.map(id => id.toLowerCase()).filter(Boolean))
-  )
+}: GetCoinPricesWithChangeInput): Promise<Record<string, CoinPriceWithChange>> => {
+  const normalizedIds = Array.from(new Set(ids.map(id => id.toLowerCase()).filter(Boolean)))
 
   const url = addQueryParams(baseUrl, {
     ids: normalizedIds.join(','),

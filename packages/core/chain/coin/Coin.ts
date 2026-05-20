@@ -27,13 +27,7 @@ export type Coin<T extends Chain = Chain> = CoinKey<T> & CoinMetadata
 export type KnownCoinMetadata = RequiredFields<CoinMetadata, 'logo'>
 export type KnownCoin = CoinKey & KnownCoinMetadata
 
-export const coinMetadataFields: (keyof Coin)[] = [
-  'priceProviderId',
-  'decimals',
-  'ticker',
-  'logo',
-  'isHidden',
-]
+export const coinMetadataFields: (keyof Coin)[] = ['priceProviderId', 'decimals', 'ticker', 'logo', 'isHidden']
 
 export type CoinAmount = {
   decimals: number
