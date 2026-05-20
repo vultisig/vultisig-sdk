@@ -1,8 +1,10 @@
 import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
@@ -43,7 +45,14 @@ import {
   VaultData,
 } from './types'
 import type { SiteScanResult } from './types/security'
-import type { CoinPricesParams, CoinPricesResult, FeeCoinInfo, TokenInfo } from './types/tokens'
+import type {
+  CoinPricesParams,
+  CoinPricesResult,
+  CoinPricesWithChangeResult,
+  DiscoveredToken,
+  FeeCoinInfo,
+  TokenInfo,
+} from './types/tokens'
 import { createVaultBackup } from './utils/export'
 import { parseKeygenQR } from './utils/parseKeygenQR'
 import { FastVault } from './vault/FastVault'
@@ -1111,6 +1120,35 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   // === STATIC TOKEN REGISTRY METHODS ===
 
   /**
+   * Discover the tokens an address actually holds on a chain
+   * (1inch for EVM, Jupiter for Solana, LCD for Cosmos, …).
+   *
+   * Vault-FREE: takes a raw `{ chain, address }` and returns
+   * `DiscoveredToken[]`. The instance method `vault.discoverTokens()`
+   * is just `getAddress` + this same `findCoins` call — exposing it
+   * statically lets callers that only hold a derived address (the
+   * agent, a portfolio screen) discover tokens without constructing a
+   * full SDK Vault. No new logic; the mapping mirrors
+   * `TokenDiscoveryService.discoverTokens` exactly.
+   *
+   * @param params - `{ chain, address }`
+   * @returns Tokens with non-zero balance at that address
+   */
+  static async discoverTokens(params: { chain: Chain; address: string }): Promise<DiscoveredToken[]> {
+    const coins = await coreFindCoins({
+      address: params.address,
+      chain: params.chain,
+    })
+    return coins.map(coin => ({
+      chain: coin.chain,
+      contractAddress: coin.id ?? '',
+      ticker: coin.ticker,
+      decimals: coin.decimals,
+      logo: coin.logo,
+    }))
+  }
+
+  /**
    * Get known tokens for a chain from the built-in registry.
    * @param chain - The blockchain chain
    * @returns Array of token metadata
@@ -1170,6 +1208,25 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static async getCoinPrices(params: CoinPricesParams): Promise<CoinPricesResult> {
     return coreCoinPrices({
+      ids: params.ids,
+      fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
+    })
+  }
+
+  /**
+   * Fetch current prices AND 24h % change for tokens by CoinGecko IDs.
+   *
+   * Use this when you need the 24h change (e.g. a price widget's
+   * −3.97% indicator). For price-only lookups prefer `getCoinPrices`
+   * — it has a stable `Record<string, number>` contract and slightly
+   * lighter payload.
+   *
+   * @param params - Price lookup parameters
+   * @returns Map of token ID to `{ price, change24h? }` (change24h is
+   *          absent when CoinGecko has no datum for that id)
+   */
+  static async getCoinPricesWithChange(params: CoinPricesParams): Promise<CoinPricesWithChangeResult> {
+    return coreCoinPricesWithChange({
       ids: params.ids,
       fiatCurrency: (params.fiatCurrency ?? 'usd') as any,
     })
