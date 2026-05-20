@@ -39,7 +39,6 @@ function v1StatusFromType(type: string | null): 'running' | 'done' | undefined {
   }
 }
 
-/**
 /** An object payload signals failure if it has an error status or any
  *  top-level `error` key. Shared by the object path and the
  *  parsed-string path so a stringified payload is judged exactly like

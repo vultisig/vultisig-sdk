@@ -119,6 +119,15 @@ export type MessageContext = {
   vault_address?: string
   vault_name?: string
   mldsa_public_key?: string
+  // Root vault keys + chain code. agent-backend reads these from req.Context
+  // (extractVaultInfoFromContext) to build req.VaultInfo, which is then
+  // injected into MCP tool calls flagged with _meta.inject_vault_args
+  // (e.g. show_receive_request). Without them, every such tool errors with
+  // "Vault not configured" at the MCP layer. Mirrors vultiagent-app's
+  // agentContext.ts which has always sent these fields.
+  ecdsa_public_key?: string
+  eddsa_public_key?: string
+  hex_chain_code?: string
   balances?: BalanceInfo[]
   addresses?: Record<string, string>
   coins?: CoinInfo[]
