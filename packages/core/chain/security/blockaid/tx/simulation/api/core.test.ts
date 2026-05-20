@@ -210,10 +210,7 @@ describe('parseBlockaidEvmSimulation', () => {
   it('emits net send when an asset has both out and in legs and out > in', async () => {
     // User sends 10 A and receives 1 A as refund — net send of 9 A.
     const result = await parseBlockaidEvmSimulation(
-      buildSimulation([
-        diff({ asset: TOKEN_A, out: [side('10')] }),
-        diff({ asset: TOKEN_A, in: [side('1')] }),
-      ]),
+      buildSimulation([diff({ asset: TOKEN_A, out: [side('10')] }), diff({ asset: TOKEN_A, in: [side('1')] })]),
       EvmChain.Ethereum
     )
 
@@ -271,9 +268,7 @@ describe('parseBlockaidEvmSimulation', () => {
       decimals: 18,
     })
     const result = await parseBlockaidEvmSimulation(
-      buildSimulation([
-        diff({ asset_type: 'NATIVE', asset: nativeAsset, out: [side('1000')] }),
-      ]),
+      buildSimulation([diff({ asset_type: 'NATIVE', asset: nativeAsset, out: [side('1000')] })]),
       EvmChain.Ethereum
     )
 
@@ -295,9 +290,7 @@ describe('parseBlockaidEvmSimulation', () => {
       EvmChain.Ethereum
     )
 
-    expect(result?.changes[0].coin.id).toBe(
-      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    )
+    expect(result?.changes[0].coin.id).toBe('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
   })
 
   it('skips malformed ERC20 entries without an address (does not group with native)', async () => {

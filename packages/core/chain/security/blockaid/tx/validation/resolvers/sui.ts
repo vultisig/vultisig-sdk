@@ -8,13 +8,8 @@ type SuiBlockaidScanResponse = {
   validation: BlockaidValidation
 }
 
-export const getSuiTxBlockaidValidation: BlockaidTxValidationResolver<
-  OtherChain.Sui
-> = async ({ data }) => {
-  const { validation } = await queryBlockaid<SuiBlockaidScanResponse>(
-    '/sui/transaction/scan',
-    data
-  )
+export const getSuiTxBlockaidValidation: BlockaidTxValidationResolver<OtherChain.Sui> = async ({ data }) => {
+  const { validation } = await queryBlockaid<SuiBlockaidScanResponse>('/sui/transaction/scan', data)
 
   return validation
 }

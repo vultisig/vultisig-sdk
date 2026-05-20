@@ -68,10 +68,7 @@ export class Schnorr {
     this.timeoutMs = options?.timeoutMs ?? 60000 // Default to 1 minute (60000ms)
   }
 
-  private async processOutbound(
-    session: MpcSession<unknown>,
-    messageId?: string
-  ): Promise<boolean> {
+  private async processOutbound(session: MpcSession<unknown>, messageId?: string): Promise<boolean> {
     try {
       const message = session.outputMessage()
       if (message === undefined) {
@@ -84,10 +81,7 @@ export class Schnorr {
         }
       }
       console.log('outbound message:', message)
-      const messageToSend = toMpcServerMessage(
-        message.body,
-        this.hexEncryptionKey
-      )
+      const messageToSend = toMpcServerMessage(message.body, this.hexEncryptionKey)
       message?.receivers.forEach(receiver => {
         // send message to receiver
         sendMpcRelayMessage({
@@ -114,11 +108,7 @@ export class Schnorr {
     }
   }
 
-  private async processInbound(
-    session: MpcSession<unknown>,
-    start: number,
-    messageId?: string
-  ): Promise<boolean> {
+  private async processInbound(session: MpcSession<unknown>, start: number, messageId?: string): Promise<boolean> {
     // Same as DKLS: empty relay polls must honor elapsed time or we spin forever.
     if (Date.now() - start > this.timeoutMs) {
       console.log('timeout')
@@ -142,13 +132,8 @@ export class Schnorr {
         if (this.cache[cacheKey]) {
           continue
         }
-        console.log(
-          `got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`
-        )
-        const decryptedMessage = fromMpcServerMessage(
-          msg.body,
-          this.hexEncryptionKey
-        )
+        console.log(`got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`)
+        const decryptedMessage = fromMpcServerMessage(msg.body, this.hexEncryptionKey)
         const isFinish = session.inputMessage(decryptedMessage)
         if (isFinish) {
           await sleep(1000) // wait for 1 second to make sure all messages are processed
@@ -186,10 +171,7 @@ export class Schnorr {
       let session: MpcSession<MpcKeyshare>
       if ('create' in this.keygenOperation) {
         session = await engine.createKeygenSession(this.setupMessage, this.localPartyId)
-      } else if (
-        'reshare' in this.keygenOperation &&
-        this.keygenOperation.reshare === 'migrate'
-      ) {
+      } else if ('reshare' in this.keygenOperation && this.keygenOperation.reshare === 'migrate') {
         if (!engine.createMigrateSession) {
           throw new Error('schnorr engine does not support createMigrateSession')
         }
@@ -238,19 +220,13 @@ export class Schnorr {
     throw new Error('Schnorr keygen failed')
   }
 
-  private async startReshare(
-    rawSchnorrKeyshare: string | undefined,
-    attempt: number,
-    messageId?: string
-  ) {
+  private async startReshare(rawSchnorrKeyshare: string | undefined, attempt: number, messageId?: string) {
     console.log('startReshare schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     const engine = (await ensureMpcEngine()).schnorr
     let localKeyshare: MpcKeyshare | null = null
     if (rawSchnorrKeyshare !== undefined && rawSchnorrKeyshare.length > 0) {
-      localKeyshare = engine.keyshareFromBytes(
-        Buffer.from(rawSchnorrKeyshare, 'base64')
-      )
+      localKeyshare = engine.keyshareFromBytes(Buffer.from(rawSchnorrKeyshare, 'base64'))
     }
 
     try {
@@ -260,18 +236,13 @@ export class Schnorr {
         if (localKeyshare === null) {
           throw new Error('local keyshare is null')
         }
-        const isPlugin =
-          'reshare' in this.keygenOperation &&
-          this.keygenOperation.reshare === 'plugin'
+        const isPlugin = 'reshare' in this.keygenOperation && this.keygenOperation.reshare === 'plugin'
         // keygenCommittee only has new committee members
-        const threshold = isPlugin
-          ? 2
-          : getKeygenThreshold(this.keygenCommittee.length)
-        const { allCommittee, newCommitteeIdx, oldCommitteeIdx } =
-          combineReshareCommittee({
-            keygenCommittee: this.keygenCommittee,
-            oldKeygenCommittee: this.oldKeygenCommittee,
-          })
+        const threshold = isPlugin ? 2 : getKeygenThreshold(this.keygenCommittee.length)
+        const { allCommittee, newCommitteeIdx, oldCommitteeIdx } = combineReshareCommittee({
+          keygenCommittee: this.keygenCommittee,
+          oldKeygenCommittee: this.oldKeygenCommittee,
+        })
         setupMessage = engine.reshareSetup(
           localKeyshare,
           allCommittee,
@@ -280,10 +251,7 @@ export class Schnorr {
           new Uint8Array(newCommitteeIdx)
         )
         // upload setup message to server
-        const encryptedSetupMsg = toMpcServerMessage(
-          setupMessage,
-          this.hexEncryptionKey
-        )
+        const encryptedSetupMsg = toMpcServerMessage(setupMessage, this.hexEncryptionKey)
         await uploadMpcSetupMessage({
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
@@ -297,16 +265,9 @@ export class Schnorr {
           sessionId: this.sessionId,
           messageId: setupMessageId,
         })
-        setupMessage = fromMpcServerMessage(
-          encodedEncryptedSetupMsg,
-          this.hexEncryptionKey
-        )
+        setupMessage = fromMpcServerMessage(encodedEncryptedSetupMsg, this.hexEncryptionKey)
       }
-      const session = await engine.createReshareSession(
-        setupMessage,
-        this.localPartyId,
-        localKeyshare
-      )
+      const session = await engine.createReshareSession(setupMessage, this.localPartyId, localKeyshare)
 
       try {
         const start = Date.now()
@@ -322,9 +283,7 @@ export class Schnorr {
           return {
             keyshare: base64Encode(finalKeyShare.toBytes()),
             publicKey: Buffer.from(finalKeyShare.publicKey()).toString('hex'),
-            chaincode: Buffer.from(finalKeyShare.rootChainCode()).toString(
-              'hex'
-            ),
+            chaincode: Buffer.from(finalKeyShare.rootChainCode()).toString('hex'),
           }
         }
       } finally {
@@ -336,10 +295,7 @@ export class Schnorr {
     }
   }
 
-  public async startReshareWithRetry(
-    keyshare: string | undefined,
-    messageId?: string
-  ) {
+  public async startReshareWithRetry(keyshare: string | undefined, messageId?: string) {
     await initializeMpcLib('eddsa')
     for (let i = 0; i < 3; i++) {
       try {
@@ -353,11 +309,7 @@ export class Schnorr {
     }
     throw new Error('schnorr reshare failed')
   }
-  public async prepareKeyImportSetup(
-    hexPrivateKey: string,
-    hexChainCode: string,
-    messageId?: string
-  ): Promise<void> {
+  public async prepareKeyImportSetup(hexPrivateKey: string, hexChainCode: string, messageId?: string): Promise<void> {
     if (!this.isInitiateDevice) {
       return
     }
@@ -374,10 +326,7 @@ export class Schnorr {
     this.pendingKeyImportSession = importResult
     this.setupMessage = importResult.setup
 
-    const encryptedSetupMsg = toMpcServerMessage(
-      this.setupMessage,
-      this.hexEncryptionKey
-    )
+    const encryptedSetupMsg = toMpcServerMessage(this.setupMessage, this.hexEncryptionKey)
     const effectiveSetupId = messageId ?? 'eddsa_key_import'
     await uploadMpcSetupMessage({
       serverUrl: this.serverURL,
@@ -418,10 +367,7 @@ export class Schnorr {
           )
           this.setupMessage = importResult.setup
           session = importResult.session
-          const encryptedSetupMsg = toMpcServerMessage(
-            this.setupMessage,
-            this.hexEncryptionKey
-          )
+          const encryptedSetupMsg = toMpcServerMessage(this.setupMessage, this.hexEncryptionKey)
           await uploadMpcSetupMessage({
             serverUrl: this.serverURL,
             message: encryptedSetupMsg,
@@ -436,10 +382,7 @@ export class Schnorr {
           sessionId: this.sessionId,
           messageId: effectiveSetupId,
         })
-        this.setupMessage = fromMpcServerMessage(
-          encodedEncryptedSetupMsg,
-          this.hexEncryptionKey
-        )
+        this.setupMessage = fromMpcServerMessage(encodedEncryptedSetupMsg, this.hexEncryptionKey)
       }
       if ('keyimport' in this.keygenOperation) {
         if (!this.isInitiateDevice) {
@@ -482,13 +425,7 @@ export class Schnorr {
     await initializeMpcLib('eddsa')
     for (let i = 0; i < 3; i++) {
       try {
-        const result = await this.startKeyImport(
-          hexPrivateKey,
-          hexChainCode,
-          i,
-          setupMessageId,
-          protocolMessageId
-        )
+        const result = await this.startKeyImport(hexPrivateKey, hexChainCode, i, setupMessageId, protocolMessageId)
         if (result !== undefined) {
           return result
         }

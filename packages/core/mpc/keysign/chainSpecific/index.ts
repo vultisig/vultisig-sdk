@@ -1,10 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 
 import { getKeysignCoin } from '../utils/getKeysignCoin'
-import {
-  chainSpecificRecord,
-  KeysignChainSpecific,
-} from './KeysignChainSpecific'
+import { chainSpecificRecord, KeysignChainSpecific } from './KeysignChainSpecific'
 import { GetChainSpecificInput, GetChainSpecificResolver } from './resolver'
 import { getBittensorChainSpecific } from './resolvers/bittensor'
 import { getCardanoChainSpecific } from './resolvers/cardano'
@@ -21,10 +18,7 @@ import { getTonChainSpecific } from './resolvers/ton'
 import { getTronChainSpecific } from './resolvers/tron'
 import { getUtxoChainSpecific } from './resolvers/utxo'
 
-const resolvers: Record<
-  KeysignChainSpecific['case'],
-  GetChainSpecificResolver<any>
-> = {
+const resolvers: Record<KeysignChainSpecific['case'], GetChainSpecificResolver<any>> = {
   ethereumSpecific: getEvmChainSpecific,
   utxoSpecific: getUtxoChainSpecific,
   thorchainSpecific: getThorchainChainSpecific,
@@ -45,9 +39,7 @@ const chainOverrides: Partial<Record<Chain, GetChainSpecificResolver<any>>> = {
   [Chain.QBTC]: getQbtcChainSpecific,
 }
 
-export const getChainSpecific = async (
-  input: GetChainSpecificInput
-): Promise<KeysignChainSpecific> => {
+export const getChainSpecific = async (input: GetChainSpecificInput): Promise<KeysignChainSpecific> => {
   const { keysignPayload } = input
   const coin = getKeysignCoin(keysignPayload)
   const chainSpecificCase = chainSpecificRecord[coin.chain]

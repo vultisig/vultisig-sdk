@@ -20,15 +20,11 @@ type TaostatsExtrinsicResponse = {
   }>
 }
 
-export const getBittensorTxStatus: TxStatusResolver<
-  OtherChain.Bittensor
-> = async ({ hash }) => {
+export const getBittensorTxStatus: TxStatusResolver<OtherChain.Bittensor> = async ({ hash }) => {
   const txHash = ensureHexPrefix(hash)
 
   const { data: response, error } = await attempt(
-    queryUrl<TaostatsExtrinsicResponse>(
-      `${taostatsExtrinsicUrl}?${new URLSearchParams({ hash: txHash })}`
-    )
+    queryUrl<TaostatsExtrinsicResponse>(`${taostatsExtrinsicUrl}?${new URLSearchParams({ hash: txHash })}`)
   )
 
   if (error || !response?.data?.length) {
@@ -37,9 +33,7 @@ export const getBittensorTxStatus: TxStatusResolver<
 
   const extrinsic = response.data[0]
   const feeCoin = chainFeeCoin[Chain.Bittensor]
-  let receipt:
-    | { feeAmount: bigint; feeDecimals: number; feeTicker: string }
-    | undefined
+  let receipt: { feeAmount: bigint; feeDecimals: number; feeTicker: string } | undefined
   if (extrinsic.fee) {
     try {
       receipt = {

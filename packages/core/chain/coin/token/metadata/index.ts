@@ -8,10 +8,7 @@ import { getEvmTokenMetadata } from './resolvers/evm'
 import { getSolanaTokenMetadata } from './resolvers/solana'
 import { getTronTokenMetadata } from './resolvers/tron'
 
-const resolvers: Record<
-  ChainKindWithTokenMetadataDiscovery,
-  TokenMetadataResolver<any>
-> = {
+const resolvers: Record<ChainKindWithTokenMetadataDiscovery, TokenMetadataResolver<any>> = {
   evm: getEvmTokenMetadata,
   solana: getSolanaTokenMetadata,
   cosmos: getCosmosTokenMetadata,

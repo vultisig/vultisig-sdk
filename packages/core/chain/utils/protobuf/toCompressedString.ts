@@ -6,10 +6,7 @@ type ToCompressedStringInput = {
   binary: Uint8Array<ArrayBufferLike>
 }
 
-export const toCompressedString = ({
-  sevenZip,
-  binary,
-}: ToCompressedStringInput) => {
+export const toCompressedString = ({ sevenZip, binary }: ToCompressedStringInput) => {
   const archiveName = 'compressed.xz'
   const inputFileName = 'data.bin'
 

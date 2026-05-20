@@ -14,10 +14,7 @@ type FromSolanaJupiterTokensInput = {
   chain: Chain
 }
 
-export const fromSolanaJupiterTokens = ({
-  tokens,
-  chain,
-}: FromSolanaJupiterTokensInput): Coin[] => {
+export const fromSolanaJupiterTokens = ({ tokens, chain }: FromSolanaJupiterTokensInput): Coin[] => {
   return tokens
     .filter(token => !!token.icon) // Ensure only tokens with logos are included
     .map(token => ({

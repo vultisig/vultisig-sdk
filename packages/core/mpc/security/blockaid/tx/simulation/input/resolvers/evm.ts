@@ -1,8 +1,5 @@
 import { productRootDomain } from '@vultisig/core-config'
-import {
-  blockaidEvmChain,
-  BlockaidSupportedEvmChain,
-} from '@vultisig/core-chain/security/blockaid/evmChains'
+import { blockaidEvmChain, BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
 import { BlockaidTxSimulationInput } from '@vultisig/core-chain/security/blockaid/tx/simulation/resolver'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
@@ -13,20 +10,13 @@ import { encodeFunctionData, erc20Abi } from 'viem'
 
 import { BlockaidTxSimulationInputResolver } from '../resolver'
 
-export const getEvmBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
-  BlockaidSupportedEvmChain
-> = ({ payload, chain }) => {
+export const getEvmBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<BlockaidSupportedEvmChain> = ({
+  payload,
+  chain,
+}) => {
   const coin = getKeysignCoin(payload)
 
-  const toEvmBlockaidTxScanInput = ({
-    to,
-    value,
-    data,
-  }: {
-    to: string
-    value: string
-    data: string
-  }) => {
+  const toEvmBlockaidTxScanInput = ({ to, value, data }: { to: string; value: string; data: string }) => {
     const params: Record<string, string> = {
       from: coin.address,
       to,
@@ -48,10 +38,7 @@ export const getEvmBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
   const swapPayload = getKeysignSwapPayload(payload)
 
   if (swapPayload) {
-    return matchRecordUnion<
-      KeysignSwapPayload,
-      Pick<BlockaidTxSimulationInput, 'data'> | null
-    >(swapPayload, {
+    return matchRecordUnion<KeysignSwapPayload, Pick<BlockaidTxSimulationInput, 'data'> | null>(swapPayload, {
       native: () => null,
       general: generalSwapPayload => {
         const { quote } = generalSwapPayload
@@ -61,9 +48,7 @@ export const getEvmBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
 
         return toEvmBlockaidTxScanInput({
           to: quote.tx.to,
-          value: quote.tx.value.startsWith('0x')
-            ? quote.tx.value
-            : `0x${bigIntToHex(BigInt(quote.tx.value))}`,
+          value: quote.tx.value.startsWith('0x') ? quote.tx.value : `0x${bigIntToHex(BigInt(quote.tx.value))}`,
           data: quote.tx.data,
         })
       },

@@ -21,12 +21,7 @@ export const computeCosmosTxReceiptFeeAmount = ({
     return undefined
   }
 
-  const gasDenominator =
-    gasWantedFromTx > 0n
-      ? gasWantedFromTx
-      : feeGasLimit > 0n
-        ? feeGasLimit
-        : gasUsed
+  const gasDenominator = gasWantedFromTx > 0n ? gasWantedFromTx : feeGasLimit > 0n ? feeGasLimit : gasUsed
 
   if (gasDenominator === 0n) {
     return undefined

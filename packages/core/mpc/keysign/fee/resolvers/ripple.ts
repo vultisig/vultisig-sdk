@@ -2,10 +2,7 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { FeeAmountResolver } from '../resolver'
 
 export const getRippleFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
-  const { gas } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'rippleSpecific'
-  )
+  const { gas } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
 
   return gas
 }

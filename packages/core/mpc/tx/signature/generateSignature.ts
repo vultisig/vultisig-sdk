@@ -13,24 +13,17 @@ type Input = {
   signatureFormat: SignatureFormat
 }
 
-export const generateSignature = ({
-  walletCore,
-  signature,
-  signatureFormat,
-}: Input) => {
+export const generateSignature = ({ walletCore, signature, signatureFormat }: Input) => {
   return match(signatureFormat, {
     rawWithRecoveryId: () => {
-      const [r, s, recovery_id] = without(
-        [signature.r, signature.s, signature.recovery_id],
-        undefined
-      ).map(value => walletCore.HexCoding.decode(value))
+      const [r, s, recovery_id] = without([signature.r, signature.s, signature.recovery_id], undefined).map(value =>
+        walletCore.HexCoding.decode(value)
+      )
 
       return new Uint8Array([...r, ...s, ...recovery_id])
     },
     raw: () => {
-      const { r, s } = recordMap(pick(signature, ['r', 's']), value =>
-        walletCore.HexCoding.decode(value).reverse()
-      )
+      const { r, s } = recordMap(pick(signature, ['r', 's']), value => walletCore.HexCoding.decode(value).reverse())
 
       return new Uint8Array([...r, ...s])
     },

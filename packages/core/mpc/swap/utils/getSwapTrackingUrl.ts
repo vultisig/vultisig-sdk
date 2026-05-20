@@ -11,11 +11,7 @@ type GetSwapTrackingUrlInput = {
   sourceChain: Chain
 }
 
-export const getSwapTrackingUrl = ({
-  swapPayload,
-  txHash,
-  sourceChain,
-}: GetSwapTrackingUrlInput): string => {
+export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwapTrackingUrlInput): string => {
   return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
     native: ({ chain }) => {
       if (chain === Chain.THORChain) {

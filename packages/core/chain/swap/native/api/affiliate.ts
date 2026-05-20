@@ -30,9 +30,7 @@ export const buildAffiliateParams = ({
       affiliate: nativeSwapAffiliateConfig.affiliateFeeAddress,
       bps: Math.max(
         0,
-        affiliateBps -
-          (baseAffiliateBps -
-            nativeSwapAffiliateConfig.referralDiscountAffiliateFeeRateBps)
+        affiliateBps - (baseAffiliateBps - nativeSwapAffiliateConfig.referralDiscountAffiliateFeeRateBps)
       ),
     })
   } else {

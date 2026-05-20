@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  getLpWithdrawReadiness,
-  getThorchainLpLockupSeconds,
-  THORCHAIN_BLOCK_TIME_SECONDS,
-} from './lockup'
+import { getLpWithdrawReadiness, getThorchainLpLockupSeconds, THORCHAIN_BLOCK_TIME_SECONDS } from './lockup'
 
 const originalFetch = globalThis.fetch
 
@@ -14,11 +10,12 @@ afterEach(() => {
 })
 
 const mockFetchJson = (body: unknown) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 
@@ -38,18 +35,12 @@ describe('getThorchainLpLockupSeconds', () => {
 
   it('throws when LIQUIDITYLOCKUPBLOCKS is missing from the mimir response', async () => {
     mockFetchJson({ OTHER_KEY: 42 })
-    await expect(getThorchainLpLockupSeconds()).rejects.toThrow(
-      /LIQUIDITYLOCKUPBLOCKS/
-    )
+    await expect(getThorchainLpLockupSeconds()).rejects.toThrow(/LIQUIDITYLOCKUPBLOCKS/)
   })
 
   it('throws when the mimir response is not an object', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify('not an object'), { status: 200 })
-    ) as typeof fetch
-    await expect(getThorchainLpLockupSeconds()).rejects.toThrow(
-      /unexpected response shape/
-    )
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify('not an object'), { status: 200 })) as typeof fetch
+    await expect(getThorchainLpLockupSeconds()).rejects.toThrow(/unexpected response shape/)
   })
 })
 

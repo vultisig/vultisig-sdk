@@ -9,9 +9,7 @@ import { getSolanaTokenMetadata } from '../../../token/metadata/resolvers/solana
 export const findSolanaCoins: FindCoinsResolver = async ({ address }) => {
   const accounts = await getSplAccounts(address)
 
-  const tokenAddresses = accounts.map(
-    account => account.account.data.parsed.info.mint
-  )
+  const tokenAddresses = accounts.map(account => account.account.data.parsed.info.mint)
 
   const result = await Promise.all(
     tokenAddresses.map(async id => {

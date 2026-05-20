@@ -1,5 +1,5 @@
-import { ChainKind, DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { TW } from '@trustwallet/wallet-core'
+import { ChainKind, DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
 import { Chain } from '../Chain'
 
@@ -18,18 +18,11 @@ const signingOutputs = {
   qbtc: TW.Cosmos.Proto.SigningOutput,
 } as const satisfies Record<ChainKind, unknown>
 
-type PotentialSigningOutput<T extends Chain = Chain> = InstanceType<
-  (typeof signingOutputs)[DeriveChainKind<T>]
->
+type PotentialSigningOutput<T extends Chain = Chain> = InstanceType<(typeof signingOutputs)[DeriveChainKind<T>]>
 
-export type SigningOutput<T extends Chain = Chain> = Omit<
-  PotentialSigningOutput<T>,
-  'errorMessage' | 'error'
->
+export type SigningOutput<T extends Chain = Chain> = Omit<PotentialSigningOutput<T>, 'errorMessage' | 'error'>
 
-const assertSigningOutput = <T extends Chain = Chain>(
-  output: PotentialSigningOutput<T>
-): SigningOutput<T> => {
+const assertSigningOutput = <T extends Chain = Chain>(output: PotentialSigningOutput<T>): SigningOutput<T> => {
   if (output.errorMessage) {
     throw new Error(`Invalid signing output: ${output.errorMessage}`)
   }
@@ -43,9 +36,7 @@ export const decodeSigningOutput = <T extends Chain = Chain>(
 ): SigningOutput<T> => {
   const chainKind = getChainKind(chain)
 
-  const output = signingOutputs[chainKind].decode(
-    data
-  ) as PotentialSigningOutput<T>
+  const output = signingOutputs[chainKind].decode(data) as PotentialSigningOutput<T>
 
   return assertSigningOutput(output)
 }
@@ -58,9 +49,7 @@ export const deserializeSigningOutput = <T extends Chain = Chain>(
 ): SigningOutput<T> => {
   const chainKind = getChainKind(chain)
 
-  const output = signingOutputs[chainKind].fromObject(
-    data
-  ) as PotentialSigningOutput<T>
+  const output = signingOutputs[chainKind].fromObject(data) as PotentialSigningOutput<T>
 
   return assertSigningOutput(output)
 }

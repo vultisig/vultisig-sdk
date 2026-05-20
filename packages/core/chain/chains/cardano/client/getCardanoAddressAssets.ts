@@ -20,9 +20,7 @@ type CardanoAddressAssetResponse = Array<{
 }>
 
 /** Fetches all native tokens held at a Cardano address via the Koios `address_assets` endpoint. */
-export const getCardanoAddressAssets = async (
-  address: string
-): Promise<CardanoAddressAsset[]> => {
+export const getCardanoAddressAssets = async (address: string): Promise<CardanoAddressAsset[]> => {
   const url = `${cardanoApiUrl}/address_assets`
 
   const response = await queryUrl<CardanoAddressAssetResponse>(url, {

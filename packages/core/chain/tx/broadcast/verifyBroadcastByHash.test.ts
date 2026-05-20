@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../hash', () => ({
   getTxHash: vi.fn(),
@@ -10,7 +10,6 @@ vi.mock('../status', () => ({
 import { Chain } from '../../Chain'
 import { getTxHash } from '../hash'
 import { getTxStatus } from '../status'
-
 import { verifyBroadcastByHash } from './verifyBroadcastByHash'
 
 const getTxHashMock = vi.mocked(getTxHash)

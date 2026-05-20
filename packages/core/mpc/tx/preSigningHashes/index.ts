@@ -9,10 +9,7 @@ import { blake2AsU8a } from '@polkadot/util-crypto'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { getPreSigningOutput } from '../../keysign/preSigningOutput'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 
 type Input = {
   walletCore: WalletCore
@@ -21,12 +18,7 @@ type Input = {
   keysignPayload?: KeysignPayload
 }
 
-export const getPreSigningHashes = ({
-  walletCore,
-  txInputData,
-  chain,
-  keysignPayload,
-}: Input) => {
+export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPayload }: Input) => {
   // PSBT signing: compute BIP-143 sighashes directly from structured data
   if (keysignPayload?.signData.case === 'signBitcoin') {
     return computePreSigningHashes(keysignPayload.signData.value)
@@ -34,10 +26,7 @@ export const getPreSigningHashes = ({
 
   if (chain === Chain.QBTC) {
     const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
-    const cosmosSpecific = getBlockchainSpecificValue(
-      qbtcPayload.blockchainSpecific,
-      'cosmosSpecific'
-    )
+    const cosmosSpecific = getBlockchainSpecificValue(qbtcPayload.blockchainSpecific, 'cosmosSpecific')
     return getQBTCPreSignedImageHash({ keysignPayload: qbtcPayload, cosmosSpecific })
   }
 

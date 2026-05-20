@@ -25,9 +25,7 @@ const preSigningOutputClasses = {
   qbtc: TW.TxCompiler.Proto.PreSigningOutput,
 } as const satisfies Record<ChainKind, unknown>
 
-type PreSigningOutput<T extends ChainKind> = InstanceType<
-  (typeof preSigningOutputClasses)[T]
->
+type PreSigningOutput<T extends ChainKind> = InstanceType<(typeof preSigningOutputClasses)[T]>
 
 export const getPreSigningOutput = <T extends Chain>({
   walletCore,

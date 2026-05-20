@@ -77,8 +77,7 @@ const expandScientificNotationToDecimalString = (s: string): string => {
     const intPart = allDigits / divisor
     const rem = allDigits % divisor
     const frac = padFractionDigits(rem.toString(), k)
-    absResult =
-      intPart === 0n ? `0.${frac}` : `${intPart.toString()}.${frac}`
+    absResult = intPart === 0n ? `0.${frac}` : `${intPart.toString()}.${frac}`
   }
 
   if (signNeg && allDigits !== 0n) {

@@ -16,27 +16,24 @@ afterEach(() => {
 })
 
 const mockFetch = (body: unknown) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 
 describe('getThorchainLpPositions schema regression guards', () => {
   it('throws when Midgard returns pools as a string (schema drift)', async () => {
     mockFetch({ pools: 'not an array' })
-    await expect(
-      getThorchainLpPositions({ thorAddress: 'thor1test' })
-    ).rejects.toThrow(/non-array `pools`/)
+    await expect(getThorchainLpPositions({ thorAddress: 'thor1test' })).rejects.toThrow(/non-array `pools`/)
   })
 
   it('throws when Midgard returns pools as an object', async () => {
     mockFetch({ pools: { foo: 'bar' } })
-    await expect(
-      getThorchainLpPositions({ thorAddress: 'thor1test' })
-    ).rejects.toThrow(/non-array `pools`/)
+    await expect(getThorchainLpPositions({ thorAddress: 'thor1test' })).rejects.toThrow(/non-array `pools`/)
   })
 
   it('returns empty when the pools key is absent (legacy Midgard empty)', async () => {
@@ -49,8 +46,8 @@ describe('getThorchainLpPositions schema regression guards', () => {
 
   it('throws when the response is not an object at all', async () => {
     mockFetch('hello')
-    await expect(
-      getThorchainLpPositions({ thorAddress: 'thor1test' })
-    ).rejects.toThrow(/unexpected Midgard response shape/)
+    await expect(getThorchainLpPositions({ thorAddress: 'thor1test' })).rejects.toThrow(
+      /unexpected Midgard response shape/
+    )
   })
 })

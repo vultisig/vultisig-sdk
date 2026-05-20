@@ -14,8 +14,7 @@ type RpcResponse<T> = {
 }
 
 // System.Account storage key prefix: twox128("System") ++ twox128("Account")
-const systemAccountPrefix =
-  '0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9'
+const systemAccountPrefix = '0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9'
 
 const ss58AddressByteLength = 35
 const ss58PublicKeyOffset = 1
@@ -24,9 +23,7 @@ const ss58PublicKeyEnd = 33
 const decodeSs58PublicKey = (address: string): Uint8Array => {
   const decoded = bs58.decode(address)
   if (decoded.length !== ss58AddressByteLength) {
-    throw new Error(
-      `Invalid SS58 address length: expected ${ss58AddressByteLength} bytes, got ${decoded.length}`
-    )
+    throw new Error(`Invalid SS58 address length: expected ${ss58AddressByteLength} bytes, got ${decoded.length}`)
   }
   return decoded.slice(ss58PublicKeyOffset, ss58PublicKeyEnd)
 }
@@ -47,9 +44,7 @@ export const getBittensorCoinBalance: CoinBalanceResolver = async input => {
   })
 
   if (response.error) {
-    throw new Error(
-      `Bittensor balance RPC error: ${response.error.message ?? `code ${response.error.code}`}`
-    )
+    throw new Error(`Bittensor balance RPC error: ${response.error.message ?? `code ${response.error.code}`}`)
   }
 
   const result = response.result

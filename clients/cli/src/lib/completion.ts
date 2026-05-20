@@ -3,10 +3,10 @@
  *
  * Provides tab completion for bash, zsh, and fish shells using tabtab
  */
+import type { Command } from 'commander'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { readFileSync, existsSync } from 'fs'
-import type { Command } from 'commander'
 
 // Import tabtab dynamically to handle ESM/CJS differences
 let tabtab: any = null
@@ -91,7 +91,6 @@ function getVaultNames(): string[] {
     if (!existsSync(vaultDir)) return []
 
     // Read vault files and extract names
-    const { readdirSync } = require('fs')
     const files = readdirSync(vaultDir) as string[]
     const names: string[] = []
 

@@ -6,13 +6,8 @@ type BlockaidScanResponse = {
   validation: BlockaidValidation
 }
 
-export const getEvmTxBlockaidValidation: BlockaidTxValidationResolver = async ({
-  data,
-}) => {
-  const { validation } = await queryBlockaid<BlockaidScanResponse>(
-    '/evm/json-rpc/scan',
-    data
-  )
+export const getEvmTxBlockaidValidation: BlockaidTxValidationResolver = async ({ data }) => {
+  const { validation } = await queryBlockaid<BlockaidScanResponse>('/evm/json-rpc/scan', data)
 
   return validation
 }

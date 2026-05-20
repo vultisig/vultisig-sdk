@@ -3,20 +3,11 @@ import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/key
 import { bigishToString, emptyToUndefined } from '../utils'
 import { mapNestedCoin } from './mapNestedCoin'
 
-export const mapSwapPayload = (
-  spRaw: any
-): KeysignPayload['swapPayload'] | undefined => {
+export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | undefined => {
   if (!spRaw) return
 
-  if (
-    spRaw.OneinchSwapPayload ||
-    spRaw.oneinchSwapPayload ||
-    spRaw.OneInchSwapPayload
-  ) {
-    const o =
-      spRaw.OneinchSwapPayload ??
-      spRaw.oneinchSwapPayload ??
-      spRaw.OneInchSwapPayload
+  if (spRaw.OneinchSwapPayload || spRaw.oneinchSwapPayload || spRaw.OneInchSwapPayload) {
+    const o = spRaw.OneinchSwapPayload ?? spRaw.oneinchSwapPayload ?? spRaw.OneInchSwapPayload
 
     const res: KeysignPayload['swapPayload'] = {
       case: 'oneinchSwapPayload',
@@ -36,14 +27,8 @@ export const mapSwapPayload = (
                     $typeName: '' as any,
                     data: o.quote.tx.data,
                     from: o.quote.tx.from,
-                    gas:
-                      o.quote.tx.gas !== undefined && o.quote.tx.gas !== null
-                        ? BigInt(o.quote.tx.gas)
-                        : 0n,
-                    gasPrice:
-                      bigishToString(
-                        o.quote.tx.gas_price ?? o.quote.tx.gasPrice
-                      ) ?? '',
+                    gas: o.quote.tx.gas !== undefined && o.quote.tx.gas !== null ? BigInt(o.quote.tx.gas) : 0n,
+                    gasPrice: bigishToString(o.quote.tx.gas_price ?? o.quote.tx.gasPrice) ?? '',
                     to: o.quote.tx.to,
                     value: bigishToString(o.quote.tx.value) ?? '',
                   }
@@ -76,12 +61,8 @@ export const mapSwapPayload = (
         fromAmount: String(t.from_amount ?? t.fromAmount),
         toAmountDecimal: t.to_amount_decimal ?? t.toAmountDecimal,
         toAmountLimit: String(t.to_amount_limit ?? t.toAmountLimit ?? ''),
-        streamingInterval: String(
-          t.streaming_interval ?? t.streamingInterval ?? ''
-        ),
-        streamingQuantity: String(
-          t.streaming_quantity ?? t.streamingQuantity ?? ''
-        ),
+        streamingInterval: String(t.streaming_interval ?? t.streamingInterval ?? ''),
+        streamingQuantity: String(t.streaming_quantity ?? t.streamingQuantity ?? ''),
         isAffiliate: Boolean(t.is_affiliate ?? t.isAffiliate),
         fee: feeIn === undefined ? '' : String(feeIn),
         expirationTime: BigInt(t.expiration_time ?? t.expirationTime ?? 0),

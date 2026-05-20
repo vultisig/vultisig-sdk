@@ -7,11 +7,7 @@ type DerivePublicKeyInput = {
   path: string
 }
 
-export const derivePublicKey = ({
-  hexRootPubKey,
-  hexChainCode,
-  path,
-}: DerivePublicKeyInput): string => {
+export const derivePublicKey = ({ hexRootPubKey, hexChainCode, path }: DerivePublicKeyInput): string => {
   if (!hexRootPubKey) {
     throw new Error('Empty pub key')
   }
@@ -59,20 +55,14 @@ const getDerivePathBytes = (derivePath: string): number[] => {
   return pathBuf
 }
 const hardenedOffset = 0x80000000
-const derivePubKeyFromPath = (
-  pubKey: Uint8Array,
-  chainCode: Uint8Array,
-  path: number[]
-): Uint8Array => {
+const derivePubKeyFromPath = (pubKey: Uint8Array, chainCode: Uint8Array, path: number[]): Uint8Array => {
   const bip32 = BIP32Factory(ecc)
   const rootNode = bip32.fromPublicKey(pubKey, chainCode)
 
   let currentNode = rootNode
   for (const index of path) {
     if (index >= hardenedOffset) {
-      throw new Error(
-        `Cannot derive hardened child (index ${index}) from a public key`
-      )
+      throw new Error(`Cannot derive hardened child (index ${index}) from a public key`)
     }
     currentNode = currentNode.derive(index)
   }

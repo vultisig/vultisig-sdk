@@ -4,12 +4,7 @@ import { order } from '@vultisig/lib-utils/array/order'
 import { toEntries } from '@vultisig/lib-utils/record/toEntries'
 
 import { fromChainAmount } from '../../amount/fromChainAmount'
-import {
-  baseAffiliateBps,
-  VultDiscountTier,
-  vultDiscountTierBps,
-  vultDiscountTierMinBalances,
-} from './config'
+import { baseAffiliateBps, VultDiscountTier, vultDiscountTierBps, vultDiscountTierMinBalances } from './config'
 
 export type { VultDiscountTier }
 
@@ -24,11 +19,7 @@ export const getVultDiscountTier = ({
 }: GetVultDiscountTierInput): VultDiscountTier | null => {
   const balance = fromChainAmount(vultBalance, vult.decimals)
 
-  const descendingTiers = order(
-    toEntries(vultDiscountTierMinBalances),
-    ({ value }) => value,
-    'desc'
-  )
+  const descendingTiers = order(toEntries(vultDiscountTierMinBalances), ({ value }) => value, 'desc')
 
   const baseTier = descendingTiers.find(({ value }) => balance >= value)?.key
 
@@ -40,12 +31,8 @@ export const getVultDiscountTier = ({
     return getLastItem(descendingTiers).key
   }
 
-  const platinumIndex = descendingTiers.findIndex(
-    ({ key }) => key === 'platinum'
-  )
-  const currentTierIndex = descendingTiers.findIndex(
-    ({ key }) => key === baseTier
-  )
+  const platinumIndex = descendingTiers.findIndex(({ key }) => key === 'platinum')
+  const currentTierIndex = descendingTiers.findIndex(({ key }) => key === baseTier)
 
   if (currentTierIndex <= platinumIndex) {
     return baseTier
@@ -54,10 +41,6 @@ export const getVultDiscountTier = ({
   return descendingTiers[currentTierIndex - 1].key
 }
 
-export const getSwapAffiliateBps = (
-  discountTier: VultDiscountTier | null
-): number => {
-  return discountTier
-    ? baseAffiliateBps - vultDiscountTierBps[discountTier]
-    : baseAffiliateBps
+export const getSwapAffiliateBps = (discountTier: VultDiscountTier | null): number => {
+  return discountTier ? baseAffiliateBps - vultDiscountTierBps[discountTier] : baseAffiliateBps
 }

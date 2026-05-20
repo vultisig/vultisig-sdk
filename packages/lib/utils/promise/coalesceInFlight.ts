@@ -8,11 +8,11 @@ type CoalesceOptions<Args extends any[]> = {
  * While a call with the same key is pending, subsequent calls return the same promise.
  * Once it settles, the entry is removed and the next call will execute again.
  */
-export function withInFlightCoalescer<
-  T extends (...args: any[]) => Promise<any>,
->(resolver: T, options?: CoalesceOptions<Parameters<T>>): T {
-  const getKey =
-    options?.getKey ?? ((...args: Parameters<T>) => JSON.stringify(args))
+export function withInFlightCoalescer<T extends (...args: any[]) => Promise<any>>(
+  resolver: T,
+  options?: CoalesceOptions<Parameters<T>>
+): T {
+  const getKey = options?.getKey ?? ((...args: Parameters<T>) => JSON.stringify(args))
   const shouldCoalesce = options?.shouldCoalesce
   const inFlight = new Map<string, ReturnType<T>>()
 

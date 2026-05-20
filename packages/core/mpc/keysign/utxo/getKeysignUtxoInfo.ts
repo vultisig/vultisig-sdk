@@ -7,11 +7,7 @@ import { getUtxos } from '@vultisig/core-chain/chains/utxo/tx/getUtxos'
 
 import { UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
 
-const toUtxoInfo = (plain: {
-  hash: string
-  amount: bigint
-  index: number
-}) =>
+const toUtxoInfo = (plain: { hash: string; amount: bigint; index: number }) =>
   create(UtxoInfoSchema, {
     hash: plain.hash,
     amount: plain.amount,

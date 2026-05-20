@@ -10,8 +10,6 @@ describe('chainFeeCoin', () => {
     // single source of truth for balance display and amount parsing across
     // every Vultisig client. Regression guard for vultisig-windows#3910.
     expect(chainFeeCoin[Chain.QBTC].decimals).toBe(8)
-    expect(chainFeeCoin[Chain.QBTC].decimals).toBe(
-      chainFeeCoin[Chain.Bitcoin].decimals
-    )
+    expect(chainFeeCoin[Chain.QBTC].decimals).toBe(chainFeeCoin[Chain.Bitcoin].decimals)
   })
 })

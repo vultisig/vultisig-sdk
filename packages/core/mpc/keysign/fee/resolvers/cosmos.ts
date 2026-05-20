@@ -16,10 +16,7 @@ const mayaGas = 2000000000n
 export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
 
-  const chainSpecific = getCosmosChainSpecific(
-    chain,
-    keysignPayload.blockchainSpecific
-  )
+  const chainSpecific = getCosmosChainSpecific(chain, keysignPayload.blockchainSpecific)
 
   return matchRecordUnion(chainSpecific, {
     ibcEnabled: ({ gas }) => gas,

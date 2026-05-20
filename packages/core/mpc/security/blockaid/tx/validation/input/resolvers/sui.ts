@@ -5,9 +5,10 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxValidationInputResolver } from '../resolver'
 
-export const getSuiBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
-  OtherChain.Sui
-> = ({ payload, walletCore }) => {
+export const getSuiBlockaidTxValidationInput: BlockaidTxValidationInputResolver<OtherChain.Sui> = ({
+  payload,
+  walletCore,
+}) => {
   const coin = assertField(payload, 'coin')
 
   const compiledTxs = getCompiledTxsForBlockaidInput({
@@ -15,9 +16,7 @@ export const getSuiBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
     walletCore,
   })
 
-  const [transaction] = compiledTxs.map(
-    compiledTx => decodeSigningOutput(OtherChain.Sui, compiledTx).unsignedTx
-  )
+  const [transaction] = compiledTxs.map(compiledTx => decodeSigningOutput(OtherChain.Sui, compiledTx).unsignedTx)
 
   return {
     chain: 'mainnet',

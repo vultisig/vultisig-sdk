@@ -7,17 +7,12 @@ import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({ chain, tx }) => {
   const client = getEvmClient(chain)
 
   const { error } = await attempt(
     client.sendRawTransaction({
-      serializedTransaction: ensureHexPrefix(
-        Buffer.from(tx.encoded).toString('hex')
-      ),
+      serializedTransaction: ensureHexPrefix(Buffer.from(tx.encoded).toString('hex')),
     })
   )
 
@@ -25,14 +20,7 @@ export const broadcastEvmTx: BroadcastTxResolver<EvmChain> = async ({
     return
   }
 
-  if (
-    isInError(
-      error,
-      'already known',
-      'transaction already exists',
-      'tx already in mempool'
-    )
-  ) {
+  if (isInError(error, 'already known', 'transaction already exists', 'tx already in mempool')) {
     return
   }
 

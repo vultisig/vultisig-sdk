@@ -4,17 +4,17 @@ import { parseThorchainSwapMemoStreaming } from './parseThorchainSwapMemoStreami
 
 describe('parseThorchainSwapMemoStreaming', () => {
   it('parses trailing tolerance/interval/quantity', () => {
-    expect(
-      parseThorchainSwapMemoStreaming(
-        '=:e:0x86d526d6624AbC0178cF7296cD538Ecc080A95F1:0/1/13'
-      )
-    ).toEqual({ streamingInterval: '1', streamingQuantity: '13' })
+    expect(parseThorchainSwapMemoStreaming('=:e:0x86d526d6624AbC0178cF7296cD538Ecc080A95F1:0/1/13')).toEqual({
+      streamingInterval: '1',
+      streamingQuantity: '13',
+    })
   })
 
   it('uses the last matching triple segment', () => {
-    expect(
-      parseThorchainSwapMemoStreaming('=:ETH.ETH:0xabc:0/1/0:0/2/5')
-    ).toEqual({ streamingInterval: '2', streamingQuantity: '5' })
+    expect(parseThorchainSwapMemoStreaming('=:ETH.ETH:0xabc:0/1/0:0/2/5')).toEqual({
+      streamingInterval: '2',
+      streamingQuantity: '5',
+    })
   })
 
   it('returns 0/0 when no triple suffix exists', () => {

@@ -9,12 +9,7 @@ type GetErc20AllowanceInput = Token<AccountCoinKey<EvmChain>> & {
   spender: string
 }
 
-export const getErc20Allowance = async ({
-  chain,
-  id,
-  address,
-  spender,
-}: GetErc20AllowanceInput) => {
+export const getErc20Allowance = async ({ chain, id, address, spender }: GetErc20AllowanceInput) => {
   const publicClient = getEvmClient(chain)
 
   return publicClient.readContract({

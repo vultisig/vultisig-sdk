@@ -20,5 +20,4 @@ export const signatureAlgorithms: Record<ChainKind, SignatureAlgorithm> = {
   qbtc: 'mldsa',
 }
 
-export const getSignatureAlgorithm = (chain: Chain): SignatureAlgorithm =>
-  signatureAlgorithms[getChainKind(chain)]
+export const getSignatureAlgorithm = (chain: Chain): SignatureAlgorithm => signatureAlgorithms[getChainKind(chain)]

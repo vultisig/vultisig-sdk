@@ -11,9 +11,7 @@ afterEach(() => {
 
 const btcAddress = 'bc1qrncuculen6deh35at408fv95ng9kx3ve70gjjx'
 
-const blockchairUtxoResponse = (
-  utxos: Array<{ txid: string; index: number; value: number }>
-) => ({
+const blockchairUtxoResponse = (utxos: Array<{ txid: string; index: number; value: number }>) => ({
   data: {
     [btcAddress]: {
       utxo: utxos.map(({ txid, index, value }) => ({
@@ -55,8 +53,7 @@ const okResponse = (body: unknown) =>
     headers: { 'Content-Type': 'application/json' },
   })
 
-const errorResponse = (status: number, body = '') =>
-  new Response(body, { status })
+const errorResponse = (status: number, body = '') => new Response(body, { status })
 
 describe('getClaimableUtxos', () => {
   it('keeps UTXOs whose entitled_amount is positive', async () => {
@@ -183,15 +180,11 @@ describe('getClaimableUtxos', () => {
       return errorResponse(503, 'Service Unavailable')
     }) as typeof fetch
 
-    await expect(getClaimableUtxos({ btcAddress })).rejects.toThrow(
-      /Failed to verify UTXO/
-    )
+    await expect(getClaimableUtxos({ btcAddress })).rejects.toThrow(/Failed to verify UTXO/)
   })
 
   it('returns an empty array when Blockchair has no UTXOs', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      okResponse(blockchairUtxoResponse([]))
-    ) as typeof fetch
+    globalThis.fetch = vi.fn(async () => okResponse(blockchairUtxoResponse([]))) as typeof fetch
 
     const result = await getClaimableUtxos({ btcAddress })
 

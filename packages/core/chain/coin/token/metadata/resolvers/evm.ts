@@ -9,10 +9,7 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { hexToNumber } from '@vultisig/lib-utils/hex/hexToNumber'
 import { Address, erc20Abi } from 'viem'
 
-export const getEvmTokenMetadata: TokenMetadataResolver<EvmChain> = async ({
-  chain,
-  id,
-}) => {
+export const getEvmTokenMetadata: TokenMetadataResolver<EvmChain> = async ({ chain, id }) => {
   const publicClient = getEvmClient(chain)
 
   const [ticker, decimals] = await Promise.all([
@@ -36,9 +33,7 @@ export const getEvmTokenMetadata: TokenMetadataResolver<EvmChain> = async ({
   const oneInchChainId = hexToNumber(getEvmChainId(chain))
   const normalizedId = id.toLowerCase()
   const logoResult = await attempt(() =>
-    queryOneInch<Record<string, OneInchToken>>(
-      `/token/v1.2/${oneInchChainId}/custom?addresses=${normalizedId}`
-    )
+    queryOneInch<Record<string, OneInchToken>>(`/token/v1.2/${oneInchChainId}/custom?addresses=${normalizedId}`)
   )
 
   if ('data' in logoResult && logoResult.data) {

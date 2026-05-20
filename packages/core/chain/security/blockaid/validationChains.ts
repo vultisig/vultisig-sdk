@@ -9,7 +9,5 @@ export const blockaidValidationSupportedChains = [
   UtxoChain.Bitcoin,
 ] as const
 
-export type BlockaidValidationSupportedChain =
-  (typeof blockaidValidationSupportedChains)[number]
-export type BlockaidValidationSupportedChainKind =
-  DeriveChainKind<BlockaidValidationSupportedChain>
+export type BlockaidValidationSupportedChain = (typeof blockaidValidationSupportedChains)[number]
+export type BlockaidValidationSupportedChainKind = DeriveChainKind<BlockaidValidationSupportedChain>

@@ -15,10 +15,7 @@ import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
-import {
-  KeysignPayload,
-  KeysignPayloadSchema,
-} from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
@@ -45,35 +42,24 @@ export const compileTx = ({
     if (!publicKey) {
       throw new Error('publicKey is required for SignBitcoin compilation')
     }
-    return compileSignBitcoinTx(
-      keysignPayload.signData.value,
-      keysignSignatures,
-      publicKey
-    )
+    return compileSignBitcoinTx(keysignPayload.signData.value, keysignSignatures, publicKey)
   }
 
   if (chain === Chain.QBTC) {
     const qbtcPayload = fromBinary(KeysignPayloadSchema, txInputData)
-    const cosmosSpecific = getBlockchainSpecificValue(
-      qbtcPayload.blockchainSpecific,
-      'cosmosSpecific'
-    )
+    const cosmosSpecific = getBlockchainSpecificValue(qbtcPayload.blockchainSpecific, 'cosmosSpecific')
     const hashHexes = getPreSigningHashes({
       walletCore,
       txInputData,
       chain,
     }).map(h => Buffer.from(h).toString('hex'))
-    const qbtcSignatures = Object.fromEntries(
-      hashHexes.map(hex => [hex, keysignSignatures[hex]])
-    )
+    const qbtcSignatures = Object.fromEntries(hashHexes.map(hex => [hex, keysignSignatures[hex]]))
     const { serialized } = getQBTCSignedTransaction({
       keysignPayload: qbtcPayload,
       cosmosSpecific,
       signatures: qbtcSignatures,
     })
-    return TW.Cosmos.Proto.SigningOutput.encode(
-      TW.Cosmos.Proto.SigningOutput.create({ serialized })
-    ).finish()
+    return TW.Cosmos.Proto.SigningOutput.encode(TW.Cosmos.Proto.SigningOutput.create({ serialized })).finish()
   }
 
   if (!publicKey) {
@@ -110,12 +96,7 @@ export const compileTx = ({
     const { callData, signedExtra } = decodeBittensorTxInput(txInputData)
     const signerPubkey = new Uint8Array(publicKey.data())
 
-    const extrinsic = assembleBittensorExtrinsic(
-      signerPubkey,
-      new Uint8Array(sig),
-      callData,
-      signedExtra
-    )
+    const extrinsic = assembleBittensorExtrinsic(signerPubkey, new Uint8Array(sig), callData, signedExtra)
 
     return TW.Polkadot.Proto.SigningOutput.encode(
       TW.Polkadot.Proto.SigningOutput.create({
@@ -143,10 +124,7 @@ export const compileTx = ({
 
     // preOutput.data is the CBOR-encoded tx body
     const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
-      walletCore.TransactionCompiler.preImageHashes(
-        getCoinType({ chain, walletCore }),
-        txInputData
-      )
+      walletCore.TransactionCompiler.preImageHashes(getCoinType({ chain, walletCore }), txInputData)
     )
 
     const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
@@ -195,10 +173,5 @@ export const compileTx = ({
     walletCore,
   })
 
-  return walletCore.TransactionCompiler.compileWithSignatures(
-    coinType,
-    txInputData,
-    allSignatures,
-    publicKeys
-  )
+  return walletCore.TransactionCompiler.compileWithSignatures(coinType, txInputData, allSignatures, publicKeys)
 }

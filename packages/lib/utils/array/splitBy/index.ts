@@ -1,7 +1,4 @@
-export function splitBy<T>(
-  items: T[],
-  organize: (item: T, index: number) => 0 | 1
-) {
+export function splitBy<T>(items: T[], organize: (item: T, index: number) => 0 | 1) {
   const result: [T[], T[]] = [[], []]
 
   items.forEach((item, index) => {

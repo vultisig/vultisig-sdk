@@ -25,11 +25,7 @@ type GetThorchainLpPoolInput = {
   id?: string | null
 }
 
-export const getThorchainLpPool = ({
-  chain,
-  ticker,
-  id,
-}: GetThorchainLpPoolInput): string => {
+export const getThorchainLpPool = ({ chain, ticker, id }: GetThorchainLpPoolInput): string => {
   const chainCode = thorchainLpChainCode[chain]
   if (!chainCode) {
     throw new Error(`Chain ${chain} is not supported for THORChain LP`)

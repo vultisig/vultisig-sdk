@@ -19,9 +19,7 @@ describe('validateClaimInput', () => {
   })
 
   it('rejects empty UTXOs', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, utxos: [] })
-    ).toThrow('UTXOs count must be 1-50')
+    expect(() => validateClaimInput({ ...validInput, utxos: [] })).toThrow('UTXOs count must be 1-50')
   })
 
   it('rejects more than 50 UTXOs', () => {
@@ -29,9 +27,7 @@ describe('validateClaimInput', () => {
       txid: 'aa'.repeat(32),
       vout: i,
     }))
-    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'UTXOs count must be 1-50'
-    )
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow('UTXOs count must be 1-50')
   })
 
   it('rejects duplicate UTXOs', () => {
@@ -39,78 +35,62 @@ describe('validateClaimInput', () => {
       { txid: 'aa'.repeat(32), vout: 0 },
       { txid: 'aa'.repeat(32), vout: 0 },
     ]
-    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'Duplicate UTXO reference'
-    )
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow('Duplicate UTXO reference')
   })
 
   it('rejects invalid txid length', () => {
     const utxos = [{ txid: 'aa'.repeat(16), vout: 0 }]
-    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'Invalid txid'
-    )
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow('Invalid txid')
   })
 
   it('rejects non-hex txid', () => {
     const utxos = [{ txid: 'zz'.repeat(32), vout: 0 }]
-    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'Invalid txid'
-    )
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow('Invalid txid')
   })
 
   it('rejects negative vout', () => {
     const utxos = [{ txid: 'aa'.repeat(32), vout: -1 }]
-    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow(
-      'Invalid vout'
-    )
+    expect(() => validateClaimInput({ ...validInput, utxos })).toThrow('Invalid vout')
   })
 
   it('rejects proof too small', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, proof: 'ff'.repeat(50) })
-    ).toThrow('Proof too small')
+    expect(() => validateClaimInput({ ...validInput, proof: 'ff'.repeat(50) })).toThrow('Proof too small')
   })
 
   it('rejects proof too large', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, proof: 'ff'.repeat(60_000) })
-    ).toThrow('Proof too large')
+    expect(() => validateClaimInput({ ...validInput, proof: 'ff'.repeat(60_000) })).toThrow('Proof too large')
   })
 
   it('rejects invalid messageHash length', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, messageHash: 'aa'.repeat(16) })
-    ).toThrow('message_hash must be 64 hex chars')
+    expect(() => validateClaimInput({ ...validInput, messageHash: 'aa'.repeat(16) })).toThrow(
+      'message_hash must be 64 hex chars'
+    )
   })
 
   it('rejects invalid addressHash length', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, addressHash: 'aa'.repeat(16) })
-    ).toThrow('address_hash must be 40 hex chars')
+    expect(() => validateClaimInput({ ...validInput, addressHash: 'aa'.repeat(16) })).toThrow(
+      'address_hash must be 40 hex chars'
+    )
   })
 
   it('rejects invalid qbtcAddressHash length', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, qbtcAddressHash: 'aa'.repeat(16) })
-    ).toThrow('qbtc_address_hash must be 64 hex chars')
+    expect(() => validateClaimInput({ ...validInput, qbtcAddressHash: 'aa'.repeat(16) })).toThrow(
+      'qbtc_address_hash must be 64 hex chars'
+    )
   })
 
   it('rejects invalid pubKeyHashSha256 length', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, pubKeyHashSha256: 'aa'.repeat(16) })
-    ).toThrow('pub_key_hash_sha256 must be 64 hex chars')
+    expect(() => validateClaimInput({ ...validInput, pubKeyHashSha256: 'aa'.repeat(16) })).toThrow(
+      'pub_key_hash_sha256 must be 64 hex chars'
+    )
   })
 
   it('rejects empty broadcaster', () => {
-    expect(() =>
-      validateClaimInput({ ...validInput, broadcaster: '' })
-    ).toThrow('broadcaster is required')
+    expect(() => validateClaimInput({ ...validInput, broadcaster: '' })).toThrow('broadcaster is required')
   })
 
   it('rejects empty claimer', () => {
-    expect(() => validateClaimInput({ ...validInput, claimer: '' })).toThrow(
-      'claimer is required'
-    )
+    expect(() => validateClaimInput({ ...validInput, claimer: '' })).toThrow('claimer is required')
   })
 })
 

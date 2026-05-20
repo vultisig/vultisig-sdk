@@ -21,9 +21,7 @@ type TxResponse = {
   }
 }
 
-export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({
-  hash,
-}) => {
+export const getQbtcTxStatus: TxStatusResolver<typeof Chain.QBTC> = async ({ hash }) => {
   const url = `${qbtcRestUrl}/cosmos/tx/v1beta1/txs/${hash}`
   const { data, error } = await attempt(async () => {
     const resp = await fetch(url)

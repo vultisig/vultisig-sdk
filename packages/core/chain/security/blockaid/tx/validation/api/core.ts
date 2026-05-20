@@ -25,9 +25,7 @@ export type BlockaidValidation = {
   }>
 }
 
-const getRiskLevelFromBlockaidValidation = ({
-  result_type,
-}: BlockaidValidation): RiskLevel | null => {
+const getRiskLevelFromBlockaidValidation = ({ result_type }: BlockaidValidation): RiskLevel | null => {
   if (!isOneOf(result_type, blockaidRiskyTxLevels)) {
     return null
   }
@@ -35,9 +33,7 @@ const getRiskLevelFromBlockaidValidation = ({
   return blockaidRiskLevelToTxRiskLevel[result_type]
 }
 
-export const parseBlockaidValidation = (
-  validation: BlockaidValidation
-): BlockaidValidationResult => {
+export const parseBlockaidValidation = (validation: BlockaidValidation): BlockaidValidationResult => {
   const level = getRiskLevelFromBlockaidValidation(validation)
   if (level === null) {
     return null

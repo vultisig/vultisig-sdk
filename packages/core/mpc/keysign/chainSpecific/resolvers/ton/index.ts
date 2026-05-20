@@ -1,9 +1,6 @@
 import { create } from '@bufbuild/protobuf'
 import { getTonAccountInfo } from '@vultisig/core-chain/chains/ton/account/getTonAccountInfo'
-import {
-  getJettonWalletAddress,
-  getTonWalletState,
-} from '@vultisig/core-chain/chains/ton/api'
+import { getJettonWalletAddress, getTonWalletState } from '@vultisig/core-chain/chains/ton/api'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { TonSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -15,9 +12,7 @@ import { GetChainSpecificResolver } from '../../resolver'
 
 const tonWalletStateUninitialized = 'uninit'
 
-export const getTonChainSpecific: GetChainSpecificResolver<
-  'tonSpecific'
-> = async ({ keysignPayload }) => {
+export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
   const receiver = keysignPayload.toAddress
@@ -70,11 +65,8 @@ export const getTonChainSpecific: GetChainSpecificResolver<
     }
 
     if (receiver) {
-      const { data: destWalletState } = await attempt(
-        getTonWalletState(receiver)
-      )
-      result.isActiveDestination =
-        destWalletState !== tonWalletStateUninitialized
+      const { data: destWalletState } = await attempt(getTonWalletState(receiver))
+      result.isActiveDestination = destWalletState !== tonWalletStateUninitialized
     }
   }
 

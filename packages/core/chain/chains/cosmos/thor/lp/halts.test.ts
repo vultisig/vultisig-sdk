@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  getThorchainLpHaltStatus,
-  getThorchainLpHaltStatusAll,
-} from './halts'
+import { getThorchainLpHaltStatus, getThorchainLpHaltStatusAll } from './halts'
 
 const originalFetch = globalThis.fetch
 
@@ -13,11 +10,12 @@ afterEach(() => {
 })
 
 const mockInbound = (entries: Array<Record<string, unknown>>) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(entries), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(entries), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 

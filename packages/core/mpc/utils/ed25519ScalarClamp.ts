@@ -1,8 +1,6 @@
 import { sha512 } from '@noble/hashes/sha512'
 
-const ed25519GroupOrder = BigInt(
-  '0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED'
-)
+const ed25519GroupOrder = BigInt('0x1000000000000000000000000000000014DEF9DEA2F79CD65812631A5CF5D3ED')
 
 const clampScalar = (scalar: Uint8Array): Uint8Array => {
   const clamped = new Uint8Array(scalar)

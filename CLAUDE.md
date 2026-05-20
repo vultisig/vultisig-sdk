@@ -43,7 +43,7 @@ yarn test:all           # All tests
 yarn typecheck          # `tsc` for packages in `.config/tsconfig.json` **and** `yarn workspace @vultisig/cli typecheck` (CLI sources are not in the root tsconfig `include`; both steps are required)
 yarn check              # typecheck + lint + knip + format:check (parallel, fast)
 yarn check:all          # check + tests
-# Knip: see .config/knip.json (scopes SDK, CLI, Rujira, examples; excludes packages/core and packages/lib sources from file rules because they ship as dist subpath exports)
+# Knip: see .config/knip.jsonc (scopes SDK, CLI, shared core/lib, native packages, Rujira, and examples)
 yarn format             # Prettier
 yarn lint:fix           # ESLint auto-fix
 yarn typecheck          # TypeScript check

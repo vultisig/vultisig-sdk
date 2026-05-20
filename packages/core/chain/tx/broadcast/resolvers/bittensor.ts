@@ -11,12 +11,8 @@ type RpcResponse = {
   error?: { code: number; message: string }
 }
 
-export const broadcastBittensorTx: BroadcastTxResolver<
-  OtherChain.Bittensor
-> = async ({ chain, tx }) => {
-  const hexWithPrefix = ensureHexPrefix(
-    Buffer.from(tx.encoded).toString('hex')
-  )
+export const broadcastBittensorTx: BroadcastTxResolver<OtherChain.Bittensor> = async ({ chain, tx }) => {
+  const hexWithPrefix = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
 
   const response = await queryUrl<RpcResponse>(bittensorRpcUrl, {
     body: {
@@ -33,9 +29,7 @@ export const broadcastBittensorTx: BroadcastTxResolver<
     if (message.includes('Already Imported')) {
       return
     }
-    const err = new Error(
-      `Bittensor broadcast failed: ${message || `code ${response.error.code}`}`
-    )
+    const err = new Error(`Bittensor broadcast failed: ${message || `code ${response.error.code}`}`)
     await verifyBroadcastByHash({ chain, tx, error: err })
   }
 }

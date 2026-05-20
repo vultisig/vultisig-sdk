@@ -6,11 +6,7 @@ type JoinMpcSessionInput = {
   localPartyId: string
 }
 
-export const joinMpcSession = async ({
-  serverUrl,
-  sessionId,
-  localPartyId,
-}: JoinMpcSessionInput) =>
+export const joinMpcSession = async ({ serverUrl, sessionId, localPartyId }: JoinMpcSessionInput) =>
   queryUrl(`${serverUrl}/${sessionId}`, {
     body: [localPartyId],
     responseType: 'none',

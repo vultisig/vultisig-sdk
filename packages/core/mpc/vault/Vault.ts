@@ -3,10 +3,7 @@ import { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
 import { signingAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { MpcLib } from '@vultisig/core-mpc/mpcLib'
 
-export type VaultKeyShares = Record<
-  (typeof signingAlgorithms)[number],
-  string
->
+export type VaultKeyShares = Record<(typeof signingAlgorithms)[number], string>
 
 export type VaultAllKeyShares = {
   keyShares: VaultKeyShares
@@ -40,5 +37,4 @@ export type Vault = {
 export const getVaultId = (vault: Vault): string => vault.publicKeys.ecdsa
 
 export const isKeyImportVault = (vault: Vault): boolean =>
-  vault.chainPublicKeys !== undefined &&
-  Object.keys(vault.chainPublicKeys).length > 0
+  vault.chainPublicKeys !== undefined && Object.keys(vault.chainPublicKeys).length > 0

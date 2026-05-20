@@ -1,6 +1,4 @@
-export function getRawQueryParams<T extends Record<string, string>>(
-  url: string
-): T {
+export function getRawQueryParams<T extends Record<string, string>>(url: string): T {
   const paramsObject = {} as T
 
   // Find the start of the query parameters

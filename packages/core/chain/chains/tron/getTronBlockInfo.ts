@@ -54,11 +54,7 @@ const deriveRefBlockHashFromBlockID = (blockID: string): string => {
   return id.substring(16, 32)
 }
 
-const resolveRefBlock = async ({
-  nowNum,
-  refBlockBytesHex,
-  refBlockHashHex,
-}: ResolveRefBlockInput) => {
+const resolveRefBlock = async ({ nowNum, refBlockBytesHex, refBlockHashHex }: ResolveRefBlockInput) => {
   const low16 = parseInt(refBlockBytesHex, 16)
   // snap to the most recent block whose (blockNum % 65536) === low16
   let candidate = Math.floor(nowNum / 65536) * 65536 + low16
@@ -105,11 +101,8 @@ export async function getTronBlockInfo({
     blockHeaderTimestamp: currentBlock.block_header?.raw_data?.timestamp ?? 0,
     blockHeaderNumber: currentBlock.block_header?.raw_data?.number ?? 0,
     blockHeaderVersion: currentBlock.block_header?.raw_data?.version ?? 0,
-    blockHeaderTxTrieRoot:
-      currentBlock.block_header?.raw_data?.txTrieRoot ?? '',
-    blockHeaderParentHash:
-      currentBlock.block_header?.raw_data?.parentHash ?? '',
-    blockHeaderWitnessAddress:
-      currentBlock.block_header?.raw_data?.witness_address ?? '',
+    blockHeaderTxTrieRoot: currentBlock.block_header?.raw_data?.txTrieRoot ?? '',
+    blockHeaderParentHash: currentBlock.block_header?.raw_data?.parentHash ?? '',
+    blockHeaderWitnessAddress: currentBlock.block_header?.raw_data?.witness_address ?? '',
   }
 }

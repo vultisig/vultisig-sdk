@@ -1,7 +1,4 @@
-export const memoize = <T extends (...args: any[]) => any>(
-  func: T,
-  getKey?: (...args: any[]) => string
-): T => {
+export const memoize = <T extends (...args: any[]) => any>(func: T, getKey?: (...args: any[]) => string): T => {
   const cache = new Map<string, ReturnType<T>>()
 
   const memoizedFunc = (...args: Parameters<T>) => {

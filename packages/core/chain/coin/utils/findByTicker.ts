@@ -5,8 +5,5 @@ type FindByTickerInput<T extends Coin> = {
   ticker: string
 }
 
-export const findByTicker = <T extends Coin>({
-  coins,
-  ticker,
-}: FindByTickerInput<T>): T | null =>
+export const findByTicker = <T extends Coin>({ coins, ticker }: FindByTickerInput<T>): T | null =>
   coins.find(c => c.ticker === ticker) ?? null

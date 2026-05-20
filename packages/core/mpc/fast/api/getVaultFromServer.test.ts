@@ -45,15 +45,15 @@ describe('getVaultFromServer', () => {
 
   it('throws when the response is not a vault object', async () => {
     vi.mocked(queryUrl).mockResolvedValue(null)
-    await expect(
-      getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })
-    ).rejects.toThrow(/expected JSON object/)
+    await expect(getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })).rejects.toThrow(
+      /expected JSON object/
+    )
   })
 
   it('throws when required string fields are missing', async () => {
     vi.mocked(queryUrl).mockResolvedValue({ name: 'only-name' })
-    await expect(
-      getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })
-    ).rejects.toThrow(/public_key_ecdsa/)
+    await expect(getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })).rejects.toThrow(
+      /public_key_ecdsa/
+    )
   })
 })

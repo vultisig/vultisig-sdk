@@ -22,7 +22,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo', () =>
 }))
 
 // Partially mock terraClassicTax — stub the LCD fetchers, keep applyTerraClassicTax real.
-vi.mock('@vultisig/core-chain/chains/cosmos/terraClassicTax', async (importOriginal) => {
+vi.mock('@vultisig/core-chain/chains/cosmos/terraClassicTax', async importOriginal => {
   const real = await importOriginal<typeof import('@vultisig/core-chain/chains/cosmos/terraClassicTax')>()
   return {
     ...real,

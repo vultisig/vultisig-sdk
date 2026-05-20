@@ -29,5 +29,4 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   tron: broadcastTronTx,
 }
 
-export const broadcastTx: BroadcastTxResolver = input =>
-  resolvers[getChainKind(input.chain)](input)
+export const broadcastTx: BroadcastTxResolver = input => resolvers[getChainKind(input.chain)](input)

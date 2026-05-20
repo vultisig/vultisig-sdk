@@ -7,9 +7,7 @@
 export const compactEncode = (value: bigint | number): Uint8Array => {
   const n = BigInt(value)
   if (n < 0n) {
-    throw new Error(
-      `SCALE compact encoding does not support negative values: ${n}`
-    )
+    throw new Error(`SCALE compact encoding does not support negative values: ${n}`)
   }
   if (n < 64n) {
     return new Uint8Array([Number(n) << 2])
@@ -20,12 +18,7 @@ export const compactEncode = (value: bigint | number): Uint8Array => {
   }
   if (n < 1073741824n) {
     const v = (Number(n) << 2) | 2
-    return new Uint8Array([
-      v & 0xff,
-      (v >> 8) & 0xff,
-      (v >> 16) & 0xff,
-      (v >> 24) & 0xff,
-    ])
+    return new Uint8Array([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff])
   }
   // Big integer mode (prefix byte = number of bytes following - 4, shifted left 2, OR 3)
   const hex = n.toString(16)
@@ -41,20 +34,12 @@ export const compactEncode = (value: bigint | number): Uint8Array => {
 }
 
 /** Encode mortal era from block number and period */
-export const encodeMortalEra = (
-  blockNumber: number,
-  period: number
-): Uint8Array => {
-  const calPeriod = Math.min(
-    Math.max(4, Math.pow(2, Math.ceil(Math.log2(period)))),
-    65536
-  )
+export const encodeMortalEra = (blockNumber: number, period: number): Uint8Array => {
+  const calPeriod = Math.min(Math.max(4, Math.pow(2, Math.ceil(Math.log2(period)))), 65536)
   const phase = blockNumber % calPeriod
   const quantizeFactor = Math.max(1, calPeriod >> 12)
   const quantizedPhase = (phase / quantizeFactor) * quantizeFactor
-  const encoded =
-    Math.min(15, Math.max(1, Math.log2(calPeriod) - 1)) +
-    ((quantizedPhase / quantizeFactor) << 4)
+  const encoded = Math.min(15, Math.max(1, Math.log2(calPeriod) - 1)) + ((quantizedPhase / quantizeFactor) << 4)
   return new Uint8Array([encoded & 0xff, (encoded >> 8) & 0xff])
 }
 

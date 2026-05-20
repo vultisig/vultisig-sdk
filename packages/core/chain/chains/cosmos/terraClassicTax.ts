@@ -27,7 +27,6 @@
  */
 
 import { Chain } from '../../Chain'
-
 import { cosmosRpcUrl } from './cosmosRpcUrl'
 
 // ---------------------------------------------------------------------------
@@ -101,16 +100,13 @@ const parseDecToFixed18 = (s: string): bigint => {
   // exactly `10^18` and pass the cap guard below — fail-closed instead.
   // Codex round-1 P1.
   if (!/^[0-9]+(\.[0-9]{1,18})?$/.test(trimmed)) {
-    throw new Error(
-      `tax_rate: malformed Dec "${trimmed}" (expected digits with at most 18 fractional digits)`
-    )
+    throw new Error(`tax_rate: malformed Dec "${trimmed}" (expected digits with at most 18 fractional digits)`)
   }
   const [intPart, fracPart = ''] = trimmed.split('.')
   // intPart is guaranteed non-empty by the regex; fracPart is in [0, 18]
   // digits so no truncation is needed (it's exactly representable).
   const fracPadded = fracPart.padEnd(18, '0')
-  const value =
-    BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracPadded)
+  const value = BigInt(intPart) * TERRA_CLASSIC_TAX_DEC_SCALE + BigInt(fracPadded)
   // Cap at 100% (Dec value `1.0` on the 18-decimal scale = `10^18`). A
   // hostile or buggy LCD returning `tax_rate: '1000.0'` would otherwise
   // drain the user — real Terra rates are < 5%.
@@ -128,9 +124,7 @@ const parseDecToFixed18 = (s: string): bigint => {
  * undercalculate fees if a flaky LCD started returning `{}` after the chain
  * un-pauses the tax (causing post-sign "insufficient fee" rejections).
  */
-export async function getTerraClassicTaxRate(
-  opts: FetchOpts = {}
-): Promise<bigint> {
+export async function getTerraClassicTaxRate(opts: FetchOpts = {}): Promise<bigint> {
   type Raw = { tax_rate?: string }
   const raw = await lcdGetJson<Raw>(getTerraClassicTaxRateUrl(), opts)
   if (raw.tax_rate === undefined || raw.tax_rate === null) {
@@ -155,10 +149,7 @@ export async function getTerraClassicTaxRate(
  * tampered LCD that drops the field would otherwise turn a capped denom
  * into an uncapped one and overcharge the user. Codex round-1 P1.
  */
-export async function getTerraClassicTaxCap(
-  denom: string,
-  opts: FetchOpts = {}
-): Promise<bigint | null> {
+export async function getTerraClassicTaxCap(denom: string, opts: FetchOpts = {}): Promise<bigint | null> {
   type Raw = { tax_cap?: string | null }
   let raw: Raw
   try {
@@ -169,9 +160,7 @@ export async function getTerraClassicTaxCap(
     throw e
   }
   if (raw.tax_cap === undefined || raw.tax_cap === null) {
-    throw new Error(
-      `tax_cap: 200 response missing tax_cap for ${denom} — refusing to fail-open and overcharge`
-    )
+    throw new Error(`tax_cap: 200 response missing tax_cap for ${denom} — refusing to fail-open and overcharge`)
   }
   if (!/^[0-9]+$/.test(raw.tax_cap)) {
     throw new Error(`tax_cap: malformed bigint "${raw.tax_cap}"`)

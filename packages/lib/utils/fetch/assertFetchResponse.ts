@@ -16,8 +16,7 @@ export const assertFetchResponse = async (response: Response) => {
     const body = await asyncFallbackChain(
       async () => response.json(),
       async () => response.text(),
-      async () =>
-        `HTTP ${response.status} ${response.statusText || 'Error'}: Request failed for ${response.url}`
+      async () => `HTTP ${response.status} ${response.statusText || 'Error'}: Request failed for ${response.url}`
     )
     const msg = extractErrorMsg(body)
 

@@ -10,12 +10,7 @@ type SendMpcRelayMessageInput = {
   message: MpcRelayMessage
 }
 
-export const sendMpcRelayMessage = async ({
-  serverUrl,
-  sessionId,
-  message,
-  messageId,
-}: SendMpcRelayMessageInput) =>
+export const sendMpcRelayMessage = async ({ serverUrl, sessionId, message, messageId }: SendMpcRelayMessageInput) =>
   queryUrl(`${serverUrl}/message/${sessionId}`, {
     headers: withoutUndefinedFields({
       message_id: messageId,

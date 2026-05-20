@@ -5,9 +5,12 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxSimulationInputResolver } from '../resolver'
 
-export const getSolanaBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
-  OtherChain.Solana
-> = ({ payload, walletCore, chain, raw }) => {
+export const getSolanaBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<OtherChain.Solana> = ({
+  payload,
+  walletCore,
+  chain,
+  raw,
+}) => {
   const coin = assertField(payload, 'coin')
   if (raw && raw.length > 0) {
     return {

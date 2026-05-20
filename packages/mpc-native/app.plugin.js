@@ -1,8 +1,5 @@
-const path = require('node:path');
-const {
-  withAppBuildGradle,
-  createRunOncePlugin,
-} = require('@expo/config-plugins');
+const path = require('node:path')
+const { withAppBuildGradle, createRunOncePlugin } = require('@expo/config-plugins')
 
 /**
  * AGP 9+ refuses direct local .aar dependencies inside an Android library
@@ -17,20 +14,20 @@ const {
  * `plugins` array. The plugin is idempotent — a marker comment guards
  * against double-injection on repeated `expo prebuild` runs.
  */
-const MARKER = '// mpc-native-aars (managed by @vultisig/mpc-native)';
+const MARKER = '// mpc-native-aars (managed by @vultisig/mpc-native)'
 
 function buildBlock(repoRelativePath) {
   return [
     `    ${MARKER}`,
     `    implementation files("$rootDir/../${repoRelativePath}/dkls-release.aar")`,
     `    implementation files("$rootDir/../${repoRelativePath}/goschnorr-release.aar")`,
-  ].join('\n');
+  ].join('\n')
 }
 
 const withMpcNativeAars = config =>
   withAppBuildGradle(config, modConfig => {
     if (modConfig.modResults.contents.includes(MARKER)) {
-      return modConfig;
+      return modConfig
     }
 
     // Compute the repo-relative path from the consumer project root to the
@@ -44,30 +41,22 @@ const withMpcNativeAars = config =>
     // `files("$rootDir/../.../dkls-release.aar")` literal would be treated
     // as Groovy escape sequences — breaking Gradle evaluation at prebuild
     // time. Forward slashes work on all platforms inside Groovy strings.
-    const projectRoot = modConfig.modRequest.projectRoot;
-    const aarsDir = path
-      .relative(projectRoot, path.resolve(__dirname, 'android', 'libs'))
-      .replace(/\\/g, '/');
+    const projectRoot = modConfig.modRequest.projectRoot
+    const aarsDir = path.relative(projectRoot, path.resolve(__dirname, 'android', 'libs')).replace(/\\/g, '/')
 
     // Match the opening `dependencies {` line with any trailing whitespace
     // (LF or CRLF — Windows checkouts via core.autocrlf=true ship CRLF files).
-    const dependenciesRegex = /dependencies\s*\{[ \t]*\r?\n/;
+    const dependenciesRegex = /dependencies\s*\{[ \t]*\r?\n/
     if (!dependenciesRegex.test(modConfig.modResults.contents)) {
-      throw new Error(
-        '[@vultisig/mpc-native] could not find dependencies block in android/app/build.gradle',
-      );
+      throw new Error('[@vultisig/mpc-native] could not find dependencies block in android/app/build.gradle')
     }
 
     modConfig.modResults.contents = modConfig.modResults.contents.replace(
       dependenciesRegex,
-      match => `${match}${buildBlock(aarsDir)}\n`,
-    );
+      match => `${match}${buildBlock(aarsDir)}\n`
+    )
 
-    return modConfig;
-  });
+    return modConfig
+  })
 
-module.exports = createRunOncePlugin(
-  withMpcNativeAars,
-  '@vultisig/mpc-native',
-  '1.0.0',
-);
+module.exports = createRunOncePlugin(withMpcNativeAars, '@vultisig/mpc-native', '1.0.0')

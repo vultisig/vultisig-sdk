@@ -14,10 +14,7 @@ type Input = {
   vaultBaseUrl?: string
 }
 
-export const createVaultWithServer = async ({
-  vaultBaseUrl,
-  ...body
-}: Input) =>
+export const createVaultWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/create`, {
     body,
     responseType: 'none',

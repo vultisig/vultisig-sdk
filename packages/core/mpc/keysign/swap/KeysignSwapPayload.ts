@@ -13,15 +13,8 @@ type GeneralSwapPayload = Omit<OneInchSwapPayload, '$typeName'>
 
 export type KeysignSwapPayload = {
   [T in SwapType]: {
-    [K in T]: T extends 'native'
-      ? NativeSwapPayload
-      : T extends 'general'
-        ? GeneralSwapPayload
-        : never
+    [K in T]: T extends 'native' ? NativeSwapPayload : T extends 'general' ? GeneralSwapPayload : never
   }
 }[SwapType]
 
-export type CommKeysignSwapPayload = Exclude<
-  KeysignPayload['swapPayload'],
-  { case: undefined; value?: undefined }
->
+export type CommKeysignSwapPayload = Exclude<KeysignPayload['swapPayload'], { case: undefined; value?: undefined }>

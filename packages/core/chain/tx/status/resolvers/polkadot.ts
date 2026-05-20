@@ -5,8 +5,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { TxStatusResolver } from '../resolver'
 
-const subscanExtrinsicUrl =
-  'https://assethub-polkadot.api.subscan.io/api/scan/extrinsic'
+const subscanExtrinsicUrl = 'https://assethub-polkadot.api.subscan.io/api/scan/extrinsic'
 
 type SubscanExtrinsicResponse = {
   code: number
@@ -20,9 +19,7 @@ type SubscanExtrinsicResponse = {
   } | null
 }
 
-export const getPolkadotTxStatus: TxStatusResolver<
-  OtherChain.Polkadot
-> = async ({ hash }) => {
+export const getPolkadotTxStatus: TxStatusResolver<OtherChain.Polkadot> = async ({ hash }) => {
   const { data: response, error } = await attempt(
     queryUrl<SubscanExtrinsicResponse>(subscanExtrinsicUrl, {
       body: { hash },

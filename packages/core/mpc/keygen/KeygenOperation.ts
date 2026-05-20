@@ -1,7 +1,3 @@
 import { ReshareType } from './ReshareType'
 
-export type KeygenOperation =
-  | { create: true }
-  | { reshare: ReshareType }
-  | { keyimport: true }
-  | { singleKeygen: true }
+export type KeygenOperation = { create: true } | { reshare: ReshareType } | { keyimport: true } | { singleKeygen: true }

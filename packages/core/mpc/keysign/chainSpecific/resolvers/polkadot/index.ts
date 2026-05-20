@@ -8,15 +8,15 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refinePolkadotChainSpecific } from './refine'
 
-export const getPolkadotChainSpecific: GetChainSpecificResolver<
-  'polkadotSpecific'
-> = async ({ keysignPayload, walletCore }) => {
+export const getPolkadotChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({
+  keysignPayload,
+  walletCore,
+}) => {
   const client = await getPolkadotClient()
 
   const { address } = getKeysignCoin(keysignPayload)
 
-  const { specVersion, transactionVersion } =
-    await client.rpc.state.getRuntimeVersion()
+  const { specVersion, transactionVersion } = await client.rpc.state.getRuntimeVersion()
 
   const chainSpecific = create(PolkadotSpecificSchema, {
     recentBlockHash: (await client.rpc.chain.getBlockHash()).toHex(),

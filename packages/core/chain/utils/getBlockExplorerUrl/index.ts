@@ -53,11 +53,7 @@ const blockExplorerBaseUrl: Record<Chain, string> = {
   [Chain.QBTC]: 'https://explorer.qbtc-testnet.io',
 }
 
-export const getBlockExplorerUrl = ({
-  chain,
-  entity,
-  value,
-}: GetBlockExplorerUrlInput): string => {
+export const getBlockExplorerUrl = ({ chain, entity, value }: GetBlockExplorerUrlInput): string => {
   const baseUrl = blockExplorerBaseUrl[chain]
   return match(entity, {
     address: () =>

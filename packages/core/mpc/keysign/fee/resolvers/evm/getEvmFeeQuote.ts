@@ -43,17 +43,10 @@ export const getEvmFeeQuote = async ({
   const client = getEvmClient(chain)
   const amount = getKeysignAmount(keysignPayload)
   const receiver = keysignPayload.toAddress
-  const data = keysignPayload.memo
-    ? formatDataToHex(keysignPayload.memo)
-    : undefined
+  const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
 
   const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
-    bigIntMax(
-      ...without(
-        [estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit],
-        undefined
-      )
-    )
+    bigIntMax(...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined))
 
   const getBaseFee = async () => baseFeeMultiplier(await getEvmBaseFee(chain))
 
@@ -81,11 +74,7 @@ export const getEvmFeeQuote = async ({
             return null
           }
 
-          const txValue = value?.startsWith('0x')
-            ? BigInt(value)
-            : value
-              ? BigInt(value)
-              : 0n
+          const txValue = value?.startsWith('0x') ? BigInt(value) : value ? BigInt(value) : 0n
 
           return {
             to: to as `0x${string}`,

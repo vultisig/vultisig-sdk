@@ -10,14 +10,10 @@ type SolanaBlockaidScanResponse = {
   }
 }
 
-export const getSolanaTxBlockaidSimulation: BlockaidTxSimulationResolver<
-  typeof Chain.Solana,
-  'solana'
-> = async ({ data }) => {
-  const { result } = await queryBlockaid<SolanaBlockaidScanResponse>(
-    '/solana/message/scan',
-    data
-  )
+export const getSolanaTxBlockaidSimulation: BlockaidTxSimulationResolver<typeof Chain.Solana, 'solana'> = async ({
+  data,
+}) => {
+  const { result } = await queryBlockaid<SolanaBlockaidScanResponse>('/solana/message/scan', data)
 
   return result.simulation
 }

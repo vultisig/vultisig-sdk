@@ -24,16 +24,8 @@ import { Buffer } from 'buffer'
  * which produces file:// URLs when running under tsx/Node.
  */
 const nativeFetch = globalThis.fetch
-globalThis.fetch = async (
-  input: RequestInfo | URL,
-  init?: RequestInit
-): Promise<Response> => {
-  const url =
-    typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.href
-        : input.url
+globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
   if (url.startsWith('file://')) {
     const buffer = await readFile(fileURLToPath(url))
     return new Response(new Uint8Array(buffer), {
@@ -107,17 +99,11 @@ async function parseKeysignQrUrl(url: string) {
 }
 
 /** Poll GET /start/{sessionId} until the session starts. */
-async function waitForSessionStart(
-  serverUrl: string,
-  sessionId: string,
-  timeoutMs = 120_000
-): Promise<string[]> {
+async function waitForSessionStart(serverUrl: string, sessionId: string, timeoutMs = 120_000): Promise<string[]> {
   const t0 = Date.now()
   while (Date.now() - t0 < timeoutMs) {
     try {
-      const signers = await queryUrl<string[]>(
-        `${serverUrl}/start/${sessionId}`
-      )
+      const signers = await queryUrl<string[]>(`${serverUrl}/start/${sessionId}`)
       if (signers?.length) return signers
     } catch {
       /* not started yet */
@@ -133,9 +119,7 @@ async function main() {
   const vaultPassword = process.env.VAULT_PASSWORD
 
   if (!qrUrl || !vaultSharePath || !vaultPassword) {
-    console.error(
-      'Missing required env vars: COSIGN_QR_URL, VAULT_SHARE_PATH, VAULT_PASSWORD'
-    )
+    console.error('Missing required env vars: COSIGN_QR_URL, VAULT_SHARE_PATH, VAULT_PASSWORD')
     process.exit(1)
   }
 
@@ -151,17 +135,12 @@ async function main() {
   console.log(`   Session: ${keysignMsg.sessionId}`)
   console.log(`   Relay: ${keysignMsg.useVultisigRelay}`)
 
-  const serverUrl = keysignMsg.useVultisigRelay
-    ? relayUrl
-    : 'http://localhost:18080'
+  const serverUrl = keysignMsg.useVultisigRelay ? relayUrl : 'http://localhost:18080'
 
   let keysignPayload = keysignMsg.keysignPayload
   if (!keysignPayload && keysignMsg.payloadId) {
     console.log('\n4. Fetching payload from server...')
-    const raw: string = await queryUrl(
-      `${serverUrl}/payload/${keysignMsg.payloadId}`,
-      { responseType: 'text' }
-    )
+    const raw: string = await queryUrl(`${serverUrl}/payload/${keysignMsg.payloadId}`, { responseType: 'text' })
     keysignPayload = fromBinary(KeysignPayloadSchema, await decompressData(raw))
   }
   if (!keysignPayload) throw new Error('No keysign payload found')
@@ -186,14 +165,10 @@ async function main() {
   })
   const msgs = inputs
     .flatMap(txInputData =>
-      getPreSigningHashes({ txInputData, walletCore, chain, keysignPayload }).map(h =>
-        Buffer.from(h).toString('hex')
-      )
+      getPreSigningHashes({ txInputData, walletCore, chain, keysignPayload }).map(h => Buffer.from(h).toString('hex'))
     )
     .sort()
-  console.log(
-    `   Hashes (${msgs.length}): ${msgs.map(h => h.slice(0, 20) + '...').join(', ')}`
-  )
+  console.log(`   Hashes (${msgs.length}): ${msgs.map(h => h.slice(0, 20) + '...').join(', ')}`)
 
   const chainKind = getChainKind(chain)
   const signatureAlgorithm = signatureAlgorithms[chainKind]
@@ -217,8 +192,7 @@ async function main() {
   console.log(`   Started: ${signers.join(', ')}`)
 
   const peers = signers.filter(s => s !== vault.localPartyId)
-  const keyShare =
-    vault.keyShares[signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa']
+  const keyShare = vault.keyShares[signatureAlgorithm === 'ecdsa' ? 'ecdsa' : 'eddsa']
 
   console.log(`\n9. Keysigning ${msgs.length} message(s)...`)
   for (let i = 0; i < msgs.length; i++) {

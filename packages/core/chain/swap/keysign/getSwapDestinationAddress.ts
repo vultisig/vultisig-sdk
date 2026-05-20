@@ -12,10 +12,7 @@ type GetSwapDestinationAddressInput = {
   fromCoin: AccountCoin
 }
 
-export const getSwapDestinationAddress = ({
-  quote,
-  fromCoin,
-}: GetSwapDestinationAddressInput): string =>
+export const getSwapDestinationAddress = ({ quote, fromCoin }: GetSwapDestinationAddressInput): string =>
   matchRecordUnion<SwapQuoteResult, string>(quote.quote, {
     general: quote =>
       matchRecordUnion<GeneralSwapTx, string>(quote.tx, {
@@ -23,11 +20,8 @@ export const getSwapDestinationAddress = ({
         solana: () => '',
       }),
     native: quote => {
-      const isErc20 =
-        isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)
+      const isErc20 = isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)
 
-      return (
-        (isErc20 ? quote.router : quote.inbound_address) || fromCoin.address
-      )
+      return (isErc20 ? quote.router : quote.inbound_address) || fromCoin.address
     },
   })

@@ -6,10 +6,7 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
-export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({
-  chain,
-  tx,
-}) => {
+export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({ chain, tx }) => {
   const { serialized } = tx
   const { tx_bytes } = JSON.parse(serialized) as { tx_bytes: string }
 
@@ -37,9 +34,7 @@ export const broadcastQbtcTx: BroadcastTxResolver<typeof Chain.QBTC> = async ({
   }
   const { error } = await attempt(async () => {
     if (data.tx_response?.code && data.tx_response.code !== 0) {
-      throw new Error(
-        `QBTC tx error: ${data.tx_response.raw_log || data.tx_response.log}`
-      )
+      throw new Error(`QBTC tx error: ${data.tx_response.raw_log || data.tx_response.log}`)
     }
   })
 

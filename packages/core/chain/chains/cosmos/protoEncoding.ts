@@ -81,14 +81,8 @@ const encodeFieldTag = (fieldNumber: number, wireType: WireType): Uint8Array => 
   // be wrong (or negative) for the upper half of the legal range.
   // Compute in bigint space to keep the full range correct, even though
   // the only current call sites use low field numbers.
-  if (
-    !Number.isInteger(fieldNumber) ||
-    fieldNumber < 1 ||
-    fieldNumber >= 2 ** 29
-  ) {
-    throw new RangeError(
-      `encodeFieldTag: fieldNumber must be in [1, 2^29 - 1], got ${fieldNumber}`
-    )
+  if (!Number.isInteger(fieldNumber) || fieldNumber < 1 || fieldNumber >= 2 ** 29) {
+    throw new RangeError(`encodeFieldTag: fieldNumber must be in [1, 2^29 - 1], got ${fieldNumber}`)
   }
   return varintBig((BigInt(fieldNumber) << 3n) | BigInt(wireType))
 }
@@ -106,11 +100,7 @@ const encodeFieldTag = (fieldNumber: number, wireType: WireType): Uint8Array => 
  * Used by IBC-transfer encoders (`MsgTransfer`, the inner `Height` submessage)
  * where some fields must be emitted even at the proto3 default value.
  */
-export const protoField = (
-  fieldNumber: number,
-  wireType: WireType,
-  data: Uint8Array
-): Uint8Array => {
+export const protoField = (fieldNumber: number, wireType: WireType, data: Uint8Array): Uint8Array => {
   const tag = encodeFieldTag(fieldNumber, wireType)
   if (wireType === WireType.LengthDelimited) {
     const length = varintBig(BigInt(data.length))
@@ -131,10 +121,7 @@ export const protoVarint = (fieldNumber: number, value: bigint): Uint8Array => {
 }
 
 /** Appends a length-delimited field (wire type 2) for raw bytes. */
-export const protoBytes = (
-  fieldNumber: number,
-  data: Uint8Array
-): Uint8Array => {
+export const protoBytes = (fieldNumber: number, data: Uint8Array): Uint8Array => {
   if (data.length === 0) return new Uint8Array(0)
   return protoField(fieldNumber, WireType.LengthDelimited, data)
 }

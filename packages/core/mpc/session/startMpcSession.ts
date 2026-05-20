@@ -7,11 +7,7 @@ type StartMpcSessionInput = {
   devices: string[]
 }
 
-export const startMpcSession = async ({
-  serverUrl,
-  sessionId,
-  devices,
-}: StartMpcSessionInput) =>
+export const startMpcSession = async ({ serverUrl, sessionId, devices }: StartMpcSessionInput) =>
   queryUrl(`${serverUrl}/start/${sessionId}`, {
     body: devices,
     responseType: 'none',

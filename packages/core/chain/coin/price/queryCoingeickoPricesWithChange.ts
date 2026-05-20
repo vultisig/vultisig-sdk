@@ -19,10 +19,7 @@ export type CoinPriceWithChange = {
  *   { ethereum: { usd: 2067.1, usd_24h_change: -3.97 }, ... }
  * The change key is `<currency>_24h_change`.
  */
-type CoinPricesWithChangeResponse = Record<
-  string,
-  Record<string, number | undefined>
->
+type CoinPricesWithChangeResponse = Record<string, Record<string, number | undefined>>
 
 type Input = {
   url: string

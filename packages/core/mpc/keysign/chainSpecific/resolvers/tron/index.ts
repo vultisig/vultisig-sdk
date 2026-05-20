@@ -10,9 +10,7 @@ import { getTrc20TransferFee } from './fee'
 
 const nativeTronSendFee = 800000n
 
-export const getTronChainSpecific: GetChainSpecificResolver<
-  'tronSpecific'
-> = async ({
+export const getTronChainSpecific: GetChainSpecificResolver<'tronSpecific'> = async ({
   keysignPayload,
   thirdPartyGasLimitEstimation,
   expiration,

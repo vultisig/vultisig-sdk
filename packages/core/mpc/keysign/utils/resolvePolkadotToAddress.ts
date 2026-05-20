@@ -9,10 +9,7 @@ type ResolvePolkadotToAddressInput = {
   walletCore: WalletCore
 }
 
-export const resolvePolkadotToAddress = ({
-  keysignPayload,
-  walletCore,
-}: ResolvePolkadotToAddressInput): string => {
+export const resolvePolkadotToAddress = ({ keysignPayload, walletCore }: ResolvePolkadotToAddressInput): string => {
   const { toAddress } = keysignPayload
   const { chain, address } = getKeysignCoin(keysignPayload)
 
