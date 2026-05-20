@@ -17,6 +17,7 @@ export type CoinMetadata = {
   decimals: number
   ticker: string
   logo?: string
+  isHidden?: boolean
 }
 
 export type Coin<T extends Chain = Chain> = CoinKey<T> & CoinMetadata
@@ -31,6 +32,7 @@ export const coinMetadataFields: (keyof Coin)[] = [
   'decimals',
   'ticker',
   'logo',
+  'isHidden',
 ]
 
 export type CoinAmount = {
