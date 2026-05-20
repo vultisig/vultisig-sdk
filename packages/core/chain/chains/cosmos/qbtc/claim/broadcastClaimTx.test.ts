@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { broadcastClaimTx } from './broadcastClaimTx'
+import { broadcastClaimTx, waitForClaimTxResult } from './broadcastClaimTx'
 
 const originalFetch = globalThis.fetch
 
@@ -201,5 +201,49 @@ describe('broadcastClaimTx', () => {
     await expect(
       broadcastClaimTx({ txBytesBase64, txHash, ...fastPolling })
     ).rejects.toThrow('no valid claimable UTXOs found')
+  })
+})
+
+describe('waitForClaimTxResult', () => {
+  it('parses claim_with_proof event for an already-broadcast tx', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      includedSuccess({
+        total_amount: '12345',
+        utxos_claimed: '3',
+        utxos_skipped: '1',
+      })
+    ) as typeof fetch
+
+    const result = await waitForClaimTxResult({ txHash, ...fastPolling })
+
+    expect(result).toEqual({
+      totalAmountClaimed: 12345n,
+      utxosClaimed: 3,
+      utxosSkipped: 1,
+      txHash,
+    })
+  })
+
+  it('retries on 404 until included', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(errorResponse(404, 'tx not found'))
+      .mockResolvedValueOnce(includedSuccess({ total_amount: '7' }))
+    globalThis.fetch = fetchMock
+
+    const result = await waitForClaimTxResult({ txHash, ...fastPolling })
+
+    expect(result.totalAmountClaimed).toBe(7n)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws if the chain returned a non-zero code', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      okJson({ tx_response: { code: 5, raw_log: 'address mismatch' } })
+    ) as typeof fetch
+
+    await expect(
+      waitForClaimTxResult({ txHash, ...fastPolling })
+    ).rejects.toThrow(/QBTC claim tx error: address mismatch/)
   })
 })

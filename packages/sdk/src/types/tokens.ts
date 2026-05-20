@@ -27,6 +27,7 @@ export type DiscoveredToken = {
   decimals: number
   logo?: string
   balance?: string
+  isHidden?: boolean
 }
 
 /** Parameters for price lookup */
@@ -39,3 +40,13 @@ export type CoinPricesParams = {
 
 /** Price lookup result: id -> price in fiat */
 export type CoinPricesResult = Record<string, number>
+
+/** One coin's spot price plus optional 24h % change. */
+export type CoinPriceWithChange = {
+  price: number
+  /** 24h % change; absent when CoinGecko has no datum for the id. */
+  change24h?: number
+}
+
+/** Price+change lookup result: id -> { price, change24h? } */
+export type CoinPricesWithChangeResult = Record<string, CoinPriceWithChange>

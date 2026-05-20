@@ -211,6 +211,35 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// Cosmos staking + distribution module (LCD queries — read-only,
+// vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
+// generic entry (src/index.ts); the React Native allow-list omitted
+// these so RN consumers couldn't read delegations/rewards/unbonding/
+// vesting and had to hand-roll an LCD client. Signing primitives still
+// ship via `chains.cosmos.buildCosmosStakingTx` (already RN-exported).
+export type {
+  ContinuousVestingAccount,
+  Coin as CosmosStakingCoin,
+  DelayedVestingAccount,
+  Delegation,
+  DelegatorReward,
+  DelegatorRewardsResponse,
+  PeriodicVestingAccount,
+  UnbondingDelegation,
+  UnbondingEntry,
+  VestingAccount,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+export {
+  getAuthAccountUrl,
+  getCosmosDelegations,
+  getCosmosDelegatorRewards,
+  getCosmosUnbondingDelegations,
+  getCosmosVestingAccount,
+  getDelegationsUrl,
+  getDelegatorRewardsUrl,
+  getUnbondingDelegationsUrl,
+} from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
+
 // Token utilities
 export type {
   Coin,
