@@ -1,4 +1,4 @@
-import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain, CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 
 import { areEqualCoins, CoinKey } from '../../coin/Coin'
 
@@ -27,4 +27,61 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
   }
 
   return cosmosGasLimitRecord[coin.chain]
+}
+
+/**
+ * Per-chain base gas limits for native Cosmos staking msgs
+ * (`MsgDelegate` / `MsgUndelegate` / `MsgBeginRedelegate` /
+ * `MsgWithdrawDelegatorReward`). These run measurably hotter than the
+ * `getCosmosGasLimit` defaults, which are calibrated for `bank.MsgSend` and
+ * `ibc.MsgTransfer`.
+ *
+ * TerraClassic's classic-terra fork has a known gas-accounting quirk:
+ * `MsgDelegate` runs out of gas at almost exactly the requested limit
+ * (`gasUsed = gasWanted + ~500`, repeatedly observed at multiple limits).
+ * The `ValuePerByte` location in the error points at the gas meter
+ * charging for byte writes inside the treasury / tax post-handler, which
+ * isn't reflected in the standard SDK gas estimate. The pragmatic fix is
+ * a generous over-allocation — fees only pay for `gas_used`, so
+ * overestimating costs nothing on success but prevents the failure mode.
+ */
+const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
+  [Chain.Cosmos]: 350_000n,
+  [Chain.Osmosis]: 400_000n,
+  [Chain.Kujira]: 350_000n,
+  [Chain.Dydx]: 350_000n,
+  [Chain.Noble]: 350_000n,
+  [Chain.Akash]: 350_000n,
+  [Chain.Terra]: 500_000n,
+  [Chain.TerraClassic]: 2_000_000n,
+}
+
+type GetCosmosStakingGasLimitInput = {
+  chain: IbcEnabledCosmosChain
+  /**
+   * Number of msgs in the tx body. Bulk `claim_rewards` packs N
+   * `MsgWithdrawDelegatorReward` into one tx, one per delegation; each
+   * extra msg adds roughly a quarter of the base cost. Defaults to 1,
+   * which is correct for delegate / undelegate / redelegate (single-msg).
+   */
+  msgCount?: number
+}
+
+/**
+ * Returns the gas limit a Cosmos staking tx should request for the given
+ * chain. Overestimating is safe — the chain only charges for `gas_used` —
+ * but underestimating runs out of gas mid-execution, so we leave headroom
+ * and scale by msg count.
+ *
+ * `msgCount` must be a finite non-negative integer. `BigInt()` throws a
+ * `RangeError` on floats / NaN / Infinity, so guard at the boundary with
+ * a clearer message before the conversion.
+ */
+export const getCosmosStakingGasLimit = ({ chain, msgCount = 1 }: GetCosmosStakingGasLimitInput): bigint => {
+  if (!Number.isInteger(msgCount) || msgCount < 0) {
+    throw new Error(`getCosmosStakingGasLimit: msgCount must be a non-negative integer, got ${msgCount}`)
+  }
+  const base = cosmosStakingGasLimitRecord[chain]
+  const n = BigInt(Math.max(1, msgCount))
+  return base + ((n - 1n) * base) / 4n
 }
