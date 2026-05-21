@@ -85,6 +85,7 @@
     "quality:contracts": "node scripts/quality-contracts.mjs",
     "cli:interactive": "yarn workspace @vultisig/cli repl",
     "mcp:build": "yarn workspace @vultisig/mcp build",
+    "proto:regen:core-mpc": "node scripts/regenerate-core-mpc-protos.mjs",
     "docs": "typedoc --options .config/typedoc.json",
     "docs:watch": "typedoc --options .config/typedoc.json --watch",
     "changeset": "changeset",

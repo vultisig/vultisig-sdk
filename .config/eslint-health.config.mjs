@@ -9,7 +9,7 @@ export default [
       sonarjs,
     },
     rules: {
-      'sonarjs/cognitive-complexity': ['error', 60],
+      'sonarjs/cognitive-complexity': ['error', 35],
       'sonarjs/no-all-duplicated-branches': 'error',
       'sonarjs/no-duplicated-branches': 'error',
       'sonarjs/no-identical-conditions': 'error',
