@@ -211,6 +211,99 @@ export type DecodedAddress = {
   type: UtxoScriptKind
 }
 
+const CASHADDR_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+const P2SH_BASE58_VERSIONS = new Set<number>([0x05, 0x32, 0x16, 0x10])
+
+function decodeBech32Address(address: string): DecodedAddress | undefined {
+  let bech32Decoded: ReturnType<typeof bech32.decode> | undefined
+  try {
+    bech32Decoded = bech32.decode(address as `${string}1${string}`)
+  } catch {
+    return undefined
+  }
+
+  if (bech32Decoded.words[0] !== 0) return undefined
+
+  const program = new Uint8Array(bech32.fromWords(bech32Decoded.words.slice(1)))
+  if (program.length === 20) return { pubKeyHash: program, type: 'p2wpkh' }
+  if (program.length === 32) {
+    throw new Error(`Cannot decode address: ${address} — P2WSH (32-byte witness v0) is not supported by this SDK build`)
+  }
+  throw new Error(`Cannot decode address: ${address} — unexpected witness v0 program length ${program.length}`)
+}
+
+function cashAddrPayloadToBytes(payload5: number[]): number[] {
+  let acc = 0
+  let bits = 0
+  const result: number[] = []
+  for (const v of payload5) {
+    acc = (acc << 5) | v
+    bits += 5
+    while (bits >= 8) {
+      bits -= 8
+      result.push((acc >> bits) & 0xff)
+    }
+  }
+  return result
+}
+
+function decodeCashAddrAddress(address: string): DecodedAddress | undefined {
+  try {
+    const cashAddr = address.includes(':') ? address : `bitcoincash:${address}`
+    const [prefix, payload] = cashAddr.split(':') as [string, string]
+    if (prefix !== 'bitcoincash' || !payload) return undefined
+
+    const data5: number[] = []
+    for (const c of payload) {
+      const idx = CASHADDR_CHARSET.indexOf(c)
+      if (idx === -1) throw new Error('invalid cashaddr char')
+      data5.push(idx)
+    }
+    // Verify the polymod checksum BEFORE stripping it. Skipping this step
+    // means any mistyped address with valid base32 chars decodes to a
+    // garbage pubKeyHash and the tx is signed to an address the user
+    // never intended. Reference:
+    //   https://reference.cash/protocol/blockchain/encoding/cashaddr
+    if (!verifyCashAddrChecksum(prefix, data5)) throw new Error('CashAddr checksum mismatch')
+
+    const result = cashAddrPayloadToBytes(data5.slice(0, -8))
+    if (result.length < 21) return undefined
+    if (result[0] === 0x00) return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2pkh' }
+    if (result[0] === 0x08) return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2sh' }
+  } catch {
+    /* not cashaddr */
+  }
+
+  return undefined
+}
+
+function decodeBase58Address(address: string, chain: UtxoChainName): DecodedAddress | undefined {
+  let decoded: Uint8Array | undefined
+  try {
+    decoded = bs58check.decode(address)
+  } catch {
+    return undefined
+  }
+
+  // Zcash t-addresses use a 2-byte version prefix:
+  //   0x1c, 0xb8 → t1... (P2PKH)
+  //   0x1c, 0xbd → t3... (P2SH)
+  if (chain === 'Zcash' && decoded.length === 22 && decoded[0] === 0x1c) {
+    if (decoded[1] === 0xb8) return { pubKeyHash: decoded.slice(2), type: 'p2pkh' }
+    if (decoded[1] === 0xbd) return { pubKeyHash: decoded.slice(2), type: 'p2sh' }
+  }
+
+  const version = decoded[0]
+  const type: UtxoScriptKind = P2SH_BASE58_VERSIONS.has(version!) ? 'p2sh' : 'p2pkh'
+  const pubKeyHash = decoded.slice(1)
+  if (pubKeyHash.length !== 20) {
+    throw new Error(
+      `Cannot decode address: ${address} — payload length ${pubKeyHash.length} bytes for chain ${chain} (expected 20)`
+    )
+  }
+  return { pubKeyHash, type }
+}
+
 /**
  * Decode a UTXO address into its 20-byte pubKeyHash + script type.
  * Recognises bech32 (BTC/LTC native segwit), CashAddr (BCH), and base58check
@@ -223,88 +316,12 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   // because the caller asked us to encode a script that this SDK can't yet
   // build — silently treating the 32-byte witness program as a 20-byte
   // P2WPKH would lock funds under a hash matching no spendable script.
-  let bech32Decoded: ReturnType<typeof bech32.decode> | undefined
-  try {
-    bech32Decoded = bech32.decode(address as `${string}1${string}`)
-  } catch {
-    /* not bech32 — fall through to other encodings */
-  }
-  if (bech32Decoded) {
-    if (bech32Decoded.words[0] === 0) {
-      const program = new Uint8Array(bech32.fromWords(bech32Decoded.words.slice(1)))
-      if (program.length === 20) {
-        return { pubKeyHash: program, type: 'p2wpkh' }
-      }
-      if (program.length === 32) {
-        // BIP-141 witness v0 with a 32-byte program is P2WSH. Building a
-        // P2WPKH locking script over a 32-byte hash silently encodes the
-        // wrong scriptPubKey (`OP_0 <32-byte>` is valid but is a P2WSH
-        // commit, not P2WPKH); the SDK would then treat it as P2WPKH at
-        // sighash time, mis-derive the scriptCode, and produce a tx that
-        // can't be unlocked. Reject explicitly so the caller surfaces the
-        // gap rather than locking funds.
-        throw new Error(
-          `Cannot decode address: ${address} — P2WSH (32-byte witness v0) is not supported by this SDK build`
-        )
-      }
-      throw new Error(`Cannot decode address: ${address} — unexpected witness v0 program length ${program.length}`)
-    }
-    // witness v1+ (taproot etc) is not supported here either
-  }
+  const bech32Decoded = decodeBech32Address(address)
+  if (bech32Decoded) return bech32Decoded
 
   // CashAddr (BCH bitcoincash:q...)
-  try {
-    const cashAddr = address.includes(':') ? address : `bitcoincash:${address}`
-    const [prefix, payload] = cashAddr.split(':') as [string, string]
-    if (prefix === 'bitcoincash' && payload) {
-      const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
-      const data5: number[] = []
-      for (const c of payload) {
-        const idx = CHARSET.indexOf(c)
-        if (idx === -1) throw new Error('invalid cashaddr char')
-        data5.push(idx)
-      }
-      // Verify the polymod checksum BEFORE stripping it. Skipping this step
-      // means any mistyped address with valid base32 chars decodes to a
-      // garbage pubKeyHash and the tx is signed to an address the user
-      // never intended. Reference:
-      //   https://reference.cash/protocol/blockchain/encoding/cashaddr
-      if (!verifyCashAddrChecksum(prefix, data5)) {
-        throw new Error('CashAddr checksum mismatch')
-      }
-      const payload5 = data5.slice(0, -8) // strip 8-symbol checksum (now verified)
-      let acc = 0
-      let bits = 0
-      const result: number[] = []
-      for (const v of payload5) {
-        acc = (acc << 5) | v
-        bits += 5
-        while (bits >= 8) {
-          bits -= 8
-          result.push((acc >> bits) & 0xff)
-        }
-      }
-      // CashAddr type byte (high nibble of result[0]):
-      //   0x00 → P2PKH (q...)
-      //   0x08 → P2SH  (p...)
-      // see https://reference.cash/protocol/blockchain/encoding/cashaddr
-      if (result.length >= 21) {
-        if (result[0] === 0x00) {
-          return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2pkh' }
-        }
-        if (result[0] === 0x08) {
-          // BCH P2SH — without this branch the address falls all the way to
-          // the bottom-of-function `Cannot decode` throw. Worse, if a future
-          // change ever made the fallthrough silent, a `bitcoincash:p...`
-          // deposit address would re-encode as P2PKH and lock funds. Add the
-          // branch + a regression test pinning the hash slice.
-          return { pubKeyHash: new Uint8Array(result.slice(1, 21)), type: 'p2sh' }
-        }
-      }
-    }
-  } catch {
-    /* not cashaddr */
-  }
+  const cashAddrDecoded = decodeCashAddrAddress(address)
+  if (cashAddrDecoded) return cashAddrDecoded
 
   // base58check (DOGE D..., Zcash t1..., legacy BTC 1...)
   // Decode the base58check payload OUTSIDE the chain-specific branching so we
@@ -314,49 +331,8 @@ export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName)
   // under a generic catch silently re-routes wrong-chain-paste cases (e.g. a
   // 22-byte Zcash t-address under chain='Dogecoin') back to the same vague
   // "Cannot decode address" message instead of surfacing the length mismatch.
-  let base58Decoded: Uint8Array | undefined
-  try {
-    base58Decoded = bs58check.decode(address)
-  } catch {
-    /* not base58 — fall through to bottom-of-function throw */
-  }
-  if (base58Decoded) {
-    const decoded = base58Decoded
-    // Zcash t-addresses use a 2-byte version prefix:
-    //   0x1c, 0xb8 → t1... (P2PKH)
-    //   0x1c, 0xbd → t3... (P2SH)
-    if (chain === 'Zcash' && decoded.length === 22 && decoded[0] === 0x1c) {
-      if (decoded[1] === 0xb8) return { pubKeyHash: decoded.slice(2), type: 'p2pkh' }
-      if (decoded[1] === 0xbd) return { pubKeyHash: decoded.slice(2), type: 'p2sh' }
-    }
-    // Single-byte version prefixes:
-    //   BTC:  0x00 (P2PKH, 1...) | 0x05 (P2SH, 3...)
-    //   LTC:  0x30 (P2PKH, L...) | 0x32 (P2SH, M...) — modern LTC P2SH; 0x05 also accepted by some hosts
-    //   DOGE: 0x1e (P2PKH, D...) | 0x16 (P2SH, A.../9...)
-    //   DASH: 0x4c (P2PKH, X...) | 0x10 (P2SH, 7...)
-    // Any unknown version byte falls through to P2PKH for backward compat with
-    // the previous behaviour — known-P2SH gets explicit handling so the SDK
-    // doesn't silently re-encode a P2SH deposit address as P2PKH (which would
-    // lock funds).
-    const version = decoded[0]
-    const P2SH_VERSIONS = new Set<number>([0x05, 0x32, 0x16, 0x10])
-    const type: UtxoScriptKind = P2SH_VERSIONS.has(version!) ? 'p2sh' : 'p2pkh'
-    // Validate the resulting pubKeyHash is exactly 20 bytes (RIPEMD160). The
-    // base58check fallback is reached when the chain-specific branches above
-    // (e.g. Zcash's 22-byte 0x1c-prefix) don't match. A wrong-chain paste —
-    // e.g. a Zcash t-address (22-byte payload) decoded under chain='Dogecoin'
-    // — would fall through here and return a 21-byte slice. `buildScriptPubKey`
-    // hardcodes `OP_PUSH_20`, so the resulting locking script
-    // (`76 a9 14 <20 of 21 bytes> <leftover> 88 ac`) is non-standard and
-    // unspendable: funds sent to it lock on chain. Reject explicitly.
-    const pubKeyHash = decoded.slice(1)
-    if (pubKeyHash.length !== 20) {
-      throw new Error(
-        `Cannot decode address: ${address} — payload length ${pubKeyHash.length} bytes for chain ${chain} (expected 20)`
-      )
-    }
-    return { pubKeyHash, type }
-  }
+  const base58Decoded = decodeBase58Address(address, chain)
+  if (base58Decoded) return base58Decoded
 
   throw new Error(`Cannot decode address: ${address}`)
 }

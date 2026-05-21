@@ -25,11 +25,19 @@ Edit `packages/core/` and `packages/lib/` directly in this repository. Use works
 
 ## Generated protobuf (`packages/core/mpc/types/**/*_pb.ts`)
 
-TypeScript under `packages/core/mpc/types/**` whose names end in `_pb.ts` is emitted by **protoc-gen-es** from `.proto` sources maintained in [vultisig/commondata](https://github.com/vultisig/commondata) (see each file's `@generated from file …` header and the embedded `github.com/vultisig/commondata/go/...` module path in generated descriptors). **Do not hand-edit those files**; change the upstream `.proto` and regenerate, then land the updated outputs in this repo.
+TypeScript under `packages/core/mpc/types/**` whose names end in `_pb.ts` is emitted by **protoc-gen-es**. Files under `packages/core/mpc/types/vultisig/**` come from `.proto` sources maintained in [vultisig/commondata](https://github.com/vultisig/commondata) (see each file's `@generated from file …` header and embedded `github.com/vultisig/commondata/go/...` module path). Files under `packages/core/mpc/types/plugin/**` currently come from [vultisig/recipes](https://github.com/vultisig/recipes) plugin policy protos and intentionally keep their `protoc-gen-es v2.10.2` headers. **Do not hand-edit those files**; change the upstream `.proto` and regenerate, then land the updated outputs in this repo.
 
 Hand-written helpers for working with generated messages live under `packages/core/mpc/types/utils/` and are **not** `_pb.ts` outputs.
 
-There is **no** checked-in buf/protoc wrapper script in this repository today; generator upgrades are intentional (the test `generatedProtobufHeaders.test.ts` pins current `protoc-gen-es` version groups so accidental drift is visible in CI).
+Regenerate the current outputs with:
+
+```bash
+git clone https://github.com/vultisig/commondata ../commondata
+git clone https://github.com/vultisig/recipes ../recipes
+COMMONDATA_DIR=../commondata RECIPES_DIR=../recipes yarn proto:regen:core-mpc
+```
+
+The script reads the existing `_pb.ts` headers as the manifest, probes common source layouts (`proto/`, `protos/`, and for recipes `types/`), and runs `buf generate` with the pinned `protoc-gen-es` version for each group. Generator upgrades are intentional: `packages/core/mpc/types/generatedProtobufHeaders.test.ts` pins the current version counts so accidental drift is visible in CI.
 
 ## Historical note
 

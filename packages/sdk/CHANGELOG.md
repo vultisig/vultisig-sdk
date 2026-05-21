@@ -1,5 +1,68 @@
 # @vultisig/sdk
 
+## 0.25.0
+
+### Minor Changes
+
+- [#502](https://github.com/vultisig/vultisig-sdk/pull/502) [`c2fd086`](https://github.com/vultisig/vultisig-sdk/commit/c2fd08670ad67e9ec93443569f9b9b9aa5f9d685) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(price): add `Vultisig.getCoinPricesWithChange` returning 24h % change
+
+  `getCoinPrices` returns only `Record<string, number>` (spot price), so
+  consumers that need the 24h change — e.g. a price widget's −3.97%
+  indicator — had to keep a side-channel CoinGecko call, duplicating the
+  SDK and risking drift.
+
+  Adds a parallel, additive path:
+  - `Vultisig.getCoinPricesWithChange(params)` →
+    `Record<string, { price: number; change24h?: number }>`
+  - core-chain `getCoinPricesWithChange` / `queryCoingeickoPricesWithChange`
+    (requests `include_24hr_change=true`; `change24h` is omitted when
+    CoinGecko has no datum for an id)
+  - new public types `CoinPriceWithChange`, `CoinPricesWithChangeResult`
+
+  Deliberately a **separate function**, not a flag on `getCoinPrices`:
+  `getCoinPrices` / `CoinPricesResult` / `FiatValueService` /
+  `fiatToAmount` / `getErc20Prices` are byte-for-byte unchanged — zero
+  regression surface on the existing call sites. Price-only callers should
+  keep using `getCoinPrices` (lighter payload, stable contract); reach for
+  `getCoinPricesWithChange` only when the change is actually rendered.
+
+  Lets vultiagent-app (and any other client) drop its hand-rolled
+  `fetchPrices` 24h-change side-channel and source price+change from the
+  SDK alone.
+
+- [#503](https://github.com/vultisig/vultisig-sdk/pull/503) [`0c9f6d5`](https://github.com/vultisig/vultisig-sdk/commit/0c9f6d5139d4a096645a575505c7550c2b26bd2a) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(tokens): add vault-free `Vultisig.discoverTokens({ chain, address })`
+
+  On-chain token discovery (1inch for EVM, Jupiter for Solana, LCD for
+  Cosmos) was only reachable as the instance method
+  `vault.discoverTokens(chain)`. Callers that hold a derived address but
+  no SDK `Vault` — the agent, a portfolio/dashboard screen, the
+  agent-backend — couldn't use it without constructing a full vault.
+
+  Adds a static, vault-free `Vultisig.discoverTokens({ chain, address })`
+  returning `DiscoveredToken[]`. It is a thin wrapper over the
+  already-vault-free `findCoins({ address, chain })` from
+  `@vultisig/core-chain/coin/find` — the exact same call + mapping
+  `vault.discoverTokens()` already does internally, minus the
+  `getAddress` step. No new discovery logic, no behavioural change to the
+  instance method, zero regression surface.
+
+  Lets vultiagent-app discover the long tail of held tokens (beyond
+  native + manually-added) on its existing vault-free balance path so the
+  dashboard + agent see the same token set as a wallet would.
+
+### Patch Changes
+
+- [#498](https://github.com/vultisig/vultisig-sdk/pull/498) [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable Cosmos bank-balance token discovery for Terra and Terra Classic, including denom metadata decimals, IBC denom trace fallback, and hidden unknown denom metadata.
+
+- [#505](https://github.com/vultisig/vultisig-sdk/pull/505) [`46274d7`](https://github.com/vultisig/vultisig-sdk/commit/46274d70fe19fb2f44bc90d9ec0cd4ac1994ae69) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Export the vault-free Cosmos staking/distribution LCD queries
+  (`getCosmosDelegations`, `getCosmosDelegatorRewards`,
+  `getCosmosUnbondingDelegations`, `getCosmosVestingAccount`, the URL
+  builders, and their types) from the React Native entry point. They
+  were already in the generic entry but the hand-curated RN allow-list
+  omitted them, forcing RN consumers (vultiagent-app) to hand-roll an
+  LCD client for delegations/rewards. Additive only; signing primitives
+  remain via `chains.cosmos.buildCosmosStakingTx`.
+
 ## 0.24.0
 
 ### Minor Changes

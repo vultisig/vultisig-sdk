@@ -15,8 +15,85 @@ type BalanceEntry = {
   tokenId?: string
 }
 
+type SDKAdapter = ReturnType<typeof useSDKAdapter>
+
 function formatErr(err: unknown): string {
   return err instanceof Error ? err.message : 'Request failed'
+}
+
+async function loadTokenBalances(
+  sdk: SDKAdapter,
+  vaultId: string,
+  chain: string,
+  signal: AbortSignal
+): Promise<{ entries: BalanceEntry[]; failures: number }> {
+  const entries: BalanceEntry[] = []
+  let failures = 0
+  const tokens = await sdk.getTokens(vaultId, chain)
+
+  for (const token of tokens) {
+    if (signal.aborted) break
+    try {
+      const tokenBalance = await sdk.getBalance(vaultId, chain, token.id)
+      if (signal.aborted) break
+      entries.push({ chain, balance: tokenBalance, tokenId: token.id })
+    } catch (err) {
+      console.error(`Failed to get balance for ${token.symbol}:`, err)
+      failures += 1
+    }
+  }
+
+  return { entries, failures }
+}
+
+async function loadBalanceEntries(
+  sdk: SDKAdapter,
+  vault: VaultInfo,
+  includeTokens: boolean,
+  signal: AbortSignal
+): Promise<{ entries: BalanceEntry[]; nativeErrors: Record<string, string>; tokenFailures: number }> {
+  const entries: BalanceEntry[] = []
+  const nativeErrors: Record<string, string> = {}
+  let tokenFailures = 0
+
+  for (const chain of vault.chains) {
+    if (signal.aborted) break
+
+    try {
+      const balance = await sdk.getBalance(vault.id, chain)
+      if (signal.aborted) break
+      entries.push({ chain, balance })
+
+      if (includeTokens) {
+        try {
+          const tokenResult = await loadTokenBalances(sdk, vault.id, chain, signal)
+          entries.push(...tokenResult.entries)
+          tokenFailures += tokenResult.failures
+        } catch (err) {
+          console.error(`Failed to load tokens for ${chain}:`, err)
+          tokenFailures += 1
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to get balance for ${chain}:`, err)
+      nativeErrors[chain] = formatErr(err)
+    }
+  }
+
+  return { entries, nativeErrors, tokenFailures }
+}
+
+function getBalanceRefreshError(
+  entries: BalanceEntry[],
+  vault: VaultInfo,
+  nativeErrors: Record<string, string>
+): string | null {
+  const failedChains = Object.keys(nativeErrors)
+  if (entries.length > 0 || vault.chains.length === 0 || failedChains.length === 0) return null
+
+  return failedChains.length === vault.chains.length
+    ? 'Could not load balances. Network or RPC endpoints may be blocked or unavailable.'
+    : `Could not load balances for: ${failedChains.join(', ')}.`
 }
 
 export default function VaultBalance({ vault }: VaultBalanceProps) {
@@ -42,59 +119,13 @@ export default function VaultBalance({ vault }: VaultBalanceProps) {
     setTokenBalanceFailures(0)
 
     try {
-      const entries: BalanceEntry[] = []
-      const nativeErrors: Record<string, string> = {}
-      let tokenFails = 0
-
-      for (const chain of vault.chains) {
-        if (signal.aborted) break
-
-        try {
-          // Native balance
-          const balance = await sdk.getBalance(vault.id, chain)
-          if (signal.aborted) break
-          entries.push({ chain, balance })
-
-          // Token balances
-          if (includeTokens) {
-            const tokens = await sdk.getTokens(vault.id, chain)
-            for (const token of tokens) {
-              if (signal.aborted) break
-              try {
-                const tokenBalance = await sdk.getBalance(vault.id, chain, token.id)
-                if (signal.aborted) break
-                entries.push({ chain, balance: tokenBalance, tokenId: token.id })
-              } catch (err) {
-                console.error(`Failed to get balance for ${token.symbol}:`, err)
-                tokenFails += 1
-              }
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to get balance for ${chain}:`, err)
-          nativeErrors[chain] = formatErr(err)
-        }
-      }
+      const { entries, nativeErrors, tokenFailures } = await loadBalanceEntries(sdk, vault, includeTokens, signal)
 
       if (!signal.aborted) {
         setBalances(entries)
         setChainErrors(nativeErrors)
-        setTokenBalanceFailures(tokenFails)
-
-        const failedChains = Object.keys(nativeErrors)
-        if (entries.length === 0 && vault.chains.length > 0) {
-          if (failedChains.length > 0) {
-            setError(
-              failedChains.length === vault.chains.length
-                ? 'Could not load balances. Network or RPC endpoints may be blocked or unavailable.'
-                : `Could not load balances for: ${failedChains.join(', ')}.`
-            )
-          } else {
-            setError(null)
-          }
-        } else {
-          setError(null)
-        }
+        setTokenBalanceFailures(tokenFailures)
+        setError(getBalanceRefreshError(entries, vault, nativeErrors))
       }
     } catch (err) {
       if (!signal.aborted) {
