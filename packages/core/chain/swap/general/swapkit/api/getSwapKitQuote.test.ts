@@ -1,5 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
-import { configureSwapKit } from '@vultisig/core-chain/swap/general/swapkit/config'
+import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
@@ -221,6 +221,64 @@ describe('getSwapKitQuote', () => {
     expect(fetchMock.mock.calls[0][1].headers['x-api-key']).toBeUndefined()
     expect(fetchMock.mock.calls[1][0]).toBe('https://api.vultisig.com/swapkit-win/v3/swap')
     expect(fetchMock.mock.calls[1][1].headers['x-api-key']).toBeUndefined()
+  })
+
+  it('does not let an undefined base URL override the current config', () => {
+    configureSwapKit({ baseUrl: 'https://swapkit.example' })
+    configureSwapKit({ baseUrl: undefined })
+
+    expect(getSwapKitConfig().baseUrl).toBe('https://swapkit.example')
+  })
+
+  it('ranks routes without expected buy amounts after valid routes', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [
+            {
+              routeId: 'missing-amount-route',
+              providers: ['NEAR'],
+            },
+            {
+              routeId: 'valid-route',
+              providers: ['NEAR'],
+              expectedBuyAmount: '9.4',
+            },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '9.3',
+          providers: ['NEAR'],
+          tx: {
+            to: '0xnear-deposit',
+            value: '5000000000000000',
+          },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await getSwapKitQuote({
+      from: {
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      to: {
+        chain: Chain.Sui,
+        address: '0xsui',
+        ticker: 'SUI',
+        decimals: 9,
+      },
+      amount: 5_000_000_000_000_000n,
+    })
+
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).routeId).toBe('valid-route')
   })
 
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {

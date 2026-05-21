@@ -362,7 +362,7 @@ export class SwapService {
     // Extract provider name
     const provider = isNative
       ? quoteData.native.swapChain.toLowerCase()
-      : (quoteData.general.routeProvider ?? quoteData.general.provider)
+      : quoteData.general.routeProvider?.trim() || quoteData.general.provider
 
     // Extract fees
     const fees = await this.extractFees(quoteData, fromCoin.chain)

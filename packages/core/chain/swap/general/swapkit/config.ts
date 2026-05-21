@@ -20,7 +20,8 @@ let swapKitConfig: SwapKitConfig = {
 export const configureSwapKit = (config: Partial<SwapKitConfig>) => {
   swapKitConfig = {
     ...swapKitConfig,
-    ...config,
+    ...(Object.prototype.hasOwnProperty.call(config, 'apiKey') ? { apiKey: config.apiKey } : {}),
+    ...(config.baseUrl !== undefined ? { baseUrl: config.baseUrl } : {}),
   }
 }
 

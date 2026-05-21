@@ -1,13 +1,12 @@
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
-
-import { AccountCoin } from '../../../../coin/AccountCoin'
 
 type Input = Record<TransferDirection, AccountCoin<SwapKitEnabledChain>> & {
   from: AccountCoin<SwapKitSourceChain>
@@ -297,10 +296,26 @@ const buildSwapKitTx = (response: SwapKitSwapResponse, from: AccountCoin<SwapKit
   return buildEvmTx(response.tx, from.address)
 }
 
+const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {
+  if (!route.expectedBuyAmount) {
+    return null
+  }
+
+  return BigInt(parseExpectedBuyAmount(route.expectedBuyAmount, decimals))
+}
+
 const sortRoutesByExpectedBuyAmount = (routes: SwapKitQuoteRoute[], decimals: number) =>
   [...routes].sort((one, another) => {
-    const oneAmount = BigInt(parseExpectedBuyAmount(one.expectedBuyAmount, decimals))
-    const anotherAmount = BigInt(parseExpectedBuyAmount(another.expectedBuyAmount, decimals))
+    const oneAmount = routeExpectedBuyAmount(one, decimals)
+    const anotherAmount = routeExpectedBuyAmount(another, decimals)
+
+    if (oneAmount === null) {
+      return anotherAmount === null ? 0 : 1
+    }
+
+    if (anotherAmount === null) {
+      return -1
+    }
 
     if (oneAmount === anotherAmount) {
       return 0
