@@ -1,5 +1,27 @@
 # @vultisig/cli
 
+## 0.25.0
+
+### Patch Changes
+
+- [#500](https://github.com/vultisig/vultisig-sdk/pull/500) [`46bb0ff`](https://github.com/vultisig/vultisig-sdk/commit/46bb0ff399fef2b082c906a097e10ebb223682a8) Thanks [@neavra](https://github.com/neavra)! - agent: report honest tool success instead of a hardcoded `true`
+
+  The agent CLI reported every finished server-side tool as `success: true`
+  regardless of outcome. `session.ts` hardcoded the result and `client.ts`
+  discarded the `tool-output-available` payload, so a failed `execute_send` /
+  `execute_swap` (invalid address, insufficient balance, no swap route, signing
+  failure) surfaced as a success to programmatic consumers (the `--via-agent`
+  pipe, automation, UI status). The client now derives success from the tool's
+  output payload (`{"status":"error"}` / `{"error"}` / stringified), passed
+  through `onToolProgress`; `ok ?? true` keeps the prior optimistic default when
+  no output is present so older backends cannot regress legitimate successes.
+
+- Updated dependencies [[`c2fd086`](https://github.com/vultisig/vultisig-sdk/commit/c2fd08670ad67e9ec93443569f9b9b9aa5f9d685), [`7b384c8`](https://github.com/vultisig/vultisig-sdk/commit/7b384c89cb0fd82e76161feee78eccbc2c4401eb), [`585c177`](https://github.com/vultisig/vultisig-sdk/commit/585c177d4de4960a764f2528aa48aebc42450f7d), [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3), [`46274d7`](https://github.com/vultisig/vultisig-sdk/commit/46274d70fe19fb2f44bc90d9ec0cd4ac1994ae69), [`0c9f6d5`](https://github.com/vultisig/vultisig-sdk/commit/0c9f6d5139d4a096645a575505c7550c2b26bd2a)]:
+  - @vultisig/sdk@0.25.0
+  - @vultisig/core-chain@2.1.0
+  - @vultisig/client-shared@0.2.9
+  - @vultisig/rujira@20.0.0
+
 ## 0.24.1
 
 ### Patch Changes
