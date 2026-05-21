@@ -230,7 +230,7 @@ describe('getSwapKitQuote', () => {
     expect(getSwapKitConfig().baseUrl).toBe('https://swapkit.example')
   })
 
-  it('ranks routes without expected buy amounts after valid routes', async () => {
+  it('ranks routes without valid expected buy amounts after valid routes', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -239,6 +239,11 @@ describe('getSwapKitQuote', () => {
             {
               routeId: 'missing-amount-route',
               providers: ['NEAR'],
+            },
+            {
+              routeId: 'malformed-amount-route',
+              providers: ['NEAR'],
+              expectedBuyAmount: 'not-a-number',
             },
             {
               routeId: 'valid-route',

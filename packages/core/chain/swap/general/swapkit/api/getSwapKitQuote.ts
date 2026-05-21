@@ -301,7 +301,11 @@ const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): big
     return null
   }
 
-  return BigInt(parseExpectedBuyAmount(route.expectedBuyAmount, decimals))
+  try {
+    return BigInt(parseExpectedBuyAmount(route.expectedBuyAmount, decimals))
+  } catch {
+    return null
+  }
 }
 
 const sortRoutesByExpectedBuyAmount = (routes: SwapKitQuoteRoute[], decimals: number) =>
