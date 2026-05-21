@@ -24,6 +24,18 @@ type SwapEntry = {
   isExactOut: boolean
 }
 
+type SwapCommandState = {
+  swaps: SwapEntry[]
+  wrapEthAmount: bigint | null
+  sawUnwrapWeth: boolean
+  sawKnownCommand: boolean
+}
+
+type SwapIntentDraft = UniversalRouterSwapIntent & {
+  first: SwapEntry
+  last: SwapEntry
+}
+
 const normalize = (addr: string): string => addr.toLowerCase()
 
 const firstAddressInV3Path = (path: string): string => {
@@ -246,6 +258,104 @@ const decodeWrapEth = (input: string): bigint | null => {
   return amount
 }
 
+type SwapCommandDecoder = (input: string) => SwapEntry | null
+
+const SWAP_COMMAND_DECODERS: Partial<Record<number, SwapCommandDecoder>> = {
+  [URCommand.V2_SWAP_EXACT_IN]: input => decodeV2Swap(input, false),
+  [URCommand.V2_SWAP_EXACT_OUT]: input => decodeV2Swap(input, true),
+  [URCommand.V3_SWAP_EXACT_IN]: input => decodeV3Swap(input, false),
+  [URCommand.V3_SWAP_EXACT_OUT]: input => decodeV3Swap(input, true),
+  [URCommand.V4_SWAP]: decodeV4SwapInput,
+}
+
+const createSwapCommandState = (): SwapCommandState => ({
+  swaps: [],
+  wrapEthAmount: null,
+  sawUnwrapWeth: false,
+  sawKnownCommand: false,
+})
+
+const applySwapCommand = (state: SwapCommandState, command: number, input: string): void => {
+  const decodeSwap = SWAP_COMMAND_DECODERS[command]
+  if (decodeSwap) {
+    state.sawKnownCommand = true
+    const entry = decodeSwap(input)
+    if (entry) state.swaps.push(entry)
+    return
+  }
+
+  if (command === URCommand.WRAP_ETH) {
+    state.sawKnownCommand = true
+    // Only the wrap that precedes the first swap matters for the user's input
+    // side; later wraps are intermediate routing.
+    if (state.swaps.length === 0) state.wrapEthAmount = decodeWrapEth(input)
+    return
+  }
+
+  if (command === URCommand.UNWRAP_WETH) {
+    state.sawKnownCommand = true
+    state.sawUnwrapWeth = true
+  }
+}
+
+const collectSwapCommands = (commands: Uint8Array, inputs: string[]): SwapCommandState => {
+  const state = createSwapCommandState()
+  for (let i = 0; i < commands.length; i++) {
+    applySwapCommand(state, commands[i] & COMMAND_TYPE_MASK, inputs[i])
+  }
+  return state
+}
+
+const aggregateSwaps = (swaps: SwapEntry[]): SwapIntentDraft => {
+  const first = swaps[0]
+  const last = swaps[swaps.length - 1]
+  // Uniswap's routing splits a single pair across several pool legs when that
+  // gives better execution. Each leg is its own swap command but they all share
+  // the same (fromToken, toToken). We detect that and sum amounts so the user
+  // sees their full trade — not just one leg's share.
+  const isSplitRoute =
+    swaps.length > 1 && swaps.every(s => s.fromToken === first.fromToken && s.toToken === first.toToken)
+
+  return {
+    first,
+    last,
+    fromToken: first.fromToken,
+    toToken: isSplitRoute ? first.toToken : last.toToken,
+    amountIn: isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountIn, 0n) : first.amountIn,
+    amountOutMin: isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountOutMin, 0n) : last.amountOutMin,
+    isExactOut: last.isExactOut,
+  }
+}
+
+const applyWrappedNativeInput = (intent: SwapIntentDraft, wrapEthAmount: bigint | null): void => {
+  if (wrapEthAmount === null) return
+
+  intent.fromToken = NATIVE_TOKEN_ADDRESS
+  // WRAP_ETH's amount is the user's total native input for the whole sequence.
+  // The first swap leg's amountIn/amountInMax only covers that leg (wrong when
+  // the swap is multi-hop or exact-out), so prefer the wrap amount whenever it
+  // isn't a "use router balance" sentinel.
+  if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL || intent.amountIn === CONTRACT_BALANCE_SENTINEL) {
+    intent.amountIn = wrapEthAmount
+  }
+}
+
+const resolveUnwrappedNativeOutput = (intent: SwapIntentDraft, wrapEthAmount: bigint | null): string => {
+  // UR emits UNWRAP_WETH for two different reasons and they have opposite
+  // meanings for the user-facing output token:
+  //   1. Output conversion: the final swap lands in WETH and UNWRAP_WETH
+  //      converts it to native. The swap is effectively ERC20 -> NATIVE.
+  //   2. Leftover refund: an exact-out flow wrapped too much ETH upfront and
+  //      UNWRAP_WETH refunds the unused remainder as native. The swap output is
+  //      still the last leg's ERC20 toToken.
+  // We distinguish them: a leftover refund only happens AFTER a WRAP_ETH, and
+  // only when the last swap's toToken is something OTHER than the wrapped-native
+  // token that was the router's working asset (= first swap's fromToken). If the
+  // last swap's toToken matches the wrapped native, it's an output conversion.
+  const isLeftoverRefund = wrapEthAmount !== null && intent.last.toToken !== intent.first.fromToken
+  return isLeftoverRefund ? intent.toToken : NATIVE_TOKEN_ADDRESS
+}
+
 /**
  * Decode Uniswap Universal Router `execute(...)` calldata into an aggregate
  * swap intent (from token, to token, amount in, amount out minimum).
@@ -268,99 +378,20 @@ export const decodeUniversalRouterExecute = (calldata: string): UniversalRouterS
   const commands = getBytes(commandsHex)
   if (commands.length !== inputs.length) return null
 
-  const swaps: SwapEntry[] = []
-  let wrapEthAmount: bigint | null = null
-  let sawUnwrapWeth = false
-  let sawKnownCommand = false
+  const commandState = collectSwapCommands(commands, inputs)
+  if (!commandState.sawKnownCommand || commandState.swaps.length === 0) return null
 
-  for (let i = 0; i < commands.length; i++) {
-    const command = commands[i] & COMMAND_TYPE_MASK
-    const input = inputs[i]
-    if (command === URCommand.V2_SWAP_EXACT_IN) {
-      sawKnownCommand = true
-      const entry = decodeV2Swap(input, false)
-      if (entry) swaps.push(entry)
-    } else if (command === URCommand.V2_SWAP_EXACT_OUT) {
-      sawKnownCommand = true
-      const entry = decodeV2Swap(input, true)
-      if (entry) swaps.push(entry)
-    } else if (command === URCommand.V3_SWAP_EXACT_IN) {
-      sawKnownCommand = true
-      const entry = decodeV3Swap(input, false)
-      if (entry) swaps.push(entry)
-    } else if (command === URCommand.V3_SWAP_EXACT_OUT) {
-      sawKnownCommand = true
-      const entry = decodeV3Swap(input, true)
-      if (entry) swaps.push(entry)
-    } else if (command === URCommand.WRAP_ETH) {
-      sawKnownCommand = true
-      // Only the wrap that precedes the first swap matters for the user's
-      // input side; later wraps are intermediate routing.
-      if (swaps.length === 0) {
-        wrapEthAmount = decodeWrapEth(input)
-      }
-    } else if (command === URCommand.UNWRAP_WETH) {
-      sawKnownCommand = true
-      sawUnwrapWeth = true
-    } else if (command === URCommand.V4_SWAP) {
-      sawKnownCommand = true
-      const entry = decodeV4SwapInput(input)
-      if (entry) swaps.push(entry)
-    }
-  }
-
-  if (!sawKnownCommand || swaps.length === 0) return null
-
-  const first = swaps[0]
-  const last = swaps[swaps.length - 1]
-
-  // Uniswap's routing splits a single pair across several pool legs when that
-  // gives better execution. Each leg is its own swap command but they all
-  // share the same (fromToken, toToken). We detect that and sum amounts so
-  // the user sees their full trade — not just one leg's share.
-  const isSplitRoute =
-    swaps.length > 1 && swaps.every(s => s.fromToken === first.fromToken && s.toToken === first.toToken)
-
-  let fromToken = first.fromToken
-  let toToken = isSplitRoute ? first.toToken : last.toToken
-  let amountIn = isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountIn, 0n) : first.amountIn
-  const aggregatedAmountOutMin = isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountOutMin, 0n) : last.amountOutMin
-
-  if (wrapEthAmount !== null) {
-    fromToken = NATIVE_TOKEN_ADDRESS
-    // WRAP_ETH's amount is the user's total native input for the whole
-    // sequence. The first swap leg's amountIn/amountInMax only covers that
-    // leg (wrong when the swap is multi-hop or exact-out), so prefer the
-    // wrap amount whenever it isn't a "use router balance" sentinel.
-    if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL || amountIn === CONTRACT_BALANCE_SENTINEL) {
-      amountIn = wrapEthAmount
-    }
-  }
-
-  if (sawUnwrapWeth) {
-    // UR emits UNWRAP_WETH for two different reasons and they have opposite
-    // meanings for the user-facing output token:
-    //   1. Output conversion: the final swap lands in WETH and UNWRAP_WETH
-    //      converts it to native. The swap is effectively ERC20 → NATIVE.
-    //   2. Leftover refund: an exact-out flow wrapped too much ETH upfront
-    //      and UNWRAP_WETH refunds the unused remainder as native. The swap
-    //      output is still the last leg's ERC20 toToken.
-    // We distinguish them: a leftover refund only happens AFTER a WRAP_ETH,
-    // and only when the last swap's toToken is something OTHER than the
-    // wrapped-native token that was the router's working asset (= first
-    // swap's fromToken). If the last swap's toToken matches the wrapped
-    // native, it's an output conversion back to native.
-    const isLeftoverRefund = wrapEthAmount !== null && last.toToken !== first.fromToken
-    if (!isLeftoverRefund) {
-      toToken = NATIVE_TOKEN_ADDRESS
-    }
+  const intent = aggregateSwaps(commandState.swaps)
+  applyWrappedNativeInput(intent, commandState.wrapEthAmount)
+  if (commandState.sawUnwrapWeth) {
+    intent.toToken = resolveUnwrappedNativeOutput(intent, commandState.wrapEthAmount)
   }
 
   return {
-    fromToken,
-    toToken,
-    amountIn,
-    amountOutMin: aggregatedAmountOutMin,
-    isExactOut: last.isExactOut,
+    fromToken: intent.fromToken,
+    toToken: intent.toToken,
+    amountIn: intent.amountIn,
+    amountOutMin: intent.amountOutMin,
+    isExactOut: intent.isExactOut,
   }
 }
