@@ -24,5 +24,6 @@ export type GeneralSwapTx =
 export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
+  routeProvider?: string
   tx: GeneralSwapTx
 }

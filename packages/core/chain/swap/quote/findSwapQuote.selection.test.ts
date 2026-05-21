@@ -3,6 +3,7 @@ import type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/General
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
+import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,10 @@ vi.mock('@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote', () 
 
 vi.mock('@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote', () => ({
   getLifiSwapQuote: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote', () => ({
+  getSwapKitQuote: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
@@ -42,7 +47,7 @@ const evmSameChainCoins = {
   },
 } as const
 
-function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch'): GeneralSwapQuote {
+function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch' | 'swapkit'): GeneralSwapQuote {
   const base = {
     dstAmount,
     tx: {
@@ -54,7 +59,7 @@ function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch'): Ge
       },
     },
   }
-  return provider === 'kyber' ? { ...base, provider: 'kyber' } : { ...base, provider: '1inch' }
+  return { ...base, provider }
 }
 
 function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
@@ -77,12 +82,14 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockReset()
     vi.mocked(getOneInchSwapQuote).mockReset()
     vi.mocked(getLifiSwapQuote).mockReset()
+    vi.mocked(getSwapKitQuote).mockReset()
     vi.mocked(getNativeSwapQuote).mockReset()
   })
 
   it('picks a later preferred provider when its comparable output amount is higher', async () => {
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     // Destination has 6 decimals. Kyber dstAmount is already in token decimals.
     // Native THORChain amounts are 8-decimal canonical → rebase to 6: divide by 1e2.
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('150', 'kyber'))
@@ -108,6 +115,7 @@ describe('findSwapQuote parallel selection', () => {
   it('ranks by destination-decimal-normalized output (higher raw native can still lose)', async () => {
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     // 1 USDC (6 decimals) on the general side.
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
@@ -131,6 +139,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('Kyber unavailable'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100'))
 
     const quote = await findSwapQuote({
@@ -148,6 +157,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('not-a-number', 'kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100'))
 
     const quote = await findSwapQuote({
@@ -163,6 +173,7 @@ describe('findSwapQuote parallel selection', () => {
 
   it('breaks ties by earlier fetcher preference order', async () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('200', 'kyber'))
     vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('200', '1inch'))
@@ -184,6 +195,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('first fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('second fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('third fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('fourth fail'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         throw new Error('thor fail')
@@ -196,7 +208,7 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, THORChain, MayaChain.')
+    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
   })
 
   it('omits noisy provider errors from the all-fail message', async () => {
@@ -205,6 +217,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error(longKyberError))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
 
     try {
@@ -218,7 +231,9 @@ describe('findSwapQuote parallel selection', () => {
         throw error
       }
 
-      expect(error.message).toBe('No swap route found after trying KyberSwap, 1inch, LiFi, THORChain, MayaChain.')
+      expect(error.message).toBe(
+        'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+      )
       expect(error.message).not.toContain(longKyberError)
       expect(error.message).not.toContain('inch fail')
     }
@@ -228,6 +243,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         throw new Error('thor fail')
@@ -247,6 +263,7 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('quote below dust threshold'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
 
     await expect(

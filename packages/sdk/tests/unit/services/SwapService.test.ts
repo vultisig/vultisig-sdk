@@ -281,6 +281,47 @@ describe('SwapService', () => {
       expect(result.approvalInfo).toBeUndefined()
     })
 
+    it('should fall back to the general provider when routeProvider is blank', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: 'swapkit' as const,
+            routeProvider: '   ',
+            tx: {
+              evm: {
+                from: '0x1234...',
+                to: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+                data: '0x...',
+                value: '0',
+              },
+            },
+          },
+        },
+        discounts: [],
+      })
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        toCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1destination',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        amount: 1,
+      })
+
+      expect(result.provider).toBe('swapkit')
+    })
+
     it('should resolve simplified coin input', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 

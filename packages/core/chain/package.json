@@ -1330,6 +1330,21 @@
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
     },
+    "./swap/general/swapkit/api/getSwapKitQuote": {
+      "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
+      "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
+      "default": "./dist/swap/general/swapkit/api/getSwapKitQuote.js"
+    },
+    "./swap/general/swapkit/config": {
+      "types": "./dist/swap/general/swapkit/config.d.ts",
+      "import": "./dist/swap/general/swapkit/config.js",
+      "default": "./dist/swap/general/swapkit/config.js"
+    },
+    "./swap/general/swapkit/SwapKitEnabledChains": {
+      "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
+      "default": "./dist/swap/general/swapkit/SwapKitEnabledChains.js"
+    },
     "./swap/keysign/getSwapDestinationAddress": {
       "types": "./dist/swap/keysign/getSwapDestinationAddress.d.ts",
       "import": "./dist/swap/keysign/getSwapDestinationAddress.js",

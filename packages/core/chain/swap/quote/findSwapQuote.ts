@@ -3,6 +3,11 @@ import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/get
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
+import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
+import {
+  swapKitEnabledChains,
+  swapKitSourceChains,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
@@ -28,7 +33,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   vultDiscountTier?: VultDiscountTier | null
 }
 
-type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -192,6 +197,28 @@ export const findSwapQuote = async ({
         providerName: 'LiFi',
         fetch: async (): Promise<SwapQuote> => {
           const general = await getLifiSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: toChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
+
+    if (isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
+      result.push({
+        providerName: 'SwapKit',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getSwapKitQuote({
             from: {
               ...from,
               chain: fromChain,

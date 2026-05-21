@@ -2,7 +2,7 @@
  * SwapService - Handles swap quote fetching and transaction preparation
  *
  * This service wraps core swap functions and provides:
- * - Quote fetching from multiple providers (1inch, KyberSwap, LiFi, THORChain, MayaChain)
+ * - Quote fetching from multiple providers (1inch, KyberSwap, LiFi, SwapKit, THORChain, MayaChain)
  * - ERC-20 allowance checking
  * - Swap transaction preparation with approval handling
  * - Chain support queries
@@ -360,7 +360,9 @@ export class SwapService {
       : BigInt(quoteData.general.dstAmount)
 
     // Extract provider name
-    const provider = isNative ? quoteData.native.swapChain.toLowerCase() : quoteData.general.provider
+    const provider = isNative
+      ? quoteData.native.swapChain.toLowerCase()
+      : quoteData.general.routeProvider?.trim() || quoteData.general.provider
 
     // Extract fees
     const fees = await this.extractFees(quoteData, fromCoin.chain)

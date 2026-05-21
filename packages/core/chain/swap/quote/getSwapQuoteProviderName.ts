@@ -6,6 +6,7 @@ import { SwapQuote, SwapQuoteResult } from './SwapQuote'
 export const getSwapQuoteProviderName = (quote: SwapQuote) => {
   return matchRecordUnion<SwapQuoteResult, string>(quote.quote, {
     native: ({ swapChain }) => swapChain,
-    general: ({ provider }) => generalSwapProviderName[provider],
+    general: ({ provider, routeProvider }) =>
+      routeProvider ? `${generalSwapProviderName[provider]} (${routeProvider})` : generalSwapProviderName[provider],
   })
 }
