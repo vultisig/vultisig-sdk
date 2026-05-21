@@ -1,5 +1,23 @@
 # @vultisig/core-chain
 
+## 2.1.0
+
+### Minor Changes
+
+- [#483](https://github.com/vultisig/vultisig-sdk/pull/483) [`7b384c8`](https://github.com/vultisig/vultisig-sdk/commit/7b384c89cb0fd82e76161feee78eccbc2c4401eb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - cosmos/staking: add `getCosmosValidators` and `getCosmosValidator` LCD query helpers, plus their URL builders (`getValidatorsUrl`, `getValidatorUrl`) and typed response models (`Validator`, `ValidatorStatus`, `ValidatorDescription`, `ValidatorCommission`).
+
+  `getCosmosValidators` auto-paginates the staking module's validator set with an optional `status` filter (typically `BOND_STATUS_BONDED` for staking-picker UIs) and a 50-page runaway cap. `getCosmosValidator` resolves a single valoper. Both work across every `IbcEnabledCosmosChain` — same paths, same response shape — and accept an optional `fetchImpl` / `signal` for testing and abortability.
+
+  These complete the staking-module read surface: callers can now list validators, list a delegator's delegations / unbondings / rewards, and resolve any individual valoper, all without a Stargate dependency.
+
+  cosmos/gas: add `getCosmosStakingGasLimit({ chain, msgCount })` alongside the existing `getCosmosGasLimit`. The defaults in `getCosmosGasLimit` are calibrated for `bank.MsgSend` / `ibc.MsgTransfer` and run out of gas mid-execution for native staking msgs — most visibly on TerraClassic, where an empirically observed `MsgDelegate` burned 400_659 gas against the 400_000 default. The new helper exposes per-chain limits sized for `MsgDelegate` / `MsgUndelegate` / `MsgBeginRedelegate` / `MsgWithdrawDelegatorReward` and scales by `msgCount` for bulk-claim multi-msg txs.
+
+- [#499](https://github.com/vultisig/vultisig-sdk/pull/499) [`585c177`](https://github.com/vultisig/vultisig-sdk/commit/585c177d4de4960a764f2528aa48aebc42450f7d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - qbtc: `generateClaimProof` now accepts an optional `broadcast: boolean` input. When set, the proof service signs and broadcasts the resulting `MsgClaimWithProof` itself (via its pre-funded broadcaster account) and returns `tx_hash` in the response. Intended for first-time claimers whose own bech32 address doesn't exist on-chain yet, so they can't produce a SignDoc the chain will accept. Server-side broadcasting is wired up in [btcq-org/qbtc#158](https://github.com/btcq-org/qbtc/pull/158).
+
+### Patch Changes
+
+- [#498](https://github.com/vultisig/vultisig-sdk/pull/498) [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable Cosmos bank-balance token discovery for Terra and Terra Classic, including denom metadata decimals, IBC denom trace fallback, and hidden unknown denom metadata.
+
 ## 2.0.0
 
 ### Major Changes
