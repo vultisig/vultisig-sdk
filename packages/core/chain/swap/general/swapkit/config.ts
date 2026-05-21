@@ -3,7 +3,35 @@ export type SwapKitConfig = {
   baseUrl: string
 }
 
-const defaultSwapKitBaseUrl = 'https://api.vultisig.com/swapkit-win'
+/**
+ * Vultisig-proxy URLs per platform (paaao 2026-05-21).
+ * The proxy injects the SwapKit API key server-side — NO client-side key needed.
+ *
+ * iOS / macOS  → https://api.vultisig.com/swapkit/
+ * Android      → https://api.vultisig.com/swapkit-a/
+ * Windows/ext  → https://api.vultisig.com/swapkit-win/  (default fallback)
+ *
+ * Callers may override via configureSwapKit({ baseUrl }) or
+ * env var SWAPKIT_BASE_URL / VULTISIG_SWAPKIT_BASE_URL.
+ */
+const detectDefaultBaseUrl = (): string => {
+  const maybeGlobal = globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined>; platform?: string }
+  }
+
+  const platform = maybeGlobal.process?.platform
+
+  if (platform === 'darwin' || platform === 'ios') {
+    return 'https://api.vultisig.com/swapkit'
+  }
+
+  if (platform === 'android') {
+    return 'https://api.vultisig.com/swapkit-a'
+  }
+
+  // Windows, extension (electron/chromium), and unknown platforms
+  return 'https://api.vultisig.com/swapkit-win'
+}
 
 const readEnv = (key: string): string | undefined => {
   const maybeGlobal = globalThis as typeof globalThis & {
@@ -14,7 +42,7 @@ const readEnv = (key: string): string | undefined => {
 }
 
 let swapKitConfig: SwapKitConfig = {
-  baseUrl: defaultSwapKitBaseUrl,
+  baseUrl: detectDefaultBaseUrl(),
 }
 
 export const configureSwapKit = (config: Partial<SwapKitConfig>) => {

@@ -199,7 +199,9 @@ describe('getSwapKitQuote', () => {
       )
     vi.stubGlobal('fetch', fetchMock)
 
-    configureSwapKit({ apiKey: undefined })
+    // Explicitly set the Windows proxy URL; the default is platform-detected
+    // (darwin/ios -> /swapkit, android -> /swapkit-a, other -> /swapkit-win).
+    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
 
     await getSwapKitQuote({
       from: {

@@ -12,6 +12,8 @@ type Input = Record<TransferDirection, AccountCoin<SwapKitEnabledChain>> & {
   from: AccountCoin<SwapKitSourceChain>
   amount: bigint
   affiliateBps?: number
+  /** Slippage tolerance in percent (e.g. 1 = 1%). Defaults to 3. */
+  slippage?: number
 }
 
 type SwapKitProvider =
@@ -229,7 +231,25 @@ const bigintString = (value: string | number | bigint | undefined, fallback = '0
     return fallback
   }
 
+  // BigInt() throws on decimal strings (e.g. '21000.5') — truncate first.
+  if (typeof value === 'string' && value.includes('.')) {
+    return BigInt(Math.trunc(Number(value))).toString()
+  }
+
   return BigInt(value).toString()
+}
+
+const safeBigInt = (value: string | number | bigint | undefined): bigint | undefined => {
+  if (value === undefined) {
+    return undefined
+  }
+
+  // BigInt() throws on decimal strings — truncate first.
+  if (typeof value === 'string' && value.includes('.')) {
+    return BigInt(Math.trunc(Number(value)))
+  }
+
+  return BigInt(value)
 }
 
 const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
@@ -251,7 +271,7 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
       to: evmTx.to,
       data: evmTx.data ?? '0x',
       value: bigintString(evmTx.value),
-      gasLimit: gas === undefined ? undefined : BigInt(gas),
+      gasLimit: safeBigInt(gas),
     },
   }
 }
@@ -373,12 +393,18 @@ const getBestSwapKitRoute = async (body: Record<string, unknown>, decimals: numb
   throw new Error('SwapKit returned no eligible routes.')
 }
 
-export const getSwapKitQuote = async ({ from, to, amount, affiliateBps }: Input): Promise<GeneralSwapQuote> => {
+export const getSwapKitQuote = async ({
+  from,
+  to,
+  amount,
+  affiliateBps,
+  slippage = 3,
+}: Input): Promise<GeneralSwapQuote> => {
   const quoteBody = {
     sellAsset: toSwapKitAsset(from),
     buyAsset: toSwapKitAsset(to),
     sellAmount: formatBasicUnitAmount(amount, from.decimals),
-    slippage: 3,
+    slippage,
     affiliateFee: affiliateBps,
   }
   const route = await getBestSwapKitRoute(quoteBody, to.decimals)
