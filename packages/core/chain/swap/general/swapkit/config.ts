@@ -19,9 +19,10 @@ const detectDefaultBaseUrl = (): string => {
     process?: { env?: Record<string, string | undefined>; platform?: string }
   }
 
-  const platform = maybeGlobal.process?.platform
+  const platform = maybeGlobal.process?.platform as string | undefined
 
-  if (platform === 'darwin' || platform === 'ios') {
+  // 'darwin' = Node.js on macOS; 'ios' = React Native iOS; 'macos' = React Native macOS / Mac Catalyst
+  if (platform === 'darwin' || platform === 'ios' || platform === 'macos') {
     return 'https://api.vultisig.com/swapkit'
   }
 
