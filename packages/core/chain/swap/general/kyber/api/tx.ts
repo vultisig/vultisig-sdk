@@ -4,7 +4,6 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { SwapFee } from '../../../SwapFee'
@@ -57,7 +56,7 @@ const getKyberSwapAffiliateFee = ({
 
   return {
     chain: to.chain,
-    id: to.id ?? evmNativeCoinAddress,
+    id: to.id,
     decimals: to.decimals,
     amount: grossAmountOut - netAmountOut,
   }
