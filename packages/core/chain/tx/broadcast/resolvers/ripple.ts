@@ -27,9 +27,7 @@ import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
  */
 const PEER_RACE_ENGINE_RESULTS = new Set(['tefALREADY', 'tefPAST_SEQ'])
 
-export const broadcastRippleTx: BroadcastTxResolver<
-  OtherChain.Ripple
-> = async ({ chain, tx }) => {
+export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async ({ chain, tx }) => {
   const client = await getRippleClient()
 
   // RPC-level errors (network blip, connection drop) get the safety-net

@@ -32,9 +32,7 @@ const assertBaseUnitString = (value: string, fieldName: string): bigint => {
     )
   }
   if (!/^\d+$/.test(value)) {
-    throw new Error(
-      `${fieldName} must be a non-negative integer base-unit string, got ${JSON.stringify(value)}`
-    )
+    throw new Error(`${fieldName} must be a non-negative integer base-unit string, got ${JSON.stringify(value)}`)
   }
   return BigInt(value)
 }
@@ -202,8 +200,7 @@ export const getLpAddSlippage = ({
   const decimal = scaled.toString().padStart(19, '0')
   const intPart = decimal.slice(0, -18) || '0'
   const fracPart = decimal.slice(-18).replace(/0+$/, '')
-  const decimalPercent =
-    fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart
+  const decimalPercent = fracPart.length > 0 ? `${intPart}.${fracPart}` : intPart
 
   // Convert to rune-equivalent for display. The slip applies only to the
   // imbalanced portion of the deposit — the part that has to be swapped
@@ -287,15 +284,11 @@ export const estimateLpAdd = async ({
     typeof raw.balance_asset !== 'string' ||
     typeof raw.balance_rune !== 'string'
   ) {
-    throw new Error(
-      `estimateLpAdd: pool ${pool} response from ${url} missing balance fields`
-    )
+    throw new Error(`estimateLpAdd: pool ${pool} response from ${url} missing balance fields`)
   }
   const poolUnitsRaw = raw.pool_units ?? raw.LP_units
   if (typeof poolUnitsRaw !== 'string' || poolUnitsRaw.length === 0) {
-    throw new Error(
-      `estimateLpAdd: pool ${pool} response from ${url} missing pool_units / LP_units`
-    )
+    throw new Error(`estimateLpAdd: pool ${pool} response from ${url} missing pool_units / LP_units`)
   }
 
   const poolState: PoolState = {
@@ -335,10 +328,8 @@ export const estimateLpAdd = async ({
   const totalAfter = P + L
   const runeDepthAfter = R + r
   const assetDepthAfter = A + a
-  const runeShareBaseUnit =
-    totalAfter === 0n ? '0' : ((runeDepthAfter * L) / totalAfter).toString()
-  const assetShareBaseUnit =
-    totalAfter === 0n ? '0' : ((assetDepthAfter * L) / totalAfter).toString()
+  const runeShareBaseUnit = totalAfter === 0n ? '0' : ((runeDepthAfter * L) / totalAfter).toString()
+  const assetShareBaseUnit = totalAfter === 0n ? '0' : ((assetDepthAfter * L) / totalAfter).toString()
 
   return {
     liquidityUnits,

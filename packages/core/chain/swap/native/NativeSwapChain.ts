@@ -53,8 +53,7 @@ export const nativeSwapEnabledChainsRecord = {
   ],
 } as const
 
-type NativeSwapEnabledChain =
-  (typeof nativeSwapEnabledChainsRecord)[NativeSwapChain][number]
+type NativeSwapEnabledChain = (typeof nativeSwapEnabledChainsRecord)[NativeSwapChain][number]
 
 export const nativeSwapEnabledChains = withoutDuplicates(
   Object.values(nativeSwapEnabledChainsRecord).flatMap(value => value)
@@ -81,17 +80,11 @@ export const nativeSwapChainIds = {
   [Chain.Tron]: 'TRON',
   [Chain.Noble]: 'NOBLE',
 } satisfies Record<NativeSwapEnabledChain, string>
-export type NativeSwapChainId =
-  (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
+export type NativeSwapChainId = (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
 
-type NativeSwapPayloadCase =
-  | 'thorchainSwapPayload'
-  | 'mayachainSwapPayload'
+type NativeSwapPayloadCase = 'thorchainSwapPayload' | 'mayachainSwapPayload'
 
-export const nativeSwapPayloadCase: Record<
-  NativeSwapChain,
-  NativeSwapPayloadCase
-> = {
+export const nativeSwapPayloadCase: Record<NativeSwapChain, NativeSwapPayloadCase> = {
   [Chain.THORChain]: 'thorchainSwapPayload',
   [Chain.MayaChain]: 'mayachainSwapPayload',
 }

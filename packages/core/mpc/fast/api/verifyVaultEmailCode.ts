@@ -9,11 +9,7 @@ type VerifyVaultEmailCodeInput = {
   vaultBaseUrl?: string
 }
 
-export const verifyVaultEmailCode = async ({
-  vaultId,
-  code,
-  vaultBaseUrl,
-}: VerifyVaultEmailCodeInput) =>
+export const verifyVaultEmailCode = async ({ vaultId, code, vaultBaseUrl }: VerifyVaultEmailCodeInput) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/verify/${vaultId}/${code}`, {
     responseType: 'none',
   })

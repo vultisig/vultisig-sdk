@@ -8,11 +8,7 @@ type ToTwAddressInput = {
   chain: Chain
 }
 
-export const toTwAddress = ({
-  address,
-  walletCore,
-  chain,
-}: ToTwAddressInput) => {
+export const toTwAddress = ({ address, walletCore, chain }: ToTwAddressInput) => {
   const coinType = getCoinType({
     walletCore,
     chain,

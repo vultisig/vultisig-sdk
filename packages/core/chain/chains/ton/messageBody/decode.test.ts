@@ -6,43 +6,25 @@ import { TonOp } from './opcodes'
 
 // Real mainnet addresses from knownRouters.ts. Tests pin these so the
 // router-binding logic can't silently break by accepting arbitrary destinations.
-const STONFI_V2_ROUTER = Address.parse(
-  'EQAiLV677BgHNXEUuDJ3Cw8K5WOiJSO86xh8YQq2LthJEoED'
-)
-const STONFI_V2_PTON_WALLET = Address.parse(
-  'EQAmV2BzRi6c-S1263Ar9HhyCLrvtMEae_qfEzhxnK7qSpr0'
-)
+const STONFI_V2_ROUTER = Address.parse('EQAiLV677BgHNXEUuDJ3Cw8K5WOiJSO86xh8YQq2LthJEoED')
+const STONFI_V2_PTON_WALLET = Address.parse('EQAmV2BzRi6c-S1263Ar9HhyCLrvtMEae_qfEzhxnK7qSpr0')
 // DeDust mainnet TON Native Vault. swap#ea06185d is sent here, NOT to the
 // factory (verified live via factory.getNativeVault() — see knownRouters.ts).
 // The factory at EQBfBWT7… only receives create_vault / create_pool ops.
-const DEDUST_NATIVE_VAULT = Address.parse(
-  'EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_'
-)
-const DEDUST_FACTORY = Address.parse(
-  'EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67'
-)
+const DEDUST_NATIVE_VAULT = Address.parse('EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_')
+const DEDUST_FACTORY = Address.parse('EQBfBWT7X2BHg9tXAxzhz2aKiNTU1tpt5NsiK0uSDW_YAJ67')
 
-const RECIPIENT = Address.parse(
-  'EQD__________________________________________0vo'
-)
-const RESPONSE = Address.parse(
-  'EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y'
-)
+const RECIPIENT = Address.parse('EQD__________________________________________0vo')
+const RESPONSE = Address.parse('EQAvDfWFG0oYX19jwNDNBBL1rKNT9XfaGP9HyTb5nb2Eml6y')
 const ATTACKER = Address.parseRaw(`0:${'4'.padStart(64, '0')}`)
 const POOL = Address.parseRaw(`0:${'1'.padStart(64, '0')}`)
 const TOKEN_WALLET = Address.parseRaw(`0:${'2'.padStart(64, '0')}`)
 const EXCESSES = Address.parseRaw(`0:${'3'.padStart(64, '0')}`)
 
-const decode = (
-  payload: string | null | undefined,
-  outerDestination: Address | string | null = RECIPIENT
-) =>
+const decode = (payload: string | null | undefined, outerDestination: Address | string | null = RECIPIENT) =>
   decodeTonMessageBody({
     payload,
-    outerDestination:
-      outerDestination instanceof Address
-        ? outerDestination.toString()
-        : outerDestination,
+    outerDestination: outerDestination instanceof Address ? outerDestination.toString() : outerDestination,
   })
 
 const buildJettonTransferBody = (args: {
@@ -89,10 +71,7 @@ const buildNftTransferBody = (args: {
     .endCell()
 
 const buildExcessesBody = (queryId: bigint) =>
-  beginCell()
-    .storeUint(TonOp.EXCESSES, 32)
-    .storeUint(queryId, 64)
-    .endCell()
+  beginCell().storeUint(TonOp.EXCESSES, 32).storeUint(queryId, 64).endCell()
 
 // STON.fi v2 swap body. Mirrors the encoding produced by
 // @ston-fi/sdk@2.x BaseRouterV2_1.createSwapBody — the inner additional_data
@@ -100,9 +79,11 @@ const buildExcessesBody = (queryId: bigint) =>
 // custom_payload / refund_fwd_gas / refund_payload / referral_value /
 // referral_address). The decoder consumes them all to fail closed on
 // prefix-shaped fakes; tests must produce the full shape.
-const buildStonfiSwapPayload = (overrides: {
-  truncateAdditionalData?: boolean
-} = {}) => {
+const buildStonfiSwapPayload = (
+  overrides: {
+    truncateAdditionalData?: boolean
+  } = {}
+) => {
   const additionalDataBuilder = beginCell()
     .storeCoins(1_147_730_000n) // min_out
     .storeAddress(RECIPIENT) // receiver
@@ -181,7 +162,9 @@ describe('decodeTonMessageBody', () => {
       destination: RECIPIENT,
       responseDestination: RESPONSE,
       forwardTonAmount: 1_000_000n,
-    }).toBoc().toString('base64')
+    })
+      .toBoc()
+      .toString('base64')
 
     expect(decode(body)).toEqual({
       kind: 'jettonTransfer',
@@ -200,7 +183,9 @@ describe('decodeTonMessageBody', () => {
       destination: RECIPIENT,
       responseDestination: null,
       forwardTonAmount: 0n,
-    }).toBoc().toString('base64')
+    })
+      .toBoc()
+      .toString('base64')
 
     const intent = decode(body)
 
@@ -377,7 +362,9 @@ describe('decodeTonMessageBody', () => {
       newOwner: RECIPIENT,
       responseDestination: RESPONSE,
       forwardAmount: 50_000n,
-    }).toBoc().toString('base64')
+    })
+      .toBoc()
+      .toString('base64')
 
     expect(decode(body)).toEqual({
       kind: 'nftTransfer',
@@ -397,12 +384,7 @@ describe('decodeTonMessageBody', () => {
   })
 
   it('returns null for an unknown opcode', () => {
-    const body = beginCell()
-      .storeUint(0xdeadbeef, 32)
-      .storeUint(0n, 64)
-      .endCell()
-      .toBoc()
-      .toString('base64')
+    const body = beginCell().storeUint(0xdeadbeef, 32).storeUint(0n, 64).endCell().toBoc().toString('base64')
 
     expect(decode(body)).toBeNull()
   })
@@ -421,12 +403,7 @@ describe('decodeTonMessageBody', () => {
       forwardTonAmount: 1_000_000n,
     })
 
-    const body = beginCell()
-      .storeUint(0, 32)
-      .storeSlice(inner.beginParse())
-      .endCell()
-      .toBoc()
-      .toString('base64')
+    const body = beginCell().storeUint(0, 32).storeSlice(inner.beginParse()).endCell().toBoc().toString('base64')
 
     expect(decode(body)).toEqual({
       kind: 'jettonTransfer',

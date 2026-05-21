@@ -3,6 +3,5 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { TxHashResolver } from '../resolver'
 
-export const getSolanaTxHash: TxHashResolver<OtherChain.Solana> = ({
-  signatures,
-}) => shouldBePresent(signatures[0].signature)
+export const getSolanaTxHash: TxHashResolver<OtherChain.Solana> = ({ signatures }) =>
+  shouldBePresent(signatures[0].signature)

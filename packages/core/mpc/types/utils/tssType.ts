@@ -6,12 +6,7 @@ import { KeygenMessageSchema } from '../vultisig/keygen/v1/keygen_message_pb'
 import { ReshareMessageSchema } from '../vultisig/keygen/v1/reshare_message_pb'
 import { SingleKeygenMessageSchema } from '../vultisig/keygen/v1/single_keygen_message_pb'
 
-export type TssType =
-  | 'Keygen'
-  | 'Reshare'
-  | 'Migrate'
-  | 'KeyImport'
-  | 'SingleKeygen'
+export type TssType = 'Keygen' | 'Reshare' | 'Migrate' | 'KeyImport' | 'SingleKeygen'
 
 export const toTssType = (operation: KeygenOperation): TssType => {
   return matchRecordUnion<KeygenOperation, TssType>(operation, {

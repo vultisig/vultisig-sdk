@@ -25,10 +25,7 @@ type BlockchairAddressResponse = {
   }
 }
 
-export const getUtxoAddressInfo = ({
-  address,
-  chain,
-}: ChainAccount<UtxoChain>) => {
+export const getUtxoAddressInfo = ({ address, chain }: ChainAccount<UtxoChain>) => {
   const url = `${getBlockchairBaseUrl(chain)}/dashboards/address/${address}`
 
   return queryUrl<BlockchairAddressResponse>(url)

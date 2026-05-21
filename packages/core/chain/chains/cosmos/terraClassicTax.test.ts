@@ -32,8 +32,7 @@ const okJson = (body: unknown): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-const status = (code: number): Response =>
-  new Response('', { status: code })
+const status = (code: number): Response => new Response('', { status: code })
 
 // ---------------------------------------------------------------------------
 // URL builders
@@ -41,15 +40,11 @@ const status = (code: number): Response =>
 
 describe('Terra Classic tax LCD URLs', () => {
   it('builds the tax_rate URL against the configured LCD', () => {
-    expect(getTerraClassicTaxRateUrl()).toMatch(
-      /\/terra\/treasury\/v1beta1\/tax_rate$/
-    )
+    expect(getTerraClassicTaxRateUrl()).toMatch(/\/terra\/treasury\/v1beta1\/tax_rate$/)
   })
 
   it('builds the tax_caps URL with a denom path segment', () => {
-    expect(getTerraClassicTaxCapsUrl('uusd')).toMatch(
-      /\/terra\/treasury\/v1beta1\/tax_caps\/uusd$/
-    )
+    expect(getTerraClassicTaxCapsUrl('uusd')).toMatch(/\/terra\/treasury\/v1beta1\/tax_caps\/uusd$/)
   })
 
   it('URL-encodes denoms that contain forward slashes (ibc/<hash>)', () => {
@@ -61,9 +56,7 @@ describe('Terra Classic tax LCD URLs', () => {
   })
 
   it('URL-encodes factory denoms (factory/<addr>/<subdenom>)', () => {
-    expect(getTerraClassicTaxCapsUrl('factory/terra1abc/shr')).toMatch(
-      /\/tax_caps\/factory%2Fterra1abc%2Fshr$/
-    )
+    expect(getTerraClassicTaxCapsUrl('factory/terra1abc/shr')).toMatch(/\/tax_caps\/factory%2Fterra1abc%2Fshr$/)
   })
 })
 
@@ -86,39 +79,29 @@ describe('getTerraClassicTaxRate', () => {
 
   it('throws when the LCD returns 200 with the tax_rate field missing (fail-closed)', async () => {
     const fetchImpl = mkFetch(() => okJson({}))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /missing field on 200/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/missing field on 200/)
   })
 
   it('throws on non-2xx responses', async () => {
     const fetchImpl = mkFetch(() => status(503))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /LCD 503/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/LCD 503/)
   })
 
   it('throws on malformed Dec strings', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_rate: 'not-a-number' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /malformed Dec/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/malformed Dec/)
   })
 
   it('throws on negative Dec strings', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_rate: '-0.001' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /negative Dec rejected/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/negative Dec rejected/)
   })
 
   it('throws when the parsed rate exceeds 100% (10^18 on the Dec scale)', async () => {
     // A hostile or buggy LCD returning 1000.0 (i.e. 100,000% rate) would
     // otherwise be applied verbatim and drain transfers.
     const fetchImpl = mkFetch(() => okJson({ tax_rate: '1000.0' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /rate above 100%/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/rate above 100%/)
   })
 
   it('accepts the boundary rate of exactly 100% (10^18)', async () => {
@@ -132,23 +115,17 @@ describe('getTerraClassicTaxRate', () => {
     // `1.0000000000000000001` (semantically > 100%) was parsed as
     // exactly 10^18 and slipped past the cap guard. Now reject outright.
     const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.0000000000000000001' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /malformed Dec/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/malformed Dec/)
   })
 
   it('rejects multi-decimal-point Dec strings', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.0.0' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /malformed Dec/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/malformed Dec/)
   })
 
   it('rejects trailing dot Dec strings', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_rate: '1.' }))
-    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(
-      /malformed Dec/
-    )
+    await expect(getTerraClassicTaxRate({ fetchImpl })).rejects.toThrow(/malformed Dec/)
   })
 
   it('passes through abort signal', async () => {
@@ -189,30 +166,22 @@ describe('getTerraClassicTaxCap', () => {
     // an uncapped one. Now the missing-field case is reserved to 404
     // explicit-not-found ONLY; 200 with no tax_cap fails closed.
     const fetchImpl = mkFetch(() => okJson({}))
-    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(
-      /200 response missing tax_cap/
-    )
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(/200 response missing tax_cap/)
   })
 
   it('throws (fail-closed) when 200 response sets tax_cap to null', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_cap: null }))
-    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(
-      /200 response missing tax_cap/
-    )
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(/200 response missing tax_cap/)
   })
 
   it('throws on non-404 errors', async () => {
     const fetchImpl = mkFetch(() => status(500))
-    await expect(
-      getTerraClassicTaxCap('uusd', { fetchImpl })
-    ).rejects.toThrow(/LCD 500/)
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(/LCD 500/)
   })
 
   it('throws on malformed integer strings', async () => {
     const fetchImpl = mkFetch(() => okJson({ tax_cap: '12.5' }))
-    await expect(
-      getTerraClassicTaxCap('uusd', { fetchImpl })
-    ).rejects.toThrow(/malformed bigint/)
+    await expect(getTerraClassicTaxCap('uusd', { fetchImpl })).rejects.toThrow(/malformed bigint/)
   })
 })
 
@@ -224,9 +193,7 @@ describe('applyTerraClassicTax', () => {
   const ONE_PERCENT_TWO = 12_000_000_000_000_000n // 1.2% as 18-decimal Dec
 
   it('returns 0n when transferring uluna (LUNC is fee-exempt)', () => {
-    expect(
-      applyTerraClassicTax(1_000_000n, 'uluna', ONE_PERCENT_TWO, {})
-    ).toBe(0n)
+    expect(applyTerraClassicTax(1_000_000n, 'uluna', ONE_PERCENT_TWO, {})).toBe(0n)
   })
 
   it('returns 0n when rate is 0n (current paused state)', () => {
@@ -241,9 +208,7 @@ describe('applyTerraClassicTax', () => {
 
   it('floors `amount * rate / 10^18` to base-unit precision', () => {
     // 1_000_000 uusd * 0.012 = 12_000 uusd. Exact, no rounding.
-    expect(
-      applyTerraClassicTax(1_000_000n, 'uusd', ONE_PERCENT_TWO, {})
-    ).toBe(12_000n)
+    expect(applyTerraClassicTax(1_000_000n, 'uusd', ONE_PERCENT_TWO, {})).toBe(12_000n)
   })
 
   it('rounds DOWN (matches cosmos-sdk Dec.MulInt for positive values)', () => {
@@ -256,23 +221,17 @@ describe('applyTerraClassicTax', () => {
     // amount=10^15 uusd, rate=1.2% → raw tax 1.2 * 10^13 = 12_000_000_000_000.
     // cap=10_000_000_000_000 — clamp to cap.
     const cap = 10_000_000_000_000n
-    expect(
-      applyTerraClassicTax(10n ** 15n, 'uusd', ONE_PERCENT_TWO, { uusd: cap })
-    ).toBe(cap)
+    expect(applyTerraClassicTax(10n ** 15n, 'uusd', ONE_PERCENT_TWO, { uusd: cap })).toBe(cap)
   })
 
   it('does not clamp when raw tax is below the cap', () => {
     // raw tax = 12_000 (well below cap); no clamping.
     const cap = 10_000_000_000_000n
-    expect(
-      applyTerraClassicTax(1_000_000n, 'uusd', ONE_PERCENT_TWO, { uusd: cap })
-    ).toBe(12_000n)
+    expect(applyTerraClassicTax(1_000_000n, 'uusd', ONE_PERCENT_TWO, { uusd: cap })).toBe(12_000n)
   })
 
   it('treats a missing cap as +infinity (no clamp)', () => {
-    expect(
-      applyTerraClassicTax(10n ** 15n, 'umystery', ONE_PERCENT_TWO, {})
-    ).toBe(12n * 10n ** 12n)
+    expect(applyTerraClassicTax(10n ** 15n, 'umystery', ONE_PERCENT_TWO, {})).toBe(12n * 10n ** 12n)
   })
 
   it('treats a null cap as +infinity (matches getTerraClassicTaxCap returning null)', () => {
@@ -284,15 +243,11 @@ describe('applyTerraClassicTax', () => {
   })
 
   it('rejects negative amount', () => {
-    expect(() =>
-      applyTerraClassicTax(-1n, 'uusd', ONE_PERCENT_TWO, {})
-    ).toThrow(/amount must be non-negative/)
+    expect(() => applyTerraClassicTax(-1n, 'uusd', ONE_PERCENT_TWO, {})).toThrow(/amount must be non-negative/)
   })
 
   it('rejects negative rate', () => {
-    expect(() => applyTerraClassicTax(1n, 'uusd', -1n, {})).toThrow(
-      /rate must be non-negative/
-    )
+    expect(() => applyTerraClassicTax(1n, 'uusd', -1n, {})).toThrow(/rate must be non-negative/)
   })
 
   it('rejects negative cap', () => {

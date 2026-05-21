@@ -11,8 +11,7 @@ const mpcLibToLibType: Record<MpcLib, LibType> = {
 
 const libTypeToMpcLib: Record<LibType, MpcLib> = mirrorRecord(mpcLibToLibType)
 
-export const fromLibType = (libType: LibType): MpcLib =>
-  libTypeToMpcLib[libType]
+export const fromLibType = (libType: LibType): MpcLib => libTypeToMpcLib[libType]
 
 export const toLibType = (libType: MpcLib): LibType => mpcLibToLibType[libType]
 

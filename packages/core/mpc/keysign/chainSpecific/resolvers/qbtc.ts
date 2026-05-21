@@ -11,9 +11,7 @@ import { GetChainSpecificResolver } from '../resolver'
 
 const qbtcDefaultGas = 7500n
 
-export const getQbtcChainSpecific: GetChainSpecificResolver<
-  'cosmosSpecific'
-> = async ({
+export const getQbtcChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> = async ({
   keysignPayload,
   transactionType = TransactionType.UNSPECIFIED,
   timeoutTimestamp,
@@ -29,9 +27,7 @@ export const getQbtcChainSpecific: GetChainSpecificResolver<
     transactionType,
     gas: qbtcDefaultGas,
     ibcDenomTraces: {
-      latestBlock: timeoutTimestamp
-        ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}`
-        : latestBlock,
+      latestBlock: timeoutTimestamp ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}` : latestBlock,
       baseDenom: '',
       path: '',
     },

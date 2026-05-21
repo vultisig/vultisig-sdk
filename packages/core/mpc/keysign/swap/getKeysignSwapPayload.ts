@@ -20,9 +20,7 @@ export const getKeysignSwapPayload = ({
     }),
     oneinchSwapPayload: general => ({ general }),
     kyberswapSwapPayload: () => {
-      throw new Error(
-        'Kyberswap swap payload is deprecated and no longer supported'
-      )
+      throw new Error('Kyberswap swap payload is deprecated and no longer supported')
     },
   })
 }

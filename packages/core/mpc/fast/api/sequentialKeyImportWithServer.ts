@@ -15,10 +15,7 @@ type Input = {
   vaultBaseUrl?: string
 }
 
-export const sequentialKeyImportWithServer = async ({
-  vaultBaseUrl,
-  ...body
-}: Input) =>
+export const sequentialKeyImportWithServer = async ({ vaultBaseUrl, ...body }: Input) =>
   queryUrl(`${vaultBaseUrl ?? fastVaultServerUrl}/import`, {
     body,
     responseType: 'none',

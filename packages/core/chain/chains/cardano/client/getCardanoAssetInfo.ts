@@ -39,9 +39,7 @@ export const getCardanoAssetInfo = async ({
   })
 
   if (!info) {
-    throw new Error(
-      `Asset info not found for ${policyId}.${assetName}`
-    )
+    throw new Error(`Asset info not found for ${policyId}.${assetName}`)
   }
 
   return info

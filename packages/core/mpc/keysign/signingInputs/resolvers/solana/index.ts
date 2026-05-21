@@ -10,37 +10,25 @@ import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
 import { getSolanaSendSigningInput } from './send'
 
-export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({
-  keysignPayload,
-  walletCore,
-}) => {
+export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain(keysignPayload)
 
-  const { recentBlockHash } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'solanaSpecific'
-  )
+  const { recentBlockHash } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'solanaSpecific')
 
   if (keysignPayload.signData.case === 'signSolana') {
     const coinType = getCoinType({ walletCore, chain })
-    const inputs = keysignPayload.signData.value.rawTransactions.map(
-      transaction => {
-        const decodedData = walletCore.TransactionDecoder.decode(
-          coinType,
-          Buffer.from(transaction, 'base64')
-        )
-        const decodedTransaction =
-          TW.Solana.Proto.DecodingTransactionOutput.decode(decodedData)
-        if (!decodedTransaction.transaction) {
-          throw new Error("Can't decode transaction")
-        }
-        const rawMessage = decodedTransaction.transaction
-
-        return TW.Solana.Proto.SigningInput.create({
-          rawMessage,
-        })
+    const inputs = keysignPayload.signData.value.rawTransactions.map(transaction => {
+      const decodedData = walletCore.TransactionDecoder.decode(coinType, Buffer.from(transaction, 'base64'))
+      const decodedTransaction = TW.Solana.Proto.DecodingTransactionOutput.decode(decodedData)
+      if (!decodedTransaction.transaction) {
+        throw new Error("Can't decode transaction")
       }
-    )
+      const rawMessage = decodedTransaction.transaction
+
+      return TW.Solana.Proto.SigningInput.create({
+        rawMessage,
+      })
+    })
     return inputs
   }
 
@@ -60,8 +48,7 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({
           }),
           Buffer.from(data, 'base64')
         )
-        const { transaction } =
-          TW.Solana.Proto.DecodingTransactionOutput.decode(decodedData)
+        const { transaction } = TW.Solana.Proto.DecodingTransactionOutput.decode(decodedData)
 
         if (!transaction) {
           throw new Error("Can't decode swap transaction")

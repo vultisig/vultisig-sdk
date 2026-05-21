@@ -16,10 +16,7 @@ export const deriveSolanaAddressWithPhantomPath = ({
   const coinType = walletCore.CoinType.solana
   const privateKey = hdWallet.getKey(coinType, phantomSolanaPath)
   const publicKey = privateKey.getPublicKeyEd25519()
-  const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(
-    coinType,
-    publicKey
-  )
+  const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
 
   privateKey.delete()
   publicKey.delete()

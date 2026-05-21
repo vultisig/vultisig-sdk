@@ -6,10 +6,7 @@ type UploadPayloadToServerInput = {
   payload: string
 }
 
-export async function uploadPayloadToServer({
-  payload,
-  serverUrl,
-}: UploadPayloadToServerInput): Promise<string> {
+export async function uploadPayloadToServer({ payload, serverUrl }: UploadPayloadToServerInput): Promise<string> {
   const hash = crypto.createHash('sha256').update(payload).digest('hex')
   const url = `${serverUrl}/payload/${hash}`
 

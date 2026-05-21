@@ -4,13 +4,14 @@
  * Provides version display and update checking functionality
  */
 import chalk from 'chalk'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 
 import { info } from './output'
 
 // Build-time injected version (replaced by esbuild --define)
+// eslint-disable-next-line @typescript-eslint/naming-convention
 declare const __CLI_VERSION__: string | undefined
 
 // Package version cache
@@ -43,7 +44,7 @@ export function getVersion(): string {
 /**
  * Version check cache info
  */
-interface VersionCache {
+type VersionCache = {
   lastCheck: number
   latestVersion: string | null
 }

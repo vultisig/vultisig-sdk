@@ -15,8 +15,7 @@ const GCM_TAG_LEN = 16
 
 function isPbkdf2VaultBackupMagic(value: Buffer): boolean {
   return (
-    value.length >= VAULT_BACKUP_MAGIC_LEN &&
-    value.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
+    value.length >= VAULT_BACKUP_MAGIC_LEN && value.subarray(0, VAULT_BACKUP_MAGIC_LEN).equals(VAULT_BACKUP_BLOB_MAGIC)
   )
 }
 

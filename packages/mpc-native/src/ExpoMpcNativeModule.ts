@@ -13,30 +13,19 @@ interface ExpoMpcNativeModuleType {
   // ---------------------------------------------------------------------------
 
   /** Create a DKLS keygen setup message. Returns base64-encoded setup. */
-  dklsKeygenSetup(
-    threshold: number,
-    keyId: string | null,
-    ids: string[]
-  ): string
+  dklsKeygenSetup(threshold: number, keyId: string | null, ids: string[]): string
 
   /**
    * Create a DKLS keygen session from a base64-encoded setup message.
    * Returns a session handle.
    */
-  createKeygenSession(
-    setupBase64: string,
-    localPartyId: string
-  ): Promise<number>
+  createKeygenSession(setupBase64: string, localPartyId: string): Promise<number>
 
   /**
    * Create a DKLS keygen refresh session.
    * Returns a session handle.
    */
-  createKeygenRefreshSession(
-    setupBase64: string,
-    localPartyId: string,
-    keyshareHandle: number
-  ): number
+  createKeygenRefreshSession(setupBase64: string, localPartyId: string, keyshareHandle: number): number
 
   /**
    * Create a DKLS keygen migration session.
@@ -58,17 +47,10 @@ interface ExpoMpcNativeModuleType {
   keygenSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a keygen message at the given index. Returns the party ID. */
-  keygenSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  keygenSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a keygen session. Returns true if the session is complete. */
-  keygenSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  keygenSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /**
    * Finish a keygen session and return the keyshare data.
@@ -84,12 +66,7 @@ interface ExpoMpcNativeModuleType {
   // ---------------------------------------------------------------------------
 
   /** Create a DKLS sign setup message. Returns base64-encoded setup. */
-  dklsSignSetup(
-    keyIdBase64: string,
-    chainPath: string,
-    messageHashBase64: string | null,
-    ids: string[]
-  ): string
+  dklsSignSetup(keyIdBase64: string, chainPath: string, messageHashBase64: string | null, ids: string[]): string
 
   /** Decode the message hash from a DKLS sign setup message. Returns base64 or null. */
   dklsDecodeMessage(setupBase64: string): string | null
@@ -98,27 +75,16 @@ interface ExpoMpcNativeModuleType {
   dklsDecodeKeyId(setupBase64: string): string | null
 
   /** Create a DKLS sign session. Returns a session handle. */
-  createSignSession(
-    setupBase64: string,
-    localPartyId: string,
-    keyshareHandle: number
-  ): number
+  createSignSession(setupBase64: string, localPartyId: string, keyshareHandle: number): number
 
   /** Get the next output message from a sign session. Returns base64 or null. */
   signSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a sign message at the given index. Returns the party ID. */
-  signSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  signSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a sign session. Returns true if the session is complete. */
-  signSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  signSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /** Finish a sign session and return the signature as base64. */
   finishSign(sessionHandle: number): string
@@ -162,27 +128,16 @@ interface ExpoMpcNativeModuleType {
   ): string
 
   /** Create a DKLS QC session. Returns a session handle. */
-  createQcSession(
-    setupBase64: string,
-    localPartyId: string,
-    keyshareHandle: number | null
-  ): number
+  createQcSession(setupBase64: string, localPartyId: string, keyshareHandle: number | null): number
 
   /** Get the next output message from a QC session. Returns base64 or null. */
   qcSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a QC message at the given index. Returns the party ID. */
-  qcSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  qcSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a QC session. Returns true if the session is complete. */
-  qcSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  qcSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /** Finish a QC session and return the keyshare handle (or -1 if none). */
   finishQc(sessionHandle: number): number
@@ -210,30 +165,20 @@ interface ExpoMpcNativeModuleType {
    * Create a DKLS key import session (non-initiator).
    * Returns a session handle.
    */
-  createDklsKeyImportSession(
-    setupBase64: string,
-    localPartyId: string
-  ): Promise<number>
+  createDklsKeyImportSession(setupBase64: string, localPartyId: string): Promise<number>
 
   // ---------------------------------------------------------------------------
   // Schnorr — Keygen
   // ---------------------------------------------------------------------------
 
   /** Create a Schnorr keygen setup message. Returns base64-encoded setup. */
-  schnorrKeygenSetup(
-    threshold: number,
-    keyId: string | null,
-    ids: string[]
-  ): string
+  schnorrKeygenSetup(threshold: number, keyId: string | null, ids: string[]): string
 
   /**
    * Create a Schnorr keygen session from a base64-encoded setup message.
    * Returns a session handle.
    */
-  createSchnorrKeygenSession(
-    setupBase64: string,
-    localPartyId: string
-  ): Promise<number>
+  createSchnorrKeygenSession(setupBase64: string, localPartyId: string): Promise<number>
 
   // ---------------------------------------------------------------------------
   // Schnorr — Keygen session I/O
@@ -243,17 +188,10 @@ interface ExpoMpcNativeModuleType {
   schnorrKeygenSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a Schnorr keygen message at the given index. */
-  schnorrKeygenSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  schnorrKeygenSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a Schnorr keygen session. Returns true if complete. */
-  schnorrKeygenSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  schnorrKeygenSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /**
    * Finish a Schnorr keygen session and return the keyshare data.
@@ -269,12 +207,7 @@ interface ExpoMpcNativeModuleType {
   // ---------------------------------------------------------------------------
 
   /** Create a Schnorr sign setup message. Returns base64-encoded setup. */
-  schnorrSignSetup(
-    keyIdBase64: string,
-    chainPath: string,
-    messageHashBase64: string,
-    ids: string[]
-  ): string
+  schnorrSignSetup(keyIdBase64: string, chainPath: string, messageHashBase64: string, ids: string[]): string
 
   /** Decode the message hash from a Schnorr sign setup message. Returns base64 or null. */
   schnorrDecodeMessage(setupBase64: string): string | null
@@ -283,27 +216,16 @@ interface ExpoMpcNativeModuleType {
   schnorrDecodeKeyId(setupBase64: string): string | null
 
   /** Create a Schnorr sign session. Returns a session handle. */
-  createSchnorrSignSession(
-    setupBase64: string,
-    localPartyId: string,
-    keyshareHandle: number
-  ): number
+  createSchnorrSignSession(setupBase64: string, localPartyId: string, keyshareHandle: number): number
 
   /** Get the next output message from a Schnorr sign session. Returns base64 or null. */
   schnorrSignSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a Schnorr sign message at the given index. */
-  schnorrSignSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  schnorrSignSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a Schnorr sign session. Returns true if complete. */
-  schnorrSignSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  schnorrSignSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /** Finish a Schnorr sign session and return the signature as base64. */
   finishSchnorrSign(sessionHandle: number): string
@@ -347,27 +269,16 @@ interface ExpoMpcNativeModuleType {
   ): string
 
   /** Create a Schnorr QC session. Returns a session handle. */
-  createSchnorrQcSession(
-    setupBase64: string,
-    localPartyId: string,
-    keyshareHandle: number | null
-  ): number
+  createSchnorrQcSession(setupBase64: string, localPartyId: string, keyshareHandle: number | null): number
 
   /** Get the next output message from a Schnorr QC session. */
   schnorrQcSessionOutputMessage(sessionHandle: number): string | null
 
   /** Get the receiver for a Schnorr QC message at the given index. */
-  schnorrQcSessionMessageReceiver(
-    sessionHandle: number,
-    messageBase64: string,
-    index: number
-  ): string
+  schnorrQcSessionMessageReceiver(sessionHandle: number, messageBase64: string, index: number): string
 
   /** Feed an input message to a Schnorr QC session. Returns true if complete. */
-  schnorrQcSessionInputMessage(
-    sessionHandle: number,
-    messageBase64: string
-  ): boolean
+  schnorrQcSessionInputMessage(sessionHandle: number, messageBase64: string): boolean
 
   /** Finish a Schnorr QC session and return the keyshare handle (or -1 if none). */
   finishSchnorrQc(sessionHandle: number): number
@@ -395,10 +306,7 @@ interface ExpoMpcNativeModuleType {
    * Create a Schnorr key import session (non-initiator).
    * Returns a session handle.
    */
-  createSchnorrKeyImportSession(
-    setupBase64: string,
-    localPartyId: string
-  ): Promise<number>
+  createSchnorrKeyImportSession(setupBase64: string, localPartyId: string): Promise<number>
 }
 
 export default requireNativeModule<ExpoMpcNativeModuleType>('ExpoMpcNative')

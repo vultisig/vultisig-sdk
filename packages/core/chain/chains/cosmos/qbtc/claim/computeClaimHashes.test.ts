@@ -12,13 +12,10 @@ import {
 
 const hexToBytes = (hex: string) => Buffer.from(hex, 'hex')
 
-const bytesToHex = (bytes: Uint8Array) =>
-  Buffer.from(bytes).toString('hex')
+const bytesToHex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
 
 // A well-known compressed public key for testing
-const testCompressedPubkey = hexToBytes(
-  '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-)
+const testCompressedPubkey = hexToBytes('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798')
 
 describe('computeAddressHash', () => {
   it('computes Hash160 for ECDSA circuit', () => {
@@ -130,8 +127,7 @@ describe('computeAllClaimHashes', () => {
   it('rejects P2TR addresses until the chain defines a Schnorr tag', () => {
     expect(() =>
       computeAllClaimHashes({
-        btcAddress:
-          'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
+        btcAddress: 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297',
         compressedPubkey: testCompressedPubkey,
         qbtcAddress: 'qbtc1test',
         chainId: 'qbtc-1',

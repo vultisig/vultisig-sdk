@@ -1,8 +1,8 @@
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
+import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { AccountCoin } from '../../../../coin/AccountCoin'
@@ -19,10 +19,7 @@ import {
 } from '../config'
 import { getKyberSwapBaseUrl } from './baseUrl'
 
-type GetKyberSwapTxInput = Record<
-  TransferDirection,
-  AccountCoin<KyberSwapEnabledChain>
-> & {
+type GetKyberSwapTxInput = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   routeSummary: any
   routerAddress: string
   amount: bigint
@@ -80,27 +77,18 @@ export const getKyberSwapTx = async ({
     sender: from.address,
     recipient: from.address,
     slippageTolerance: kyberSwapSlippageTolerance,
-    deadline: Math.round(
-      convertDuration(
-        Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'),
-        'ms',
-        's'
-      )
-    ),
+    deadline: Math.round(convertDuration(Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'), 'ms', 's')),
     enableGasEstimation,
     ...getKyberSwapAffiliateParams(affiliateBps),
     ignoreCappedSlippage: false,
   }
 
-  const buildResponse = await queryUrl<KyberSwapBuildResponse>(
-    `${getKyberSwapBaseUrl(from.chain)}/route/build`,
-    {
-      headers: {
-        'X-Client-Id': kyberSwapAffiliateConfig.source,
-      },
-      body: buildPayload,
-    }
-  )
+  const buildResponse = await queryUrl<KyberSwapBuildResponse>(`${getKyberSwapBaseUrl(from.chain)}/route/build`, {
+    headers: {
+      'X-Client-Id': kyberSwapAffiliateConfig.source,
+    },
+    body: buildPayload,
+  })
 
   if (buildResponse.code !== 0 || !buildResponse.data) {
     if ('message' in buildResponse) {

@@ -18,16 +18,11 @@ type BlockchairTxResponse = {
   >
 }
 
-export const getUtxoTxStatus: TxStatusResolver<UtxoBasedChain> = async ({
-  chain,
-  hash,
-}) => {
+export const getUtxoTxStatus: TxStatusResolver<UtxoBasedChain> = async ({ chain, hash }) => {
   const baseUrl = getBlockchairBaseUrl(chain)
   const url = `${baseUrl}/dashboards/transaction/${hash}`
 
-  const { data: response, error } = await attempt(
-    queryUrl<BlockchairTxResponse>(url)
-  )
+  const { data: response, error } = await attempt(queryUrl<BlockchairTxResponse>(url))
 
   if (error || !response || !response.data[hash]) {
     return { status: 'pending' }

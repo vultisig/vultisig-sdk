@@ -7,7 +7,7 @@ const getEngineKey = (algo: SignatureAlgorithm): 'dkls' | 'schnorr' => {
   if (algo === 'mldsa') {
     throw new Error(
       'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine. ' +
-      'Route MLDSA signing through packages/core/mpc/mldsa/ instead.'
+        'Route MLDSA signing through packages/core/mpc/mldsa/ instead.'
     )
   }
   return algo === 'eddsa' ? 'schnorr' : 'dkls'
@@ -25,19 +25,15 @@ type SignSessionMethods = {
 
 const dklsMethods: SignSessionMethods = {
   setup: (...args) => getMpcEngine().dkls.signSetup(...args),
-  setupMessageHash: (setupMsg) => getMpcEngine().dkls.signSetupMessageHash(setupMsg),
+  setupMessageHash: setupMsg => getMpcEngine().dkls.signSetupMessageHash(setupMsg),
 }
 
 const mldsaNotSupported: SignSessionMethods = {
   setup: () => {
-    throw new Error(
-      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.'
-    )
+    throw new Error('MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.')
   },
   setupMessageHash: () => {
-    throw new Error(
-      'MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.'
-    )
+    throw new Error('MLDSA uses a dedicated signing path (MldsaKeysign), not the pluggable MPC engine.')
   },
 }
 
@@ -51,8 +47,7 @@ export const SignSession: Record<SignatureAlgorithm, SignSessionMethods> = {
       }
       return getMpcEngine().schnorr.signSetup(keyId, chainPath, messageHash, partyIds)
     },
-    setupMessageHash: (setupMsg) =>
-      getMpcEngine().schnorr.signSetupMessageHash(setupMsg),
+    setupMessageHash: setupMsg => getMpcEngine().schnorr.signSetupMessageHash(setupMsg),
   },
 }
 

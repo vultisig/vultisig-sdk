@@ -128,9 +128,7 @@ export const keysign = async ({
 
   const processInbound = async (): Promise<void> => {
     if (abortController.signal.aborted) {
-      throw new Error(
-        `Exited inbound processing due to a timeout after ${maxInboundWaitTime} min`
-      )
+      throw new Error(`Exited inbound processing due to a timeout after ${maxInboundWaitTime} min`)
     }
 
     const relayMessages = await transformError(
@@ -149,9 +147,7 @@ export const keysign = async ({
         continue
       }
 
-      const accepted = session.inputMessage(
-        fromMpcServerMessage(msg.body, hexEncryptionKey)
-      )
+      const accepted = session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
       if (accepted) {
         processedMessages[cacheKey] = true
         return
@@ -202,8 +198,7 @@ export const keysign = async ({
           // little-endian (the on-the-wire ed25519-dalek format). Pass
           // through here; any backend-specific byte-ordering quirks belong
           // inside that backend's session wrapper, never in this loop.
-          const [r, s] = [rawR, rawS]
-            .map(value => Buffer.from(value).toString('hex'))
+          const [r, s] = [rawR, rawS].map(value => Buffer.from(value).toString('hex'))
 
           const derSignature = encodeDERSignature(rawR, rawS)
           return withoutUndefinedFields({

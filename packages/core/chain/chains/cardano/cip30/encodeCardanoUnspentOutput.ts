@@ -4,8 +4,7 @@ import { CardanoExtendedUtxo } from '../utxo/getCardanoExtendedUtxos'
 import { buildCardanoValue } from './buildCardanoValue'
 import { cardanoCborEncoder } from './cborEncoder'
 
-const hexToBytes = (hex: string): Uint8Array =>
-  Uint8Array.from(Buffer.from(stripHexPrefix(hex), 'hex'))
+const hexToBytes = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(stripHexPrefix(hex), 'hex'))
 
 type Input = {
   utxo: CardanoExtendedUtxo
@@ -20,10 +19,7 @@ type Input = {
  *
  * `address_bytes` should already be the raw address bytes (see `cardanoAddressBytes`).
  */
-export const encodeCardanoUnspentOutput = ({
-  utxo,
-  addressBytes,
-}: Input): Uint8Array => {
+export const encodeCardanoUnspentOutput = ({ utxo, addressBytes }: Input): Uint8Array => {
   const txHashBytes = hexToBytes(utxo.hash)
   if (txHashBytes.length !== 32) {
     throw new Error(

@@ -5,9 +5,7 @@ type Trc20TransferInfo = {
   amount: bigint
 }
 
-export const decodeTrc20TransferData = (
-  data: string
-): Trc20TransferInfo | null => {
+export const decodeTrc20TransferData = (data: string): Trc20TransferInfo | null => {
   const cleanData = data.startsWith('0x') ? data.slice(2) : data
 
   if (!cleanData.startsWith(trc20TransferSelector)) {

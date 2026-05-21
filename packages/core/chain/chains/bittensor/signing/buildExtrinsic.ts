@@ -10,12 +10,7 @@
 
 import { decodeAddress } from '@polkadot/util-crypto'
 
-import {
-  compactEncode,
-  concatBytes,
-  encodeMortalEra,
-  hexToBytes,
-} from './scale'
+import { compactEncode, concatBytes, encodeMortalEra, hexToBytes } from './scale'
 
 /** Bittensor Balances.transfer_allow_death call indices (allows full balance send) */
 const balancesPallet = 5
@@ -55,11 +50,7 @@ const buildCallData = (toAddress: string, amount: bigint): Uint8Array => {
  * Order must match the runtime's SignedExtra tuple:
  *   CheckMortality(Era), CheckNonce(compact), ChargeTransactionPayment(compact), CheckMetadataHash(mode)
  */
-const buildSignedExtra = (
-  nonce: number,
-  blockNumber: number,
-  eraPeriod: number
-): Uint8Array =>
+const buildSignedExtra = (nonce: number, blockNumber: number, eraPeriod: number): Uint8Array =>
   concatBytes(
     encodeMortalEra(blockNumber, eraPeriod),
     compactEncode(nonce),
@@ -79,11 +70,7 @@ const buildAdditionalSigned = (params: BittensorSigningParams): Uint8Array => {
   new DataView(specVersionBytes.buffer).setUint32(0, params.specVersion, true)
 
   const txVersionBytes = new Uint8Array(4)
-  new DataView(txVersionBytes.buffer).setUint32(
-    0,
-    params.transactionVersion,
-    true
-  )
+  new DataView(txVersionBytes.buffer).setUint32(0, params.transactionVersion, true)
 
   return concatBytes(
     specVersionBytes,
@@ -105,11 +92,7 @@ export const buildBittensorSigningPayload = (
   params: BittensorSigningParams
 ): { callData: Uint8Array; signedExtra: Uint8Array; payload: Uint8Array } => {
   const callData = buildCallData(params.toAddress, params.amount)
-  const signedExtra = buildSignedExtra(
-    params.nonce,
-    params.blockNumber,
-    params.eraPeriod ?? 64
-  )
+  const signedExtra = buildSignedExtra(params.nonce, params.blockNumber, params.eraPeriod ?? 64)
   const additionalSigned = buildAdditionalSigned(params)
 
   const payload = concatBytes(callData, signedExtra, additionalSigned)

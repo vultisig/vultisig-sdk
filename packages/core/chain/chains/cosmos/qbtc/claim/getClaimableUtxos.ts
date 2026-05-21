@@ -30,21 +30,13 @@ type QbtcUtxoResponse = {
  * the remaining entitled amount in satoshis. Other non-2xx responses
  * propagate so transient network failures don't silently drop UTXOs.
  */
-const getOnChainEntitledAmount = async ({
-  txid,
-  vout,
-}: {
-  txid: string
-  vout: number
-}): Promise<bigint | null> => {
+const getOnChainEntitledAmount = async ({ txid, vout }: { txid: string; vout: number }): Promise<bigint | null> => {
   const response = await fetch(`${qbtcRestUrl}/qbtc/v1/utxo/${txid}/${vout}`)
 
   if (response.status === 404) return null
 
   if (!response.ok) {
-    throw new Error(
-      `Failed to verify UTXO ${txid}:${vout} on QBTC chain (${response.status} ${response.statusText})`
-    )
+    throw new Error(`Failed to verify UTXO ${txid}:${vout} on QBTC chain (${response.status} ${response.statusText})`)
   }
 
   const body: QbtcUtxoResponse = await response.json()
@@ -68,9 +60,7 @@ const getOnChainEntitledAmount = async ({
  * not the Blockchair-reported BTC value — partial payouts on a UTXO would
  * otherwise mislead the user about what they're about to claim.
  */
-export const getClaimableUtxos = async ({
-  btcAddress,
-}: GetClaimableUtxosInput): Promise<ClaimableUtxo[]> => {
+export const getClaimableUtxos = async ({ btcAddress }: GetClaimableUtxosInput): Promise<ClaimableUtxo[]> => {
   const response = await getUtxoAddressInfo({
     address: btcAddress,
     chain: Chain.Bitcoin,
@@ -79,9 +69,7 @@ export const getClaimableUtxos = async ({
   const btcUtxos = response.data[btcAddress]?.utxo ?? []
 
   const entitledAmounts = await Promise.all(
-    btcUtxos.map(({ transaction_hash, index }) =>
-      getOnChainEntitledAmount({ txid: transaction_hash, vout: index })
-    )
+    btcUtxos.map(({ transaction_hash, index }) => getOnChainEntitledAmount({ txid: transaction_hash, vout: index }))
   )
 
   return btcUtxos.flatMap(({ transaction_hash, index }, i) => {

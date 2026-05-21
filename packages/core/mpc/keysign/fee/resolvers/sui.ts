@@ -2,10 +2,7 @@ import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpec
 import { FeeAmountResolver } from '../resolver'
 
 export const getSuiFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
-  const { gasBudget } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'suicheSpecific'
-  )
+  const { gasBudget } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'suicheSpecific')
 
   return BigInt(gasBudget)
 }

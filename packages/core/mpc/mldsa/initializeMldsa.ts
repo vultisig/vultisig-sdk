@@ -4,8 +4,5 @@ import { transformError } from '@vultisig/lib-utils/error/transformError'
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 
 export const initializeMldsaLib = memoizeAsync(() =>
-  transformError(
-    initializeMldsa(),
-    prefixErrorWith('Failed to initialize MLDSA lib')
-  )
+  transformError(initializeMldsa(), prefixErrorWith('Failed to initialize MLDSA lib'))
 )

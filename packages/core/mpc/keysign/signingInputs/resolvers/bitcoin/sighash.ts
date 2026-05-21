@@ -7,8 +7,7 @@ import { SignBitcoin } from '../../../../types/vultisig/keysign/v1/wasm_execute_
 // See https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
 
 /** Double-SHA256 as used in Bitcoin consensus. */
-const hash256 = (data: Uint8Array): Buffer =>
-  Buffer.from(sha256(sha256(data)))
+const hash256 = (data: Uint8Array): Buffer => Buffer.from(sha256(sha256(data)))
 
 /** Serialize a uint32 as 4 bytes little-endian. */
 export const writeUInt32LE = (value: number): Buffer => {
@@ -51,11 +50,7 @@ export const writeVarInt = (n: number): Buffer => {
  */
 const p2wpkhScriptCode = (scriptPubKey: Buffer): Buffer => {
   const pubkeyHash = scriptPubKey.subarray(2, 22)
-  return Buffer.concat([
-    Buffer.from([0x19, 0x76, 0xa9, 0x14]),
-    pubkeyHash,
-    Buffer.from([0x88, 0xac]),
-  ])
+  return Buffer.concat([Buffer.from([0x19, 0x76, 0xa9, 0x14]), pubkeyHash, Buffer.from([0x88, 0xac])])
 }
 
 /** Serialize an outpoint (txid LE + vout LE). */
@@ -87,9 +82,7 @@ const serializeOutput = (amount: bigint, scriptPubKey: Buffer): Buffer =>
  *
  * @see https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
  */
-export const computePreSigningHashes = (
-  signBitcoin: SignBitcoin
-): Uint8Array[] => {
+export const computePreSigningHashes = (signBitcoin: SignBitcoin): Uint8Array[] => {
   const { version, locktime, inputs, outputs } = signBitcoin
 
   if (inputs.length === 0) {
@@ -102,22 +95,16 @@ export const computePreSigningHashes = (
   }
 
   // hashPrevouts = double_SHA256(all outpoints serialized)
-  const prevoutsData = Buffer.concat(
-    inputs.map(inp => serializeOutpoint(inp.hash, inp.index))
-  )
+  const prevoutsData = Buffer.concat(inputs.map(inp => serializeOutpoint(inp.hash, inp.index)))
   const hashPrevouts = hash256(prevoutsData)
 
   // hashSequence = double_SHA256(all sequences serialized)
-  const sequenceData = Buffer.concat(
-    inputs.map(inp => writeUInt32LE(inp.sequence ?? 0xffffffff))
-  )
+  const sequenceData = Buffer.concat(inputs.map(inp => writeUInt32LE(inp.sequence ?? 0xffffffff)))
   const hashSequence = hash256(sequenceData)
 
   // hashOutputs = double_SHA256(all outputs serialized)
   const outputsData = Buffer.concat(
-    outputs.map(out =>
-      serializeOutput(out.amount, Buffer.from(out.scriptPubKey, 'hex'))
-    )
+    outputs.map(out => serializeOutput(out.amount, Buffer.from(out.scriptPubKey, 'hex')))
   )
   const hashOutputs = hash256(outputsData)
 
@@ -140,18 +127,12 @@ export const computePreSigningHashes = (
         throw new Error('P2SH-P2WPKH inputs require redeemScript')
       }
       const redeemScript = Buffer.from(input.redeemScript, 'hex')
-      if (
-        redeemScript.length !== 22 ||
-        redeemScript[0] !== 0x00 ||
-        redeemScript[1] !== 0x14
-      ) {
+      if (redeemScript.length !== 22 || redeemScript[0] !== 0x00 || redeemScript[1] !== 0x14) {
         throw new Error('Unsupported redeemScript for p2sh-p2wpkh')
       }
       scriptCode = p2wpkhScriptCode(redeemScript)
     } else {
-      throw new Error(
-        `Unsupported script type for BIP-143 sighash: ${input.scriptType}`
-      )
+      throw new Error(`Unsupported script type for BIP-143 sighash: ${input.scriptType}`)
     }
 
     const sighashType = input.sighashType ?? 1 // SIGHASH_ALL
@@ -160,8 +141,7 @@ export const computePreSigningHashes = (
 
     if (baseType !== 0x01 || anyoneCanPay) {
       throw new Error(
-        `Unsupported sighash type: 0x${sighashType.toString(16)}. ` +
-          `Only SIGHASH_ALL (0x01) is currently supported.`
+        `Unsupported sighash type: 0x${sighashType.toString(16)}. ` + `Only SIGHASH_ALL (0x01) is currently supported.`
       )
     }
 
@@ -186,4 +166,3 @@ export const computePreSigningHashes = (
 
   return sighashes
 }
-

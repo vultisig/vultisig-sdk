@@ -20,9 +20,7 @@ describe('decimalStringToBigInt', () => {
   it('rejects empty, dot-only, and over-precision inputs', () => {
     expect(() => decimalStringToBigInt('', 2)).toThrow('Invalid decimal string')
     expect(() => decimalStringToBigInt('.', 2)).toThrow('Invalid decimal string')
-    expect(() => decimalStringToBigInt('1.001', 2)).toThrow(
-      /^Fractional part exceeds 2 decimals: \d+$/
-    )
+    expect(() => decimalStringToBigInt('1.001', 2)).toThrow(/^Fractional part exceeds 2 decimals: \d+$/)
   })
 
   it('rejects non-digit integer parts', () => {

@@ -1,4 +1,3 @@
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 
-export const toEvmTxData = (data: string) =>
-  Buffer.from(stripHexPrefix(data), 'hex')
+export const toEvmTxData = (data: string) => Buffer.from(stripHexPrefix(data), 'hex')

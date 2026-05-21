@@ -1,9 +1,9 @@
+import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { match } from '@vultisig/lib-utils/match'
-import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getCardanoPublicKeyData } from './cardano'
 import { derivePublicKey } from './ecdsa/derivePublicKey'
@@ -18,17 +18,9 @@ type Input = {
   chainPublicKeys?: Partial<Record<Chain, string>>
 }
 
-export const getPublicKey = ({
-  chain,
-  walletCore,
-  hexChainCode,
-  publicKeys,
-  chainPublicKeys,
-}: Input) => {
+export const getPublicKey = ({ chain, walletCore, hexChainCode, publicKeys, chainPublicKeys }: Input) => {
   if (chain === Chain.QBTC) {
-    throw new Error(
-      'QBTC uses MLDSA; use vault.publicKeyMldsa and deriveQbtcAddress instead of WalletCore public keys'
-    )
+    throw new Error('QBTC uses MLDSA; use vault.publicKeyMldsa and deriveQbtcAddress instead of WalletCore public keys')
   }
 
   const coinType = getCoinType({
@@ -38,11 +30,7 @@ export const getPublicKey = ({
 
   const chainPublicKey = chainPublicKeys?.[chain]
 
-  if (
-    chainPublicKeys !== undefined &&
-    Object.keys(chainPublicKeys).length > 0 &&
-    !chainPublicKey
-  ) {
+  if (chainPublicKeys !== undefined && Object.keys(chainPublicKeys).length > 0 && !chainPublicKey) {
     throw new Error('Chain public key not found')
   }
 
@@ -56,9 +44,7 @@ export const getPublicKey = ({
       ecdsa: () => {
         const path = walletCore.CoinTypeExt.derivationPath(coinType)
         if (!path) {
-          throw new Error(
-            `WalletCore returned empty derivation path (chain=${chain}, coinType=${coinType})`
-          )
+          throw new Error(`WalletCore returned empty derivation path (chain=${chain}, coinType=${coinType})`)
         }
         return derivePublicKey({
           hexRootPubKey: publicKeys.ecdsa,
@@ -80,10 +66,7 @@ export const getPublicKey = ({
         })
       : Buffer.from(derivedPublicKey, 'hex')
 
-  const pubkey = walletCore.PublicKey.createWithData(
-    publicKeyData,
-    publicKeyType
-  )
+  const pubkey = walletCore.PublicKey.createWithData(publicKeyData, publicKeyType)
 
   if (coinType == walletCore.CoinType.tron) {
     return pubkey.uncompressed()

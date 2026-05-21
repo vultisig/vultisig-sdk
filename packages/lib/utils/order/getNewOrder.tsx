@@ -8,11 +8,7 @@ type GetNewOrderInput = {
   destinationIndex: number
 }
 
-export const getNewOrder = ({
-  orders,
-  sourceIndex,
-  destinationIndex,
-}: GetNewOrderInput): number => {
+export const getNewOrder = ({ orders, sourceIndex, destinationIndex }: GetNewOrderInput): number => {
   if (isEmpty(orders)) {
     return defaultOrder
   }
@@ -26,8 +22,7 @@ export const getNewOrder = ({
   const previous = orders[previousIndex]
 
   const shouldBeLast =
-    (destinationIndex === orders.length - 1 && sourceIndex !== null) ||
-    destinationIndex > orders.length - 1
+    (destinationIndex === orders.length - 1 && sourceIndex !== null) || destinationIndex > orders.length - 1
 
   if (shouldBeLast) {
     return getLastItem(orders) + orderIncrementStep

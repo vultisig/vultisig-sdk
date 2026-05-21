@@ -68,15 +68,11 @@ export const cborUint = (n: number): Uint8Array => cborHead(0, n)
 export const cborNegint = (n: number): Uint8Array => cborHead(1, n)
 
 /** Encode a CBOR array header (major type 4) followed by items. Cardinality must be ≤ 2^32 − 1. */
-export const cborArray = (items: Uint8Array[]): Uint8Array =>
-  concat([cborHead(4, items.length), ...items])
+export const cborArray = (items: Uint8Array[]): Uint8Array => concat([cborHead(4, items.length), ...items])
 
 /** Encode a CBOR map header (major type 5) followed by key-value pairs. Cardinality must be ≤ 2^32 − 1. */
 export const cborMap = (entries: Array<[Uint8Array, Uint8Array]>): Uint8Array =>
-  concat([
-    cborHead(5, entries.length),
-    ...entries.flatMap(([k, v]) => [k, v]),
-  ])
+  concat([cborHead(5, entries.length), ...entries.flatMap(([k, v]) => [k, v])])
 
 /**
  * Encode the major-type + argument head (RFC 8949 §3.1).
@@ -86,9 +82,7 @@ export const cborMap = (entries: Array<[Uint8Array, Uint8Array]>): Uint8Array =>
  */
 const cborHead = (majorType: number, value: number): Uint8Array => {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new Error(
-      `cborHead: value must be a non-negative integer ≤ 2^32-1, got ${value}`
-    )
+    throw new Error(`cborHead: value must be a non-negative integer ≤ 2^32-1, got ${value}`)
   }
   const mt = majorType << 5
   if (value < 24) return Uint8Array.of(mt | value)
@@ -96,11 +90,5 @@ const cborHead = (majorType: number, value: number): Uint8Array => {
   if (value < 0x10000) {
     return Uint8Array.of(mt | 25, (value >> 8) & 0xff, value & 0xff)
   }
-  return Uint8Array.of(
-    mt | 26,
-    (value >>> 24) & 0xff,
-    (value >>> 16) & 0xff,
-    (value >>> 8) & 0xff,
-    value & 0xff
-  )
+  return Uint8Array.of(mt | 26, (value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff)
 }

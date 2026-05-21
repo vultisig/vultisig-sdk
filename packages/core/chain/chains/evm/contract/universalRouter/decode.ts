@@ -1,12 +1,6 @@
 import { AbiCoder, getBytes, hexlify, Interface } from 'ethers'
 
-import {
-  COMMAND_TYPE_MASK,
-  CONTRACT_BALANCE_SENTINEL,
-  NATIVE_TOKEN_ADDRESS,
-  URCommand,
-  V4Action,
-} from './opcodes'
+import { COMMAND_TYPE_MASK, CONTRACT_BALANCE_SENTINEL, NATIVE_TOKEN_ADDRESS, URCommand, V4Action } from './opcodes'
 import { UniversalRouterSwapIntent } from './types'
 
 /**
@@ -52,24 +46,10 @@ const safeDecode = <T>(fn: () => T): T | null => {
   }
 }
 
-const decodeV2Swap = (
-  input: string,
-  isExactOut: boolean
-): SwapEntry | null => {
-  const decoded = safeDecode(() =>
-    coder.decode(
-      ['address', 'uint256', 'uint256', 'address[]', 'bool'],
-      input
-    )
-  )
+const decodeV2Swap = (input: string, isExactOut: boolean): SwapEntry | null => {
+  const decoded = safeDecode(() => coder.decode(['address', 'uint256', 'uint256', 'address[]', 'bool'], input))
   if (!decoded) return null
-  const [, amountA, amountB, path] = decoded as unknown as [
-    string,
-    bigint,
-    bigint,
-    string[],
-    boolean,
-  ]
+  const [, amountA, amountB, path] = decoded as unknown as [string, bigint, bigint, string[], boolean]
   if (!Array.isArray(path) || path.length < 2) return null
   const fromToken = normalize(path[0])
   const toToken = normalize(path[path.length - 1])
@@ -90,21 +70,10 @@ const decodeV2Swap = (
       }
 }
 
-const decodeV3Swap = (
-  input: string,
-  isExactOut: boolean
-): SwapEntry | null => {
-  const decoded = safeDecode(() =>
-    coder.decode(['address', 'uint256', 'uint256', 'bytes', 'bool'], input)
-  )
+const decodeV3Swap = (input: string, isExactOut: boolean): SwapEntry | null => {
+  const decoded = safeDecode(() => coder.decode(['address', 'uint256', 'uint256', 'bytes', 'bool'], input))
   if (!decoded) return null
-  const [, amountA, amountB, path] = decoded as unknown as [
-    string,
-    bigint,
-    bigint,
-    string,
-    boolean,
-  ]
+  const [, amountA, amountB, path] = decoded as unknown as [string, bigint, bigint, string, boolean]
   const fromToken = firstAddressInV3Path(path)
   const toToken = lastAddressInV3Path(path)
   if (!fromToken || !toToken) return null
@@ -129,30 +98,25 @@ const decodeV3Swap = (
   }
 }
 
-const POOL_KEY_TYPE =
-  '(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)'
-const PATH_KEY_TYPE =
-  '(address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData)'
+const POOL_KEY_TYPE = '(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)'
+const PATH_KEY_TYPE = '(address intermediateCurrency, uint24 fee, int24 tickSpacing, address hooks, bytes hookData)'
 
 const decodeV4ExactInSingle = (params: string): SwapEntry | null => {
   const decoded = safeDecode(() =>
     coder.decode(
-      [
-        `tuple(${POOL_KEY_TYPE} poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData)`,
-      ],
+      [`tuple(${POOL_KEY_TYPE} poolKey, bool zeroForOne, uint128 amountIn, uint128 amountOutMinimum, bytes hookData)`],
       params
     )
   )
   if (!decoded) return null
-  const [{ poolKey, zeroForOne, amountIn, amountOutMinimum }] =
-    decoded as unknown as [
-      {
-        poolKey: { currency0: string; currency1: string }
-        zeroForOne: boolean
-        amountIn: bigint
-        amountOutMinimum: bigint
-      },
-    ]
+  const [{ poolKey, zeroForOne, amountIn, amountOutMinimum }] = decoded as unknown as [
+    {
+      poolKey: { currency0: string; currency1: string }
+      zeroForOne: boolean
+      amountIn: bigint
+      amountOutMinimum: bigint
+    },
+  ]
   const fromToken = normalize(zeroForOne ? poolKey.currency0 : poolKey.currency1)
   const toToken = normalize(zeroForOne ? poolKey.currency1 : poolKey.currency0)
   return {
@@ -167,22 +131,19 @@ const decodeV4ExactInSingle = (params: string): SwapEntry | null => {
 const decodeV4ExactIn = (params: string): SwapEntry | null => {
   const decoded = safeDecode(() =>
     coder.decode(
-      [
-        `tuple(address currencyIn, ${PATH_KEY_TYPE}[] path, uint128 amountIn, uint128 amountOutMinimum)`,
-      ],
+      [`tuple(address currencyIn, ${PATH_KEY_TYPE}[] path, uint128 amountIn, uint128 amountOutMinimum)`],
       params
     )
   )
   if (!decoded) return null
-  const [{ currencyIn, path, amountIn, amountOutMinimum }] =
-    decoded as unknown as [
-      {
-        currencyIn: string
-        path: { intermediateCurrency: string }[]
-        amountIn: bigint
-        amountOutMinimum: bigint
-      },
-    ]
+  const [{ currencyIn, path, amountIn, amountOutMinimum }] = decoded as unknown as [
+    {
+      currencyIn: string
+      path: { intermediateCurrency: string }[]
+      amountIn: bigint
+      amountOutMinimum: bigint
+    },
+  ]
   if (!Array.isArray(path) || path.length === 0) return null
   return {
     fromToken: normalize(currencyIn),
@@ -196,22 +157,19 @@ const decodeV4ExactIn = (params: string): SwapEntry | null => {
 const decodeV4ExactOutSingle = (params: string): SwapEntry | null => {
   const decoded = safeDecode(() =>
     coder.decode(
-      [
-        `tuple(${POOL_KEY_TYPE} poolKey, bool zeroForOne, uint128 amountOut, uint128 amountInMaximum, bytes hookData)`,
-      ],
+      [`tuple(${POOL_KEY_TYPE} poolKey, bool zeroForOne, uint128 amountOut, uint128 amountInMaximum, bytes hookData)`],
       params
     )
   )
   if (!decoded) return null
-  const [{ poolKey, zeroForOne, amountOut, amountInMaximum }] =
-    decoded as unknown as [
-      {
-        poolKey: { currency0: string; currency1: string }
-        zeroForOne: boolean
-        amountOut: bigint
-        amountInMaximum: bigint
-      },
-    ]
+  const [{ poolKey, zeroForOne, amountOut, amountInMaximum }] = decoded as unknown as [
+    {
+      poolKey: { currency0: string; currency1: string }
+      zeroForOne: boolean
+      amountOut: bigint
+      amountInMaximum: bigint
+    },
+  ]
   const fromToken = normalize(zeroForOne ? poolKey.currency0 : poolKey.currency1)
   const toToken = normalize(zeroForOne ? poolKey.currency1 : poolKey.currency0)
   return {
@@ -226,22 +184,19 @@ const decodeV4ExactOutSingle = (params: string): SwapEntry | null => {
 const decodeV4ExactOut = (params: string): SwapEntry | null => {
   const decoded = safeDecode(() =>
     coder.decode(
-      [
-        `tuple(address currencyOut, ${PATH_KEY_TYPE}[] path, uint128 amountOut, uint128 amountInMaximum)`,
-      ],
+      [`tuple(address currencyOut, ${PATH_KEY_TYPE}[] path, uint128 amountOut, uint128 amountInMaximum)`],
       params
     )
   )
   if (!decoded) return null
-  const [{ currencyOut, path, amountOut, amountInMaximum }] =
-    decoded as unknown as [
-      {
-        currencyOut: string
-        path: { intermediateCurrency: string }[]
-        amountOut: bigint
-        amountInMaximum: bigint
-      },
-    ]
+  const [{ currencyOut, path, amountOut, amountInMaximum }] = decoded as unknown as [
+    {
+      currencyOut: string
+      path: { intermediateCurrency: string }[]
+      amountOut: bigint
+      amountInMaximum: bigint
+    },
+  ]
   if (!Array.isArray(path) || path.length === 0) return null
   // For exact-out, the first PathKey's intermediateCurrency is the token the
   // user spends; the path walks forward to currencyOut.
@@ -255,9 +210,7 @@ const decodeV4ExactOut = (params: string): SwapEntry | null => {
 }
 
 const decodeV4SwapInput = (input: string): SwapEntry | null => {
-  const outer = safeDecode(() =>
-    coder.decode(['bytes', 'bytes[]'], input)
-  )
+  const outer = safeDecode(() => coder.decode(['bytes', 'bytes[]'], input))
   if (!outer) return null
   const [actions, params] = outer as unknown as [string, string[]]
   const actionBytes = getBytes(actions)
@@ -287,9 +240,7 @@ const decodeV4SwapInput = (input: string): SwapEntry | null => {
 }
 
 const decodeWrapEth = (input: string): bigint | null => {
-  const decoded = safeDecode(() =>
-    coder.decode(['address', 'uint256'], input)
-  )
+  const decoded = safeDecode(() => coder.decode(['address', 'uint256'], input))
   if (!decoded) return null
   const [, amount] = decoded as unknown as [string, bigint]
   return amount
@@ -304,16 +255,12 @@ const decodeWrapEth = (input: string): bigint | null => {
  * otherwise valid execute call are skipped rather than rejected — the router
  * frequently bundles Permit2/sweep/transfer commands around swaps.
  */
-export const decodeUniversalRouterExecute = (
-  calldata: string
-): UniversalRouterSwapIntent | null => {
+export const decodeUniversalRouterExecute = (calldata: string): UniversalRouterSwapIntent | null => {
   if (!calldata || !calldata.startsWith('0x') || calldata.length < 10) {
     return null
   }
 
-  const parsed = safeDecode(() =>
-    urInterface.parseTransaction({ data: calldata })
-  )
+  const parsed = safeDecode(() => urInterface.parseTransaction({ data: calldata }))
   if (!parsed || parsed.name !== 'execute') return null
 
   const commandsHex = parsed.args[0] as string
@@ -372,19 +319,12 @@ export const decodeUniversalRouterExecute = (
   // share the same (fromToken, toToken). We detect that and sum amounts so
   // the user sees their full trade — not just one leg's share.
   const isSplitRoute =
-    swaps.length > 1 &&
-    swaps.every(
-      s => s.fromToken === first.fromToken && s.toToken === first.toToken
-    )
+    swaps.length > 1 && swaps.every(s => s.fromToken === first.fromToken && s.toToken === first.toToken)
 
   let fromToken = first.fromToken
   let toToken = isSplitRoute ? first.toToken : last.toToken
-  let amountIn = isSplitRoute
-    ? swaps.reduce((sum, s) => sum + s.amountIn, 0n)
-    : first.amountIn
-  const aggregatedAmountOutMin = isSplitRoute
-    ? swaps.reduce((sum, s) => sum + s.amountOutMin, 0n)
-    : last.amountOutMin
+  let amountIn = isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountIn, 0n) : first.amountIn
+  const aggregatedAmountOutMin = isSplitRoute ? swaps.reduce((sum, s) => sum + s.amountOutMin, 0n) : last.amountOutMin
 
   if (wrapEthAmount !== null) {
     fromToken = NATIVE_TOKEN_ADDRESS
@@ -392,9 +332,7 @@ export const decodeUniversalRouterExecute = (
     // sequence. The first swap leg's amountIn/amountInMax only covers that
     // leg (wrong when the swap is multi-hop or exact-out), so prefer the
     // wrap amount whenever it isn't a "use router balance" sentinel.
-    if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL) {
-      amountIn = wrapEthAmount
-    } else if (amountIn === CONTRACT_BALANCE_SENTINEL) {
+    if (wrapEthAmount !== CONTRACT_BALANCE_SENTINEL || amountIn === CONTRACT_BALANCE_SENTINEL) {
       amountIn = wrapEthAmount
     }
   }
@@ -412,8 +350,7 @@ export const decodeUniversalRouterExecute = (
     // wrapped-native token that was the router's working asset (= first
     // swap's fromToken). If the last swap's toToken matches the wrapped
     // native, it's an output conversion back to native.
-    const isLeftoverRefund =
-      wrapEthAmount !== null && last.toToken !== first.fromToken
+    const isLeftoverRefund = wrapEthAmount !== null && last.toToken !== first.fromToken
     if (!isLeftoverRefund) {
       toToken = NATIVE_TOKEN_ADDRESS
     }

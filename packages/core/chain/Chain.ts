@@ -8,8 +8,7 @@ export const EthereumL2Chain = {
   Mantle: 'Mantle',
 } as const
 
-export type EthereumL2Chain =
-  (typeof EthereumL2Chain)[keyof typeof EthereumL2Chain]
+export type EthereumL2Chain = (typeof EthereumL2Chain)[keyof typeof EthereumL2Chain]
 
 export const EvmChain = {
   ...EthereumL2Chain,
@@ -53,12 +52,10 @@ export const cosmosChainsByKind = {
 export type CosmosChainKind = keyof typeof cosmosChainsByKind
 
 export const IbcEnabledCosmosChain = cosmosChainsByKind.ibcEnabled
-export type IbcEnabledCosmosChain =
-  (typeof IbcEnabledCosmosChain)[keyof typeof IbcEnabledCosmosChain]
+export type IbcEnabledCosmosChain = (typeof IbcEnabledCosmosChain)[keyof typeof IbcEnabledCosmosChain]
 
 export const VaultBasedCosmosChain = cosmosChainsByKind.vaultBased
-export type VaultBasedCosmosChain =
-  (typeof VaultBasedCosmosChain)[keyof typeof VaultBasedCosmosChain]
+export type VaultBasedCosmosChain = (typeof VaultBasedCosmosChain)[keyof typeof VaultBasedCosmosChain]
 
 export const CosmosChain = {
   ...IbcEnabledCosmosChain,
@@ -89,17 +86,8 @@ export const Chain = {
 
 export type Chain = (typeof Chain)[keyof typeof Chain]
 
-export const UtxoBasedChain = [
-  ...Object.values(UtxoChain),
-  OtherChain.Cardano,
-] as const
+export const UtxoBasedChain = [...Object.values(UtxoChain), OtherChain.Cardano] as const
 
 export type UtxoBasedChain = (typeof UtxoBasedChain)[number]
 
-export const defaultChains = [
-  Chain.Bitcoin,
-  Chain.Ethereum,
-  Chain.THORChain,
-  Chain.Solana,
-  Chain.BSC,
-]
+export const defaultChains = [Chain.Bitcoin, Chain.Ethereum, Chain.THORChain, Chain.Solana, Chain.BSC]

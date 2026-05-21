@@ -29,13 +29,8 @@ export const computeAddressHash = ({
   compressedPubkey: Uint8Array
   circuit: QbtcClaimCircuit
 }): Uint8Array => {
-  if (
-    compressedPubkey.length !== 33 ||
-    (compressedPubkey[0] !== 0x02 && compressedPubkey[0] !== 0x03)
-  ) {
-    throw new Error(
-      'compressedPubkey must be a 33-byte compressed secp256k1 key'
-    )
+  if (compressedPubkey.length !== 33 || (compressedPubkey[0] !== 0x02 && compressedPubkey[0] !== 0x03)) {
+    throw new Error('compressedPubkey must be a 33-byte compressed secp256k1 key')
   }
 
   if (circuit === 'schnorr') {
@@ -45,12 +40,10 @@ export const computeAddressHash = ({
 }
 
 /** Computes SHA256 of the QBTC bech32 address string. */
-export const computeQbtcAddressHash = (qbtcAddress: string): Uint8Array =>
-  sha256(new TextEncoder().encode(qbtcAddress))
+export const computeQbtcAddressHash = (qbtcAddress: string): Uint8Array => sha256(new TextEncoder().encode(qbtcAddress))
 
 /** Computes the first 8 bytes of SHA256 of the chain ID. */
-export const computeChainIdHash = (chainId: string): Uint8Array =>
-  sha256(new TextEncoder().encode(chainId)).slice(0, 8)
+export const computeChainIdHash = (chainId: string): Uint8Array => sha256(new TextEncoder().encode(chainId)).slice(0, 8)
 
 type ComputeClaimMessageHashInput = {
   addressHash: Uint8Array
@@ -77,9 +70,7 @@ export const computeClaimMessageHash = ({
   circuit,
 }: ComputeClaimMessageHashInput): Uint8Array => {
   if (circuit === 'schnorr') {
-    throw new Error(
-      'Schnorr / Taproot claim circuit is not yet supported on the QBTC chain'
-    )
+    throw new Error('Schnorr / Taproot claim circuit is not yet supported on the QBTC chain')
   }
 
   if (addressHash.length !== 20) {
@@ -97,11 +88,7 @@ export const computeClaimMessageHash = ({
   const suffix = encoder.encode(claimSuffix)
 
   const message = new Uint8Array(
-    prefix.length +
-      addressHash.length +
-      qbtcAddressHash.length +
-      chainIdHash.length +
-      suffix.length
+    prefix.length + addressHash.length + qbtcAddressHash.length + chainIdHash.length + suffix.length
   )
 
   let offset = 0

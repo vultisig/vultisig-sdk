@@ -5,9 +5,11 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxValidationInputResolver } from '../resolver'
 
-export const getSolanaBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
-  OtherChain.Solana
-> = ({ payload, walletCore, chain }) => {
+export const getSolanaBlockaidTxValidationInput: BlockaidTxValidationInputResolver<OtherChain.Solana> = ({
+  payload,
+  walletCore,
+  chain,
+}) => {
   const coin = assertField(payload, 'coin')
 
   const transactions = getCompiledTxsForBlockaidInput({

@@ -4,10 +4,7 @@ import { kujiraCoinsOnThorChain } from '../../chains/cosmos/thor/kujira-merge/ku
 import { yieldBearingThorChainTokens } from '../../chains/cosmos/thor/yield-bearing-tokens/yAssetsOnThorChain'
 import { KnownCoinMetadata } from '../Coin'
 
-export const knownCosmosTokens: Record<
-  CosmosChain,
-  Record<string, KnownCoinMetadata>
-> = {
+export const knownCosmosTokens: Record<CosmosChain, Record<string, KnownCoinMetadata>> = {
   [Chain.MayaChain]: {
     maya: {
       ticker: 'MAYA',
@@ -107,20 +104,18 @@ export const knownCosmosTokens: Record<
       decimals: 6,
       priceProviderId: 'ion',
     },
-    'factory/osmo1mlng7pz4pnyxtpq0akfwall37czyk9lukaucsrn30ameplhhshtqdvfm5c/ulvn':
-      {
-        ...kujiraCoinsMigratedToThorChainMetadata.lvn,
-        decimals: 6,
-      },
+    'factory/osmo1mlng7pz4pnyxtpq0akfwall37czyk9lukaucsrn30ameplhhshtqdvfm5c/ulvn': {
+      ...kujiraCoinsMigratedToThorChainMetadata.lvn,
+      decimals: 6,
+    },
   },
   [Chain.Kujira]: {
-    'factory/kujira1qk00h5atutpsv900x202pxx42npjr9thg58dnqpa72f2p7m2luase444a7/uusk':
-      {
-        ticker: 'USK',
-        logo: 'usk.png',
-        decimals: 6,
-        priceProviderId: 'usk',
-      },
+    'factory/kujira1qk00h5atutpsv900x202pxx42npjr9thg58dnqpa72f2p7m2luase444a7/uusk': {
+      ticker: 'USK',
+      logo: 'usk.png',
+      decimals: 6,
+      priceProviderId: 'usk',
+    },
     'factory/kujira12cjjeytrqcj25uv349thltcygnp9k0kukpct0e/uwink': {
       ...kujiraCoinsMigratedToThorChainMetadata.wink,
       decimals: 6,
@@ -157,13 +152,12 @@ export const knownCosmosTokens: Record<
       ...kujiraCoinsMigratedToThorChainMetadata.rkuji,
       decimals: 6,
     },
-    'factory/kujira13x2l25mpkhwnwcwdzzd34cr8fyht9jlj7xu9g4uffe36g3fmln8qkvm3qn/unami':
-      {
-        ticker: 'NAMI',
-        logo: 'NAMI.png',
-        decimals: 6,
-        priceProviderId: 'nami-protocol',
-      },
+    'factory/kujira13x2l25mpkhwnwcwdzzd34cr8fyht9jlj7xu9g4uffe36g3fmln8qkvm3qn/unami': {
+      ticker: 'NAMI',
+      logo: 'NAMI.png',
+      decimals: 6,
+      priceProviderId: 'nami-protocol',
+    },
     'factory/kujira1sc6a0347cc5q3k890jj0pf3ylx2s38rh4sza4t/ufuzn': {
       ...kujiraCoinsMigratedToThorChainMetadata.fuzn,
       decimals: 6,
@@ -173,13 +167,12 @@ export const knownCosmosTokens: Record<
       ...kujiraCoinsMigratedToThorChainMetadata.lvn,
       decimals: 6,
     },
-    'factory/kujira13x2l25mpkhwnwcwdzzd34cr8fyht9jlj7xu9g4uffe36g3fmln8qkvm3qn/uauto':
-      {
-        ticker: 'AUTO',
-        logo: 'auto.png',
-        decimals: 6,
-        priceProviderId: 'auto-2',
-      },
+    'factory/kujira13x2l25mpkhwnwcwdzzd34cr8fyht9jlj7xu9g4uffe36g3fmln8qkvm3qn/uauto': {
+      ticker: 'AUTO',
+      logo: 'auto.png',
+      decimals: 6,
+      priceProviderId: 'auto-2',
+    },
   },
   [Chain.Terra]: {
     terra13j2k5rfkg0qhk58vz63cze0uze4hwswlrfnm0fa4rnyggjyfrcnqcrs5z2: {

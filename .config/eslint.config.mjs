@@ -27,23 +27,25 @@ const compat = new FlatCompat({
 export default [
   {
     ignores: [
+      // Vendored dependencies and generated build outputs are covered by
+      // package/build checks, not source lint.
       '**/node_modules',
       '**/dist',
       '**/dist-electron',
       '**/.rollup.cache',
       '**/coverage',
+      // Protobuf TypeScript generated from commondata; edit the proto source
+      // and regenerate instead of lint-fixing these outputs by hand.
       '**/*_pb.ts',
-      '**/lib/**',
-      // Ignore every packages/core sibling of `mpc`. Enumerated (not blanket
-      // with negation) because ESLint 9's flat-config `ignores` does not
-      // reliably re-include files that were globally ignored. Adding a new
-      // packages/core/<x> package? Add it here AND wire it into the lint
-      // scripts in package.json if it should be linted.
-      'packages/core/chain/**',
-      'packages/core/config/**',
+      // Legacy MPC test fixtures still need a focused lint rollout because
+      // they exercise generated payload shapes and fixture helpers.
       'packages/core/mpc/**/*.test.ts',
       'packages/core/mpc/**/tests/**',
-      'packages/lib/**',
+      // wasm-pack emits these bindings; keep them byte-for-byte with the
+      // generated artifacts instead of applying repo source rules.
+      'packages/lib/dkls/vs_wasm*.{js,d.ts}',
+      'packages/lib/mldsa/vs_wasm*.{js,d.ts}',
+      'packages/lib/schnorr/vs_schnorr_wasm*.{js,d.ts}',
       'archived/**',
       // WASM files copied by build tools
       '**/public/wallet-core.js',
@@ -149,6 +151,20 @@ export default [
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',
       'no-restricted-syntax': ['error', ...mpcSingletonRestrictedSyntax],
+    },
+  },
+  {
+    files: ['packages/mpc-native/app.plugin.js'],
+    rules: {
+      // Expo config plugins are loaded by Node as CommonJS from package roots.
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    files: ['packages/mpc-native/src/**/*.ts', 'packages/walletcore-native/src/**/*.ts'],
+    rules: {
+      // Native bridge declarations mirror external module/interface shapes.
+      '@typescript-eslint/consistent-type-definitions': 'off',
     },
   },
   // ...storybook.configs['flat/recommended'], // TEMPORARILY DISABLED

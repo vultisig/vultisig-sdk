@@ -37,16 +37,9 @@ export const refineBittensorChainSpecific = async ({
   // Assemble with dummy signer and zero signature for fee estimation
   const dummySigner = new Uint8Array(32)
   const dummySignature = new Uint8Array(64)
-  const dummyExtrinsic = assembleBittensorExtrinsic(
-    dummySigner,
-    dummySignature,
-    callData,
-    signedExtra
-  )
+  const dummyExtrinsic = assembleBittensorExtrinsic(dummySigner, dummySignature, callData, signedExtra)
 
-  const hexWithPrefix = ensureHexPrefix(
-    Buffer.from(dummyExtrinsic).toString('hex')
-  )
+  const hexWithPrefix = ensureHexPrefix(Buffer.from(dummyExtrinsic).toString('hex'))
 
   const response = await queryUrl<{
     result?: { partialFee: string }
@@ -61,9 +54,7 @@ export const refineBittensorChainSpecific = async ({
   })
 
   if (!response.result?.partialFee) {
-    throw new Error(
-      `payment_queryInfo failed: ${response.error?.message ?? 'missing partialFee in response'}`
-    )
+    throw new Error(`payment_queryInfo failed: ${response.error?.message ?? 'missing partialFee in response'}`)
   }
 
   return {

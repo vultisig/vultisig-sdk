@@ -1,8 +1,7 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { cardanoApiUrl } from '../client/config'
-
 import type { ChainPlainUtxo } from '../../utxo/tx/ChainPlainUtxo'
+import { cardanoApiUrl } from '../client/config'
 
 type CardanoUtxoResponse = Array<{
   tx_hash: string
@@ -10,9 +9,7 @@ type CardanoUtxoResponse = Array<{
   value: string
 }>
 
-export const getCardanoUtxos = async (
-  address: string
-): Promise<ChainPlainUtxo[]> => {
+export const getCardanoUtxos = async (address: string): Promise<ChainPlainUtxo[]> => {
   const url = `${cardanoApiUrl}/address_utxos`
 
   const utxos = await queryUrl<CardanoUtxoResponse>(url, {

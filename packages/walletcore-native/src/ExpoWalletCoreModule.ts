@@ -129,12 +129,7 @@ interface ExpoWalletCoreModuleType {
   hdWalletGetAddressForCoin(handle: number, coinType: number): string
 
   /** Get the extended private key. */
-  hdWalletGetExtendedPrivateKey(
-    handle: number,
-    purposeValue: number,
-    coinType: number,
-    versionValue: number
-  ): string
+  hdWalletGetExtendedPrivateKey(handle: number, purposeValue: number, coinType: number, versionValue: number): string
 
   /** Free an HDWallet handle. */
   freeHDWallet(handle: number): void

@@ -7,10 +7,7 @@ import { assertValidPoolId } from './pools'
  * are tokenized on `:` and trimmed/rejected when they contain internal
  * whitespace.
  */
-const assertMemoSegmentSafe = (
-  value: string,
-  fieldName: string
-): void => {
+const assertMemoSegmentSafe = (value: string, fieldName: string): void => {
   if (typeof value !== 'string') {
     throw new Error(`${fieldName} must be a string, got ${typeof value}`)
   }
@@ -20,9 +17,7 @@ const assertMemoSegmentSafe = (
     )
   }
   if (/\s/.test(value)) {
-    throw new Error(
-      `${fieldName} must not contain whitespace, got ${JSON.stringify(value)}`
-    )
+    throw new Error(`${fieldName} must not contain whitespace, got ${JSON.stringify(value)}`)
   }
 }
 
@@ -61,10 +56,7 @@ export type AddLpMemoInput = {
  * `+:POOL::AFFILIATE:BPS` but neither Vultisig native client ships it;
  * we match the native behavior for wire-level consistency.
  */
-export const addLpMemo = ({
-  pool,
-  pairedAddress,
-}: AddLpMemoInput): string => {
+export const addLpMemo = ({ pool, pairedAddress }: AddLpMemoInput): string => {
   assertValidPoolId(pool)
   if (pairedAddress && pairedAddress.length > 0) {
     assertMemoSegmentSafe(pairedAddress, 'pairedAddress')
@@ -99,20 +91,10 @@ export type RemoveLpMemoInput = {
  * THORChain enforces a ~1 hour window (`LIQUIDITYLOCKUPBLOCKS`, currently
  * 600 on mainnet) after the most recent add before broadcasts process cleanly.
  */
-export const removeLpMemo = ({
-  pool,
-  basisPoints,
-  withdrawToAsset,
-}: RemoveLpMemoInput): string => {
+export const removeLpMemo = ({ pool, basisPoints, withdrawToAsset }: RemoveLpMemoInput): string => {
   assertValidPoolId(pool)
-  if (
-    !Number.isInteger(basisPoints) ||
-    basisPoints < 1 ||
-    basisPoints > 10000
-  ) {
-    throw new Error(
-      `removeLpMemo: basisPoints must be an integer in [1, 10000], got ${basisPoints}`
-    )
+  if (!Number.isInteger(basisPoints) || basisPoints < 1 || basisPoints > 10000) {
+    throw new Error(`removeLpMemo: basisPoints must be an integer in [1, 10000], got ${basisPoints}`)
   }
   if (withdrawToAsset && withdrawToAsset.length > 0) {
     assertMemoSegmentSafe(withdrawToAsset, 'withdrawToAsset')

@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  concatBytes,
-  protoBytes,
-  protoField,
-  protoString,
-  protoVarint,
-  varintBig,
-  WireType,
-} from './protoEncoding'
+import { concatBytes, protoBytes, protoField, protoString, protoVarint, varintBig, WireType } from './protoEncoding'
 
 // ---------------------------------------------------------------------------
 // Wire-format expectations are hand-derived from the protobuf encoding spec
@@ -93,17 +85,13 @@ describe('protoField (no default-elision)', () => {
     // field 3, wire 2 → tag = (3<<3)|2 = 0x1a. payload = "hi" = 0x68 0x69.
     // length prefix = varint(2) = 0x02.
     const payload = new TextEncoder().encode('hi')
-    expect(hex(protoField(3, WireType.LengthDelimited, payload))).toBe(
-      '1a026869'
-    )
+    expect(hex(protoField(3, WireType.LengthDelimited, payload))).toBe('1a026869')
   })
 
   it('encodes an empty length-delimited field as just <tag><0>', () => {
     // Lower-level: caller decides whether to emit at all. Empty submessages
     // (e.g. a fully-zero `Height`) need the bare tag + zero length.
-    expect(hex(protoField(6, WireType.LengthDelimited, new Uint8Array(0)))).toBe(
-      '3200'
-    )
+    expect(hex(protoField(6, WireType.LengthDelimited, new Uint8Array(0)))).toBe('3200')
   })
 
   it('encodes a high field number that needs a multi-byte tag varint', () => {
@@ -112,15 +100,11 @@ describe('protoField (no default-elision)', () => {
   })
 
   it('rejects field number 0', () => {
-    expect(() => protoField(0, WireType.Varint, varintBig(1n))).toThrow(
-      /fieldNumber/
-    )
+    expect(() => protoField(0, WireType.Varint, varintBig(1n))).toThrow(/fieldNumber/)
   })
 
   it('rejects field numbers >= 2^29', () => {
-    expect(() => protoField(1 << 29, WireType.Varint, varintBig(1n))).toThrow(
-      /fieldNumber/
-    )
+    expect(() => protoField(1 << 29, WireType.Varint, varintBig(1n))).toThrow(/fieldNumber/)
   })
 })
 
@@ -167,28 +151,15 @@ describe('concatBytes', () => {
   })
 
   it('concatenates in the given order', () => {
-    expect(
-      hex(
-        concatBytes(
-          new Uint8Array([0x01, 0x02]),
-          new Uint8Array([0x03]),
-          new Uint8Array([0x04, 0x05])
-        )
-      )
-    ).toBe('0102030405')
+    expect(hex(concatBytes(new Uint8Array([0x01, 0x02]), new Uint8Array([0x03]), new Uint8Array([0x04, 0x05])))).toBe(
+      '0102030405'
+    )
   })
 
   it('handles a mix of empty and non-empty inputs', () => {
-    expect(
-      hex(
-        concatBytes(
-          new Uint8Array(0),
-          new Uint8Array([0xff]),
-          new Uint8Array(0),
-          new Uint8Array([0xaa])
-        )
-      )
-    ).toBe('ffaa')
+    expect(hex(concatBytes(new Uint8Array(0), new Uint8Array([0xff]), new Uint8Array(0), new Uint8Array([0xaa])))).toBe(
+      'ffaa'
+    )
   })
 })
 
@@ -205,9 +176,7 @@ describe('Coin message wire-format parity', () => {
     // Field 1 ("denom"): tag=0x0a, len=5, payload="uluna" = 75 6c 75 6e 61.
     // Field 2 ("amount"): tag=0x12, len=7, payload="1000000" = 31 30 30 30 30 30 30.
     const expected = '0a05756c756e611207313030303030'.concat('30')
-    const actual = hex(
-      concatBytes(protoString(1, 'uluna'), protoString(2, '1000000'))
-    )
+    const actual = hex(concatBytes(protoString(1, 'uluna'), protoString(2, '1000000')))
     expect(actual).toBe(expected)
   })
 })

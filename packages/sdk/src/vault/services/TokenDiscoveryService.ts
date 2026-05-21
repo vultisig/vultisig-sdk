@@ -20,6 +20,7 @@ export class TokenDiscoveryService {
         ticker: coin.ticker,
         decimals: coin.decimals,
         logo: coin.logo,
+        ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
       }))
     } catch (error) {
       throw new VaultError(

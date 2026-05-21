@@ -26,8 +26,7 @@ export const VAULT_BACKUP_SALT_LEN = 16
 export const VAULT_BACKUP_IV_LEN = 12
 
 /** Magic + salt + IV (before AES-GCM ciphertext + tag). */
-export const VAULT_BACKUP_PBKDF2_HEADER_LEN =
-  VAULT_BACKUP_MAGIC_LEN + VAULT_BACKUP_SALT_LEN + VAULT_BACKUP_IV_LEN
+export const VAULT_BACKUP_PBKDF2_HEADER_LEN = VAULT_BACKUP_MAGIC_LEN + VAULT_BACKUP_SALT_LEN + VAULT_BACKUP_IV_LEN
 
 /** PBKDF2-HMAC-SHA256 iteration count for vault backups (OWASP / cross-platform agreement). */
 export const DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS = 600_000

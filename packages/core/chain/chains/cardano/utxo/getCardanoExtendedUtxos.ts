@@ -28,9 +28,7 @@ type KoiosExtendedUtxoResponse = Array<{
  * Fetches UTXOs for a Cardano address with the `_extended` flag,
  * which includes the `asset_list` field for each UTXO.
  */
-export const getCardanoExtendedUtxos = async (
-  address: string
-): Promise<CardanoExtendedUtxo[]> => {
+export const getCardanoExtendedUtxos = async (address: string): Promise<CardanoExtendedUtxo[]> => {
   const url = `${cardanoApiUrl}/address_utxos`
 
   const response = await queryUrl<KoiosExtendedUtxoResponse>(url, {

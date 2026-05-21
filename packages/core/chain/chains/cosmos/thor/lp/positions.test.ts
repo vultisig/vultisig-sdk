@@ -11,11 +11,12 @@ afterEach(() => {
 })
 
 const mockFetchJson = (body: unknown, status = 200) => {
-  globalThis.fetch = vi.fn(async () =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  globalThis.fetch = vi.fn(
+    async () =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })
   ) as typeof fetch
 }
 
@@ -108,9 +109,7 @@ describe('getThorchainLpPositions', () => {
 
   it('bubbles non-404 errors', async () => {
     mockFetchThrows(httpError(500))
-    await expect(
-      getThorchainLpPositions({ thorAddress: 'thor1test' })
-    ).rejects.toThrow()
+    await expect(getThorchainLpPositions({ thorAddress: 'thor1test' })).rejects.toThrow()
   })
 
   it('backfills missing numeric fields with zero strings', async () => {

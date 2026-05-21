@@ -8,12 +8,7 @@ type UploadMpcSetupMessageInput = {
   messageId?: string
 }
 
-export const uploadMpcSetupMessage = async ({
-  serverUrl,
-  message,
-  sessionId,
-  messageId,
-}: UploadMpcSetupMessageInput) =>
+export const uploadMpcSetupMessage = async ({ serverUrl, message, sessionId, messageId }: UploadMpcSetupMessageInput) =>
   queryUrl(`${serverUrl}/setup-message/${sessionId}`, {
     headers: withoutUndefinedFields({
       message_id: messageId,

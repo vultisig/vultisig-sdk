@@ -4,5 +4,4 @@ import { bytesToHex } from 'viem'
 
 import { TxHashResolver } from '../resolver'
 
-export const getTronTxHash: TxHashResolver<OtherChain.Tron> = ({ id }) =>
-  stripHexPrefix(bytesToHex(id))
+export const getTronTxHash: TxHashResolver<OtherChain.Tron> = ({ id }) => stripHexPrefix(bytesToHex(id))

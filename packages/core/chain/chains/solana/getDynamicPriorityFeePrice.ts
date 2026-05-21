@@ -28,34 +28,27 @@ const MIN_SAMPLE_SIZE = 5
  * back to the floor when the sample window is too sparse to extrapolate
  * a reliable percentile (see MIN_SAMPLE_SIZE).
  */
-export const getDynamicPriorityFeePrice = async (
-    writableAccounts: PublicKey[] = []
-): Promise<number> => {
-    const client = getSolanaClient()
+export const getDynamicPriorityFeePrice = async (writableAccounts: PublicKey[] = []): Promise<number> => {
+  const client = getSolanaClient()
 
-    const recentFees = await client.getRecentPrioritizationFees(
-        writableAccounts.length > 0
-            ? { lockedWritableAccounts: writableAccounts }
-            : undefined
-    )
+  const recentFees = await client.getRecentPrioritizationFees(
+    writableAccounts.length > 0 ? { lockedWritableAccounts: writableAccounts } : undefined
+  )
 
-    const nonZeroFees = recentFees
-        .map(entry => entry.prioritizationFee)
-        .filter(fee => fee > 0)
-        .sort((a, b) => a - b)
+  const nonZeroFees = recentFees
+    .map(entry => entry.prioritizationFee)
+    .filter(fee => fee > 0)
+    .sort((a, b) => a - b)
 
-    // Sparse-window guard: too few non-zero samples means a single
-    // outlier slot would dominate the percentile. Fall back to floor.
-    if (nonZeroFees.length < MIN_SAMPLE_SIZE) {
-        return solanaConfig.priorityFeePrice
-    }
+  // Sparse-window guard: too few non-zero samples means a single
+  // outlier slot would dominate the percentile. Fall back to floor.
+  if (nonZeroFees.length < MIN_SAMPLE_SIZE) {
+    return solanaConfig.priorityFeePrice
+  }
 
-    const index = Math.min(
-        Math.floor(nonZeroFees.length * PRIORITY_FEE_PERCENTILE),
-        nonZeroFees.length - 1
-    )
+  const index = Math.min(Math.floor(nonZeroFees.length * PRIORITY_FEE_PERCENTILE), nonZeroFees.length - 1)
 
-    return Math.max(nonZeroFees[index], solanaConfig.priorityFeePrice)
+  return Math.max(nonZeroFees[index], solanaConfig.priorityFeePrice)
 }
 
 // Test-only export: lets unit tests pin the threshold without re-stating

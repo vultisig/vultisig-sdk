@@ -5,6 +5,5 @@ import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { fromCommCoin } from '../../types/utils/commCoin'
 
-export const getKeysignCoin = <T extends Chain = Chain>({
-  coin,
-}: KeysignPayload): AccountCoin<T> => fromCommCoin<T>(shouldBePresent(coin))
+export const getKeysignCoin = <T extends Chain = Chain>({ coin }: KeysignPayload): AccountCoin<T> =>
+  fromCommCoin<T>(shouldBePresent(coin))

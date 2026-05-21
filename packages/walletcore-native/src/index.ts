@@ -5,6 +5,7 @@
  * Provides a JS object matching the WalletCore API shape expected by the SDK.
  */
 import { keccak_256 } from '@noble/hashes/sha3'
+
 import ExpoWalletCore from './ExpoWalletCoreModule'
 
 // ---------------------------------------------------------------------------
@@ -95,13 +96,22 @@ export interface WalletCoreLike {
     isValidBech32(address: string, coinType: number, hrp: string): boolean
     isValidSS58(address: string, coinType: number, ss58Prefix: number): boolean
     createWithString(address: string, coinType: number): NativeAnyAddressInstance
-    createBech32WithPublicKey(publicKey: NativePublicKeyInstance, coinType: number, hrp: string): NativeAnyAddressInstance
+    createBech32WithPublicKey(
+      publicKey: NativePublicKeyInstance,
+      coinType: number,
+      hrp: string
+    ): NativeAnyAddressInstance
     createBech32(address: string, coinType: number, hrp: string): NativeAnyAddressInstance
   }
 
   TransactionCompiler: {
     preImageHashes(coinType: number, txInputData: Uint8Array): Uint8Array
-    compileWithSignatures(coinType: number, txInputData: Uint8Array, signatures: NativeDataVectorInstance, publicKeys: NativeDataVectorInstance): Uint8Array
+    compileWithSignatures(
+      coinType: number,
+      txInputData: Uint8Array,
+      signatures: NativeDataVectorInstance,
+      publicKeys: NativeDataVectorInstance
+    ): Uint8Array
   }
 
   DataVector: {
@@ -170,9 +180,7 @@ export interface WalletCoreLike {
 // `globalThis.Buffer` themselves before invoking any WalletCore method.
 
 function toBase64(bytes: Uint8Array | Buffer): string {
-  const buf = Buffer.isBuffer(bytes)
-    ? bytes
-    : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   return buf.toString('base64')
 }
 
@@ -599,9 +607,7 @@ function abiEncode(name: string, params: AbiParam[]): Uint8Array {
 
   // Concatenate: selector + heads + tails
   const totalLen =
-    selector.length +
-    headParts.reduce((sum, p) => sum + p.length, 0) +
-    tailParts.reduce((sum, p) => sum + p.length, 0)
+    selector.length + headParts.reduce((sum, p) => sum + p.length, 0) + tailParts.reduce((sum, p) => sum + p.length, 0)
 
   const result = new Uint8Array(totalLen)
   let offset = 0
@@ -783,16 +789,8 @@ export class NativeWalletCore {
           const dataB64 = ExpoWalletCore.anyAddressData(address, coinType)
           return new NativeAnyAddress(desc, dataB64)
         },
-        createBech32WithPublicKey(
-          publicKey: NativePublicKey,
-          coinType: number,
-          hrp: string
-        ): NativeAnyAddress {
-          const desc = ExpoWalletCore.anyAddressCreateBech32WithPublicKey(
-            publicKey._handle,
-            coinType,
-            hrp
-          )
+        createBech32WithPublicKey(publicKey: NativePublicKey, coinType: number, hrp: string): NativeAnyAddress {
+          const desc = ExpoWalletCore.anyAddressCreateBech32WithPublicKey(publicKey._handle, coinType, hrp)
           return new NativeAnyAddress(desc)
         },
         createBech32(address: string, coinType: number, hrp: string): NativeAnyAddress {

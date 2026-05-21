@@ -208,10 +208,7 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
   },
 }
 
-export const chainFeeCoin: Record<Chain, KnownCoin> = recordMap(
-  leanChainFeeCoin,
-  (coin, chain) => ({
-    ...coin,
-    chain,
-  })
-)
+export const chainFeeCoin: Record<Chain, KnownCoin> = recordMap(leanChainFeeCoin, (coin, chain) => ({
+  ...coin,
+  chain,
+}))

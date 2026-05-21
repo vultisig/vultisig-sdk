@@ -39,17 +39,13 @@ export const getThorchainLpPositions = async ({
   //   - `raw.pools` MUST be an array if present — a non-array `pools`
   //     IS schema drift and we throw.
   if (!raw || typeof raw !== 'object') {
-    throw new Error(
-      `getThorchainLpPositions: unexpected Midgard response shape from ${url}`
-    )
+    throw new Error(`getThorchainLpPositions: unexpected Midgard response shape from ${url}`)
   }
   if (raw.pools === undefined) {
     return []
   }
   if (!Array.isArray(raw.pools)) {
-    throw new Error(
-      `getThorchainLpPositions: Midgard response ${url} has non-array \`pools\` field`
-    )
+    throw new Error(`getThorchainLpPositions: Midgard response ${url} has non-array \`pools\` field`)
   }
   return raw.pools.map(normalizeMemberPool)
 }

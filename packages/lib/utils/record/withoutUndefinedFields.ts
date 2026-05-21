@@ -1,9 +1,7 @@
 import { WithoutUndefinedFields } from '../types/WithoutUndefinedFields'
 import { getRecordKeys } from './getRecordKeys/index.js'
 
-export function withoutUndefinedFields<T extends Record<string, any>>(
-  record: T
-): WithoutUndefinedFields<T> {
+export function withoutUndefinedFields<T extends Record<string, any>>(record: T): WithoutUndefinedFields<T> {
   const result = {} as WithoutUndefinedFields<T>
 
   getRecordKeys(record).forEach(key => {

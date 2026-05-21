@@ -16,9 +16,7 @@ export const getClaimWithProofDisabled = async (): Promise<boolean> => {
   const parsedValue = Number(param.value)
 
   if (!Number.isFinite(parsedValue)) {
-    throw new Error(
-      `Invalid ClaimWithProofDisabled value: ${String(param.value)}`
-    )
+    throw new Error(`Invalid ClaimWithProofDisabled value: ${String(param.value)}`)
   }
 
   return parsedValue > 0

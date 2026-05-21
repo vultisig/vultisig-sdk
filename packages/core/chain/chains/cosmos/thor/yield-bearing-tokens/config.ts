@@ -12,7 +12,5 @@ export const yieldContractsByBaseDenom = {
 } as const
 
 // MAINNET affiliate contract + your affiliate address
-export const yieldBearingAssetsAffiliateContract =
-  'thor1v3f7h384r8hw6r3dtcgfq6d5fq842u6cjzeuu8nr0cp93j7zfxyquyrfl8'
-export const yieldBearingAssetsAffiliateAddress =
-  'thor1svfwxevnxtm4ltnw92hrqpqk4vzuzw9a4jzy04'
+export const yieldBearingAssetsAffiliateContract = 'thor1v3f7h384r8hw6r3dtcgfq6d5fq842u6cjzeuu8nr0cp93j7zfxyquyrfl8'
+export const yieldBearingAssetsAffiliateAddress = 'thor1svfwxevnxtm4ltnw92hrqpqk4vzuzw9a4jzy04'

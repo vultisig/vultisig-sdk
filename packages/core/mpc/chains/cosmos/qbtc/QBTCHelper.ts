@@ -9,12 +9,7 @@ import { Buffer } from 'buffer'
 import { sha256 } from '@noble/hashes/sha256'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
-import {
-  concatBytes,
-  protoBytes,
-  protoString,
-  protoVarint,
-} from '@vultisig/core-chain/chains/cosmos/protoEncoding'
+import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/core-chain/chains/cosmos/protoEncoding'
 
 import { KeysignSignature } from '../../../keysign/KeysignSignature'
 import { CosmosSpecific } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -35,10 +30,7 @@ type QBTCKeysignInput = {
 }
 
 /** Returns the SHA256 hash(es) of the SignDoc that must be signed. */
-export const getQBTCPreSignedImageHash = ({
-  keysignPayload,
-  cosmosSpecific,
-}: QBTCKeysignInput): Uint8Array[] => {
+export const getQBTCPreSignedImageHash = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput): Uint8Array[] => {
   const signDoc = buildSignDoc({ keysignPayload, cosmosSpecific })
   return [sha256(signDoc)]
 }
@@ -68,10 +60,7 @@ export const getQBTCSignedTransaction = ({
   })
 
   const hashHex = Buffer.from(sha256(signDoc)).toString('hex')
-  const sig = shouldBePresent(
-    signatures[hashHex],
-    `QBTC signature for hash ${hashHex}`
-  )
+  const sig = shouldBePresent(signatures[hashHex], `QBTC signature for hash ${hashHex}`)
   const sigData = Buffer.from(sig.der_signature, 'hex')
 
   const txRaw = buildTxRaw({ bodyBytes, authInfoBytes, signature: sigData })
@@ -80,9 +69,7 @@ export const getQBTCSignedTransaction = ({
     tx_bytes: txBytesBase64,
     mode: 'BROADCAST_MODE_SYNC',
   })
-  const transactionHash = Buffer.from(sha256(txRaw))
-    .toString('hex')
-    .toUpperCase()
+  const transactionHash = Buffer.from(sha256(txRaw)).toString('hex').toUpperCase()
 
   return { serialized, transactionHash }
 }
@@ -104,10 +91,7 @@ type BuildTxComponentsOutput = {
   authInfoBytes: Uint8Array
 }
 
-const buildTxComponents = ({
-  keysignPayload,
-  cosmosSpecific,
-}: QBTCKeysignInput): BuildTxComponentsOutput => {
+const buildTxComponents = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput): BuildTxComponentsOutput => {
   const coin = shouldBePresent(keysignPayload.coin)
   const pubKeyData = Buffer.from(coin.hexPublicKey, 'hex')
 
@@ -126,11 +110,7 @@ type BuildSignDocFromComponentsInput = {
   accountNumber: bigint
 }
 
-const buildSignDocFromComponents = ({
-  bodyBytes,
-  authInfoBytes,
-  accountNumber,
-}: BuildSignDocFromComponentsInput) =>
+const buildSignDocFromComponents = ({ bodyBytes, authInfoBytes, accountNumber }: BuildSignDocFromComponentsInput) =>
   concatBytes(
     protoBytes(1, bodyBytes),
     protoBytes(2, authInfoBytes),
@@ -138,10 +118,7 @@ const buildSignDocFromComponents = ({
     protoVarint(4, accountNumber)
   )
 
-const buildTxBody = ({
-  keysignPayload,
-  cosmosSpecific,
-}: QBTCKeysignInput): Uint8Array => {
+const buildTxBody = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput): Uint8Array => {
   const { transactionType, ibcDenomTraces } = cosmosSpecific
   let { memo } = keysignPayload
   let anyMsg: Uint8Array
@@ -157,10 +134,7 @@ const buildTxBody = ({
     anyMsg = buildMsgSendAny(keysignPayload)
   }
 
-  return concatBytes(
-    protoBytes(1, anyMsg),
-    memo ? protoString(2, memo) : new Uint8Array(0)
-  )
+  return concatBytes(protoBytes(1, anyMsg), memo ? protoString(2, memo) : new Uint8Array(0))
 }
 
 const buildMsgSendAny = (keysignPayload: KeysignPayload): Uint8Array => {
@@ -172,16 +146,9 @@ const buildMsgSend = (keysignPayload: KeysignPayload): Uint8Array => {
   const coin = shouldBePresent(keysignPayload.coin)
   const coinDenom = coin.isNativeToken ? denom : coin.contractAddress
 
-  const coinProto = concatBytes(
-    protoString(1, coinDenom),
-    protoString(2, keysignPayload.toAmount)
-  )
+  const coinProto = concatBytes(protoString(1, coinDenom), protoString(2, keysignPayload.toAmount))
 
-  return concatBytes(
-    protoString(1, coin.address),
-    protoString(2, keysignPayload.toAddress),
-    protoBytes(3, coinProto)
-  )
+  return concatBytes(protoString(1, coin.address), protoString(2, keysignPayload.toAddress), protoBytes(3, coinProto))
 }
 
 type BuildIBCTransferAnyInput = {
@@ -189,27 +156,16 @@ type BuildIBCTransferAnyInput = {
   ibcDenomTraces?: CosmosSpecific['ibcDenomTraces']
 }
 
-const buildIBCTransferAny = ({
-  keysignPayload,
-  ibcDenomTraces,
-}: BuildIBCTransferAnyInput): Uint8Array => {
+const buildIBCTransferAny = ({ keysignPayload, ibcDenomTraces }: BuildIBCTransferAnyInput): Uint8Array => {
   const msgTransfer = buildMsgTransfer({ keysignPayload, ibcDenomTraces })
-  return concatBytes(
-    protoString(1, msgTransferTypeURL),
-    protoBytes(2, msgTransfer)
-  )
+  return concatBytes(protoString(1, msgTransferTypeURL), protoBytes(2, msgTransfer))
 }
 
-const buildMsgTransfer = ({
-  keysignPayload,
-  ibcDenomTraces,
-}: BuildIBCTransferAnyInput): Uint8Array => {
+const buildMsgTransfer = ({ keysignPayload, ibcDenomTraces }: BuildIBCTransferAnyInput): Uint8Array => {
   const memo = shouldBePresent(keysignPayload.memo, 'IBC transfer memo')
   const parts = memo.split(':')
   if (parts.length < 2) {
-    throw new Error(
-      'QBTC: IBC transfer requires memo with source channel (ibc:channel-N:...)'
-    )
+    throw new Error('QBTC: IBC transfer requires memo with source channel (ibc:channel-N:...)')
   }
   const sourceChannel = parts[1]
 
@@ -223,10 +179,7 @@ const buildMsgTransfer = ({
   const coin = shouldBePresent(keysignPayload.coin)
   const tokenDenom = coin.isNativeToken ? denom : coin.contractAddress
 
-  const token = concatBytes(
-    protoString(1, tokenDenom),
-    protoString(2, keysignPayload.toAmount)
-  )
+  const token = concatBytes(protoString(1, tokenDenom), protoString(2, keysignPayload.toAmount))
 
   return concatBytes(
     protoString(1, 'transfer'),
@@ -256,9 +209,7 @@ const buildMsgVote = (keysignPayload: KeysignPayload): Uint8Array => {
   const voteStr = (keysignPayload.memo ?? '').replace('QBTC_VOTE:', '')
   const parts = voteStr.split(':')
   if (parts.length !== 2) {
-    throw new Error(
-      'QBTC: invalid vote memo format, expected OPTION:PROPOSAL_ID'
-    )
+    throw new Error('QBTC: invalid vote memo format, expected OPTION:PROPOSAL_ID')
   }
 
   const optionKey = parts[0].toUpperCase()
@@ -270,11 +221,7 @@ const buildMsgVote = (keysignPayload: KeysignPayload): Uint8Array => {
   }
   const proposalId = BigInt(parts[1])
 
-  return concatBytes(
-    protoVarint(1, proposalId),
-    protoString(2, coin.address),
-    protoVarint(3, option)
-  )
+  return concatBytes(protoVarint(1, proposalId), protoString(2, coin.address), protoVarint(3, option))
 }
 
 type BuildAuthInfoInput = {
@@ -283,32 +230,18 @@ type BuildAuthInfoInput = {
   gas: bigint
 }
 
-const buildAuthInfo = ({
-  pubKeyData,
-  sequence,
-  gas,
-}: BuildAuthInfoInput): Uint8Array => {
+const buildAuthInfo = ({ pubKeyData, sequence, gas }: BuildAuthInfoInput): Uint8Array => {
   const pubKeyMsg = protoBytes(1, pubKeyData)
 
-  const pubKeyAny = concatBytes(
-    protoString(1, pubKeyTypeURL),
-    protoBytes(2, pubKeyMsg)
-  )
+  const pubKeyAny = concatBytes(protoString(1, pubKeyTypeURL), protoBytes(2, pubKeyMsg))
 
   const singleMode = protoVarint(1, 1n)
 
   const modeInfo = protoBytes(1, singleMode)
 
-  const signerInfo = concatBytes(
-    protoBytes(1, pubKeyAny),
-    protoBytes(2, modeInfo),
-    protoVarint(3, sequence)
-  )
+  const signerInfo = concatBytes(protoBytes(1, pubKeyAny), protoBytes(2, modeInfo), protoVarint(3, sequence))
 
-  const feeCoin = concatBytes(
-    protoString(1, denom),
-    protoString(2, gas.toString())
-  )
+  const feeCoin = concatBytes(protoString(1, denom), protoString(2, gas.toString()))
 
   const gasLimit = 300000n
 
@@ -323,13 +256,5 @@ type BuildTxRawInput = {
   signature: Uint8Array
 }
 
-const buildTxRaw = ({
-  bodyBytes,
-  authInfoBytes,
-  signature,
-}: BuildTxRawInput): Uint8Array =>
-  concatBytes(
-    protoBytes(1, bodyBytes),
-    protoBytes(2, authInfoBytes),
-    protoBytes(3, signature)
-  )
+const buildTxRaw = ({ bodyBytes, authInfoBytes, signature }: BuildTxRawInput): Uint8Array =>
+  concatBytes(protoBytes(1, bodyBytes), protoBytes(2, authInfoBytes), protoBytes(3, signature))

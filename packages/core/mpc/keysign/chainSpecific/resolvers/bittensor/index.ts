@@ -21,28 +21,21 @@ const rpc = async <T>(method: string, params: unknown[] = []) => {
     body: { jsonrpc: '2.0', method, params, id: 1 },
   })
   if (response.error) {
-    throw new Error(
-      `Bittensor RPC ${method} failed: ${response.error.message ?? `code ${response.error.code}`}`
-    )
+    throw new Error(`Bittensor RPC ${method} failed: ${response.error.message ?? `code ${response.error.code}`}`)
   }
   return response.result as T
 }
 
-export const getBittensorChainSpecific: GetChainSpecificResolver<
-  'polkadotSpecific'
-> = async ({ keysignPayload }) => {
+export const getBittensorChainSpecific: GetChainSpecificResolver<'polkadotSpecific'> = async ({ keysignPayload }) => {
   const { address } = getKeysignCoin(keysignPayload)
 
-  const [runtimeVersion, blockHash, nonce, header, genesisHash] =
-    await Promise.all([
-      rpc<{ specVersion: number; transactionVersion: number }>(
-        'state_getRuntimeVersion'
-      ),
-      rpc<string>('chain_getBlockHash'),
-      rpc<number>('system_accountNextIndex', [address]),
-      rpc<{ number: string }>('chain_getHeader'),
-      rpc<string>('chain_getBlockHash', [0]),
-    ])
+  const [runtimeVersion, blockHash, nonce, header, genesisHash] = await Promise.all([
+    rpc<{ specVersion: number; transactionVersion: number }>('state_getRuntimeVersion'),
+    rpc<string>('chain_getBlockHash'),
+    rpc<number>('system_accountNextIndex', [address]),
+    rpc<{ number: string }>('chain_getHeader'),
+    rpc<string>('chain_getBlockHash', [0]),
+  ])
 
   const chainSpecific = create(PolkadotSpecificSchema, {
     recentBlockHash: blockHash,

@@ -1,13 +1,9 @@
 import { isPromise } from './promise/isPromise'
 import { Result } from './types/Result'
 
-export function attempt<T, E = unknown>(
-  fn: () => Promise<T>
-): Promise<Result<T, E>>
+export function attempt<T, E = unknown>(fn: () => Promise<T>): Promise<Result<T, E>>
 export function attempt<T, E = unknown>(fn: () => T): Result<T, E>
-export function attempt<T, E = unknown>(
-  promise: Promise<T>
-): Promise<Result<T, E>>
+export function attempt<T, E = unknown>(promise: Promise<T>): Promise<Result<T, E>>
 export function attempt<T, E = unknown>(
   input: Promise<T> | (() => T) | (() => Promise<T>)
 ): Result<T, E> | Promise<Result<T, E>> {
@@ -29,14 +25,8 @@ export function attempt<T, E = unknown>(
   }
 }
 
-export function withFallback<T, E = unknown>(
-  result: Result<T, E>,
-  fallback: T
-): T
-export function withFallback<T, E = unknown>(
-  result: Promise<Result<T, E>>,
-  fallback: T
-): Promise<T>
+export function withFallback<T, E = unknown>(result: Result<T, E>, fallback: T): T
+export function withFallback<T, E = unknown>(result: Promise<Result<T, E>>, fallback: T): Promise<T>
 export function withFallback<T, E = unknown>(
   result: Result<T, E> | Promise<Result<T, E>>,
   fallback: T

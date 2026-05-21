@@ -55,6 +55,49 @@ export type DelegatorRewardsResponse = {
 }
 
 /**
+ * Validator bond status as reported by the staking module.
+ * `BOND_STATUS_BONDED` validators are in the active set and earn rewards.
+ * `UNBONDING` / `UNBONDED` are out of the active set; `UNSPECIFIED` is the
+ * default-uninitialized value (only seen on misbehaving chains, treat as
+ * unknown).
+ */
+export type ValidatorStatus =
+  | 'BOND_STATUS_UNSPECIFIED'
+  | 'BOND_STATUS_UNBONDED'
+  | 'BOND_STATUS_UNBONDING'
+  | 'BOND_STATUS_BONDED'
+
+export type ValidatorDescription = {
+  moniker: string
+  /** Keybase identity hex (16 chars) for avatar lookup; "" if unset */
+  identity: string
+  website: string
+  securityContact: string
+  details: string
+}
+
+export type ValidatorCommission = {
+  /** Current commission rate as 18-decimal Dec string, e.g. "0.050000000000000000" for 5% */
+  rate: string
+  maxRate: string
+  maxChangeRate: string
+}
+
+export type Validator = {
+  /** valoper bech32, e.g. `terravaloper1...` */
+  operatorAddress: string
+  jailed: boolean
+  status: ValidatorStatus
+  /** Total bonded tokens in base units. String to preserve precision. */
+  tokens: string
+  /** Raw shares issued. String to preserve precision. */
+  delegatorShares: string
+  description: ValidatorDescription
+  commission: ValidatorCommission
+  minSelfDelegation: string
+}
+
+/**
  * Discriminated by `@type` on the auth/accounts response. We only surface
  * vesting variants the staking module cares about; non-vesting addresses
  * return `null` from `getCosmosVestingAccount`.
@@ -114,6 +157,27 @@ export const getDelegatorRewardsUrl = (chain: StakingChain, delegatorAddress: st
 
 export const getAuthAccountUrl = (chain: StakingChain, address: string): string =>
   `${cosmosRpcUrl[chain]}/cosmos/auth/v1beta1/accounts/${address}`
+
+/**
+ * Validator list endpoint. Optional `status` filter is the canonical way to
+ * exclude jailed / unbonding validators from the picker — without it, large
+ * chains like TerraClassic return hundreds of inactive entries. `paginationKey`
+ * is the opaque cursor returned by the previous page.
+ */
+export const getValidatorsUrl = (
+  chain: StakingChain,
+  opts: { status?: ValidatorStatus; limit?: number; paginationKey?: string } = {}
+): string => {
+  const params = new URLSearchParams()
+  if (opts.status) params.set('status', opts.status)
+  if (opts.limit !== undefined) params.set('pagination.limit', String(opts.limit))
+  if (opts.paginationKey) params.set('pagination.key', opts.paginationKey)
+  const qs = params.toString()
+  return `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/validators${qs ? `?${qs}` : ''}`
+}
+
+export const getValidatorUrl = (chain: StakingChain, validatorAddress: string): string =>
+  `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/validators/${validatorAddress}`
 
 // ---------------------------------------------------------------------------
 // Fetchers (raw fetch, no Stargate dep — works in RN + Node + browser)
@@ -200,6 +264,95 @@ export async function getCosmosDelegatorRewards(
     rewards: (raw.rewards ?? []).map(r => ({ validatorAddress: r.validator_address, reward: r.reward })),
     total: raw.total ?? [],
   }
+}
+
+type RawValidator = {
+  operator_address: string
+  jailed?: boolean
+  status: ValidatorStatus
+  tokens: string
+  delegator_shares: string
+  description: {
+    moniker?: string
+    identity?: string
+    website?: string
+    security_contact?: string
+    details?: string
+  }
+  commission: {
+    commission_rates: {
+      rate: string
+      max_rate: string
+      max_change_rate: string
+    }
+  }
+  min_self_delegation: string
+}
+
+const parseValidator = (v: RawValidator): Validator => ({
+  operatorAddress: v.operator_address,
+  jailed: v.jailed ?? false,
+  status: v.status,
+  tokens: v.tokens,
+  delegatorShares: v.delegator_shares,
+  description: {
+    moniker: v.description.moniker ?? '',
+    identity: v.description.identity ?? '',
+    website: v.description.website ?? '',
+    securityContact: v.description.security_contact ?? '',
+    details: v.description.details ?? '',
+  },
+  commission: {
+    rate: v.commission.commission_rates.rate,
+    maxRate: v.commission.commission_rates.max_rate,
+    maxChangeRate: v.commission.commission_rates.max_change_rate,
+  },
+  minSelfDelegation: v.min_self_delegation,
+})
+
+/**
+ * Returns the full validator set for the chain, auto-paginating until the
+ * LCD reports `next_key === null`. Pass `status: 'BOND_STATUS_BONDED'` to
+ * limit to the active set (the typical case for stake-picker UIs).
+ *
+ * `pageLimit` (default 200) caps per-request size; the LCD caps it at 200 on
+ * most chains. Total pages walked is bounded to avoid runaway pagination on
+ * a misbehaving endpoint.
+ */
+export async function getCosmosValidators(
+  chain: StakingChain,
+  opts: FetchOpts & { status?: ValidatorStatus; pageLimit?: number } = {}
+): Promise<Validator[]> {
+  type Raw = {
+    validators: RawValidator[]
+    pagination: { next_key: string | null; total?: string }
+  }
+  const pageLimit = opts.pageLimit ?? 200
+  const collected: Validator[] = []
+  let paginationKey: string | undefined
+  const MAX_PAGES = 50
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url = getValidatorsUrl(chain, {
+      status: opts.status,
+      limit: pageLimit,
+      paginationKey,
+    })
+    const raw = await lcdGet<Raw>(url, opts)
+    for (const v of raw.validators) collected.push(parseValidator(v))
+    if (!raw.pagination.next_key) return collected
+    paginationKey = raw.pagination.next_key
+  }
+  throw new Error(`getCosmosValidators: exceeded ${MAX_PAGES} pages on ${chain} (possible LCD pagination bug)`)
+}
+
+export async function getCosmosValidator(
+  chain: StakingChain,
+  validatorAddress: string,
+  opts: FetchOpts = {}
+): Promise<Validator> {
+  type Raw = { validator: RawValidator }
+  const raw = await lcdGet<Raw>(getValidatorUrl(chain, validatorAddress), opts)
+  return parseValidator(raw.validator)
 }
 
 /**

@@ -54,10 +54,7 @@ const cborBytes = (data: Uint8Array): Uint8Array => {
  * Build the witness set CBOR: a1 00 81 82 5820<vkey> 5840<sig>
  * = map(1) { 0 => [ [bytes(32), bytes(64)] ] }
  */
-const buildWitnessCbor = (
-  publicKey: Uint8Array,
-  signature: Uint8Array
-): Uint8Array => {
+const buildWitnessCbor = (publicKey: Uint8Array, signature: Uint8Array): Uint8Array => {
   const vkeyCbor = cborBytes(publicKey)
   const sigCbor = cborBytes(signature)
 
@@ -83,11 +80,7 @@ const concat = (parts: Uint8Array[]): Uint8Array => {
 }
 
 /** Returns the full signed Cardano transaction as CBOR bytes. */
-export const buildSignedCardanoTx = ({
-  txBodyCbor,
-  publicKey,
-  signature,
-}: BuildSignedCardanoTxInput): Uint8Array => {
+export const buildSignedCardanoTx = ({ txBodyCbor, publicKey, signature }: BuildSignedCardanoTxInput): Uint8Array => {
   const witnessCbor = buildWitnessCbor(publicKey, signature)
 
   // Signed tx: 0x84 [tx_body, witnesses, isValid, auxiliary_data]

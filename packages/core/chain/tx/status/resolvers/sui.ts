@@ -5,9 +5,7 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
-export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({
-  hash,
-}) => {
+export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash }) => {
   const client = getSuiClient()
 
   const { data, error } = await attempt(

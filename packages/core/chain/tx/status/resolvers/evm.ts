@@ -5,15 +5,10 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
-export const getEvmTxStatus: TxStatusResolver<EvmChain> = async ({
-  chain,
-  hash,
-}) => {
+export const getEvmTxStatus: TxStatusResolver<EvmChain> = async ({ chain, hash }) => {
   const client = getEvmClient(chain)
 
-  const { data, error } = await attempt(
-    client.getTransactionReceipt({ hash: hash as `0x${string}` })
-  )
+  const { data, error } = await attempt(client.getTransactionReceipt({ hash: hash as `0x${string}` }))
 
   if (error) {
     return { status: 'pending' }

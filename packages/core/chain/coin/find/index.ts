@@ -2,10 +2,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 
-import {
-  CoinFinderChainKind,
-  coinFinderChainKinds,
-} from './CoinFinderChainKind'
+import { CoinFinderChainKind, coinFinderChainKinds } from './CoinFinderChainKind'
 import { FindCoinsResolver } from './resolver'
 import { findCardanoCoins } from './resolvers/cardano'
 import { findCosmosCoins } from './resolvers/cosmos'
@@ -23,9 +20,7 @@ export const findCoins: FindCoinsResolver<Chain> = async input => {
   const chainKind = getChainKind(input.chain)
   if (!isOneOf(chainKind, coinFinderChainKinds)) {
     throw new Error(
-      `Unsupported CoinFinder chain kind: ${chainKind}, should be one of ${coinFinderChainKinds.join(
-        ', '
-      )}`
+      `Unsupported CoinFinder chain kind: ${chainKind}, should be one of ${coinFinderChainKinds.join(', ')}`
     )
   }
 

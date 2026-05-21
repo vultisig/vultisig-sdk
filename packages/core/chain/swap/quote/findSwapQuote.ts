@@ -18,8 +18,8 @@ import { SwapDiscount } from '../discount/SwapDiscount'
 import { getKyberSwapQuote } from '../general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '../general/kyber/chains'
 import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
-import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
+import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { SwapQuote } from './SwapQuote'
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {

@@ -6,8 +6,7 @@ import { MpcDevice, mpcDeviceFromDeviceName } from './MpcDevice'
 const localPartyIdSeparator = '-'
 
 export const generateLocalPartyId = (device: MpcDevice) => {
-  const deviceName =
-    device === 'server' ? capitalizeFirstLetter(device) : device
+  const deviceName = device === 'server' ? capitalizeFirstLetter(device) : device
 
   const number = randomIntegerInRange(1000, 9999)
 
@@ -22,5 +21,4 @@ export const parseLocalPartyId = (localPartyId: string) => {
 
 export const hasServer = (signers: string[]) => signers.some(isServer)
 
-export const isServer = (device: string) =>
-  mpcDeviceFromDeviceName(parseLocalPartyId(device).deviceName) === 'server'
+export const isServer = (device: string) => mpcDeviceFromDeviceName(parseLocalPartyId(device).deviceName) === 'server'

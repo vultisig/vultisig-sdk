@@ -38,9 +38,7 @@ const getDiscoveredEvmCoin = async ({
     }
   }
 
-  const metadataResult = await attempt(() =>
-    getEvmTokenMetadata({ chain, id: tokenAddress })
-  )
+  const metadataResult = await attempt(() => getEvmTokenMetadata({ chain, id: tokenAddress }))
 
   if ('error' in metadataResult) {
     if (metadataResult.error instanceof NoDataError) {
@@ -57,10 +55,7 @@ const getDiscoveredEvmCoin = async ({
   }
 }
 
-export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
-  address,
-  chain,
-}) => {
+export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain }) => {
   const oneInchSupportedChains: EvmChain[] = [
     EvmChain.Ethereum,
     EvmChain.Base,
@@ -78,9 +73,7 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
   const oneInchChainId = hexToNumber(getEvmChainId(chain))
 
   const balanceResult = await attempt(
-    queryOneInch<Record<string, string>>(
-      `/balance/v1.2/${oneInchChainId}/balances/${address}`
-    )
+    queryOneInch<Record<string, string>>(`/balance/v1.2/${oneInchChainId}/balances/${address}`)
   )
 
   let balanceData: Record<string, string> = {}
@@ -118,9 +111,7 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
             address,
             chain,
             tokenAddress,
-            token:
-              tokenInfoData[tokenAddress] ??
-              tokenInfoData[tokenAddress.toLowerCase()],
+            token: tokenInfoData[tokenAddress] ?? tokenInfoData[tokenAddress.toLowerCase()],
           })
         )
       ),
@@ -128,12 +119,7 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({
     )
   }
 
-  if (
-    chain !== EvmChain.Ethereum ||
-    discoveredCoins.some(
-      coin => coin.id?.toLowerCase() === vult.id.toLowerCase()
-    )
-  ) {
+  if (chain !== EvmChain.Ethereum || discoveredCoins.some(coin => coin.id?.toLowerCase() === vult.id.toLowerCase())) {
     return discoveredCoins
   }
 

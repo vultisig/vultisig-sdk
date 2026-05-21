@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  getLiquidityUnits,
-  getLpAddSlippage,
-  getPoolShare,
-} from './math'
+import { getLiquidityUnits, getLpAddSlippage, getPoolShare } from './math'
 
 // A realistic pool state resembling mainnet BTC.BTC shape (scaled down).
 // 1000 RUNE and 0.1 BTC, pool units = 100 (arbitrary starting scale).
@@ -176,9 +172,7 @@ describe('getLpAddSlippage', () => {
       runeAmountBaseUnit: '50000000000', // 500 RUNE
       assetAmountBaseUnit: '0',
     })
-    expect(parseFloat(large.decimalPercent)).toBeGreaterThan(
-      parseFloat(small.decimalPercent)
-    )
+    expect(parseFloat(large.decimalPercent)).toBeGreaterThan(parseFloat(small.decimalPercent))
   })
 
   it('returns zero for empty pools (safeguard)', () => {

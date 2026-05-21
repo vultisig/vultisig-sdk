@@ -764,14 +764,11 @@ export const knownTokens = makeRecord(Object.values(Chain), chain => {
 
 type KnownIndex = Record<Chain, Record<string, KnownCoin>>
 
-export const knownTokensIndex: KnownIndex = makeRecord(
-  Object.values(Chain),
-  chain => {
-    const byId: Record<string, KnownCoin> = {}
-    for (const coin of knownTokens[chain] ?? []) {
-      if (!coin.id) continue
-      byId[coin.id.toLowerCase()] = coin
-    }
-    return byId
+export const knownTokensIndex: KnownIndex = makeRecord(Object.values(Chain), chain => {
+  const byId: Record<string, KnownCoin> = {}
+  for (const coin of knownTokens[chain] ?? []) {
+    if (!coin.id) continue
+    byId[coin.id.toLowerCase()] = coin
   }
-)
+  return byId
+})
