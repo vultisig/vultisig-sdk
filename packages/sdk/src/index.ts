@@ -44,6 +44,28 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // ============================================================================
+// PUBLIC API - Station Migration Primitives
+// ============================================================================
+
+export type {
+  StationImportSource,
+  StationMnemonicImportSource,
+  StationPrivateKeyImportSource,
+  StationSeedImportSource,
+  StationTerraChain,
+  StationTerraChainPublicData,
+  StationTerraCoinType,
+  StationTerraKeyMaterial,
+} from '@vultisig/core-chain/station/importPrimitives'
+export {
+  deriveStationTerraKeyMaterial,
+  getStationTerraDerivationPath,
+  normalizeStationPrivateKeyHex,
+  stationTerraCoinTypes,
+  validateStationPrivateKeyHex,
+} from '@vultisig/core-chain/station/importPrimitives'
+
+// ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 

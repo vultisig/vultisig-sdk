@@ -1240,6 +1240,11 @@
       "import": "./dist/signing/SignatureFormat.js",
       "default": "./dist/signing/SignatureFormat.js"
     },
+    "./station/importPrimitives": {
+      "types": "./dist/station/importPrimitives.d.ts",
+      "import": "./dist/station/importPrimitives.js",
+      "default": "./dist/station/importPrimitives.js"
+    },
     "./swap/affiliate": {
       "types": "./dist/swap/affiliate/index.d.ts",
       "import": "./dist/swap/affiliate/index.js",
