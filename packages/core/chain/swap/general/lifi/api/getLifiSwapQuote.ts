@@ -23,6 +23,35 @@ const setupLifi = memoize(() => {
   })
 })
 
+// Slippage tolerance baked into the LiFi-prebuilt swap tx. The
+// returned `transactionRequest.data` is a fully-formed Solana / EVM
+// transaction that encodes a minAmountOut floor at quote time —
+// the underlying AMM (Raydium / Orca / Meteora on Solana; Uniswap /
+// 1inch on EVM) reverts if simulation-time output drops below the
+// floor. Default LiFi slippage is 0.005 (0.5%), which is far too
+// tight for MPC-signed flows where the keysign ceremony adds
+// 30-90s of clock drift between quote and broadcast and the price
+// routinely moves more than 0.5% on volatile pairs (SOL/USDC,
+// SOL/anything memecoin). Production repro (2026-05-22):
+// SOL→USDC simulation failed with `-32002: custom program error:
+// 0x32` (Raydium AMM error 50 = AmountExceedsMaximum / slippage
+// exceeded). Bump to 1% — covers the typical ceremony drift while
+// staying well inside the user's pre-sign card's risk surface
+// (typical realised slippage on these aggregators is <0.1%, so
+// the 1% is a ceiling, not the expected price hit).
+//
+// EVM is less time-sensitive (no MPC ceremony delay equivalent —
+// the model dispatches and the user signs in seconds) but the
+// same 1% bump still helps when the user pauses on the pre-sign
+// card for a moment.
+//
+// Hoisted to module scope so the planned per-pair / per-call
+// override (forwarding `execute_swap.slippage_tolerance_percent`
+// through the resolver, tracked as a follow-up) lands as a clean
+// diff rather than reshaping the function body. Codex Round 1b
+// review feedback (vultisig-sdk#513).
+const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
+
 export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
   setupLifi()
 
@@ -30,29 +59,6 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
 
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
-
-  // Slippage tolerance baked into the LiFi-prebuilt swap tx. The
-  // returned `transactionRequest.data` is a fully-formed Solana / EVM
-  // transaction that encodes a minAmountOut floor at quote time —
-  // the underlying AMM (Raydium / Orca / Meteora on Solana; Uniswap /
-  // 1inch on EVM) reverts if simulation-time output drops below the
-  // floor. Default LiFi slippage is 0.005 (0.5%), which is far too
-  // tight for MPC-signed flows where the keysign ceremony adds
-  // 30-90s of clock drift between quote and broadcast and the price
-  // routinely moves more than 0.5% on volatile pairs (SOL/USDC,
-  // SOL/anything memecoin). Production repro (2026-05-22):
-  // SOL→USDC simulation failed with `-32002: custom program error:
-  // 0x32` (Raydium AMM error 50 = AmountExceedsMaximum / slippage
-  // exceeded). Bump to 1% — covers the typical ceremony drift while
-  // staying well inside the user's pre-sign card's risk surface
-  // (typical realised slippage on these aggregators is <0.1%, so
-  // the 1% is a ceiling, not the expected price hit).
-  //
-  // EVM is less time-sensitive (no MPC ceremony delay equivalent —
-  // the model dispatches and the user signs in seconds) but the
-  // same 1% bump still helps when the user pauses on the pre-sign
-  // card for a moment.
-  const SLIPPAGE_TOLERANCE = 0.01
 
   const quote = await getQuote({
     fromChain,
@@ -63,7 +69,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAddress,
     toAddress,
     fee: affiliateBps ? affiliateBps / 10000 : undefined,
-    slippage: SLIPPAGE_TOLERANCE,
+    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
   })
 
   const { transactionRequest, estimate } = quote
