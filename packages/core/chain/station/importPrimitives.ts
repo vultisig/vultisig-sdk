@@ -1,9 +1,8 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { deriveAddress } from '@vultisig/core-chain/publicKey/address/deriveAddress'
 import BIP32Factory from 'bip32'
 import * as ecc from 'tiny-secp256k1'
-
-import { Chain } from '../Chain'
-import { deriveAddress } from '../publicKey/address/deriveAddress'
 
 export const stationTerraCoinTypes = [330, 118] as const
 
