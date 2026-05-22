@@ -60,7 +60,32 @@ type SwapQuoteFetcher = {
 type RankedSwapQuote = {
   quote: SwapQuote
   outputAmount: bigint
+  providerName: SwapQuoteProviderName
 }
+
+/**
+ * Bias window (in bps of best comparable output) within which a direct native
+ * THORChain / MayaChain route is preferred over a higher-output aggregator route.
+ *
+ * Rationale (paaao, 2026-05-22): for L1 ↔ L1 swaps that THORChain natively serves,
+ * the protocol-aligned route is preferred even when an aggregator (e.g. SwapKit)
+ * gross-output is slightly higher. Direct THORChain captures full vultisig
+ * affiliate revenue (50bps) and avoids the SwapKit fee skim; the protocol is the
+ * moat. Mirrors the priority-order short-circuit used in vultisig-ios's
+ * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`, ported as a soft bias
+ * here so a clearly-better aggregator route (>5% above THOR) still wins.
+ *
+ * 500 bps = 5%. Conservative: covers normal LP slippage / pool depth variance
+ * without ceding obviously-better aggregator routes.
+ */
+export const nativeSwapBiasOutputBps = 500n
+
+const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
+
+type NativeProviderName = (typeof nativeProviderNames)[number]
+
+const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName =>
+  (nativeProviderNames as readonly SwapQuoteProviderName[]).includes(name)
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
 function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
@@ -95,8 +120,7 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
-  let best: SwapQuote | null = null
-  let bestAmount: bigint | null = null
+  let best: RankedSwapQuote | null = null
   let bestIndex = Number.POSITIVE_INFINITY
 
   for (let i = 0; i < settled.length; i++) {
@@ -104,17 +128,55 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     if (result.status !== 'fulfilled') {
       continue
     }
-    const { outputAmount, quote } = result.value
+    const candidate = result.value
     // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
     // (general-first vs native-first), so this preserves that preference when amounts tie.
-    if (bestAmount === null || outputAmount > bestAmount || (outputAmount === bestAmount && i < bestIndex)) {
-      best = quote
-      bestAmount = outputAmount
+    if (
+      best === null ||
+      candidate.outputAmount > best.outputAmount ||
+      (candidate.outputAmount === best.outputAmount && i < bestIndex)
+    ) {
+      best = candidate
       bestIndex = i
     }
   }
 
-  return best
+  if (best === null) {
+    return null
+  }
+
+  // Native THOR/Maya bias: if best is an aggregator route but a direct THORChain
+  // or MayaChain route is within `nativeSwapBiasOutputBps` of best.outputAmount,
+  // prefer the native route. See `nativeSwapBiasOutputBps` for rationale.
+  //
+  // When best is already a native provider, no swap. When best.outputAmount is 0
+  // (degenerate), the relative bias check is undefined → keep best as-is.
+  if (isNativeProvider(best.providerName) || best.outputAmount <= 0n) {
+    return best.quote
+  }
+
+  let nativeBias: RankedSwapQuote | null = null
+  for (const result of settled) {
+    if (result.status !== 'fulfilled') {
+      continue
+    }
+    const candidate = result.value
+    if (!isNativeProvider(candidate.providerName)) {
+      continue
+    }
+    // Δ = best - candidate ≥ 0 (best is the max). Within bias iff Δ * 10000 ≤ best * bps.
+    const delta = best.outputAmount - candidate.outputAmount
+    const withinBias = delta * 10000n <= best.outputAmount * nativeSwapBiasOutputBps
+    if (!withinBias) {
+      continue
+    }
+    // If multiple natives qualify (THOR + Maya), prefer the one with higher output.
+    if (nativeBias === null || candidate.outputAmount > nativeBias.outputAmount) {
+      nativeBias = candidate
+    }
+  }
+
+  return (nativeBias ?? best).quote
 }
 
 export const findSwapQuote = async ({
@@ -286,11 +348,12 @@ export const findSwapQuote = async ({
   }
 
   const settled = await Promise.allSettled(
-    fetchers.map(async fetcher => {
+    fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
       const quote = await fetcher.fetch()
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to),
+        providerName: fetcher.providerName,
       }
     })
   )
