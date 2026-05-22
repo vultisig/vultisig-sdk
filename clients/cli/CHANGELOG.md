@@ -1,5 +1,35 @@
 # @vultisig/cli
 
+## 0.26.0
+
+### Minor Changes
+
+- [#507](https://github.com/vultisig/vultisig-sdk/pull/507) [`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add SwapKit as a configurable general swap provider for EVM and Solana source routes.
+
+### Patch Changes
+
+- [#506](https://github.com/vultisig/vultisig-sdk/pull/506) [`b1ce322`](https://github.com/vultisig/vultisig-sdk/commit/b1ce3226039d46055d11726cc0e971dd7a09a035) Thanks [@neavra](https://github.com/neavra)! - agent: send ecdsa/eddsa/chain_code in MessageContext so MCP receives vault info
+
+  The CLI's `MessageContext` was missing `ecdsa_public_key`, `eddsa_public_key`,
+  and `hex_chain_code` — fields vultiagent-app's `agentContext.ts` has always
+  sent. agent-backend reads these via `extractVaultInfoFromContext` to build
+  `req.VaultInfo`, which is then injected into MCP tool calls flagged with
+  `_meta.inject_vault_args: true`. Without them, every such tool errors with
+  "Vault not configured" at the MCP layer — currently observable for the
+  unified `show_receive_request` (vultisig/mcp#179, vultisig/agent-backend#554),
+  but the same gap will break any future `inject_vault_args` tool dispatched
+  through the CLI. `buildMessageContext` and `buildMinimalContext` now populate
+  the three fields from `vault.publicKeys.{ecdsa,eddsa}` + `vault.hexChainCode`.
+
+  Also picks up Ehsan's review nit on [#500](https://github.com/vultisig/vultisig-sdk/issues/500): removes the stray `/**` opener on
+  `client.ts:43` (the line above `isErrorPayloadObject`'s docblock).
+
+- Updated dependencies [[`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379)]:
+  - @vultisig/core-chain@2.2.0
+  - @vultisig/sdk@0.26.0
+  - @vultisig/client-shared@0.2.10
+  - @vultisig/rujira@21.0.0
+
 ## 0.25.0
 
 ### Patch Changes

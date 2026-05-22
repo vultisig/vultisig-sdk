@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 2.2.0
+
+### Minor Changes
+
+- [#507](https://github.com/vultisig/vultisig-sdk/pull/507) [`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add SwapKit as a configurable general swap provider for EVM and Solana source routes.
+
 ## 2.1.0
 
 ### Minor Changes

@@ -1,5 +1,26 @@
 # @vultisig/core-mpc
 
+## 1.2.15
+
+### Patch Changes
+
+- [#508](https://github.com/vultisig/vultisig-sdk/pull/508) [`40df23c`](https://github.com/vultisig/vultisig-sdk/commit/40df23c2ce48f51e2664528b0db5f1b8f14448c7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(core-mpc/cardano): throw a clear error when a Cardano memo is provided
+
+  Until CIP-20 auxiliary-data support lands (see vultisig/vultisig-sdk#432),
+  `getCardanoSigningInputs` would silently drop `keysignPayload.memo` and
+  produce a signed Cardano transaction with `auxiliary_data = null` — the
+  memo never made it on-chain (e.g. tx
+  `9c8549aea24106c699fffe74c7ded7186c25c390b33415853a83b0781efe4efe`).
+
+  The resolver now fails fast with an explanatory error so callers (direct
+  send, deposit, `VaultBase.send()`, `prepareSendTxFromKeys`, CLI/MCP) can
+  surface the limitation to the user instead of issuing a tx that loses
+  their memo. The CIP-30 path (`cardanoCip30.ts`) is unaffected — it signs
+  the dApp-provided tx body hash and does not read `keysignPayload.memo`.
+
+- Updated dependencies [[`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379)]:
+  - @vultisig/core-chain@2.2.0
+
 ## 1.2.14
 
 ### Patch Changes
