@@ -235,17 +235,13 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
     const opaque = '0a024010'
     const out = buildTronTxFromRawData(opaque)
     expect(out.unsignedRawHex).toBe(opaque)
-    expect(out.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
-
-    // sha256(0x0a024010) — deterministic; pin it so a regression in the
-    // hash path would fail this test rather than silently shift the
-    // user's signing scope.
-    // (Computed independently: sha256("0a024010" hex bytes)).
-    // Use a single-source dependency: compare to buildTronSendTx's hash
-    // is too circular here, so the regex match above is the canonical
-    // shape check; this assertion just confirms a stable, non-empty
-    // hex string.
-    expect(out.signingHashHex.length).toBe(64)
+    // sha256(0x0a 0x02 0x40 0x10) — pinned so any regression in the
+    // hash path (wrong algorithm, wrong input slice, extra prefix) fails
+    // loudly rather than silently shifting the user's signing scope.
+    // Computed independently via Node crypto, not via the function itself.
+    expect(out.signingHashHex).toBe(
+      'd3953dbc76634d62993fa4b0e619d03e75534fc366b33f9a2bf4c4ee319f9928'
+    )
   })
 
   it('rejects empty hex', () => {
