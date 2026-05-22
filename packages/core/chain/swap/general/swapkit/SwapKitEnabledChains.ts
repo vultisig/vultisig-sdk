@@ -1,5 +1,9 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 
+// Chains that can be the SOURCE of a SwapKit-routed swap.
+// Live curl matrix against the vultisig.com proxy confirms NEAR Intents +
+// THORChain via SwapKit accept these as source: BTC, ZEC, LTC, DOGE, BCH,
+// DASH, Cosmos, THORChain, MayaChain, Ton, Cardano, Sui, Tron, Ripple.
 export const swapKitSourceChains = [
   Chain.Ethereum,
   Chain.Arbitrum,
@@ -9,12 +13,6 @@ export const swapKitSourceChains = [
   Chain.Optimism,
   Chain.Polygon,
   Chain.Solana,
-] as const
-
-export type SwapKitSourceChain = (typeof swapKitSourceChains)[number]
-
-export const swapKitEnabledChains = [
-  ...swapKitSourceChains,
   Chain.Bitcoin,
   Chain.BitcoinCash,
   Chain.Cardano,
@@ -31,5 +29,9 @@ export const swapKitEnabledChains = [
   Chain.Tron,
   Chain.Zcash,
 ] as const
+
+export type SwapKitSourceChain = (typeof swapKitSourceChains)[number]
+
+export const swapKitEnabledChains = swapKitSourceChains
 
 export type SwapKitEnabledChain = (typeof swapKitEnabledChains)[number]
