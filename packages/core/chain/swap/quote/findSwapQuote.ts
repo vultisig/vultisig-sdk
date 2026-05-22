@@ -1,7 +1,10 @@
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
-import { getOneInchSwapQuote, OneInchAffiliateConfig } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
+import {
+  getOneInchSwapQuote,
+  OneInchAffiliateConfig,
+} from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import {
@@ -23,8 +26,8 @@ import { SwapDiscount } from '../discount/SwapDiscount'
 import { getKyberSwapQuote } from '../general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '../general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '../general/kyber/config'
-import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
 import { NativeSwapAffiliateConfig } from '../native/api/affiliate'
+import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
 import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { SwapQuote } from './SwapQuote'

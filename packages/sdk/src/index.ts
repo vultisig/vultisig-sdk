@@ -195,12 +195,12 @@ export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/co
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 
 // Station affiliate configs — parallel to vultisig-0 defaults, for Station consumers
-export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 export {
+  stationKyberSwapAffiliateConfig,
   stationNativeSwapAffiliateConfig,
   stationOneInchAffiliateConfig,
-  stationKyberSwapAffiliateConfig,
 } from '@vultisig/core-chain/swap/affiliate/station'
+export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'

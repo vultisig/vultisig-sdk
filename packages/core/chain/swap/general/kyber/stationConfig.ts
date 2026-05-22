@@ -1,5 +1,3 @@
-import { Minutes } from '@vultisig/lib-utils/time'
-
 export const stationKyberSwapAffiliateConfig = {
   // Station source ID pending Kyber partner-team confirmation.
   // Using vultisig-v0 as a temp fallback per spec — fees still flow to
