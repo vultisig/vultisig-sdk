@@ -1495,6 +1495,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@cosmjs/encoding@npm:^0.39.0":
+  version: 0.39.0
+  resolution: "@cosmjs/encoding@npm:0.39.0"
+  dependencies:
+    "@scure/base": "npm:^2.0.0"
+    base64-js: "npm:^1.3.0"
+    readonly-date-esm: "npm:^2.0.0"
+  checksum: 10c0/87158a97a3e6e9d423489b1483db1706329276567c5a87874f8f098d07076531c8819f67e09766390ab0596800ed07d5d34d2831db71916f9b2de758f7e6bcc6
+  languageName: node
+  linkType: hard
+
 "@cosmjs/json-rpc@npm:^0.37.1":
   version: 0.37.1
   resolution: "@cosmjs/json-rpc@npm:0.37.1"
@@ -7255,7 +7266,7 @@ __metadata:
   resolution: "@vultisig/cli@workspace:clients/cli"
   dependencies:
     "@cosmjs/cosmwasm-stargate": "npm:^0.38.1"
-    "@cosmjs/encoding": "npm:^0.38.1"
+    "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.38.1"
     "@napi-rs/keyring": "npm:^1.3.0"
@@ -7306,7 +7317,7 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
     "@cosmjs/amino": "npm:^0.38.1"
-    "@cosmjs/encoding": "npm:^0.38.1"
+    "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.38.1"
     "@lifi/sdk": "npm:^3.16.2"
@@ -7346,7 +7357,7 @@ __metadata:
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
-    "@cosmjs/encoding": "npm:^0.38.1"
+    "@cosmjs/encoding": "npm:^0.39.0"
     "@mysten/sui": "npm:^2.8.0"
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
