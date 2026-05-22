@@ -1,7 +1,7 @@
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
-import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
+import { getOneInchSwapQuote, OneInchAffiliateConfig } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import {
@@ -22,15 +22,27 @@ import { getSwapAffiliateBps, VultDiscountTier } from '../affiliate'
 import { SwapDiscount } from '../discount/SwapDiscount'
 import { getKyberSwapQuote } from '../general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '../general/kyber/chains'
+import { KyberSwapBaseAffiliateConfig } from '../general/kyber/config'
 import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
+import { NativeSwapAffiliateConfig } from '../native/api/affiliate'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
 import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { SwapQuote } from './SwapQuote'
+
+/** Optional per-aggregator affiliate overrides. When absent each aggregator
+ * falls back to its own vultisig-0 default — no behavior change for existing
+ * callers. Station consumers pass the station* configs from the station barrel. */
+export type SwapAffiliateConfig = {
+  native?: NativeSwapAffiliateConfig
+  oneInch?: OneInchAffiliateConfig
+  kyber?: KyberSwapBaseAffiliateConfig
+}
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   amount: bigint
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
+  affiliateConfig?: SwapAffiliateConfig
 }
 
 type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
@@ -106,6 +118,7 @@ export const findSwapQuote = async ({
   amount,
   referral,
   vultDiscountTier,
+  affiliateConfig,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   const affiliateBps = getSwapAffiliateBps(vultDiscountTier ?? null)
 
@@ -133,6 +146,7 @@ export const findSwapQuote = async ({
           amount: amountNumber,
           referral,
           affiliateBps,
+          nativeAffiliateConfig: affiliateConfig?.native,
         })
 
         return {
@@ -168,6 +182,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            kyberConfig: affiliateConfig?.kyber,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -185,6 +200,7 @@ export const findSwapQuote = async ({
             toCoinId: to.id ?? to.ticker,
             amount: chainAmount,
             affiliateBps,
+            oneInchConfig: affiliateConfig?.oneInch,
           })
 
           return { quote: { general }, discounts: vultDiscount }
