@@ -3,27 +3,13 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { describe, expect, it, vi } from 'vitest'
 
 import { stationKyberSwapAffiliateConfig } from '../general/kyber/stationConfig'
-import { stationNativeSwapAffiliateConfig } from '../native/stationNativeSwapAffiliateConfig'
 import { stationOneInchAffiliateConfig } from '../general/oneInch/stationOneInchAffiliateConfig'
+import { stationNativeSwapAffiliateConfig } from '../native/stationNativeSwapAffiliateConfig'
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: vi.fn(),
 }))
 vi.mock('i18next', () => ({ t: (key: string) => key }))
-
-const btcFrom = {
-  chain: Chain.Bitcoin,
-  ticker: 'BTC',
-  decimals: 8,
-  address: 'bc1qtest',
-} as any
-
-const ethTo = {
-  chain: Chain.Ethereum,
-  ticker: 'ETH',
-  decimals: 18,
-  address: '0x86d526d6624AbC0178cF7296cD538Ecc080A95F1',
-} as any
 
 const baseOkBody = {
   expected_amount_out: '1000',
