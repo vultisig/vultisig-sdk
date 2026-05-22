@@ -1,3 +1,4 @@
+import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { oneInchSwapEnabledChains } from '@vultisig/core-chain/swap/general/oneInch/OneInchSwapEnabledChains'
 import { swapKitEnabledChains } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
@@ -8,4 +9,5 @@ export const swapEnabledChains = [
   ...oneInchSwapEnabledChains,
   ...lifiSwapEnabledChains,
   ...swapKitEnabledChains,
+  ...kyberSwapEnabledChains,
 ] as const
