@@ -112,16 +112,14 @@ describe('findSwapQuote parallel selection', () => {
     expect(getNativeSwapQuote).toHaveBeenCalled()
   })
 
-  it('ranks by destination-decimal-normalized output (higher raw native can still lose)', async () => {
+  it('ranks by destination-decimal-normalized output among aggregators when no native route exists', async () => {
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
-    // 1 USDC (6 decimals) on the general side.
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('900000', 'swapkit'))
+    // 1 USDC (6 decimals) on the general side via kyber — higher comparable output.
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
-    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
-      // 50_000_000 in 8-decimal is > 1_000_000 raw, but 50_000_000 / 1e2 = 500_000 < 1_000_000 comparable.
-      minimalNativeQuote(swapChain, '50000000')
-    )
+    // No native quote available — hard THOR priority doesn't apply.
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
 
     const quote = await findSwapQuote({
       ...evmSameChainCoins,
@@ -391,13 +389,13 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     expect(quote.quote.native.expected_amount_out).toBe('100000000')
   })
 
-  it('does NOT prefer THORChain when SwapKit is better by 10% (outside 5% bias)', async () => {
+  it('prefers THORChain over SwapKit even when SwapKit is 10% better (hard priority, no output comparison)', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    // SwapKit: gross output 1_100_000.
+    // SwapKit: gross output 1_100_000 (10% higher than THORChain).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1100000', 'swapkit'))
-    // THORChain native: comparable 1_000_000 (raw 100_000_000 in 8-dec). 9.09% lower → outside bias.
+    // THORChain native: comparable 1_000_000. Hard priority means THOR still wins.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         return minimalNativeQuote(swapChain, '100000000')
@@ -410,11 +408,10 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
       amount: 1n,
     })
 
-    if (!('general' in quote.quote)) {
-      throw new Error('Expected aggregator quote when bias is exceeded')
+    if (!('native' in quote.quote)) {
+      throw new Error('Expected THORChain to win via hard priority regardless of SwapKit output')
     }
-    expect(quote.quote.general.provider).toBe('swapkit')
-    expect(quote.quote.general.dstAmount).toBe('1100000')
+    expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
   })
 
   it('only SwapKit available → SwapKit wins (no native bias applies)', async () => {

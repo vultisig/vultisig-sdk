@@ -69,16 +69,12 @@ type RankedSwapQuote = {
  *
  * Rationale (paaao, 2026-05-22): for L1 ↔ L1 swaps that THORChain natively serves,
  * the protocol-aligned route is preferred even when an aggregator (e.g. SwapKit)
- * gross-output is slightly higher. Direct THORChain captures full vultisig
- * affiliate revenue (50bps) and avoids the SwapKit fee skim; the protocol is the
- * moat. Mirrors the priority-order short-circuit used in vultisig-ios's
- * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`, ported as a soft bias
- * here so a clearly-better aggregator route (>5% above THOR) still wins.
- *
- * 500 bps = 5%. Conservative: covers normal LP slippage / pool depth variance
- * without ceding obviously-better aggregator routes.
+ * gross-output is higher. Direct THORChain captures full vultisig affiliate
+ * revenue (50bps) and avoids the SwapKit fee skim; the protocol is the moat.
+ * Mirrors the priority-order short-circuit used in vultisig-ios's
+ * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders` (priority-first-success,
+ * no output comparison).
  */
-export const nativeSwapBiasOutputBps = 500n
 
 const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
 
@@ -145,17 +141,14 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     return null
   }
 
-  // Native THOR/Maya bias: if best is an aggregator route but a direct THORChain
-  // or MayaChain route is within `nativeSwapBiasOutputBps` of best.outputAmount,
-  // prefer the native route. See `nativeSwapBiasOutputBps` for rationale.
-  //
-  // When best is already a native provider, no swap. When best.outputAmount is 0
-  // (degenerate), the relative bias check is undefined → keep best as-is.
-  if (isNativeProvider(best.providerName) || best.outputAmount <= 0n) {
+  // Hard THORChain/Maya priority: if any native route exists, always prefer it
+  // over any aggregator route. Mirrors vultisig-ios's priority-first-success
+  // pattern. No output comparison.
+  if (isNativeProvider(best.providerName)) {
     return best.quote
   }
 
-  let nativeBias: RankedSwapQuote | null = null
+  let bestNative: RankedSwapQuote | null = null
   for (const result of settled) {
     if (result.status !== 'fulfilled') {
       continue
@@ -164,19 +157,13 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     if (!isNativeProvider(candidate.providerName)) {
       continue
     }
-    // Δ = best - candidate ≥ 0 (best is the max). Within bias iff Δ * 10000 ≤ best * bps.
-    const delta = best.outputAmount - candidate.outputAmount
-    const withinBias = delta * 10000n <= best.outputAmount * nativeSwapBiasOutputBps
-    if (!withinBias) {
-      continue
-    }
     // If multiple natives qualify (THOR + Maya), prefer the one with higher output.
-    if (nativeBias === null || candidate.outputAmount > nativeBias.outputAmount) {
-      nativeBias = candidate
+    if (bestNative === null || candidate.outputAmount > bestNative.outputAmount) {
+      bestNative = candidate
     }
   }
 
-  return (nativeBias ?? best).quote
+  return (bestNative ?? best).quote
 }
 
 export const findSwapQuote = async ({
