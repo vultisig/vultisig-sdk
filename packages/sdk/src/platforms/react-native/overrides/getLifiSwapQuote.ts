@@ -18,6 +18,7 @@ import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -64,6 +65,38 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   const chainKind = getChainKind(transfer.from.chain)
 
   const { value, gasLimit, data, from, to } = shouldBePresent(transactionRequest)
+
+  // For Solana SPL-token swaps the destination ATA may not yet exist. LiFi's
+  // transaction blob won't include the creation instruction in that case, which
+  // causes the simulation to revert with custom program error 0x17.
+  if (chainKind === 'solana' && toToken !== chainFeeCoin[transfer.to.chain].ticker) {
+    const rawData = shouldBePresent(data)
+    const { gasCosts, feeCosts } = estimate
+    const [networkFee] = shouldBePresent(gasCosts)
+    const fees = shouldBePresent(feeCosts)
+    const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
+    const swapFeeAssetId =
+      [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
+
+    const patchedData = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+
+    return {
+      dstAmount: estimate.toAmount,
+      provider: 'li.fi',
+      tx: {
+        solana: {
+          data: patchedData,
+          networkFee: BigInt(networkFee.amount),
+          swapFee: {
+            amount: BigInt(swapFee.amount),
+            decimals: swapFee.token.decimals,
+            chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+            id: swapFeeAssetId,
+          },
+        },
+      },
+    }
+  }
 
   return {
     dstAmount: estimate.toAmount,
