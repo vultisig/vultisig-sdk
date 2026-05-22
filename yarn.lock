@@ -7601,7 +7601,7 @@ __metadata:
     dotenv: "npm:^17.2.3"
     electron: "npm:^42.1.0"
     ethers: "npm:^6.15.0"
-    event-target-polyfill: "npm:^0.0.3"
+    event-target-polyfill: "npm:^0.0.4"
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
     i18next: "npm:^26.0.8"
@@ -11662,10 +11662,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"event-target-polyfill@npm:^0.0.3":
-  version: 0.0.3
-  resolution: "event-target-polyfill@npm:0.0.3"
-  checksum: 10c0/90d210c5606e0e24386fd4e7a06859d8d5668eafa44c04d4554b84790b70f0a0a1af4bf0f7231267fd0328b24b5da4fd297e15e107d744e27cb771ff250b48cd
+"event-target-polyfill@npm:^0.0.4":
+  version: 0.0.4
+  resolution: "event-target-polyfill@npm:0.0.4"
+  checksum: 10c0/7052b838df6509e8290f110daf94604dd05828834db4ad6fe4a12abc693da1a3274100cfd4ff3e47a941d5aa3fb7cdb8164d85402b93d85340bb3adc596d8732
   languageName: node
   linkType: hard
 
