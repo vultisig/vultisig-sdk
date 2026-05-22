@@ -239,9 +239,7 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
     // hash path (wrong algorithm, wrong input slice, extra prefix) fails
     // loudly rather than silently shifting the user's signing scope.
     // Computed independently via Node crypto, not via the function itself.
-    expect(out.signingHashHex).toBe(
-      'd3953dbc76634d62993fa4b0e619d03e75534fc366b33f9a2bf4c4ee319f9928'
-    )
+    expect(out.signingHashHex).toBe('d3953dbc76634d62993fa4b0e619d03e75534fc366b33f9a2bf4c4ee319f9928')
   })
 
   it('rejects empty hex', () => {
