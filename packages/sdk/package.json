@@ -198,7 +198,7 @@
     "crypto-browserify": "^3.12.1",
     "date-fns": "^4.1.0",
     "ethers": "^6.15.0",
-    "event-target-polyfill": "^0.0.3",
+    "event-target-polyfill": "^0.0.4",
     "events": "^3.3.0",
     "i18next": "^26.0.8",
     "i18next-http-backend": "^4.0.0",
