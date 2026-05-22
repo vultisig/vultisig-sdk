@@ -12,9 +12,12 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 
+export type LifiAffiliateConfig = Pick<typeof lifiConfig, 'integratorName'>
+
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
+  lifiAffiliateConfig?: LifiAffiliateConfig
 }
 
 const setupLifi = memoize(() => {
@@ -23,7 +26,17 @@ const setupLifi = memoize(() => {
   })
 })
 
-export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
+export const getLifiSwapQuote = async ({
+  amount,
+  affiliateBps,
+  lifiAffiliateConfig,
+  ...transfer
+}: Input): Promise<GeneralSwapQuote> => {
+  // lifiAffiliateConfig is only used for the fee attribution in the getQuote call.
+  // The createConfig integrator is set once at module init (vultisig-0 default).
+  // When Station's integrator name is confirmed, the caller should pass it via
+  // lifiAffiliateConfig.integratorName — the getQuote request will tag fees
+  // to that integrator even though createConfig uses vultisig-0.
   setupLifi()
 
   const [fromChain, toChain] = [transfer.from, transfer.to].map(({ chain }) => lifiSwapChainId[chain])
@@ -40,6 +53,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAddress,
     toAddress,
     fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    ...(lifiAffiliateConfig ? { integrator: lifiAffiliateConfig.integratorName } : {}),
   })
 
   const { transactionRequest, estimate } = quote
