@@ -10,6 +10,8 @@
  * Covered surface:
  *   - `buildTronSendTx`        — native TRX transfer
  *   - `buildTrc20TransferTx`   — TRC-20 token transfer (USDT etc.)
+ *   - `buildTronTxFromRawData` — sign a pre-built raw_data hex (e.g.
+ *                                yield.xyz staking actions, dApp signing)
  *   - `getTronBlockRefs`       — latest block hash + ref_block_* for building tx
  *   - `getTronAccount`         — balance + bandwidth/energy
  *   - `estimateTrc20Energy`    — contract-call energy prediction
@@ -29,6 +31,7 @@ export {
   buildTrc20CallData,
   buildTrc20TransferTx,
   buildTronSendTx,
+  buildTronTxFromRawData,
   encodeInt64Varint,
   encodeVarint,
   estimateTrc20Energy,

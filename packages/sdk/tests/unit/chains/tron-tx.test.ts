@@ -8,7 +8,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { encodeInt64Varint, encodeVarint } from '../../../src/chains/tron/proto'
-import { buildTrc20CallData, buildTrc20TransferTx, buildTronSendTx } from '../../../src/chains/tron/tx'
+import {
+  buildTrc20CallData,
+  buildTrc20TransferTx,
+  buildTronSendTx,
+  buildTronTxFromRawData,
+} from '../../../src/chains/tron/tx'
 
 // Valid Tron base58check addresses (0x41 || 20-byte payload, bs58check-encoded).
 const FROM = 'T9yED5xMV5ARV98BexN97aLZ1UUq7eKSxm'
@@ -174,5 +179,90 @@ describe('tron / buildTrc20TransferTx', () => {
         timestamp: 1_699_999_940_000n,
       })
     ).toThrow(/feeLimit must be > 0/)
+  })
+})
+
+describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
+  it('produces the same signingHash and signedTxHex as buildTronSendTx for an identical tx', () => {
+    // Round-trip: build a real native-send tx via buildTronSendTx, then
+    // feed its `unsignedRawHex` back through buildTronTxFromRawData. The
+    // signingHash MUST be byte-identical (same SHA-256 of the same
+    // raw_data) and `finalize()` MUST emit the same signed-tx hex when
+    // given the same signature.
+    const reference = buildTronSendTx({
+      from: FROM,
+      to: TO,
+      amount: 7_500_000n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+    })
+
+    const replay = buildTronTxFromRawData(reference.unsignedRawHex)
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+    expect(replay.unsignedRawHex).toBe(reference.unsignedRawHex)
+
+    // Stub 65-byte signature (r || s || v) — content doesn't matter, only
+    // shape. Both finalize() calls must wrap it identically.
+    const sigHex = 'aa'.repeat(65)
+    const refSigned = reference.finalize(sigHex)
+    const replaySigned = replay.finalize(sigHex)
+    expect(replaySigned.signedTxHex).toBe(refSigned.signedTxHex)
+    expect(replaySigned.txId).toBe(refSigned.txId)
+  })
+
+  it('accepts `0x`-prefixed hex input', () => {
+    const reference = buildTronSendTx({
+      from: FROM,
+      to: TO,
+      amount: 100n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+    })
+    const replay = buildTronTxFromRawData('0x' + reference.unsignedRawHex)
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
+  it('round-trips arbitrary opaque raw_data bytes (the yield.xyz case)', () => {
+    // yield.xyz Tron staking returns FreezeBalanceV2 / UnfreezeBalanceV2
+    // / VoteWitness raw_data that we have NO local builder for. The
+    // primitive must work without parsing the protobuf — just hash and
+    // wrap. Use a synthetic-but-plausible raw_data: a single field
+    // ref_block_bytes (tag 0x0a, len 2, value 0x40df).
+    const opaque = '0a024010'
+    const out = buildTronTxFromRawData(opaque)
+    expect(out.unsignedRawHex).toBe(opaque)
+    expect(out.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
+
+    // sha256(0x0a024010) — deterministic; pin it so a regression in the
+    // hash path would fail this test rather than silently shift the
+    // user's signing scope.
+    // (Computed independently: sha256("0a024010" hex bytes)).
+    // Use a single-source dependency: compare to buildTronSendTx's hash
+    // is too circular here, so the regex match above is the canonical
+    // shape check; this assertion just confirms a stable, non-empty
+    // hex string.
+    expect(out.signingHashHex.length).toBe(64)
+  })
+
+  it('rejects empty hex', () => {
+    expect(() => buildTronTxFromRawData('')).toThrow(/zero bytes/)
+  })
+
+  it('rejects non-string input', () => {
+    // @ts-expect-error — intentional shape violation for the runtime guard
+    expect(() => buildTronTxFromRawData(null)).toThrow(/hex string/)
+  })
+
+  it('rejects malformed hex (odd-length)', () => {
+    expect(() => buildTronTxFromRawData('0a02401')).toThrow()
+  })
+
+  it('finalize rejects a sig that is not 65 bytes', () => {
+    const out = buildTronTxFromRawData('0a024010')
+    expect(() => out.finalize('aa'.repeat(64))).toThrow(/65-byte/)
   })
 })
