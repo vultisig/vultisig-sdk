@@ -16,8 +16,7 @@
  * `./walletV4R2` / `./crypto-rn`. It never reaches `@ton/crypto-primitives`
  * so the RN bundle does not need the `crypto.subtle` polyfill.
  */
-import type { Cell } from '@ton/core'
-import { Address, beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
+import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
 
@@ -439,28 +438,20 @@ export type BuildTonTxFromSigningPayloadOptions = {
 }
 
 function decodeSigningPayload(input: string): Cell {
-  // Wrap @ton/core's Cell.fromBoc — accepts base64 OR hex (heuristic:
-  // strict hex if every char is a hex digit and length is even, else
-  // assume base64). yield.xyz returns base64 in our reference fixture.
+  // Heuristic: strict hex if every char is a hex digit and length is
+  // even, else assume base64. yield.xyz returns base64 in the
+  // reference fixture; legacy / sandbox responses may emit hex.
   const trimmed = input.trim()
   if (trimmed.length === 0) {
     throw new Error('TON signing payload BoC is empty')
   }
   const looksLikeHex =
     trimmed.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(trimmed)
-  let bocBytes: Uint8Array
-  if (looksLikeHex) {
-    bocBytes = hexToBytes(trimmed)
-  } else {
-    bocBytes = new Uint8Array(Buffer.from(trimmed, 'base64'))
-  }
-  // Late import (sync) of Cell to avoid a cyclic-import landmine —
-  // @ton/core is already loaded at the top of this file but the named
-  // `Cell.fromBoc` is only available off the module object, not from a
-  // named import (we already type-only-import the Cell type).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const tonCore = require('@ton/core') as typeof import('@ton/core')
-  const cells = tonCore.Cell.fromBoc(Buffer.from(bocBytes))
+  const bocBytes = looksLikeHex
+    ? hexToBytes(trimmed)
+    : new Uint8Array(Buffer.from(trimmed, 'base64'))
+
+  const cells = Cell.fromBoc(Buffer.from(bocBytes))
   if (cells.length === 0) {
     throw new Error('TON signing payload BoC contained zero cells')
   }
