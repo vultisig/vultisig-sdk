@@ -345,6 +345,16 @@ export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult 
   if (typeof rawDataHex !== 'string') {
     throw new Error('buildTronTxFromRawData: rawDataHex must be a hex string')
   }
+  // Reject non-hex characters explicitly. `hexToBytes` uses
+  // `parseInt(_, 16)` which silently returns NaN for invalid chars,
+  // producing garbage bytes that hash to a wrong signing payload and
+  // ultimately MPC-sign over nothing meaningful. The strict guard
+  // ensures malformed input from yield.xyz / app callers fails fast
+  // with a clear message rather than producing an unbroadcastable tx.
+  const stripped = rawDataHex.startsWith('0x') ? rawDataHex.slice(2) : rawDataHex
+  if (!/^[0-9a-fA-F]*$/.test(stripped)) {
+    throw new Error('buildTronTxFromRawData: rawDataHex contains non-hex characters')
+  }
   const rawData = hexToBytes(rawDataHex)
   if (rawData.length === 0) {
     throw new Error('buildTronTxFromRawData: rawDataHex decoded to zero bytes')

@@ -261,6 +261,15 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
     expect(() => buildTronTxFromRawData('0a02401')).toThrow()
   })
 
+  it('rejects hex strings containing non-hex characters (CodeRabbit r1)', () => {
+    // Even-length, decoded by parseInt(_,16) but with a non-hex char
+    // ('z') — under the unguarded path this would parseInt-to-NaN and
+    // produce garbage bytes, ultimately MPC-signing a wrong hash.
+    expect(() => buildTronTxFromRawData('0a0z4010')).toThrow(/non-hex/i)
+    // 0x-prefixed variant still triggers the guard.
+    expect(() => buildTronTxFromRawData('0x0a0z4010')).toThrow(/non-hex/i)
+  })
+
   it('finalize rejects a sig that is not 65 bytes', () => {
     const out = buildTronTxFromRawData('0a024010')
     expect(() => out.finalize('aa'.repeat(64))).toThrow(/65-byte/)
