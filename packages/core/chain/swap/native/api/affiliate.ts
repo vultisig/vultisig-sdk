@@ -32,10 +32,7 @@ export const buildAffiliateParams = ({
     })
     affiliateParams.push({
       affiliate: config.affiliateFeeAddress,
-      bps: Math.max(
-        0,
-        affiliateBps - (baseAffiliateBps - config.referralDiscountAffiliateFeeRateBps)
-      ),
+      bps: Math.max(0, affiliateBps - (baseAffiliateBps - config.referralDiscountAffiliateFeeRateBps)),
     })
   } else {
     affiliateParams.push({

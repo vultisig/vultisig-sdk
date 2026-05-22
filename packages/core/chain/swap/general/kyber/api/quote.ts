@@ -15,7 +15,13 @@ type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   kyberConfig?: KyberSwapBaseAffiliateConfig
 }
 
-export const getKyberSwapQuote = async ({ from, to, amount, affiliateBps, kyberConfig }: Input): Promise<GeneralSwapQuote> => {
+export const getKyberSwapQuote = async ({
+  from,
+  to,
+  amount,
+  affiliateBps,
+  kyberConfig,
+}: Input): Promise<GeneralSwapQuote> => {
   const { routeSummary, routerAddress } = await getKyberSwapRoute({
     from,
     to,
