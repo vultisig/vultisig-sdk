@@ -2992,6 +2992,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@formatjs/bigdecimal@npm:0.2.5":
+  version: 0.2.5
+  resolution: "@formatjs/bigdecimal@npm:0.2.5"
+  checksum: 10c0/094417c931b11b46d1314fe3e949927e700b6ea9e1276c60d3203fcd06d831a15426aae4504b3d96fcfaf38053438ae1c74c4837339e22e9b032acdb8d1159ce
+  languageName: node
+  linkType: hard
+
 "@formatjs/ecma402-abstract@npm:2.3.6":
   version: 2.3.6
   resolution: "@formatjs/ecma402-abstract@npm:2.3.6"
@@ -3010,6 +3017,13 @@ __metadata:
   dependencies:
     tslib: "npm:^2.8.0"
   checksum: 10c0/f5eabb0e4ab7162297df8252b4cfde194b23248120d9df267592eae2be2d2f7c4f670b5a70523d91b4ecdc35d40e65823bb8eeba8dd79fbf8601a972bf3b8866
+  languageName: node
+  linkType: hard
+
+"@formatjs/fast-memoize@npm:3.1.5":
+  version: 3.1.5
+  resolution: "@formatjs/fast-memoize@npm:3.1.5"
+  checksum: 10c0/80e5d5c6b3b558de5cabfbb7b5df89e291c9b05fb5f5edaa7234a581e55a96d15fab35c5922229f7885b160fe5a3654d029029bcb5e9a86ce4143db4a5ecea79
   languageName: node
   linkType: hard
 
@@ -3053,6 +3067,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@formatjs/intl-localematcher@npm:0.8.8":
+  version: 0.8.8
+  resolution: "@formatjs/intl-localematcher@npm:0.8.8"
+  dependencies:
+    "@formatjs/fast-memoize": "npm:3.1.5"
+  checksum: 10c0/c661bb779e42018575b3718cad8053e0ee0262f51734f59c6ecc717be29060c345aa88aad7bf923d08f78b0a9244ab8a8ffdda97127e4a415e68d13a74ac2823
+  languageName: node
+  linkType: hard
+
 "@formatjs/intl-numberformat@npm:^8.15.0":
   version: 8.15.6
   resolution: "@formatjs/intl-numberformat@npm:8.15.6"
@@ -3065,15 +3088,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-pluralrules@npm:^5.4.0":
-  version: 5.4.6
-  resolution: "@formatjs/intl-pluralrules@npm:5.4.6"
+"@formatjs/intl-pluralrules@npm:^6.3.8":
+  version: 6.3.8
+  resolution: "@formatjs/intl-pluralrules@npm:6.3.8"
   dependencies:
-    "@formatjs/ecma402-abstract": "npm:2.3.6"
-    "@formatjs/intl-localematcher": "npm:0.6.2"
-    decimal.js: "npm:^10.4.3"
-    tslib: "npm:^2.8.0"
-  checksum: 10c0/95dd6fb3e9bd84ce44cc194f6f815d690703bd60b75bf2ae895535d2d9a1a675765879de9b54f854882fc1335cbfac6a535873d5b2d75cc5ca93c6ca172aa272
+    "@formatjs/bigdecimal": "npm:0.2.5"
+    "@formatjs/intl-localematcher": "npm:0.8.8"
+  checksum: 10c0/3b1f8d935b3f1a97e6bc1b8a51c96fbc2a344ca6128ad6c4ebc3c2b1449ea5cb9f84c13991661416eec6a828cf8408c9b016254ff14317e640469e34b035d8d4
   languageName: node
   linkType: hard
 
@@ -7560,7 +7581,7 @@ __metadata:
     "@formatjs/intl-getcanonicallocales": "npm:^2.5.0"
     "@formatjs/intl-locale": "npm:^4.2.0"
     "@formatjs/intl-numberformat": "npm:^8.15.0"
-    "@formatjs/intl-pluralrules": "npm:^5.4.0"
+    "@formatjs/intl-pluralrules": "npm:^6.3.8"
     "@lifi/sdk": "npm:^3.15.5"
     "@mysten/sui": "npm:^2.3.0"
     "@noble/hashes": "npm:^1.8.0"
