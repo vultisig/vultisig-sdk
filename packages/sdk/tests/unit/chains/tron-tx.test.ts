@@ -224,6 +224,9 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
     })
     const replay = buildTronTxFromRawData('0x' + reference.unsignedRawHex)
     expect(replay.signingHashHex).toBe(reference.signingHashHex)
+    // unsignedRawHex must equal the normalized form (no 0x prefix, lowercase)
+    // CodeRabbit #515 r3 — locks the prefix-stripping/canonicalization contract
+    expect(replay.unsignedRawHex).toBe(reference.unsignedRawHex)
   })
 
   it('returns normalized (prefix-stripped, lowercased) `unsignedRawHex` — CodeRabbit #515 r3', () => {
