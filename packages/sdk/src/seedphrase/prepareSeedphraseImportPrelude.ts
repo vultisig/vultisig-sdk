@@ -20,6 +20,7 @@ export type SeedphraseImportPreludeInput = {
   chains?: Chain[]
   chainsToScan?: Chain[]
   usePhantomSolanaPath?: boolean
+  useCosmosPathTerra?: boolean
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   validator: SeedphraseValidator
   keyDeriver: MasterKeyDeriver
@@ -32,12 +33,13 @@ export type SeedphraseImportPreludeResult = {
   masterKeys: DerivedMasterKeys
   discoveredChains: ChainDiscoveryResult[] | undefined
   usePhantomSolanaPath: boolean
+  useCosmosPathTerra: boolean
   chainsToImport: Chain[]
 }
 
 /**
  * Shared validation, master-key derivation, optional chain discovery, Phantom path selection,
- * and `chainsToImport` resolution for seedphrase-based vault creation (secure + fast).
+ * Cosmos-path Terra detection, and `chainsToImport` resolution for seedphrase-based vault creation.
  */
 export async function prepareSeedphraseImportPrelude(
   input: SeedphraseImportPreludeInput
@@ -48,6 +50,7 @@ export async function prepareSeedphraseImportPrelude(
     chains,
     chainsToScan,
     usePhantomSolanaPath: explicitPhantomPath,
+    useCosmosPathTerra: explicitCosmosPathTerra,
     onChainDiscovery,
     validator,
     keyDeriver,
@@ -75,6 +78,7 @@ export async function prepareSeedphraseImportPrelude(
 
   let discoveredChains: ChainDiscoveryResult[] | undefined
   let usePhantomSolanaPath = explicitPhantomPath ?? false
+  let useCosmosPathTerra = explicitCosmosPathTerra ?? false
 
   if (discoverChains) {
     reportProgress({
@@ -90,6 +94,9 @@ export async function prepareSeedphraseImportPrelude(
     if (explicitPhantomPath === undefined) {
       usePhantomSolanaPath = discoveryResult.usePhantomSolanaPath
     }
+    if (explicitCosmosPathTerra === undefined) {
+      useCosmosPathTerra = discoveryResult.useCosmosPathTerra
+    }
   }
 
   const chainsToImport = chains ?? discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? DEFAULT_CHAINS
@@ -98,6 +105,7 @@ export async function prepareSeedphraseImportPrelude(
     masterKeys,
     discoveredChains,
     usePhantomSolanaPath,
+    useCosmosPathTerra,
     chainsToImport,
   }
 }
