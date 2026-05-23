@@ -12,6 +12,7 @@
 export type {
   BuildTonJettonTransferOptions,
   BuildTonSendOptions,
+  BuildTonTxFromSigningPayloadOptions,
   TonTxBuilderResult,
   TonV4R2Wallet,
   TonWalletInfo,
@@ -21,6 +22,7 @@ export {
   broadcastTonTx,
   buildTonJettonTransferTx,
   buildTonSendTx,
+  buildTonTxFromSigningPayload,
   buildV4R2Wallet,
   deriveTonAddress,
   getTonBalance,
