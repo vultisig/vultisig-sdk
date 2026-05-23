@@ -7,13 +7,17 @@ const EVM_HASH = '0xabc123'
 // Real-shape UTXO hash -- bare 64-char hex, no `0x` prefix.
 // Represents the human-readable txid form (byte-reversed double-SHA256
 // for BTC/BCH/DOGE/LTC/ZEC), which is the format track.swapkit.dev expects.
+// @see packages/core/chain/tx/hash/resolvers/utxo.ts -- signing layer emits
+//   `Buffer.from(txid).reverse().toString('hex')` (byte-reversed display form).
 const UTXO_HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
 // XRP Ledger tx hashes are 64-char uppercase hex, forward byte-order
 // (no reversal like UTXO chains). Distinct constant to document the contract.
 const XRP_HASH = 'B4E2CF540C6F29C8A0A94FFF0ADB32E17BB49D3B3C6ED4DE3F8C5B0A7A6F9E2C'
-// TON transaction hashes are base64-encoded. encodeURIComponent is meaningful
-// here (unlike hex chains where it is a no-op), due to `=` padding.
-const TON_HASH = 'kQDwGWm7EWmP+8LdMDJgLR/r3QIDAQAB'
+// TON transaction hashes are hex-encoded (not base64).
+// @see packages/core/chain/tx/hash/resolvers/ton.ts -- signing layer emits
+//   `Buffer.from(hash).toString('hex')` (hex, no 0x prefix).
+// encodeURIComponent is a no-op for standard hex chars.
+const TON_HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
 
 describe('getSwapTrackingUrl', () => {
   describe('general / swapkit provider', () => {
@@ -87,15 +91,27 @@ describe('getSwapTrackingUrl', () => {
       expect(url).toBe(`https://track.swapkit.dev/?tx=${XRP_HASH}&chainId=ripple`)
     })
 
-    it('TON base64 hash is URL-encoded (encodeURIComponent handles = padding)', () => {
-      // TON hashes are base64-encoded. encodeURIComponent is non-trivially
-      // applied here (unlike hex chains where it is a no-op).
+    it('TON hex hash passes through (encodeURIComponent is no-op for hex)', () => {
+      // TON hashes are hex-encoded (signing layer: Buffer.from(hash).toString('hex')).
+      // No 0x prefix -- encodeURIComponent is a no-op for hex chars.
       const url = getSwapTrackingUrl({
         swapPayload: { general: { provider: 'swapkit' } as any },
         txHash: TON_HASH,
         sourceChain: Chain.Ton,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${encodeURIComponent(TON_HASH)}&chainId=ton`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${TON_HASH}&chainId=ton`)
+    })
+
+    it('TON hash with 0x prefix throws (would silently corrupt hex hash)', () => {
+      // Defensive guard: a 0x-prefixed TON hash indicates misconfigured upstream.
+      // stripHexPrefix would strip the first two chars, producing a corrupted hash.
+      expect(() =>
+        getSwapTrackingUrl({
+          swapPayload: { general: { provider: 'swapkit' } as any },
+          txHash: `0x${TON_HASH}`,
+          sourceChain: Chain.Ton,
+        })
+      ).toThrow('TON tx hash must not have a 0x prefix')
     })
 
     describe('exhaustiveness warning when chain not in tracker map', () => {

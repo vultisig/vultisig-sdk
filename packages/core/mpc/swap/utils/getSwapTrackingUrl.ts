@@ -61,11 +61,15 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
       if (provider === 'swapkit') {
         const chainId = swapKitTrackerChainId[sourceChain as SwapKitSourceChain]
         if (chainId) {
+          // Guard: TON hashes are hex-encoded (see packages/core/chain/tx/hash/resolvers/ton.ts).
+          // A `0x`-prefixed TON hash indicates a misconfigured upstream -- stripHexPrefix would
+          // silently corrupt it by stripping the first two hex chars, producing a wrong hash.
+          if (sourceChain === Chain.Ton && txHash.startsWith('0x')) {
+            throw new Error(`TON tx hash must not have a 0x prefix (got: ${txHash.slice(0, 10)}...)`)
+          }
           // Bare hash (no `0x` prefix) -- `stripHexPrefix` is a no-op when the
-          // hash is already prefix-free (UTXO chains, Ripple, etc.) and strips
+          // hash is already prefix-free (UTXO chains, Ripple, TON, etc.) and strips
           // `0x` from EVM hashes to match track.swapkit.dev's expected format.
-          // `encodeURIComponent` is primarily meaningful for base64-encoded
-          // hashes (TON), where `=` padding and `+`/`/` chars are URL-special.
           return `https://track.swapkit.dev/?tx=${encodeURIComponent(stripHexPrefix(txHash))}&chainId=${chainId}`
         }
         // SwapKitSourceChain extended without updating swapKitTrackerChainId
