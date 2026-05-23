@@ -50,9 +50,18 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
   const destinationAddress = swapPayload
     ? matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
         native: swapPayload => swapPayload.vaultAddress,
-        // Deposit-channel SwapKit routes: toAddress is the provider deposit address,
-        // already set correctly at the keysignPayload root by buildSwapKeysignPayload.
-        general: () => keysignPayload.toAddress,
+        // Deposit-channel SwapKit routes: toAddress is the provider deposit-channel address.
+        // See JSDoc on buildSwapKeysignPayload for the invariant that guarantees it is set.
+        general: () => {
+          const toAddress = keysignPayload.toAddress
+          if (!toAddress) {
+            throw new Error('UTXO general swap: destination address is missing from keysign payload')
+          }
+          if (!walletCore.AnyAddress.isValid(toAddress, coinType)) {
+            throw new Error(`UTXO general swap: destination address "${toAddress}" is not valid for this chain`)
+          }
+          return toAddress
+        },
       })
     : keysignPayload.toAddress
 

@@ -5,6 +5,13 @@ import { describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getChainSpecific: vi.fn(async () => ({ case: 'rippleSpecific', value: {} })),
   getKeysignUtxoInfo: vi.fn(async () => []),
+  // refineKeysignUtxo is mocked to return the payload unchanged. This means:
+  //   - UTXO selection, fee calculation, and address validation inside refineKeysignUtxo
+  //     are NOT exercised by these tests.
+  //   - These tests cover buildSwapKeysignPayload surface behavior only: that the correct
+  //     oneinchSwapPayload is built and keysignPayload.toAddress / memo are set correctly.
+  //   - Address format validation is covered by the getUtxoSigningInputs unit tests
+  //     (packages/core/mpc/keysign/signingInputs/resolvers/utxo.test.ts).
   refineKeysignUtxo: vi.fn((input: { keysignPayload: unknown }) => input.keysignPayload),
 }))
 
