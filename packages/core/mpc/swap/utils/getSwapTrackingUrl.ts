@@ -53,8 +53,23 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
       if (provider === 'swapkit') {
         const chainId = swapKitTrackerChainId[sourceChain as SwapKitSourceChain]
         if (chainId) {
-          return `https://track.swapkit.dev/?tx=${txHash}&chainId=${chainId}`
+          // Bare hash (no `0x` prefix) matches the THORChain `runescan.io`
+          // branch above + matches the format track.swapkit.dev parses for
+          // UTXO chains. `stripHexPrefix` is a no-op when no prefix is
+          // present, so EVM hashes pass through unchanged.
+          // `encodeURIComponent` is defensive for forward-compat with chain
+          // types whose hashes contain URL-special chars. NeOMakinG #527 r1
+          // preferably-blocking + suggestion.
+          return `https://track.swapkit.dev/?tx=${encodeURIComponent(stripHexPrefix(txHash))}&chainId=${chainId}`
         }
+        // SwapKitSourceChain extended without updating swapKitTrackerChainId
+        // → silent fallback to block explorer would degrade tracking
+        // without surfacing the gap. Warn so the drift shows up in logs +
+        // greppable CI output. NeOMakinG #527 r1 BLOCKER.
+         
+        console.warn(
+          `[getSwapTrackingUrl] SwapKit tracker chainId missing for ${sourceChain} — falling back to source-chain block explorer. Add a swapKitTrackerChainId entry.`
+        )
       }
       return getBlockExplorerUrl({
         chain: sourceChain,
