@@ -105,16 +105,6 @@ export const buildSwapKeysignPayload = async ({
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
-      const transferSwapPayload = matchRecordUnion<GeneralSwapTx, KeysignPayload['swapPayload'] | undefined>(quote.tx, {
-        evm: () => undefined,
-        solana: () => undefined,
-        transfer: () => ({ case: undefined }),
-      })
-
-      if (transferSwapPayload) {
-        return transferSwapPayload
-      }
-
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
         evm: ({ from, to, data, value }) => {
           return {
@@ -134,9 +124,19 @@ export const buildSwapKeysignPayload = async ({
           gasPrice: '',
           gas: BigInt(0),
         }),
-        transfer: () => {
-          throw new Error('Transfer SwapKit routes do not use a oneinch swap payload.')
-        },
+        // Deposit-channel routes (UTXO/Ripple/Tron/Ton sources via Chainflip, NEAR Intents, etc.)
+        // send funds to a provider-controlled deposit address. The actual signing uses
+        // keysignPayload.toAddress + keysignPayload.memo (already set at root), so the
+        // transaction stub here only needs to satisfy the payload schema — from/to are
+        // informational for SwapVerify display.
+        transfer: ({ to }) => ({
+          from: fromCoin.address,
+          to,
+          data: '',
+          value: '',
+          gasPrice: '',
+          gas: 0n,
+        }),
       })
 
       const tx = create(OneInchTransactionSchema, txMsg)

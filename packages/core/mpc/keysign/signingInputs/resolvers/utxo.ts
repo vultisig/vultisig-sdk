@@ -50,9 +50,9 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
   const destinationAddress = swapPayload
     ? matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
         native: swapPayload => swapPayload.vaultAddress,
-        general: () => {
-          throw new Error('General swap not supported')
-        },
+        // Deposit-channel SwapKit routes: toAddress is the provider deposit address,
+        // already set correctly at the keysignPayload root by buildSwapKeysignPayload.
+        general: () => keysignPayload.toAddress,
       })
     : keysignPayload.toAddress
 
