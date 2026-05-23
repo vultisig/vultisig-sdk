@@ -33,6 +33,10 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   affiliateBps?: number
 }
 
+// 1% slippage tolerance — same as core implementation (see getLifiSwapQuote.ts in core).
+// MPC keysign ceremony latency makes the default LiFi 0.5% too tight for Vultisig flows.
+const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
+
 const setupLifi = memoize(async () => {
   const { createConfig } = await import('@lifi/sdk')
   createConfig({
@@ -59,6 +63,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAddress,
     toAddress,
     fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
   })
 
   const { transactionRequest, estimate } = quote
