@@ -337,9 +337,12 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
  * @param rawDataHex  hex-encoded protobuf `Transaction.raw_data` bytes,
  *                    with or without `0x` prefix. Must NOT be the full
  *                    signed-tx envelope — only the inner raw_data.
- * @returns same shape as `buildTronSendTx`. `unsignedRawHex` round-trips
- *          the input verbatim so byte parity checks against the
- *          original payload still work.
+ * @returns same shape as `buildTronSendTx`. `unsignedRawHex` is the
+ *          *normalized* hex of the decoded raw_data bytes — equal to
+ *          the input after stripping any leading `0x`/`0X` prefix and
+ *          lowercasing. Byte-parity checks against the decoded bytes
+ *          hold; a naive string-level `===` against the original input
+ *          may differ on prefix or hex casing.
  */
 export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult {
   if (typeof rawDataHex !== 'string') {
@@ -351,11 +354,14 @@ export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult 
   // ultimately MPC-sign over nothing meaningful. The strict guard
   // ensures malformed input from yield.xyz / app callers fails fast
   // with a clear message rather than producing an unbroadcastable tx.
-  const stripped = rawDataHex.startsWith('0x') ? rawDataHex.slice(2) : rawDataHex
+  const stripped = rawDataHex.startsWith('0x') || rawDataHex.startsWith('0X') ? rawDataHex.slice(2) : rawDataHex
   if (!/^[0-9a-fA-F]*$/.test(stripped)) {
     throw new Error('buildTronTxFromRawData: rawDataHex contains non-hex characters')
   }
-  const rawData = hexToBytes(rawDataHex)
+  // Decode from the prefix-stripped form so `hexToBytes` doesn't have to
+  // re-do prefix handling (and so a `0X` prefix doesn't ride through to
+  // any future decoder that's `0x`-case-sensitive).
+  const rawData = hexToBytes(stripped)
   if (rawData.length === 0) {
     throw new Error('buildTronTxFromRawData: rawDataHex decoded to zero bytes')
   }

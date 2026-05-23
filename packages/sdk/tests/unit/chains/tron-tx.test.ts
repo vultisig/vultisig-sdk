@@ -226,6 +226,22 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
     expect(replay.signingHashHex).toBe(reference.signingHashHex)
   })
 
+  it('returns normalized (prefix-stripped, lowercased) `unsignedRawHex` — CodeRabbit #515 r3', () => {
+    // The JSDoc explicitly documents that `unsignedRawHex` is the
+    // normalized form of the decoded bytes. Pin both rules:
+    //   - leading `0x` / `0X` is stripped
+    //   - hex casing is lowercased
+    // so callers doing byte-level comparison (rather than string
+    // equality with the original input) get a stable round-trip.
+    const raw = '0A024010'
+    const out = buildTronTxFromRawData(raw)
+    expect(out.unsignedRawHex).toBe('0a024010')
+
+    const prefixedUpper = buildTronTxFromRawData('0X0A024010')
+    expect(prefixedUpper.unsignedRawHex).toBe('0a024010')
+    expect(prefixedUpper.signingHashHex).toBe(out.signingHashHex)
+  })
+
   it('round-trips arbitrary opaque raw_data bytes (the yield.xyz case)', () => {
     // yield.xyz Tron staking returns FreezeBalanceV2 / UnfreezeBalanceV2
     // / VoteWitness raw_data that we have NO local builder for. The
