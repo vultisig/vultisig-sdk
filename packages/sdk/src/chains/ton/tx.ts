@@ -433,23 +433,57 @@ export type BuildTonTxFromSigningPayloadOptions = {
    */
   includeStateInit?: boolean
   /**
-   * Optional override for the wallet workchain. Defaults to 0 (the
-   * masterchain). Pass `-1` for masterchain validators / system
-   * contracts; almost no consumer needs this.
+   * Optional override for the wallet workchain. Defaults to `0` (the
+   * basechain — where all user wallets live). Pass `-1` for the
+   * masterchain (validators / system contracts); almost no consumer
+   * needs this.
    */
   workchain?: number
 }
 
 function decodeSigningPayload(input: string): Cell {
-  // Heuristic: strict hex if every char is a hex digit and length is
-  // even, else assume base64. yield.xyz returns base64 in the
-  // reference fixture; legacy / sandbox responses may emit hex.
+  // Encoding detection (CodeRabbit #516 R2). The serialized BoC arrives
+  // as either hex or base64, and yield.xyz uses both depending on the
+  // protocol family. Two refinements over the naive "any-even-hex →
+  // hex" check:
+  //
+  //   1. Accept an optional `0x`/`0X` prefix on hex input. Without
+  //      this, a callsite that prefixes (common in EVM-leaning
+  //      tooling) would silently fall through to the base64 branch
+  //      and produce wrong bytes.
+  //
+  //   2. Disambiguate hex vs base64 when both regexes would match.
+  //      A hex string like "abcdef0123456789" is *also* valid
+  //      base64. We prefer hex when EITHER:
+  //        - the input starts with `0x`/`0X`, OR
+  //        - the input is even-length, every char is in [0-9a-fA-F]
+  //          AND it cannot also be the start of a base64-encoded BoC.
+  //      A real BoC always begins with the magic byte 0xB5
+  //      (`B5EE9C72…` in hex). When we see that magic, treat it as
+  //      hex even if the rest could parse as base64.
+  //
+  // Anything else → base64. Buffer.from(_, 'base64') silently drops
+  // non-base64 characters, so we sanity-check by ensuring the
+  // produced byte stream re-parses as a valid BoC below; the
+  // Cell.fromBoc + zero-cells guards downstream catch corruption.
   const trimmed = input.trim()
   if (trimmed.length === 0) {
     throw new Error('TON signing payload BoC is empty')
   }
-  const looksLikeHex = trimmed.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(trimmed)
-  const bocBytes = looksLikeHex ? hexToBytes(trimmed) : new Uint8Array(Buffer.from(trimmed, 'base64'))
+  const hadHexPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X')
+  const normalized = hadHexPrefix ? trimmed.slice(2) : trimmed
+  const isEvenHex = normalized.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(normalized)
+  // BoC magic 0xB5EE9C72 (4 bytes = 8 hex chars). If the input is hex
+  // AND begins with that prefix, it's unambiguously hex.
+  const startsWithBocMagic = isEvenHex && /^b5ee9c72/i.test(normalized)
+  // Prefer hex when:
+  //  - caller explicitly prefixed with 0x, OR
+  //  - input matches the BoC magic in hex, OR
+  //  - input is even-length hex AND cannot also be parsed as base64
+  //    (length not multiple of 4 → base64 padding can't fit).
+  const couldBeBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(normalized) && normalized.length % 4 === 0
+  const looksLikeHex = hadHexPrefix || startsWithBocMagic || (isEvenHex && !couldBeBase64)
+  const bocBytes = looksLikeHex ? hexToBytes(normalized) : new Uint8Array(Buffer.from(normalized, 'base64'))
 
   const cells = Cell.fromBoc(Buffer.from(bocBytes))
   if (cells.length === 0) {

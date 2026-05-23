@@ -189,6 +189,49 @@ describe('chains/ton / buildTonTxFromSigningPayload (prebuilt-payload signing)',
     expect(replay.signingHashHex).toBe(reference.signingHashHex)
   })
 
+  it('accepts a 0x-prefixed hex signing payload (CodeRabbit #516 r2)', () => {
+    // The decoder must strip an optional 0x prefix before deciding
+    // hex-vs-base64. Without that, an EVM-leaning callsite that
+    // prepends "0x" silently fell through to the base64 branch and
+    // produced garbage bytes (wrong signing hash → wrong MPC sig).
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 100n,
+      bounceable: false,
+      seqno: 7,
+      validUntil: 1_700_000_000,
+    })
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: '0x' + reference.unsignedBocHex,
+    })
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
+  it('disambiguates hex from base64 via BoC magic 0xB5EE9C72 (CodeRabbit #516 r2)', () => {
+    // A real BoC starts with the magic 0xB5EE9C72. The decoder must
+    // recognise that prefix as hex even when the byte stream could
+    // also be a syntactically-valid base64 string. Without the magic
+    // disambiguation, even-length hex that happens to match base64
+    // alphabet rules could be misclassified.
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 100n,
+      bounceable: false,
+      seqno: 9,
+      validUntil: 1_700_000_000,
+    })
+    // BoC's serialized form always begins with the magic bytes.
+    expect(/^b5ee9c72/i.test(reference.unsignedBocHex)).toBe(true)
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: reference.unsignedBocHex,
+    })
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
   it('emits a larger BoC when includeStateInit=true (first-send deployment envelope)', () => {
     // The wallet address derives from the pubkey; we only test the BoC
     // size grows because adding StateInit appends a code+data ref.
