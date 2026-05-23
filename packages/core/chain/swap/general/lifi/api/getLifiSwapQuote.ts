@@ -90,7 +90,6 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   // on the user without anyone noticing. NeOMakinG #513 r1.
   const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
-     
     console.warn(
       `[getLifiSwapQuote] affiliate + slippage combined cost exceeds ${MAX_COMBINED_COST_BPS}bps: ${combinedCostBps}bps`
     )
