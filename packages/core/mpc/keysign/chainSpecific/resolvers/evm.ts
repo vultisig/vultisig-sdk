@@ -18,11 +18,20 @@ export const getEvmChainSpecific: GetChainSpecificResolver<'ethereumSpecific'> =
   const { chain, address } = coin
   const client = getEvmClient(chain)
 
-  const nonce = BigInt(
-    await client.getTransactionCount({
-      address: address as `0x${string}`,
-    })
-  )
+  // Use the `pending` block tag so mempool txs are counted. Without this,
+  // back-to-back dApp transactions (e.g. CCTP v2 approve() followed
+  // immediately by depositForBurn()) get the same nonce because the first
+  // tx hasn't been mined yet. Fall back to `latest` for chains that don't
+  // support the pending tag cleanly (zkSync Era, Hyperliquid, some alt-EVMs).
+  const getNonce = async () => {
+    const params = { address: address as `0x${string}` }
+    try {
+      return await client.getTransactionCount({ ...params, blockTag: 'pending' })
+    } catch {
+      return client.getTransactionCount({ ...params, blockTag: 'latest' })
+    }
+  }
+  const nonce = BigInt(await getNonce())
 
   const getData = () => {
     const swapPayload = getKeysignSwapPayload(keysignPayload)

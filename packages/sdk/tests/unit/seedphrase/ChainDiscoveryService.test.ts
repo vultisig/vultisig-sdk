@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChainDiscoveryService } from '@/seedphrase/ChainDiscoveryService'
 
-const { mockDeriveAddress, mockDerivePhantom, mockGetCoinBalance } = vi.hoisted(() => ({
+const { mockDeriveAddress, mockDerivePhantom, mockDeriveTerraCosmosPath, mockGetCoinBalance } = vi.hoisted(() => ({
   mockDeriveAddress: vi.fn(),
   mockDerivePhantom: vi.fn(),
+  mockDeriveTerraCosmosPath: vi.fn(),
   mockGetCoinBalance: vi.fn(),
 }))
 
@@ -17,6 +18,7 @@ vi.mock('@/seedphrase/MasterKeyDeriver', () => ({
     Object.assign(this, {
       deriveAddress: mockDeriveAddress,
       deriveSolanaAddressWithPhantomPath: mockDerivePhantom,
+      deriveTerraAddressWithCosmosPath: mockDeriveTerraCosmosPath,
     })
   }),
 }))
@@ -32,6 +34,7 @@ describe('ChainDiscoveryService', () => {
     vi.clearAllMocks()
     mockDeriveAddress.mockImplementation(async (_mnemonic: string, chain: Chain) => `addr-${chain}`)
     mockDerivePhantom.mockResolvedValue('phantom-addr')
+    mockDeriveTerraCosmosPath.mockResolvedValue('terra1-cosmos-path-addr')
     mockGetCoinBalance.mockResolvedValue(0n)
   })
 
@@ -132,5 +135,81 @@ describe('ChainDiscoveryService', () => {
       config: { chains: [Chain.Ethereum], concurrencyLimit: 0 },
     })
     expect(mockDeriveAddress).toHaveBeenCalled()
+  })
+
+  it('discoverChains returns useCosmosPathTerra=false when 330-path Terra has balance', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.Terra ? 'terra1-standard-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockImplementation(async ({ address }: { address: string }) => {
+      if (address === 'terra1-standard-330-addr') return 10_000_000n
+      return 0n
+    })
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Terra] },
+    })
+
+    expect(useCosmosPathTerra).toBe(false)
+  })
+
+  it('discoverChains sets useCosmosPathTerra=true when 330-path is empty but 118-path has balance', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.Terra ? 'terra1-standard-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockImplementation(async ({ address }: { address: string }) => {
+      if (address === 'terra1-standard-330-addr') return 0n
+      if (address === 'terra1-cosmos-path-addr') return 7_000_000n
+      return 0n
+    })
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { results, useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Terra] },
+    })
+
+    expect(useCosmosPathTerra).toBe(true)
+    const terra = results.find(r => r.chain === Chain.Terra)
+    expect(terra?.address).toBe('terra1-cosmos-path-addr')
+    expect(terra?.hasBalance).toBe(true)
+    expect(terra?.balance).toBe('7000000')
+    expect(mockDeriveTerraCosmosPath).toHaveBeenCalled()
+  })
+
+  it('discoverChains returns useCosmosPathTerra=false when both 330-path and 118-path have zero balance', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.Terra ? 'terra1-standard-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockResolvedValue(0n)
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Terra] },
+    })
+
+    expect(useCosmosPathTerra).toBe(false)
+  })
+
+  it('discoverChains prefers 330-path when both 330 and 118 have balance', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.Terra ? 'terra1-standard-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockImplementation(async ({ address }: { address: string }) => {
+      // Both paths have balance
+      if (address === 'terra1-standard-330-addr') return 5_000_000n
+      if (address === 'terra1-cosmos-path-addr') return 3_000_000n
+      return 0n
+    })
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { results, useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Terra] },
+    })
+
+    // 330-path preferred: flag stays false, address stays on 330
+    expect(useCosmosPathTerra).toBe(false)
+    const terra = results.find(r => r.chain === Chain.Terra)
+    expect(terra?.address).toBe('terra1-standard-330-addr')
   })
 })

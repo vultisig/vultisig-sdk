@@ -97,12 +97,19 @@ export type ChainDiscoveryResult = {
 
 /**
  * Aggregate result from chain discovery including Phantom Solana path detection
+ * and Cosmos-coin-type Terra path detection.
  */
 export type ChainDiscoveryAggregate = {
   /** Discovery results for each chain */
   results: ChainDiscoveryResult[]
   /** Whether Phantom derivation path should be used for Solana (has balance on Phantom path, none on standard) */
   usePhantomSolanaPath: boolean
+  /**
+   * Whether Cosmos coin-type path (m/44'/118'/0'/0/0) should be used for Terra/TerraClassic.
+   * True when the 330-path has zero balance AND the 118-path has non-zero balance.
+   * Covers seeds originally exported from Keplr or Leap.
+   */
+  useCosmosPathTerra: boolean
 }
 
 /**
@@ -131,6 +138,8 @@ export type CreateFastVaultFromSeedphraseOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
   usePhantomSolanaPath?: boolean
+  /** Use Cosmos coin-type path (m/44'/118'/0'/0/0) for Terra/TerraClassic (auto-detected if discoverChains is true) */
+  useCosmosPathTerra?: boolean
   /** Enable batched MPC ceremonies for this import. */
   tssBatching?: boolean
 }
@@ -167,6 +176,8 @@ export type CreateSecureVaultFromSeedphraseOptions = {
   onChainDiscovery?: (progress: ChainDiscoveryProgress) => void
   /** Use Phantom wallet derivation path for Solana (auto-detected if discoverChains is true) */
   usePhantomSolanaPath?: boolean
+  /** Use Cosmos coin-type path (m/44'/118'/0'/0/0) for Terra/TerraClassic (auto-detected if discoverChains is true) */
+  useCosmosPathTerra?: boolean
   /** Enable batched MPC ceremonies for this import. */
   tssBatching?: boolean
 }
@@ -193,6 +204,8 @@ export type JoinSecureVaultOptions = {
   onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   /** Use Phantom wallet derivation path for Solana (must match initiator's setting) */
   usePhantomSolanaPath?: boolean
+  /** Use Cosmos coin-type path (m/44'/118'/0'/0/0) for Terra/TerraClassic (must match initiator's setting) */
+  useCosmosPathTerra?: boolean
   /** Enable batched MPC ceremonies for this join flow. */
   tssBatching?: boolean
 }

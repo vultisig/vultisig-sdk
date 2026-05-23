@@ -176,6 +176,35 @@ export class ChainDiscoveryService {
       }
     }
 
+    // Check Cosmos-coin-type Terra path (m/44'/118'/0'/0/0) if Terra was in the scan.
+    // Keplr and Leap historically derived Terra under coin type 118 instead of 330.
+    // Use the 118 path when it has balance AND the standard 330 path has no balance.
+    let useCosmosPathTerra = false
+    const terraResult = results.find(r => r.chain === Chain.Terra)
+
+    if (terraResult) {
+      try {
+        const cosmosPathCheck = await this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain)
+        const standard330Balance = BigInt(terraResult.balance || '0')
+
+        // Use Cosmos path if it has balance AND standard 330-path has no balance
+        useCosmosPathTerra = cosmosPathCheck.balance > 0n && standard330Balance === 0n
+
+        // If 118 path has balance but 330 doesn't, update the Terra result
+        if (useCosmosPathTerra) {
+          terraResult.address = cosmosPathCheck.address
+          terraResult.balance = cosmosPathCheck.balance.toString()
+          terraResult.hasBalance = true
+          if (!chainsWithBalance.includes(Chain.Terra)) {
+            chainsWithBalance.push(Chain.Terra)
+          }
+        }
+      } catch (error) {
+        // Cosmos-path Terra check failed, continue with standard 330 path
+        console.warn('Failed to check Cosmos-path Terra address:', error)
+      }
+    }
+
     // Report completion
     onProgress?.({
       phase: 'complete',
@@ -188,6 +217,7 @@ export class ChainDiscoveryService {
     return {
       results,
       usePhantomSolanaPath,
+      useCosmosPathTerra,
     }
   }
 
@@ -283,6 +313,36 @@ export class ChainDiscoveryService {
       const address = await this.keyDeriver.deriveSolanaAddressWithPhantomPath(mnemonic)
       const balance = await getCoinBalance({
         chain: Chain.Solana,
+        address,
+      })
+      return { address, balance }
+    }
+
+    return Promise.race([checkPromise(), timeoutPromise]).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    })
+  }
+
+  /**
+   * Check Terra balance using the Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Keplr and Leap historically derived Terra under coin type 118 (Cosmos) instead
+   * of Terra's native SLIP-44 330. This detects wallets originally created in those apps.
+   */
+  private async checkCosmosPathTerraBalance(
+    mnemonic: string,
+    timeout: number
+  ): Promise<{ address: string; balance: bigint }> {
+    // Create timeout promise with cleanup
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Timeout checking Cosmos-path Terra address')), timeout)
+    })
+
+    const checkPromise = async () => {
+      const address = await this.keyDeriver.deriveTerraAddressWithCosmosPath(mnemonic)
+      const balance = await getCoinBalance({
+        chain: Chain.Terra,
         address,
       })
       return { address, balance }

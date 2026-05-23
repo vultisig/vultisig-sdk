@@ -116,13 +116,14 @@ export class SecureVaultFromSeedphraseService {
       throw new VaultError(VaultErrorCode.InvalidConfig, 'Threshold cannot exceed number of devices')
     }
 
-    const { masterKeys, discoveredChains, usePhantomSolanaPath, chainsToImport } = await prepareSeedphraseImportPrelude(
-      {
+    const { masterKeys, discoveredChains, usePhantomSolanaPath, useCosmosPathTerra, chainsToImport } =
+      await prepareSeedphraseImportPrelude({
         mnemonic,
         discoverChains: options.discoverChains,
         chains: options.chains,
         chainsToScan: options.chainsToScan,
         usePhantomSolanaPath: options.usePhantomSolanaPath,
+        useCosmosPathTerra: options.useCosmosPathTerra,
         onChainDiscovery: options.onChainDiscovery,
         validator: this.validator,
         keyDeriver: this.keyDeriver,
@@ -133,8 +134,7 @@ export class SecureVaultFromSeedphraseService {
           derivingKeys: { progress: 10, message: 'Deriving master keys...' },
           discoveringChains: { progress: 15, message: 'Discovering chains with balances...' },
         },
-      }
-    )
+      })
 
     // Step 4: Generate session parameters
     reportProgress({
@@ -243,6 +243,7 @@ export class SecureVaultFromSeedphraseService {
     let eddsaResult: { publicKey: string; keyshare: string; chaincode: string }
     const chainPrivateKeys = await this.keyDeriver.deriveChainPrivateKeys(mnemonic, chainsToImport as Chain[], {
       usePhantomSolanaPath,
+      useCosmosPathTerra,
     })
 
     if (tssBatching) {

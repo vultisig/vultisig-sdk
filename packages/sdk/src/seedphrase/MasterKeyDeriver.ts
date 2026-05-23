@@ -48,7 +48,12 @@ export type DerivedChainKey = {
 export type DeriveChainPrivateKeysOptions = {
   /** Use Phantom wallet derivation path for Solana instead of standard BIP44 path */
   usePhantomSolanaPath?: boolean
+  /** Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for Terra instead of native 330 path */
+  useCosmosPathTerra?: boolean
 }
+
+/** Cosmos coin-type derivation path used by Keplr/Leap for Terra */
+export const cosmosPathTerra = "m/44'/118'/0'/0/0"
 
 /**
  * MasterKeyDeriver - Derives cryptographic keys from BIP39 mnemonic
@@ -200,10 +205,13 @@ export class MasterKeyDeriver {
 
         // Derive chain-specific key
         // For Solana with Phantom path, use custom derivation path
+        // For Terra/TerraClassic with Cosmos path, use m/44'/118'/0'/0/0
         const chainKey =
           chain === 'Solana' && options?.usePhantomSolanaPath
             ? hdWallet.getKey(coinType, phantomSolanaPath)
-            : hdWallet.getKeyForCoin(coinType)
+            : (chain === 'Terra' || chain === 'TerraClassic') && options?.useCosmosPathTerra
+              ? hdWallet.getKey(coinType, cosmosPathTerra)
+              : hdWallet.getKeyForCoin(coinType)
         const chainKeyData = new Uint8Array(chainKey.data())
 
         let privateKeyHex: string
@@ -286,6 +294,40 @@ export class MasterKeyDeriver {
       const coinType = walletCore.CoinType.solana
       const privateKey = hdWallet.getKey(coinType, phantomSolanaPath)
       const publicKey = privateKey.getPublicKeyEd25519()
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+
+      privateKey.delete()
+      publicKey.delete()
+
+      return address
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive Terra address using Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Keplr and Leap historically derived Terra under the Cosmos coin type (118),
+   * producing the same terra1... bech32 address format but from a different HD path.
+   * This is needed to discover wallets originally created in Keplr/Leap.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns Terra address derived using the Cosmos coin-type path
+   */
+  async deriveTerraAddressWithCosmosPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      // Use terraV2 coin type for terra1... address encoding, but derive from path 118
+      const coinType = walletCore.CoinType.terraV2
+      const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
+      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
       const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
 
       privateKey.delete()
