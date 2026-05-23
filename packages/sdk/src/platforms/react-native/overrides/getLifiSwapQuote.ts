@@ -15,6 +15,7 @@
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
@@ -78,7 +79,9 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     const swapFeeAssetId =
       [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
 
-    const patchedData = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+    const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+
+    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
 
     return {
       dstAmount: estimate.toAmount,
@@ -86,7 +89,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
       tx: {
         solana: {
           data: patchedData,
-          networkFee: BigInt(networkFee.amount),
+          networkFee: BigInt(networkFee.amount) + ataRentBuffer,
           swapFee: {
             amount: BigInt(swapFee.amount),
             decimals: swapFee.token.decimals,

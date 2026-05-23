@@ -1,6 +1,47 @@
-import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync } from '@solana/spl-token'
+import {
+  createAssociatedTokenAccountIdempotentInstruction,
+  getAssociatedTokenAddressSync,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from '@solana/spl-token'
 import { AddressLookupTableAccount, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
+
+/** Maximum attempts for LUT fetches before giving up. */
+const MAX_LUT_FETCH_ATTEMPTS = 3
+
+/**
+ * Fetch a LUT account with simple retry (exponential back-off, up to 3 attempts).
+ * RPC timeouts are transient; retrying avoids spurious quote failures.
+ */
+async function fetchLutWithRetry(
+  client: ReturnType<typeof getSolanaClient>,
+  accountKey: PublicKey
+): Promise<AddressLookupTableAccount | null> {
+  let lastError: unknown
+  for (let attempt = 0; attempt < MAX_LUT_FETCH_ATTEMPTS; attempt++) {
+    try {
+      const result = await client.getAddressLookupTable(accountKey)
+      return result.value ?? null
+    } catch (err) {
+      lastError = err
+      if (attempt < MAX_LUT_FETCH_ATTEMPTS - 1) {
+        await new Promise(resolve => setTimeout(resolve, 200 * 2 ** attempt))
+      }
+    }
+  }
+  // All attempts failed — log and continue without the LUT (decompile will fail
+  // if the LUT is required, which is the correct failure outcome).
+  console.warn('[injectSolanaAtaIfMissing] LUT fetch failed after retries:', lastError)
+  return null
+}
+
+export type InjectSolanaAtaResult = {
+  /** Possibly-modified base64-encoded VersionedTransaction. */
+  data: string
+  /** Whether a createAssociatedTokenAccount instruction was injected. */
+  ataInjected: boolean
+}
 
 /**
  * Checks whether the destination SPL-token ATA exists and, if not, prepends a
@@ -9,30 +50,45 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
  * The idempotent variant is safe: it succeeds whether or not the ATA already
  * exists at broadcast time (useful when the RPC snapshot is stale).
  *
- * @param txData   Base64-encoded serialized VersionedTransaction from LiFi.
+ * Token-2022 compatibility: the mint account's owner program is resolved at
+ * runtime so the correct token program (Token or Token-2022) is used for ATA
+ * derivation and instruction creation.
+ *
+ * @param txData       Base64-encoded serialized VersionedTransaction from LiFi.
  * @param mintAddress  SPL token mint address (e.g. USDC mint on Solana).
- * @param owner    Wallet address that will own the ATA (the swap destination).
- * @param payer    Wallet address paying for the ATA creation (the swap sender).
- * @returns        Possibly-modified base64-encoded transaction.
+ * @param owner        Wallet address that will own the ATA (swap destination).
+ * @param payer        Wallet address paying for ATA creation (swap sender).
+ * @returns            Modified transaction data + whether an ATA was injected.
  */
 export const injectSolanaAtaIfMissing = async (
   txData: string,
   mintAddress: string,
   owner: string,
   payer: string
-): Promise<string> => {
+): Promise<InjectSolanaAtaResult> => {
   const mintPubkey = new PublicKey(mintAddress)
   const ownerPubkey = new PublicKey(owner)
   const payerPubkey = new PublicKey(payer)
 
-  const ataAddress = getAssociatedTokenAddressSync(mintPubkey, ownerPubkey, /* allowOwnerOffCurve */ false)
-
   const client = getSolanaClient()
+
+  // Resolve token program from mint account owner (Token vs Token-2022).
+  const mintInfo = await client.getAccountInfo(mintPubkey)
+  const tokenProgramId = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID
+
+  // allowOwnerOffCurve=true: PDAs are valid ATA owners (e.g. multisig destinations).
+  const ataAddress = getAssociatedTokenAddressSync(
+    mintPubkey,
+    ownerPubkey,
+    /* allowOwnerOffCurve */ true,
+    tokenProgramId
+  )
+
   const ataInfo = await client.getAccountInfo(ataAddress)
 
   // ATA already exists — return the original tx data unchanged.
   if (ataInfo !== null) {
-    return txData
+    return { data: txData, ataInjected: false }
   }
 
   // Deserialize the LiFi VersionedTransaction (base64-encoded).
@@ -45,9 +101,9 @@ export const injectSolanaAtaIfMissing = async (
   if (versionedTx.message.version === 0) {
     const lookups = (versionedTx.message as { addressTableLookups: { accountKey: PublicKey }[] }).addressTableLookups
     for (const lut of lookups) {
-      const lutInfo = await client.getAddressLookupTable(lut.accountKey)
-      if (lutInfo.value) {
-        lutAccounts.push(lutInfo.value)
+      const lutAccount = await fetchLutWithRetry(client, lut.accountKey)
+      if (lutAccount) {
+        lutAccounts.push(lutAccount)
       }
     }
   }
@@ -60,7 +116,8 @@ export const injectSolanaAtaIfMissing = async (
     payerPubkey,
     ataAddress,
     ownerPubkey,
-    mintPubkey
+    mintPubkey,
+    tokenProgramId
   )
 
   // Prepend the ATA creation instruction so it runs before the swap.
@@ -71,9 +128,9 @@ export const injectSolanaAtaIfMissing = async (
   }).compileToV0Message(lutAccounts.length > 0 ? lutAccounts : undefined)
 
   const updatedTx = new VersionedTransaction(updatedMessage)
+  // NOTE: do NOT copy versionedTx.signatures here. After compileToV0Message the
+  // message bytes changed; any signature committed to the old bytes would be
+  // invalid. LiFi does not pre-sign Solana quotes so signatures are empty anyway.
 
-  // Copy over any existing signatures (fee-payer partial sigs from LiFi, if any).
-  updatedTx.signatures = versionedTx.signatures
-
-  return Buffer.from(updatedTx.serialize()).toString('base64')
+  return { data: Buffer.from(updatedTx.serialize()).toString('base64'), ataInjected: true }
 }

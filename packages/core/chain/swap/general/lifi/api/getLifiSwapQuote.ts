@@ -1,5 +1,6 @@
 import { createConfig, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
@@ -127,7 +128,11 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     const swapFeeAssetId =
       [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
 
-    const patchedData = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+    const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+
+    // ATA creation costs ~2,039,280 lamports rent exemption. Add the buffer when
+    // we injected the instruction so the user's fee estimate covers ATA creation.
+    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
 
     return {
       dstAmount: estimate.toAmount,
@@ -135,7 +140,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
       tx: {
         solana: {
           data: patchedData,
-          networkFee: BigInt(networkFee.amount),
+          networkFee: BigInt(networkFee.amount) + ataRentBuffer,
           swapFee: {
             amount: BigInt(swapFee.amount),
             decimals: swapFee.token.decimals,
