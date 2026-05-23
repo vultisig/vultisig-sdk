@@ -7724,7 +7724,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.6"
   peerDependencies:
-    "@vultisig/sdk": ">=0.27.0"
+    "@vultisig/sdk": ">=0.28.0"
   peerDependenciesMeta:
     "@vultisig/sdk":
       optional: true

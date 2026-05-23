@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 0.28.0
+
+### Minor Changes
+
+- [#530](https://github.com/vultisig/vultisig-sdk/pull/530) [`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(seedphrase): probe Cosmos-coin-type Terra path (118) for Keplr/Leap seeds when standard 330-path is empty
+
 ## 0.27.0
 
 ### Minor Changes
