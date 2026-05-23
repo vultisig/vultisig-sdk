@@ -5,6 +5,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -123,6 +124,10 @@ type SwapKitQuoteResponse = {
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
   tx?: unknown
+  targetAddress?: string
+  depositAddress?: string
+  depositAmount?: string
+  memo?: string
   providers?: string[]
   legs?: { provider?: string }[]
   fees?: { type?: string; amount?: string }[]
@@ -139,6 +144,17 @@ type SwapKitEvmTx = {
   gas?: string | number | bigint
   gasLimit?: string | number | bigint
 }
+
+const swapKitTransferSourceChains = [
+  Chain.Bitcoin,
+  Chain.BitcoinCash,
+  Chain.Dogecoin,
+  Chain.Litecoin,
+  Chain.Ripple,
+  Chain.Ton,
+  Chain.Tron,
+  Chain.Zcash,
+] as const
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -308,9 +324,90 @@ const buildSolanaTx = (tx: unknown, fees: SwapKitSwapResponse['fees']): GeneralS
   }
 }
 
-const buildSwapKitTx = (response: SwapKitSwapResponse, from: AccountCoin<SwapKitSourceChain>): GeneralSwapTx => {
+const getTransferTargetAddress = ({ targetAddress, depositAddress, tx }: SwapKitSwapResponse): string | undefined => {
+  if (targetAddress) {
+    return targetAddress
+  }
+
+  if (depositAddress) {
+    return depositAddress
+  }
+
+  if (Array.isArray(tx) && isRecord(tx[0]) && typeof tx[0].address === 'string') {
+    return tx[0].address
+  }
+
+  return undefined
+}
+
+const toTransferAmount = (value: string | number | bigint, decimals: number): bigint => {
+  if (typeof value === 'bigint') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error('SwapKit transfer route returned an invalid amount.')
+    }
+
+    return Number.isInteger(value) ? BigInt(value) : toChainAmount(value.toString(), decimals)
+  }
+
+  return value.includes('.') ? toChainAmount(value, decimals) : BigInt(value)
+}
+
+const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: bigint, decimals: number): bigint => {
+  if (depositAmount) {
+    return toChainAmount(depositAmount, decimals)
+  }
+
+  if (
+    Array.isArray(tx) &&
+    isRecord(tx[0]) &&
+    (typeof tx[0].amount === 'string' || typeof tx[0].amount === 'number' || typeof tx[0].amount === 'bigint')
+  ) {
+    return toTransferAmount(tx[0].amount, decimals)
+  }
+
+  return amount
+}
+
+const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
+  isOneOf(chain, swapKitTransferSourceChains)
+
+const buildTransferTx = (
+  response: SwapKitSwapResponse,
+  from: AccountCoin<SwapKitSourceChain>,
+  amount: bigint
+): GeneralSwapTx => {
+  const to = getTransferTargetAddress(response)
+
+  if (!to) {
+    throw new Error('SwapKit transfer route did not return a target address.')
+  }
+
+  const transfer = {
+    to,
+    amount: getTransferAmount(response, amount, from.decimals),
+    ...(response.memo ? { memo: response.memo } : {}),
+  }
+
+  return {
+    transfer,
+  }
+}
+
+const buildSwapKitTx = (
+  response: SwapKitSwapResponse,
+  from: AccountCoin<SwapKitSourceChain>,
+  amount: bigint
+): GeneralSwapTx => {
   if (from.chain === Chain.Solana) {
     return buildSolanaTx(response.tx, response.fees)
+  }
+
+  if (shouldUseTransferTx(from.chain)) {
+    return buildTransferTx(response, from, amount)
   }
 
   return buildEvmTx(response.tx, from.address)
@@ -409,17 +506,21 @@ export const getSwapKitQuote = async ({
   }
   const route = await getBestSwapKitRoute(quoteBody, to.decimals)
 
-  const swapResponse = await postSwapKit<SwapKitSwapResponse>('/v3/swap', {
-    routeId: route.routeId,
-    sourceAddress: from.address,
-    destinationAddress: to.address,
-    disableBalanceCheck: true,
-  })
+  const swapResponse = await postSwapKit<SwapKitSwapResponse>(
+    '/v3/swap',
+    withoutUndefinedFields({
+      routeId: route.routeId,
+      sourceAddress: from.address,
+      destinationAddress: to.address,
+      disableBalanceCheck: true,
+      disableBuildTx: shouldUseTransferTx(from.chain) ? true : undefined,
+    })
+  )
 
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
     routeProvider: getRouteProviderName(swapResponse) ?? getRouteProviderName(route),
-    tx: buildSwapKitTx(swapResponse, from),
+    tx: buildSwapKitTx(swapResponse, from, amount),
   }
 }

@@ -43,6 +43,8 @@ export type BuildSwapKeysignPayloadInput = {
   walletCore: WalletCore
 }
 
+type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
@@ -55,7 +57,16 @@ export const buildSwapKeysignPayload = async ({
   libType,
   walletCore,
 }: BuildSwapKeysignPayloadInput) => {
-  const chainAmount = toChainAmount(amount, fromCoin.decimals)
+  const transferTx = matchRecordUnion<SwapQuoteResult, TransferSwapTx | undefined>(swapQuote.quote, {
+    native: () => undefined,
+    general: ({ tx }) =>
+      matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: tx => tx,
+      }),
+  })
+  const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
@@ -66,6 +77,7 @@ export const buildSwapKeysignPayload = async ({
       matchRecordUnion<GeneralSwapTx, bigint | undefined>(tx, {
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
+        transfer: () => undefined,
       }),
   })
 
@@ -82,12 +94,27 @@ export const buildSwapKeysignPayload = async ({
     utxoInfo: await getKeysignUtxoInfo(fromCoin),
     memo: matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
       native: ({ memo }) => memo,
-      general: () => undefined,
+      general: ({ tx }) =>
+        matchRecordUnion<GeneralSwapTx, string | undefined>(tx, {
+          evm: () => undefined,
+          solana: () => undefined,
+          transfer: ({ memo }) => memo,
+        }),
     }),
   })
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
+      const transferSwapPayload = matchRecordUnion<GeneralSwapTx, KeysignPayload['swapPayload'] | undefined>(quote.tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: () => ({ case: undefined }),
+      })
+
+      if (transferSwapPayload) {
+        return transferSwapPayload
+      }
+
       const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
         evm: ({ from, to, data, value }) => {
           return {
@@ -107,6 +134,9 @@ export const buildSwapKeysignPayload = async ({
           gasPrice: '',
           gas: BigInt(0),
         }),
+        transfer: () => {
+          throw new Error('Transfer SwapKit routes do not use a oneinch swap payload.')
+        },
       })
 
       const tx = create(OneInchTransactionSchema, txMsg)
