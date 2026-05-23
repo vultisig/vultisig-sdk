@@ -483,6 +483,38 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
   })
 
+  it('when both THORChain and MayaChain succeed, returns the one with higher comparable output', async () => {
+    // Ethereum is supported by both THORChain and MayaChain.
+    // dst.decimals = 6 (evmSameChainCoins); native amounts are 8-dec canonical,
+    // so comparable = raw / 100.
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    // THORChain: 100_000_000 raw → 1_000_000 comparable.
+    // MayaChain:  120_000_000 raw → 1_200_000 comparable. Maya wins.
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        return minimalNativeQuote(swapChain, '100000000')
+      }
+      if (swapChain === Chain.MayaChain) {
+        return minimalNativeQuote(swapChain, '120000000')
+      }
+      throw new Error(`unexpected swapChain: ${swapChain}`)
+    })
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('native' in quote.quote)) {
+      throw new Error('Expected a native quote')
+    }
+    expect(quote.quote.native.swapChain).toBe(Chain.MayaChain)
+    expect(quote.quote.native.expected_amount_out).toBe('120000000')
+  })
+
   it('MayaChain also benefits from the bias when it is the only native option', async () => {
     // Use Arbitrum ↔ Arbitrum: Maya supports Arbitrum (per nativeSwapEnabledChainsRecord),
     // SwapKit supports Arbitrum as well. THORChain does NOT support Arbitrum.

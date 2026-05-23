@@ -64,24 +64,25 @@ type RankedSwapQuote = {
 }
 
 /**
- * Bias window (in bps of best comparable output) within which a direct native
- * THORChain / MayaChain route is preferred over a higher-output aggregator route.
+ * Hard native priority: when any direct THORChain or MayaChain route is available,
+ * it is always preferred over any aggregator (SwapKit, LiFi, etc.) regardless of
+ * gross output. When both THOR and Maya succeed, the one with the higher comparable
+ * output wins; among aggregator-only results the normal output ranking applies.
  *
- * Rationale (paaao, 2026-05-22): for L1 ↔ L1 swaps that THORChain natively serves,
- * the protocol-aligned route is preferred even when an aggregator (e.g. SwapKit)
- * gross-output is higher. Direct THORChain captures full vultisig affiliate
- * revenue (50bps) and avoids the SwapKit fee skim; the protocol is the moat.
- * Mirrors the priority-order short-circuit used in vultisig-ios's
- * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders` (priority-first-success,
- * no output comparison).
+ * Rationale (paaao, 2026-05-22): for L1 swaps that native protocols serve directly,
+ * the protocol-aligned route is always preferred. Direct routes capture full
+ * vultisig affiliate revenue and avoid the aggregator fee skim; the protocol is
+ * the moat. Mirrors the priority-first-success pattern in vultisig-ios's
+ * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`.
  */
 
 const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
 
 type NativeProviderName = (typeof nativeProviderNames)[number]
 
-const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName =>
-  (nativeProviderNames as readonly SwapQuoteProviderName[]).includes(name)
+const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderNames)
+
+const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
 function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
