@@ -46,6 +46,33 @@ describe('getSwapTrackingUrl', () => {
       expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=solana`)
     })
 
+    // Remaining mapped chains — lock each chainId entry so map drift is caught immediately
+    it.each([
+      [Chain.Arbitrum, '42161', EVM_HASH, 'abc123'],
+      [Chain.Avalanche, '43114', EVM_HASH, 'abc123'],
+      [Chain.Base, '8453', EVM_HASH, 'abc123'],
+      [Chain.BSC, '56', EVM_HASH, 'abc123'],
+      [Chain.Optimism, '10', EVM_HASH, 'abc123'],
+      // UTXO chains use bare hashes (no 0x)
+      [Chain.BitcoinCash, 'bitcoincash', UTXO_HASH, UTXO_HASH],
+      [Chain.Dogecoin, 'dogecoin', UTXO_HASH, UTXO_HASH],
+      [Chain.Litecoin, 'litecoin', UTXO_HASH, UTXO_HASH],
+      [Chain.Zcash, 'zcash', UTXO_HASH, UTXO_HASH],
+      // Ripple: bare hex (not 0x-prefixed in practice)
+      [Chain.Ripple, 'ripple', UTXO_HASH, UTXO_HASH],
+      // TON: hex hash (same bare format)
+      [Chain.Ton, 'ton', UTXO_HASH, UTXO_HASH],
+      // Tron: decimal chain ID per SwapKit docs (not 0x2b6653cc)
+      [Chain.Tron, '728126428', UTXO_HASH, UTXO_HASH],
+    ])('%s routes to track.swapkit.dev with chainId=%s', (chain, expectedChainId, hash, expectedHash) => {
+      const url = getSwapTrackingUrl({
+        swapPayload: { general: { provider: 'swapkit' } as any },
+        txHash: hash,
+        sourceChain: chain as Chain,
+      })
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${expectedHash}&chainId=${expectedChainId}`)
+    })
+
     describe('exhaustiveness warning when chain not in tracker map', () => {
       let warnSpy: ReturnType<typeof vi.spyOn>
       beforeEach(() => {
