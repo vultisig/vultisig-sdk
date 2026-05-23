@@ -330,6 +330,10 @@ export class SwapService {
       if ('evm' in quoteData.general.tx) {
         return quoteData.general.tx.evm.to
       }
+      // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
+      if ('transfer' in quoteData.general.tx) {
+        return undefined
+      }
     }
     if ('native' in quoteData && quoteData.native.router) {
       return quoteData.native.router
@@ -478,6 +482,16 @@ export class SwapService {
         }
       } catch {
         // Fall through to default if gas price fetch fails
+      }
+    }
+
+    // UTXO/Cosmos source via deposit channel: fees come from the source-chain tx,
+    // not from the SwapKit quote. Return 0n as placeholder; real fees are estimated
+    // at execution time by the chain-specific fee estimator.
+    if ('transfer' in tx) {
+      return {
+        network: 0n,
+        total: 0n,
       }
     }
 
