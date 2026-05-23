@@ -280,6 +280,41 @@ describe('findSwapQuote parallel selection', () => {
     }
   })
 
+  it('surfaces a below-minimum message from SwapKit providerErrors when all providers fail', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('CHAINFLIP: Amount below minimum: 0.0003 BTC required'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Amount below the minimum required by a swap provider.')
+  })
+
+  it('prefers dust-threshold message over below-minimum when both signals are present', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('CHAINFLIP: Amount below minimum: 0.0003 BTC required'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('amount less than dust threshold')
+      }
+      throw new Error('maya fail')
+    })
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+  })
+
   it('maps dust threshold on any provider to the user-facing message (Maya in this setup)', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))

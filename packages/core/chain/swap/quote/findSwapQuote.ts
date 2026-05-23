@@ -300,10 +300,36 @@ export const findSwapQuote = async ({
     return best
   }
 
+  // Scan rejected results for actionable size-related signals. Prefer the most
+  // specific message available: a provider's "below minimum" hint beats the
+  // generic no-route fallback.
+  let belowMinimumMessage: string | undefined
+
   for (const result of settled) {
-    if (result.status === 'rejected' && isInError(result.reason, 'dust threshold')) {
+    if (result.status !== 'rejected') {
+      continue
+    }
+
+    const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
+
+    if (isInError(result.reason, 'dust threshold') || isInError(result.reason, 'amount less than')) {
       throw new Error('Swap amount too small. Please increase the amount to proceed.')
     }
+
+    if (
+      !belowMinimumMessage &&
+      (msg.toLowerCase().includes('below minimum') ||
+        msg.toLowerCase().includes('minimum amount') ||
+        msg.toLowerCase().includes('min amount') ||
+        msg.toLowerCase().includes('amount too small') ||
+        msg.toLowerCase().includes('below the minimum'))
+    ) {
+      belowMinimumMessage = msg
+    }
+  }
+
+  if (belowMinimumMessage) {
+    throw new Error(`Amount below the minimum required by a swap provider. ${belowMinimumMessage}`)
   }
 
   const failedProviders = settled

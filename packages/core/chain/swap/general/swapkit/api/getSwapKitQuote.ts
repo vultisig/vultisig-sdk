@@ -192,6 +192,37 @@ const isNoRouteError = (message: string) => {
   return normalizedMessage.includes('noroutesfound') || normalizedMessage.includes('noroutes')
 }
 
+const isBelowMinimumError = (message: string) => {
+  const lower = message.toLowerCase()
+
+  return (
+    lower.includes('below minimum') ||
+    lower.includes('belowminimum') ||
+    lower.includes('minimum amount') ||
+    lower.includes('min amount') ||
+    lower.includes('amount too small') ||
+    lower.includes('dust threshold') ||
+    lower.includes('below the minimum')
+  )
+}
+
+/** Extracts the first below-minimum signal from providerErrors, if any. */
+const extractBelowMinimumProviderError = (errors: SwapKitQuoteResponse['providerErrors']): string | undefined => {
+  if (!errors?.length) {
+    return undefined
+  }
+
+  for (const err of errors) {
+    const msg = err.message ?? ''
+    if (isBelowMinimumError(msg)) {
+      const provider = err.provider ? `${err.provider}: ` : ''
+      return `${provider}${msg}`
+    }
+  }
+
+  return undefined
+}
+
 const getRouteProviderName = (route: Pick<SwapKitQuoteRoute, 'providers' | 'legs'>) => {
   const [firstProvider] = routeProviderNames(route).filter(provider => !swapKitExcludedProviders.has(provider))
 
@@ -445,13 +476,36 @@ const sortRoutesByExpectedBuyAmount = (routes: SwapKitQuoteRoute[], decimals: nu
     return oneAmount > anotherAmount ? -1 : 1
   })
 
+const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise<SwapKitQuoteResponse> => {
+  const { apiKey, baseUrl } = getSwapKitConfig()
+  const trimmedApiKey = apiKey?.trim()
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v3/quote`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  // Parse the body regardless of HTTP status — SwapKit embeds providerErrors
+  // inside 400/error responses that we need to inspect for minimum-size signals.
+  const data = await response.json().catch(() => undefined)
+
+  if (!response.ok && !isRecord(data)) {
+    throw new Error(`SwapKit request failed (${response.status}): ${response.statusText}`)
+  }
+
+  return (isRecord(data) ? data : {}) as SwapKitQuoteResponse
+}
+
 const getSwapKitRoutes = async (
   body: Record<string, unknown>,
   providers: SwapKitProvider[]
 ): Promise<SwapKitQuoteRoute[]> => {
   try {
-    const quoteResponse = await postSwapKit<SwapKitQuoteResponse>(
-      '/v3/quote',
+    const quoteResponse = await fetchSwapKitQuoteResponse(
       withoutUndefinedFields({
         ...body,
         providers,
@@ -462,13 +516,31 @@ const getSwapKitRoutes = async (
       const message = quoteResponse.message ?? quoteResponse.error
 
       if (isNoRouteError(message)) {
+        // Before swallowing the no-route response, check if any provider
+        // told us the amount is below their minimum — that's more actionable.
+        const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+        if (belowMinMsg) {
+          throw new Error(belowMinMsg)
+        }
+
         return []
       }
 
       throw new Error(message)
     }
 
-    return quoteResponse.routes?.filter(isAllowedRoute) ?? []
+    const allowedRoutes = quoteResponse.routes?.filter(isAllowedRoute) ?? []
+
+    // Even with routes present, check providerErrors for minimum signals on partial failures.
+    // If every allowed route was filtered out but a provider told us why, surface it.
+    if (allowedRoutes.length === 0) {
+      const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+      if (belowMinMsg) {
+        throw new Error(belowMinMsg)
+      }
+    }
+
+    return allowedRoutes
   } catch (error) {
     if (error instanceof Error && isNoRouteError(error.message)) {
       return []

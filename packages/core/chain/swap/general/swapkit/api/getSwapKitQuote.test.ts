@@ -458,6 +458,83 @@ describe('getSwapKitQuote', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).routeId).toBe('valid-route')
   })
 
+  it('throws a below-minimum error when providerErrors carry a minimum-size rejection (no-route response)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response(
+        {
+          routes: [],
+          error: 'noRoutesFound',
+          message: 'No routes found for BTC.BTC -> ETH.ETH',
+          providerErrors: [
+            {
+              provider: 'CHAINFLIP',
+              message: 'Amount below minimum: 0.0003 BTC required',
+              errorCode: 'BELOW_MINIMUM',
+            },
+          ],
+        },
+        false,
+        400
+      )
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1000n,
+      })
+    ).rejects.toThrow('CHAINFLIP: Amount below minimum: 0.0003 BTC required')
+  })
+
+  it('throws a below-minimum error when providerErrors carry a minimum-size rejection (200 with empty routes)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        routes: [],
+        providerErrors: [
+          {
+            provider: 'NEAR',
+            message: 'min amount not met for this swap',
+          },
+        ],
+      })
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 100n,
+      })
+    ).rejects.toThrow('NEAR: min amount not met for this swap')
+  })
+
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {
     const fetchMock = vi
       .fn()
