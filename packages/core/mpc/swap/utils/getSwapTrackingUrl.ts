@@ -13,9 +13,17 @@ type GetSwapTrackingUrlInput = {
 }
 
 // Chain identifiers accepted by https://track.swapkit.dev/?tx=<hash>&chainId=<id>
-// These differ from the SwapKit API chain-prefix map (ETH, ARB, …) used in getSwapKitQuote.ts.
+// These differ from the SwapKit API chain-prefix map (ETH, ARB, ...) used in getSwapKitQuote.ts.
 // Source: https://docs.swapkit.dev/swapkit-api/providers-request-supported-chains-by-a-swap-provider#chain-ids-and-corresponding-names
-const swapKitTrackerChainId: Record<SwapKitSourceChain, string> = {
+//
+// UTXO byte-order contract: track.swapkit.dev accepts UTXO tx hashes in their
+// natural txid representation (the byte-reversed, human-readable form that block
+// explorers display). Our signing flow produces hashes in that same display form,
+// so no additional byte reversal is needed here.
+// The `satisfies Record<SwapKitSourceChain, string>` below enforces compile-time
+// exhaustiveness -- adding a chain to SwapKitEnabledChains without updating this
+// map is a type error.
+const swapKitTrackerChainId = {
   [Chain.Ethereum]: '1',
   [Chain.Arbitrum]: '42161',
   [Chain.Avalanche]: '43114',
@@ -32,7 +40,7 @@ const swapKitTrackerChainId: Record<SwapKitSourceChain, string> = {
   [Chain.Ton]: 'ton',
   [Chain.Tron]: '728126428',
   [Chain.Zcash]: 'zcash',
-}
+} satisfies Record<SwapKitSourceChain, string>
 
 export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwapTrackingUrlInput): string => {
   return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
@@ -53,19 +61,19 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
       if (provider === 'swapkit') {
         const chainId = swapKitTrackerChainId[sourceChain as SwapKitSourceChain]
         if (chainId) {
-          // Bare hash (no `0x` prefix) matches the THORChain `runescan.io`
-          // branch above + matches the format track.swapkit.dev parses for
-          // UTXO chains. `stripHexPrefix` is a no-op when no prefix is
-          // present, so EVM hashes pass through unchanged.
-          // `encodeURIComponent` is defensive for forward-compat with chain
-          // types whose hashes contain URL-special chars. NeOMakinG #527 r1
-          // preferably-blocking + suggestion.
+          // Bare hash (no `0x` prefix) -- `stripHexPrefix` is a no-op when the
+          // hash is already prefix-free (UTXO chains, Ripple, etc.) and strips
+          // `0x` from EVM hashes to match track.swapkit.dev's expected format.
+          // `encodeURIComponent` is primarily meaningful for base64-encoded
+          // hashes (TON), where `=` padding and `+`/`/` chars are URL-special.
           return `https://track.swapkit.dev/?tx=${encodeURIComponent(stripHexPrefix(txHash))}&chainId=${chainId}`
         }
         // SwapKitSourceChain extended without updating swapKitTrackerChainId
-        // → silent fallback to block explorer would degrade tracking
+        // -> silent fallback to block explorer would degrade tracking
         // without surfacing the gap. Warn so the drift shows up in logs +
-        // greppable CI output. NeOMakinG #527 r1 BLOCKER.
+        // greppable CI output.
+        // TODO: wire to telemetry event 'swapkit_tracker_chain_missing' so
+        // mapping drift is caught in production monitoring, not just CI logs.
 
         console.warn(
           `[getSwapTrackingUrl] SwapKit tracker chainId missing for ${sourceChain} — falling back to source-chain block explorer. Add a swapKitTrackerChainId entry.`

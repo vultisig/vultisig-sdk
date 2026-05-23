@@ -4,9 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSwapTrackingUrl } from './getSwapTrackingUrl'
 
 const EVM_HASH = '0xabc123'
-// Real-shape UTXO hash — bare, no `0x` prefix. Tracks against
-// track.swapkit.dev's expected format (NeOMakinG #527 r1).
+// Real-shape UTXO hash -- bare 64-char hex, no `0x` prefix.
+// Represents the human-readable txid form (byte-reversed double-SHA256
+// for BTC/BCH/DOGE/LTC/ZEC), which is the format track.swapkit.dev expects.
 const UTXO_HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
+// XRP Ledger tx hashes are 64-char uppercase hex, forward byte-order
+// (no reversal like UTXO chains). Distinct constant to document the contract.
+const XRP_HASH = 'B4E2CF540C6F29C8A0A94FFF0ADB32E17BB49D3B3C6ED4DE3F8C5B0A7A6F9E2C'
+// TON transaction hashes are base64-encoded. encodeURIComponent is meaningful
+// here (unlike hex chains where it is a no-op), due to `=` padding.
+const TON_HASH = 'kQDwGWm7EWmP+8LdMDJgLR/r3QIDAQAB'
 
 describe('getSwapTrackingUrl', () => {
   describe('general / swapkit provider', () => {
@@ -46,23 +53,20 @@ describe('getSwapTrackingUrl', () => {
       expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=solana`)
     })
 
-    // Remaining mapped chains — lock each chainId entry so map drift is caught immediately
+    // Remaining mapped chains -- lock each chainId entry so map drift is caught immediately
     it.each([
       [Chain.Arbitrum, '42161', EVM_HASH, 'abc123'],
       [Chain.Avalanche, '43114', EVM_HASH, 'abc123'],
       [Chain.Base, '8453', EVM_HASH, 'abc123'],
       [Chain.BSC, '56', EVM_HASH, 'abc123'],
       [Chain.Optimism, '10', EVM_HASH, 'abc123'],
-      // UTXO chains use bare hashes (no 0x)
+      // UTXO chains: bare hashes (no 0x). Byte-order is the human-readable
+      // txid form (byte-reversed double-SHA256), which track.swapkit.dev expects.
       [Chain.BitcoinCash, 'bitcoincash', UTXO_HASH, UTXO_HASH],
       [Chain.Dogecoin, 'dogecoin', UTXO_HASH, UTXO_HASH],
       [Chain.Litecoin, 'litecoin', UTXO_HASH, UTXO_HASH],
       [Chain.Zcash, 'zcash', UTXO_HASH, UTXO_HASH],
-      // Ripple: bare hex (not 0x-prefixed in practice)
-      [Chain.Ripple, 'ripple', UTXO_HASH, UTXO_HASH],
-      // TON: hex hash (same bare format)
-      [Chain.Ton, 'ton', UTXO_HASH, UTXO_HASH],
-      // Tron: decimal chain ID per SwapKit docs (not 0x2b6653cc)
+      // Tron: decimal chain ID per SwapKit docs (not 0x2b6653cc hex form)
       [Chain.Tron, '728126428', UTXO_HASH, UTXO_HASH],
     ])('%s routes to track.swapkit.dev with chainId=%s', (chain, expectedChainId, hash, expectedHash) => {
       const url = getSwapTrackingUrl({
@@ -71,6 +75,27 @@ describe('getSwapTrackingUrl', () => {
         sourceChain: chain as Chain,
       })
       expect(url).toBe(`https://track.swapkit.dev/?tx=${expectedHash}&chainId=${expectedChainId}`)
+    })
+
+    it('XRP uses forward byte-order hash (distinct from UTXO chains, no reversal needed)', () => {
+      // XRP Ledger tx hashes are 64-char uppercase hex, forward byte-order.
+      const url = getSwapTrackingUrl({
+        swapPayload: { general: { provider: 'swapkit' } as any },
+        txHash: XRP_HASH,
+        sourceChain: Chain.Ripple,
+      })
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${XRP_HASH}&chainId=ripple`)
+    })
+
+    it('TON base64 hash is URL-encoded (encodeURIComponent handles = padding)', () => {
+      // TON hashes are base64-encoded. encodeURIComponent is non-trivially
+      // applied here (unlike hex chains where it is a no-op).
+      const url = getSwapTrackingUrl({
+        swapPayload: { general: { provider: 'swapkit' } as any },
+        txHash: TON_HASH,
+        sourceChain: Chain.Ton,
+      })
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${encodeURIComponent(TON_HASH)}&chainId=ton`)
     })
 
     describe('exhaustiveness warning when chain not in tracker map', () => {
