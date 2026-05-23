@@ -66,7 +66,7 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
         // → silent fallback to block explorer would degrade tracking
         // without surfacing the gap. Warn so the drift shows up in logs +
         // greppable CI output. NeOMakinG #527 r1 BLOCKER.
-         
+
         console.warn(
           `[getSwapTrackingUrl] SwapKit tracker chainId missing for ${sourceChain} — falling back to source-chain block explorer. Add a swapKitTrackerChainId entry.`
         )
