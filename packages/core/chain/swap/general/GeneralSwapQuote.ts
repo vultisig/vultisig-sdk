@@ -20,6 +20,13 @@ export type GeneralSwapTx =
         swapFee: SwapFee
       }
     }
+  | {
+      transfer: {
+        to: string
+        amount: bigint
+        memo?: string
+      }
+    }
 
 export type GeneralSwapQuote = {
   dstAmount: string

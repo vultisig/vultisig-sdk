@@ -1335,15 +1335,15 @@
       "import": "./dist/swap/general/oneInch/oneInchAffiliateConfig.js",
       "default": "./dist/swap/general/oneInch/oneInchAffiliateConfig.js"
     },
-    "./swap/general/oneInch/stationOneInchAffiliateConfig": {
-      "types": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.d.ts",
-      "import": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.js",
-      "default": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.js"
-    },
     "./swap/general/oneInch/OneInchSwapEnabledChains": {
       "types": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.d.ts",
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
+    },
+    "./swap/general/oneInch/stationOneInchAffiliateConfig": {
+      "types": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.d.ts",
+      "import": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.js",
+      "default": "./dist/swap/general/oneInch/stationOneInchAffiliateConfig.js"
     },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
@@ -1385,11 +1385,6 @@
       "import": "./dist/swap/native/nativeSwapAffiliateConfig.js",
       "default": "./dist/swap/native/nativeSwapAffiliateConfig.js"
     },
-    "./swap/native/stationNativeSwapAffiliateConfig": {
-      "types": "./dist/swap/native/stationNativeSwapAffiliateConfig.d.ts",
-      "import": "./dist/swap/native/stationNativeSwapAffiliateConfig.js",
-      "default": "./dist/swap/native/stationNativeSwapAffiliateConfig.js"
-    },
     "./swap/native/NativeSwapChain": {
       "types": "./dist/swap/native/NativeSwapChain.d.ts",
       "import": "./dist/swap/native/NativeSwapChain.js",
@@ -1399,6 +1394,11 @@
       "types": "./dist/swap/native/NativeSwapQuote.d.ts",
       "import": "./dist/swap/native/NativeSwapQuote.js",
       "default": "./dist/swap/native/NativeSwapQuote.js"
+    },
+    "./swap/native/stationNativeSwapAffiliateConfig": {
+      "types": "./dist/swap/native/stationNativeSwapAffiliateConfig.d.ts",
+      "import": "./dist/swap/native/stationNativeSwapAffiliateConfig.js",
+      "default": "./dist/swap/native/stationNativeSwapAffiliateConfig.js"
     },
     "./swap/native/utils/getNativeSwapDecimals": {
       "types": "./dist/swap/native/utils/getNativeSwapDecimals.d.ts",

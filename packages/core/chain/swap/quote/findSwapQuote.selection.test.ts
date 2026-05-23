@@ -171,6 +171,47 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.native.expected_amount_out).toBe('100')
   })
 
+  it('attempts SwapKit for newly enabled non-EVM source chains', async () => {
+    vi.mocked(getSwapKitQuote).mockResolvedValue({
+      dstAmount: '1000000000',
+      provider: 'swapkit',
+      tx: {
+        transfer: {
+          to: 'UQDeposit',
+          amount: 100_000n,
+        },
+      },
+    })
+
+    const from = {
+      chain: Chain.Bitcoin,
+      address: 'bc1qsource',
+      decimals: 8,
+      ticker: 'BTC',
+    }
+    const to = {
+      chain: Chain.Ton,
+      address: 'UQDestination',
+      decimals: 9,
+      ticker: 'TON',
+    }
+
+    const quote = await findSwapQuote({
+      from,
+      to,
+      amount: 100_000n,
+    })
+
+    expect(getSwapKitQuote).toHaveBeenCalledWith({
+      from,
+      to,
+      amount: 100_000n,
+      affiliateBps: 50,
+    })
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+    expect('general' in quote.quote).toBe(true)
+  })
+
   it('breaks ties by earlier fetcher preference order', async () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
