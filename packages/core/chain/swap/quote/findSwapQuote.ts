@@ -34,8 +34,9 @@ import { SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
- * callers. Tenant consumers (e.g. Station) supply their own config objects and
- * pass them here; those constants live in the consumer package, not the SDK. */
+ * callers. This TYPE is stable SDK API. Tenant consumers (e.g. Station) supply
+ * their own concrete config instances and pass them here; those instances live
+ * in the consumer package, not in the SDK. */
 export type SwapAffiliateConfig = {
   native?: NativeSwapAffiliateConfig
   oneInch?: OneInchAffiliateConfig
