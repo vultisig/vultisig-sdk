@@ -300,10 +300,68 @@ export const findSwapQuote = async ({
     return best
   }
 
-  for (const result of settled) {
-    if (result.status === 'rejected' && isInError(result.reason, 'dust threshold')) {
+  // Scan rejected results for actionable size-related signals. Prefer the most
+  // specific message available: a provider's "below minimum" hint beats the
+  // generic no-route fallback.
+  //
+  // Provider preference order is INTENTIONALLY stable here — it does NOT mirror
+  // the runtime `fetchers[]` array order, which shifts based on
+  // `shouldPreferGeneralSwap`. The below-min preference is a separate concept:
+  // we pick which provider's hint to surface, not which provider to query
+  // first. KyberSwap typically surfaces the cleanest EVM messages, then 1inch
+  // and LiFi (cross-chain matrix), then SwapKit (catch-all), then the two
+  // native protocols. This ordering is independent of routing and gives
+  // deterministic message selection regardless of `Promise.allSettled`
+  // resolution order. (#535 r3 — NeO preferably-blocking response.)
+  const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
+    'KyberSwap',
+    '1inch',
+    'LiFi',
+    'SwapKit',
+    'THORChain',
+    'MayaChain',
+  ]
+
+  const isBelowMinimumMsg = (msg: string) => {
+    const lower = msg.toLowerCase()
+    return (
+      lower.includes('below minimum') ||
+      lower.includes('minimum amount') ||
+      lower.includes('min amount') ||
+      lower.includes('amount too small') ||
+      lower.includes('below the minimum')
+    )
+  }
+
+  const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
+
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i]
+    if (result.status !== 'rejected') {
+      continue
+    }
+
+    const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
+
+    if (isInError(result.reason, 'dust threshold') || isInError(result.reason, 'amount less than')) {
       throw new Error('Swap amount too small. Please increase the amount to proceed.')
     }
+
+    if (isBelowMinimumMsg(msg)) {
+      const providerName = fetchers[i].providerName
+      if (!belowMinimumByProvider.has(providerName)) {
+        belowMinimumByProvider.set(providerName, msg)
+      }
+    }
+  }
+
+  if (belowMinimumByProvider.size > 0) {
+    // Pick the message from the highest-preference provider that has one.
+    const preferred = belowMinimumProviderOrder.find(p => belowMinimumByProvider.has(p))
+    const belowMinimumMessage = preferred
+      ? belowMinimumByProvider.get(preferred)!
+      : [...belowMinimumByProvider.values()][0]
+    throw new Error(`Amount below the minimum required by a swap provider. ${belowMinimumMessage}`)
   }
 
   const failedProviders = settled
