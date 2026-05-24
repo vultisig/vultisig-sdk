@@ -136,6 +136,24 @@ describe('injectSolanaAtaIfMissing', () => {
     }).not.toThrow()
   })
 
+  it('throws when caller-supplied payer does not match the tx fee-payer', async () => {
+    // Build a tx whose fee-payer is `payer`, but pass a DIFFERENT pubkey as
+    // the `payer` arg to injectSolanaAtaIfMissing. The contract violation
+    // must surface as a clear thrown error, not a downstream simulation
+    // failure. (#519 r3 — NeO should-fix.)
+    const wrongPayer = Keypair.generate().publicKey.toBase58()
+    const mockClient = {
+      // mint exists, ATA does not (so we proceed to decompile + payer check)
+      getAccountInfo: vi.fn().mockResolvedValueOnce(MOCK_MINT_INFO).mockResolvedValueOnce(null),
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    await expect(
+      injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, wrongPayer)
+    ).rejects.toThrow(/Payer mismatch/)
+  })
+
   it('tolerates a throwing getAddressLookupTable and still injects the ATA', async () => {
     // The minimal tx has no LUT references, so the LUT loop does not run.
     // This test verifies that if getAddressLookupTable were to throw on a tx

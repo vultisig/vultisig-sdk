@@ -122,6 +122,20 @@ export const injectSolanaAtaIfMissing = async (
     addressLookupTableAccounts: lutAccounts,
   })
 
+  // Validate the caller-supplied payer matches the tx's actual fee-payer.
+  // If LiFi ever changes the fee-payer convention (or the caller passes a
+  // wrong address), the createAtaIx would be funded by `payerPubkey` while
+  // the tx is paid by `decompiledMessage.payerKey` — which simulates with
+  // a confusing "insufficient lamports" error on the wrong account. Throw
+  // here with a clear message so the upstream error path can surface the
+  // contract violation rather than a downstream simulation failure.
+  // (#519 r3 — NeO should-fix.)
+  if (!payerPubkey.equals(decompiledMessage.payerKey)) {
+    throw new Error(
+      `Payer mismatch: caller passed ${payerPubkey.toBase58()} but LiFi tx fee-payer is ${decompiledMessage.payerKey.toBase58()}`
+    )
+  }
+
   const createAtaIx = createAssociatedTokenAccountIdempotentInstruction(
     payerPubkey,
     ataAddress,
@@ -131,6 +145,18 @@ export const injectSolanaAtaIfMissing = async (
   )
 
   // Prepend the ATA creation instruction so it runs before the swap.
+  //
+  // `recentBlockhash` is preserved verbatim from the LiFi quote. After the
+  // MPC ceremony, the blockhash may exceed Solana's ~2-minute validity
+  // window and the broadcast will fail with `BlockhashNotFound`. Refreshing
+  // the blockhash here would decouple this tx from LiFi's quote machinery,
+  // and any caller pre-signature would be invalidated by the message-byte
+  // change anyway — so we don't. This is the same constraint LiFi swaps
+  // already carry on every Solana path (not introduced by ATA injection).
+  // If MPC ceremony latency becomes a regression source, the upstream fix
+  // is to call LiFi closer to broadcast time (or refresh the quote on
+  // expiry), not to refresh the blockhash mid-flight here.
+  // (#519 r3 — NeO should-fix; deferred as out-of-scope.)
   const updatedMessage = new TransactionMessage({
     payerKey: decompiledMessage.payerKey,
     recentBlockhash: decompiledMessage.recentBlockhash,
