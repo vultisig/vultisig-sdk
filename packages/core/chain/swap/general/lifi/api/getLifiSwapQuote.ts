@@ -142,6 +142,19 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
         }
       },
       evm: () => {
+        // Mirror the Solana branch's fee extraction so EVM routes
+        // (including cross-chain EVM → Solana/Cosmos via Stargate, Across,
+        // etc.) surface the affiliate fee. LI.FI's `feeCosts` is the same
+        // for both kinds; the EVM branch was previously dropping it on the
+        // floor which left the swap-fee row blank for every LI.FI EVM
+        // route. Keep `affiliateFee` optional: not every route has one
+        // (affiliateBps may be 0 and no LIFI Fixed Fee charged).
+        const fees = estimate.feeCosts ?? []
+        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
+        const swapFeeAssetId =
+          swapFee &&
+          ([fromToken, toToken].find(token => token === swapFee.token.address) ||
+            chainFeeCoin[transfer.from.chain].id)
         return {
           evm: {
             from: shouldBePresent(from),
@@ -149,6 +162,16 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+            ...(swapFee
+              ? {
+                  affiliateFee: {
+                    amount: BigInt(swapFee.amount),
+                    decimals: swapFee.token.decimals,
+                    chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+                    id: swapFeeAssetId,
+                  },
+                }
+              : {}),
           },
         }
       },
