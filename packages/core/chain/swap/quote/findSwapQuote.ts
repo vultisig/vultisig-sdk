@@ -125,6 +125,20 @@ export const findSwapQuote = async ({
   vultDiscountTier,
   affiliateConfig,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
+  // Runtime guard: THORName affiliateFeeAddress must be lowercase.
+  // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
+  // silently routes affiliate fees to the vultisig-0 default instead of the
+  // intended recipient. Fail loudly at call-site rather than silently misbehave.
+  const nativeAffiliateFeeAddress = affiliateConfig?.native?.affiliateFeeAddress
+  if (
+    nativeAffiliateFeeAddress !== undefined &&
+    nativeAffiliateFeeAddress !== nativeAffiliateFeeAddress.toLowerCase()
+  ) {
+    throw new Error(
+      `THORName affiliateFeeAddress must be lowercase. THORChain memo parsing is case-sensitive. Using "${nativeAffiliateFeeAddress}" will silently break affiliate fee routing.`
+    )
+  }
+
   const affiliateBps = getSwapAffiliateBps(vultDiscountTier ?? null)
 
   const vultDiscount: SwapDiscount[] = vultDiscountTier ? [{ vult: { tier: vultDiscountTier } }] : []
