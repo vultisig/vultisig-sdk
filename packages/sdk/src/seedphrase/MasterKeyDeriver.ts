@@ -342,6 +342,41 @@ export class MasterKeyDeriver {
   }
 
   /**
+   * Derive TerraClassic address using Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Mirrors deriveTerraAddressWithCosmosPath but uses the TerraClassic (LUNC) coin type
+   * so the resulting address is a terra1... address compatible with Chain.TerraClassic.
+   * Keplr/Leap-created TerraClassic-only seeds also use the Cosmos 118 derivation path
+   * instead of TerraClassic's native SLIP-44 path.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns TerraClassic address derived using the Cosmos coin-type path
+   */
+  async deriveTerraClassicAddressWithCosmosPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      // Use terra (classic, LUNC) coin type for address encoding, derive from path 118
+      const coinType = walletCore.CoinType.terra
+      const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
+      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+
+      privateKey.delete()
+      publicKey.delete()
+
+      return address
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
    * Derive chain code from HDWallet
    * Uses the root chain code from the BIP32 derivation
    */

@@ -176,12 +176,15 @@ export class ChainDiscoveryService {
       }
     }
 
-    // Check Cosmos-coin-type Terra path (m/44'/118'/0'/0/0) if Terra was in the scan.
-    // Keplr and Leap historically derived Terra under coin type 118 instead of 330.
-    // Use the 118 path when it has balance AND the standard 330 path has no balance.
+    // Check Cosmos-coin-type Terra/TerraClassic path (m/44'/118'/0'/0/0) if either
+    // chain was in the scan. Keplr and Leap historically derived Terra/TerraClassic
+    // under coin type 118 instead of their native SLIP-44 paths.
+    // Use the 118 path when it has balance AND the standard path has no balance.
     let useCosmosPathTerra = false
     const terraResult = results.find(r => r.chain === Chain.Terra)
+    const terraClassicResult = results.find(r => r.chain === Chain.TerraClassic)
 
+    // Probe Terra (Luna v2) if it was in the scan.
     if (terraResult) {
       try {
         const cosmosPathCheck = await this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain)
@@ -202,6 +205,32 @@ export class ChainDiscoveryService {
       } catch (error) {
         // Cosmos-path Terra check failed, continue with standard 330 path
         console.warn('Failed to check Cosmos-path Terra address:', error)
+      }
+    }
+
+    // Probe TerraClassic (LUNC) if it was in the scan but Terra was not.
+    // Without this, config.chains: [Chain.TerraClassic] seeds created in Keplr/Leap
+    // could never have useCosmosPathTerra set, despite the Terra/TerraClassic contract
+    // documented in the public types. (sdk#530 post-merge CR follow-up.)
+    if (!terraResult && terraClassicResult) {
+      try {
+        const cosmosPathCheck = await this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain)
+        const standard330Balance = BigInt(terraClassicResult.balance || '0')
+
+        // Same rule: use 118 path when it has balance and the standard path does not
+        useCosmosPathTerra = cosmosPathCheck.balance > 0n && standard330Balance === 0n
+
+        if (useCosmosPathTerra) {
+          terraClassicResult.address = cosmosPathCheck.address
+          terraClassicResult.balance = cosmosPathCheck.balance.toString()
+          terraClassicResult.hasBalance = true
+          if (!chainsWithBalance.includes(Chain.TerraClassic)) {
+            chainsWithBalance.push(Chain.TerraClassic)
+          }
+        }
+      } catch (error) {
+        // Cosmos-path TerraClassic check failed, continue with standard path
+        console.warn('Failed to check Cosmos-path TerraClassic address:', error)
       }
     }
 
@@ -343,6 +372,36 @@ export class ChainDiscoveryService {
       const address = await this.keyDeriver.deriveTerraAddressWithCosmosPath(mnemonic)
       const balance = await getCoinBalance({
         chain: Chain.Terra,
+        address,
+      })
+      return { address, balance }
+    }
+
+    return Promise.race([checkPromise(), timeoutPromise]).finally(() => {
+      if (timeoutId) clearTimeout(timeoutId)
+    })
+  }
+
+  /**
+   * Check TerraClassic (LUNC) balance using the Cosmos coin-type derivation path.
+   *
+   * TerraClassic-only seeds created in Keplr/Leap also use coin type 118 instead
+   * of TerraClassic's native SLIP-44 path. This is the TerraClassic counterpart of
+   * checkCosmosPathTerraBalance. (sdk#530 post-merge CR follow-up.)
+   */
+  private async checkCosmosPathTerraClassicBalance(
+    mnemonic: string,
+    timeout: number
+  ): Promise<{ address: string; balance: bigint }> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Timeout checking Cosmos-path TerraClassic address')), timeout)
+    })
+
+    const checkPromise = async () => {
+      const address = await this.keyDeriver.deriveTerraClassicAddressWithCosmosPath(mnemonic)
+      const balance = await getCoinBalance({
+        chain: Chain.TerraClassic,
         address,
       })
       return { address, balance }

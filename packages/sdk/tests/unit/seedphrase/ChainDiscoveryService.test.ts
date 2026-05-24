@@ -3,10 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ChainDiscoveryService } from '@/seedphrase/ChainDiscoveryService'
 
-const { mockDeriveAddress, mockDerivePhantom, mockDeriveTerraCosmosPath, mockGetCoinBalance } = vi.hoisted(() => ({
+const {
+  mockDeriveAddress,
+  mockDerivePhantom,
+  mockDeriveTerraCosmosPath,
+  mockDeriveTerraClassicCosmosPath,
+  mockGetCoinBalance,
+} = vi.hoisted(() => ({
   mockDeriveAddress: vi.fn(),
   mockDerivePhantom: vi.fn(),
   mockDeriveTerraCosmosPath: vi.fn(),
+  mockDeriveTerraClassicCosmosPath: vi.fn(),
   mockGetCoinBalance: vi.fn(),
 }))
 
@@ -19,6 +26,7 @@ vi.mock('@/seedphrase/MasterKeyDeriver', () => ({
       deriveAddress: mockDeriveAddress,
       deriveSolanaAddressWithPhantomPath: mockDerivePhantom,
       deriveTerraAddressWithCosmosPath: mockDeriveTerraCosmosPath,
+      deriveTerraClassicAddressWithCosmosPath: mockDeriveTerraClassicCosmosPath,
     })
   }),
 }))
@@ -35,6 +43,7 @@ describe('ChainDiscoveryService', () => {
     mockDeriveAddress.mockImplementation(async (_mnemonic: string, chain: Chain) => `addr-${chain}`)
     mockDerivePhantom.mockResolvedValue('phantom-addr')
     mockDeriveTerraCosmosPath.mockResolvedValue('terra1-cosmos-path-addr')
+    mockDeriveTerraClassicCosmosPath.mockResolvedValue('terra1-classic-cosmos-path-addr')
     mockGetCoinBalance.mockResolvedValue(0n)
   })
 
@@ -211,5 +220,74 @@ describe('ChainDiscoveryService', () => {
     expect(useCosmosPathTerra).toBe(false)
     const terra = results.find(r => r.chain === Chain.Terra)
     expect(terra?.address).toBe('terra1-standard-330-addr')
+  })
+
+  // ---------------------------------------------------------------------------
+  // TerraClassic-only Cosmos-path probe (sdk#530 post-merge CR follow-up)
+  //
+  // config.chains: [Chain.TerraClassic] (no Chain.Terra) must still set
+  // useCosmosPathTerra=true when the 118-path has balance and the 330-path
+  // does not. Before the fix the terraResult lookup found nothing and the
+  // Cosmos-path check was never attempted for TerraClassic-only seeds.
+  // ---------------------------------------------------------------------------
+
+  it('discoverChains sets useCosmosPathTerra=true for TerraClassic-only seed (118-path has balance, 330 empty)', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.TerraClassic ? 'terra1-classic-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockImplementation(async ({ address }: { address: string }) => {
+      if (address === 'terra1-classic-330-addr') return 0n // standard 330-path: no balance
+      if (address === 'terra1-classic-cosmos-path-addr') return 8_000_000n // 118-path: has balance
+      return 0n
+    })
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { results, useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.TerraClassic] },
+    })
+
+    expect(useCosmosPathTerra).toBe(true)
+    const classic = results.find(r => r.chain === Chain.TerraClassic)
+    expect(classic?.address).toBe('terra1-classic-cosmos-path-addr')
+    expect(classic?.hasBalance).toBe(true)
+    expect(classic?.balance).toBe('8000000')
+    expect(mockDeriveTerraClassicCosmosPath).toHaveBeenCalled()
+    // Terra (v2) cosmos-path must NOT have been probed — only TerraClassic was in scope
+    expect(mockDeriveTerraCosmosPath).not.toHaveBeenCalled()
+  })
+
+  it('discoverChains returns useCosmosPathTerra=false for TerraClassic-only seed when 330-path has balance', async () => {
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) =>
+      chain === Chain.TerraClassic ? 'terra1-classic-330-addr' : `addr-${chain}`
+    )
+    mockGetCoinBalance.mockImplementation(async ({ address }: { address: string }) => {
+      if (address === 'terra1-classic-330-addr') return 5_000_000n // standard 330-path has balance
+      if (address === 'terra1-classic-cosmos-path-addr') return 2_000_000n
+      return 0n
+    })
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    const { useCosmosPathTerra } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.TerraClassic] },
+    })
+
+    // 330-path has balance → no Cosmos-path override
+    expect(useCosmosPathTerra).toBe(false)
+  })
+
+  it('discoverChains does not probe TerraClassic cosmos-path when Terra (v2) is also in config', async () => {
+    // When both Terra and TerraClassic are in config, the Terra probe handles
+    // useCosmosPathTerra; the TerraClassic-only branch must not also fire.
+    mockDeriveAddress.mockImplementation(async (_m: string, chain: Chain) => `addr-${chain}`)
+    mockGetCoinBalance.mockResolvedValue(0n)
+
+    const s = new ChainDiscoveryService(wasmProvider)
+    await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Terra, Chain.TerraClassic] },
+    })
+
+    // Terra probe fires, TerraClassic-only branch must not
+    expect(mockDeriveTerraCosmosPath).toHaveBeenCalled()
+    expect(mockDeriveTerraClassicCosmosPath).not.toHaveBeenCalled()
   })
 })
