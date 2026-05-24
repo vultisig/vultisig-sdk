@@ -153,8 +153,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
         const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
         const swapFeeAssetId =
           swapFee &&
-          ([fromToken, toToken].find(token => token === swapFee.token.address) ||
-            chainFeeCoin[transfer.from.chain].id)
+          ([fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id)
         return {
           evm: {
             from: shouldBePresent(from),
