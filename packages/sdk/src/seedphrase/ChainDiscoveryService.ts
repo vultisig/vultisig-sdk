@@ -14,6 +14,24 @@ import { MasterKeyDeriver } from './MasterKeyDeriver'
 import type { ChainDiscoveryAggregate, ChainDiscoveryProgress, ChainDiscoveryResult } from './types'
 
 /**
+ * Thrown when a balance RPC call fails due to a transport-level error
+ * (network timeout, DNS failure, non-2xx HTTP status).
+ *
+ * Callers must distinguish this from a confirmed-zero-balance result:
+ * - TransportError  → RPC unreachable; balance unknown; warn + continue
+ * - probe returns   → RPC responded; balance confirmed (may be zero)
+ */
+export class TransportError extends Error {
+  override readonly name = 'TransportError'
+  constructor(
+    message: string,
+    public readonly cause?: unknown
+  ) {
+    super(message)
+  }
+}
+
+/**
  * Configuration for chain discovery
  */
 export type ChainDiscoveryConfig = {
@@ -226,27 +244,42 @@ export class ChainDiscoveryService {
 
     // Terra (Luna v2) probe runs first if Terra was in scan.
     if (terraResult) {
-      const fired = await this.tryApplyCosmosPath({
-        result: terraResult,
-        chainsWithBalance,
-        chain: Chain.Terra,
-        probe: () => this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain),
-        logLabel: 'Cosmos-path Terra',
-      })
-      if (fired) return true
+      try {
+        const fired = await this.tryApplyCosmosPath({
+          result: terraResult,
+          chainsWithBalance,
+          chain: Chain.Terra,
+          probe: () => this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain),
+          logLabel: 'Cosmos-path Terra',
+        })
+        if (fired) return true
+      } catch (error) {
+        // TransportError: RPC unreachable. Balance unknown — warn and continue.
+        // Do NOT treat as zero balance; the user may have funds on this path.
+        console.warn(`Cosmos-path Terra balance check failed (transport):`, { chain: Chain.Terra, path: '118', error })
+      }
     }
 
     // TerraClassic (LUNC) probe only runs if Terra wasn't in scan, so the contract
     // (Terra-first preference) is preserved. (sdk#530 post-merge CR follow-up.)
     if (!terraResult && terraClassicResult) {
-      const fired = await this.tryApplyCosmosPath({
-        result: terraClassicResult,
-        chainsWithBalance,
-        chain: Chain.TerraClassic,
-        probe: () => this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain),
-        logLabel: 'Cosmos-path TerraClassic',
-      })
-      if (fired) return true
+      try {
+        const fired = await this.tryApplyCosmosPath({
+          result: terraClassicResult,
+          chainsWithBalance,
+          chain: Chain.TerraClassic,
+          probe: () => this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain),
+          logLabel: 'Cosmos-path TerraClassic',
+        })
+        if (fired) return true
+      } catch (error) {
+        // TransportError: RPC unreachable. Balance unknown — warn and continue.
+        console.warn(`Cosmos-path TerraClassic balance check failed (transport):`, {
+          chain: Chain.TerraClassic,
+          path: '118',
+          error,
+        })
+      }
     }
 
     return false
@@ -255,6 +288,10 @@ export class ChainDiscoveryService {
   /**
    * Run a single Cosmos-path probe and apply the result if the 118 path has
    * balance and the 330 path doesn't. Returns true when the swap fires.
+   *
+   * Throws {@link TransportError} when the RPC call fails (timeout, network,
+   * non-2xx). Only returns false on a confirmed zero balance. Callers that
+   * want best-effort behaviour (warn + continue) should catch TransportError.
    */
   private async tryApplyCosmosPath(args: {
     result: ChainDiscoveryResult
@@ -264,22 +301,25 @@ export class ChainDiscoveryService {
     logLabel: string
   }): Promise<boolean> {
     const { result, chainsWithBalance, chain, probe, logLabel } = args
+    let cosmosPathCheck: { address: string; balance: bigint }
     try {
-      const cosmosPathCheck = await probe()
-      const standard330Balance = BigInt(result.balance || '0')
-      const fired = cosmosPathCheck.balance > 0n && standard330Balance === 0n
-      if (!fired) return false
-      result.address = cosmosPathCheck.address
-      result.balance = cosmosPathCheck.balance.toString()
-      result.hasBalance = true
-      if (!chainsWithBalance.includes(chain)) {
-        chainsWithBalance.push(chain)
-      }
-      return true
+      cosmosPathCheck = await probe()
     } catch (error) {
-      console.warn(`Failed to check ${logLabel} address:`, error)
-      return false
+      // Re-throw as TransportError so callers can distinguish RPC failure
+      // from a confirmed zero balance. The original error is preserved as cause.
+      throw new TransportError(`${logLabel} RPC unreachable`, error)
     }
+
+    const standard330Balance = BigInt(result.balance || '0')
+    const fired = cosmosPathCheck.balance > 0n && standard330Balance === 0n
+    if (!fired) return false
+    result.address = cosmosPathCheck.address
+    result.balance = cosmosPathCheck.balance.toString()
+    result.hasBalance = true
+    if (!chainsWithBalance.includes(chain)) {
+      chainsWithBalance.push(chain)
+    }
+    return true
   }
 
   /**
