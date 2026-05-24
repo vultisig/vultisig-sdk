@@ -1,4 +1,11 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
+import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
+import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
+import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
+import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import {
@@ -11,6 +18,10 @@ import {
   swapKitEnabledChains,
   swapKitSourceChains,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
+import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
@@ -19,17 +30,6 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { Chain } from '../../Chain'
-import { isChainOfKind } from '../../ChainKind'
-import { getSwapAffiliateBps, VultDiscountTier } from '../affiliate'
-import { SwapDiscount } from '../discount/SwapDiscount'
-import { getKyberSwapQuote } from '../general/kyber/api/quote'
-import { kyberSwapEnabledChains } from '../general/kyber/chains'
-import { KyberSwapBaseAffiliateConfig } from '../general/kyber/config'
-import { NativeSwapAffiliateConfig } from '../native/api/affiliate'
-import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
-import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
-import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
