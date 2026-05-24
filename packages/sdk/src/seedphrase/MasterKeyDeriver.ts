@@ -48,7 +48,13 @@ export type DerivedChainKey = {
 export type DeriveChainPrivateKeysOptions = {
   /** Use Phantom wallet derivation path for Solana instead of standard BIP44 path */
   usePhantomSolanaPath?: boolean
-  /** Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for Terra instead of native 330 path */
+  /**
+   * Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for the Terra
+   * family (Terra v2 LUNA AND TerraClassic LUNC) instead of their native
+   * SLIP-44 paths. Applies to BOTH chains when true; the MasterKeyDeriver
+   * caller checks chain === 'Terra' || chain === 'TerraClassic'.
+   * The field name's "Terra" prefix means the Terra family, not Terra v2 alone.
+   */
   useCosmosPathTerra?: boolean
 }
 
