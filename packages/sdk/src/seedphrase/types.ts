@@ -105,9 +105,17 @@ export type ChainDiscoveryAggregate = {
   /** Whether Phantom derivation path should be used for Solana (has balance on Phantom path, none on standard) */
   usePhantomSolanaPath: boolean
   /**
-   * Whether Cosmos coin-type path (m/44'/118'/0'/0/0) should be used for Terra/TerraClassic.
-   * True when the 330-path has zero balance AND the 118-path has non-zero balance.
-   * Covers seeds originally exported from Keplr or Leap.
+   * Whether Cosmos coin-type path (m/44'/118'/0'/0/0) should be used for the
+   * Terra family (Terra v2 LUNA AND TerraClassic LUNC). True when EITHER chain
+   * was probed and its 330-path balance was zero while the 118-path balance was
+   * non-zero. Applies to BOTH chains in `MasterKeyDeriver` (chain === 'Terra'
+   * || chain === 'TerraClassic'), so the flag name's "Terra" prefix means the
+   * Terra family, not Terra v2 in isolation.
+   *
+   * Covers seeds originally exported from Keplr or Leap. Field name kept as
+   * `useCosmosPathTerra` (rather than the more accurate
+   * `useCosmosPathForTerraFamily`) to avoid a public-API breaking change; a
+   * follow-up MAJOR may rename for clarity.
    */
   useCosmosPathTerra: boolean
 }
