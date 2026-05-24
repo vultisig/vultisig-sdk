@@ -116,8 +116,8 @@ export const buildSwapKeysignPayload = async ({
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
-      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
-        evm: ({ from, to, data, value }) => {
+      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
+        evm: ({ from, to, data, value, affiliateFee }) => {
           return {
             from,
             to,
@@ -125,15 +125,27 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
+            swapFee: affiliateFee ? affiliateFee.amount.toString() : '',
+            ...(affiliateFee
+              ? {
+                  swapFeeChain: affiliateFee.chain,
+                  swapFeeTokenId: affiliateFee.id,
+                  swapFeeDecimals: affiliateFee.decimals,
+                }
+              : {}),
           }
         },
-        solana: ({ data }) => ({
+        solana: ({ data, swapFee }) => ({
           from: '',
           to: '',
           data,
           value: '',
           gasPrice: '',
           gas: BigInt(0),
+          swapFee: swapFee.amount.toString(),
+          swapFeeChain: swapFee.chain,
+          swapFeeTokenId: swapFee.id,
+          swapFeeDecimals: swapFee.decimals,
         }),
         // Deposit-channel routes (UTXO/Ripple/Tron/Ton sources via Chainflip, NEAR Intents, etc.)
         // send funds to a provider-controlled deposit address. The actual signing uses
@@ -158,6 +170,7 @@ export const buildSwapKeysignPayload = async ({
           value: '',
           gasPrice: '',
           gas: 0n,
+          swapFee: '',
         }),
       })
 
