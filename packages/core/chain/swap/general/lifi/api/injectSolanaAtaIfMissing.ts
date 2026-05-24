@@ -18,21 +18,21 @@ async function fetchLutWithRetry(
   client: ReturnType<typeof getSolanaClient>,
   accountKey: PublicKey
 ): Promise<AddressLookupTableAccount | null> {
-  let lastError: unknown
+  const errors: unknown[] = []
   for (let attempt = 0; attempt < MAX_LUT_FETCH_ATTEMPTS; attempt++) {
     try {
       const result = await client.getAddressLookupTable(accountKey)
       return result.value ?? null
     } catch (err) {
-      lastError = err
+      errors.push(err)
       if (attempt < MAX_LUT_FETCH_ATTEMPTS - 1) {
         await new Promise(resolve => setTimeout(resolve, 200 * 2 ** attempt))
       }
     }
   }
-  // All attempts failed — log and continue without the LUT (decompile will fail
-  // if the LUT is required, which is the correct failure outcome).
-  console.warn('[injectSolanaAtaIfMissing] LUT fetch failed after retries:', lastError)
+  // All attempts failed — log every error so transient (RPC timeout) vs
+  // permanent ('account not found') failures are distinguishable in logs.
+  console.warn('[injectSolanaAtaIfMissing] LUT fetch failed after retries:', errors)
   return null
 }
 
@@ -73,8 +73,14 @@ export const injectSolanaAtaIfMissing = async (
   const client = getSolanaClient()
 
   // Resolve token program from mint account owner (Token vs Token-2022).
+  // Failing to resolve the mint (RPC timeout, bad address, closed account) must
+  // throw rather than fall back to TOKEN_PROGRAM_ID — a silent fallback would
+  // derive the wrong ATA and produce an opaque simulation failure.
   const mintInfo = await client.getAccountInfo(mintPubkey)
-  const tokenProgramId = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID
+  if (!mintInfo) {
+    throw new Error(`Mint account ${mintAddress} not found — cannot determine Token vs Token-2022 program`)
+  }
+  const tokenProgramId = mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID
 
   // allowOwnerOffCurve=true: PDAs are valid ATA owners (e.g. multisig destinations).
   const ataAddress = getAssociatedTokenAddressSync(
@@ -108,6 +114,10 @@ export const injectSolanaAtaIfMissing = async (
     }
   }
 
+  // Legacy (pre-V0) transactions are implicitly upgraded to V0 here: decompile
+  // accepts both legacy and V0 messages, and compileToV0Message always produces
+  // a V0 message. LiFi does not send legacy Solana transactions in practice but
+  // the path is safe regardless.
   const decompiledMessage = TransactionMessage.decompile(versionedTx.message, {
     addressLookupTableAccounts: lutAccounts,
   })

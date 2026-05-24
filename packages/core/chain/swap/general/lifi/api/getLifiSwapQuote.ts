@@ -129,9 +129,21 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
       [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
 
     const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+    // Known edge case: LiFi's quote is calculated before ATA injection, so if the
+    // payer's SOL balance equals exactly the quoted networkFee, the tx will fail
+    // after ATA injection adds the rent cost. We surface the rent buffer in the
+    // returned networkFee so the UI can show the correct total to the user, but we
+    // do NOT re-validate payer balance here (that would require an extra RPC call
+    // and the wallet UI is expected to gate on "insufficient funds" before submit).
 
-    // ATA creation costs ~2,039,280 lamports rent exemption. Add the buffer when
-    // we injected the instruction so the user's fee estimate covers ATA creation.
+    // ATA creation costs ~2,039,280 lamports rent exemption (solanaConfig.ataRentLamports).
+    // This is a build-time constant; Solana's rent-exempt threshold can theoretically
+    // change via on-chain governance (sysvar::Rent). In practice this value has been
+    // stable since mainnet launch — tracking at https://docs.solana.com/developing/runtime-facilities/sysvars#rent.
+    // If a governance vote changes the threshold, update solanaConfig.ataRentLamports.
+    // A runtime fetch via getMinimumBalanceForRentExemption(AccountLayout.span) would
+    // be exact but adds an extra RPC round-trip to every Solana SPL quote; the
+    // build-time constant is the deliberate tradeoff here.
     const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
 
     return {
