@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 2.2.3
+
+### Patch Changes
+
+- [#519](https://github.com/vultisig/vultisig-sdk/pull/519) [`4c9454e`](https://github.com/vultisig/vultisig-sdk/commit/4c9454eca99f43a2ce572732c3d6fcc74c99e89e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap/lifi/solana): inject createAssociatedTokenAccountInstruction when SPL-token destination ATA is missing
+
+  SOL -> SPL-token swaps via Li.Fi failed simulation with `custom program error: 0x17` when the destination wallet had no Associated Token Account for the output mint (e.g. first-time USDC recipient). LiFi's transaction blob does not include the ATA creation instruction in that case.
+
+  This adds a pre-flight RPC check: if the destination ATA is missing, a `createAssociatedTokenAccountIdempotentInstruction` is prepended to the transaction before the quote data is returned. The idempotent variant is safe even if the ATA is created between quote-time and broadcast-time.
+
+  Also defaults LiFi slippage tolerance to 1% (up from LiFi's default 0.5%) for RN consumers to account for MPC keysign latency (30-90s between quote and broadcast).
+
 ## 2.2.2
 
 ### Patch Changes
