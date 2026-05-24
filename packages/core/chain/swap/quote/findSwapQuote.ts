@@ -303,9 +303,35 @@ export const findSwapQuote = async ({
   // Scan rejected results for actionable size-related signals. Prefer the most
   // specific message available: a provider's "below minimum" hint beats the
   // generic no-route fallback.
-  let belowMinimumMessage: string | undefined
+  //
+  // Provider preference order mirrors fetcher preference: KyberSwap first (most
+  // specific EVM messages), then 1inch, LiFi, SwapKit (cross-chain specifics),
+  // THORChain, MayaChain. This ensures deterministic selection regardless of
+  // Promise.allSettled resolution order.
+  const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
+    'KyberSwap',
+    '1inch',
+    'LiFi',
+    'SwapKit',
+    'THORChain',
+    'MayaChain',
+  ]
 
-  for (const result of settled) {
+  const isBelowMinimumMsg = (msg: string) => {
+    const lower = msg.toLowerCase()
+    return (
+      lower.includes('below minimum') ||
+      lower.includes('minimum amount') ||
+      lower.includes('min amount') ||
+      lower.includes('amount too small') ||
+      lower.includes('below the minimum')
+    )
+  }
+
+  const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
+
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i]
     if (result.status !== 'rejected') {
       continue
     }
@@ -316,19 +342,20 @@ export const findSwapQuote = async ({
       throw new Error('Swap amount too small. Please increase the amount to proceed.')
     }
 
-    if (
-      !belowMinimumMessage &&
-      (msg.toLowerCase().includes('below minimum') ||
-        msg.toLowerCase().includes('minimum amount') ||
-        msg.toLowerCase().includes('min amount') ||
-        msg.toLowerCase().includes('amount too small') ||
-        msg.toLowerCase().includes('below the minimum'))
-    ) {
-      belowMinimumMessage = msg
+    if (isBelowMinimumMsg(msg)) {
+      const providerName = fetchers[i].providerName
+      if (!belowMinimumByProvider.has(providerName)) {
+        belowMinimumByProvider.set(providerName, msg)
+      }
     }
   }
 
-  if (belowMinimumMessage) {
+  if (belowMinimumByProvider.size > 0) {
+    // Pick the message from the highest-preference provider that has one.
+    const preferred = belowMinimumProviderOrder.find(p => belowMinimumByProvider.has(p))
+    const belowMinimumMessage = preferred
+      ? belowMinimumByProvider.get(preferred)!
+      : [...belowMinimumByProvider.values()][0]
     throw new Error(`Amount below the minimum required by a swap provider. ${belowMinimumMessage}`)
   }
 

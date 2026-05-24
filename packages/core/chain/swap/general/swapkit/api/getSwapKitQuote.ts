@@ -195,6 +195,23 @@ const isNoRouteError = (message: string) => {
 const isBelowMinimumError = (message: string) => {
   const lower = message.toLowerCase()
 
+  // Rejection tokens that anchor the minimum-size patterns to actual failures.
+  // Without them, phrases like 'minimum amount of gas used' (success context)
+  // would produce false positives.
+  const hasRejectionToken =
+    lower.includes('rejected') ||
+    lower.includes('failed') ||
+    lower.includes('not met') ||
+    lower.includes('required') ||
+    lower.includes('too small') ||
+    lower.includes('below') ||
+    lower.includes('error') ||
+    lower.includes('threshold')
+
+  if (!hasRejectionToken) {
+    return false
+  }
+
   return (
     lower.includes('below minimum') ||
     lower.includes('belowminimum') ||
@@ -206,6 +223,9 @@ const isBelowMinimumError = (message: string) => {
   )
 }
 
+const isBelowMinimumErrorCode = (errorCode: string | undefined): boolean =>
+  typeof errorCode === 'string' && errorCode.toUpperCase().includes('BELOW_MINIMUM')
+
 /** Extracts the first below-minimum signal from providerErrors, if any. */
 const extractBelowMinimumProviderError = (errors: SwapKitQuoteResponse['providerErrors']): string | undefined => {
   if (!errors?.length) {
@@ -213,10 +233,18 @@ const extractBelowMinimumProviderError = (errors: SwapKitQuoteResponse['provider
   }
 
   for (const err of errors) {
-    const msg = err.message ?? ''
-    if (isBelowMinimumError(msg)) {
+    const raw = err.message
+    // Guard: SwapKit schema marks message as optional string, but runtime values
+    // may be numeric or nested objects. Skip non-string entries to avoid TypeError
+    // from calling .toLowerCase() on a non-string.
+    const isStringMsg = typeof raw === 'string'
+
+    // Accept if the message pattern matches OR if the errorCode explicitly signals
+    // a below-minimum rejection (handles cases where the message text is vague).
+    if ((isStringMsg && isBelowMinimumError(raw)) || isBelowMinimumErrorCode(err.errorCode)) {
       const provider = err.provider ? `${err.provider}: ` : ''
-      return `${provider}${msg}`
+      const msgText = isStringMsg ? raw : 'Amount below minimum'
+      return `${provider}${msgText}`
     }
   }
 
@@ -489,12 +517,19 @@ const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise
     body: JSON.stringify(body),
   })
 
-  // Parse the body regardless of HTTP status — SwapKit embeds providerErrors
-  // inside 400/error responses that we need to inspect for minimum-size signals.
-  const data = await response.json().catch(() => undefined)
+  // Capture raw text first so non-JSON error bodies (e.g. HTML from a load
+  // balancer) are preserved for debugging instead of being swallowed silently.
+  const rawText = await response.text().catch(() => '')
+  let data: unknown
+  try {
+    data = rawText ? JSON.parse(rawText) : undefined
+  } catch {
+    data = undefined
+  }
 
   if (!response.ok && !isRecord(data)) {
-    throw new Error(`SwapKit request failed (${response.status}): ${response.statusText}`)
+    const bodyHint = rawText ? ` body: ${rawText.slice(0, 200)}` : ''
+    throw new Error(`SwapKit request failed (${response.status}): ${response.statusText}${bodyHint}`)
   }
 
   return (isRecord(data) ? data : {}) as SwapKitQuoteResponse
@@ -531,13 +566,12 @@ const getSwapKitRoutes = async (
 
     const allowedRoutes = quoteResponse.routes?.filter(isAllowedRoute) ?? []
 
-    // Even with routes present, check providerErrors for minimum signals on partial failures.
-    // If every allowed route was filtered out but a provider told us why, surface it.
-    if (allowedRoutes.length === 0) {
-      const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
-      if (belowMinMsg) {
-        throw new Error(belowMinMsg)
-      }
+    // Check providerErrors unconditionally — a provider rejecting for below-minimum
+    // is an actionable signal even when other routes exist. The user could increase
+    // their amount to unlock that provider's (potentially better) route.
+    const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+    if (belowMinMsg) {
+      throw new Error(belowMinMsg)
     }
 
     return allowedRoutes

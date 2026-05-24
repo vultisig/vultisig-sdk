@@ -5,13 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
 
-const response = (body: unknown, ok = true, status = 200) =>
-  ({
+const response = (body: unknown, ok = true, status = 200) => {
+  const serialized = JSON.stringify(body)
+  return {
     ok,
     status,
     statusText: ok ? 'OK' : 'Bad Request',
+    text: vi.fn(async () => serialized),
     json: vi.fn(async () => body),
-  }) as unknown as Response
+  } as unknown as Response
+}
 
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
@@ -533,6 +536,48 @@ describe('getSwapKitQuote', () => {
         amount: 100n,
       })
     ).rejects.toThrow('NEAR: min amount not met for this swap')
+  })
+
+  it('throws a below-minimum error when providerErrors are present alongside valid routes (signal-loss regression)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        routes: [
+          {
+            routeId: 'near-route',
+            providers: ['NEAR'],
+            expectedBuyAmount: '0.001',
+          },
+        ],
+        providerErrors: [
+          {
+            provider: 'CHAINFLIP',
+            message: 'Amount below minimum: 0.0003 BTC required',
+            errorCode: 'BELOW_MINIMUM',
+          },
+        ],
+      })
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1000n,
+      })
+    ).rejects.toThrow('CHAINFLIP: Amount below minimum: 0.0003 BTC required')
   })
 
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {
