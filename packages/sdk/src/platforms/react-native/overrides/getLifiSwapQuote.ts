@@ -15,9 +15,11 @@
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -30,6 +32,10 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
 }
+
+// 1% slippage tolerance — same as core implementation (see getLifiSwapQuote.ts in core).
+// MPC keysign ceremony latency makes the default LiFi 0.5% too tight for Vultisig flows.
+const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
 
 const setupLifi = memoize(async () => {
   const { createConfig } = await import('@lifi/sdk')
@@ -57,6 +63,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAddress,
     toAddress,
     fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
   })
 
   const { transactionRequest, estimate } = quote
@@ -64,6 +71,40 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   const chainKind = getChainKind(transfer.from.chain)
 
   const { value, gasLimit, data, from, to } = shouldBePresent(transactionRequest)
+
+  // For Solana SPL-token swaps the destination ATA may not yet exist. LiFi's
+  // transaction blob won't include the creation instruction in that case, which
+  // causes the simulation to revert with custom program error 0x17.
+  if (chainKind === 'solana' && toToken !== chainFeeCoin[transfer.to.chain].ticker) {
+    const rawData = shouldBePresent(data)
+    const { gasCosts, feeCosts } = estimate
+    const [networkFee] = shouldBePresent(gasCosts)
+    const fees = shouldBePresent(feeCosts)
+    const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
+    const swapFeeAssetId =
+      [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
+
+    const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+
+    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
+
+    return {
+      dstAmount: estimate.toAmount,
+      provider: 'li.fi',
+      tx: {
+        solana: {
+          data: patchedData,
+          networkFee: BigInt(networkFee.amount) + ataRentBuffer,
+          swapFee: {
+            amount: BigInt(swapFee.amount),
+            decimals: swapFee.token.decimals,
+            chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+            id: swapFeeAssetId,
+          },
+        },
+      },
+    }
+  }
 
   return {
     dstAmount: estimate.toAmount,
