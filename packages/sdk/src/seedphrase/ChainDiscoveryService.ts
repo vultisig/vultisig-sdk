@@ -180,59 +180,16 @@ export class ChainDiscoveryService {
     // chain was in the scan. Keplr and Leap historically derived Terra/TerraClassic
     // under coin type 118 instead of their native SLIP-44 paths.
     // Use the 118 path when it has balance AND the standard path has no balance.
-    let useCosmosPathTerra = false
     const terraResult = results.find(r => r.chain === Chain.Terra)
     const terraClassicResult = results.find(r => r.chain === Chain.TerraClassic)
 
-    // Probe Terra (Luna v2) if it was in the scan.
-    if (terraResult) {
-      try {
-        const cosmosPathCheck = await this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain)
-        const standard330Balance = BigInt(terraResult.balance || '0')
-
-        // Use Cosmos path if it has balance AND standard 330-path has no balance
-        useCosmosPathTerra = cosmosPathCheck.balance > 0n && standard330Balance === 0n
-
-        // If 118 path has balance but 330 doesn't, update the Terra result
-        if (useCosmosPathTerra) {
-          terraResult.address = cosmosPathCheck.address
-          terraResult.balance = cosmosPathCheck.balance.toString()
-          terraResult.hasBalance = true
-          if (!chainsWithBalance.includes(Chain.Terra)) {
-            chainsWithBalance.push(Chain.Terra)
-          }
-        }
-      } catch (error) {
-        // Cosmos-path Terra check failed, continue with standard 330 path
-        console.warn('Failed to check Cosmos-path Terra address:', error)
-      }
-    }
-
-    // Probe TerraClassic (LUNC) if it was in the scan but Terra was not.
-    // Without this, config.chains: [Chain.TerraClassic] seeds created in Keplr/Leap
-    // could never have useCosmosPathTerra set, despite the Terra/TerraClassic contract
-    // documented in the public types. (sdk#530 post-merge CR follow-up.)
-    if (!terraResult && terraClassicResult) {
-      try {
-        const cosmosPathCheck = await this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain)
-        const standard330Balance = BigInt(terraClassicResult.balance || '0')
-
-        // Same rule: use 118 path when it has balance and the standard path does not
-        useCosmosPathTerra = cosmosPathCheck.balance > 0n && standard330Balance === 0n
-
-        if (useCosmosPathTerra) {
-          terraClassicResult.address = cosmosPathCheck.address
-          terraClassicResult.balance = cosmosPathCheck.balance.toString()
-          terraClassicResult.hasBalance = true
-          if (!chainsWithBalance.includes(Chain.TerraClassic)) {
-            chainsWithBalance.push(Chain.TerraClassic)
-          }
-        }
-      } catch (error) {
-        // Cosmos-path TerraClassic check failed, continue with standard path
-        console.warn('Failed to check Cosmos-path TerraClassic address:', error)
-      }
-    }
+    const useCosmosPathTerra = await this.probeCosmosPathForTerraChains({
+      mnemonic,
+      timeoutPerChain,
+      terraResult,
+      terraClassicResult,
+      chainsWithBalance,
+    })
 
     // Report completion
     onProgress?.({
@@ -247,6 +204,81 @@ export class ChainDiscoveryService {
       results,
       usePhantomSolanaPath,
       useCosmosPathTerra,
+    }
+  }
+
+  /**
+   * Probe Terra and TerraClassic for Cosmos-coin-type (m/44'/118') balances.
+   * Extracted from discoverChains to keep cognitive complexity in range.
+   *
+   * Returns true when either chain's Cosmos-path balance is non-zero AND the
+   * standard 330-path balance is zero. Mutates the relevant ChainDiscoveryResult
+   * + appends to chainsWithBalance when the swap fires.
+   */
+  private async probeCosmosPathForTerraChains(args: {
+    mnemonic: string
+    timeoutPerChain: number
+    terraResult: ChainDiscoveryResult | undefined
+    terraClassicResult: ChainDiscoveryResult | undefined
+    chainsWithBalance: Chain[]
+  }): Promise<boolean> {
+    const { mnemonic, timeoutPerChain, terraResult, terraClassicResult, chainsWithBalance } = args
+
+    // Terra (Luna v2) probe runs first if Terra was in scan.
+    if (terraResult) {
+      const fired = await this.tryApplyCosmosPath({
+        result: terraResult,
+        chainsWithBalance,
+        chain: Chain.Terra,
+        probe: () => this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain),
+        logLabel: 'Cosmos-path Terra',
+      })
+      if (fired) return true
+    }
+
+    // TerraClassic (LUNC) probe only runs if Terra wasn't in scan, so the contract
+    // (Terra-first preference) is preserved. (sdk#530 post-merge CR follow-up.)
+    if (!terraResult && terraClassicResult) {
+      const fired = await this.tryApplyCosmosPath({
+        result: terraClassicResult,
+        chainsWithBalance,
+        chain: Chain.TerraClassic,
+        probe: () => this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain),
+        logLabel: 'Cosmos-path TerraClassic',
+      })
+      if (fired) return true
+    }
+
+    return false
+  }
+
+  /**
+   * Run a single Cosmos-path probe and apply the result if the 118 path has
+   * balance and the 330 path doesn't. Returns true when the swap fires.
+   */
+  private async tryApplyCosmosPath(args: {
+    result: ChainDiscoveryResult
+    chainsWithBalance: Chain[]
+    chain: Chain
+    probe: () => Promise<{ address: string; balance: bigint }>
+    logLabel: string
+  }): Promise<boolean> {
+    const { result, chainsWithBalance, chain, probe, logLabel } = args
+    try {
+      const cosmosPathCheck = await probe()
+      const standard330Balance = BigInt(result.balance || '0')
+      const fired = cosmosPathCheck.balance > 0n && standard330Balance === 0n
+      if (!fired) return false
+      result.address = cosmosPathCheck.address
+      result.balance = cosmosPathCheck.balance.toString()
+      result.hasBalance = true
+      if (!chainsWithBalance.includes(chain)) {
+        chainsWithBalance.push(chain)
+      }
+      return true
+    } catch (error) {
+      console.warn(`Failed to check ${logLabel} address:`, error)
+      return false
     }
   }
 
