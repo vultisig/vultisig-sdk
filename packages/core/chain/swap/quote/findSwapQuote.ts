@@ -1,4 +1,11 @@
+import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
+import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
+import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
+import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
+import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import {
@@ -11,6 +18,10 @@ import {
   swapKitEnabledChains,
   swapKitSourceChains,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
+import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
@@ -19,17 +30,6 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { Chain } from '../../Chain'
-import { isChainOfKind } from '../../ChainKind'
-import { getSwapAffiliateBps, VultDiscountTier } from '../affiliate'
-import { SwapDiscount } from '../discount/SwapDiscount'
-import { getKyberSwapQuote } from '../general/kyber/api/quote'
-import { kyberSwapEnabledChains } from '../general/kyber/chains'
-import { KyberSwapBaseAffiliateConfig } from '../general/kyber/config'
-import { NativeSwapAffiliateConfig } from '../native/api/affiliate'
-import { getNativeSwapQuote } from '../native/api/getNativeSwapQuote'
-import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '../native/NativeSwapChain'
-import { getNativeSwapDecimals } from '../native/utils/getNativeSwapDecimals'
 import { SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
@@ -60,7 +60,70 @@ type SwapQuoteFetcher = {
 type RankedSwapQuote = {
   quote: SwapQuote
   outputAmount: bigint
+  providerName: SwapQuoteProviderName
 }
+
+/**
+ * Hard native priority: when any direct THORChain or MayaChain route is available,
+ * it is always preferred over any aggregator (SwapKit, LiFi, etc.) regardless of
+ * gross output. When both THOR and Maya succeed, the one with the higher comparable
+ * output wins; among aggregator-only results the normal output ranking applies.
+ *
+ * Rationale (paaao, 2026-05-22): for L1 swaps that native protocols serve directly,
+ * the protocol-aligned route is always preferred. Direct routes capture full
+ * vultisig affiliate revenue and avoid the aggregator fee skim; the protocol is
+ * the moat. Mirrors the priority-first-success pattern in vultisig-ios's
+ * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`.
+ */
+
+/**
+ * Native swap providers — direct on-chain protocols (no aggregator layer).
+ *
+ * Adding a new native protocol (e.g. Chainflip-direct in the future) requires:
+ *   1. Adding its name to `SwapQuoteProviderName` above
+ *   2. Adding it here so `isNativeProvider` recognises it for hard-priority
+ *      selection in `selectBestEligibleQuote`
+ *   3. Wiring its fetcher into `getNativeFetchers`
+ *
+ * The `satisfies` clause gives compile-time safety against typos, but the
+ * semantic mapping (which providers count as "native") still lives in this
+ * file and must be kept aligned with the protocol's actual integration mode.
+ */
+const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
+
+type NativeProviderName = (typeof nativeProviderNames)[number]
+
+const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderNames)
+
+const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
+
+/**
+ * Declared preference order for AGGREGATOR ties — when two aggregators return
+ * identical `outputAmount`, the earlier entry wins. This makes the tie-break
+ * explicit (the previous implementation tied via `fetchers[]` array index,
+ * which was determined dynamically by `shouldPreferGeneralSwap` and therefore
+ * harder to reason about). Native providers (THORChain/MayaChain) bypass this
+ * because they have hard priority over aggregators regardless of output.
+ *
+ * Order rationale: KyberSwap and 1inch typically surface the best on-chain
+ * liquidity for EVM-only swaps; LiFi covers the broader cross-chain matrix;
+ * SwapKit is the catch-all fallback. Adjust as data changes.
+ *
+ * @internal Exported for unit-test introspection only.
+ */
+export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  'KyberSwap',
+  '1inch',
+  'LiFi',
+  'SwapKit',
+] as const
+
+const aggregatorPreferenceIndex = new Map<SwapQuoteProviderName, number>(
+  aggregatorPreferenceOrder.map((name, idx) => [name, idx])
+)
+
+const getAggregatorPreferenceRank = (name: SwapQuoteProviderName): number =>
+  aggregatorPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
 function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
@@ -95,26 +158,44 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
-  let best: SwapQuote | null = null
-  let bestAmount: bigint | null = null
-  let bestIndex = Number.POSITIVE_INFINITY
+  let bestNative: RankedSwapQuote | null = null
+  let bestAggregator: RankedSwapQuote | null = null
+  let bestAggregatorPreferenceRank = Number.POSITIVE_INFINITY
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
     if (result.status !== 'fulfilled') {
       continue
     }
-    const { outputAmount, quote } = result.value
-    // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
-    // (general-first vs native-first), so this preserves that preference when amounts tie.
-    if (bestAmount === null || outputAmount > bestAmount || (outputAmount === bestAmount && i < bestIndex)) {
-      best = quote
-      bestAmount = outputAmount
-      bestIndex = i
+    const candidate = result.value
+
+    if (isNativeProvider(candidate.providerName)) {
+      // Among natives (THOR + Maya), prefer higher output.
+      if (bestNative === null || candidate.outputAmount > bestNative.outputAmount) {
+        bestNative = candidate
+      }
+    } else {
+      // Tie-break by declared aggregator preference (lower rank wins). This
+      // replaces the previous index-based tie-break, which was determined
+      // dynamically by `shouldPreferGeneralSwap` and therefore harder to
+      // reason about. The declared order lives in `aggregatorPreferenceOrder`
+      // above. (#521 r3 — NeO should-fix.)
+      const candidateRank = getAggregatorPreferenceRank(candidate.providerName)
+      if (
+        bestAggregator === null ||
+        candidate.outputAmount > bestAggregator.outputAmount ||
+        (candidate.outputAmount === bestAggregator.outputAmount && candidateRank < bestAggregatorPreferenceRank)
+      ) {
+        bestAggregator = candidate
+        bestAggregatorPreferenceRank = candidateRank
+      }
     }
   }
 
-  return best
+  // Hard THORChain/Maya priority: if any native route exists, always prefer it
+  // over any aggregator route. Mirrors vultisig-ios's priority-first-success
+  // pattern. No output comparison between native and aggregator.
+  return (bestNative ?? bestAggregator)?.quote ?? null
 }
 
 export const findSwapQuote = async ({
@@ -286,11 +367,12 @@ export const findSwapQuote = async ({
   }
 
   const settled = await Promise.allSettled(
-    fetchers.map(async fetcher => {
+    fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
       const quote = await fetcher.fetch()
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to),
+        providerName: fetcher.providerName,
       }
     })
   )
