@@ -486,8 +486,11 @@ export class SwapService {
     }
 
     // UTXO/Cosmos source via deposit channel: fees come from the source-chain tx,
-    // not from the SwapKit quote. Return 0n as placeholder; real fees are estimated
-    // at execution time by the chain-specific fee estimator.
+    // not from the SwapKit quote. Return 0n — real source-chain fees are estimated
+    // at broadcast time by TransactionBuilder.estimateSendFee() (which wraps
+    // getSendFeeEstimate() from @vultisig/core-mpc). This is the same estimator
+    // used for regular UTXO sends. VaultBase.getSwapQuote detects this 0n and
+    // keeps maxSwapable=0n rather than overstating it as the full balance.
     if ('transfer' in tx) {
       return {
         network: 0n,

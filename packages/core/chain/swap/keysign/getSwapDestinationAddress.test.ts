@@ -34,7 +34,10 @@ describe('getSwapDestinationAddress', () => {
     expect(getSwapDestinationAddress({ quote, fromCoin })).toBe('0xrouter')
   })
 
-  it('returns empty string for solana routes', () => {
+  // Solana swap txs are fully serialized upfront by the provider — the destination
+  // address is encoded inside the serialized transaction data, not surfaced as a
+  // separate field. There is no standalone `to` address to extract, so we return ''.
+  it('returns empty string for solana routes (destination encoded in serialized tx)', () => {
     const quote: SwapQuote = {
       discounts: [],
       quote: {
