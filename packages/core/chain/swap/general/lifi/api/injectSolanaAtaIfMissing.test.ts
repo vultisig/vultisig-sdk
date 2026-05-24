@@ -149,9 +149,9 @@ describe('injectSolanaAtaIfMissing', () => {
     }
     vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
 
-    await expect(
-      injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, wrongPayer)
-    ).rejects.toThrow(/Payer mismatch/)
+    await expect(injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, wrongPayer)).rejects.toThrow(
+      /Payer mismatch/
+    )
   })
 
   it('tolerates a throwing getAddressLookupTable and still injects the ATA', async () => {

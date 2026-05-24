@@ -105,7 +105,11 @@ export const injectSolanaAtaIfMissing = async (
   // correctly decompile the V0 message into individual instructions.
   const lutAccounts: AddressLookupTableAccount[] = []
   if (versionedTx.message.version === 0) {
-    const lookups = (versionedTx.message as { addressTableLookups: { accountKey: PublicKey }[] }).addressTableLookups
+    const lookups = (
+      versionedTx.message as {
+        addressTableLookups: { accountKey: PublicKey }[]
+      }
+    ).addressTableLookups
     for (const lut of lookups) {
       const lutAccount = await fetchLutWithRetry(client, lut.accountKey)
       if (lutAccount) {
@@ -168,5 +172,8 @@ export const injectSolanaAtaIfMissing = async (
   // message bytes changed; any signature committed to the old bytes would be
   // invalid. LiFi does not pre-sign Solana quotes so signatures are empty anyway.
 
-  return { data: Buffer.from(updatedTx.serialize()).toString('base64'), ataInjected: true }
+  return {
+    data: Buffer.from(updatedTx.serialize()).toString('base64'),
+    ataInjected: true,
+  }
 }
