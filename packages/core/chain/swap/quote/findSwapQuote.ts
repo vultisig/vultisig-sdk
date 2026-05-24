@@ -76,6 +76,19 @@ type RankedSwapQuote = {
  * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`.
  */
 
+/**
+ * Native swap providers — direct on-chain protocols (no aggregator layer).
+ *
+ * Adding a new native protocol (e.g. Chainflip-direct in the future) requires:
+ *   1. Adding its name to `SwapQuoteProviderName` above
+ *   2. Adding it here so `isNativeProvider` recognises it for hard-priority
+ *      selection in `selectBestEligibleQuote`
+ *   3. Wiring its fetcher into `getNativeFetchers`
+ *
+ * The `satisfies` clause gives compile-time safety against typos, but the
+ * semantic mapping (which providers count as "native") still lives in this
+ * file and must be kept aligned with the protocol's actual integration mode.
+ */
 const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
 
 type NativeProviderName = (typeof nativeProviderNames)[number]
@@ -83,6 +96,34 @@ type NativeProviderName = (typeof nativeProviderNames)[number]
 const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderNames)
 
 const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
+
+/**
+ * Declared preference order for AGGREGATOR ties — when two aggregators return
+ * identical `outputAmount`, the earlier entry wins. This makes the tie-break
+ * explicit (the previous implementation tied via `fetchers[]` array index,
+ * which was determined dynamically by `shouldPreferGeneralSwap` and therefore
+ * harder to reason about). Native providers (THORChain/MayaChain) bypass this
+ * because they have hard priority over aggregators regardless of output.
+ *
+ * Order rationale: KyberSwap and 1inch typically surface the best on-chain
+ * liquidity for EVM-only swaps; LiFi covers the broader cross-chain matrix;
+ * SwapKit is the catch-all fallback. Adjust as data changes.
+ *
+ * @internal Exported for unit-test introspection only.
+ */
+export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  'KyberSwap',
+  '1inch',
+  'LiFi',
+  'SwapKit',
+] as const
+
+const aggregatorPreferenceIndex = new Map<SwapQuoteProviderName, number>(
+  aggregatorPreferenceOrder.map((name, idx) => [name, idx])
+)
+
+const getAggregatorPreferenceRank = (name: SwapQuoteProviderName): number =>
+  aggregatorPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
 function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
@@ -119,7 +160,7 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
   let bestNative: RankedSwapQuote | null = null
   let bestAggregator: RankedSwapQuote | null = null
-  let bestAggregatorIndex = Number.POSITIVE_INFINITY
+  let bestAggregatorPreferenceRank = Number.POSITIVE_INFINITY
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -134,15 +175,19 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
         bestNative = candidate
       }
     } else {
-      // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
-      // (general-first vs native-first), so this preserves that preference when amounts tie.
+      // Tie-break by declared aggregator preference (lower rank wins). This
+      // replaces the previous index-based tie-break, which was determined
+      // dynamically by `shouldPreferGeneralSwap` and therefore harder to
+      // reason about. The declared order lives in `aggregatorPreferenceOrder`
+      // above. (#521 r3 — NeO should-fix.)
+      const candidateRank = getAggregatorPreferenceRank(candidate.providerName)
       if (
         bestAggregator === null ||
         candidate.outputAmount > bestAggregator.outputAmount ||
-        (candidate.outputAmount === bestAggregator.outputAmount && i < bestAggregatorIndex)
+        (candidate.outputAmount === bestAggregator.outputAmount && candidateRank < bestAggregatorPreferenceRank)
       ) {
         bestAggregator = candidate
-        bestAggregatorIndex = i
+        bestAggregatorPreferenceRank = candidateRank
       }
     }
   }

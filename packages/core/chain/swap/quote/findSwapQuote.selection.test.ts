@@ -229,6 +229,30 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('kyber')
   })
 
+  it('tie-break: 1inch wins over SwapKit on equal output by declared preference', async () => {
+    // 1inch is ranked 2nd, SwapKit is ranked 4th in aggregatorPreferenceOrder.
+    // On an equal-output tie, 1inch must win regardless of fetcher array order
+    // (which is determined dynamically by shouldPreferGeneralSwap). This
+    // exercises the declared-preference tie-break introduced in #521 r3 to
+    // replace the previous implicit index-based tie-break. (NeO should-fix.)
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('500', '1inch'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('500', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    expect('general' in quote.quote).toBe(true)
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('1inch')
+  })
+
   it('when all providers fail, reports every attempted provider', async () => {
     const mayaError = 'maya last error'
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('first fail'))
