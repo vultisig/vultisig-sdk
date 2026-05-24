@@ -117,8 +117,9 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
-  let best: RankedSwapQuote | null = null
-  let bestIndex = Number.POSITIVE_INFINITY
+  let bestNative: RankedSwapQuote | null = null
+  let bestAggregator: RankedSwapQuote | null = null
+  let bestAggregatorIndex = Number.POSITIVE_INFINITY
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -126,45 +127,30 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
       continue
     }
     const candidate = result.value
-    // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
-    // (general-first vs native-first), so this preserves that preference when amounts tie.
-    if (
-      best === null ||
-      candidate.outputAmount > best.outputAmount ||
-      (candidate.outputAmount === best.outputAmount && i < bestIndex)
-    ) {
-      best = candidate
-      bestIndex = i
-    }
-  }
 
-  if (best === null) {
-    return null
+    if (isNativeProvider(candidate.providerName)) {
+      // Among natives (THOR + Maya), prefer higher output.
+      if (bestNative === null || candidate.outputAmount > bestNative.outputAmount) {
+        bestNative = candidate
+      }
+    } else {
+      // Tie-break: lower index wins. Fetchers are ordered by `shouldPreferGeneralSwap`
+      // (general-first vs native-first), so this preserves that preference when amounts tie.
+      if (
+        bestAggregator === null ||
+        candidate.outputAmount > bestAggregator.outputAmount ||
+        (candidate.outputAmount === bestAggregator.outputAmount && i < bestAggregatorIndex)
+      ) {
+        bestAggregator = candidate
+        bestAggregatorIndex = i
+      }
+    }
   }
 
   // Hard THORChain/Maya priority: if any native route exists, always prefer it
   // over any aggregator route. Mirrors vultisig-ios's priority-first-success
-  // pattern. No output comparison.
-  if (isNativeProvider(best.providerName)) {
-    return best.quote
-  }
-
-  let bestNative: RankedSwapQuote | null = null
-  for (const result of settled) {
-    if (result.status !== 'fulfilled') {
-      continue
-    }
-    const candidate = result.value
-    if (!isNativeProvider(candidate.providerName)) {
-      continue
-    }
-    // If multiple natives qualify (THOR + Maya), prefer the one with higher output.
-    if (bestNative === null || candidate.outputAmount > bestNative.outputAmount) {
-      bestNative = candidate
-    }
-  }
-
-  return (bestNative ?? best).quote
+  // pattern. No output comparison between native and aggregator.
+  return (bestNative ?? bestAggregator)?.quote ?? null
 }
 
 export const findSwapQuote = async ({
