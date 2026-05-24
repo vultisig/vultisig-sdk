@@ -368,13 +368,23 @@ export class MasterKeyDeriver {
       // Use terra (classic, LUNC) coin type for address encoding, derive from path 118
       const coinType = walletCore.CoinType.terra
       const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
-      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
-      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
-
-      privateKey.delete()
-      publicKey.delete()
-
-      return address
+      // Nested try/finally so privateKey + publicKey WASM handles are
+      // deterministically released even if `getPublicKeySecp256k1` or
+      // `deriveAddressFromPublicKey` throws. Without this nested guard, a
+      // throw between `getKey` and the trailing `.delete()` calls would
+      // leak the raw private-key bytes in WASM memory until the next GC
+      // pass — a material confidentiality risk for seed-derived secrets.
+      // (#539 r3 — NeO preferably-blocking.)
+      let publicKey: ReturnType<typeof privateKey.getPublicKeySecp256k1> | null = null
+      try {
+        publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
+        return walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+      } finally {
+        if (publicKey?.delete) {
+          publicKey.delete()
+        }
+        privateKey.delete()
+      }
     } finally {
       if (hdWallet.delete) {
         hdWallet.delete()
