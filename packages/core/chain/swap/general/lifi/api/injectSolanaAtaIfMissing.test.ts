@@ -51,11 +51,14 @@ describe('injectSolanaAtaIfMissing', () => {
 
   it('returns the original tx data unchanged and ataInjected=false when the ATA already exists', async () => {
     const mockClient = {
-      // First call: mint account info. Second call: ATA exists (non-null).
+      // First call: mint account info. Second call: ATA exists (non-null + healthy owner).
       getAccountInfo: vi
         .fn()
         .mockResolvedValueOnce(MOCK_MINT_INFO)
-        .mockResolvedValueOnce({ data: Buffer.alloc(0) }),
+        .mockResolvedValueOnce({
+          owner: TOKEN_PROGRAM_ID,
+          data: Buffer.alloc(165),
+        }),
       getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
     }
     vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
@@ -152,6 +155,66 @@ describe('injectSolanaAtaIfMissing', () => {
     await expect(injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, wrongPayer)).rejects.toThrow(
       /Payer mismatch/
     )
+  })
+
+  it('throws when the mint is owned by an unsupported token program', async () => {
+    // Custom token program — neither TOKEN_PROGRAM_ID nor TOKEN_2022_PROGRAM_ID.
+    // Silent fallback to TOKEN_PROGRAM_ID would derive the WRONG ATA and produce
+    // an opaque simulation failure. (#519 r-N NeO blocking #1.)
+    const unsupportedProgram = Keypair.generate().publicKey
+    const mockClient = {
+      getAccountInfo: vi.fn().mockResolvedValueOnce({
+        owner: unsupportedProgram,
+        data: Buffer.alloc(82),
+      }),
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    await expect(injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, payer)).rejects.toThrow(
+      /unsupported program/
+    )
+  })
+
+  it('throws when the ATA address is squatted by an account with a different owner', async () => {
+    // ATA address exists but is owned by a non-token program (seed collision
+    // for a different PDA, or manual pre-allocation). Returning early without
+    // injection would later fail with an opaque "invalid account data" error
+    // at simulation. (#519 r-N NeO blocking #2.)
+    const squatter = Keypair.generate().publicKey
+    const mockClient = {
+      getAccountInfo: vi
+        .fn()
+        .mockResolvedValueOnce(MOCK_MINT_INFO)
+        .mockResolvedValueOnce({ owner: squatter, data: Buffer.alloc(0) }),
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    await expect(injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, owner, payer)).rejects.toThrow(
+      /exists but is owned by/
+    )
+  })
+
+  it('treats ATA as existing when account owner matches the token program', async () => {
+    // Healthy ATA — owner matches TOKEN_PROGRAM_ID — return ataInjected=false.
+    const mockClient = {
+      getAccountInfo: vi
+        .fn()
+        .mockResolvedValueOnce(MOCK_MINT_INFO)
+        .mockResolvedValueOnce({
+          owner: TOKEN_PROGRAM_ID,
+          data: Buffer.alloc(165),
+        }),
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    const originalData = buildMinimalLifiTx()
+    const result = await injectSolanaAtaIfMissing(originalData, USDC_MINT, owner, payer)
+
+    expect(result.ataInjected).toBe(false)
+    expect(result.data).toBe(originalData)
   })
 
   it('tolerates a throwing getAddressLookupTable and still injects the ATA', async () => {

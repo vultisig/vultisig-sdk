@@ -78,9 +78,22 @@ export const injectSolanaAtaIfMissing = async (
   // derive the wrong ATA and produce an opaque simulation failure.
   const mintInfo = await client.getAccountInfo(mintPubkey)
   if (!mintInfo) {
-    throw new Error(`Mint account ${mintAddress} not found — cannot determine Token vs Token-2022 program`)
+    throw new Error(`Mint account ${mintAddress} not found - cannot determine Token vs Token-2022 program`)
   }
-  const tokenProgramId = mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID
+  // Explicit allowlist of recognized token programs. Falling back to
+  // TOKEN_PROGRAM_ID for any other owner (custom forks, mis-typed addresses,
+  // accidentally-passed non-mint accounts) derives the WRONG ATA and produces
+  // an opaque simulation error rather than a clear cause. (#519 r-N NeO blocking #1.)
+  let tokenProgramId: PublicKey
+  if (mintInfo.owner.equals(TOKEN_PROGRAM_ID)) {
+    tokenProgramId = TOKEN_PROGRAM_ID
+  } else if (mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)) {
+    tokenProgramId = TOKEN_2022_PROGRAM_ID
+  } else {
+    throw new Error(
+      `Mint ${mintAddress} is owned by unsupported program ${mintInfo.owner.toBase58()} - expected Token or Token-2022`
+    )
+  }
 
   // allowOwnerOffCurve=true: PDAs are valid ATA owners (e.g. multisig destinations).
   const ataAddress = getAssociatedTokenAddressSync(
@@ -92,8 +105,18 @@ export const injectSolanaAtaIfMissing = async (
 
   const ataInfo = await client.getAccountInfo(ataAddress)
 
-  // ATA already exists — return the original tx data unchanged.
+  // ATA already exists - verify it's actually a token account owned by the
+  // matching program before skipping injection. A non-token account squatting
+  // the ATA address (seed collision for a different PDA, manual pre-allocation)
+  // would otherwise pass the null check and cause an opaque "invalid account
+  // data" simulation failure when the swap tries to write to it.
+  // (#519 r-N NeO blocking #2.)
   if (ataInfo !== null) {
+    if (!ataInfo.owner.equals(tokenProgramId)) {
+      throw new Error(
+        `ATA address ${ataAddress.toBase58()} exists but is owned by ${ataInfo.owner.toBase58()}, expected ${tokenProgramId.toBase58()}`
+      )
+    }
     return { data: txData, ataInjected: false }
   }
 
