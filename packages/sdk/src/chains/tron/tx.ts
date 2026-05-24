@@ -304,6 +304,84 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
   return { signingHashHex, unsignedRawHex, finalize }
 }
 
+/**
+ * Same signing-hash + finalize contract as `buildTronSendTx` /
+ * `buildTrc20TransferTx`, but takes a PRE-BUILT `raw_data` protobuf byte
+ * sequence instead of building it from a TransferContract or
+ * TriggerSmartContract. Use when an upstream service (e.g. yield.xyz,
+ * stakek.it, a delegation-service backend) hands you the encoded
+ * raw_data hex and you only need to:
+ *   1. compute the signing hash (sha256(raw_data)),
+ *   2. MPC-sign it,
+ *   3. wrap raw_data + signature into the outer Transaction protobuf
+ *      for broadcast.
+ *
+ * No validation of the protobuf contents — the caller has already
+ * decided the tx shape is correct. Validation lives one layer up
+ * (yield.xyz's preview, the user's review card, etc.).
+ *
+ * Why expose this:
+ *
+ *   - yield.xyz Tron actions (`tron-trx-native-staking`,
+ *     `tron-trx-strx-staking`) return a pre-encoded `raw_data` hex
+ *     covering FreezeBalanceV2 / UnfreezeBalanceV2 / VoteWitness etc.
+ *     contracts. Replicating those builders here would mean shipping
+ *     N more contract types just so the SDK can produce identical
+ *     bytes — wasteful when the upstream already did the work.
+ *
+ *   - Delegated-staking / dApp signing flows (e.g. wallet-connect
+ *     style) pre-build the tx on a remote node and expect the wallet
+ *     to sign without re-deriving the bytes. Same primitive serves
+ *     that use case too.
+ *
+ * @param rawDataHex  hex-encoded protobuf `Transaction.raw_data` bytes,
+ *                    with or without `0x` prefix. Must NOT be the full
+ *                    signed-tx envelope — only the inner raw_data.
+ * @returns same shape as `buildTronSendTx`. `unsignedRawHex` is the
+ *          *normalized* hex of the decoded raw_data bytes — equal to
+ *          the input after stripping any leading `0x`/`0X` prefix and
+ *          lowercasing. Byte-parity checks against the decoded bytes
+ *          hold; a naive string-level `===` against the original input
+ *          may differ on prefix or hex casing.
+ */
+export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult {
+  if (typeof rawDataHex !== 'string') {
+    throw new Error('buildTronTxFromRawData: rawDataHex must be a hex string')
+  }
+  // Reject non-hex characters explicitly. `hexToBytes` uses
+  // `parseInt(_, 16)` which silently returns NaN for invalid chars,
+  // producing garbage bytes that hash to a wrong signing payload and
+  // ultimately MPC-sign over nothing meaningful. The strict guard
+  // ensures malformed input from yield.xyz / app callers fails fast
+  // with a clear message rather than producing an unbroadcastable tx.
+  const stripped = rawDataHex.startsWith('0x') || rawDataHex.startsWith('0X') ? rawDataHex.slice(2) : rawDataHex
+  if (!/^[0-9a-fA-F]*$/.test(stripped)) {
+    throw new Error('buildTronTxFromRawData: rawDataHex contains non-hex characters')
+  }
+  // Decode from the prefix-stripped form so `hexToBytes` doesn't have to
+  // re-do prefix handling (and so a `0X` prefix doesn't ride through to
+  // any future decoder that's `0x`-case-sensitive).
+  const rawData = hexToBytes(stripped)
+  if (rawData.length === 0) {
+    throw new Error('buildTronTxFromRawData: rawDataHex decoded to zero bytes')
+  }
+
+  const signingHashBytes = sha256(rawData)
+  const signingHashHex = bytesToHex(signingHashBytes)
+  // Normalise the round-trip representation so callers comparing the
+  // returned `unsignedRawHex` against the input string don't have to
+  // strip the optional `0x` prefix themselves.
+  const unsignedRawHex = bytesToHex(rawData)
+
+  const finalize = (sigHex: string): { signedTxHex: string; txId: string } => {
+    const sig = parseSignature(sigHex)
+    const signedTx = wrapTransaction(rawData, sig)
+    return { signedTxHex: bytesToHex(signedTx), txId: signingHashHex }
+  }
+
+  return { signingHashHex, unsignedRawHex, finalize }
+}
+
 export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBuilderResult {
   validateRefs(opts.refBlockBytes, opts.refBlockHash)
   // feeLimit must be > 0 — buildRawData silently drops a zero feeLimit, and a

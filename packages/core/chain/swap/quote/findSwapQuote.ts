@@ -34,7 +34,9 @@ import { SwapQuote } from './SwapQuote'
 
 /** Optional per-aggregator affiliate overrides. When absent each aggregator
  * falls back to its own vultisig-0 default — no behavior change for existing
- * callers. Station consumers pass the station* configs from the station barrel. */
+ * callers. This TYPE is stable SDK API. Tenant consumers (e.g. Station) supply
+ * their own concrete config instances and pass them here; those instances live
+ * in the consumer package, not in the SDK. */
 export type SwapAffiliateConfig = {
   native?: NativeSwapAffiliateConfig
   oneInch?: OneInchAffiliateConfig
@@ -123,6 +125,20 @@ export const findSwapQuote = async ({
   vultDiscountTier,
   affiliateConfig,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
+  // Runtime guard: THORName affiliateFeeAddress must be lowercase.
+  // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
+  // silently routes affiliate fees to the vultisig-0 default instead of the
+  // intended recipient. Fail loudly at call-site rather than silently misbehave.
+  const nativeAffiliateFeeAddress = affiliateConfig?.native?.affiliateFeeAddress
+  if (
+    nativeAffiliateFeeAddress !== undefined &&
+    nativeAffiliateFeeAddress !== nativeAffiliateFeeAddress.toLowerCase()
+  ) {
+    throw new Error(
+      `THORName affiliateFeeAddress must be lowercase. THORChain memo parsing is case-sensitive. Using "${nativeAffiliateFeeAddress}" will silently break affiliate fee routing.`
+    )
+  }
+
   const affiliateBps = getSwapAffiliateBps(vultDiscountTier ?? null)
 
   const vultDiscount: SwapDiscount[] = vultDiscountTier ? [{ vult: { tier: vultDiscountTier } }] : []

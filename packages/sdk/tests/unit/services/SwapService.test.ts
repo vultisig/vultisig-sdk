@@ -374,6 +374,54 @@ describe('SwapService', () => {
       )
     })
 
+    it('should return fees.network=0n for UTXO deposit-channel (transfer) routes', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      // SwapKit transfer routes: source chain sends to a deposit address.
+      // Source-chain fees are not known at quote time — only at broadcast.
+      const mockTransferQuote = {
+        quote: {
+          general: {
+            // 0.1 ETH in wei — realistic output for a small BTC -> ETH cross-chain swap
+            dstAmount: '100000000000000000',
+            provider: 'swapkit' as const,
+            tx: {
+              transfer: {
+                to: 'bc1qdeposit',
+                amount: 500_000n,
+                memo: 'route-memo',
+              },
+            },
+          },
+        },
+        discounts: [],
+      }
+
+      vi.mocked(findSwapQuote).mockResolvedValue(mockTransferQuote as any)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 0.005,
+      })
+
+      // extractFees must return 0n for transfer routes — real source-chain fees are
+      // only estimable at broadcast time via getSendFeeEstimate(). A non-zero value
+      // would be a fabricated placeholder and mislead maxSwapable in VaultBase.
+      expect(result.fees.network).toBe(0n)
+      expect(result.fees.total).toBe(0n)
+    })
+
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 

@@ -147,6 +147,12 @@ await vault.sign(payload, {
 - [CLI Documentation](clients/cli/README.md) — Command-line interface
 - [docs.vultisig.com](https://docs.vultisig.com/developer-docs/vultisig-sdk/) — Online documentation
 
+## Breaking Changes
+
+See [MIGRATING.md](./MIGRATING.md) for migration guides covering all major-version breaking changes.
+
+**v-next:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, and `stationOneInchAffiliateConfig` removed from `@vultisig/sdk`. See [MIGRATING.md](./MIGRATING.md) for the reconstruction pattern.
+
 ## Type Reference
 
 All compound methods live on `VaultBase` (inherited by `FastVault` and `SecureVault`).
