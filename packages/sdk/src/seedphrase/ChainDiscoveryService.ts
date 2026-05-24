@@ -254,9 +254,16 @@ export class ChainDiscoveryService {
         })
         if (fired) return true
       } catch (error) {
-        // TransportError: RPC unreachable. Balance unknown — warn and continue.
-        // Do NOT treat as zero balance; the user may have funds on this path.
-        console.warn(`Cosmos-path Terra balance check failed (transport):`, { chain: Chain.Terra, path: '118', error })
+        // Only swallow TransportError (RPC unreachable). Non-transport errors
+        // (WASM init failure, invalid mnemonic) propagate — they indicate a
+        // broken caller state, not a transient network condition.
+        if (!(error instanceof TransportError)) throw error
+        console.warn(`Cosmos-path Terra balance check failed (transport):`, {
+          chain: Chain.Terra,
+          path: '118',
+          error: error.message,
+          cause: error.cause,
+        })
       }
     }
 
@@ -273,11 +280,12 @@ export class ChainDiscoveryService {
         })
         if (fired) return true
       } catch (error) {
-        // TransportError: RPC unreachable. Balance unknown — warn and continue.
+        if (!(error instanceof TransportError)) throw error
         console.warn(`Cosmos-path TerraClassic balance check failed (transport):`, {
           chain: Chain.TerraClassic,
           path: '118',
-          error,
+          error: error.message,
+          cause: error.cause,
         })
       }
     }
@@ -300,15 +308,12 @@ export class ChainDiscoveryService {
     probe: () => Promise<{ address: string; balance: bigint }>
     logLabel: string
   }): Promise<boolean> {
-    const { result, chainsWithBalance, chain, probe, logLabel } = args
-    let cosmosPathCheck: { address: string; balance: bigint }
-    try {
-      cosmosPathCheck = await probe()
-    } catch (error) {
-      // Re-throw as TransportError so callers can distinguish RPC failure
-      // from a confirmed zero balance. The original error is preserved as cause.
-      throw new TransportError(`${logLabel} RPC unreachable`, error)
-    }
+    const { result, chainsWithBalance, chain, probe } = args
+    // probe() throws TransportError for RPC failures (wrapped by the probe
+    // implementation). Non-transport errors (WASM init, invalid mnemonic) are
+    // NOT TransportErrors and should propagate unmodified so callers apply the
+    // correct recovery semantics instead of silently continuing.
+    const cosmosPathCheck = await probe()
 
     const standard330Balance = BigInt(result.balance || '0')
     const fired = cosmosPathCheck.balance > 0n && standard330Balance === 0n
@@ -434,24 +439,25 @@ export class ChainDiscoveryService {
     mnemonic: string,
     timeout: number
   ): Promise<{ address: string; balance: bigint }> {
-    // Create timeout promise with cleanup
+    // Derivation is client-side WASM — errors here (invalid mnemonic, WASM not
+    // initialised) are NOT transport errors and must propagate unmodified.
+    const address = await this.keyDeriver.deriveTerraAddressWithCosmosPath(mnemonic)
+
+    // Only the RPC fetch is subject to transport failure / timeout.
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Timeout checking Cosmos-path Terra address')), timeout)
+      timeoutId = setTimeout(() => reject(new TransportError('Timeout checking Cosmos-path Terra address')), timeout)
     })
 
-    const checkPromise = async () => {
-      const address = await this.keyDeriver.deriveTerraAddressWithCosmosPath(mnemonic)
-      const balance = await getCoinBalance({
-        chain: Chain.Terra,
-        address,
-      })
+    try {
+      const balance = await Promise.race([getCoinBalance({ chain: Chain.Terra, address }), timeoutPromise])
       return { address, balance }
-    }
-
-    return Promise.race([checkPromise(), timeoutPromise]).finally(() => {
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      throw new TransportError('Cosmos-path Terra RPC unreachable', error)
+    } finally {
       if (timeoutId) clearTimeout(timeoutId)
-    })
+    }
   }
 
   /**
@@ -465,23 +471,27 @@ export class ChainDiscoveryService {
     mnemonic: string,
     timeout: number
   ): Promise<{ address: string; balance: bigint }> {
+    // Derivation is client-side WASM — errors here must propagate unmodified.
+    const address = await this.keyDeriver.deriveTerraClassicAddressWithCosmosPath(mnemonic)
+
+    // Only the RPC fetch is subject to transport failure / timeout.
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Timeout checking Cosmos-path TerraClassic address')), timeout)
+      timeoutId = setTimeout(
+        () => reject(new TransportError('Timeout checking Cosmos-path TerraClassic address')),
+        timeout
+      )
     })
 
-    const checkPromise = async () => {
-      const address = await this.keyDeriver.deriveTerraClassicAddressWithCosmosPath(mnemonic)
-      const balance = await getCoinBalance({
-        chain: Chain.TerraClassic,
-        address,
-      })
+    try {
+      const balance = await Promise.race([getCoinBalance({ chain: Chain.TerraClassic, address }), timeoutPromise])
       return { address, balance }
-    }
-
-    return Promise.race([checkPromise(), timeoutPromise]).finally(() => {
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      throw new TransportError('Cosmos-path TerraClassic RPC unreachable', error)
+    } finally {
       if (timeoutId) clearTimeout(timeoutId)
-    })
+    }
   }
 
   /**
