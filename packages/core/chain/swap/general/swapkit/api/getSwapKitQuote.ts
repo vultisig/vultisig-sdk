@@ -566,12 +566,22 @@ const getSwapKitRoutes = async (
 
     const allowedRoutes = quoteResponse.routes?.filter(isAllowedRoute) ?? []
 
-    // Check providerErrors unconditionally — a provider rejecting for below-minimum
-    // is an actionable signal even when other routes exist. The user could increase
-    // their amount to unlock that provider's (potentially better) route.
-    const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
-    if (belowMinMsg) {
-      throw new Error(belowMinMsg)
+    // Below-minimum surfacing is gated on having NO allowed routes. The earlier
+    // unconditional throw was a UX regression: when SwapKit returns
+    // `routes: [NEAR_route], providerErrors: [{CHAINFLIP below-minimum}]`,
+    // throwing the CHAINFLIP-below-min error would block the user from the
+    // NEAR route they could otherwise execute. The actionable-hint argument
+    // ("user could increase amount to unlock the rejected provider") is real
+    // but a second-order optimization that doesn't justify breaking the
+    // primary "we found a route, let them swap" path. If we later want to
+    // surface "could be better with $larger amount" as a non-blocking hint,
+    // the right place is the route metadata (separate channel from the
+    // throw/return contract here). (#535 r3 — NeO preferably-blocking.)
+    if (allowedRoutes.length === 0) {
+      const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+      if (belowMinMsg) {
+        throw new Error(belowMinMsg)
+      }
     }
 
     return allowedRoutes

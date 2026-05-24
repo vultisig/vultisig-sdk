@@ -538,46 +538,72 @@ describe('getSwapKitQuote', () => {
     ).rejects.toThrow('NEAR: min amount not met for this swap')
   })
 
-  it('throws a below-minimum error when providerErrors are present alongside valid routes (signal-loss regression)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      response({
-        routes: [
-          {
-            routeId: 'near-route',
-            providers: ['NEAR'],
-            expectedBuyAmount: '0.001',
+  it('returns a valid route when providerErrors carry below-minimum alongside valid routes (no UX regression)', async () => {
+    // Updated #535 r3 (NeO preferably-blocking): when SwapKit returns a usable
+    // route AND a below-minimum providerError, we MUST return the route. The
+    // earlier behavior (throwing the providerError) blocked users from a
+    // route they could otherwise execute. Below-min surfacing is now gated
+    // on `allowedRoutes.length === 0`. EVM→Sui path so we can reuse the
+    // existing NEAR-route mock shape (UTXO source would need different
+    // tx envelope structure).
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [
+            {
+              routeId: 'near-route',
+              providers: ['NEAR'],
+              expectedBuyAmount: '9.4',
+            },
+          ],
+          providerErrors: [
+            {
+              provider: 'CHAINFLIP',
+              message: 'Amount below minimum: 0.0003 BTC required',
+              errorCode: 'BELOW_MINIMUM',
+            },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        // Second call: route-detail fetch for the selected NEAR route.
+        response({
+          expectedBuyAmount: '9.3',
+          providers: ['NEAR'],
+          tx: {
+            to: '0xnear-deposit',
+            value: '5000000000000000',
+            gasLimit: '21000',
           },
-        ],
-        providerErrors: [
-          {
-            provider: 'CHAINFLIP',
-            message: 'Amount below minimum: 0.0003 BTC required',
-            errorCode: 'BELOW_MINIMUM',
-          },
-        ],
-      })
-    )
+        })
+      )
 
     vi.stubGlobal('fetch', fetchMock)
     configureSwapKit({ apiKey: undefined })
 
-    await expect(
-      getSwapKitQuote({
-        from: {
-          chain: Chain.Bitcoin,
-          address: 'bc1qsource',
-          ticker: 'BTC',
-          decimals: 8,
-        },
-        to: {
-          chain: Chain.Ethereum,
-          address: '0xdestination',
-          ticker: 'ETH',
-          decimals: 18,
-        },
-        amount: 1000n,
-      })
-    ).rejects.toThrow('CHAINFLIP: Amount below minimum: 0.0003 BTC required')
+    // Must NOT throw — the NEAR route is valid and should be returned even
+    // though CHAINFLIP rejected for below-minimum.
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      to: {
+        chain: Chain.Sui,
+        address: '0xsui',
+        ticker: 'SUI',
+        decimals: 9,
+      },
+      amount: 5_000_000_000_000_000n,
+    })
+
+    expect(quote).toMatchObject({
+      provider: 'swapkit',
+      routeProvider: 'NEAR',
+    })
   })
 
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {
