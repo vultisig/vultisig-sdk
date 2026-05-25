@@ -91,8 +91,9 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
     })
 
     const [input] = getTronSigningInputs({ keysignPayload: payload, walletCore })
+    // Anti-regression: prior to fix, feeLimit was passed gasEstimation
+    // (a non-zero energy estimate that's semantically meaningless for
+    // system contracts and only served to confuse the UI fee display).
     expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
-    // Explicit anti-regression: feeLimit must NOT equal gasEstimation.
-    expect(input.transaction?.feeLimit?.toNumber()).not.toBe(Number(GAS_ESTIMATION))
   })
 })
