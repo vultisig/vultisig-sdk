@@ -16,7 +16,13 @@
 import { beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
-import { buildTonSendTx, deriveTonAddress, TON_V4R2_SUB_WALLET_ID, validateTonMemo } from '../../../src/chains/ton'
+import {
+  buildTonSendTx,
+  buildTonTxFromSigningPayload,
+  deriveTonAddress,
+  TON_V4R2_SUB_WALLET_ID,
+  validateTonMemo,
+} from '../../../src/chains/ton'
 import { buildV4R2Wallet } from '../../../src/chains/ton/walletV4R2'
 
 // Deterministic 32-byte Ed25519 pubkey (all 0x01s) — avoids seed randomness
@@ -129,6 +135,163 @@ describe('chains/ton', () => {
       bounceable: false,
       seqno: 1,
       validUntil: 1_700_000_000,
+    })
+    expect(() => builder.finalize('aa'.repeat(32))).toThrow(/must be 64 bytes/)
+  })
+})
+
+describe('chains/ton / buildTonTxFromSigningPayload (prebuilt-payload signing)', () => {
+  // Round-trip parity: build a payload via buildTonSendTx, extract its
+  // unsignedBocHex (the serialized signing-payload Cell), feed it back
+  // through buildTonTxFromSigningPayload. signingHashHex MUST match
+  // byte-for-byte and finalize(sig) MUST produce the same external
+  // BoC. This proves the primitive is a clean replacement for the
+  // chain-specific builder when fed equivalent input — which is the
+  // contract yield.xyz / dApp signing flows rely on.
+  it('produces the same signingHashHex as buildTonSendTx for an identical payload', () => {
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 250_000_000n, // 0.25 TON
+      bounceable: false,
+      seqno: 7,
+      validUntil: 1_700_000_000,
+    })
+
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: Buffer.from(reference.unsignedBocHex, 'hex').toString('base64'),
+      // seqno is non-zero → no StateInit envelope
+      includeStateInit: false,
+    })
+
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+    expect(replay.fromAddress).toBe(reference.fromAddress)
+
+    // Same payload + same sig → same broadcastable BoC.
+    const sig = 'cc'.repeat(64)
+    expect(replay.finalize(sig).signedBocBase64).toBe(reference.finalize(sig).signedBocBase64)
+  })
+
+  it('accepts a hex-encoded signing payload (forward-compat with hex wire formats)', () => {
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 100n,
+      bounceable: false,
+      seqno: 5,
+      validUntil: 1_700_000_000,
+    })
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: reference.unsignedBocHex, // hex, not base64
+    })
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
+  it('accepts a 0x-prefixed hex signing payload (CodeRabbit #516 r2)', () => {
+    // The decoder must strip an optional 0x prefix before deciding
+    // hex-vs-base64. Without that, an EVM-leaning callsite that
+    // prepends "0x" silently fell through to the base64 branch and
+    // produced garbage bytes (wrong signing hash → wrong MPC sig).
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 100n,
+      bounceable: false,
+      seqno: 7,
+      validUntil: 1_700_000_000,
+    })
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: '0x' + reference.unsignedBocHex,
+    })
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
+  it('disambiguates hex from base64 via BoC magic 0xB5EE9C72 (CodeRabbit #516 r2)', () => {
+    // A real BoC starts with the magic 0xB5EE9C72. The decoder must
+    // recognise that prefix as hex even when the byte stream could
+    // also be a syntactically-valid base64 string. Without the magic
+    // disambiguation, even-length hex that happens to match base64
+    // alphabet rules could be misclassified.
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 100n,
+      bounceable: false,
+      seqno: 9,
+      validUntil: 1_700_000_000,
+    })
+    // BoC's serialized form always begins with the magic bytes.
+    expect(/^b5ee9c72/i.test(reference.unsignedBocHex)).toBe(true)
+    const replay = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: reference.unsignedBocHex,
+    })
+    expect(replay.signingHashHex).toBe(reference.signingHashHex)
+  })
+
+  it('emits a larger BoC when includeStateInit=true (first-send deployment envelope)', () => {
+    // The wallet address derives from the pubkey; we only test the BoC
+    // size grows because adding StateInit appends a code+data ref.
+    // Same payload + same sig + only the includeStateInit flag toggled.
+    const ref = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 1_000n,
+      bounceable: false,
+      seqno: 0, // deploy + send
+      validUntil: 1_700_000_000,
+    })
+    const bocBase64 = Buffer.from(ref.unsignedBocHex, 'hex').toString('base64')
+    const fakeSig = 'aa'.repeat(64)
+
+    const withStateInit = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: bocBase64,
+      includeStateInit: true,
+    }).finalize(fakeSig)
+
+    const withoutStateInit = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: bocBase64,
+      includeStateInit: false,
+    }).finalize(fakeSig)
+
+    expect(withStateInit.signedBocBase64.length).toBeGreaterThan(withoutStateInit.signedBocBase64.length)
+  })
+
+  it('rejects an Ed25519 pubkey that is not 32 bytes', () => {
+    expect(() =>
+      buildTonTxFromSigningPayload({
+        publicKeyEd25519: '01'.repeat(33), // 33 bytes
+        signingPayloadBoc: 'AA==',
+      })
+    ).toThrow(/32 bytes/)
+  })
+
+  it('rejects an empty signing payload', () => {
+    expect(() =>
+      buildTonTxFromSigningPayload({
+        publicKeyEd25519: PUBKEY_HEX,
+        signingPayloadBoc: '',
+      })
+    ).toThrow(/empty/)
+  })
+
+  it('finalize rejects signatures of the wrong length', () => {
+    const reference = buildTonSendTx({
+      publicKeyEd25519: PUBKEY_HEX,
+      to: RECIPIENT,
+      amount: 1n,
+      bounceable: false,
+      seqno: 1,
+      validUntil: 1_700_000_000,
+    })
+    const builder = buildTonTxFromSigningPayload({
+      publicKeyEd25519: PUBKEY_HEX,
+      signingPayloadBoc: Buffer.from(reference.unsignedBocHex, 'hex').toString('base64'),
     })
     expect(() => builder.finalize('aa'.repeat(32))).toThrow(/must be 64 bytes/)
   })

@@ -215,6 +215,7 @@ export {
 } from '@vultisig/core-chain/swap/affiliate/config'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
+export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'

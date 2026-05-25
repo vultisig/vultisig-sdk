@@ -1,5 +1,41 @@
 # @vultisig/sdk
 
+## 1.1.0
+
+### Minor Changes
+
+- [#515](https://github.com/vultisig/vultisig-sdk/pull/515) [`5ef62f1`](https://github.com/vultisig/vultisig-sdk/commit/5ef62f1aa20202f4a4eb97afa0cf20216dc5a1f1) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTronTxFromRawData(rawDataHex)` to sign yield.xyz Tron actions whose `raw_data` is already encoded upstream (FreezeBalanceV2, UnfreezeBalanceV2, VoteWitnessContract, …). Hashes the raw_data bytes with SHA-256, takes the MPC signature, and wraps the final `Transaction { raw_data, signature }` envelope — same `{signingHashHex, unsignedRawHex, finalize(sig)}` contract as `buildTronSendTx`. Includes strict hex-character validation so malformed input fails fast instead of silently producing a wrong signing payload.
+
+## 1.0.0
+
+### Major Changes
+
+- [#537](https://github.com/vultisig/vultisig-sdk/pull/537) [`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - chore: remove Station affiliate constants from shared SDK (closes [#536](https://github.com/vultisig/vultisig-sdk/issues/536))
+
+  Station-specific constants (`stvs` THORName, `0x649E...076D` EVM fee receiver) do not belong in a public package consumed by Windows and external users. The generic `affiliateConfig` injection seam on `findSwapQuote` + `SwapAffiliateConfig` type remain — those are correct SDK design. Station reconstructs the same three configs in its own consumer package (mcp-ts#201).
+
+  **BREAKING CHANGE:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, and `stationOneInchAffiliateConfig` are no longer exported from `@vultisig/sdk`. See MIGRATING.md for the reconstruction pattern.
+
+  > **WARNING: DO NOT MERGE until vultisig/mcp-ts#201 lands.** Station must reconstruct these constants in its consumer package before this removal ships. Merging early will silently fall back to vultisig-0 affiliate defaults, breaking Station's affiliate fee routing on native swaps.
+
+## 0.28.0
+
+### Minor Changes
+
+- [#530](https://github.com/vultisig/vultisig-sdk/pull/530) [`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(seedphrase): probe Cosmos-coin-type Terra path (118) for Keplr/Leap seeds when standard 330-path is empty
+
+## 0.27.0
+
+### Minor Changes
+
+- [#516](https://github.com/vultisig/vultisig-sdk/pull/516) [`9a80907`](https://github.com/vultisig/vultisig-sdk/commit/9a8090721008f2a10dffa9cf2d3fac479d65481c) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTonTxFromSigningPayload({publicKeyEd25519, signingPayloadBoc, includeStateInit, workchain})` to sign yield.xyz TON actions whose signing payload BoC is already constructed upstream. Parses the BoC, hashes the payload cell, takes the MPC signature, and wraps the final external message — same `{signingHashHex, unsignedBocHex, fromAddress, finalize(sig)}` contract as `buildTonSendTx`. Accepts either base64 or hex BoC input. Optional `includeStateInit` flag deploys the v4r2 wallet contract alongside the tx for first-send (seqno === 0) scenarios.
+
+## 0.26.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
 ## 0.26.0
 
 ### Minor Changes

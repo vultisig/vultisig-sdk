@@ -18,6 +18,7 @@ export const getSwapDestinationAddress = ({ quote, fromCoin }: GetSwapDestinatio
       matchRecordUnion<GeneralSwapTx, string>(quote.tx, {
         evm: ({ to }) => to,
         solana: () => '',
+        transfer: ({ to }) => to,
       }),
     native: quote => {
       const isErc20 = isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)

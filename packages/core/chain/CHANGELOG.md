@@ -1,5 +1,35 @@
 # @vultisig/core-chain
 
+## 2.2.3
+
+### Patch Changes
+
+- [#519](https://github.com/vultisig/vultisig-sdk/pull/519) [`4c9454e`](https://github.com/vultisig/vultisig-sdk/commit/4c9454eca99f43a2ce572732c3d6fcc74c99e89e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap/lifi/solana): inject createAssociatedTokenAccountInstruction when SPL-token destination ATA is missing
+
+  SOL -> SPL-token swaps via Li.Fi failed simulation with `custom program error: 0x17` when the destination wallet had no Associated Token Account for the output mint (e.g. first-time USDC recipient). LiFi's transaction blob does not include the ATA creation instruction in that case.
+
+  This adds a pre-flight RPC check: if the destination ATA is missing, a `createAssociatedTokenAccountIdempotentInstruction` is prepended to the transaction before the quote data is returned. The idempotent variant is safe even if the ATA is created between quote-time and broadcast-time.
+
+  Also defaults LiFi slippage tolerance to 1% (up from LiFi's default 0.5%) for RN consumers to account for MPC keysign latency (30-90s between quote and broadcast).
+
+## 2.2.2
+
+### Patch Changes
+
+- [#537](https://github.com/vultisig/vultisig-sdk/pull/537) [`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - chore: remove Station affiliate constants from shared SDK (closes [#536](https://github.com/vultisig/vultisig-sdk/issues/536))
+
+  Station-specific constants (`stvs` THORName, `0x649E...076D` EVM fee receiver) do not belong in a public package consumed by Windows and external users. The generic `affiliateConfig` injection seam on `findSwapQuote` + `SwapAffiliateConfig` type remain — those are correct SDK design. Station reconstructs the same three configs in its own consumer package (mcp-ts#201).
+
+  **BREAKING CHANGE:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, and `stationOneInchAffiliateConfig` are no longer exported from `@vultisig/sdk`. See MIGRATING.md for the reconstruction pattern.
+
+  > **WARNING: DO NOT MERGE until vultisig/mcp-ts#201 lands.** Station must reconstruct these constants in its consumer package before this removal ships. Merging early will silently fall back to vultisig-0 affiliate defaults, breaking Station's affiliate fee routing on native swaps.
+
+## 2.2.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
 ## 2.2.0
 
 ### Minor Changes

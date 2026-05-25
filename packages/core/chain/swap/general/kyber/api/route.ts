@@ -9,6 +9,7 @@ import {
   getKyberSwapAffiliateParams,
   kyberSwapAffiliateConfig,
   KyberSwapAffiliateParams,
+  KyberSwapBaseAffiliateConfig,
   kyberSwapSlippageTolerance,
 } from '../config'
 import { getKyberSwapBaseUrl } from './baseUrl'
@@ -16,6 +17,7 @@ import { getKyberSwapBaseUrl } from './baseUrl'
 type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
+  kyberConfig?: KyberSwapBaseAffiliateConfig
 }
 
 type KyberSwapRoute = {
@@ -39,7 +41,13 @@ type KyberSwapRouteParams = {
   slippageTolerance: number
 } & Partial<KyberSwapAffiliateParams>
 
-export const getKyberSwapRoute = async ({ from, to, amount, affiliateBps }: Input): Promise<KyberSwapRoute> => {
+export const getKyberSwapRoute = async ({
+  from,
+  to,
+  amount,
+  affiliateBps,
+  kyberConfig = kyberSwapAffiliateConfig,
+}: Input): Promise<KyberSwapRoute> => {
   const [tokenIn, tokenOut] = [from, to].map(({ id }) => id || evmNativeCoinAddress)
 
   const routeParams: KyberSwapRouteParams = {
@@ -49,14 +57,14 @@ export const getKyberSwapRoute = async ({ from, to, amount, affiliateBps }: Inpu
     saveGas: true,
     gasInclude: true,
     slippageTolerance: kyberSwapSlippageTolerance,
-    ...getKyberSwapAffiliateParams(affiliateBps),
+    ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),
   }
 
   const routeUrl = addQueryParams(`${getKyberSwapBaseUrl(from.chain)}/routes`, routeParams)
 
   const { data } = await queryUrl<KyberSwapRouteResponse>(routeUrl, {
     headers: {
-      'X-Client-Id': kyberSwapAffiliateConfig.source,
+      'X-Client-Id': kyberConfig.source,
     },
   })
 

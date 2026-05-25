@@ -43,6 +43,19 @@ export type BuildSwapKeysignPayloadInput = {
   walletCore: WalletCore
 }
 
+type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+
+/**
+ * Builds a KeysignPayload for a swap transaction.
+ *
+ * Contract: `keysignPayload.toAddress` is always the correct signing destination:
+ *   - EVM/Solana swaps: set to the router or swap contract address
+ *   - Deposit-channel (transfer) swaps: set to the provider deposit channel address
+ *     (from `GeneralSwapTx.transfer.to` via `getSwapDestinationAddress`)
+ *
+ * UTXO signing (via `getUtxoSigningInputs`) relies on this invariant — it reads
+ * `keysignPayload.toAddress` directly for the `general` swap arm.
+ */
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
@@ -55,7 +68,16 @@ export const buildSwapKeysignPayload = async ({
   libType,
   walletCore,
 }: BuildSwapKeysignPayloadInput) => {
-  const chainAmount = toChainAmount(amount, fromCoin.decimals)
+  const transferTx = matchRecordUnion<SwapQuoteResult, TransferSwapTx | undefined>(swapQuote.quote, {
+    native: () => undefined,
+    general: ({ tx }) =>
+      matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: tx => tx,
+      }),
+  })
+  const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
@@ -66,6 +88,7 @@ export const buildSwapKeysignPayload = async ({
       matchRecordUnion<GeneralSwapTx, bigint | undefined>(tx, {
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
+        transfer: () => undefined,
       }),
   })
 
@@ -82,7 +105,12 @@ export const buildSwapKeysignPayload = async ({
     utxoInfo: await getKeysignUtxoInfo(fromCoin),
     memo: matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
       native: ({ memo }) => memo,
-      general: () => undefined,
+      general: ({ tx }) =>
+        matchRecordUnion<GeneralSwapTx, string | undefined>(tx, {
+          evm: () => undefined,
+          solana: () => undefined,
+          transfer: ({ memo }) => memo,
+        }),
     }),
   })
 
@@ -106,6 +134,30 @@ export const buildSwapKeysignPayload = async ({
           value: '',
           gasPrice: '',
           gas: BigInt(0),
+        }),
+        // Deposit-channel routes (UTXO/Ripple/Tron/Ton sources via Chainflip, NEAR Intents, etc.)
+        // send funds to a provider-controlled deposit address. The actual signing uses
+        // keysignPayload.toAddress + keysignPayload.memo (set at the KeysignPayload root below),
+        // NOT the fields inside this OneInchTransaction stub.
+        //
+        // Why OneInchTransaction? It is the only SwapPayload variant that cross-platform clients
+        // already know how to display in SwapVerify (fromAmount / toAmountDecimal / provider).
+        // A dedicated TransferDisplayPayload proto type would require a coordinated proto schema
+        // change across all native clients, so we intentionally reuse OneInchTransaction here.
+        //
+        // Invariant that MUST hold for this to be safe:
+        //   - gas = 0n, gasPrice = '', value = '', data = '' (non-EVM signing ignores them)
+        //   - from/to are purely informational for the SwapVerify display layer
+        // If OneInchTransactionSchema ever adds EVM-only required fields or validation, this
+        // arm must be revisited to either (a) introduce a dedicated payload type, or (b) keep
+        // sending zero/empty values and ensure the schema still accepts them.
+        transfer: ({ to }) => ({
+          from: fromCoin.address,
+          to,
+          data: '',
+          value: '',
+          gasPrice: '',
+          gas: 0n,
         }),
       })
 

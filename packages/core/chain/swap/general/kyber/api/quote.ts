@@ -5,20 +5,29 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { KyberSwapEnabledChain } from '../chains'
+import { KyberSwapBaseAffiliateConfig } from '../config'
 import { getKyberSwapRoute } from './route'
 import { getKyberSwapTx } from './tx'
 
 type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
+  kyberConfig?: KyberSwapBaseAffiliateConfig
 }
 
-export const getKyberSwapQuote = async ({ from, to, amount, affiliateBps }: Input): Promise<GeneralSwapQuote> => {
+export const getKyberSwapQuote = async ({
+  from,
+  to,
+  amount,
+  affiliateBps,
+  kyberConfig,
+}: Input): Promise<GeneralSwapQuote> => {
   const { routeSummary, routerAddress } = await getKyberSwapRoute({
     from,
     to,
     amount,
     affiliateBps,
+    kyberConfig,
   })
 
   const tx = await attempt(
@@ -30,6 +39,7 @@ export const getKyberSwapQuote = async ({ from, to, amount, affiliateBps }: Inpu
       amount,
       enableGasEstimation: true,
       affiliateBps,
+      kyberConfig,
     })
   )
 
@@ -44,6 +54,7 @@ export const getKyberSwapQuote = async ({ from, to, amount, affiliateBps }: Inpu
         amount,
         enableGasEstimation: false,
         affiliateBps,
+        kyberConfig,
       })
     }
 

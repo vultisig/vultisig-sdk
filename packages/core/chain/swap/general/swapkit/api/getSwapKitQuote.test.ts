@@ -1,16 +1,33 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
+import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
 
-const response = (body: unknown, ok = true, status = 200) =>
-  ({
+const response = (body: unknown, ok = true, status = 200) => {
+  const serialized = JSON.stringify(body)
+  return {
     ok,
     status,
     statusText: ok ? 'OK' : 'Bad Request',
+    text: vi.fn(async () => serialized),
     json: vi.fn(async () => body),
-  }) as unknown as Response
+  } as unknown as Response
+}
+
+type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
+
+const transferSourceFixtures: TransferSourceFixture[] = [
+  ['Bitcoin', Chain.Bitcoin, 'BTC', 8, 'bc1qsource', 'bc1qdeposit'],
+  ['Litecoin', Chain.Litecoin, 'LTC', 8, 'ltc1qsource', 'Ldeposit'],
+  ['Dogecoin', Chain.Dogecoin, 'DOGE', 8, 'Dsource', 'Ddeposit'],
+  ['Bitcoin Cash', Chain.BitcoinCash, 'BCH', 8, 'bitcoincash:qsource', 'bitcoincash:qdeposit'],
+  ['Ripple', Chain.Ripple, 'XRP', 6, 'rSource', 'rDeposit'],
+  ['Zcash', Chain.Zcash, 'ZEC', 8, 't1Source', 't1Deposit'],
+  ['Tron', Chain.Tron, 'TRX', 6, 'TSource', 'TDeposit'],
+  ['TON', Chain.Ton, 'TON', 9, 'UQSource', 'UQDeposit'],
+]
 
 describe('getSwapKitQuote', () => {
   afterEach(() => {
@@ -94,6 +111,7 @@ describe('getSwapKitQuote', () => {
       destinationAddress: 'sol-destination',
       disableBalanceCheck: true,
     })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
     expect(quote).toEqual({
       dstAmount: '12400000',
       provider: 'swapkit',
@@ -106,6 +124,161 @@ describe('getSwapKitQuote', () => {
           value: '0',
           gasLimit: 21000n,
         },
+      },
+    })
+  })
+
+  it.each(transferSourceFixtures)(
+    'maps %s source routes to a transfer tx and asks SwapKit not to build a tx',
+    async (_, chain, ticker, decimals, source, target) => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              {
+                routeId: 'near-transfer-route',
+                providers: ['NEAR'],
+                expectedBuyAmount: '0.01',
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            targetAddress: target,
+          })
+        )
+
+      vi.stubGlobal('fetch', fetchMock)
+      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+      const quote = await getSwapKitQuote({
+        from: {
+          chain,
+          address: source,
+          ticker,
+          decimals,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 100_000n,
+      })
+
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+        routeId: 'near-transfer-route',
+        sourceAddress: source,
+        destinationAddress: '0xdestination',
+        disableBalanceCheck: true,
+        disableBuildTx: true,
+      })
+      expect(quote).toMatchObject({
+        dstAmount: '9000000000000000',
+        provider: 'swapkit',
+        routeProvider: 'NEAR',
+        tx: {
+          transfer: {
+            to: target,
+            amount: 100_000n,
+          },
+        },
+      })
+    }
+  )
+
+  it('maps SwapKit transfer memo and deposit amount fallbacks', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'deposit-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            depositAddress: 'bc1qdeposit',
+            depositAmount: '0.001',
+            memo: 'swap-memo',
+          })
+        )
+    )
+    configureSwapKit({ apiKey: undefined })
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Bitcoin,
+        address: 'bc1qsource',
+        ticker: 'BTC',
+        decimals: 8,
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      amount: 1n,
+    })
+
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'bc1qdeposit',
+        amount: 100_000n,
+        memo: 'swap-memo',
+      },
+    })
+  })
+
+  it('maps transfer target and decimal amount from SwapKit tx-array fallback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'ton-array-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['NEAR'],
+            tx: [{ address: 'UQDeposit', amount: '0.001' }],
+          })
+        )
+    )
+    configureSwapKit({ apiKey: undefined })
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Ton,
+        address: 'UQSource',
+        ticker: 'TON',
+        decimals: 9,
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      amount: 1n,
+    })
+
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'UQDeposit',
+        amount: 1_000_000n,
       },
     })
   })
@@ -286,6 +459,151 @@ describe('getSwapKitQuote', () => {
     })
 
     expect(JSON.parse(fetchMock.mock.calls[1][1].body).routeId).toBe('valid-route')
+  })
+
+  it('throws a below-minimum error when providerErrors carry a minimum-size rejection (no-route response)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response(
+        {
+          routes: [],
+          error: 'noRoutesFound',
+          message: 'No routes found for BTC.BTC -> ETH.ETH',
+          providerErrors: [
+            {
+              provider: 'CHAINFLIP',
+              message: 'Amount below minimum: 0.0003 BTC required',
+              errorCode: 'BELOW_MINIMUM',
+            },
+          ],
+        },
+        false,
+        400
+      )
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1000n,
+      })
+    ).rejects.toThrow('CHAINFLIP: Amount below minimum: 0.0003 BTC required')
+  })
+
+  it('throws a below-minimum error when providerErrors carry a minimum-size rejection (200 with empty routes)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        routes: [],
+        providerErrors: [
+          {
+            provider: 'NEAR',
+            message: 'min amount not met for this swap',
+          },
+        ],
+      })
+    )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    await expect(
+      getSwapKitQuote({
+        from: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 100n,
+      })
+    ).rejects.toThrow('NEAR: min amount not met for this swap')
+  })
+
+  it('returns a valid route when providerErrors carry below-minimum alongside valid routes (no UX regression)', async () => {
+    // Updated #535 r3 (NeO preferably-blocking): when SwapKit returns a usable
+    // route AND a below-minimum providerError, we MUST return the route. The
+    // earlier behavior (throwing the providerError) blocked users from a
+    // route they could otherwise execute. Below-min surfacing is now gated
+    // on `allowedRoutes.length === 0`. EVM→Sui path so we can reuse the
+    // existing NEAR-route mock shape (UTXO source would need different
+    // tx envelope structure).
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [
+            {
+              routeId: 'near-route',
+              providers: ['NEAR'],
+              expectedBuyAmount: '9.4',
+            },
+          ],
+          providerErrors: [
+            {
+              provider: 'CHAINFLIP',
+              message: 'Amount below minimum: 0.0003 BTC required',
+              errorCode: 'BELOW_MINIMUM',
+            },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        // Second call: route-detail fetch for the selected NEAR route.
+        response({
+          expectedBuyAmount: '9.3',
+          providers: ['NEAR'],
+          tx: {
+            to: '0xnear-deposit',
+            value: '5000000000000000',
+            gasLimit: '21000',
+          },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined })
+
+    // Must NOT throw — the NEAR route is valid and should be returned even
+    // though CHAINFLIP rejected for below-minimum.
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      to: {
+        chain: Chain.Sui,
+        address: '0xsui',
+        ticker: 'SUI',
+        decimals: 9,
+      },
+      amount: 5_000_000_000_000_000n,
+    })
+
+    expect(quote).toMatchObject({
+      provider: 'swapkit',
+      routeProvider: 'NEAR',
+    })
   })
 
   it('falls back to focused provider groups when the broad SwapKit provider query misses a route', async () => {
