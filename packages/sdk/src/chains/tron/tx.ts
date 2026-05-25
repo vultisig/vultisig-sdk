@@ -86,6 +86,15 @@ export type BuildTronSendOptions = {
   expiration: bigint
   /** Transaction timestamp (ms). Required — typically `BigInt(Date.now())`. */
   timestamp: bigint
+  /**
+   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   * Used by THORChain swap memos, exchange deposit memos, etc.
+   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   * The parity path: iOS sets `TronTransaction.memo = memoString` which
+   * WalletCore encodes identically as field 12; the legacy keysign resolver
+   * wires `memo: keysignPayload.memo` on the TW proto for the same effect.
+   */
+  data?: Uint8Array
 }
 
 export type BuildTrc20TransferOptions = {
@@ -228,6 +237,7 @@ function buildRawData(opts: {
   contractTypeUrl: string
   contractValue: Uint8Array
   feeLimit?: bigint
+  data?: Uint8Array
 }): Uint8Array {
   // `google.protobuf.Any` wrapper: { type_url (1), value (2) }.
   const anyParam = concatProtoBytes(fieldString(1, opts.contractTypeUrl), fieldBytes(2, opts.contractValue))
@@ -242,9 +252,18 @@ function buildRawData(opts: {
     fieldBytes(1, opts.refBlockBytes),
     fieldBytes(4, opts.refBlockHash),
     fieldInt64(8, opts.expiration),
-    fieldBytes(11, contract),
-    fieldInt64(14, opts.timestamp)
+    fieldBytes(11, contract)
   )
+
+  // Field 12: data (proto field 12, wire type 2 = length-delimited bytes).
+  // Encodes swap memos, exchange deposit memos, etc. Matches the behaviour of
+  // WalletCore's TronTransaction.memo field and the legacy keysign resolver.
+  // Empty arrays are treated as absent — Tron nodes reject zero-length data.
+  if (opts.data != null && opts.data.length > 0) {
+    raw = concatProtoBytes(raw, fieldBytes(12, opts.data))
+  }
+
+  raw = concatProtoBytes(raw, fieldInt64(14, opts.timestamp))
 
   if (opts.feeLimit != null && opts.feeLimit > 0n) {
     raw = concatProtoBytes(raw, fieldInt64(18, opts.feeLimit))
@@ -289,6 +308,7 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
     contractType: 1,
     contractTypeUrl: 'type.googleapis.com/protocol.TransferContract',
     contractValue,
+    data: opts.data,
   })
 
   const signingHashBytes = sha256(rawData)
