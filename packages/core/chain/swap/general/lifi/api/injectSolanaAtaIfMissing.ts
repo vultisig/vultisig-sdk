@@ -54,6 +54,16 @@ export type InjectSolanaAtaResult = {
  * runtime so the correct token program (Token or Token-2022) is used for ATA
  * derivation and instruction creation.
  *
+ * Token-2022 extension limitation: this function handles ATA derivation and
+ * creation correctly for Token-2022 mints, but it does NOT inspect or handle
+ * Token-2022 extension data (e.g. TransferFee, ConfidentialTransfer,
+ * InterestBearingMint). Extensions that affect transfer semantics (e.g.
+ * TransferFee withholding, MemoRequired) are the responsibility of the LiFi
+ * route builder, not of this ATA injection layer. If a Token-2022 mint has
+ * extensions that require special instruction handling beyond ATA creation,
+ * the LiFi transaction itself must already encode those requirements.
+ * (#519 r-N NeO preferably-blocking #1 - document limitation.)
+ *
  * @param txData       Base64-encoded serialized VersionedTransaction from LiFi.
  * @param mintAddress  SPL token mint address (e.g. USDC mint on Solana).
  * @param owner        Wallet address that will own the ATA (swap destination).
@@ -95,11 +105,25 @@ export const injectSolanaAtaIfMissing = async (
     )
   }
 
-  // allowOwnerOffCurve=true: PDAs are valid ATA owners (e.g. multisig destinations).
+  // Validate that the owner is on the ed25519 curve (i.e. a normal wallet keypair).
+  // In Vultisig flows the swap destination is always a user wallet — off-curve
+  // addresses are PDAs (Program Derived Addresses) and are valid ATA owners in the
+  // broader Solana ecosystem but should never appear as the destination in a LiFi
+  // quote. Silently passing an off-curve owner with allowOwnerOffCurve=true would
+  // derive an ATA that the user likely can never sign for, producing an opaque
+  // simulation failure. (#519 r-N NeO should-fix #2.)
+  if (!PublicKey.isOnCurve(ownerPubkey.toBytes())) {
+    throw new Error(
+      `Owner ${owner} is off the ed25519 curve (PDA or invalid key) - Vultisig LiFi swaps require an on-curve wallet address as destination`
+    )
+  }
+
+  // allowOwnerOffCurve=false (default): we already validated above that the owner
+  // is on-curve, so we don't need to pass the flag — keeping it explicit for clarity.
   const ataAddress = getAssociatedTokenAddressSync(
     mintPubkey,
     ownerPubkey,
-    /* allowOwnerOffCurve */ true,
+    /* allowOwnerOffCurve */ false,
     tokenProgramId
   )
 
@@ -145,9 +169,22 @@ export const injectSolanaAtaIfMissing = async (
   // accepts both legacy and V0 messages, and compileToV0Message always produces
   // a V0 message. LiFi does not send legacy Solana transactions in practice but
   // the path is safe regardless.
-  const decompiledMessage = TransactionMessage.decompile(versionedTx.message, {
-    addressLookupTableAccounts: lutAccounts,
-  })
+  //
+  // When the tx references LUTs, decompile can fail if a referenced LUT account
+  // was not fetched (e.g. all retry attempts exhausted). Rather than letting the
+  // SDK throw an opaque "unknown account" message, we wrap here and re-throw with
+  // context so callers can distinguish a LUT-dependency failure from any other
+  // decompile error. (#519 r-N NeO should-fix #1.)
+  let decompiledMessage: TransactionMessage
+  try {
+    decompiledMessage = TransactionMessage.decompile(versionedTx.message, {
+      addressLookupTableAccounts: lutAccounts,
+    })
+  } catch (err) {
+    throw new Error(
+      `Failed to decompile LiFi transaction message - one or more LUT accounts could not be resolved (fetched ${lutAccounts.length} of ${(versionedTx.message as { addressTableLookups?: unknown[] }).addressTableLookups?.length ?? 0} referenced LUTs). Original error: ${err instanceof Error ? err.message : String(err)}`
+    )
+  }
 
   // Validate the caller-supplied payer matches the tx's actual fee-payer.
   // If LiFi ever changes the fee-payer convention (or the caller passes a

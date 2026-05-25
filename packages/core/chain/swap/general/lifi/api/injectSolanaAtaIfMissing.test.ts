@@ -1,5 +1,12 @@
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { Keypair, PublicKey, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
+import {
+  AddressLookupTableAccount,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+} from '@solana/web3.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
@@ -38,6 +45,40 @@ function buildMinimalLifiTx(): string {
     recentBlockhash: blockhash,
     instructions: [ix],
   }).compileToV0Message()
+  const tx = new VersionedTransaction(message)
+  return Buffer.from(tx.serialize()).toString('base64')
+}
+
+/**
+ * Build a V0 VersionedTransaction that references a LUT. The LUT address is
+ * embedded in the message's addressTableLookups so the decompile path actually
+ * exercises the LUT-fetch branch. We include a single address from the LUT in
+ * the instruction so the entry makes it into the compiled message.
+ */
+function buildLutLifiTx(lutKey: PublicKey, lutAddress: PublicKey): string {
+  const payerKey = new PublicKey(payer)
+  // An instruction that uses the LUT-provided address so the compiler includes
+  // the LUT reference in the compiled V0 message.
+  const ix = SystemProgram.transfer({
+    fromPubkey: payerKey,
+    toPubkey: lutAddress,
+    lamports: 0,
+  })
+  const lut = new AddressLookupTableAccount({
+    key: lutKey,
+    state: {
+      deactivationSlot: BigInt('18446744073709551615'),
+      lastExtendedSlot: 0,
+      lastExtendedSlotStartIndex: 0,
+      authority: undefined,
+      addresses: [lutAddress],
+    },
+  })
+  const message = new TransactionMessage({
+    payerKey,
+    recentBlockhash: blockhash,
+    instructions: [ix],
+  }).compileToV0Message([lut])
   const tx = new VersionedTransaction(message)
   return Buffer.from(tx.serialize()).toString('base64')
 }
@@ -232,5 +273,84 @@ describe('injectSolanaAtaIfMissing', () => {
 
     // Must still inject the ATA even if LUT fetching failed/didn't run.
     expect(result.ataInjected).toBe(true)
+  })
+
+  it('throws with a clear error when LUT decompile fails due to missing LUT accounts', async () => {
+    // This test actually exercises the LUT path: buildLutLifiTx embeds a real
+    // LUT reference in the V0 message. The mock returns null for the LUT fetch
+    // (simulates all retries exhausted), so decompile will throw because it
+    // cannot resolve the LUT-referenced accounts — and we expect a clear
+    // re-thrown error rather than the SDK's opaque message.
+    // (#519 r-N NeO should-fix #1 + should-fix #4.)
+    const lutKey = Keypair.generate().publicKey
+    const lutAddress = Keypair.generate().publicKey
+    const txData = buildLutLifiTx(lutKey, lutAddress)
+
+    const mockClient = {
+      // mint account exists, ATA does not (so we proceed to decompile)
+      getAccountInfo: vi.fn().mockResolvedValueOnce(MOCK_MINT_INFO).mockResolvedValueOnce(null),
+      // LUT fetch returns null — simulates exhausted retries
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    await expect(injectSolanaAtaIfMissing(txData, USDC_MINT, owner, payer)).rejects.toThrow(
+      /Failed to decompile LiFi transaction message/
+    )
+    // Confirm LUT fetch was actually attempted (LUT path exercised).
+    expect(mockClient.getAddressLookupTable).toHaveBeenCalledWith(lutKey)
+  })
+
+  it('successfully injects ATA when LUT is fetched and decompile succeeds', async () => {
+    // Exercises the full LUT path: a tx with a real LUT reference is fetched,
+    // the LUT account is returned, decompile succeeds, and the ATA is injected.
+    // (#519 r-N NeO should-fix #4 — LUT path actually exercised.)
+    const lutKey = Keypair.generate().publicKey
+    const lutAddress = Keypair.generate().publicKey
+    const txData = buildLutLifiTx(lutKey, lutAddress)
+
+    const lut = new AddressLookupTableAccount({
+      key: lutKey,
+      state: {
+        deactivationSlot: BigInt('18446744073709551615'),
+        lastExtendedSlot: 0,
+        lastExtendedSlotStartIndex: 0,
+        authority: undefined,
+        addresses: [lutAddress],
+      },
+    })
+
+    const mockClient = {
+      getAccountInfo: vi.fn().mockResolvedValueOnce(MOCK_MINT_INFO).mockResolvedValueOnce(null),
+      getAddressLookupTable: vi.fn().mockResolvedValue({ value: lut }),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    const result = await injectSolanaAtaIfMissing(txData, USDC_MINT, owner, payer)
+
+    expect(result.ataInjected).toBe(true)
+    expect(mockClient.getAddressLookupTable).toHaveBeenCalledWith(lutKey)
+  })
+
+  it('throws when the owner address is off the ed25519 curve (PDA or invalid key)', async () => {
+    // Off-curve addresses (PDAs) should not be used as swap destinations in
+    // Vultisig LiFi flows. Passing one with allowOwnerOffCurve silently would
+    // derive an ATA the user can't sign for. (#519 r-N NeO should-fix #2.)
+    //
+    // We construct an off-curve public key by finding a PDA (createProgramAddress
+    // always produces an off-curve address by definition).
+    const programId = SystemProgram.programId
+    const pdaOwner = PublicKey.findProgramAddressSync([Buffer.from('test')], programId)[0]
+    expect(PublicKey.isOnCurve(pdaOwner.toBytes())).toBe(false)
+
+    const mockClient = {
+      getAccountInfo: vi.fn().mockResolvedValueOnce(MOCK_MINT_INFO),
+      getAddressLookupTable: vi.fn(),
+    }
+    vi.mocked(getSolanaClient).mockReturnValue(mockClient as any)
+
+    await expect(injectSolanaAtaIfMissing(buildMinimalLifiTx(), USDC_MINT, pdaOwner.toBase58(), payer)).rejects.toThrow(
+      /off the ed25519 curve/
+    )
   })
 })
