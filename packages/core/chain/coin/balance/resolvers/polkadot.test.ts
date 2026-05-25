@@ -121,7 +121,43 @@ describe('getPolkadotCoinBalance — pallet_assets.Account (Asset Hub tokens)', 
         address: VALID_DOT_ADDRESS,
         id: 'not-a-number',
       })
-    ).rejects.toThrow(/Invalid Asset Hub asset_id/)
+    ).rejects.toThrow(/Invalid Polkadot asset_id/)
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('throws on fractional asset_id (1984.5 would silently truncate with parseInt)', async () => {
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: '1984.5',
+      })
+    ).rejects.toThrow(/Invalid Polkadot asset_id/)
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('throws on asset_id that overflows u32 (4294967296 = 0x100000000)', async () => {
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: '4294967296',
+      })
+    ).rejects.toThrow(/Invalid Polkadot asset_id/)
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('throws on negative asset_id', async () => {
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: '-1',
+      })
+    ).rejects.toThrow(/Invalid Polkadot asset_id/)
 
     expect(queryUrlMock).not.toHaveBeenCalled()
   })
@@ -150,7 +186,7 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     //         + free(u128) + reserved(u128) + frozen(u128) + flags(u128)
     // free = 1_000_000_000_000 = 0x000000E8D4A51000 LE-encoded in 16 bytes:
     //   LE bytes: 00 10 A5 D4 E8 00 00 00 00 00 00 00 00 00 00 00
-    const freeLE = '0010A5D4E8000000000000000000000000'
+    const freeLE = '0010a5d4e80000000000000000000000'
     const fakeResult =
       '0x' +
       '00000000' + // nonce

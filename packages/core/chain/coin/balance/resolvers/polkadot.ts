@@ -64,9 +64,9 @@ const decodePolkadotPublicKey = (address: string): Uint8Array => {
 // Response is SCALE-encoded AssetAccount; only the first 16 bytes matter:
 //   balance: u128 LE — 0 (or null response) means the account doesn't hold that asset.
 const getAssetHubTokenBalance = async (assetIdStr: string, pubkey: Uint8Array): Promise<bigint> => {
-  const assetId = parseInt(assetIdStr, 10)
-  if (!Number.isInteger(assetId) || assetId <= 0) {
-    throw new Error(`Invalid Asset Hub asset_id: ${assetIdStr}`)
+  const assetId = Number(assetIdStr)
+  if (!Number.isInteger(assetId) || assetId < 0 || assetId > 0xffffffff) {
+    throw new Error(`Invalid Polkadot asset_id: ${assetIdStr}`)
   }
 
   const assetIdLE = new Uint8Array(4)
