@@ -144,6 +144,12 @@ describe('constructAssetHubPolkadotSigningPayload', () => {
     expect(result.length).toBe(32)
   })
 
+  it('throws when signedExtensions is an empty array (cannot bypass guard)', () => {
+    expect(() => constructAssetHubPolkadotSigningPayload({ ...basePayload, signedExtensions: [] })).toThrow(
+      /missing required Asset Hub extensions/
+    )
+  })
+
   it('encodes zero tip correctly (compact 0x00)', () => {
     const result = constructAssetHubPolkadotSigningPayload({ ...basePayload, tip: '0x0' })
     const hex = toHex(result)

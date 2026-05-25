@@ -30,7 +30,7 @@ const polkadotSigningPayloadHashThreshold = 256
  */
 export const constructAssetHubPolkadotSigningPayload = (payload: PolkadotSignerPayloadJSON): Uint8Array => {
   const required = ['ChargeAssetTxPayment', 'CheckMetadataHash']
-  if (payload.signedExtensions && payload.signedExtensions.length > 0) {
+  if (payload.signedExtensions != null) {
     const missing = required.filter(ext => !payload.signedExtensions!.includes(ext))
     if (missing.length > 0) {
       throw new Error(
