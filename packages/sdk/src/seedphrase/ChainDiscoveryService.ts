@@ -8,7 +8,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 
-import { SUPPORTED_CHAINS } from '../constants'
+import { assertSeedphraseImportSupportsChains, SEEDPHRASE_IMPORT_SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
 import { MasterKeyDeriver } from './MasterKeyDeriver'
 import type { ChainDiscoveryAggregate, ChainDiscoveryProgress, ChainDiscoveryResult } from './types'
@@ -37,7 +37,7 @@ export class TransportError extends Error {
 export type ChainDiscoveryConfig = {
   /** Maximum concurrent balance requests (default: 5) */
   concurrencyLimit?: number
-  /** Chains to scan (default: SUPPORTED_CHAINS) */
+  /** Chains to scan (default: SEEDPHRASE_IMPORT_SUPPORTED_CHAINS) */
   chains?: Chain[]
   /** Timeout per chain in ms (default: 10000) */
   timeoutPerChain?: number
@@ -46,7 +46,7 @@ export type ChainDiscoveryConfig = {
 /**
  * Chains that use EdDSA signature algorithm
  */
-const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Bittensor, Chain.Ton, Chain.Cardano]
+const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Ton]
 
 /**
  * ChainDiscoveryService - Scans blockchains for existing balances
@@ -99,7 +99,8 @@ export class ChainDiscoveryService {
     const onProgress = options?.onProgress
     // Ensure concurrencyLimit is at least 1 to prevent infinite loop
     const concurrencyLimit = Math.max(1, config.concurrencyLimit ?? 5)
-    const chains = config.chains ?? SUPPORTED_CHAINS
+    const chains = config.chains ?? SEEDPHRASE_IMPORT_SUPPORTED_CHAINS
+    assertSeedphraseImportSupportsChains(chains)
     const timeoutPerChain = config.timeoutPerChain ?? 10000
 
     const results: ChainDiscoveryResult[] = []

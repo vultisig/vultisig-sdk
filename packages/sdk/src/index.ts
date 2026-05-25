@@ -69,8 +69,15 @@ export {
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
-// Supported chains constant
-export { SUPPORTED_CHAINS } from './Vultisig'
+// Supported chains constants
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+  SUPPORTED_CHAINS,
+} from './Vultisig'
 
 // ============================================================================
 // PUBLIC API - Storage

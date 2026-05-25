@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS } from '@/constants'
 import { ChainDiscoveryService, TransportError } from '@/seedphrase/ChainDiscoveryService'
 
 const {
@@ -50,7 +51,32 @@ describe('ChainDiscoveryService', () => {
   it('isEddsaChain is true for EdDSA chains', () => {
     const s = new ChainDiscoveryService(wasmProvider)
     expect(s.isEddsaChain(Chain.Solana)).toBe(true)
+    expect(s.isEddsaChain(Chain.Bittensor)).toBe(false)
     expect(s.isEddsaChain(Chain.Ethereum)).toBe(false)
+  })
+
+  it('default discovery skips chains disabled for seedphrase import', async () => {
+    const s = new ChainDiscoveryService(wasmProvider)
+
+    await s.discoverChains('test mnemonic twelve words here about', {
+      config: { concurrencyLimit: 50 },
+    })
+
+    const scannedChains = mockDeriveAddress.mock.calls.map(([, chain]) => chain)
+    for (const chain of SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS) {
+      expect(scannedChains).not.toContain(chain)
+    }
+  })
+
+  it('rejects explicit discovery of chains disabled for seedphrase import', async () => {
+    const s = new ChainDiscoveryService(wasmProvider)
+
+    await expect(
+      s.discoverChains('test mnemonic twelve words here about', {
+        config: { chains: [Chain.Bittensor] },
+      })
+    ).rejects.toThrow(/Bittensor/)
+    expect(mockDeriveAddress).not.toHaveBeenCalled()
   })
 
   it('sortByBalance puts funded chains first then sorts by amount descending', () => {
