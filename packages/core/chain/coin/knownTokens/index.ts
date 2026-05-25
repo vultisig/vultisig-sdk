@@ -83,6 +83,25 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'tether',
     },
+    // CoinGecko canonical address. TronScan shows publicTag="USDCOLD" but blueTag="USDC" + 2.5M+ txns confirm this is Circle's USDC.
+    TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8: {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz: {
+      ticker: 'USDD',
+      logo: 'usdd',
+      decimals: 18,
+      priceProviderId: 'usdd',
+    },
+    TThzxNRLrW2Brp9DcTQU8i4Wd9udCWEdZ3: {
+      ticker: 'stUSDT',
+      logo: 'stusdt',
+      decimals: 18,
+      priceProviderId: 'staked-usdt',
+    },
   },
   [Chain.Solana]: {
     // QA dogfood Bug J (paaao 2026-05-02): USDC and USDT on Solana
