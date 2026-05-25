@@ -1,7 +1,16 @@
+import { base64Decode } from '@bufbuild/protobuf/wire'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { bigishToString, emptyToUndefined } from '../utils'
 import { mapNestedCoin } from './mapNestedCoin'
+
+const mapBytes = (value: unknown): Uint8Array => {
+  if (value instanceof Uint8Array) {
+    return value
+  }
+
+  return typeof value === 'string' ? base64Decode(value) : new Uint8Array()
+}
 
 export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | undefined => {
   if (!spRaw) return
@@ -84,6 +93,30 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         isAffiliate: Boolean(t.is_affiliate ?? t.isAffiliate),
         fee: feeIn === undefined ? '' : String(feeIn),
         expirationTime: BigInt(t.expiration_time ?? t.expirationTime ?? 0),
+      },
+    }
+
+    return res
+  }
+
+  if (spRaw.SwapKitSwapPayload || spRaw.swapkitSwapPayload) {
+    const s = spRaw.SwapKitSwapPayload ?? spRaw.swapkitSwapPayload
+
+    const res: KeysignPayload['swapPayload'] = {
+      case: 'swapkitSwapPayload',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SwapKitSwapPayload',
+        fromCoin: mapNestedCoin(s.from_coin ?? s.fromCoin),
+        toCoin: mapNestedCoin(s.to_coin ?? s.toCoin),
+        fromAmount: String(s.from_amount ?? s.fromAmount),
+        toAmountDecimal: s.to_amount_decimal ?? s.toAmountDecimal,
+        txType: s.tx_type ?? s.txType ?? '',
+        txPayload: mapBytes(s.tx_payload ?? s.txPayload),
+        targetAddress: s.target_address ?? s.targetAddress ?? '',
+        inboundAddress: s.inbound_address ?? s.inboundAddress,
+        memo: s.memo,
+        subProvider: s.sub_provider ?? s.subProvider ?? '',
+        swapId: s.swap_id ?? s.swapId ?? '',
       },
     }
 
