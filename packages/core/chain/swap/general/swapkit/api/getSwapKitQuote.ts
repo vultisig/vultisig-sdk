@@ -1,3 +1,4 @@
+import { base64Decode } from '@bufbuild/protobuf/wire'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -116,7 +117,11 @@ type SwapKitQuoteRoute = {
 
 type SwapKitQuoteResponse = {
   routes?: SwapKitQuoteRoute[]
-  providerErrors?: { provider?: string; message?: string; errorCode?: string }[]
+  providerErrors?: {
+    provider?: string
+    message?: string
+    errorCode?: string
+  }[]
   error?: string
   message?: string
 }
@@ -126,6 +131,7 @@ type SwapKitSwapResponse = {
   tx?: unknown
   targetAddress?: string
   depositAddress?: string
+  inboundAddress?: string
   depositAmount?: string
   memo?: string
   swapId?: string
@@ -435,6 +441,45 @@ const getTransferAmount = ({ depositAmount, tx }: SwapKitSwapResponse, amount: b
 const shouldUseTransferTx = (chain: SwapKitSourceChain): chain is (typeof swapKitTransferSourceChains)[number] =>
   isOneOf(chain, swapKitTransferSourceChains)
 
+const textEncoder = new TextEncoder()
+
+const stringifyCanonicalJson = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map(stringifyCanonicalJson).join(',')}]`
+  }
+
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .flatMap(key => {
+        const item = value[key]
+
+        return item === undefined ? [] : [`${JSON.stringify(key)}:${stringifyCanonicalJson(item)}`]
+      })
+      .join(',')}}`
+  }
+
+  return JSON.stringify(value)
+}
+
+const encodeSwapKitTxPayload = (tx: unknown, txType?: string): Uint8Array => {
+  const normalizedTxType = txType?.toUpperCase()
+
+  if (normalizedTxType === 'CARDANO' || tx === undefined || tx === null) {
+    return new Uint8Array()
+  }
+
+  if (typeof tx === 'string') {
+    if (normalizedTxType === 'PSBT' || normalizedTxType === 'SUI') {
+      return base64Decode(tx)
+    }
+
+    return textEncoder.encode(tx)
+  }
+
+  return textEncoder.encode(stringifyCanonicalJson(tx))
+}
+
 const buildTransferTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
@@ -451,6 +496,12 @@ const buildTransferTx = (
     amount: getTransferAmount(response, amount, from.decimals),
     ...(response.memo ? { memo: response.memo } : {}),
     ...(response.meta?.txType ? { txType: response.meta.txType } : {}),
+    ...(response.tx
+      ? {
+          txPayload: encodeSwapKitTxPayload(response.tx, response.meta?.txType),
+        }
+      : {}),
+    ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
   }
 

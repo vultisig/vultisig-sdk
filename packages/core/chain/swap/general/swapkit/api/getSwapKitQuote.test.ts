@@ -16,6 +16,8 @@ const response = (body: unknown, ok = true, status = 200) => {
   } as unknown as Response
 }
 
+const textEncoder = new TextEncoder()
+
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
 const transferSourceFixtures: TransferSourceFixture[] = [
@@ -32,7 +34,10 @@ const transferSourceFixtures: TransferSourceFixture[] = [
 describe('getSwapKitQuote', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
+    configureSwapKit({
+      apiKey: undefined,
+      baseUrl: 'https://api.vultisig.com/swapkit-win',
+    })
   })
 
   it('quotes and builds an EVM transaction while filtering native THOR/Maya routes', async () => {
@@ -69,7 +74,10 @@ describe('getSwapKitQuote', () => {
       )
 
     vi.stubGlobal('fetch', fetchMock)
-    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+    configureSwapKit({
+      apiKey: 'test-key',
+      baseUrl: 'https://swapkit.example',
+    })
 
     const quote = await getSwapKitQuote({
       from: {
@@ -153,7 +161,10 @@ describe('getSwapKitQuote', () => {
         )
 
       vi.stubGlobal('fetch', fetchMock)
-      configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+      configureSwapKit({
+        apiKey: 'test-key',
+        baseUrl: 'https://swapkit.example',
+      })
 
       const quote = await getSwapKitQuote({
         from: {
@@ -199,7 +210,13 @@ describe('getSwapKitQuote', () => {
         .fn()
         .mockResolvedValueOnce(
           response({
-            routes: [{ routeId: 'deposit-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }],
+            routes: [
+              {
+                routeId: 'deposit-route',
+                providers: ['NEAR'],
+                expectedBuyAmount: '0.01',
+              },
+            ],
           })
         )
         .mockResolvedValueOnce(
@@ -239,6 +256,66 @@ describe('getSwapKitQuote', () => {
     })
   })
 
+  it('maps SwapKit transfer tx metadata into QR payload fields', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              {
+                routeId: 'psbt-route',
+                providers: ['CHAINFLIP'],
+                expectedBuyAmount: '0.01',
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            expectedBuyAmount: '0.009',
+            providers: ['CHAINFLIP'],
+            targetAddress: 'bc1qdeposit',
+            inboundAddress: 'bc1qinbound',
+            tx: 'cHNidA==',
+            meta: {
+              txType: 'PSBT',
+            },
+            swapId: 'swapkit-id',
+          })
+        )
+    )
+    configureSwapKit({ apiKey: undefined })
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Bitcoin,
+        address: 'bc1qsource',
+        ticker: 'BTC',
+        decimals: 8,
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      amount: 100_000n,
+    })
+
+    expect(quote.tx).toEqual({
+      transfer: {
+        to: 'bc1qdeposit',
+        amount: 100_000n,
+        txType: 'PSBT',
+        txPayload: textEncoder.encode('psbt'),
+        inboundAddress: 'bc1qinbound',
+        swapId: 'swapkit-id',
+      },
+    })
+  })
+
   it('maps transfer target and decimal amount from SwapKit tx-array fallback', async () => {
     vi.stubGlobal(
       'fetch',
@@ -246,7 +323,13 @@ describe('getSwapKitQuote', () => {
         .fn()
         .mockResolvedValueOnce(
           response({
-            routes: [{ routeId: 'ton-array-route', providers: ['NEAR'], expectedBuyAmount: '0.01' }],
+            routes: [
+              {
+                routeId: 'ton-array-route',
+                providers: ['NEAR'],
+                expectedBuyAmount: '0.01',
+              },
+            ],
           })
         )
         .mockResolvedValueOnce(
@@ -279,6 +362,7 @@ describe('getSwapKitQuote', () => {
       transfer: {
         to: 'UQDeposit',
         amount: 1_000_000n,
+        txPayload: textEncoder.encode('[{"address":"UQDeposit","amount":"0.001"}]'),
       },
     })
   })
@@ -374,7 +458,10 @@ describe('getSwapKitQuote', () => {
 
     // Explicitly set the Windows proxy URL; the default is platform-detected
     // (darwin/ios -> /swapkit, android -> /swapkit-a, other -> /swapkit-win).
-    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
+    configureSwapKit({
+      apiKey: undefined,
+      baseUrl: 'https://api.vultisig.com/swapkit-win',
+    })
 
     await getSwapKitQuote({
       from: {
