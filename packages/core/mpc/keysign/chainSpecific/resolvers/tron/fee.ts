@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
+import { getTronAccountResources } from '@vultisig/core-chain/chains/tron/resources/getTronAccountResources'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
 
@@ -55,6 +56,7 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
   const energyUsed = responseData.energy_used ?? 0
   const energyPenalty = responseData.energy_penalty ?? 0
   const totalEnergy = BigInt(energyUsed) + BigInt(energyPenalty)
+
   // Clamp negative totals to 0. TronGrid edge cases can return negative energy
   // values which, multiplied by energyPrice, produce a negative int64 in the
   // protobuf feeLimit field via `Long.fromString(gasEstimation.toString())`.
@@ -64,8 +66,25 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
   if (totalEnergy <= 0n) {
     return 0n
   }
+
+  // Subtract sender's available staked energy before computing the burn cost.
+  // Mirrors iOS TronService.swift:117-126 intent — falls back to worst-case on
+  // fetch failure so fee is never under-estimated.
+  let energyToBurn = totalEnergy
+  try {
+    const resources = await getTronAccountResources(coin.address)
+    const availableEnergy = BigInt(resources.energy.available)
+    if (availableEnergy >= totalEnergy) {
+      energyToBurn = 0n
+    } else if (availableEnergy > 0n) {
+      energyToBurn = totalEnergy - availableEnergy
+    }
+  } catch (err) {
+    console.warn('[tron] failed to fetch account energy resources, falling back to worst-case fee', err)
+  }
+
   const energyPrice = await getEnergyPrice()
-  const totalSun = totalEnergy * energyPrice
+  const totalSun = energyToBurn * energyPrice
 
   return totalSun
 }
