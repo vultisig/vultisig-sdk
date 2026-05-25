@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { constructPolkadotSigningPayload } from './constructSigningPayload'
+import { constructAssetHubPolkadotSigningPayload } from './constructSigningPayload'
 import { PolkadotSignerPayloadJSON } from './PolkadotSignerPayload'
 
 // ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@ import { PolkadotSignerPayloadJSON } from './PolkadotSignerPayload'
 // Ported from vultiagent-app/src/services/__tests__/polkadotTx.test.ts
 // (assembleSignerPayload describe block) which serves as the canonical
 // source of truth. That fixture was verified against @polkadot/api and
-// the live Asset Hub runtime (statemint 2002001).
+// the live Asset Hub runtime (statemint 2001681).
 //
 // The three AH-required bytes are:
 //   ChargeAssetTxPayment::extra  Option<MultiLocation>=None   0x00
@@ -37,13 +37,13 @@ const NONCE = '0x0'
 // tip: 0
 const TIP = '0x0'
 
-// specVersion: statemint 2002001 = 0x001E8B11
+// specVersion: statemint 2001681 = 0x001E8B11
 const SPEC_VERSION = '0x001e8b11'
 
 // transactionVersion: 15 = 0x0f
 const TX_VERSION = '0x0000000f'
 
-// genesisHash: 32-byte AH genesis (live prefix pinned, rest zeros for fixture stability)
+// First 8 bytes are real AH genesis prefix; rest is fixture-stable zeros + sentinel `aa` trailer
 const GENESIS_HASH = '0x68d56f15f4d3e1ec0000000000000000000000000000000000000000000000aa'
 
 // blockHash: 32 bytes of 0x11 (deterministic stand-in for a real block hash)
@@ -74,9 +74,9 @@ const basePayload: PolkadotSignerPayloadJSON = {
   version: 4,
 }
 
-describe('constructPolkadotSigningPayload', () => {
+describe('constructAssetHubPolkadotSigningPayload', () => {
   it('matches AH-required canonical layout including all three signed-extension bytes', () => {
-    const result = constructPolkadotSigningPayload(basePayload)
+    const result = constructAssetHubPolkadotSigningPayload(basePayload)
 
     // Layout (ported from vultiagent-app assembleSignerPayload fixture):
     //   call || era || nonce || tip
@@ -114,7 +114,7 @@ describe('constructPolkadotSigningPayload', () => {
     // Proves the fixture is sensitive to the new bytes. The pre-fix payload
     // was: method || era || nonce || tip || specVersion || txVersion ||
     //      genesisHash || blockHash  (no AH signed-extension bytes at all).
-    const result = constructPolkadotSigningPayload(basePayload)
+    const result = constructAssetHubPolkadotSigningPayload(basePayload)
 
     // The payload is short (< 256 bytes), so no blake2 hashing kicks in -
     // we can count raw bytes directly.
@@ -128,18 +128,24 @@ describe('constructPolkadotSigningPayload', () => {
     expect(preFix).toBe(115)
   })
 
-  it('returns blake2b-256 hash when raw payload would exceed 256 bytes', () => {
-    // Craft a method payload long enough to push raw over threshold.
+  it('does NOT hash when raw payload is exactly 256 bytes (boundary)', () => {
     // Non-AH fields (era+nonce+tip+spec+txv+genesis+block+AH-ext) = 79 bytes.
-    // So method needs > 177 bytes = 354 hex chars after '0x'.
+    // method = 177 bytes -> total = 256 -> condition is `> 256` -> no hash.
+    const boundaryMethod = '0x' + '00'.repeat(177)
+    const result = constructAssetHubPolkadotSigningPayload({ ...basePayload, method: boundaryMethod })
+    expect(result.length).toBe(256)
+  })
+
+  it('returns blake2b-256 hash when raw payload exceeds 256 bytes', () => {
+    // method = 178 bytes -> total = 257 -> condition is `> 256` -> hash fires.
     const longMethod = '0x' + '00'.repeat(178)
-    const result = constructPolkadotSigningPayload({ ...basePayload, method: longMethod })
+    const result = constructAssetHubPolkadotSigningPayload({ ...basePayload, method: longMethod })
     // blake2b-256 always produces exactly 32 bytes
     expect(result.length).toBe(32)
   })
 
   it('encodes zero tip correctly (compact 0x00)', () => {
-    const result = constructPolkadotSigningPayload({ ...basePayload, tip: '0x0' })
+    const result = constructAssetHubPolkadotSigningPayload({ ...basePayload, tip: '0x0' })
     const hex = toHex(result)
     // method is 39 bytes (78 hex chars): positions [0..77]
     // era: [78..81], nonce: [82..83], tip: [84..85]
