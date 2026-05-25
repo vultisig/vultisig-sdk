@@ -162,6 +162,40 @@ describe('getPolkadotCoinBalance — pallet_assets.Account (Asset Hub tokens)', 
     expect(queryUrlMock).not.toHaveBeenCalled()
   })
 
+  it('accepts asset_id=0 (valid lower u32 boundary) and returns 0n when account has no entry', async () => {
+    // le_u32(0) = 00000000. Some system chains use asset_id=0.
+    queryUrlMock.mockResolvedValue({ result: null })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+      id: '0',
+    })
+
+    expect(balance).toBe(0n)
+    // Verify the storage key includes the le_u32(0) asset segment (8 hex chars of '0')
+    const calledKey = queryUrlMock.mock.calls[0]?.[1]?.body?.params?.[0] as string
+    expect(calledKey).toBeDefined()
+    // le_u32(0) = 00000000 — must appear somewhere in the storage key after the prefix hash
+    expect(calledKey).toContain('00000000')
+  })
+
+  it('scientific-notation asset_id (1.984e3) is accepted — Number() evaluates to integer 1984', async () => {
+    // Number('1.984e3') === 1984 which is a valid integer. Document this
+    // accepted-but-non-canonical form so future callers know the contract.
+    // In practice coin.id only comes from knownTokens which always uses plain
+    // decimal strings ('1984', '1337') so this path is never hit in production.
+    queryUrlMock.mockResolvedValue({ result: null })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+      id: '1.984e3',
+    })
+
+    expect(balance).toBe(0n)
+  })
+
   it('propagates Asset Hub RPC errors', async () => {
     queryUrlMock.mockResolvedValue({ error: { code: -32000, message: 'storage error' } })
 
