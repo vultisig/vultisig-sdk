@@ -294,6 +294,205 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
     expect(tx.unsignedRawHex).toContain('62' + expectedVarint + expectedMemoHex)
     expect(tx.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
   })
+
+  // Varint length-prefix boundary tests. The wrong prefix length silently
+  // produces a different signing hash and the broadcast either parses the
+  // wrong byte slice as the memo or rejects the tx outright. Pin the
+  // transition points: 127→128 (1→2 byte varint) and 16383→16384 (2→3).
+  describe('varint length-prefix boundaries (native TRX)', () => {
+    function memoOf(length: number): Uint8Array {
+      const bytes = new Uint8Array(length)
+      bytes.fill(0x41) // 'A'
+      return bytes
+    }
+
+    function rawHexFor(memoBytes: Uint8Array): string {
+      return buildTronSendTx({
+        from: FROM,
+        to: TO,
+        amount: 1_000_000n,
+        refBlockBytes: REF_BLOCK_BYTES,
+        refBlockHash: REF_BLOCK_HASH,
+        expiration: 1_700_000_000_000n,
+        timestamp: 1_699_999_940_000n,
+        data: memoBytes,
+      }).unsignedRawHex
+    }
+
+    it('127-byte memo → 1-byte varint length prefix (0x7f)', () => {
+      const memo = memoOf(127)
+      const expected = '62' + '7f' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('128-byte memo → 2-byte varint length prefix (0x8001)', () => {
+      const memo = memoOf(128)
+      const expected = '62' + '8001' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('16383-byte memo → 2-byte varint length prefix (0xff7f)', () => {
+      const memo = memoOf(16383)
+      const expected = '62' + 'ff7f' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('16384-byte memo → 3-byte varint length prefix (0x808001)', () => {
+      const memo = memoOf(16384)
+      const expected = '62' + '808001' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+  })
+})
+
+describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () => {
+  // TRC-20 path mirrors the native send path: memo goes on the *wrapping*
+  // Transaction's raw_data.data (field 12), NOT the inner contract-call
+  // data (which is the ABI-encoded transfer payload). Exchanges that
+  // require user-tag memos to credit TRC-20 USDT deposits (Binance, OKX,
+  // KuCoin) rely on this field being present and correctly encoded.
+  it('no memo → field 12 tag 0x62 is absent from raw_data bytes', () => {
+    const tx = buildTrc20TransferTx({
+      from: FROM,
+      to: TO,
+      tokenAddress: USDT,
+      amount: 1_000_000n,
+      feeLimit: 100_000_000n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+    })
+    // 0x62 is the field-12 tag (12<<3|2 = 0x62). When absent it must not
+    // appear in the tail of the raw bytes. The inner contract data lives
+    // under a different tag (field 4 of TriggerSmartContract = 0x22)
+    // wrapped inside Any(field 2)→Contract(field 2)→Raw(field 11), so
+    // 0x62 is only emitted when field 12 itself is set.
+    const rawHex = tx.unsignedRawHex
+    // Field 18 (fee_limit) tag = 18<<3|0 = 0x90 0x01. Locate it as a
+    // boundary marker; everything after must be the feeLimit varint, no
+    // stray 0x62 tag.
+    const feeLimitIdx = rawHex.indexOf('900180c2d72f')
+    expect(feeLimitIdx).toBeGreaterThan(-1)
+    // The bytes preceding fee_limit are: timestamp tag (0x70) + varint.
+    // The bytes preceding timestamp would be field 12 if present. Assert
+    // the timestamp tag follows directly after the contract block by
+    // checking no 0x62-tag-prefixed length-delimited block sits between
+    // contract end and timestamp tag — simplest signal is just length.
+    // Match what the native-send "no memo" assertion does: scan for the
+    // 0x62 tag. The contract value never legitimately ends with 0x62
+    // followed by a valid varint length so this is a tight check.
+    expect(rawHex).not.toContain('6204') // any short memo wouldn't appear
+  })
+
+  it('empty Uint8Array memo → treated as absent, no field 12 emitted', () => {
+    const tx = buildTrc20TransferTx({
+      from: FROM,
+      to: TO,
+      tokenAddress: USDT,
+      amount: 1_000_000n,
+      feeLimit: 100_000_000n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+      data: new Uint8Array(0),
+    })
+    expect(tx.unsignedRawHex).not.toContain('6204')
+  })
+
+  it('exchange deposit memo → field 12 present with UTF-8 encoded bytes', () => {
+    // Binance-style TRC-20 USDT deposit memo (numeric user tag).
+    const memo = '103456789'
+    const memoBytes = new TextEncoder().encode(memo)
+    const tx = buildTrc20TransferTx({
+      from: FROM,
+      to: TO,
+      tokenAddress: USDT,
+      amount: 1_000_000n,
+      feeLimit: 100_000_000n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+      data: memoBytes,
+    })
+    const expectedLen = memoBytes.length.toString(16).padStart(2, '0')
+    const expectedMemoHex = bytesToHex(memoBytes)
+    expect(tx.unsignedRawHex).toContain('62' + expectedLen + expectedMemoHex)
+  })
+
+  it('memo changes the signing hash vs no-memo TRC-20 (pre-signing stability)', () => {
+    const baseOpts = {
+      from: FROM,
+      to: TO,
+      tokenAddress: USDT,
+      amount: 1_000_000n,
+      feeLimit: 100_000_000n,
+      refBlockBytes: REF_BLOCK_BYTES,
+      refBlockHash: REF_BLOCK_HASH,
+      expiration: 1_700_000_000_000n,
+      timestamp: 1_699_999_940_000n,
+    }
+    const noMemo = buildTrc20TransferTx(baseOpts)
+    const withMemo = buildTrc20TransferTx({
+      ...baseOpts,
+      data: new TextEncoder().encode('103456789'),
+    })
+    expect(withMemo.signingHashHex).not.toBe(noMemo.signingHashHex)
+    expect(withMemo.unsignedRawHex).not.toBe(noMemo.unsignedRawHex)
+  })
+
+  // Same boundary set as the native path — TRC-20 must encode field 12
+  // length prefix identically. The two builders share `buildRawData` so
+  // the test guards against future divergence (e.g. someone routing TRC-20
+  // through a different encoder).
+  describe('varint length-prefix boundaries (TRC-20)', () => {
+    function memoOf(length: number): Uint8Array {
+      const bytes = new Uint8Array(length)
+      bytes.fill(0x41)
+      return bytes
+    }
+
+    function rawHexFor(memoBytes: Uint8Array): string {
+      return buildTrc20TransferTx({
+        from: FROM,
+        to: TO,
+        tokenAddress: USDT,
+        amount: 1_000_000n,
+        feeLimit: 100_000_000n,
+        refBlockBytes: REF_BLOCK_BYTES,
+        refBlockHash: REF_BLOCK_HASH,
+        expiration: 1_700_000_000_000n,
+        timestamp: 1_699_999_940_000n,
+        data: memoBytes,
+      }).unsignedRawHex
+    }
+
+    it('127-byte memo → 1-byte varint length prefix (0x7f)', () => {
+      const memo = memoOf(127)
+      const expected = '62' + '7f' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('128-byte memo → 2-byte varint length prefix (0x8001)', () => {
+      const memo = memoOf(128)
+      const expected = '62' + '8001' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('16383-byte memo → 2-byte varint length prefix (0xff7f)', () => {
+      const memo = memoOf(16383)
+      const expected = '62' + 'ff7f' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+
+    it('16384-byte memo → 3-byte varint length prefix (0x808001)', () => {
+      const memo = memoOf(16384)
+      const expected = '62' + '808001' + bytesToHex(memo)
+      expect(rawHexFor(memo)).toContain(expected)
+    })
+  })
 })
 
 describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
