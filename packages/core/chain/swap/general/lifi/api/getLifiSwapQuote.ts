@@ -1,4 +1,4 @@
-import { createConfig, getQuote } from '@lifi/sdk'
+import { ChainId, createConfig, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -76,6 +76,33 @@ const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
 // not a hard reject — getQuote will still dispatch. NeOMakinG #513
 // round 1 `suggestion` 1.
 const MAX_COMBINED_COST_BPS = 300
+
+// Resolve a LiFi fee-token `chainId` back to a Vultisig `LifiSwapEnabledChain`.
+//
+// `mirrorRecord(lifiSwapChainId)` is a closed, build-time map of LI.FI source
+// chains (EVM chains Vultisig exposes + Solana). LI.FI's `feeCosts[].token`
+// is *not* guaranteed by the API contract to live on the source chain — for
+// cross-chain routes (e.g. EVM → Cosmos via Stargate, EVM → BTC via THORChain
+// relay) the fee can be denominated on an intermediate chain whose ID is not
+// a key in this map. `mirrorRecord(...)[unknownChainId]` then silently yields
+// `undefined`, producing `affiliateFee.chain = undefined`, which serializes
+// as an absent `swap_fee_chain` field alongside a non-empty `swap_fee` —
+// exactly the ambiguous state this PR set out to eliminate.
+//
+// Fall back to `transfer.from.chain` because LiFi's fixed fee is collected
+// from the user's source-chain wallet regardless of which bridge leg
+// denominates it internally, and the source chain is always a
+// `LifiSwapEnabledChain` (guaranteed by the `Input` type). Warn so any
+// future LiFi behavioural drift is visible in ops telemetry rather than
+// silently misattributed. (NeOMakinG #540 review blocking #1.)
+const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): LifiSwapEnabledChain => {
+  const resolved = mirrorRecord(lifiSwapChainId)[chainId]
+  if (resolved === undefined) {
+    console.warn(`[getLifiSwapQuote] fee token chainId ${chainId} not in lifiSwapChainId; falling back to ${fallback}`)
+    return fallback
+  }
+  return resolved
+}
 
 export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
   setupLifi()
@@ -156,7 +183,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
           swapFee: {
             amount: BigInt(swapFee.amount),
             decimals: swapFee.token.decimals,
-            chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+            chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
             id: swapFeeAssetId,
           },
         },
@@ -186,7 +213,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
             swapFee: {
               amount: BigInt(swapFee.amount),
               decimals: swapFee.token.decimals,
-              chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+              chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
               id: swapFeeAssetId,
             },
           },
@@ -223,7 +250,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
                   affiliateFee: {
                     amount: BigInt(swapFee.amount),
                     decimals: swapFee.token.decimals,
-                    chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+                    chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
                     id: swapFeeAssetId,
                   },
                 }

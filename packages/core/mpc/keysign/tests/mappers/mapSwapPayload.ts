@@ -23,7 +23,25 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
               dstAmount: String(o.quote.dst_amount ?? o.quote.dstAmount),
               tx: o.quote.tx
                 ? {
-                    swapFee: String(o.quote.swap_fee ?? 0),
+                    // `swap_fee` lives on `tx` per the proto, but historical iOS
+                    // fixtures have surfaced it one level up on `quote`; accept
+                    // both paths so existing roundtrip fixtures keep working.
+                    swapFee: String(o.quote.tx.swap_fee ?? o.quote.tx.swapFee ?? o.quote.swap_fee ?? 0),
+                    // Coin context for `swap_fee` (proto fields 8/9/10, optional).
+                    // Forward whichever casing iOS emits so the cosigner can
+                    // render the fee row with correct decimals/asset attribution
+                    // — without this, the new fields would be silently dropped
+                    // on iOS → TS fixture roundtrips and KyberSwap-style payloads
+                    // would misread a destination-token fee as the source fee
+                    // coin. (NeOMakinG #540 preferably-blocking #1.)
+                    swapFeeChain: o.quote.tx.swap_fee_chain ?? o.quote.tx.swapFeeChain,
+                    swapFeeTokenId: o.quote.tx.swap_fee_token_id ?? o.quote.tx.swapFeeTokenId,
+                    swapFeeDecimals:
+                      o.quote.tx.swap_fee_decimals != null
+                        ? Number(o.quote.tx.swap_fee_decimals)
+                        : o.quote.tx.swapFeeDecimals != null
+                          ? Number(o.quote.tx.swapFeeDecimals)
+                          : undefined,
                     $typeName: '' as any,
                     data: o.quote.tx.data,
                     from: o.quote.tx.from,
