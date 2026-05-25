@@ -3,6 +3,8 @@ import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
 
+import { getEnergyPrice } from './energyPrice'
+
 type TriggerContractResponse = {
   energy_used?: number
   energy_penalty?: number
@@ -53,7 +55,8 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
   const energyUsed = responseData.energy_used ?? 0
   const energyPenalty = responseData.energy_penalty ?? 0
   const totalEnergy = BigInt(energyUsed) + BigInt(energyPenalty)
-  const totalSun = totalEnergy * 280n
+  const energyPrice = await getEnergyPrice()
+  const totalSun = totalEnergy * energyPrice
 
   return totalSun
 }
