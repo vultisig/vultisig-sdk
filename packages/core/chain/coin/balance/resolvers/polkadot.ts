@@ -97,9 +97,10 @@ const getAssetHubTokenBalance = async (assetIdStr: string, pubkey: Uint8Array): 
   if (!result) return 0n
 
   // AssetAccount SCALE layout: balance(u128=16 bytes LE) + status(u8) + reason(enum) + extra
-  // We only need the first 16 bytes for balance.
+  // We return the raw u128 balance regardless of account status (Liquid/Frozen/Blocked).
+  // Freeze checks are a spend-path concern; balance display should reflect total holdings.
   const hex = result.startsWith('0x') ? result.slice(2) : result
-  if (hex.length < 32 || !/^[0-9a-fA-F]+$/.test(hex)) {
+  if (hex.length < 32 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) {
     throw new Error(`Asset Hub pallet_assets: unexpected storage response: ${result}`)
   }
   const balanceHex = hex.slice(0, 32)
