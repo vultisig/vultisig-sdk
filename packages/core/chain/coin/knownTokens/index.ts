@@ -761,6 +761,29 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       priceProviderId: 'usd-coin',
     },
   },
+  [Chain.Polkadot]: {
+    // Polkadot Asset Hub (parachain 1000) — pallet_assets tokens.
+    // asset_id is used as the token identifier instead of a contract address.
+    // Decimals verified live via state_getStorage on Assets.Metadata at 2026-05-25.
+    // On-chain symbol for 1984 is "USDt" but we normalise to "USDT" for consistency.
+    '1984': {
+      ticker: 'USDT',
+      logo: 'usdt',
+      decimals: 6,
+      // NOTE: CoinGecko's 'tether' coin doesn't list polkadot-asset-hub in its
+      // platforms map (only Ethereum/Solana/Tron/TON/Near/etc). Price still resolves
+      // correctly via /simple/price?ids=tether but any future platform-verification
+      // logic (e.g. checking coin.platforms['polkadot-asset-hub']) will find nothing
+      // and should special-case this entry.
+      priceProviderId: 'tether',
+    },
+    '1337': {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+  },
   ...knownCosmosTokens,
 }
 
