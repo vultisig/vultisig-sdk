@@ -54,7 +54,11 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+        // FreezeBalanceV2 is a system (bandwidth) op, not a smart-contract call.
+        // feeLimit caps energy for TriggerSmartContract only; the node ignores it
+        // for native staking ops. Set to 0 so the UI does not inherit the energy
+        // estimate and mislead users about the actual cost of the operation.
+        feeLimit: Long.ZERO,
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
@@ -83,7 +87,11 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
         }),
         timestamp: Long.fromString(tronSpecific.timestamp.toString()),
         expiration: Long.fromString(tronSpecific.expiration.toString()),
-        feeLimit: Long.fromString(tronSpecific.gasEstimation.toString()),
+        // UnfreezeBalanceV2 is a system (bandwidth) op, not a smart-contract call.
+        // feeLimit caps energy for TriggerSmartContract only; the node ignores it
+        // for native staking ops. Set to 0 so the UI does not inherit the energy
+        // estimate and mislead users about the actual cost of the operation.
+        feeLimit: Long.ZERO,
         blockHeader: createTronBlockHeader(tronSpecific),
       }),
     })
