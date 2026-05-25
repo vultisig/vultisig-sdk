@@ -192,6 +192,65 @@ const isNoRouteError = (message: string) => {
   return normalizedMessage.includes('noroutesfound') || normalizedMessage.includes('noroutes')
 }
 
+const isBelowMinimumError = (message: string) => {
+  const lower = message.toLowerCase()
+
+  // Rejection tokens that anchor the minimum-size patterns to actual failures.
+  // Without them, phrases like 'minimum amount of gas used' (success context)
+  // would produce false positives.
+  const hasRejectionToken =
+    lower.includes('rejected') ||
+    lower.includes('failed') ||
+    lower.includes('not met') ||
+    lower.includes('required') ||
+    lower.includes('too small') ||
+    lower.includes('below') ||
+    lower.includes('error') ||
+    lower.includes('threshold')
+
+  if (!hasRejectionToken) {
+    return false
+  }
+
+  return (
+    lower.includes('below minimum') ||
+    lower.includes('belowminimum') ||
+    lower.includes('minimum amount') ||
+    lower.includes('min amount') ||
+    lower.includes('amount too small') ||
+    lower.includes('dust threshold') ||
+    lower.includes('below the minimum')
+  )
+}
+
+const isBelowMinimumErrorCode = (errorCode: string | undefined): boolean =>
+  typeof errorCode === 'string' && errorCode.toUpperCase().includes('BELOW_MINIMUM')
+
+/** Extracts the first below-minimum signal from providerErrors, if any. */
+const extractBelowMinimumProviderError = (errors: SwapKitQuoteResponse['providerErrors']): string | undefined => {
+  if (!errors?.length) {
+    return undefined
+  }
+
+  for (const err of errors) {
+    const raw = err.message
+    // Guard: SwapKit schema marks message as optional string, but runtime values
+    // may be numeric or nested objects. Skip non-string entries to avoid TypeError
+    // from calling .toLowerCase() on a non-string.
+    const isStringMsg = typeof raw === 'string'
+
+    // Accept if the message pattern matches OR if the errorCode explicitly signals
+    // a below-minimum rejection (handles cases where the message text is vague).
+    if ((isStringMsg && isBelowMinimumError(raw)) || isBelowMinimumErrorCode(err.errorCode)) {
+      const provider = err.provider ? `${err.provider}: ` : ''
+      const msgText = isStringMsg ? raw : 'Amount below minimum'
+      return `${provider}${msgText}`
+    }
+  }
+
+  return undefined
+}
+
 const getRouteProviderName = (route: Pick<SwapKitQuoteRoute, 'providers' | 'legs'>) => {
   const [firstProvider] = routeProviderNames(route).filter(provider => !swapKitExcludedProviders.has(provider))
 
@@ -445,13 +504,43 @@ const sortRoutesByExpectedBuyAmount = (routes: SwapKitQuoteRoute[], decimals: nu
     return oneAmount > anotherAmount ? -1 : 1
   })
 
+const fetchSwapKitQuoteResponse = async (body: Record<string, unknown>): Promise<SwapKitQuoteResponse> => {
+  const { apiKey, baseUrl } = getSwapKitConfig()
+  const trimmedApiKey = apiKey?.trim()
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/v3/quote`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  // Capture raw text first so non-JSON error bodies (e.g. HTML from a load
+  // balancer) are preserved for debugging instead of being swallowed silently.
+  const rawText = await response.text().catch(() => '')
+  let data: unknown
+  try {
+    data = rawText ? JSON.parse(rawText) : undefined
+  } catch {
+    data = undefined
+  }
+
+  if (!response.ok && !isRecord(data)) {
+    const bodyHint = rawText ? ` body: ${rawText.slice(0, 200)}` : ''
+    throw new Error(`SwapKit request failed (${response.status}): ${response.statusText}${bodyHint}`)
+  }
+
+  return (isRecord(data) ? data : {}) as SwapKitQuoteResponse
+}
+
 const getSwapKitRoutes = async (
   body: Record<string, unknown>,
   providers: SwapKitProvider[]
 ): Promise<SwapKitQuoteRoute[]> => {
   try {
-    const quoteResponse = await postSwapKit<SwapKitQuoteResponse>(
-      '/v3/quote',
+    const quoteResponse = await fetchSwapKitQuoteResponse(
       withoutUndefinedFields({
         ...body,
         providers,
@@ -462,13 +551,40 @@ const getSwapKitRoutes = async (
       const message = quoteResponse.message ?? quoteResponse.error
 
       if (isNoRouteError(message)) {
+        // Before swallowing the no-route response, check if any provider
+        // told us the amount is below their minimum — that's more actionable.
+        const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+        if (belowMinMsg) {
+          throw new Error(belowMinMsg)
+        }
+
         return []
       }
 
       throw new Error(message)
     }
 
-    return quoteResponse.routes?.filter(isAllowedRoute) ?? []
+    const allowedRoutes = quoteResponse.routes?.filter(isAllowedRoute) ?? []
+
+    // Below-minimum surfacing is gated on having NO allowed routes. The earlier
+    // unconditional throw was a UX regression: when SwapKit returns
+    // `routes: [NEAR_route], providerErrors: [{CHAINFLIP below-minimum}]`,
+    // throwing the CHAINFLIP-below-min error would block the user from the
+    // NEAR route they could otherwise execute. The actionable-hint argument
+    // ("user could increase amount to unlock the rejected provider") is real
+    // but a second-order optimization that doesn't justify breaking the
+    // primary "we found a route, let them swap" path. If we later want to
+    // surface "could be better with $larger amount" as a non-blocking hint,
+    // the right place is the route metadata (separate channel from the
+    // throw/return contract here). (#535 r3 — NeO preferably-blocking.)
+    if (allowedRoutes.length === 0) {
+      const belowMinMsg = extractBelowMinimumProviderError(quoteResponse.providerErrors)
+      if (belowMinMsg) {
+        throw new Error(belowMinMsg)
+      }
+    }
+
+    return allowedRoutes
   } catch (error) {
     if (error instanceof Error && isNoRouteError(error.message)) {
       return []

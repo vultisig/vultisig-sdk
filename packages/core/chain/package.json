@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.2.2",
+  "version": "2.2.4",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1240,6 +1240,11 @@
       "import": "./dist/signing/SignatureFormat.js",
       "default": "./dist/signing/SignatureFormat.js"
     },
+    "./station/importPrimitives": {
+      "types": "./dist/station/importPrimitives.d.ts",
+      "import": "./dist/station/importPrimitives.js",
+      "default": "./dist/station/importPrimitives.js"
+    },
     "./swap/affiliate": {
       "types": "./dist/swap/affiliate/index.d.ts",
       "import": "./dist/swap/affiliate/index.js",
@@ -1299,6 +1304,11 @@
       "types": "./dist/swap/general/lifi/api/getLifiSwapQuote.d.ts",
       "import": "./dist/swap/general/lifi/api/getLifiSwapQuote.js",
       "default": "./dist/swap/general/lifi/api/getLifiSwapQuote.js"
+    },
+    "./swap/general/lifi/api/injectSolanaAtaIfMissing": {
+      "types": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.d.ts",
+      "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
+      "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
     },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
@@ -1717,6 +1727,7 @@
     "@polkadot/api": "^16.5.4",
     "@polkadot/util": "^14.0.1",
     "@polkadot/util-crypto": "^14.0.1",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",

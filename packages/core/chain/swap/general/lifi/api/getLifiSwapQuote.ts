@@ -1,5 +1,6 @@
 import { createConfig, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
+import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
@@ -11,6 +12,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
@@ -112,6 +114,55 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   const chainKind = getChainKind(transfer.from.chain)
 
   const { value, gasLimit, data, from, to } = shouldBePresent(transactionRequest)
+
+  // For Solana SPL-token swaps the destination ATA may not yet exist. LiFi's
+  // transaction blob won't include the creation instruction in that case, which
+  // causes the simulation to revert with custom program error 0x17. We check
+  // and inject the instruction before returning the quote data.
+  if (chainKind === 'solana' && toToken !== chainFeeCoin[transfer.to.chain].ticker) {
+    const rawData = shouldBePresent(data)
+    const { gasCosts, feeCosts } = estimate
+    const [networkFee] = shouldBePresent(gasCosts)
+    const fees = shouldBePresent(feeCosts)
+    const swapFee = shouldBePresent(fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0])
+    const swapFeeAssetId =
+      [fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id
+
+    const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
+    // Known edge case: LiFi's quote is calculated before ATA injection, so if the
+    // payer's SOL balance equals exactly the quoted networkFee, the tx will fail
+    // after ATA injection adds the rent cost. We surface the rent buffer in the
+    // returned networkFee so the UI can show the correct total to the user, but we
+    // do NOT re-validate payer balance here (that would require an extra RPC call
+    // and the wallet UI is expected to gate on "insufficient funds" before submit).
+
+    // ATA creation costs ~2,039,280 lamports rent exemption (solanaConfig.ataRentLamports).
+    // This is a build-time constant; Solana's rent-exempt threshold can theoretically
+    // change via on-chain governance (sysvar::Rent). In practice this value has been
+    // stable since mainnet launch — tracking at https://docs.solana.com/developing/runtime-facilities/sysvars#rent.
+    // If a governance vote changes the threshold, update solanaConfig.ataRentLamports.
+    // A runtime fetch via getMinimumBalanceForRentExemption(AccountLayout.span) would
+    // be exact but adds an extra RPC round-trip to every Solana SPL quote; the
+    // build-time constant is the deliberate tradeoff here.
+    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
+
+    return {
+      dstAmount: estimate.toAmount,
+      provider: 'li.fi',
+      tx: {
+        solana: {
+          data: patchedData,
+          networkFee: BigInt(networkFee.amount) + ataRentBuffer,
+          swapFee: {
+            amount: BigInt(swapFee.amount),
+            decimals: swapFee.token.decimals,
+            chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+            id: swapFeeAssetId,
+          },
+        },
+      },
+    }
+  }
 
   return {
     dstAmount: estimate.toAmount,

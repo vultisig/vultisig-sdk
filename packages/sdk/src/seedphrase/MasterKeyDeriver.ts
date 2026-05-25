@@ -48,7 +48,13 @@ export type DerivedChainKey = {
 export type DeriveChainPrivateKeysOptions = {
   /** Use Phantom wallet derivation path for Solana instead of standard BIP44 path */
   usePhantomSolanaPath?: boolean
-  /** Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for Terra instead of native 330 path */
+  /**
+   * Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for the Terra
+   * family (Terra v2 LUNA AND TerraClassic LUNC) instead of their native
+   * SLIP-44 paths. Applies to BOTH chains when true; the MasterKeyDeriver
+   * caller checks chain === 'Terra' || chain === 'TerraClassic'.
+   * The field name's "Terra" prefix means the Terra family, not Terra v2 alone.
+   */
   useCosmosPathTerra?: boolean
 }
 
@@ -333,6 +339,39 @@ export class MasterKeyDeriver {
       privateKey.delete()
       publicKey.delete()
 
+      return address
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive TerraClassic address using Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Mirrors deriveTerraAddressWithCosmosPath but uses the TerraClassic (LUNC) coin type
+   * so the resulting address is a terra1... address compatible with Chain.TerraClassic.
+   * Keplr/Leap-created TerraClassic-only seeds also use the Cosmos 118 derivation path
+   * instead of TerraClassic's native SLIP-44 path.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns TerraClassic address derived using the Cosmos coin-type path
+   */
+  async deriveTerraClassicAddressWithCosmosPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      // Use terra (classic, LUNC) coin type for address encoding, derive from path 118
+      const coinType = walletCore.CoinType.terra
+      const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
+      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+      publicKey.delete()
+      privateKey.delete()
       return address
     } finally {
       if (hdWallet.delete) {

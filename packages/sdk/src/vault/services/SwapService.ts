@@ -330,6 +330,10 @@ export class SwapService {
       if ('evm' in quoteData.general.tx) {
         return quoteData.general.tx.evm.to
       }
+      // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
+      if ('transfer' in quoteData.general.tx) {
+        return undefined
+      }
     }
     if ('native' in quoteData && quoteData.native.router) {
       return quoteData.native.router
@@ -478,6 +482,19 @@ export class SwapService {
         }
       } catch {
         // Fall through to default if gas price fetch fails
+      }
+    }
+
+    // UTXO/Cosmos source via deposit channel: fees come from the source-chain tx,
+    // not from the SwapKit quote. Return 0n — real source-chain fees are estimated
+    // at broadcast time by TransactionBuilder.estimateSendFee() (which wraps
+    // getSendFeeEstimate() from @vultisig/core-mpc). This is the same estimator
+    // used for regular UTXO sends. VaultBase.getSwapQuote detects this 0n and
+    // keeps maxSwapable=0n rather than overstating it as the full balance.
+    if ('transfer' in tx) {
+      return {
+        network: 0n,
+        total: 0n,
       }
     }
 
