@@ -89,6 +89,20 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('error')
   })
 
+  it('returns error for empty string receipt.result (iOS parity: non-nil optional → failure)', async () => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: '' } })
+
+    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(result.status).toBe('error')
+  })
+
+  it('returns error when top-level result is FAILED and receipt is absent (iOS parity)', async () => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, result: 'FAILED' })
+
+    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(result.status).toBe('error')
+  })
+
   it('returns pending on network error', async () => {
     mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
