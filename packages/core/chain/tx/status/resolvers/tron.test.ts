@@ -103,6 +103,17 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('error')
   })
 
+  // Tron RPC never emits result:'SUCCESS' at the top level — the field is absent on success.
+  // This test asserts the invariant: an unexpected non-FAILED top-level result falls through
+  // to receipt-based resolution and does NOT become a false positive.
+  it('does not misclassify an unknown top-level result as success (falls through to receipt path)', async () => {
+    // receipt is absent → still pending, not success
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, result: 'SUCCESS' })
+
+    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(result.status).toBe('pending') // no receipt → pending, not success
+  })
+
   it('returns pending on network error', async () => {
     mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
