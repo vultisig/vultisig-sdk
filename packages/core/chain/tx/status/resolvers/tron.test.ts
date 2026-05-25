@@ -89,11 +89,21 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('error')
   })
 
-  it('returns error for empty string receipt.result (iOS parity: non-nil optional → failure)', async () => {
-    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: '' } })
+  // NeO's live mainnet canary: real USDT TRC20 transfer emits receipt.result='SUCCESS'.
+  // protobuf3 serializes non-default contractResult enum values by name — value=1 (SUCCESS) is
+  // non-default so it appears as "SUCCESS" in the JSON response. Must NOT be treated as error.
+  it('returns success for receipt.result=SUCCESS (TRC20 transfer — NeO live tx 1540b1b3)', async () => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: 'SUCCESS' } })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result.status).toBe('error')
+    expect(result.status).toBe('success')
+  })
+
+  it('returns success for unknown receipt.result value (future-proof: unknown codes treated as success)', async () => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: 'UNKNOWN_FUTURE_CODE' } })
+
+    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(result.status).toBe('success')
   })
 
   it('returns error when top-level result is FAILED and receipt is absent (iOS parity)', async () => {

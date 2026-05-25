@@ -6,6 +6,19 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { tronRpcUrl } from '../../../chains/tron/config'
 import { TxStatusResolver } from '../resolver'
 
+// Terminal failure codes for ResourceReceipt.result (core/Tron.proto field 7, contractResult enum).
+// Protobuf3 JSON serializes non-default enum values by name: successful TRC20 calls emit
+// receipt.result="SUCCESS" (non-default, value=1). Native TRX transfers emit no receipt at all.
+// Known failure codes verified against Tron protocol and live mainnet responses.
+const TRON_RECEIPT_FAILURE_RESULTS = new Set([
+  'FAILED',
+  'OUT_OF_ENERGY',
+  'REVERT',
+  'OUT_OF_TIME',
+  'BANDWIDTH_ERROR',
+  'ACCOUNT_FREEZED',
+])
+
 type TronTxInfoResponse = {
   id?: string
   fee?: number
@@ -16,8 +29,9 @@ type TronTxInfoResponse = {
   // https://developers.tron.network/reference/gettransactioninfobyid
   result?: string
   receipt?: {
-    // Only present when the tx failed. Known values: "FAILED", "OUT_OF_ENERGY", "REVERT",
-    // "OUT_OF_TIME", "BANDWIDTH_ERROR", "ACCOUNT_FREEZED". Absent on success.
+    // Present on both success ("SUCCESS") and failure. Absent only for native TRX transfers
+    // where no smart contract executed. Known failure values: FAILED, OUT_OF_ENERGY, REVERT,
+    // OUT_OF_TIME, BANDWIDTH_ERROR, ACCOUNT_FREEZED. Successful TRC20 calls emit "SUCCESS".
     result?: string
   }
 }
@@ -35,29 +49,24 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     return { status: 'pending' }
   }
 
-  // iOS semantics (mirrors TronTransactionStatusProvider.swift):
-  // 1. top-level result === "FAILED" → error (checked before receipt)
+  // 1. top-level result === "FAILED" → error
   //    Tron RPC only emits "FAILED" here — no "SUCCESS" counterpart exists at the top level.
   //    iOS ref: `if let topLevelResult = response.data.result, topLevelResult == "FAILED"`
   //    (TronTransactionStatusProvider.swift:41 — same guard, same single-value invariant)
-  // 2. receipt absent → pending (mined but no receipt object yet)
-  // 3. receipt.result != null (any non-null value, including "") → error
-  // 4. receipt present, result null/absent → success
   if (tx.result === 'FAILED') {
     return { status: 'error' }
   }
 
+  // 2. receipt absent → pending (native TRX transfers or tx still processing)
   if (!tx.receipt) {
     return { status: 'pending' }
   }
 
-  // Use != null (not truthiness) so empty string "" also maps to error, matching iOS
-  // optional-binding semantics where `if let receiptResult = receipt.result` fires for any
-  // non-nil value including "". Per Tron protocol, an empty string receipt.result signals a
-  // contract execution failure where the node wrote a receipt object but produced no explicit
-  // error code (e.g. internal assertion failed silently). It is non-null → non-success.
-  // iOS ref: TronTransactionStatusProvider.swift:53 — `if let receiptResult = receipt.result`
-  const status = tx.receipt.result != null ? 'error' : 'success'
+  // 3. receipt.result in terminal failure set → error
+  //    receipt.result == null → success (native TRX send, no contract result)
+  //    receipt.result == 'SUCCESS' → success (TRC20/smart-contract success, protobuf3 non-default enum)
+  //    receipt.result unknown → treat as success (safer than false-failure for user)
+  const status = tx.receipt.result != null && TRON_RECEIPT_FAILURE_RESULTS.has(tx.receipt.result) ? 'error' : 'success'
   const feeCoin = chainFeeCoin[Chain.Tron]
   const receipt =
     tx.fee != null
