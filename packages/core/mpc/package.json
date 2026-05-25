@@ -266,6 +266,11 @@
       "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/tron/index.js"
     },
+    "./keysign/chainSpecific/resolvers/tron/energyPrice": {
+      "types": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.js"
+    },
     "./keysign/chainSpecific/resolvers/tron/fee": {
       "types": "./dist/keysign/chainSpecific/resolvers/tron/fee.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/tron/fee.js",

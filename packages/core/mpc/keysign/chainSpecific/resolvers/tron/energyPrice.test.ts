@@ -38,10 +38,9 @@ describe('getEnergyPrice', () => {
   it('falls back to 280n when fetch throws', async () => {
     queryUrlMock.mockRejectedValue(new Error('network error'))
 
-    const { getEnergyPrice, _FALLBACK_ENERGY_PRICE_FOR_TEST } = await loadModule()
+    const { getEnergyPrice } = await loadModule()
     const price = await getEnergyPrice()
 
-    expect(price).toBe(_FALLBACK_ENERGY_PRICE_FOR_TEST)
     expect(price).toBe(280n)
   })
 
@@ -63,6 +62,35 @@ describe('getEnergyPrice', () => {
     const price = await getEnergyPrice()
 
     expect(price).toBe(280n)
+  })
+
+  it('falls back to 280n when getEnergyFee value is 0', async () => {
+    // value: 0 would produce BigInt(0) -> totalEnergy * 0n = 0n -> free fees -> tx fails on-chain
+    queryUrlMock.mockResolvedValue({
+      chainParameter: [{ key: 'getEnergyFee', value: 0 }],
+    })
+
+    const { getEnergyPrice } = await loadModule()
+    const price = await getEnergyPrice()
+
+    expect(price).toBe(280n)
+  })
+
+  it('recovers immediately after a failed fetch (errors are not cached)', async () => {
+    // Call 1: network error -> fallback
+    queryUrlMock.mockRejectedValue(new Error('network error'))
+    const { getEnergyPrice } = await loadModule()
+    const fallbackPrice = await getEnergyPrice()
+    expect(fallbackPrice).toBe(280n)
+
+    // Call 2: TronGrid recovers -> should return live price, NOT cached fallback
+    queryUrlMock.mockResolvedValue({
+      chainParameter: [{ key: 'getEnergyFee', value: 420 }],
+    })
+    const recoveredPrice = await getEnergyPrice()
+    expect(recoveredPrice).toBe(420n)
+    // queryUrl was called twice: once for the error, once for the recovery
+    expect(queryUrlMock).toHaveBeenCalledTimes(2)
   })
 
   it('returns cached result on second call within TTL', async () => {
