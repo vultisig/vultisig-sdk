@@ -48,6 +48,7 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       streamingQuantity,
       toAmountLimit: '0',
       isAffiliate,
+      fee: quote.fees.total,
     }),
   }
 }

@@ -14,6 +14,7 @@
 //
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
+import type { ChainId } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
@@ -43,6 +44,23 @@ const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
 // affiliateBps shouldn't silently push users past 3% total cost without logging.
 // (#519 r-N NeO should-fix #3 - mirror core guard in RN override.)
 const MAX_COMBINED_COST_BPS = 300
+
+// Mirror of core's `resolveSwapFeeChain`. See the core version in
+// `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote.ts` for the
+// full rationale: `mirrorRecord(lifiSwapChainId)[unknownChainId]` silently
+// returns `undefined` for cross-chain routes whose fee token lives on an
+// intermediate chain that is not a `LifiSwapEnabledChain`, producing an
+// ambiguous `swap_fee` non-empty + `swap_fee_chain` absent state on the
+// cosigner. Fall back to the source chain and warn so the drift is visible.
+// (NeOMakinG #540 review blocking #1.)
+const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): LifiSwapEnabledChain => {
+  const resolved = mirrorRecord(lifiSwapChainId)[chainId]
+  if (resolved === undefined) {
+    console.warn(`[getLifiSwapQuote] fee token chainId ${chainId} not in lifiSwapChainId; falling back to ${fallback}`)
+    return fallback
+  }
+  return resolved
+}
 
 const setupLifi = memoize(async () => {
   const { createConfig } = await import('@lifi/sdk')
@@ -112,7 +130,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
           swapFee: {
             amount: BigInt(swapFee.amount),
             decimals: swapFee.token.decimals,
-            chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+            chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
             id: swapFeeAssetId,
           },
         },
@@ -142,13 +160,30 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
             swapFee: {
               amount: BigInt(swapFee.amount),
               decimals: swapFee.token.decimals,
-              chain: mirrorRecord(lifiSwapChainId)[swapFee.token.chainId],
+              chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
               id: swapFeeAssetId,
             },
           },
         }
       },
       evm: () => {
+        // Mirror the core implementation's EVM affiliate-fee extraction so RN
+        // routes surface the same swap-fee row context as desktop/web. LI.FI's
+        // `feeCosts` is the same shape across both kinds; keep `affiliateFee`
+        // optional because not every route has one (affiliateBps may be 0 and
+        // no LIFI Fixed Fee charged). See core for the full rationale on the
+        // lowercase address normalization. (CodeRabbit #540 actionable.)
+        const fees = estimate.feeCosts ?? []
+        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
+        // EVM addresses can come back from LiFi in either lowercase or
+        // EIP-55 checksum form; normalize both sides to lowercase so a
+        // checksum mismatch doesn't silently fall back to the native
+        // fee coin and misattribute the affiliate fee.
+        const swapFeeAddress = swapFee?.token.address.toLowerCase()
+        const swapFeeAssetId =
+          swapFee &&
+          ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
+            chainFeeCoin[transfer.from.chain].id)
         return {
           evm: {
             from: shouldBePresent(from),
@@ -156,6 +191,16 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+            ...(swapFee
+              ? {
+                  affiliateFee: {
+                    amount: BigInt(swapFee.amount),
+                    decimals: swapFee.token.decimals,
+                    chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
+                    id: swapFeeAssetId,
+                  },
+                }
+              : {}),
           },
         }
       },
