@@ -761,6 +761,24 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       priceProviderId: 'usd-coin',
     },
   },
+  [Chain.Polkadot]: {
+    // Polkadot Asset Hub (parachain 1000) — pallet_assets tokens.
+    // asset_id is used as the token identifier instead of a contract address.
+    // Decimals verified live via state_getStorage on Assets.Metadata at 2026-05-25.
+    // On-chain symbol for 1984 is "USDt" but we normalise to "USDT" for consistency.
+    '1984': {
+      ticker: 'USDT',
+      logo: 'usdt',
+      decimals: 6,
+      priceProviderId: 'tether',
+    },
+    '1337': {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+  },
   ...knownCosmosTokens,
 }
 
