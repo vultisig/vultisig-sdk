@@ -151,9 +151,15 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
         // (affiliateBps may be 0 and no LIFI Fixed Fee charged).
         const fees = estimate.feeCosts ?? []
         const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
+        // EVM addresses can come back from LiFi in either lowercase or
+        // EIP-55 checksum form; normalize both sides to lowercase so a
+        // checksum mismatch doesn't silently fall back to the native
+        // fee coin and misattribute the affiliate fee.
+        const swapFeeAddress = swapFee?.token.address.toLowerCase()
         const swapFeeAssetId =
           swapFee &&
-          ([fromToken, toToken].find(token => token === swapFee.token.address) || chainFeeCoin[transfer.from.chain].id)
+          ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
+            chainFeeCoin[transfer.from.chain].id)
         return {
           evm: {
             from: shouldBePresent(from),
