@@ -50,10 +50,31 @@ describe('base58CheckTronDecode', () => {
     expect(() => base58CheckTronDecode('notanaddress')).toThrow()
   })
 
-  it('throws when the decoded payload has a wrong network prefix (not 0x41)', () => {
+  it('throws when the decoded payload has a wrong network prefix (not 0x41 or 0xa0)', () => {
     // Valid bs58check encoding but with a 0x00 prefix (BTC P2PKH style, not Tron).
     // Verifies that prefix validation runs after checksum validation.
     expect(() => base58CheckTronDecode(NON_TRON_PREFIX_ADDRESS)).toThrow(/invalid tron address prefix/)
+  })
+
+  it('decodes a Nile testnet address (0xa0 prefix) successfully', async () => {
+    // Encode a known 20-byte payload with 0xa0 prefix to produce a valid Nile address.
+    // We import bs58check here to build the test fixture deterministically.
+    const bs58check = await import('bs58check')
+    const mod = bs58check as unknown as {
+      encode?: (b: Uint8Array) => string
+      default?: { encode: (b: Uint8Array) => string }
+    }
+    const encode = mod.encode ?? mod.default?.encode
+    if (!encode) throw new Error('bs58check.encode unavailable in test')
+
+    const evmBytes = Buffer.from(WALLET_ADDRESS_EVM_HEX, 'hex')
+    const nilePayload = Buffer.concat([Buffer.from([0xa0]), evmBytes])
+    const nileAddress = encode(nilePayload)
+
+    // Must not throw and must return the same 20-byte EVM hex.
+    const hex = base58CheckTronDecode(nileAddress)
+    expect(hex).toBe(WALLET_ADDRESS_EVM_HEX)
+    expect(hex).toHaveLength(40)
   })
 })
 
@@ -122,5 +143,75 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
         id: USDT_CONTRACT,
       })
     ).rejects.toThrow('network error')
+  })
+
+  it('propagates errors from TRC20 RPC JSON-RPC error response path', async () => {
+    // Covers sendRPCRequest's error branch: `error.message` is passed into
+    // intRpcCall's decode fn which calls BigInt() on the string. A JSON-RPC
+    // error object with a human-readable message causes BigInt to throw a
+    // SyntaxError - must propagate, not be swallowed.
+    queryUrlMock.mockResolvedValue({ error: { message: 'Contract not found' } })
+
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+        id: USDT_CONTRACT,
+      })
+    ).rejects.toThrow()
+  })
+
+  it('throws + logs on malformed RPC hex response', async () => {
+    // should-fix: BigInt('0xZZZ') throws - intRpcCall must log + re-throw with context.
+    queryUrlMock.mockResolvedValue({ result: '0xZZZ' })
+
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+        id: USDT_CONTRACT,
+      })
+    ).rejects.toThrow(/malformed hex/)
+  })
+})
+
+describe('getTronCoinBalance (native TRX)', () => {
+  beforeEach(() => {
+    queryUrlMock.mockReset()
+  })
+
+  it('returns the native TRX balance as bigint', async () => {
+    queryUrlMock.mockResolvedValue({ balance: '1000000' })
+
+    const balance = await getTronCoinBalance({
+      chain: Chain.Tron,
+      address: WALLET_ADDRESS,
+    })
+
+    expect(balance).toBe(1_000_000n)
+  })
+
+  it('propagates native TRX RPC transport errors (does not swallow to 0n)', async () => {
+    // BLOCKER 1: same contract — native TRX path must propagate, not catch.
+    queryUrlMock.mockRejectedValue(new Error('timeout'))
+
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+      })
+    ).rejects.toThrow('timeout')
+  })
+
+  it('throws + logs on malformed TRX balance value from RPC', async () => {
+    // should-fix: BigInt('not-a-number') throws - must log + re-throw.
+    queryUrlMock.mockResolvedValue({ balance: 'not-a-number' })
+
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+      })
+    ).rejects.toThrow(/malformed TRX balance/)
   })
 })
