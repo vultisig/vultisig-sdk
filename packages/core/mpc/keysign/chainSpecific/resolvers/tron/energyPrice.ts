@@ -25,29 +25,27 @@ const fetchEnergyPriceRaw = async (): Promise<bigint> => {
   })
 
   const param = data.chainParameter?.find(p => p.key === 'getEnergyFee')
-  if (param?.value == null) {
+  if (param?.value == null || param.value <= 0) {
     return FALLBACK_ENERGY_PRICE
   }
 
   return BigInt(param.value)
 }
 
+// Only successful fetches are memoized. Errors bubble up so the catch below
+// never caches the fallback as if it were a real price (fixes error-caching bug).
+const memoizedFetchEnergyPrice = memoizeAsync(fetchEnergyPriceRaw, { cacheTime: CACHE_TTL_MS })
+
 /**
  * Returns the current energy price in sun/energy from Tron chain params.
- * Cached for 5 min. Falls back to 280 sun/energy (2023 governance default)
- * if the endpoint is unreachable.
+ * Successful fetches cached for 5 min. Falls back to 280 sun/energy (2023
+ * governance default) if the endpoint is unreachable - recovery is immediate
+ * once TronGrid comes back (errors are never cached).
  */
-export const getEnergyPrice = memoizeAsync(
-  async (): Promise<bigint> => {
-    try {
-      return await fetchEnergyPriceRaw()
-    } catch {
-      return FALLBACK_ENERGY_PRICE
-    }
-  },
-  { cacheTime: CACHE_TTL_MS }
-)
-
-// Test-only export so unit tests can assert the fallback value without
-// repeating the magic number.
-export const _FALLBACK_ENERGY_PRICE_FOR_TEST = FALLBACK_ENERGY_PRICE
+export const getEnergyPrice = async (): Promise<bigint> => {
+  try {
+    return await memoizedFetchEnergyPrice()
+  } catch {
+    return FALLBACK_ENERGY_PRICE
+  }
+}
