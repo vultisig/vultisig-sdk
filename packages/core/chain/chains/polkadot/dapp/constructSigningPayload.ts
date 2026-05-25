@@ -6,7 +6,11 @@ import { PolkadotSignerPayloadJSON } from './PolkadotSignerPayload'
 const polkadotSigningPayloadHashThreshold = 256
 
 /**
- * Construct the raw signing payload bytes from a Polkadot SignerPayloadJSON.
+ * Construct the raw signing payload bytes from an Asset Hub Polkadot SignerPayloadJSON.
+ *
+ * SCOPE: Asset Hub (statemint/statemine) payloads ONLY. The payload must include
+ * both `ChargeAssetTxPayment` and `CheckMetadataHash` in `signedExtensions`.
+ * Relay-chain payloads use different extensions and must NOT use this function.
  *
  * Follows the Asset Hub Polkadot (statemint) extrinsic payload v4 encoding:
  * method + era + compact(nonce) + compact(tip)
@@ -24,7 +28,16 @@ const polkadotSigningPayloadHashThreshold = 256
  *
  * If the payload exceeds 256 bytes, it is blake2b-256 hashed before signing.
  */
-export const constructPolkadotSigningPayload = (payload: PolkadotSignerPayloadJSON): Uint8Array => {
+export const constructAssetHubPolkadotSigningPayload = (payload: PolkadotSignerPayloadJSON): Uint8Array => {
+  const required = ['ChargeAssetTxPayment', 'CheckMetadataHash']
+  if (payload.signedExtensions && payload.signedExtensions.length > 0) {
+    const missing = required.filter(ext => !payload.signedExtensions!.includes(ext))
+    if (missing.length > 0) {
+      throw new Error(
+        `constructAssetHubPolkadotSigningPayload: payload signedExtensions missing required Asset Hub extensions: ${missing.join(', ')}. This function only encodes Asset Hub (statemint) payloads.`
+      )
+    }
+  }
   const method = hexToU8a(payload.method)
   const era = hexToU8a(payload.era)
   const nonce = compactToU8a(parseInt(payload.nonce, 16))
