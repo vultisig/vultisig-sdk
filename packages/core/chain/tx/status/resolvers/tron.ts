@@ -10,8 +10,9 @@ type TronTxInfoResponse = {
   id?: string
   fee?: number
   blockNumber?: number
+  result?: string // top-level failure marker; "FAILED" means the tx failed before receipt was written
   receipt?: {
-    result?: string
+    result?: string // only present on failure: "FAILED", "OUT_OF_ENERGY", "REVERT", etc.
   }
 }
 
@@ -28,15 +29,22 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     return { status: 'pending' }
   }
 
-  // iOS semantics:
-  // - receipt absent → pending (mined but no receipt object yet)
-  // - receipt.result present (any value: FAILED, OUT_OF_ENERGY, REVERT, …) → error
-  // - receipt present, result absent → success
+  // iOS semantics (mirrors TronTransactionStatusProvider.swift):
+  // 1. top-level result === "FAILED" → error (checked before receipt)
+  // 2. receipt absent → pending (mined but no receipt object yet)
+  // 3. receipt.result != null (any non-null value, including "") → error
+  // 4. receipt present, result null/absent → success
+  if (tx.result === 'FAILED') {
+    return { status: 'error' }
+  }
+
   if (!tx.receipt) {
     return { status: 'pending' }
   }
 
-  const status = tx.receipt.result ? 'error' : 'success'
+  // Use != null (not truthiness) so empty string "" also maps to error, matching iOS
+  // optional-binding semantics where `if let x = receipt.result` fires for any non-nil value.
+  const status = tx.receipt.result != null ? 'error' : 'success'
   const feeCoin = chainFeeCoin[Chain.Tron]
   const receipt =
     tx.fee != null
