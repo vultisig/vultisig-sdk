@@ -56,15 +56,18 @@ describe('getTrc20TransferFee', () => {
     ).rejects.toThrow('network error')
   })
 
-  it('documents negative energy_used / energy_penalty behavior (no clamping in current impl)', async () => {
-    // TronGrid edge cases can return negative values; current code does not clamp,
-    // so the returned fee is negative. This test pins the existing behavior so any
-    // future change (e.g. adding Math.max(0, ...) clamping) is a conscious decision.
+  it('clamps negative energy_used / energy_penalty totals to 0n (avoids negative feeLimit broadcast reject)', async () => {
+    // TronGrid edge cases can return negative values. Without clamping, the
+    // negative bigint flows as `gasEstimation` into protobuf `feeLimit` via
+    // `Long.fromString(gasEstimation.toString())`, encoding a negative int64
+    // which TronGrid rejects at broadcast. Send-service path has a similar
+    // guard at sdk/src/chains/tron/tx.ts:391; this mirrors it for the MPC
+    // keysign path.
     mockQueryUrl.mockResolvedValue({ energy_used: -5000, energy_penalty: -1000 })
 
     const fee = await getTrc20TransferFee({ coin, amount: 1_000_000n, receiver: 'TJDENsfBJs4RFETt1X1W8wMDc8M5XnJhd' })
 
-    // (-5000 + -1000) * 280 = -1_680_000n — negative because no clamp exists yet
-    expect(fee).toBe(-1_680_000n)
+    // (-5000 + -1000) = -6000n -> clamp to 0n -> no broadcast reject
+    expect(fee).toBe(0n)
   })
 })
