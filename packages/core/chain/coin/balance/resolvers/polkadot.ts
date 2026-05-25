@@ -52,6 +52,15 @@ const decodePolkadotPublicKey = (address: string): Uint8Array => {
 }
 
 export const getPolkadotCoinBalance: CoinBalanceResolver = async input => {
+  // PR A (#562) registers USDT (id=1984) + USDC (id=1337) in knownTokens.
+  // PR B (TBD) will wire pallet_assets.Account storage queries for those assets.
+  // Until PR B lands, bail early for any non-native coin to avoid returning the
+  // DOT System.Account free balance for a USDT/USDC row — that would show the
+  // user a misleading DOT balance under a USDT token entry.
+  if (input.id) {
+    return BigInt(0)
+  }
+
   const pubkey = decodePolkadotPublicKey(input.address)
   const hash = bytesToHex(blake2b(pubkey, { dkLen: 16 }))
   const accountId = bytesToHex(pubkey)

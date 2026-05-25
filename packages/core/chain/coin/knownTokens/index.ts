@@ -770,6 +770,11 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       ticker: 'USDT',
       logo: 'usdt',
       decimals: 6,
+      // NOTE: CoinGecko's 'tether' coin doesn't list polkadot-asset-hub in its
+      // platforms map (only Ethereum/Solana/Tron/TON/Near/etc). Price still resolves
+      // correctly via /simple/price?ids=tether but any future platform-verification
+      // logic (e.g. checking coin.platforms['polkadot-asset-hub']) will find nothing
+      // and should special-case this entry.
       priceProviderId: 'tether',
     },
     '1337': {
