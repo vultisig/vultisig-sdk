@@ -10,7 +10,7 @@ import { CoinBalanceResolver } from '../resolver'
 // the bundler. Resolve the decode function once at module load time.
 type Bs58CheckMod = { decode?: (s: string) => Uint8Array; default?: { decode: (s: string) => Uint8Array } }
 const _mod = bs58check as unknown as Bs58CheckMod
-const _decode: (s: string) => Uint8Array = (_mod.decode ?? _mod.default?.decode) as (s: string) => Uint8Array
+const _decode: ((s: string) => Uint8Array) | undefined = _mod.decode ?? _mod.default?.decode
 
 export const getTronCoinBalance: CoinBalanceResolver = async input => {
   if (isFeeCoin(input)) {
@@ -77,12 +77,15 @@ export function base58CheckTronDecode(address: string): string {
 }
 
 async function fetchTRC20TokenBalance(contractAddress: string, walletAddress: string): Promise<bigint> {
-  const paddedWalletAddress = '0000000000000000000000' + walletAddress.slice(2)
+  // walletAddress is "0x" + 40-char EVM hex (base58CheckTronDecode output, 0x41 prefix already stripped).
+  // Pad to 64 chars (12 zero bytes + 20-byte addr) for the balanceOf(address) ABI param.
+  const evmHex = walletAddress.slice(2) // 40-char hex, no prefix
+  const paddedWalletAddress = '000000000000000000000000' + evmHex // 24 + 40 = 64 chars
 
   const data = '0x70a08231' + paddedWalletAddress
 
-  const fromAddress = '0x' + walletAddress.slice(4)
-  const toAddress = '0x' + contractAddress.slice(4)
+  const fromAddress = walletAddress // already "0x" + 40-char EVM hex
+  const toAddress = contractAddress // already "0x" + 40-char EVM hex
 
   const params: any[] = [
     {
