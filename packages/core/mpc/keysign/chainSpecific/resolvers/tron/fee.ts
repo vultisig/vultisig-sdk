@@ -37,7 +37,7 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
 
   const parameter = buildTrc20TransferParameter(recipientAddressHex, amount)
 
-  const url = 'https://api.trongrid.io/walletsolidity/triggerconstantcontract'
+  const url = 'https://api.trongrid.io/wallet/triggerconstantcontract'
 
   const responseData = await queryUrl<TriggerContractResponse>(url, {
     headers: {
