@@ -167,6 +167,23 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
         }
       },
       evm: () => {
+        // Mirror the core implementation's EVM affiliate-fee extraction so RN
+        // routes surface the same swap-fee row context as desktop/web. LI.FI's
+        // `feeCosts` is the same shape across both kinds; keep `affiliateFee`
+        // optional because not every route has one (affiliateBps may be 0 and
+        // no LIFI Fixed Fee charged). See core for the full rationale on the
+        // lowercase address normalization. (CodeRabbit #540 actionable.)
+        const fees = estimate.feeCosts ?? []
+        const swapFee = fees.find(fee => fee.name === 'LIFI Fixed Fee') || fees[0]
+        // EVM addresses can come back from LiFi in either lowercase or
+        // EIP-55 checksum form; normalize both sides to lowercase so a
+        // checksum mismatch doesn't silently fall back to the native
+        // fee coin and misattribute the affiliate fee.
+        const swapFeeAddress = swapFee?.token.address.toLowerCase()
+        const swapFeeAssetId =
+          swapFee &&
+          ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
+            chainFeeCoin[transfer.from.chain].id)
         return {
           evm: {
             from: shouldBePresent(from),
@@ -174,6 +191,16 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+            ...(swapFee
+              ? {
+                  affiliateFee: {
+                    amount: BigInt(swapFee.amount),
+                    decimals: swapFee.token.decimals,
+                    chain: resolveSwapFeeChain(swapFee.token.chainId, transfer.from.chain),
+                    id: swapFeeAssetId,
+                  },
+                }
+              : {}),
           },
         }
       },
