@@ -144,6 +144,23 @@ describe('getTronChainSpecific — native TRX bandwidth fee check', () => {
     expect(result.gasEstimation).toBe(800_000n)
   })
 
+  it('returns 0n fee when available bandwidth exactly equals the threshold (boundary: available === 300)', async () => {
+    // The check is `>= BYTES_PER_NATIVE_TRX_TX`, so exactly 300 must be free.
+    vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(300))
+
+    const result = await getTronChainSpecific({
+      keysignPayload: makeTrxPayload(),
+      walletCore: {} as any,
+      thirdPartyGasLimitEstimation: undefined,
+      expiration: undefined,
+      timestamp: undefined,
+      refBlockBytesHex: undefined,
+      refBlockHashHex: undefined,
+    })
+
+    expect(result.gasEstimation).toBe(0n)
+  })
+
   it('honours thirdPartyGasLimitEstimation when provided, skipping bandwidth check', async () => {
     vi.mocked(getTronAccountResources).mockResolvedValue(makeBandwidthResources(1500))
 

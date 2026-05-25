@@ -9,9 +9,10 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { getTrc20TransferFee } from './fee'
 
-// Conservative worst-case fee when sender has exhausted bandwidth. Tron's
-// dynamic fee schedule charges ~1000 sun/bandwidth-point; a native transfer
-// consumes ~267-345 points, but the fee can spike — 800k sun gives margin.
+// Worst-case fee when sender has exhausted bandwidth. A native TRX transfer
+// is ~267-345 bytes on-wire (signed size); at 1000 sun/byte that's ~267k-345k
+// sun. 800_000n keeps the pre-existing margin (~2.4× the median signed size)
+// and guards against governance-driven bandwidth price hikes.
 const NATIVE_TRX_SEND_FEE_FALLBACK = 800_000n
 
 // Native TRX transfer is ~270-345 bytes; use 300 as the threshold (mirrors iOS BYTES_PER_COIN_TX)
