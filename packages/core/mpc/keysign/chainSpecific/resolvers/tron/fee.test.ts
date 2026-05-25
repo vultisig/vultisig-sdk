@@ -47,4 +47,24 @@ describe('getTrc20TransferFee', () => {
 
     expect(fee).toBe(0n)
   })
+
+  it('propagates queryUrl errors (throw-bubbling contract)', async () => {
+    mockQueryUrl.mockRejectedValue(new Error('network error'))
+
+    await expect(
+      getTrc20TransferFee({ coin, amount: 1_000_000n, receiver: 'TJDENsfBJs4RFETt1X1W8wMDc8M5XnJhd' })
+    ).rejects.toThrow('network error')
+  })
+
+  it('documents negative energy_used / energy_penalty behavior (no clamping in current impl)', async () => {
+    // TronGrid edge cases can return negative values; current code does not clamp,
+    // so the returned fee is negative. This test pins the existing behavior so any
+    // future change (e.g. adding Math.max(0, ...) clamping) is a conscious decision.
+    mockQueryUrl.mockResolvedValue({ energy_used: -5000, energy_penalty: -1000 })
+
+    const fee = await getTrc20TransferFee({ coin, amount: 1_000_000n, receiver: 'TJDENsfBJs4RFETt1X1W8wMDc8M5XnJhd' })
+
+    // (-5000 + -1000) * 280 = -1_680_000n — negative because no clamp exists yet
+    expect(fee).toBe(-1_680_000n)
+  })
 })
