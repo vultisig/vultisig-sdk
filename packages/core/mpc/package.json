@@ -902,6 +902,11 @@
       "import": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js",
       "default": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js"
     },
+    "./types/vultisig/keysign/v1/swapkit_swap_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.js"
+    },
     "./types/vultisig/keysign/v1/thorchain_swap_payload_pb": {
       "types": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.d.ts",
       "import": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.js",

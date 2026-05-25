@@ -128,6 +128,7 @@ type SwapKitSwapResponse = {
   depositAddress?: string
   depositAmount?: string
   memo?: string
+  swapId?: string
   providers?: string[]
   legs?: { provider?: string }[]
   fees?: { type?: string; amount?: string }[]
@@ -449,6 +450,8 @@ const buildTransferTx = (
     to,
     amount: getTransferAmount(response, amount, from.decimals),
     ...(response.memo ? { memo: response.memo } : {}),
+    ...(response.meta?.txType ? { txType: response.meta.txType } : {}),
+    ...(response.swapId ? { swapId: response.swapId } : {}),
   }
 
   return {
