@@ -28,10 +28,15 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     return { status: 'pending' }
   }
 
-  const receiptResult = tx.receipt?.result
-  const success = receiptResult !== 'FAILED'
+  // iOS semantics:
+  // - receipt absent → pending (mined but no receipt object yet)
+  // - receipt.result present (any value: FAILED, OUT_OF_ENERGY, REVERT, …) → error
+  // - receipt present, result absent → success
+  if (!tx.receipt) {
+    return { status: 'pending' }
+  }
 
-  const status = success ? 'success' : 'error'
+  const status = tx.receipt.result ? 'error' : 'success'
   const feeCoin = chainFeeCoin[Chain.Tron]
   const receipt =
     tx.fee != null
