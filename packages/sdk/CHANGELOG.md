@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.1.1
+
+### Patch Changes
+
+- [#512](https://github.com/vultisig/vultisig-sdk/pull/512) [`72eb200`](https://github.com/vultisig/vultisig-sdk/commit/72eb200ec647a707d1ebdc1f8b6f0f5243780477) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Station Terra import primitives for legacy seed-byte, mnemonic, and raw private-key migration flows.
+
 ## 1.1.0
 
 ### Minor Changes
