@@ -83,6 +83,24 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'tether',
     },
+    TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8: {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn: {
+      ticker: 'USDD',
+      logo: 'usdd',
+      decimals: 18,
+      priceProviderId: 'usdd',
+    },
+    TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE: {
+      ticker: 'stUSDT',
+      logo: 'stusdt',
+      decimals: 6,
+      priceProviderId: 'staked-usdt',
+    },
   },
   [Chain.Solana]: {
     // QA dogfood Bug J (paaao 2026-05-02): USDC and USDT on Solana
