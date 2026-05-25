@@ -9,52 +9,133 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
 
 import { getPolkadotCoinBalance } from './polkadot'
 
-// A valid Polkadot SS58 address (Alice, network prefix 0).
+// Alice's Polkadot SS58 address (network prefix 0) and its 32-byte public key.
+// Public key: d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 const VALID_DOT_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5'
 
-describe('getPolkadotCoinBalance — interim token guard (PR A / #562)', () => {
-  // PR A adds USDT (id=1984) + USDC (id=1337) to knownTokens.
-  // PR B (TBD) will wire pallet_assets.Account queries for those assets.
-  // Until PR B lands the resolver must return 0n for any coin with an id
-  // rather than returning the native DOT System.Account free balance —
-  // which would show the user a misleading DOT balance under a USDT row.
+// Storage key verification (computed offline via @polkadot/util-crypto + @noble/hashes):
+//
+//   twox128("Assets")  = 682a59d51ab9e48a8c8cc418ff9708d2
+//   twox128("Account") = b99d880ec681799c0cf30e8886371da9
+//   le_u32(1984)       = c0070000
+//   blake2_128(le_u32(1984)) = a319d0e87221ca1ee751c1529f201522
+//   blake2_128(alice_pubkey) = de1e86a9a8c739864cf3cc5ec2bea59f
+//
+//   USDT key = 0x682a59d51ab9e48a8c8cc418ff9708d2
+//              b99d880ec681799c0cf30e8886371da9
+//              a319d0e87221ca1ee751c1529f201522c0070000
+//              de1e86a9a8c739864cf3cc5ec2bea59f
+//              d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
+//   (202 chars total including "0x" prefix)
 
+describe('getPolkadotCoinBalance — pallet_assets.Account (Asset Hub tokens)', () => {
   beforeEach(() => {
     queryUrlMock.mockReset()
   })
 
-  it('returns 0n for USDT (asset_id=1984) without hitting RPC', async () => {
+  it('fetches USDT balance (asset_id=1984) from Asset Hub pallet_assets', async () => {
+    // AssetAccount SCALE: balance(u128 LE) + status(Liquid=0x00) + reason(Consumer=0x01)
+    // balance = 1_000_000 (1 USDT at 6 decimals) = 0x0F4240
+    // LE 16 bytes: 40 42 0f 00 00 00 00 00 00 00 00 00 00 00 00 00
+    const fakeAssetAccountHex = '0x' + '40420f00000000000000000000000000' + '00' + '01'
+    queryUrlMock.mockResolvedValue({ result: fakeAssetAccountHex })
+
     const balance = await getPolkadotCoinBalance({
       chain: Chain.Polkadot,
       address: VALID_DOT_ADDRESS,
-      id: '1984', // TODO(PR B): wire pallet_assets.Account query here
+      id: '1984',
+    })
+
+    expect(balance).toBe(1_000_000n)
+    expect(queryUrlMock).toHaveBeenCalledTimes(1)
+
+    // Verify it called Asset Hub (not relay chain) with the correct storage key.
+    const call = queryUrlMock.mock.calls[0]
+    const url: string = call[0]
+    expect(url).toContain('dot-ah')
+
+    const storageKey: string = call[1].body.params[0]
+    // key must start with twox128("Assets") + twox128("Account")
+    expect(storageKey.startsWith('0x682a59d51ab9e48a8c8cc418ff9708d2b99d880ec681799c0cf30e8886371da9')).toBe(true)
+    // full key for USDT + Alice — verified offline via @polkadot/util-crypto
+    expect(storageKey).toBe(
+      '0x682a59d51ab9e48a8c8cc418ff9708d2b99d880ec681799c0cf30e8886371da9' +
+        'a319d0e87221ca1ee751c1529f201522c0070000' +
+        'de1e86a9a8c739864cf3cc5ec2bea59f' +
+        'd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d'
+    )
+    expect(storageKey).toHaveLength(202)
+  })
+
+  it('fetches USDC balance (asset_id=1337) from Asset Hub pallet_assets', async () => {
+    // balance = 500_000 (0.5 USDC at 6 decimals)
+    // 500_000 = 0x7A120, LE 16 bytes: 20 a1 07 00 00...
+    const fakeAssetAccountHex = '0x' + '20a10700000000000000000000000000' + '00' + '01'
+    queryUrlMock.mockResolvedValue({ result: fakeAssetAccountHex })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+      id: '1337',
+    })
+
+    expect(balance).toBe(500_000n)
+    expect(queryUrlMock).toHaveBeenCalledTimes(1)
+
+    // Key must contain le_u32(1337) = 39050000 in the asset segment
+    const storageKey: string = queryUrlMock.mock.calls[0][1].body.params[0]
+    expect(storageKey).toContain('39050000') // le_u32(1337)
+    expect(storageKey).toHaveLength(202)
+  })
+
+  it('returns 0n when the account has no entry for that asset (null RPC response)', async () => {
+    queryUrlMock.mockResolvedValue({ result: null })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+      id: '1984',
     })
 
     expect(balance).toBe(0n)
-    // RPC must NOT be called — guard must short-circuit before any network I/O
+    expect(queryUrlMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws on malformed SCALE response (too short to contain u128)', async () => {
+    // 30 hex chars = 15 bytes — not enough for u128 (needs 32 hex chars)
+    queryUrlMock.mockResolvedValue({ result: '0x' + 'aa'.repeat(15) })
+
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: '1984',
+      })
+    ).rejects.toThrow(/unexpected storage response/)
+  })
+
+  it('throws on non-numeric asset_id', async () => {
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: 'not-a-number',
+      })
+    ).rejects.toThrow(/Invalid Asset Hub asset_id/)
+
     expect(queryUrlMock).not.toHaveBeenCalled()
   })
 
-  it('returns 0n for USDC (asset_id=1337) without hitting RPC', async () => {
-    const balance = await getPolkadotCoinBalance({
-      chain: Chain.Polkadot,
-      address: VALID_DOT_ADDRESS,
-      id: '1337', // TODO(PR B): wire pallet_assets.Account query here
-    })
+  it('propagates Asset Hub RPC errors', async () => {
+    queryUrlMock.mockResolvedValue({ error: { code: -32000, message: 'storage error' } })
 
-    expect(balance).toBe(0n)
-    expect(queryUrlMock).not.toHaveBeenCalled()
-  })
-
-  it('returns 0n for any non-empty id (generic guard coverage)', async () => {
-    const balance = await getPolkadotCoinBalance({
-      chain: Chain.Polkadot,
-      address: VALID_DOT_ADDRESS,
-      id: '9999',
-    })
-
-    expect(balance).toBe(0n)
-    expect(queryUrlMock).not.toHaveBeenCalled()
+    await expect(
+      getPolkadotCoinBalance({
+        chain: Chain.Polkadot,
+        address: VALID_DOT_ADDRESS,
+        id: '1984',
+      })
+    ).rejects.toThrow(/pallet_assets RPC error/)
   })
 })
 
@@ -63,16 +144,12 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     queryUrlMock.mockReset()
   })
 
-  it('queries RPC for native DOT (no id present)', async () => {
+  it('queries relay chain RPC for native DOT (no id present)', async () => {
     // SCALE-encoded AccountInfo with free balance = 1_000_000_000_000n (1 DOT)
     // Layout: nonce(u32=0) + consumers(u32=0) + providers(u32=1) + sufficients(u32=0)
     //         + free(u128) + reserved(u128) + frozen(u128) + flags(u128)
     // free = 1_000_000_000_000 = 0x000000E8D4A51000 LE-encoded in 16 bytes:
     //   LE bytes: 00 10 A5 D4 E8 00 00 00 00 00 00 00 00 00 00 00
-    // Full hex (nonce+consumers+providers+sufficients = 00000000 00000000 01000000 00000000):
-    //   0x 00000000 00000000 01000000 00000000
-    //      0010A5D4E8000000000000000000000000  (free, 16 bytes LE)
-    //      + 3 more u128 zero fields (reserved, frozen, flags)
     const freeLE = '0010A5D4E8000000000000000000000000'
     const fakeResult =
       '0x' +
@@ -93,9 +170,17 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
       // no id — native DOT
     })
 
-    // Should have called the RPC
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
-    // Balance should be 1 DOT = 1_000_000_000_000 planck
+
+    // Must call the relay chain, not Asset Hub
+    const url: string = queryUrlMock.mock.calls[0][0]
+    expect(url).not.toContain('dot-ah')
+    expect(url).toContain('/dot/')
+
+    // Must use System.Account prefix, not Assets.Account
+    const storageKey: string = queryUrlMock.mock.calls[0][1].body.params[0]
+    expect(storageKey.startsWith('0x26aa394eea5630e07c48ae0c9558cef7')).toBe(true)
+
     expect(balance).toBe(1_000_000_000_000n)
   })
 

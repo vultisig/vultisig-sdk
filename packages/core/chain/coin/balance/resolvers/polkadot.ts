@@ -5,7 +5,7 @@
 // Bittensor revert that originally broke this resolver.
 import { blake2b } from '@noble/hashes/blake2b'
 import { bytesToHex } from '@noble/hashes/utils'
-import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
+import { assetHubRpcUrl, polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import bs58 from 'bs58'
 
@@ -20,6 +20,11 @@ type RpcResponse<T> = {
 
 // twox128("System") ++ twox128("Account") — well-known Substrate storage prefix
 const systemAccountPrefix = '0x26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da9'
+
+// twox128("Assets") ++ twox128("Account") — pallet_assets.Account on Asset Hub
+// Computed via xxhashAsHex('Assets', 128) + xxhashAsHex('Account', 128) from @polkadot/util-crypto.
+// Hardcoded to avoid pulling @polkadot/util-crypto (BN.js double-bundle crash).
+const assetsAccountPrefix = '0x682a59d51ab9e48a8c8cc418ff9708d2b99d880ec681799c0cf30e8886371da9'
 
 const polkadotSs58Prefix = 0
 const ss58AddressByteLength = 35
@@ -51,17 +56,70 @@ const decodePolkadotPublicKey = (address: string): Uint8Array => {
   return payload.subarray(1)
 }
 
-export const getPolkadotCoinBalance: CoinBalanceResolver = async input => {
-  // PR A (#562) registers USDT (id=1984) + USDC (id=1337) in knownTokens.
-  // PR B (TBD) will wire pallet_assets.Account storage queries for those assets.
-  // Until PR B lands, bail early for any non-native coin to avoid returning the
-  // DOT System.Account free balance for a USDT/USDC row — that would show the
-  // user a misleading DOT balance under a USDT token entry.
-  if (input.id) {
-    return BigInt(0)
+// Storage key: assetsAccountPrefix
+//   + blake2_128_concat(le_u32(assetId))   — 16-byte hash + 4-byte raw
+//   + blake2_128_concat(accountId_32bytes)  — 16-byte hash + 32-byte raw
+// Total: 32 + 20 + 48 = 100 bytes → 202 hex chars with "0x" prefix.
+//
+// Response is SCALE-encoded AssetAccount; only the first 16 bytes matter:
+//   balance: u128 LE — 0 (or null response) means the account doesn't hold that asset.
+const getAssetHubTokenBalance = async (assetIdStr: string, pubkey: Uint8Array): Promise<bigint> => {
+  const assetId = parseInt(assetIdStr, 10)
+  if (!Number.isInteger(assetId) || assetId <= 0) {
+    throw new Error(`Invalid Asset Hub asset_id: ${assetIdStr}`)
   }
 
+  const assetIdLE = new Uint8Array(4)
+  new DataView(assetIdLE.buffer).setUint32(0, assetId, true)
+
+  const assetIdHashHex = bytesToHex(blake2b(assetIdLE, { dkLen: 16 }))
+  const assetIdHex = bytesToHex(assetIdLE)
+  const accountHashHex = bytesToHex(blake2b(pubkey, { dkLen: 16 }))
+  const accountHex = bytesToHex(pubkey)
+
+  const storageKey = assetsAccountPrefix + assetIdHashHex + assetIdHex + accountHashHex + accountHex
+
+  const response = await queryUrl<RpcResponse<string | null>>(assetHubRpcUrl, {
+    body: {
+      jsonrpc: '2.0',
+      method: 'state_getStorage',
+      params: [storageKey],
+      id: 1,
+    },
+  })
+
+  if (response.error) {
+    throw new Error(`Asset Hub pallet_assets RPC error: ${response.error.message ?? `code ${response.error.code}`}`)
+  }
+
+  // Null result means the account has no entry for this asset — balance is 0.
+  const result = response.result
+  if (!result) return 0n
+
+  // AssetAccount SCALE layout: balance(u128=16 bytes LE) + status(u8) + reason(enum) + extra
+  // We only need the first 16 bytes for balance.
+  const hex = result.startsWith('0x') ? result.slice(2) : result
+  if (hex.length < 32 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new Error(`Asset Hub pallet_assets: unexpected storage response: ${result}`)
+  }
+  const balanceHex = hex.slice(0, 32)
+
+  const leBytes = balanceHex.match(/.{2}/g)
+  if (!leBytes) {
+    throw new Error(`Asset Hub pallet_assets: failed to parse balance hex: ${balanceHex}`)
+  }
+  return BigInt('0x' + leBytes.reverse().join(''))
+}
+
+export const getPolkadotCoinBalance: CoinBalanceResolver = async input => {
   const pubkey = decodePolkadotPublicKey(input.address)
+
+  // Non-native coins (USDT id=1984, USDC id=1337, etc.) live on Asset Hub.
+  // Query pallet_assets.Account storage instead of System.Account.
+  if (input.id) {
+    return getAssetHubTokenBalance(input.id, pubkey)
+  }
+
   const hash = bytesToHex(blake2b(pubkey, { dkLen: 16 }))
   const accountId = bytesToHex(pubkey)
   const storageKey = systemAccountPrefix + hash + accountId
