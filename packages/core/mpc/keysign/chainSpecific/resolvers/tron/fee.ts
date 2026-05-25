@@ -37,7 +37,7 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
 
   const parameter = buildTrc20TransferParameter(recipientAddressHex, amount)
 
-  const url = 'https://api.trongrid.io/walletsolidity/triggerconstantcontract'
+  const url = 'https://api.trongrid.io/wallet/triggerconstantcontract'
 
   const responseData = await queryUrl<TriggerContractResponse>(url, {
     headers: {
@@ -55,6 +55,15 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
   const energyUsed = responseData.energy_used ?? 0
   const energyPenalty = responseData.energy_penalty ?? 0
   const totalEnergy = BigInt(energyUsed) + BigInt(energyPenalty)
+  // Clamp negative totals to 0. TronGrid edge cases can return negative energy
+  // values which, multiplied by energyPrice, produce a negative int64 in the
+  // protobuf feeLimit field via `Long.fromString(gasEstimation.toString())`.
+  // TronGrid rejects negative feeLimit at broadcast. Send-service path has a
+  // similar guard at sdk/src/chains/tron/tx.ts:391; mirror it here for the MPC
+  // keysign path. Returning 0 lets the upstream estimator pick a sane default.
+  if (totalEnergy <= 0n) {
+    return 0n
+  }
   const energyPrice = await getEnergyPrice()
   const totalSun = totalEnergy * energyPrice
 
