@@ -51,6 +51,7 @@ describe('ChainDiscoveryService', () => {
   it('isEddsaChain is true for EdDSA chains', () => {
     const s = new ChainDiscoveryService(wasmProvider)
     expect(s.isEddsaChain(Chain.Solana)).toBe(true)
+    expect(s.isEddsaChain(Chain.Cardano)).toBe(true)
     expect(s.isEddsaChain(Chain.Bittensor)).toBe(false)
     expect(s.isEddsaChain(Chain.Ethereum)).toBe(false)
   })

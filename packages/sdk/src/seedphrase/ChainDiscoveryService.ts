@@ -46,7 +46,7 @@ export type ChainDiscoveryConfig = {
 /**
  * Chains that use EdDSA signature algorithm
  */
-const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Ton]
+const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Ton, Chain.Cardano]
 
 /**
  * ChainDiscoveryService - Scans blockchains for existing balances

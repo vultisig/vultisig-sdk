@@ -5,6 +5,8 @@
 
 import { Chain, defaultChains } from '@vultisig/core-chain/Chain'
 
+import { VaultError, VaultErrorCode } from './vault/VaultError'
+
 /**
  * Default chains for new vaults
  * Re-exported from core for backward compatibility
@@ -43,7 +45,8 @@ export const assertSeedphraseImportSupportsChains = (chains: readonly Chain[]): 
     return
   }
 
-  throw new Error(
+  throw new VaultError(
+    VaultErrorCode.InvalidConfig,
     `Seedphrase import does not currently support ${unsupportedChains.join(
       ', '
     )}. These chains require key material or threshold signing that is not available in the current SDK.`
