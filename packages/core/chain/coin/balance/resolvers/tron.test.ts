@@ -112,15 +112,15 @@ describe('getTronCoinBalance (TRC20 eth_call calldata)', () => {
     expect(balance).toBe(100_000_000n)
   })
 
-  it('returns 0n on RPC error without throwing', async () => {
+  it('propagates RPC errors instead of swallowing them', async () => {
     queryUrlMock.mockRejectedValue(new Error('network error'))
 
-    const balance = await getTronCoinBalance({
-      chain: Chain.Tron,
-      address: WALLET_ADDRESS,
-      id: USDT_CONTRACT,
-    })
-
-    expect(balance).toBe(0n)
+    await expect(
+      getTronCoinBalance({
+        chain: Chain.Tron,
+        address: WALLET_ADDRESS,
+        id: USDT_CONTRACT,
+      })
+    ).rejects.toThrow('network error')
   })
 })

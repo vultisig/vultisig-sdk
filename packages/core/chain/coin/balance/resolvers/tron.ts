@@ -7,43 +7,38 @@ import bs58check from 'bs58check'
 import { CoinBalanceResolver } from '../resolver'
 
 // bs58check v4 ships as ESM with a CJS-compat default export depending on
-// the bundler. Resolve the decode function once at module load time.
+// the bundler. Resolve the decode function once at module load time and
+// throw immediately if unavailable — fail on startup, not mid-request.
 type Bs58CheckMod = { decode?: (s: string) => Uint8Array; default?: { decode: (s: string) => Uint8Array } }
 const _mod = bs58check as unknown as Bs58CheckMod
-const _decode: ((s: string) => Uint8Array) | undefined = _mod.decode ?? _mod.default?.decode
+const _decode: (s: string) => Uint8Array = (() => {
+  const fn = _mod.decode ?? _mod.default?.decode
+  if (!fn) throw new Error('bs58check.decode unavailable — bundler did not resolve bs58check correctly')
+  return fn
+})()
 
 export const getTronCoinBalance: CoinBalanceResolver = async input => {
   if (isFeeCoin(input)) {
-    try {
-      const data = await queryUrl<{
-        result?: { balance?: string }
-        balance?: string
-      }>(`${tronRpcUrl}/wallet/getaccount`, {
-        body: {
-          address: input.address,
-          visible: true,
-        },
-      })
+    const data = await queryUrl<{
+      result?: { balance?: string }
+      balance?: string
+    }>(`${tronRpcUrl}/wallet/getaccount`, {
+      body: {
+        address: input.address,
+        visible: true,
+      },
+    })
 
-      const balance = data.result?.balance ?? data.balance ?? data.result?.balance?.toString() ?? '0'
+    const balance = data.result?.balance ?? data.balance ?? data.result?.balance?.toString() ?? '0'
 
-      return BigInt(balance ?? '0')
-    } catch (error) {
-      console.error('Error fetching TRX balance:', error)
-      return BigInt('0')
-    }
+    return BigInt(balance ?? '0')
   } else {
-    try {
-      const hexAddress = base58CheckTronDecode(input.address)
-      const hexContractAddress = base58CheckTronDecode(shouldBePresent(input.id))
+    const hexAddress = base58CheckTronDecode(input.address)
+    const hexContractAddress = base58CheckTronDecode(shouldBePresent(input.id))
 
-      const balance = await fetchTRC20TokenBalance(`0x${hexContractAddress}`, `0x${hexAddress}`)
+    const balance = await fetchTRC20TokenBalance(`0x${hexContractAddress}`, `0x${hexAddress}`)
 
-      return BigInt(balance ?? '0')
-    } catch (error) {
-      console.error('Error fetching TRC20 token balance:', error)
-      return BigInt('0')
-    }
+    return BigInt(balance ?? '0')
   }
 }
 
@@ -58,10 +53,12 @@ export const getTronCoinBalance: CoinBalanceResolver = async input => {
  *
  * bs58check.decode verifies the 4-byte SHA-256d checksum and throws on
  * mismatch, so callers get an explicit error rather than silent misdirection.
+ *
+ * Note: this resolver only supports Tron mainnet (prefix 0x41). Testnet (Nile,
+ * prefix 0xa0) is not supported - full testnet support is a broader feature
+ * that requires testnet-aware RPC routing too.
  */
 export function base58CheckTronDecode(address: string): string {
-  if (!_decode) throw new Error('bs58check.decode unavailable')
-
   // Throws if the checksum is invalid - intentional.
   const decoded = _decode(address)
 
