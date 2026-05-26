@@ -7471,7 +7471,7 @@ __metadata:
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.22.3"
     typescript: "npm:^6.0.3"
-    viem: "npm:^2.48.4"
+    viem: "npm:^2.51.0"
     vitest: "npm:^4.1.6"
     ws: "npm:^8.19.0"
   bin:
@@ -7524,7 +7524,7 @@ __metadata:
     ethers: "npm:^6.16.0"
     i18next: "npm:^26.0.8"
     tiny-secp256k1: "npm:^2.2.4"
-    viem: "npm:^2.48.4"
+    viem: "npm:^2.51.0"
     xrpl: "npm:^4.6.0"
   languageName: unknown
   linkType: soft
@@ -7558,7 +7558,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     cosmjs-types: "npm:^0.11.0"
     long: "npm:^5.3.2"
-    viem: "npm:^2.48.4"
+    viem: "npm:^2.51.0"
   languageName: unknown
   linkType: soft
 
@@ -7655,7 +7655,7 @@ __metadata:
   dependencies:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
-    viem: "npm:^2.48.4"
+    viem: "npm:^2.51.0"
   languageName: unknown
   linkType: soft
 
@@ -7807,7 +7807,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     util: "npm:^0.12.5"
     uuid: "npm:^13.0.0"
-    viem: "npm:^2.48.4"
+    viem: "npm:^2.51.0"
     vite-plugin-node-polyfills: "npm:^0.26.0"
     vite-plugin-wasm: "npm:^3.6.0"
     vitest: "npm:^4.1.6"
@@ -16913,6 +16913,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ox@https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a":
+  version: 0.14.26-386a343.0
+  resolution: "ox@https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a"
+  dependencies:
+    "@adraffy/ens-normalize": "npm:^1.11.0"
+    "@noble/ciphers": "npm:^1.3.0"
+    "@noble/curves": "npm:1.9.1"
+    "@noble/hashes": "npm:^1.8.0"
+    "@scure/bip32": "npm:^1.7.0"
+    "@scure/bip39": "npm:^1.6.0"
+    abitype: "npm:^1.2.3"
+    eventemitter3: "npm:5.0.1"
+  peerDependencies:
+    typescript: ">=5.4.0"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10c0/7c9785a31568076f67b9c83a07494921d255b4030b9b95cbb330d230498a23c1f58ab9d90cb0ca7546b1bc727e4b43651bb30fe577142ae0800bc63a0c0223f5
+  languageName: node
+  linkType: hard
+
 "ox@npm:0.14.17":
   version: 0.14.17
   resolution: "ox@npm:0.14.17"
@@ -16931,27 +16952,6 @@ __metadata:
     typescript:
       optional: true
   checksum: 10c0/a4632918d89db20e7265dff96dec3786046e2ec99a42659badd300b7b24678348f505fd57e651c3a814a150d905f512a23a037f15757eae41db601d25fa7b10c
-  languageName: node
-  linkType: hard
-
-"ox@npm:0.14.20":
-  version: 0.14.20
-  resolution: "ox@npm:0.14.20"
-  dependencies:
-    "@adraffy/ens-normalize": "npm:^1.11.0"
-    "@noble/ciphers": "npm:^1.3.0"
-    "@noble/curves": "npm:1.9.1"
-    "@noble/hashes": "npm:^1.8.0"
-    "@scure/bip32": "npm:^1.7.0"
-    "@scure/bip39": "npm:^1.6.0"
-    abitype: "npm:^1.2.3"
-    eventemitter3: "npm:5.0.1"
-  peerDependencies:
-    typescript: ">=5.4.0"
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: 10c0/fe1c34577536aea3bda5ec47e083be9069d99cb35a270527921f1c7b406283f12bc4b7e9348b46aa3ba88555fc8abc963129c6b5b8b3b375d5e1549f65f2ce9a
   languageName: node
   linkType: hard
 
@@ -21309,9 +21309,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.48.4":
-  version: 2.48.4
-  resolution: "viem@npm:2.48.4"
+"viem@npm:^2.51.0":
+  version: 2.51.0
+  resolution: "viem@npm:2.51.0"
   dependencies:
     "@noble/curves": "npm:1.9.1"
     "@noble/hashes": "npm:1.8.0"
@@ -21319,14 +21319,14 @@ __metadata:
     "@scure/bip39": "npm:1.6.0"
     abitype: "npm:1.2.3"
     isows: "npm:1.0.7"
-    ox: "npm:0.14.20"
-    ws: "npm:8.18.3"
+    ox: "https://pkg.pr.new/ox@386a3439fe1ce76d237930f8c6e6bb493746069a"
+    ws: "npm:8.20.1"
   peerDependencies:
     typescript: ">=5.0.4"
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/c8c5f94c74403ea48ebef9bfc6c744fe96e8573f9000940f7127dc5157f2d0de52fd1434ce498aa698454d30e312406ae320b6f81629f07fb60b4a13e1e3b5ae
+  checksum: 10c0/cc17f57580a8141ed4394e7c5ac32e9e91ecc3e36144ce05a31bc22e5d7769cd30c8a2094474467aeed01e71c4e0c79b153487dd8d1f66fac524b2508cff1d7c
   languageName: node
   linkType: hard
 
@@ -22008,6 +22008,21 @@ __metadata:
     utf-8-validate:
       optional: true
   checksum: 10c0/eac918213de265ef7cb3d4ca348b891a51a520d839aa51cdb8ca93d4fa7ff9f6ccb339ccee89e4075324097f0a55157c89fa3f7147bde9d8d7e90335dc087b53
+  languageName: node
+  linkType: hard
+
+"ws@npm:8.20.1":
+  version: 8.20.1
+  resolution: "ws@npm:8.20.1"
+  peerDependencies:
+    bufferutil: ^4.0.1
+    utf-8-validate: ">=5.0.2"
+  peerDependenciesMeta:
+    bufferutil:
+      optional: true
+    utf-8-validate:
+      optional: true
+  checksum: 10c0/ce162433218399cdedeb76fd33363d4d86a7d910058d4e3c679dce08cea65d6da6b39f11baa4d7808d024cf46ed88f6a05c17611621aaad8fc5e62edacc30c5d
   languageName: node
   linkType: hard
 
