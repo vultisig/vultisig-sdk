@@ -3930,13 +3930,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/bcs@npm:^2.0.3":
-  version: 2.0.3
-  resolution: "@mysten/bcs@npm:2.0.3"
+"@mysten/bcs@npm:^2.0.5":
+  version: 2.0.5
+  resolution: "@mysten/bcs@npm:2.0.5"
   dependencies:
-    "@mysten/utils": "npm:^0.3.1"
+    "@mysten/utils": "npm:^0.3.3"
     "@scure/base": "npm:^2.0.0"
-  checksum: 10c0/27be1c7b1614d883baac5249634539ac9751fd78cc014bb75a60444ad088f12efdd83ba39d6f27efc9aec28e497ce053a019c25a213fdf475d19d2c24d3d29aa
+  checksum: 10c0/ef86f7deb9376e337b8dd6e55a13a8f12d3ef21eb0dd01f7a5410f5105ff0f19560d9d74d00fc07e0912c26469b26d079ca2b5201abcc978a5efa15f1e876e3e
   languageName: node
   linkType: hard
 
@@ -3963,13 +3963,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/sui@npm:^2.3.0, @mysten/sui@npm:^2.8.0":
-  version: 2.16.0
-  resolution: "@mysten/sui@npm:2.16.0"
+"@mysten/sui@npm:^2.17.0":
+  version: 2.17.0
+  resolution: "@mysten/sui@npm:2.17.0"
   dependencies:
     "@graphql-typed-document-node/core": "npm:^3.2.0"
-    "@mysten/bcs": "npm:^2.0.3"
-    "@mysten/utils": "npm:^0.3.1"
+    "@mysten/bcs": "npm:^2.0.5"
+    "@mysten/utils": "npm:^0.3.3"
     "@noble/curves": "npm:^2.0.1"
     "@noble/hashes": "npm:^2.0.1"
     "@protobuf-ts/grpcweb-transport": "npm:^2.11.1"
@@ -3982,7 +3982,7 @@ __metadata:
     graphql: "npm:^16.12.0"
     poseidon-lite: "npm:0.2.1"
     valibot: "npm:^1.2.0"
-  checksum: 10c0/b6593fa4afa9928bc59b71966714e51cf1eb38a9991843ba69f20c956e67d2e372e944d1854542c9ea49610dfbc32f33658d9f56e256f39db5ce28515ff4e5ba
+  checksum: 10c0/d9e5cbb67fb0f2e10f4136284a6a9d382862a2401e1e957db339442e95c90a95b3c762d65d7e5a5ca72514493b317226feda84cdb1b3569a5cab9924edb90ff5
   languageName: node
   linkType: hard
 
@@ -3995,12 +3995,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/utils@npm:^0.3.1":
-  version: 0.3.1
-  resolution: "@mysten/utils@npm:0.3.1"
+"@mysten/utils@npm:^0.3.3":
+  version: 0.3.3
+  resolution: "@mysten/utils@npm:0.3.3"
   dependencies:
     "@scure/base": "npm:^2.0.0"
-  checksum: 10c0/d28cc00c3b072dfd2a64f8908fa2063dead56dbe8bb9dd63458c755bf19c1806a7b038696ba63a1a7cdddb7c4a1d510acab26da5deeb99202f2bbb2b1bba25ef
+  checksum: 10c0/e04876af863679dbe16ad9272a069881a8d1254f3e0296d2f76cec1fc13f972f4ba75a92d6554be8853db742f5c31035c8f2a5bd86695a53dfbebe6913a45580
   languageName: node
   linkType: hard
 
@@ -7568,7 +7568,7 @@ __metadata:
     "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.38.1"
     "@lifi/sdk": "npm:^3.16.2"
-    "@mysten/sui": "npm:^2.8.0"
+    "@mysten/sui": "npm:^2.17.0"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.4"
     "@polkadot/util": "npm:^14.0.1"
@@ -7607,7 +7607,7 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
     "@cosmjs/encoding": "npm:^0.39.0"
-    "@mysten/sui": "npm:^2.8.0"
+    "@mysten/sui": "npm:^2.17.0"
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.9"
@@ -7811,7 +7811,7 @@ __metadata:
     "@formatjs/intl-numberformat": "npm:^8.15.0"
     "@formatjs/intl-pluralrules": "npm:^5.4.0"
     "@lifi/sdk": "npm:^3.15.5"
-    "@mysten/sui": "npm:^2.3.0"
+    "@mysten/sui": "npm:^2.17.0"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.4.6"
     "@rollup/plugin-alias": "npm:^6.0.0"
