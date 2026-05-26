@@ -12,12 +12,15 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 
+export type OneInchAffiliateConfig = typeof oneInchAffiliateConfig
+
 type Input = {
   account: ChainAccount
   fromCoinId: string
   toCoinId: string
   amount: bigint
   affiliateBps?: number
+  oneInchConfig?: OneInchAffiliateConfig
 }
 
 const getBaseUrl = (chainId: number) => `${rootApiUrl}/1inch/swap/v6.0/${chainId}/swap`
@@ -28,6 +31,7 @@ export const getOneInchSwapQuote = async ({
   toCoinId,
   amount,
   affiliateBps,
+  oneInchConfig = oneInchAffiliateConfig,
 }: Input): Promise<GeneralSwapQuote> => {
   const chain = account.chain as EvmChain
   const chainId = hexToNumber(getEvmChainId(chain))
@@ -42,7 +46,7 @@ export const getOneInchSwapQuote = async ({
     includeGas: true,
     ...(affiliateBps
       ? {
-          referrer: oneInchAffiliateConfig.referrer,
+          referrer: oneInchConfig.referrer,
           fee: affiliateBps / 100,
         }
       : {}),

@@ -16,7 +16,7 @@ import {
 } from '../NativeSwapChain'
 import { NativeSwapQuote } from '../NativeSwapQuote'
 import { getNativeSwapDecimals } from '../utils/getNativeSwapDecimals'
-import { buildAffiliateParams } from './affiliate'
+import { buildAffiliateParams, NativeSwapAffiliateConfig } from './affiliate'
 
 type GetNativeSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   swapChain: NativeSwapChain
@@ -24,6 +24,7 @@ type GetNativeSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   amount: number
   referral?: string
   affiliateBps?: number
+  nativeAffiliateConfig?: NativeSwapAffiliateConfig
 }
 
 type NativeSwapQuoteErrorResponse = {
@@ -45,6 +46,7 @@ const requestNativeSwapQuote = async ({
   streamingQuantity,
   affiliateBps,
   referral,
+  nativeAffiliateConfig,
 }: {
   swapChain: NativeSwapChain
   swapBaseUrl: string
@@ -56,6 +58,7 @@ const requestNativeSwapQuote = async ({
   streamingQuantity?: number
   affiliateBps?: number
   referral?: string
+  nativeAffiliateConfig?: NativeSwapAffiliateConfig
 }): Promise<NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse> => {
   const params = new URLSearchParams({
     from_asset: fromAsset,
@@ -69,6 +72,7 @@ const requestNativeSwapQuote = async ({
           swapChain,
           referral,
           affiliateBps,
+          config: nativeAffiliateConfig,
         })
       : {}),
   })
@@ -100,6 +104,7 @@ export const getNativeSwapQuote = async ({
   amount,
   affiliateBps,
   referral,
+  nativeAffiliateConfig,
 }: GetNativeSwapQuoteInput): Promise<NativeSwapQuote> => {
   const [fromAsset, toAsset] = [from, to].map(asset => toNativeSwapAsset(asset))
 
@@ -120,6 +125,7 @@ export const getNativeSwapQuote = async ({
       streamingInterval: nativeSwapStreamingInterval[swapChain],
       affiliateBps,
       referral,
+      nativeAffiliateConfig,
     })
 
     return {
@@ -138,6 +144,7 @@ export const getNativeSwapQuote = async ({
     streamingInterval: nativeSwapStreamingInterval[swapChain],
     affiliateBps,
     referral,
+    nativeAffiliateConfig,
   })
 
   const rapid = assertOkQuote(rapidResult, from)
@@ -165,6 +172,7 @@ export const getNativeSwapQuote = async ({
       streamingQuantity,
       affiliateBps,
       referral,
+      nativeAffiliateConfig,
     })
     streaming = assertOkQuote(streamingRes, from)
   } catch (error) {

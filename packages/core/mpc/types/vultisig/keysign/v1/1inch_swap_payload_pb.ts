@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keysign/v1/1inch_swap_payload.proto.
  */
 export const file_vultisig_keysign_v1_1inch_swap_payload: GenFile = /*@__PURE__*/
-  fileDesc("Cix2dWx0aXNpZy9rZXlzaWduL3YxLzFpbmNoX3N3YXBfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSJ9ChJPbmVJbmNoVHJhbnNhY3Rpb24SDAoEZnJvbRgBIAEoCRIKCgJ0bxgCIAEoCRIMCgRkYXRhGAMgASgJEg0KBXZhbHVlGAQgASgJEhEKCWdhc19wcmljZRgFIAEoCRILCgNnYXMYBiABKAMSEAoIc3dhcF9mZWUYByABKAkiVwoMT25lSW5jaFF1b3RlEhIKCmRzdF9hbW91bnQYASABKAkSMwoCdHgYAiABKAsyJy52dWx0aXNpZy5rZXlzaWduLnYxLk9uZUluY2hUcmFuc2FjdGlvbiLiAQoST25lSW5jaFN3YXBQYXlsb2FkEiwKCWZyb21fY29pbhgBIAEoCzIZLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29pbhIqCgd0b19jb2luGAIgASgLMhkudnVsdGlzaWcua2V5c2lnbi52MS5Db2luEhMKC2Zyb21fYW1vdW50GAMgASgJEhkKEXRvX2Ftb3VudF9kZWNpbWFsGAQgASgJEjAKBXF1b3RlGAUgASgLMiEudnVsdGlzaWcua2V5c2lnbi52MS5PbmVJbmNoUXVvdGUSEAoIcHJvdmlkZXIYBiABKAlCVAoTdnVsdGlzaWcua2V5c2lnbi52MVo4Z2l0aHViLmNvbS92dWx0aXNpZy9jb21tb25kYXRhL2dvL3Z1bHRpc2lnL2tleXNpZ24vdjE7djG6AgJWU2IGcHJvdG8z", [file_vultisig_keysign_v1_coin]);
+  fileDesc("Cix2dWx0aXNpZy9rZXlzaWduL3YxLzFpbmNoX3N3YXBfcGF5bG9hZC5wcm90bxITdnVsdGlzaWcua2V5c2lnbi52MSKZAgoST25lSW5jaFRyYW5zYWN0aW9uEgwKBGZyb20YASABKAkSCgoCdG8YAiABKAkSDAoEZGF0YRgDIAEoCRINCgV2YWx1ZRgEIAEoCRIRCglnYXNfcHJpY2UYBSABKAkSCwoDZ2FzGAYgASgDEhAKCHN3YXBfZmVlGAcgASgJEhsKDnN3YXBfZmVlX2NoYWluGAggASgJSACIAQESHgoRc3dhcF9mZWVfdG9rZW5faWQYCSABKAlIAYgBARIeChFzd2FwX2ZlZV9kZWNpbWFscxgKIAEoBUgCiAEBQhEKD19zd2FwX2ZlZV9jaGFpbkIUChJfc3dhcF9mZWVfdG9rZW5faWRCFAoSX3N3YXBfZmVlX2RlY2ltYWxzIlcKDE9uZUluY2hRdW90ZRISCgpkc3RfYW1vdW50GAEgASgJEjMKAnR4GAIgASgLMicudnVsdGlzaWcua2V5c2lnbi52MS5PbmVJbmNoVHJhbnNhY3Rpb24i4gEKEk9uZUluY2hTd2FwUGF5bG9hZBIsCglmcm9tX2NvaW4YASABKAsyGS52dWx0aXNpZy5rZXlzaWduLnYxLkNvaW4SKgoHdG9fY29pbhgCIAEoCzIZLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29pbhITCgtmcm9tX2Ftb3VudBgDIAEoCRIZChF0b19hbW91bnRfZGVjaW1hbBgEIAEoCRIwCgVxdW90ZRgFIAEoCzIhLnZ1bHRpc2lnLmtleXNpZ24udjEuT25lSW5jaFF1b3RlEhAKCHByb3ZpZGVyGAYgASgJQlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw", [file_vultisig_keysign_v1_coin]);
 
 /**
  * @generated from message vultisig.keysign.v1.OneInchTransaction
@@ -52,6 +52,28 @@ export type OneInchTransaction = Message<"vultisig.keysign.v1.OneInchTransaction
    * @generated from field: string swap_fee = 7;
    */
   swapFee: string;
+
+  /**
+   * Coin context for `swap_fee`. The amount alone is not enough because
+   * providers attribute the fee to different coins (e.g. KyberSwap charges
+   * it in the destination token; LI.FI / 1inch / SwapKit charge it in the
+   * source chain's fee coin). Receivers need these fields to compute the
+   * correct fiat-equivalent value. All three are optional for backwards
+   * compatibility with senders that do not yet populate them.
+   *
+   * @generated from field: optional string swap_fee_chain = 8;
+   */
+  swapFeeChain?: string;
+
+  /**
+   * @generated from field: optional string swap_fee_token_id = 9;
+   */
+  swapFeeTokenId?: string;
+
+  /**
+   * @generated from field: optional int32 swap_fee_decimals = 10;
+   */
+  swapFeeDecimals?: number;
 };
 
 /**

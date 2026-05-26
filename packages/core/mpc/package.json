@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.2.13",
+  "version": "1.2.20",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -265,6 +265,11 @@
       "types": "./dist/keysign/chainSpecific/resolvers/tron/index.d.ts",
       "import": "./dist/keysign/chainSpecific/resolvers/tron/index.js",
       "default": "./dist/keysign/chainSpecific/resolvers/tron/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/tron/energyPrice": {
+      "types": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/tron/energyPrice.js"
     },
     "./keysign/chainSpecific/resolvers/tron/fee": {
       "types": "./dist/keysign/chainSpecific/resolvers/tron/fee.d.ts",
@@ -902,6 +907,11 @@
       "import": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js",
       "default": "./dist/types/vultisig/keysign/v1/kyberswap_swap_payload_pb.js"
     },
+    "./types/vultisig/keysign/v1/swapkit_swap_payload_pb": {
+      "types": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.d.ts",
+      "import": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.js",
+      "default": "./dist/types/vultisig/keysign/v1/swapkit_swap_payload_pb.js"
+    },
     "./types/vultisig/keysign/v1/thorchain_swap_payload_pb": {
       "types": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.d.ts",
       "import": "./dist/types/vultisig/keysign/v1/thorchain_swap_payload_pb.js",
@@ -969,12 +979,12 @@
   "dependencies": {
     "7z-wasm": "^1.2.0",
     "@bufbuild/protobuf": "^2.11.0",
-    "@cosmjs/encoding": "^0.38.1",
-    "@mysten/sui": "^2.8.0",
+    "@cosmjs/encoding": "^0.39.0",
+    "@mysten/sui": "^2.17.0",
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.9",
-    "@vultisig/core-chain": "2.0.0",
+    "@vultisig/core-chain": "2.2.5",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
@@ -986,6 +996,6 @@
     "buffer": "^6.0.3",
     "cosmjs-types": "^0.11.0",
     "long": "^5.3.2",
-    "viem": "^2.48.4"
+    "viem": "^2.51.0"
   }
 }

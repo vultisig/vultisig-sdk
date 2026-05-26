@@ -1,5 +1,113 @@
 # @vultisig/cli
 
+## 1.1.3
+
+### Patch Changes
+
+- [#544](https://github.com/vultisig/vultisig-sdk/pull/544) [`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable unsupported Bittensor seedphrase import and expose the SDK-owned seedphrase import chain support list.
+
+- Updated dependencies [[`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95)]:
+  - @vultisig/sdk@1.1.3
+
+## 1.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`4c9454e`](https://github.com/vultisig/vultisig-sdk/commit/4c9454eca99f43a2ce572732c3d6fcc74c99e89e), [`5ef62f1`](https://github.com/vultisig/vultisig-sdk/commit/5ef62f1aa20202f4a4eb97afa0cf20216dc5a1f1)]:
+  - @vultisig/core-chain@2.2.3
+  - @vultisig/sdk@1.1.0
+  - @vultisig/rujira@25.0.0
+
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b)]:
+  - @vultisig/sdk@1.0.0
+  - @vultisig/core-chain@2.2.2
+  - @vultisig/client-shared@0.2.13
+  - @vultisig/rujira@24.0.0
+
+## 0.28.0
+
+### Patch Changes
+
+- Updated dependencies [[`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9)]:
+  - @vultisig/sdk@0.28.0
+  - @vultisig/client-shared@0.2.12
+  - @vultisig/rujira@23.0.0
+
+## 0.27.0
+
+### Patch Changes
+
+- Updated dependencies [[`9a80907`](https://github.com/vultisig/vultisig-sdk/commit/9a8090721008f2a10dffa9cf2d3fac479d65481c)]:
+  - @vultisig/sdk@0.27.0
+  - @vultisig/client-shared@0.2.11
+  - @vultisig/rujira@22.0.0
+
+## 0.26.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
+- Updated dependencies [[`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc)]:
+  - @vultisig/core-chain@2.2.1
+  - @vultisig/sdk@0.26.1
+
+## 0.26.0
+
+### Minor Changes
+
+- [#507](https://github.com/vultisig/vultisig-sdk/pull/507) [`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add SwapKit as a configurable general swap provider for EVM and Solana source routes.
+
+### Patch Changes
+
+- [#506](https://github.com/vultisig/vultisig-sdk/pull/506) [`b1ce322`](https://github.com/vultisig/vultisig-sdk/commit/b1ce3226039d46055d11726cc0e971dd7a09a035) Thanks [@neavra](https://github.com/neavra)! - agent: send ecdsa/eddsa/chain_code in MessageContext so MCP receives vault info
+
+  The CLI's `MessageContext` was missing `ecdsa_public_key`, `eddsa_public_key`,
+  and `hex_chain_code` — fields vultiagent-app's `agentContext.ts` has always
+  sent. agent-backend reads these via `extractVaultInfoFromContext` to build
+  `req.VaultInfo`, which is then injected into MCP tool calls flagged with
+  `_meta.inject_vault_args: true`. Without them, every such tool errors with
+  "Vault not configured" at the MCP layer — currently observable for the
+  unified `show_receive_request` (vultisig/mcp#179, vultisig/agent-backend#554),
+  but the same gap will break any future `inject_vault_args` tool dispatched
+  through the CLI. `buildMessageContext` and `buildMinimalContext` now populate
+  the three fields from `vault.publicKeys.{ecdsa,eddsa}` + `vault.hexChainCode`.
+
+  Also picks up Ehsan's review nit on [#500](https://github.com/vultisig/vultisig-sdk/issues/500): removes the stray `/**` opener on
+  `client.ts:43` (the line above `isErrorPayloadObject`'s docblock).
+
+- Updated dependencies [[`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379)]:
+  - @vultisig/core-chain@2.2.0
+  - @vultisig/sdk@0.26.0
+  - @vultisig/client-shared@0.2.10
+  - @vultisig/rujira@21.0.0
+
+## 0.25.0
+
+### Patch Changes
+
+- [#500](https://github.com/vultisig/vultisig-sdk/pull/500) [`46bb0ff`](https://github.com/vultisig/vultisig-sdk/commit/46bb0ff399fef2b082c906a097e10ebb223682a8) Thanks [@neavra](https://github.com/neavra)! - agent: report honest tool success instead of a hardcoded `true`
+
+  The agent CLI reported every finished server-side tool as `success: true`
+  regardless of outcome. `session.ts` hardcoded the result and `client.ts`
+  discarded the `tool-output-available` payload, so a failed `execute_send` /
+  `execute_swap` (invalid address, insufficient balance, no swap route, signing
+  failure) surfaced as a success to programmatic consumers (the `--via-agent`
+  pipe, automation, UI status). The client now derives success from the tool's
+  output payload (`{"status":"error"}` / `{"error"}` / stringified), passed
+  through `onToolProgress`; `ok ?? true` keeps the prior optimistic default when
+  no output is present so older backends cannot regress legitimate successes.
+
+- Updated dependencies [[`c2fd086`](https://github.com/vultisig/vultisig-sdk/commit/c2fd08670ad67e9ec93443569f9b9b9aa5f9d685), [`7b384c8`](https://github.com/vultisig/vultisig-sdk/commit/7b384c89cb0fd82e76161feee78eccbc2c4401eb), [`585c177`](https://github.com/vultisig/vultisig-sdk/commit/585c177d4de4960a764f2528aa48aebc42450f7d), [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3), [`46274d7`](https://github.com/vultisig/vultisig-sdk/commit/46274d70fe19fb2f44bc90d9ec0cd4ac1994ae69), [`0c9f6d5`](https://github.com/vultisig/vultisig-sdk/commit/0c9f6d5139d4a096645a575505c7550c2b26bd2a)]:
+  - @vultisig/sdk@0.25.0
+  - @vultisig/core-chain@2.1.0
+  - @vultisig/client-shared@0.2.9
+  - @vultisig/rujira@20.0.0
+
 ## 0.24.1
 
 ### Patch Changes

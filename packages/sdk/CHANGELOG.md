@@ -1,5 +1,128 @@
 # @vultisig/sdk
 
+## 1.1.3
+
+### Patch Changes
+
+- [#544](https://github.com/vultisig/vultisig-sdk/pull/544) [`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable unsupported Bittensor seedphrase import and expose the SDK-owned seedphrase import chain support list.
+
+## 1.1.2
+
+### Patch Changes
+
+- [#554](https://github.com/vultisig/vultisig-sdk/pull/554) [`bf7278c`](https://github.com/vultisig/vultisig-sdk/commit/bf7278c5886789c4a181169a36bc9296ef81b79c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Emit the dedicated commondata SwapKit swap payload for source-chain transfer routes so QR cosigners can distinguish SwapKit swaps from OneInch-compatible swap payloads.
+
+## 1.1.1
+
+### Patch Changes
+
+- [#512](https://github.com/vultisig/vultisig-sdk/pull/512) [`72eb200`](https://github.com/vultisig/vultisig-sdk/commit/72eb200ec647a707d1ebdc1f8b6f0f5243780477) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Station Terra import primitives for legacy seed-byte, mnemonic, and raw private-key migration flows.
+
+## 1.1.0
+
+### Minor Changes
+
+- [#515](https://github.com/vultisig/vultisig-sdk/pull/515) [`5ef62f1`](https://github.com/vultisig/vultisig-sdk/commit/5ef62f1aa20202f4a4eb97afa0cf20216dc5a1f1) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTronTxFromRawData(rawDataHex)` to sign yield.xyz Tron actions whose `raw_data` is already encoded upstream (FreezeBalanceV2, UnfreezeBalanceV2, VoteWitnessContract, …). Hashes the raw_data bytes with SHA-256, takes the MPC signature, and wraps the final `Transaction { raw_data, signature }` envelope — same `{signingHashHex, unsignedRawHex, finalize(sig)}` contract as `buildTronSendTx`. Includes strict hex-character validation so malformed input fails fast instead of silently producing a wrong signing payload.
+
+## 1.0.0
+
+### Major Changes
+
+- [#537](https://github.com/vultisig/vultisig-sdk/pull/537) [`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - chore: remove Station affiliate constants from shared SDK (closes [#536](https://github.com/vultisig/vultisig-sdk/issues/536))
+
+  Station-specific constants (`stvs` THORName, `0x649E...076D` EVM fee receiver) do not belong in a public package consumed by Windows and external users. The generic `affiliateConfig` injection seam on `findSwapQuote` + `SwapAffiliateConfig` type remain — those are correct SDK design. Station reconstructs the same three configs in its own consumer package (mcp-ts#201).
+
+  **BREAKING CHANGE:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, and `stationOneInchAffiliateConfig` are no longer exported from `@vultisig/sdk`. See MIGRATING.md for the reconstruction pattern.
+
+  > **WARNING: DO NOT MERGE until vultisig/mcp-ts#201 lands.** Station must reconstruct these constants in its consumer package before this removal ships. Merging early will silently fall back to vultisig-0 affiliate defaults, breaking Station's affiliate fee routing on native swaps.
+
+## 0.28.0
+
+### Minor Changes
+
+- [#530](https://github.com/vultisig/vultisig-sdk/pull/530) [`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(seedphrase): probe Cosmos-coin-type Terra path (118) for Keplr/Leap seeds when standard 330-path is empty
+
+## 0.27.0
+
+### Minor Changes
+
+- [#516](https://github.com/vultisig/vultisig-sdk/pull/516) [`9a80907`](https://github.com/vultisig/vultisig-sdk/commit/9a8090721008f2a10dffa9cf2d3fac479d65481c) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTonTxFromSigningPayload({publicKeyEd25519, signingPayloadBoc, includeStateInit, workchain})` to sign yield.xyz TON actions whose signing payload BoC is already constructed upstream. Parses the BoC, hashes the payload cell, takes the MPC signature, and wraps the final external message — same `{signingHashHex, unsignedBocHex, fromAddress, finalize(sig)}` contract as `buildTonSendTx`. Accepts either base64 or hex BoC input. Optional `includeStateInit` flag deploys the v4r2 wallet contract alongside the tx for first-send (seqno === 0) scenarios.
+
+## 0.26.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
+## 0.26.0
+
+### Minor Changes
+
+- [#507](https://github.com/vultisig/vultisig-sdk/pull/507) [`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add SwapKit as a configurable general swap provider for EVM and Solana source routes.
+
+## 0.25.0
+
+### Minor Changes
+
+- [#502](https://github.com/vultisig/vultisig-sdk/pull/502) [`c2fd086`](https://github.com/vultisig/vultisig-sdk/commit/c2fd08670ad67e9ec93443569f9b9b9aa5f9d685) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(price): add `Vultisig.getCoinPricesWithChange` returning 24h % change
+
+  `getCoinPrices` returns only `Record<string, number>` (spot price), so
+  consumers that need the 24h change — e.g. a price widget's −3.97%
+  indicator — had to keep a side-channel CoinGecko call, duplicating the
+  SDK and risking drift.
+
+  Adds a parallel, additive path:
+  - `Vultisig.getCoinPricesWithChange(params)` →
+    `Record<string, { price: number; change24h?: number }>`
+  - core-chain `getCoinPricesWithChange` / `queryCoingeickoPricesWithChange`
+    (requests `include_24hr_change=true`; `change24h` is omitted when
+    CoinGecko has no datum for an id)
+  - new public types `CoinPriceWithChange`, `CoinPricesWithChangeResult`
+
+  Deliberately a **separate function**, not a flag on `getCoinPrices`:
+  `getCoinPrices` / `CoinPricesResult` / `FiatValueService` /
+  `fiatToAmount` / `getErc20Prices` are byte-for-byte unchanged — zero
+  regression surface on the existing call sites. Price-only callers should
+  keep using `getCoinPrices` (lighter payload, stable contract); reach for
+  `getCoinPricesWithChange` only when the change is actually rendered.
+
+  Lets vultiagent-app (and any other client) drop its hand-rolled
+  `fetchPrices` 24h-change side-channel and source price+change from the
+  SDK alone.
+
+- [#503](https://github.com/vultisig/vultisig-sdk/pull/503) [`0c9f6d5`](https://github.com/vultisig/vultisig-sdk/commit/0c9f6d5139d4a096645a575505c7550c2b26bd2a) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(tokens): add vault-free `Vultisig.discoverTokens({ chain, address })`
+
+  On-chain token discovery (1inch for EVM, Jupiter for Solana, LCD for
+  Cosmos) was only reachable as the instance method
+  `vault.discoverTokens(chain)`. Callers that hold a derived address but
+  no SDK `Vault` — the agent, a portfolio/dashboard screen, the
+  agent-backend — couldn't use it without constructing a full vault.
+
+  Adds a static, vault-free `Vultisig.discoverTokens({ chain, address })`
+  returning `DiscoveredToken[]`. It is a thin wrapper over the
+  already-vault-free `findCoins({ address, chain })` from
+  `@vultisig/core-chain/coin/find` — the exact same call + mapping
+  `vault.discoverTokens()` already does internally, minus the
+  `getAddress` step. No new discovery logic, no behavioural change to the
+  instance method, zero regression surface.
+
+  Lets vultiagent-app discover the long tail of held tokens (beyond
+  native + manually-added) on its existing vault-free balance path so the
+  dashboard + agent see the same token set as a wallet would.
+
+### Patch Changes
+
+- [#498](https://github.com/vultisig/vultisig-sdk/pull/498) [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable Cosmos bank-balance token discovery for Terra and Terra Classic, including denom metadata decimals, IBC denom trace fallback, and hidden unknown denom metadata.
+
+- [#505](https://github.com/vultisig/vultisig-sdk/pull/505) [`46274d7`](https://github.com/vultisig/vultisig-sdk/commit/46274d70fe19fb2f44bc90d9ec0cd4ac1994ae69) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Export the vault-free Cosmos staking/distribution LCD queries
+  (`getCosmosDelegations`, `getCosmosDelegatorRewards`,
+  `getCosmosUnbondingDelegations`, `getCosmosVestingAccount`, the URL
+  builders, and their types) from the React Native entry point. They
+  were already in the generic entry but the hand-curated RN allow-list
+  omitted them, forcing RN consumers (vultiagent-app) to hand-roll an
+  LCD client for delegations/rewards. Additive only; signing primitives
+  remain via `chains.cosmos.buildCosmosStakingTx`.
+
 ## 0.24.0
 
 ### Minor Changes

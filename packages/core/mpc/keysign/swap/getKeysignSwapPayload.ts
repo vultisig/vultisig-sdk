@@ -19,6 +19,9 @@ export const getKeysignSwapPayload = ({
       native: { ...value, chain: Chain.MayaChain },
     }),
     oneinchSwapPayload: general => ({ general }),
+    swapkitSwapPayload: value => ({
+      general: { ...value, provider: 'swapkit' },
+    }),
     kyberswapSwapPayload: () => {
       throw new Error('Kyberswap swap payload is deprecated and no longer supported')
     },

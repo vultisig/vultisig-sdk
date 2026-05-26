@@ -1,8 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import type { VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
-import { findSwapQuote as coreFindSwapQuote } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import { findSwapQuote as coreFindSwapQuote, SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+
+export type { SwapAffiliateConfig }
 
 export type FindSwapQuoteParams = {
   fromChain: Chain
@@ -20,6 +22,7 @@ export type FindSwapQuoteParams = {
   amount: bigint
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
+  affiliateConfig?: SwapAffiliateConfig
 }
 
 export type { SwapQuote }
@@ -66,5 +69,6 @@ export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQu
     amount: params.amount,
     referral: params.referral,
     vultDiscountTier: params.vultDiscountTier,
+    affiliateConfig: params.affiliateConfig,
   })
 }

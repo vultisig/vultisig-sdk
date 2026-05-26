@@ -16,8 +16,7 @@
  * `./walletV4R2` / `./crypto-rn`. It never reaches `@ton/crypto-primitives`
  * so the RN bundle does not need the `crypto.subtle` polyfill.
  */
-import type { Cell } from '@ton/core'
-import { Address, beginCell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
+import { Address, beginCell, Cell, internal, SendMode, storeMessageRelaxed } from '@ton/core'
 
 import { buildV4R2Wallet, storeStateInitCell, TON_V4R2_SUB_WALLET_ID } from './walletV4R2'
 
@@ -64,7 +63,10 @@ export function deriveTonAddress(
     publicKeyEd25519: hexToBytes(publicKeyEd25519Hex),
     workchain: opts.workchain,
   })
-  return wallet.addressString({ bounceable: opts.bounceable ?? false, testOnly: opts.testOnly })
+  return wallet.addressString({
+    bounceable: opts.bounceable ?? false,
+    testOnly: opts.testOnly,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +354,194 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
         signature,
         signingPayload,
         includeStateInit: opts.seqno === 0,
+        stateInitCell,
+      })
+      return {
+        signedBocBase64: ext.toBoc().toString('base64'),
+        extMessageHashHex: bytesToHex(ext.hash()),
+      }
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prebuilt-signing-payload primitive
+//
+// `buildTonTxFromSigningPayload` accepts a pre-built signing-payload BoC
+// (the inner Cell that gets hashed for signing) plus the user's pubkey,
+// returns the same {signingHashHex, finalize} contract as the
+// chain-specific builders. Used by:
+//
+//   - yield.xyz TON staking actions (tston-staking, nomination-staking,
+//     chorus-one-pools-staking) which return the signing-payload BoC
+//     pre-encoded — we'd otherwise need to ship a builder per pool
+//     contract variant.
+//
+//   - WalletConnect / dApp signing flows where the dApp constructs the
+//     payload server-side.
+//
+// ## Seqno freshness — critical
+//
+// TON wallets reject any external message whose embedded seqno doesn't
+// match the wallet contract's CURRENT seqno (the wallet's nonce). yield.xyz
+// pins the seqno at action-create time; if the user takes >30s to sign,
+// the seqno is stale and the broadcast fails with `external message was
+// not accepted`.
+//
+// This primitive does NOT re-pin the seqno — it signs whatever payload
+// it's given, deterministically. The consumer (app's signing flow) is
+// responsible for either:
+//   (a) regenerating the payload with a fresh seqno right before signing
+//       (recommended for yield.xyz-style integrations), OR
+//   (b) accepting the risk of seqno-stale failures with a clear user
+//       message when broadcast 4xxs.
+//
+// Surfacing both options keeps the primitive pure — re-pinning would
+// mean parsing the BoC, mutating the seqno cell, and re-hashing, which
+// is a different abstraction.
+// ---------------------------------------------------------------------------
+
+export type BuildTonTxFromSigningPayloadOptions = {
+  /**
+   * Ed25519 pubkey of the signer (32 bytes, hex). Used to derive the
+   * V4R2 wallet address for the outer external-message envelope —
+   * NOT included in the signed payload itself. The signing hash is
+   * the hash of the payload BoC; the pubkey only affects the envelope
+   * `dest:MsgAddressInt` field.
+   */
+  publicKeyEd25519: string
+  /**
+   * The pre-built signing-payload BoC, base64-encoded. yield.xyz returns
+   * this verbatim in each step's `unsignedTransaction` field. Hex is
+   * also accepted (auto-detect by prefix / character set) so a future
+   * upstream that emits hex doesn't break this primitive.
+   */
+  signingPayloadBoc: string
+  /**
+   * When true, the external message wraps a StateInit cell (the wallet
+   * deploys itself in the same tx). Required for the very first send
+   * from a wallet — the contract isn't on-chain yet so the message
+   * must include code+data.
+   *
+   * For TON V4R2 the rule is: include StateInit iff seqno === 0. Callers
+   * that derive the BoC from yield.xyz typically know this from their
+   * own seqno lookup; pass true on first-ever send, false otherwise.
+   *
+   * Default false to fail-closed (a missing StateInit on first send
+   * surfaces as a clear broadcast error; a stale StateInit on a later
+   * send would pass an invalid contract redeploy).
+   */
+  includeStateInit?: boolean
+  /**
+   * Optional override for the wallet workchain. Defaults to `0` (the
+   * basechain — where all user wallets live). Pass `-1` for the
+   * masterchain (validators / system contracts); almost no consumer
+   * needs this.
+   */
+  workchain?: number
+}
+
+function decodeSigningPayload(input: string): Cell {
+  // Encoding detection (CodeRabbit #516 R2). The serialized BoC arrives
+  // as either hex or base64, and yield.xyz uses both depending on the
+  // protocol family. Two refinements over the naive "any-even-hex →
+  // hex" check:
+  //
+  //   1. Accept an optional `0x`/`0X` prefix on hex input. Without
+  //      this, a callsite that prefixes (common in EVM-leaning
+  //      tooling) would silently fall through to the base64 branch
+  //      and produce wrong bytes.
+  //
+  //   2. Disambiguate hex vs base64 when both regexes would match.
+  //      A hex string like "abcdef0123456789" is *also* valid
+  //      base64. We prefer hex when EITHER:
+  //        - the input starts with `0x`/`0X`, OR
+  //        - the input is even-length, every char is in [0-9a-fA-F]
+  //          AND it cannot also be the start of a base64-encoded BoC.
+  //      A real BoC always begins with the magic byte 0xB5
+  //      (`B5EE9C72…` in hex). When we see that magic, treat it as
+  //      hex even if the rest could parse as base64.
+  //
+  // Anything else → base64. Buffer.from(_, 'base64') silently drops
+  // non-base64 characters, so we sanity-check by ensuring the
+  // produced byte stream re-parses as a valid BoC below; the
+  // Cell.fromBoc + zero-cells guards downstream catch corruption.
+  const trimmed = input.trim()
+  if (trimmed.length === 0) {
+    throw new Error('TON signing payload BoC is empty')
+  }
+  const hadHexPrefix = trimmed.startsWith('0x') || trimmed.startsWith('0X')
+  const normalized = hadHexPrefix ? trimmed.slice(2) : trimmed
+  const isEvenHex = normalized.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(normalized)
+  // BoC magic 0xB5EE9C72 (4 bytes = 8 hex chars). If the input is hex
+  // AND begins with that prefix, it's unambiguously hex.
+  const startsWithBocMagic = isEvenHex && /^b5ee9c72/i.test(normalized)
+  // Prefer hex when:
+  //  - caller explicitly prefixed with 0x, OR
+  //  - input matches the BoC magic in hex, OR
+  //  - input is even-length hex AND cannot also be parsed as base64
+  //    (length not multiple of 4 → base64 padding can't fit).
+  const couldBeBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(normalized) && normalized.length % 4 === 0
+  const looksLikeHex = hadHexPrefix || startsWithBocMagic || (isEvenHex && !couldBeBase64)
+  const bocBytes = looksLikeHex ? hexToBytes(normalized) : new Uint8Array(Buffer.from(normalized, 'base64'))
+
+  const cells = Cell.fromBoc(Buffer.from(bocBytes))
+  if (cells.length === 0) {
+    throw new Error('TON signing payload BoC contained zero cells')
+  }
+  const first = cells[0]
+  if (!first) {
+    throw new Error('TON signing payload BoC root cell missing')
+  }
+  return first
+}
+
+/**
+ * Sign a pre-built TON signing payload (the inner Cell that gets hashed
+ * for the wallet's external-message body). See the section header
+ * comment above for the full design rationale and seqno-freshness
+ * warnings.
+ *
+ * @returns {signingHashHex, unsignedBocHex, fromAddress, finalize(sig)}
+ *          — identical contract to `buildTonSendTx` so call-sites can
+ *          treat both paths uniformly. `unsignedBocHex` round-trips
+ *          the decoded payload's serialized form (NOT the input
+ *          string verbatim — equality holds at the byte level after
+ *          BoC re-serialization).
+ */
+export function buildTonTxFromSigningPayload(opts: BuildTonTxFromSigningPayloadOptions): TonTxBuilderResult {
+  const pubKey = hexToBytes(opts.publicKeyEd25519)
+  if (pubKey.length !== 32) {
+    throw new Error(`TON publicKeyEd25519 must be 32 bytes, got ${pubKey.length}`)
+  }
+  const workchain = opts.workchain ?? 0
+  const wallet = buildV4R2Wallet({ publicKeyEd25519: pubKey, workchain })
+
+  const signingPayload = decodeSigningPayload(opts.signingPayloadBoc)
+
+  const signingHashBytes = signingPayload.hash()
+  const signingHashHex = bytesToHex(signingHashBytes)
+  const unsignedBocBuf = signingPayload.toBoc({ idx: false })
+  const unsignedBocHex = bytesToHex(new Uint8Array(unsignedBocBuf))
+
+  const fromAddress = wallet.addressString({ bounceable: false })
+  const includeStateInit = opts.includeStateInit ?? false
+  const stateInitCell = includeStateInit ? storeStateInitCell(wallet.init) : undefined
+
+  return {
+    signingHashHex,
+    unsignedBocHex,
+    fromAddress,
+    finalize: (signatureHex: string) => {
+      const signature = hexToBytes(signatureHex)
+      if (signature.length !== 64) {
+        throw new Error(`TON signature must be 64 bytes (R||S), got ${signature.length}`)
+      }
+      const ext = buildExternalMessageCell({
+        walletAddress: wallet.address,
+        signature,
+        signingPayload,
+        includeStateInit,
         stateInitCell,
       })
       return {

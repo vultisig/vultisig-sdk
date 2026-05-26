@@ -47,6 +47,9 @@ export async function buildMessageContext(vault: VaultBase): Promise<MessageCont
     vault_address: vault.publicKeys.ecdsa,
     vault_name: vault.name,
     mldsa_public_key: vault.publicKeyMldsa,
+    ecdsa_public_key: vault.publicKeys.ecdsa,
+    eddsa_public_key: vault.publicKeys.eddsa,
+    hex_chain_code: vault.hexChainCode,
   }
 
   applyChainPublicKeys(vault, context)
@@ -132,6 +135,9 @@ export async function buildMinimalContext(vault: VaultBase): Promise<MessageCont
   const context: MessageContext = {
     vault_address: vault.publicKeys.ecdsa,
     vault_name: vault.name,
+    ecdsa_public_key: vault.publicKeys.ecdsa,
+    eddsa_public_key: vault.publicKeys.eddsa,
+    hex_chain_code: vault.hexChainCode,
   }
 
   applyChainPublicKeys(vault, context)

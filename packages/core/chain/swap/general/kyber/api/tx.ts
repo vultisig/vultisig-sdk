@@ -4,7 +4,6 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-import { evmNativeCoinAddress } from '../../../../chains/evm/config'
 import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { SwapFee } from '../../../SwapFee'
@@ -14,6 +13,7 @@ import {
   getKyberSwapAffiliateParams,
   hasAffiliateBps,
   kyberSwapAffiliateConfig,
+  KyberSwapBaseAffiliateConfig,
   kyberSwapSlippageTolerance,
   kyberSwapTxLifespan,
 } from '../config'
@@ -25,6 +25,7 @@ type GetKyberSwapTxInput = Record<TransferDirection, AccountCoin<KyberSwapEnable
   amount: bigint
   enableGasEstimation: boolean
   affiliateBps?: number
+  kyberConfig?: KyberSwapBaseAffiliateConfig
 }
 
 type KyberSwapBuildResponse = {
@@ -57,7 +58,7 @@ const getKyberSwapAffiliateFee = ({
 
   return {
     chain: to.chain,
-    id: to.id ?? evmNativeCoinAddress,
+    id: to.id,
     decimals: to.decimals,
     amount: grossAmountOut - netAmountOut,
   }
@@ -71,6 +72,7 @@ export const getKyberSwapTx = async ({
   amount,
   enableGasEstimation,
   affiliateBps,
+  kyberConfig = kyberSwapAffiliateConfig,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
   const buildPayload = {
     routeSummary,
@@ -79,13 +81,13 @@ export const getKyberSwapTx = async ({
     slippageTolerance: kyberSwapSlippageTolerance,
     deadline: Math.round(convertDuration(Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'), 'ms', 's')),
     enableGasEstimation,
-    ...getKyberSwapAffiliateParams(affiliateBps),
+    ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),
     ignoreCappedSlippage: false,
   }
 
   const buildResponse = await queryUrl<KyberSwapBuildResponse>(`${getKyberSwapBaseUrl(from.chain)}/route/build`, {
     headers: {
-      'X-Client-Id': kyberSwapAffiliateConfig.source,
+      'X-Client-Id': kyberConfig.source,
     },
     body: buildPayload,
   })

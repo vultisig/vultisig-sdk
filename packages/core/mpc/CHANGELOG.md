@@ -1,5 +1,72 @@
 # @vultisig/core-mpc
 
+## 1.2.20
+
+### Patch Changes
+
+- [#554](https://github.com/vultisig/vultisig-sdk/pull/554) [`bf7278c`](https://github.com/vultisig/vultisig-sdk/commit/bf7278c5886789c4a181169a36bc9296ef81b79c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Emit the dedicated commondata SwapKit swap payload for source-chain transfer routes so QR cosigners can distinguish SwapKit swaps from OneInch-compatible swap payloads.
+
+- Updated dependencies [[`bf7278c`](https://github.com/vultisig/vultisig-sdk/commit/bf7278c5886789c4a181169a36bc9296ef81b79c)]:
+  - @vultisig/core-chain@2.2.5
+
+## 1.2.19
+
+### Patch Changes
+
+- Updated dependencies [[`72eb200`](https://github.com/vultisig/vultisig-sdk/commit/72eb200ec647a707d1ebdc1f8b6f0f5243780477)]:
+  - @vultisig/core-chain@2.2.4
+
+## 1.2.18
+
+### Patch Changes
+
+- Updated dependencies [[`4c9454e`](https://github.com/vultisig/vultisig-sdk/commit/4c9454eca99f43a2ce572732c3d6fcc74c99e89e)]:
+  - @vultisig/core-chain@2.2.3
+
+## 1.2.17
+
+### Patch Changes
+
+- Updated dependencies [[`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b)]:
+  - @vultisig/core-chain@2.2.2
+
+## 1.2.16
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
+- Updated dependencies [[`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc)]:
+  - @vultisig/core-chain@2.2.1
+
+## 1.2.15
+
+### Patch Changes
+
+- [#508](https://github.com/vultisig/vultisig-sdk/pull/508) [`40df23c`](https://github.com/vultisig/vultisig-sdk/commit/40df23c2ce48f51e2664528b0db5f1b8f14448c7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(core-mpc/cardano): throw a clear error when a Cardano memo is provided
+
+  Until CIP-20 auxiliary-data support lands (see vultisig/vultisig-sdk#432),
+  `getCardanoSigningInputs` would silently drop `keysignPayload.memo` and
+  produce a signed Cardano transaction with `auxiliary_data = null` — the
+  memo never made it on-chain (e.g. tx
+  `9c8549aea24106c699fffe74c7ded7186c25c390b33415853a83b0781efe4efe`).
+
+  The resolver now fails fast with an explanatory error so callers (direct
+  send, deposit, `VaultBase.send()`, `prepareSendTxFromKeys`, CLI/MCP) can
+  surface the limitation to the user instead of issuing a tx that loses
+  their memo. The CIP-30 path (`cardanoCip30.ts`) is unaffected — it signs
+  the dApp-provided tx body hash and does not read `keysignPayload.memo`.
+
+- Updated dependencies [[`cb80440`](https://github.com/vultisig/vultisig-sdk/commit/cb804408b9607aacb143a7a941f0f9f1986f2379)]:
+  - @vultisig/core-chain@2.2.0
+
+## 1.2.14
+
+### Patch Changes
+
+- Updated dependencies [[`7b384c8`](https://github.com/vultisig/vultisig-sdk/commit/7b384c89cb0fd82e76161feee78eccbc2c4401eb), [`585c177`](https://github.com/vultisig/vultisig-sdk/commit/585c177d4de4960a764f2528aa48aebc42450f7d), [`1667b79`](https://github.com/vultisig/vultisig-sdk/commit/1667b79fbc754e36032942fb5e749706dfc09bf3)]:
+  - @vultisig/core-chain@2.1.0
+
 ## 1.2.13
 
 ### Patch Changes

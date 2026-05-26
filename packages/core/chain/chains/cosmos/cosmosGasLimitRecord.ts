@@ -81,7 +81,9 @@ export const getCosmosStakingGasLimit = ({ chain, msgCount = 1 }: GetCosmosStaki
   if (!Number.isInteger(msgCount) || msgCount < 0) {
     throw new Error(`getCosmosStakingGasLimit: msgCount must be a non-negative integer, got ${msgCount}`)
   }
+
   const base = cosmosStakingGasLimitRecord[chain]
   const n = BigInt(Math.max(1, msgCount))
+
   return base + ((n - 1n) * base) / 4n
 }

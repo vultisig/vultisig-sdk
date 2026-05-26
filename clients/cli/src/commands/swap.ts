@@ -117,6 +117,67 @@ export type SwapOptions = {
   signal?: AbortSignal
 } & SwapQuoteOptions
 
+function validateSwapAmount(amount: SwapQuoteOptions['amount']): void {
+  if (amount === 'max') return
+  if (isNaN(amount) || amount <= 0) throw new Error('Invalid amount')
+}
+
+function getSwapAmountString(amount: SwapQuoteOptions['amount']): string {
+  return amount === 'max' ? 'max' : String(amount)
+}
+
+function toSwapRequest(options: SwapOptions, amount: string, dryRun?: true) {
+  return {
+    fromChain: options.fromChain,
+    fromSymbol: options.fromToken || '',
+    toChain: options.toChain,
+    toSymbol: options.toToken || '',
+    amount,
+    ...(dryRun && { dryRun: true as const }),
+  }
+}
+
+function toDryRunResult(options: SwapOptions, quote: SwapQuoteResult, fromAmountRaw: string): SwapDryRunResult {
+  const result: SwapDryRunResult = {
+    dryRun: true,
+    fromChain: String(options.fromChain),
+    fromToken: quote.fromCoin.ticker,
+    toChain: String(options.toChain),
+    toToken: quote.toCoin.ticker,
+    inputAmount: fromAmountRaw,
+    ...(options.amount === 'max' && { isMax: true }),
+    estimatedOutput: formatBigintAmount(quote.estimatedOutput, quote.toCoin.decimals),
+    provider: quote.provider,
+  }
+
+  if (quote.estimatedOutputFiat != null) result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
+  if (quote.requiresApproval) result.requiresApproval = true
+  if (quote.warnings?.length) result.warnings = [...quote.warnings]
+  return result
+}
+
+function displayDryRunResult(result: SwapDryRunResult): void {
+  info(`\nDry-run preview:`)
+  info(`  From:             ${result.inputAmount} ${result.fromToken} (${result.fromChain})`)
+  info(`  To:               ${result.estimatedOutput} ${result.toToken} (${result.toChain})`)
+  info(`  Provider:         ${result.provider}`)
+  if (result.estimatedOutputFiat != null) info(`  Est. value (USD): $${result.estimatedOutputFiat}`)
+  if (result.requiresApproval) info(`  Requires approval: yes`)
+  if (result.warnings?.length) result.warnings.forEach(w => warn(`  Warning: ${w}`))
+}
+
+async function confirmSwapIfNeeded(options: SwapOptions): Promise<void> {
+  if (options.yes) return
+  if (isNonInteractive()) {
+    throw new Error('Swap requires confirmation. Use --yes to skip, or --dry-run to preview.')
+  }
+  const confirmed = await confirmSwap()
+  if (!confirmed) {
+    warn('Swap cancelled')
+    throw new Error('Swap cancelled by user')
+  }
+}
+
 /**
  * Execute swap command: preview -> confirm -> vault.swap()
  */
@@ -126,66 +187,30 @@ export async function executeSwap(
 ): Promise<{ txHash: string; quote: SwapQuoteResult } | SwapDryRunResult> {
   const vault = await ctx.ensureActiveVault()
 
-  const isMax = options.amount === 'max'
-  if (!isMax && (isNaN(options.amount as number) || (options.amount as number) <= 0)) {
-    throw new Error('Invalid amount')
-  }
-
-  const amountStr = isMax ? 'max' : String(options.amount)
+  validateSwapAmount(options.amount)
+  const amountStr = getSwapAmountString(options.amount)
 
   // 1. Dry-run for quote/preview
   const quoteSpinner = createSpinner('Getting swap quote...')
 
-  const dryResult = await vault.swap({
-    fromChain: options.fromChain,
-    fromSymbol: options.fromToken || '',
-    toChain: options.toChain,
-    toSymbol: options.toToken || '',
-    amount: amountStr,
-    dryRun: true,
-  })
+  const dryResult = await vault.swap(toSwapRequest(options, amountStr, true))
 
   if (!dryResult.dryRun) throw new Error('unreachable')
 
   quoteSpinner.succeed('Quote received')
 
   const quote = dryResult.quote
-  const fromAmountRaw = isMax ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : String(options.amount)
-  const fromAmountDisplay = isMax ? `${fromAmountRaw} (max)` : fromAmountRaw
+  const fromAmountRaw =
+    options.amount === 'max' ? formatBigintAmount(quote.maxSwapable, quote.fromCoin.decimals) : String(options.amount)
+  const fromAmountDisplay = options.amount === 'max' ? `${fromAmountRaw} (max)` : fromAmountRaw
 
   // If user asked for dry-run only, return preview
   if (options.dryRun) {
-    const estimatedOutput = formatBigintAmount(quote.estimatedOutput, quote.toCoin.decimals)
-    const result: SwapDryRunResult = {
-      dryRun: true,
-      fromChain: String(options.fromChain),
-      fromToken: quote.fromCoin.ticker,
-      toChain: String(options.toChain),
-      toToken: quote.toCoin.ticker,
-      inputAmount: fromAmountRaw,
-      ...(isMax && { isMax: true }),
-      estimatedOutput,
-      provider: quote.provider,
-    }
-    if (quote.estimatedOutputFiat != null) {
-      result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
-    }
-    if (quote.requiresApproval) {
-      result.requiresApproval = true
-    }
-    if (quote.warnings && quote.warnings.length > 0) {
-      result.warnings = [...quote.warnings]
-    }
+    const result = toDryRunResult(options, quote, fromAmountRaw)
     if (isJsonOutput()) {
       outputJson(result)
     } else {
-      info(`\nDry-run preview:`)
-      info(`  From:             ${result.inputAmount} ${result.fromToken} (${result.fromChain})`)
-      info(`  To:               ${result.estimatedOutput} ${result.toToken} (${result.toChain})`)
-      info(`  Provider:         ${result.provider}`)
-      if (result.estimatedOutputFiat != null) info(`  Est. value (USD): $${result.estimatedOutputFiat}`)
-      if (result.requiresApproval) info(`  Requires approval: yes`)
-      if (result.warnings?.length) result.warnings.forEach(w => warn(`  Warning: ${w}`))
+      displayDryRunResult(result)
     }
     return result
   }
@@ -205,16 +230,7 @@ export async function executeSwap(
   }
 
   // 3. Confirm (required in all output modes)
-  if (!options.yes) {
-    if (isNonInteractive()) {
-      throw new Error('Swap requires confirmation. Use --yes to skip, or --dry-run to preview.')
-    }
-    const confirmed = await confirmSwap()
-    if (!confirmed) {
-      warn('Swap cancelled')
-      throw new Error('Swap cancelled by user')
-    }
-  }
+  await confirmSwapIfNeeded(options)
 
   // 4. Unlock and execute via compound method
   await ensureVaultUnlocked(vault, options.password)
@@ -226,13 +242,7 @@ export async function executeSwap(
   })
 
   try {
-    const result = await vault.swap({
-      fromChain: options.fromChain,
-      fromSymbol: options.fromToken || '',
-      toChain: options.toChain,
-      toSymbol: options.toToken || '',
-      amount: amountStr,
-    })
+    const result = await vault.swap(toSwapRequest(options, amountStr))
 
     if (result.dryRun) throw new Error('unreachable')
     const broadcast = result as Extract<typeof result, { dryRun: false }>

@@ -20,9 +20,21 @@ export type GeneralSwapTx =
         swapFee: SwapFee
       }
     }
+  | {
+      transfer: {
+        to: string
+        amount: bigint
+        memo?: string
+        txType?: string
+        txPayload?: Uint8Array
+        inboundAddress?: string
+        swapId?: string
+      }
+    }
 
 export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
+  routeProvider?: string
   tx: GeneralSwapTx
 }

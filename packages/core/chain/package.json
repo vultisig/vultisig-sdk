@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.0.0",
+  "version": "2.2.5",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1240,6 +1240,11 @@
       "import": "./dist/signing/SignatureFormat.js",
       "default": "./dist/signing/SignatureFormat.js"
     },
+    "./station/importPrimitives": {
+      "types": "./dist/station/importPrimitives.d.ts",
+      "import": "./dist/station/importPrimitives.js",
+      "default": "./dist/station/importPrimitives.js"
+    },
     "./swap/affiliate": {
       "types": "./dist/swap/affiliate/index.d.ts",
       "import": "./dist/swap/affiliate/index.js",
@@ -1300,6 +1305,11 @@
       "import": "./dist/swap/general/lifi/api/getLifiSwapQuote.js",
       "default": "./dist/swap/general/lifi/api/getLifiSwapQuote.js"
     },
+    "./swap/general/lifi/api/injectSolanaAtaIfMissing": {
+      "types": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.d.ts",
+      "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
+      "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
@@ -1329,6 +1339,21 @@
       "types": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.d.ts",
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
+    },
+    "./swap/general/swapkit/api/getSwapKitQuote": {
+      "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
+      "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
+      "default": "./dist/swap/general/swapkit/api/getSwapKitQuote.js"
+    },
+    "./swap/general/swapkit/config": {
+      "types": "./dist/swap/general/swapkit/config.d.ts",
+      "import": "./dist/swap/general/swapkit/config.js",
+      "default": "./dist/swap/general/swapkit/config.js"
+    },
+    "./swap/general/swapkit/SwapKitEnabledChains": {
+      "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
+      "default": "./dist/swap/general/swapkit/SwapKitEnabledChains.js"
     },
     "./swap/keysign/getSwapDestinationAddress": {
       "types": "./dist/swap/keysign/getSwapDestinationAddress.d.ts",
@@ -1693,15 +1718,16 @@
     "7z-wasm": "^1.2.0",
     "@bufbuild/protobuf": "^2.11.0",
     "@cosmjs/amino": "^0.38.1",
-    "@cosmjs/encoding": "^0.38.1",
+    "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.38.1",
     "@cosmjs/stargate": "^0.38.1",
     "@lifi/sdk": "^3.16.2",
-    "@mysten/sui": "^2.8.0",
+    "@mysten/sui": "^2.17.0",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/util": "^14.0.1",
     "@polkadot/util-crypto": "^14.0.1",
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
@@ -1711,12 +1737,13 @@
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
+    "bs58check": "^4.0.0",
     "cbor-x": "^1.6.4",
     "date-fns": "^4.1.0",
     "ethers": "^6.16.0",
     "i18next": "^26.0.8",
     "tiny-secp256k1": "^2.2.4",
-    "viem": "^2.48.4",
+    "viem": "^2.51.0",
     "xrpl": "^4.6.0"
   }
 }

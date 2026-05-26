@@ -26,6 +26,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -43,6 +44,19 @@ export type BuildSwapKeysignPayloadInput = {
   walletCore: WalletCore
 }
 
+type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+
+/**
+ * Builds a KeysignPayload for a swap transaction.
+ *
+ * Contract: `keysignPayload.toAddress` is always the correct signing destination:
+ *   - EVM/Solana swaps: set to the router or swap contract address
+ *   - Deposit-channel (transfer) swaps: set to the provider deposit channel address
+ *     (from `GeneralSwapTx.transfer.to` via `getSwapDestinationAddress`)
+ *
+ * UTXO signing (via `getUtxoSigningInputs`) relies on this invariant — it reads
+ * `keysignPayload.toAddress` directly for the `general` swap arm.
+ */
 export const buildSwapKeysignPayload = async ({
   fromCoin,
   toCoin,
@@ -55,7 +69,16 @@ export const buildSwapKeysignPayload = async ({
   libType,
   walletCore,
 }: BuildSwapKeysignPayloadInput) => {
-  const chainAmount = toChainAmount(amount, fromCoin.decimals)
+  const transferTx = matchRecordUnion<SwapQuoteResult, TransferSwapTx | undefined>(swapQuote.quote, {
+    native: () => undefined,
+    general: ({ tx }) =>
+      matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: tx => tx,
+      }),
+  })
+  const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
 
   const fromCoinHexPublicKey = Buffer.from(fromPublicKey.data()).toString('hex')
   const toCoinHexPublicKey = Buffer.from(toPublicKey.data()).toString('hex')
@@ -66,6 +89,7 @@ export const buildSwapKeysignPayload = async ({
       matchRecordUnion<GeneralSwapTx, bigint | undefined>(tx, {
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
+        transfer: () => undefined,
       }),
   })
 
@@ -82,14 +106,50 @@ export const buildSwapKeysignPayload = async ({
     utxoInfo: await getKeysignUtxoInfo(fromCoin),
     memo: matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
       native: ({ memo }) => memo,
-      general: () => undefined,
+      general: ({ tx }) =>
+        matchRecordUnion<GeneralSwapTx, string | undefined>(tx, {
+          evm: () => undefined,
+          solana: () => undefined,
+          transfer: ({ memo }) => memo,
+        }),
     }),
   })
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
-      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
-        evm: ({ from, to, data, value }) => {
+      const transfer = matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(quote.tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: tx => tx,
+      })
+
+      if (quote.provider === 'swapkit' && transfer) {
+        return {
+          case: 'swapkitSwapPayload',
+          value: create(SwapKitSwapPayloadSchema, {
+            fromCoin: toCommCoin({
+              ...fromCoin,
+              hexPublicKey: fromCoinHexPublicKey,
+            }),
+            toCoin: toCommCoin({
+              ...toCoin,
+              hexPublicKey: toCoinHexPublicKey,
+            }),
+            fromAmount: chainAmount.toString(),
+            toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
+            txType: transfer.txType ?? '',
+            txPayload: transfer.txPayload ?? new Uint8Array(),
+            targetAddress: transfer.to,
+            ...(transfer.inboundAddress ? { inboundAddress: transfer.inboundAddress } : {}),
+            ...(transfer.memo ? { memo: transfer.memo } : {}),
+            subProvider: quote.routeProvider ?? '',
+            swapId: transfer.swapId ?? '',
+          }),
+        }
+      }
+
+      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
+        evm: ({ from, to, data, value, affiliateFee }) => {
           return {
             from,
             to,
@@ -97,15 +157,38 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
+            swapFee: affiliateFee ? affiliateFee.amount.toString() : '',
+            ...(affiliateFee
+              ? {
+                  swapFeeChain: affiliateFee.chain,
+                  swapFeeTokenId: affiliateFee.id,
+                  swapFeeDecimals: affiliateFee.decimals,
+                }
+              : {}),
           }
         },
-        solana: ({ data }) => ({
+        solana: ({ data, swapFee }) => ({
           from: '',
           to: '',
           data,
           value: '',
           gasPrice: '',
           gas: BigInt(0),
+          swapFee: swapFee.amount.toString(),
+          swapFeeChain: swapFee.chain,
+          swapFeeTokenId: swapFee.id,
+          swapFeeDecimals: swapFee.decimals,
+        }),
+        // Non-SwapKit transfer routes can still use the existing general display shape.
+        // SwapKit transfer routes return above with the dedicated commondata payload.
+        transfer: ({ to }) => ({
+          from: fromCoin.address,
+          to,
+          data: '',
+          value: '',
+          gasPrice: '',
+          gas: 0n,
+          swapFee: '',
         }),
       })
 
