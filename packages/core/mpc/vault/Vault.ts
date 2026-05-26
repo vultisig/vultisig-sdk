@@ -32,6 +32,12 @@ export type Vault = {
   keyShareMldsa?: string
   /** Zcash Sapling key material (legacy / storage). */
   saplingExtras?: string
+  /**
+   * Per-chain BIP32 path overrides for recovery wallets.
+   * An empty string (`""`) means literal root: use the ECDSA root key directly
+   * with no derivation hop. Required for Fast Vault MPC recovery vaults.
+   */
+  derivationOverrides?: Partial<Record<Chain, string>>
 }
 
 export const getVaultId = (vault: Vault): string => vault.publicKeys.ecdsa

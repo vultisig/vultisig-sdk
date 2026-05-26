@@ -22,6 +22,12 @@ export type VaultIdentity = {
   libType: KeysignLibType
   publicKeyMldsa?: string
   chainPublicKeys?: Partial<Record<Chain, string>>
+  /**
+   * Per-chain BIP32 path overrides forwarded from the vault model.
+   * An empty string (`""`) means literal root (no derivation hop).
+   * Used when building keysign payloads for recovery wallets.
+   */
+  derivationOverrides?: Partial<Record<Chain, string>>
 }
 
 /**
@@ -37,4 +43,5 @@ export const vaultDataToIdentity = (vault: CoreVault): VaultIdentity => ({
   libType: vault.libType,
   publicKeyMldsa: vault.publicKeyMldsa,
   chainPublicKeys: vault.chainPublicKeys,
+  derivationOverrides: vault.derivationOverrides,
 })

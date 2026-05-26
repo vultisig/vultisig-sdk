@@ -291,4 +291,134 @@ describe('deriveAddressFromKeys', () => {
       expect(mockGetPublicKey).not.toHaveBeenCalled()
     })
   })
+
+  describe('derivationOverrides — literal-root recovery path', () => {
+    // BIP32 test vector 1 master-level ECDSA public key (no derivation).
+    // Pinned test vector from the Terra wrong-derivation recovery spec:
+    //   rootPubKey = 0339a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c2
+    //   override   = { Terra: "" }
+    //   expected   = terra1x3ppj0smkuy3d6g525sh9n2w9k7fm7q3k0tgd9
+    const ROOT_PUBKEY = '0339a36013301597daef41fbe593a02cc513d0b55527ec2df1050e2e8ff49c85c2'
+    const RECOVERY_ADDRESS = 'terra1x3ppj0smkuy3d6g525sh9n2w9k7fm7q3k0tgd9'
+    const CHAIN_CODE = '873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508'
+
+    it('empty-string override injects root pubkey as synthetic chainPublicKeys entry', async () => {
+      mockDeriveAddress.mockReturnValueOnce(RECOVERY_ADDRESS)
+      const result = await deriveAddressFromKeys({
+        chain: Chain.Terra,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        derivationOverrides: { [Chain.Terra]: '' },
+      })
+      expect(result).toEqual({ chain: Chain.Terra, address: RECOVERY_ADDRESS })
+      // The root pubkey must be forwarded as-is — no BIP32 derivation
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: Chain.Terra,
+          chainPublicKeys: expect.objectContaining({
+            [Chain.Terra]: ROOT_PUBKEY,
+          }),
+        })
+      )
+    })
+
+    it('override on Terra also resolves when querying TerraClassic (alias)', async () => {
+      mockDeriveAddress.mockReturnValueOnce(RECOVERY_ADDRESS)
+      await deriveAddressFromKeys({
+        chain: Chain.TerraClassic,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        derivationOverrides: { [Chain.Terra]: '' },
+      })
+      // TerraClassic query honours the Terra override via alias
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: Chain.TerraClassic,
+          chainPublicKeys: expect.objectContaining({
+            [Chain.TerraClassic]: ROOT_PUBKEY,
+          }),
+        })
+      )
+    })
+
+    it('override on TerraClassic resolves when querying Terra (reverse alias)', async () => {
+      mockDeriveAddress.mockReturnValueOnce(RECOVERY_ADDRESS)
+      await deriveAddressFromKeys({
+        chain: Chain.Terra,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        derivationOverrides: { [Chain.TerraClassic]: '' },
+      })
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: Chain.Terra,
+          chainPublicKeys: expect.objectContaining({
+            [Chain.Terra]: ROOT_PUBKEY,
+          }),
+        })
+      )
+    })
+
+    it('derivationOverrides takes precedence over chainPublicKeys for the same chain', async () => {
+      const hardenedPubkey = '03c7721fa4760e081f7ae3b192084467528603ebdf84ebf3d86addc86d5bcdc31b'
+      mockDeriveAddress.mockReturnValueOnce(RECOVERY_ADDRESS)
+      await deriveAddressFromKeys({
+        chain: Chain.Terra,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        chainPublicKeys: { [Chain.Terra]: hardenedPubkey },
+        derivationOverrides: { [Chain.Terra]: '' },
+      })
+      // The root pubkey (from derivationOverrides) wins over the hardened key (from chainPublicKeys)
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chainPublicKeys: expect.objectContaining({
+            [Chain.Terra]: ROOT_PUBKEY,
+          }),
+        })
+      )
+    })
+
+    it('non-empty override string is ignored; standard derivation runs', async () => {
+      await deriveAddressFromKeys({
+        chain: Chain.Ethereum,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        derivationOverrides: { [Chain.Ethereum]: "m/44'/60'/0'/0/0" },
+      })
+      // Non-empty override string is reserved for future use; chainPublicKeys stays undefined
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chainPublicKeys: undefined,
+        })
+      )
+    })
+
+    it('override for an unrelated chain does not affect the requested chain', async () => {
+      await deriveAddressFromKeys({
+        chain: Chain.Ethereum,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+        derivationOverrides: { [Chain.Terra]: '' },
+      })
+      // Ethereum is not in derivationOverrides — standard BIP32 derivation must run
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chain: Chain.Ethereum,
+          chainPublicKeys: undefined,
+        })
+      )
+    })
+
+    it('absent derivationOverrides leaves existing behaviour unchanged', async () => {
+      await deriveAddressFromKeys({
+        chain: Chain.Ethereum,
+        ecdsaPublicKey: ROOT_PUBKEY,
+        hexChainCode: CHAIN_CODE,
+      })
+      expect(mockGetPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({ chainPublicKeys: undefined })
+      )
+    })
+  })
 })

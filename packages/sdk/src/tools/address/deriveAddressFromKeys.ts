@@ -21,6 +21,23 @@ type DeriveAddressFromKeysInput = {
    * non-hardened BIP32 fallback is used unchanged — existing callers are unaffected.
    */
   chainPublicKeys?: Partial<Record<Chain, string>>
+  /**
+   * Per-chain BIP32 path overrides.  An empty string (`""`) means "literal root":
+   * use the ECDSA root public key directly with no BIP32 derivation.
+   *
+   * Required for Fast Vault MPC recovery wallets whose keysign session was
+   * executed at the root key (no derivation hop), producing an address of the
+   * form `bech32(prefix, hash160(ecdsaRootPubKey))`.
+   *
+   * Behaviour:
+   * - `""` → the root `ecdsaPublicKey` is injected as a synthetic `chainPublicKeys`
+   *   entry for the requested chain, bypassing BIP32 derivation entirely.
+   * - Non-empty strings are reserved for future path-override support and are
+   *   currently ignored (the standard derivation path is used).
+   * - Takes precedence over `chainPublicKeys` for the same chain when both are
+   *   provided (the synthetic injection wins).
+   */
+  derivationOverrides?: Partial<Record<Chain, string>>
 }
 
 type DeriveAddressFromKeysResult = {
@@ -63,13 +80,45 @@ export const deriveAddressFromKeys = async (
     )
   }
 
+  // Resolve derivationOverrides: an empty-string override means "literal root" —
+  // use the ECDSA root pubkey directly with no BIP32 derivation hop.
+  // We implement this by injecting a synthetic chainPublicKeys entry so the
+  // existing chainPublicKeys path handles the bypass transparently.
+  // derivationOverrides takes precedence over chainPublicKeys for the same chain.
+  const effectiveChainPublicKeys: Partial<Record<Chain, string>> | undefined = (() => {
+    // Determine if a literal-root override applies for the requested chain.
+    // The override map may key on either the exact chain OR its Terra/TerraClassic alias.
+    const directOverride = input.derivationOverrides?.[input.chain]
+    const aliasOverride =
+      input.chain === Chain.TerraClassic
+        ? input.derivationOverrides?.[Chain.Terra]
+        : input.chain === Chain.Terra
+          ? input.derivationOverrides?.[Chain.TerraClassic]
+          : undefined
+    const activeOverride = directOverride ?? aliasOverride
+
+    if (activeOverride === '') {
+      // Literal-root override: use the ECDSA root key as the pre-derived pubkey.
+      // ecdsaPublicKey is guaranteed non-empty by the guard at the top of this function.
+      const rootKey = input.ecdsaPublicKey!
+      const synthetic: Partial<Record<Chain, string>> = {
+        ...input.chainPublicKeys,
+        [input.chain]: rootKey,
+      }
+      return synthetic
+    }
+    // Non-empty override strings are reserved for future use; fall through to
+    // standard chainPublicKeys resolution.
+    return input.chainPublicKeys
+  })()
+
   // Terra and TerraClassic share BIP44 coin_type 330 and the same hardened-derived pubkey.
   // Mirror the alias from addressDerivation.ts so callers only need to supply one direction.
   // We also filter the map to only include the requested chain: getPublicKey treats any
   // non-empty map as authoritative and throws "Chain public key not found" when the chain
   // is absent, so we must not forward a partial map for an unrelated chain.
   const resolvedChainPublicKeys: Partial<Record<Chain, string>> | undefined = (() => {
-    const keys = input.chainPublicKeys
+    const keys = effectiveChainPublicKeys
     if (!keys) return undefined
 
     // Validate all present entries before any alias logic.
