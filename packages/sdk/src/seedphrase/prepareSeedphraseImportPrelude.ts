@@ -1,6 +1,6 @@
 import type { Chain } from '@vultisig/core-chain/Chain'
 
-import { DEFAULT_CHAINS } from '../constants'
+import { assertSeedphraseImportSupportsChains, DEFAULT_CHAINS } from '../constants'
 import type { VaultCreationStep } from '../types'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
 import type { ChainDiscoveryService } from './ChainDiscoveryService'
@@ -69,13 +69,6 @@ export async function prepareSeedphraseImportPrelude(
     throw new VaultError(VaultErrorCode.InvalidConfig, `Invalid mnemonic: ${validation.error}`)
   }
 
-  reportProgress({
-    step: 'initializing',
-    ...progressLabels.derivingKeys,
-  })
-
-  const masterKeys = await keyDeriver.deriveMasterKeys(mnemonic)
-
   let discoveredChains: ChainDiscoveryResult[] | undefined
   let usePhantomSolanaPath = explicitPhantomPath ?? false
   let useCosmosPathTerra = explicitCosmosPathTerra ?? false
@@ -100,6 +93,14 @@ export async function prepareSeedphraseImportPrelude(
   }
 
   const chainsToImport = chains ?? discoveredChains?.filter(c => c.hasBalance).map(c => c.chain) ?? DEFAULT_CHAINS
+  assertSeedphraseImportSupportsChains(chainsToImport)
+
+  reportProgress({
+    step: 'initializing',
+    ...progressLabels.derivingKeys,
+  })
+
+  const masterKeys = await keyDeriver.deriveMasterKeys(mnemonic)
 
   return {
     masterKeys,

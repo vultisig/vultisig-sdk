@@ -9,6 +9,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { phantomSolanaPath } from '@vultisig/core-chain/publicKey/address/deriveSolanaAddressFromMnemonic'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
+import { assertSeedphraseImportSupportsChains } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
 import { clampThenUniformScalar } from '../crypto/ed25519ScalarClamp'
 import { cleanMnemonic } from './SeedphraseValidator'
@@ -132,6 +133,8 @@ export class MasterKeyDeriver {
    * @returns Chain-specific key information
    */
   async deriveChainKey(mnemonic: string, chain: Chain, isEddsa: boolean): Promise<DerivedChainKey> {
+    assertSeedphraseImportSupportsChains([chain])
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -195,6 +198,8 @@ export class MasterKeyDeriver {
     chains: Chain[],
     options?: DeriveChainPrivateKeysOptions
   ): Promise<ChainPrivateKey[]> {
+    assertSeedphraseImportSupportsChains(chains)
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -252,6 +257,8 @@ export class MasterKeyDeriver {
    * @returns Address for the chain
    */
   async deriveAddress(mnemonic: string, chain: Chain): Promise<string> {
+    assertSeedphraseImportSupportsChains([chain])
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 

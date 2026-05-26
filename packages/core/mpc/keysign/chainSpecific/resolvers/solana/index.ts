@@ -6,7 +6,6 @@ import { getDynamicPriorityFeePrice } from '@vultisig/core-chain/chains/solana/g
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { getSplAssociatedAccount } from '@vultisig/core-chain/chains/solana/spl/getSplAssociatedAccount'
 import { SolanaSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
@@ -14,7 +13,12 @@ import { GetChainSpecificResolver } from '../../resolver'
 
 export const getSolanaChainSpecific: GetChainSpecificResolver<'solanaSpecific'> = async ({ keysignPayload }) => {
   const coin = getKeysignCoin<OtherChain.Solana>(keysignPayload)
-  const receiver = shouldBePresent(keysignPayload.toAddress)
+  // DApp signing flows (raw transaction bytes — Jupiter swaps, multi-step
+  // routes, etc.) can arrive with an empty `toAddress` because the recipient
+  // set isn't a single account. The bytes already carry their own recipients
+  // and blockhash; we just need to populate the schema and pick a priority
+  // fee. Treat empty as "no specific recipient" instead of throwing.
+  const receiver = keysignPayload.toAddress || undefined
   const client = getSolanaClient()
 
   const recentBlockHash = (await client.getLatestBlockhash()).blockhash
@@ -32,6 +36,7 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<'solanaSpecific'> 
   // For native SOL the recipient lamports change, so it's writable.
   // For SPL the SystemProgram never touches the recipient's main
   // wallet — only the sender/recipient ATAs are writable.
+  // When `receiver` is unknown (DApp signing), fall back to the global feed.
   const writableAccounts: PublicKey[] = []
 
   if (coin.id) {
@@ -43,17 +48,19 @@ export const getSolanaChainSpecific: GetChainSpecificResolver<'solanaSpecific'> 
     chainSpecific.programId = fromAccount.isToken2022
     writableAccounts.push(new PublicKey(fromAccount.address))
 
-    const { data } = await attempt(
-      getSplAssociatedAccount({
-        account: receiver,
-        token: coin.id,
-      })
-    )
-    if (data) {
-      chainSpecific.toTokenAssociatedAddress = data.address
-      writableAccounts.push(new PublicKey(data.address))
+    if (receiver) {
+      const { data } = await attempt(
+        getSplAssociatedAccount({
+          account: receiver,
+          token: coin.id,
+        })
+      )
+      if (data) {
+        chainSpecific.toTokenAssociatedAddress = data.address
+        writableAccounts.push(new PublicKey(data.address))
+      }
     }
-  } else {
+  } else if (receiver) {
     writableAccounts.push(new PublicKey(receiver))
   }
 
