@@ -23,10 +23,14 @@ export const getPolkadotSigningInputs: SigningInputsResolver<'polkadot'> = ({ ke
   // Amount: converted to hexadecimal, stripped of '0x'
   const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
 
+  // methodIndex 3 = transfer_keep_alive on Asset Hub (statemint pallet_balances).
+  // method 0 = transfer_allow_death which can reap the sender's account when the
+  // remaining balance drops below ED (0.01 DOT). app + mcp-ts already use method 3;
+  // this aligns the SDK keysign path with them.
   const callIndices = TW.Polkadot.Proto.CallIndices.create({
     custom: TW.Polkadot.Proto.CustomCallIndices.create({
       moduleIndex: 10,
-      methodIndex: 0,
+      methodIndex: 3,
     }),
   })
 

@@ -86,6 +86,25 @@ export type BuildTronSendOptions = {
   expiration: bigint
   /** Transaction timestamp (ms). Required — typically `BigInt(Date.now())`. */
   timestamp: bigint
+  /**
+   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   *
+   * IMPORTANT: this is the *Transaction-level* memo on `raw_data.data`, NOT
+   * any contract-call data. For native TRX sends the memo is the free-form
+   * payload most exchanges and THORChain expect.
+   *
+   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   *
+   * Used by:
+   *   - THORChain swap memos (`SWAP:CHAIN.ASSET:dest:limit`)
+   *   - Exchange deposit memos (Binance / OKX / KuCoin user-tag memos)
+   *   - Any flow that needs to attach an arbitrary identifier to a transfer
+   *
+   * Parity: iOS sets `TronTransaction.memo = memoString` which WalletCore
+   * encodes identically as field 12; the legacy keysign resolver wires
+   * `memo: keysignPayload.memo` on the TW proto for the same effect.
+   */
+  data?: Uint8Array
 }
 
 export type BuildTrc20TransferOptions = {
@@ -112,6 +131,27 @@ export type BuildTrc20TransferOptions = {
   expiration: bigint
   /** Timestamp (ms). Required — see `BuildTronSendOptions`. */
   timestamp: bigint
+  /**
+   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   *
+   * IMPORTANT: this is the *Transaction-level* memo on the WRAPPING
+   * Transaction, NOT the TRC-20 contract call data. The contract call data
+   * (4-byte selector + 32-byte recipient + 32-byte amount) is built
+   * separately and lives on the inner `TriggerSmartContract.data` field.
+   *
+   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   *
+   * Used by:
+   *   - Exchange deposit memos for TRC-20 USDT / USDC user-tag identifiers
+   *     (Binance / OKX / KuCoin require this for crediting deposits)
+   *   - Any flow that needs to attach an arbitrary identifier to a token
+   *     transfer
+   *
+   * Parity: iOS sets `TronTransaction.memo = memoString` for both native
+   * and TRC-20 paths; WalletCore encodes it as field 12 on the wrapping
+   * Transaction in both cases.
+   */
+  data?: Uint8Array
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +268,7 @@ function buildRawData(opts: {
   contractTypeUrl: string
   contractValue: Uint8Array
   feeLimit?: bigint
+  data?: Uint8Array
 }): Uint8Array {
   // `google.protobuf.Any` wrapper: { type_url (1), value (2) }.
   const anyParam = concatProtoBytes(fieldString(1, opts.contractTypeUrl), fieldBytes(2, opts.contractValue))
@@ -242,9 +283,18 @@ function buildRawData(opts: {
     fieldBytes(1, opts.refBlockBytes),
     fieldBytes(4, opts.refBlockHash),
     fieldInt64(8, opts.expiration),
-    fieldBytes(11, contract),
-    fieldInt64(14, opts.timestamp)
+    fieldBytes(11, contract)
   )
+
+  // Field 12: data (proto field 12, wire type 2 = length-delimited bytes).
+  // Encodes swap memos, exchange deposit memos, etc. Matches the behaviour of
+  // WalletCore's TronTransaction.memo field and the legacy keysign resolver.
+  // Empty arrays are treated as absent — Tron nodes reject zero-length data.
+  if (opts.data != null && opts.data.length > 0) {
+    raw = concatProtoBytes(raw, fieldBytes(12, opts.data))
+  }
+
+  raw = concatProtoBytes(raw, fieldInt64(14, opts.timestamp))
 
   if (opts.feeLimit != null && opts.feeLimit > 0n) {
     raw = concatProtoBytes(raw, fieldInt64(18, opts.feeLimit))
@@ -289,6 +339,7 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
     contractType: 1,
     contractTypeUrl: 'type.googleapis.com/protocol.TransferContract',
     contractValue,
+    data: opts.data,
   })
 
   const signingHashBytes = sha256(rawData)
@@ -402,6 +453,7 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
     contractTypeUrl: 'type.googleapis.com/protocol.TriggerSmartContract',
     contractValue,
     feeLimit: opts.feeLimit,
+    data: opts.data,
   })
 
   const signingHashBytes = sha256(rawData)

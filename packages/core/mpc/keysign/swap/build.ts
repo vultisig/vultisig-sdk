@@ -26,6 +26,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -116,8 +117,39 @@ export const buildSwapKeysignPayload = async ({
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
-      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName' | 'swapFee'>>(quote.tx, {
-        evm: ({ from, to, data, value }) => {
+      const transfer = matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(quote.tx, {
+        evm: () => undefined,
+        solana: () => undefined,
+        transfer: tx => tx,
+      })
+
+      if (quote.provider === 'swapkit' && transfer) {
+        return {
+          case: 'swapkitSwapPayload',
+          value: create(SwapKitSwapPayloadSchema, {
+            fromCoin: toCommCoin({
+              ...fromCoin,
+              hexPublicKey: fromCoinHexPublicKey,
+            }),
+            toCoin: toCommCoin({
+              ...toCoin,
+              hexPublicKey: toCoinHexPublicKey,
+            }),
+            fromAmount: chainAmount.toString(),
+            toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
+            txType: transfer.txType ?? '',
+            txPayload: transfer.txPayload ?? new Uint8Array(),
+            targetAddress: transfer.to,
+            ...(transfer.inboundAddress ? { inboundAddress: transfer.inboundAddress } : {}),
+            ...(transfer.memo ? { memo: transfer.memo } : {}),
+            subProvider: quote.routeProvider ?? '',
+            swapId: transfer.swapId ?? '',
+          }),
+        }
+      }
+
+      const txMsg = matchRecordUnion<GeneralSwapTx, Omit<OneInchTransaction, '$typeName'>>(quote.tx, {
+        evm: ({ from, to, data, value, affiliateFee }) => {
           return {
             from,
             to,
@@ -125,32 +157,30 @@ export const buildSwapKeysignPayload = async ({
             value,
             gasPrice: '',
             gas: 0n,
+            swapFee: affiliateFee ? affiliateFee.amount.toString() : '',
+            ...(affiliateFee
+              ? {
+                  swapFeeChain: affiliateFee.chain,
+                  swapFeeTokenId: affiliateFee.id,
+                  swapFeeDecimals: affiliateFee.decimals,
+                }
+              : {}),
           }
         },
-        solana: ({ data }) => ({
+        solana: ({ data, swapFee }) => ({
           from: '',
           to: '',
           data,
           value: '',
           gasPrice: '',
           gas: BigInt(0),
+          swapFee: swapFee.amount.toString(),
+          swapFeeChain: swapFee.chain,
+          swapFeeTokenId: swapFee.id,
+          swapFeeDecimals: swapFee.decimals,
         }),
-        // Deposit-channel routes (UTXO/Ripple/Tron/Ton sources via Chainflip, NEAR Intents, etc.)
-        // send funds to a provider-controlled deposit address. The actual signing uses
-        // keysignPayload.toAddress + keysignPayload.memo (set at the KeysignPayload root below),
-        // NOT the fields inside this OneInchTransaction stub.
-        //
-        // Why OneInchTransaction? It is the only SwapPayload variant that cross-platform clients
-        // already know how to display in SwapVerify (fromAmount / toAmountDecimal / provider).
-        // A dedicated TransferDisplayPayload proto type would require a coordinated proto schema
-        // change across all native clients, so we intentionally reuse OneInchTransaction here.
-        //
-        // Invariant that MUST hold for this to be safe:
-        //   - gas = 0n, gasPrice = '', value = '', data = '' (non-EVM signing ignores them)
-        //   - from/to are purely informational for the SwapVerify display layer
-        // If OneInchTransactionSchema ever adds EVM-only required fields or validation, this
-        // arm must be revisited to either (a) introduce a dedicated payload type, or (b) keep
-        // sending zero/empty values and ensure the schema still accepts them.
+        // Non-SwapKit transfer routes can still use the existing general display shape.
+        // SwapKit transfer routes return above with the dedicated commondata payload.
         transfer: ({ to }) => ({
           from: fromCoin.address,
           to,
@@ -158,6 +188,7 @@ export const buildSwapKeysignPayload = async ({
           value: '',
           gasPrice: '',
           gas: 0n,
+          swapFee: '',
         }),
       })
 

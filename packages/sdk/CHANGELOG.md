@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.1.2
+
+### Patch Changes
+
+- [#554](https://github.com/vultisig/vultisig-sdk/pull/554) [`bf7278c`](https://github.com/vultisig/vultisig-sdk/commit/bf7278c5886789c4a181169a36bc9296ef81b79c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Emit the dedicated commondata SwapKit swap payload for source-chain transfer routes so QR cosigners can distinguish SwapKit swaps from OneInch-compatible swap payloads.
+
 ## 1.1.1
 
 ### Patch Changes

@@ -1,5 +1,7 @@
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -38,7 +40,7 @@ const publicKey = {
 } as never
 
 describe('buildSwapKeysignPayload transfer routes', () => {
-  it('builds oneinchSwapPayload for UTXO source (Chainflip, no memo)', async () => {
+  it('builds swapkitSwapPayload for UTXO source (Chainflip, no memo)', async () => {
     mocks.getChainSpecific.mockResolvedValueOnce({
       case: 'utxoSpecific',
       value: { byteFee: '10', sendMaxAmount: false },
@@ -87,12 +89,26 @@ describe('buildSwapKeysignPayload transfer routes', () => {
     expect(payload.toAddress).toBe('bc1qchainflipdeposit')
     expect(payload.toAmount).toBe('600000')
     expect(payload.memo).toBeUndefined()
-    // Must have a real swap payload — SwapVerify throws if case is undefined.
-    expect(payload.swapPayload.case).toBe('oneinchSwapPayload')
-    if (payload.swapPayload.case === 'oneinchSwapPayload') {
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
       expect(payload.swapPayload.value.fromAmount).toBe('600000')
-      expect(payload.swapPayload.value.quote?.tx?.from).toBe('bc1qsource')
-      expect(payload.swapPayload.value.quote?.tx?.to).toBe('bc1qchainflipdeposit')
+      expect(payload.swapPayload.value.targetAddress).toBe('bc1qchainflipdeposit')
+      expect(payload.swapPayload.value.subProvider).toBe('CHAINFLIP')
+      expect(payload.swapPayload.value.txPayload).toEqual(new Uint8Array())
+    }
+
+    const roundtrip = fromBinary(
+      KeysignPayloadSchema,
+      toBinary(
+        KeysignPayloadSchema,
+        create(KeysignPayloadSchema, {
+          swapPayload: payload.swapPayload,
+        })
+      )
+    )
+    expect(roundtrip.swapPayload.case).toBe('swapkitSwapPayload')
+    if (roundtrip.swapPayload.case === 'swapkitSwapPayload') {
+      expect(roundtrip.swapPayload.value.targetAddress).toBe('bc1qchainflipdeposit')
     }
   })
 
@@ -108,6 +124,8 @@ describe('buildSwapKeysignPayload transfer routes', () => {
               to: 'rDeposit',
               amount: 1_000_000n,
               memo: '12345',
+              txType: 'TRANSFER',
+              swapId: 'swapkit-id',
             },
           },
         },
@@ -140,12 +158,13 @@ describe('buildSwapKeysignPayload transfer routes', () => {
     expect(payload.toAddress).toBe('rDeposit')
     expect(payload.toAmount).toBe('1000000')
     expect(payload.memo).toBe('12345')
-    // Transfer routes now emit oneinchSwapPayload so SwapVerify can display swap details.
-    expect(payload.swapPayload.case).toBe('oneinchSwapPayload')
-    if (payload.swapPayload.case === 'oneinchSwapPayload') {
+    expect(payload.swapPayload.case).toBe('swapkitSwapPayload')
+    if (payload.swapPayload.case === 'swapkitSwapPayload') {
       expect(payload.swapPayload.value.fromAmount).toBe('1000000')
-      expect(payload.swapPayload.value.quote?.tx?.from).toBe('rSource')
-      expect(payload.swapPayload.value.quote?.tx?.to).toBe('rDeposit')
+      expect(payload.swapPayload.value.targetAddress).toBe('rDeposit')
+      expect(payload.swapPayload.value.memo).toBe('12345')
+      expect(payload.swapPayload.value.txType).toBe('TRANSFER')
+      expect(payload.swapPayload.value.swapId).toBe('swapkit-id')
     }
     expect(mocks.getChainSpecific).toHaveBeenCalledWith(
       expect.objectContaining({
