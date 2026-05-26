@@ -5178,15 +5178,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@react-native-async-storage/async-storage@npm:^3.0.1":
-  version: 3.0.2
-  resolution: "@react-native-async-storage/async-storage@npm:3.0.2"
+"@react-native-async-storage/async-storage@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "@react-native-async-storage/async-storage@npm:3.1.0"
   dependencies:
     idb: "npm:8.0.3"
   peerDependencies:
     react: "*"
     react-native: "*"
-  checksum: 10c0/afcc9805d15c644a0390e806a2d663bd9ce44f73f15d279b707581677d3a51b985e93a7bb64e301c6f970c3dae531ac7a40bb94e5773bc3515ae54afe59d9d77
+  checksum: 10c0/d81f8ad525018ec877fd6f52fafb339be80883e7cb6c6e127665373dafdc7f3b520c80cad2225df49354cf8689c23eaa21459cdf1ff76efdc70de52710e916e4
   languageName: node
   linkType: hard
 
@@ -21629,7 +21629,7 @@ __metadata:
     "@eslint/eslintrc": "npm:^3.3.5"
     "@eslint/js": "npm:^9.22.0"
     "@google-cloud/translate": "npm:^9.3.0"
-    "@react-native-async-storage/async-storage": "npm:^3.0.1"
+    "@react-native-async-storage/async-storage": "npm:^3.1.0"
     "@rollup/plugin-commonjs": "npm:^29.0.2"
     "@rollup/plugin-node-resolve": "npm:^16.0.3"
     "@rollup/plugin-terser": "npm:^1.0.0"
