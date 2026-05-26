@@ -101,6 +101,15 @@ describe('MasterKeyDeriver', () => {
   const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 
   describe('deriveChainKey - public key type selection', () => {
+    it('rejects chains disabled for seedphrase import before loading WalletCore', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveChainKey(testMnemonic, Chain.Bittensor, true)).rejects.toThrow(/Bittensor/)
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+
     it('should use secp256k1 public key for ECDSA chains (Bitcoin)', async () => {
       const mock = createMockWalletCore()
       const provider = createMockWasmProvider(mock)
@@ -163,15 +172,15 @@ describe('MasterKeyDeriver', () => {
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
     })
 
-    it('should use ed25519Cardano public key for Cardano', async () => {
+    it('rejects Cardano until seedphrase import has full signing support for it', async () => {
       const mock = createMockWalletCore()
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)
+      await expect(deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)).rejects.toThrow(/Cardano/)
 
-      expect(mock.getLastPublicKeyCall()).toBe('ed25519Cardano')
-      expect(mock.mockPrivateKey.getPublicKeyEd25519Cardano).toHaveBeenCalled()
+      expect(mock.getLastPublicKeyCall()).toBe(null)
+      expect(mock.mockPrivateKey.getPublicKeyEd25519Cardano).not.toHaveBeenCalled()
     })
 
     it('should use secp256k1 for Cosmos chains (ECDSA)', async () => {
@@ -231,6 +240,28 @@ describe('MasterKeyDeriver', () => {
 
       const hdWallet = mock.walletCore.HDWallet.createWithMnemonic.mock.results[0].value
       expect(hdWallet.delete).toHaveBeenCalled()
+    })
+  })
+
+  describe('seedphrase import chain support', () => {
+    it('rejects disabled chains when deriving multiple private keys', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveChainPrivateKeys(testMnemonic, [Chain.Ethereum, Chain.Bittensor])).rejects.toThrow(
+        /Bittensor/
+      )
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+
+    it('rejects disabled chains when deriving addresses for discovery', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveAddress(testMnemonic, Chain.Bittensor)).rejects.toThrow(/Bittensor/)
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
     })
   })
 

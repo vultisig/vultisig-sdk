@@ -11,7 +11,15 @@ import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 
 import { AddressBookManager } from './AddressBookManager'
-import { DEFAULT_CHAINS, SUPPORTED_CHAINS } from './constants'
+import {
+  assertSeedphraseImportSupportsChains,
+  DEFAULT_CHAINS,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+  SUPPORTED_CHAINS,
+} from './constants'
 import { getDefaultStorage } from './context/defaultStorage'
 import type { VaultContext } from './context/SdkContext'
 import type { SdkConfigOptions, SdkContext } from './context/SdkContext'
@@ -62,7 +70,15 @@ import { VaultError, VaultErrorCode } from './vault/VaultError'
 import { VaultManager } from './VaultManager'
 
 // Re-export constants
-export { DEFAULT_CHAINS, SUPPORTED_CHAINS }
+export {
+  assertSeedphraseImportSupportsChains,
+  DEFAULT_CHAINS,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+  SUPPORTED_CHAINS,
+}
 
 /**
  * Configuration options for Vultisig SDK
@@ -567,7 +583,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * Useful for determining which chains to include when importing a seedphrase.
    *
    * @param mnemonic - The seedphrase to derive addresses from
-   * @param chains - Optional list of chains to scan (defaults to all supported)
+   * @param chains - Optional list of chains to scan (defaults to supported seedphrase-import chains)
    * @param onProgress - Optional progress callback
    * @returns Aggregate with chain discovery results and Phantom Solana path flag
    *
