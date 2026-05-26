@@ -1,5 +1,14 @@
 # @vultisig/cli
 
+## 1.1.3
+
+### Patch Changes
+
+- [#544](https://github.com/vultisig/vultisig-sdk/pull/544) [`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable unsupported Bittensor seedphrase import and expose the SDK-owned seedphrase import chain support list.
+
+- Updated dependencies [[`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95)]:
+  - @vultisig/sdk@1.1.3
+
 ## 1.1.0
 
 ### Patch Changes
