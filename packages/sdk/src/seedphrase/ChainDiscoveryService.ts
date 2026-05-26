@@ -7,6 +7,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { getSignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
 import { assertSeedphraseImportSupportsChains, SEEDPHRASE_IMPORT_SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
@@ -42,11 +43,6 @@ export type ChainDiscoveryConfig = {
   /** Timeout per chain in ms (default: 10000) */
   timeoutPerChain?: number
 }
-
-/**
- * Chains that use EdDSA signature algorithm
- */
-const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Ton, Chain.Cardano]
 
 /**
  * ChainDiscoveryService - Scans blockchains for existing balances
@@ -517,6 +513,6 @@ export class ChainDiscoveryService {
    * Check if a chain uses EdDSA signature algorithm
    */
   isEddsaChain(chain: Chain): boolean {
-    return EDDSA_CHAINS.includes(chain)
+    return getSignatureAlgorithm(chain) === 'eddsa'
   }
 }
