@@ -6,6 +6,7 @@ import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTo
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
+import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
@@ -1113,6 +1114,27 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   static getAddressExplorerUrl(chain: Chain, address: string): string {
     return getBlockExplorerUrl({ chain, entity: 'address', value: address })
+  }
+
+  /**
+   * Get the canonical "view on explorer" URL for a swap-provider transaction.
+   *
+   * Routes to the aggregator's scanner where one exists (LI.FI / Helius for
+   * Solana settlement, Runescan for THORChain, the MayaChain explorer for
+   * MayaChain) and falls back to the source-chain explorer for `1inch`,
+   * `kyber`, and `swapkit` — none of which expose a per-tx aggregator page.
+   *
+   * Mirrors iOS `ExplorerLinkBuilder.swift` and Android
+   * `ExplorerLinkRepository.getSwapProgressLink` so every Vultisig client
+   * routes tx-history links to the same scanner.
+   *
+   * @param provider - The swap provider that executed the trade
+   * @param txHash - The on-chain transaction hash (with or without 0x prefix)
+   * @param fromChain - The chain the tx was broadcast on
+   * @returns The provider-specific explorer URL
+   */
+  static getSwapExplorerUrl(provider: SwapExplorerProvider, txHash: string, fromChain: Chain): string {
+    return getSwapExplorerUrl({ provider, txHash, fromChain })
   }
 
   /**

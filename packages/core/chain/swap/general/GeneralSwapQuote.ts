@@ -57,6 +57,16 @@ export type GeneralSwapTx =
       }
     }
 
+/**
+ * Quote returned by an EVM/Solana general-purpose swap aggregator.
+ *
+ * Consumers building a "View on Explorer" link should call
+ * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
+ * `@vultisig/core-chain/swap/utils/getSwapExplorerUrl` instead of routing
+ * by hand — the helper covers the LI.FI / Helius scanners and falls back to
+ * the source-chain explorer for `1inch` / `kyber` / `swapkit` (none of which
+ * expose a per-tx aggregator page).
+ */
 export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
