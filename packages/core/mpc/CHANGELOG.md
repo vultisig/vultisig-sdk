@@ -1,5 +1,31 @@
 # @vultisig/core-mpc
 
+## 1.2.21
+
+### Patch Changes
+
+- [#577](https://github.com/vultisig/vultisig-sdk/pull/577) [`cc9d67f`](https://github.com/vultisig/vultisig-sdk/commit/cc9d67f0c61d9ebdfc133beac5ef04658d37a37f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(mpc): env-gated diagnostic logging for relay-decrypt ghash tag investigation
+
+  Adds non-default-on diagnostic logging to `fromMpcServerMessage` and the
+  `receiveMessages` keysign relay loop, gated on `VULTISIG_DIAG_MPC_RELAY=1`.
+  Logs envelope shape (`body_len`, `decoded_len`, `nonce_hex`, first 32 bytes
+  of ciphertext) plus a `key_fingerprint` (sha256-truncated of decoded key
+  bytes, NOT raw key material) for cross-node correlation of the persistent
+  "aes/gcm: invalid ghash tag" failures. Behavior unchanged when the env flag
+  is absent.
+
+- [#577](https://github.com/vultisig/vultisig-sdk/pull/577) [`cc9d67f`](https://github.com/vultisig/vultisig-sdk/commit/cc9d67f0c61d9ebdfc133beac5ef04658d37a37f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+- Updated dependencies [[`cc9d67f`](https://github.com/vultisig/vultisig-sdk/commit/cc9d67f0c61d9ebdfc133beac5ef04658d37a37f)]:
+  - @vultisig/core-chain@2.3.0
+
 ## 1.2.20
 
 ### Patch Changes
