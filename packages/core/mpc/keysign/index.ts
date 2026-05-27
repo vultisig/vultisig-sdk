@@ -147,6 +147,21 @@ export const keysign = async ({
         continue
       }
 
+      // Diagnostic logging for "aes/gcm: invalid ghash tag" investigation.
+      // Enable via VULTISIG_DIAG_MPC_RELAY=1. Remove once root-cause is confirmed.
+      if (process.env.VULTISIG_DIAG_MPC_RELAY === '1') {
+        console.log(
+          '[DIAG-MPC-INBOUND]',
+          JSON.stringify({
+            from: msg.from,
+            to: msg.to,
+            session_id: msg.session_id,
+            body_len: msg.body?.length ?? null,
+            message_id: messageId,
+          })
+        )
+      }
+
       const accepted = session.inputMessage(fromMpcServerMessage(msg.body, hexEncryptionKey))
       if (accepted) {
         processedMessages[cacheKey] = true
