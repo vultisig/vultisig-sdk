@@ -974,6 +974,11 @@
       "import": "./dist/coin/price/queryCoingeickoPricesWithChange.js",
       "default": "./dist/coin/price/queryCoingeickoPricesWithChange.js"
     },
+    "./coin/price/resolveTokenPriceId": {
+      "types": "./dist/coin/price/resolveTokenPriceId.d.ts",
+      "import": "./dist/coin/price/resolveTokenPriceId.js",
+      "default": "./dist/coin/price/resolveTokenPriceId.js"
+    },
     "./coin/token/metadata": {
       "types": "./dist/coin/token/metadata/index.d.ts",
       "import": "./dist/coin/token/metadata/index.js",
