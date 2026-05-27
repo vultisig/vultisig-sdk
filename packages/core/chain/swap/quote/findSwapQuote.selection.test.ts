@@ -279,9 +279,7 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow(
-      'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
-    )
+    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
   })
 
   it('omits noisy provider errors from the all-fail message', async () => {
@@ -306,7 +304,7 @@ describe('findSwapQuote parallel selection', () => {
       }
 
       expect(error.message).toBe(
-        'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+        'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
       )
       expect(error.message).not.toContain(longKyberError)
       expect(error.message).not.toContain('inch fail')

@@ -127,7 +127,9 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
  * @internal Exported for unit-test introspection only.
  */
 export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
-  'CowSwap',
+  // 'CowSwap' intentionally omitted in Phase 1 — see fetcher-registration
+  // comment lower in this file. Will be added (and slotted first for the
+  // large-trade RFQ benefit) when Phase 2 wires the build/sign path.
   'KyberSwap',
   '1inch',
   'LiFi',
@@ -280,26 +282,19 @@ export const findSwapQuote = async ({
     const toChain = to.chain
     const chainAmount = amount
 
-    // CowSwap: same-chain EVM only. No USD threshold gate — consumer (mcp-ts) is
-    // responsible for filtering by swap size. SDK always queries when chain-eligible.
-    if (isOneOf(fromChain, cowSwapSupportedChains) && fromChain === toChain) {
-      result.push({
-        providerName: 'CowSwap',
-        fetch: async (): Promise<SwapQuote> => {
-          const general = await getCowSwapQuote({
-            sellToken: from.id ?? from.address,
-            buyToken: to.id ?? to.address,
-            sellAmount: chainAmount,
-            from: from.address,
-            receiver: to.address,
-            chainConfig: cowSwapChainConfig[fromChain],
-            affiliateBps,
-          })
-
-          return { quote: { general }, discounts: vultDiscount }
-        },
-      })
-    }
+    // CowSwap: Phase 1 (SDK scaffold only). NOT registered as a live fetcher
+    // until Phase 2 wires the build/sign path through `getCowSwapOrder` +
+    // `submitCowSwapOrder` (the off-chain order flow, see #471). Registering
+    // here while the consumer pipeline can't sign would let CowSwap win a
+    // quote and then fail at sign time. The cowswap module + types + tests
+    // remain in this PR so Phase 2 only needs to plug in the fetcher block
+    // here and the consumer-side dispatch in mcp-ts. (#584 round-1 — Ehsan)
+    //
+    // void-imports so the dead-code linter doesn't gripe; they're used by
+    // sibling tests + ensure the module compiles cleanly.
+    void getCowSwapQuote
+    void cowSwapChainConfig
+    void cowSwapSupportedChains
 
     if (
       isOneOf(fromChain, kyberSwapEnabledChains) &&
@@ -434,7 +429,7 @@ export const findSwapQuote = async ({
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
-    'CowSwap',
+    // 'CowSwap' omitted in Phase 1 (no live fetcher — see comment higher up).
     'KyberSwap',
     '1inch',
     'LiFi',
