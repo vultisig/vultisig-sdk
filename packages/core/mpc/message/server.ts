@@ -16,9 +16,13 @@ export const fromMpcServerMessage = (body: string, hexEncryptionKey: string) => 
   // No behavior change — only logs body/key signature shapes when the env flag is set.
   // Enable via VULTISIG_DIAG_MPC_RELAY=1. Remove once root-cause is confirmed.
   //
-  // key_fingerprint is a sha256-truncated digest of the relay key, NOT any
-  // bits of the key itself. Identifies which key is in use across nodes for
-  // cross-node correlation without putting key material in logs.
+  // key_fingerprint is a sha256-truncated digest of the relay key's DECODED
+  // bytes (NOT the hex string), so the fingerprint is stable across
+  // upper/lower-case hex inputs - `0xABCD...` and `0xabcd...` map to the same
+  // 32 bytes of key material and must produce the same fingerprint for
+  // cross-node correlation. Hashing the hex string would split the same key
+  // into two distinct fingerprints based on caller-side casing. No key bits
+  // reach the log either way.
   if (process.env.VULTISIG_DIAG_MPC_RELAY === '1') {
     console.log(
       '[DIAG-MPC-RELAY]',
@@ -27,7 +31,7 @@ export const fromMpcServerMessage = (body: string, hexEncryptionKey: string) => 
         decoded_len: encryptedBuf.length,
         nonce_hex: encryptedBuf.subarray(0, 12).toString('hex'),
         first32_hex: encryptedBuf.toString('hex').slice(0, 64),
-        key_fingerprint: createHash('sha256').update(hexEncryptionKey).digest('hex').slice(0, 16),
+        key_fingerprint: createHash('sha256').update(Buffer.from(hexEncryptionKey, 'hex')).digest('hex').slice(0, 16),
       })
     )
   }
