@@ -88,6 +88,18 @@ SDK builds to 6 bundles via Rollup:
 
 ## Changesets
 
+**Every PR that changes a published package MUST include a changeset.** No exceptions.
+
+Why this rule exists: on 2026-05-25, PRs #555, #556, #559, #562, #563 all merged to main without changeset files. `changesets-action` never fired, no version-packages PR was created, and `@vultisig/sdk` got stuck on `1.1.2`. This blocked vultiagent-app#856 (Tron memo support) with a typecheck failure because `BuildTronSendOptions.data` (added in #559) wasn't in the published types yet. The fix required a separate chore PR (#564) bundling 5 retroactive changesets.
+
+**Rule for agents** (and humans): before opening any PR that touches a file under `packages/*/src/`, `packages/core/`, `packages/lib/`, `clients/cli/src/`, or anything else that ships to npm, run:
+
+```bash
+yarn changeset
+```
+
+Pick the affected packages and the right bump type (patch / minor / major). Commit the generated `.changeset/<some-slug>.md` file with the rest of your changes. The `changesets-action` workflow on `main` will pick it up and open a `version-packages` PR that, when merged, publishes the new version.
+
 When creating changesets, use the exact package names from package.json:
 
 - `@vultisig/sdk` - Main SDK (packages/sdk)
@@ -96,6 +108,14 @@ When creating changesets, use the exact package names from package.json:
 - `@vultisig/core-chain`, `@vultisig/core-mpc`, `@vultisig/core-config`, `@vultisig/lib-utils`, `@vultisig/lib-dkls`, `@vultisig/lib-mldsa`, `@vultisig/lib-schnorr` - Published shared libraries (lockstep version; `core-chain` / `core-mpc` reference each other and sibling libs with **exact** semver in `package.json` so `npm pack` is valid off-repo—update those literals whenever you bump the shared version)
 
 **Do not** use variations like `@vultisig/vultisig-sdk` or `@anthropic/vultisig-sdk`.
+
+**Anti-pattern (do not):**
+
+- Open a PR touching `packages/*/src/` without a changeset and assume "it's small, skip changeset". Even one-line fixes need a `patch` changeset if they ship to consumers.
+- Wait until merge time to add the changeset. CI doesn't fail on missing changeset (yet), but the downstream cost is silent.
+- Add a single changeset bundling 5 prior PRs after the fact — that's a retroactive band-aid and erases the per-PR changelog granularity.
+
+**Test-only / internal-only changes** (e.g. files under `packages/sdk/tests/`, `.config/`, `clients/cli/tests/`, root-level docs/CI) **do not** need a changeset since they don't affect published artifacts.
 
 ## Testing
 
