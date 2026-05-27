@@ -133,8 +133,12 @@ export async function parseKeygenQR(qrPayload: string): Promise<ParsedKeygenQR> 
     throw new Error('Invalid QR payload: missing jsonData parameter')
   }
 
+  // URLSearchParams decodes '+' as space per application/x-www-form-urlencoded spec.
+  // Base64 data legitimately contains '+' characters, so restore them.
+  const base64Safe = jsonData.replace(/ /g, '+')
+
   // URL decode and decompress
-  const decodedData = decodeURIComponent(jsonData)
+  const decodedData = decodeURIComponent(base64Safe)
   const binaryData = await decompressData(decodedData)
 
   // Parse protobuf
