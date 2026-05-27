@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CosmosChain } from '../../../Chain'
 import { getCosmosAccountInfo } from './getCosmosAccountInfo'
 
-vi.mock('../client', () => ({
+vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
   getCosmosClient: vi.fn(),
 }))
 
@@ -11,9 +11,8 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: vi.fn(),
 }))
 
+import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-
-import { getCosmosClient } from '../client'
 
 const baseBlock = {
   header: { time: '2026-05-27T00:00:00.000Z', height: '12345' },
