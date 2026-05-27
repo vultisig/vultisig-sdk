@@ -19,6 +19,9 @@ export const getSwapDestinationAddress = ({ quote, fromCoin }: GetSwapDestinatio
         evm: ({ to }) => to,
         solana: () => '',
         transfer: ({ to }) => to,
+        // CowSwap orders are settled by the solver network — no on-chain
+        // destination address is needed at keysign time.
+        cowswap_order: () => '',
       }),
     native: quote => {
       const isErc20 = isOneOf(fromCoin.chain, Object.values(EvmChain)) && !isFeeCoin(fromCoin)

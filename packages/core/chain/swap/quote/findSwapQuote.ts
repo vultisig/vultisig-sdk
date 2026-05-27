@@ -3,6 +3,8 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
+import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -51,7 +53,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   affiliateConfig?: SwapAffiliateConfig
 }
 
-type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -125,6 +127,7 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
  * @internal Exported for unit-test introspection only.
  */
 export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  'CowSwap',
   'KyberSwap',
   '1inch',
   'LiFi',
@@ -277,6 +280,27 @@ export const findSwapQuote = async ({
     const toChain = to.chain
     const chainAmount = amount
 
+    // CowSwap: same-chain EVM only. No USD threshold gate — consumer (mcp-ts) is
+    // responsible for filtering by swap size. SDK always queries when chain-eligible.
+    if (isOneOf(fromChain, cowSwapSupportedChains) && fromChain === toChain) {
+      result.push({
+        providerName: 'CowSwap',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getCowSwapQuote({
+            sellToken: from.id ?? from.address,
+            buyToken: to.id ?? to.address,
+            sellAmount: chainAmount,
+            from: from.address,
+            receiver: to.address,
+            chainConfig: cowSwapChainConfig[fromChain],
+            affiliateBps,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
+
     if (
       isOneOf(fromChain, kyberSwapEnabledChains) &&
       isOneOf(toChain, kyberSwapEnabledChains) &&
@@ -410,6 +434,7 @@ export const findSwapQuote = async ({
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
+    'CowSwap',
     'KyberSwap',
     '1inch',
     'LiFi',
