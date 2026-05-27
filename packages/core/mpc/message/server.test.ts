@@ -54,7 +54,13 @@ describe('mpc server message encoding', () => {
 
     expect(consoleSpy).toHaveBeenCalledWith('[DIAG-MPC-RELAY]', expect.stringMatching(/"body_len":\d+/))
     expect(consoleSpy).toHaveBeenCalledWith('[DIAG-MPC-RELAY]', expect.stringMatching(/"nonce_hex":"[0-9a-f]{24}"/))
-    expect(consoleSpy).toHaveBeenCalledWith('[DIAG-MPC-RELAY]', expect.stringMatching(/"key_first16":"[0-9a-f]{16}"/))
+    // key_fingerprint is a sha256-truncated digest, not key bits — never logs raw key material.
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[DIAG-MPC-RELAY]',
+      expect.stringMatching(/"key_fingerprint":"[0-9a-f]{16}"/)
+    )
+    // Negative: never log the raw key prefix shape (key_first16 was the pre-fix logger).
+    expect(consoleSpy).not.toHaveBeenCalledWith('[DIAG-MPC-RELAY]', expect.stringMatching(/"key_first16":/))
     consoleSpy.mockRestore()
   })
 })
