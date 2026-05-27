@@ -76,7 +76,7 @@
     "vitest": "^4.1.6"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=1.2.0"
+    "@vultisig/sdk": ">=1.2.1"
   },
   "peerDependenciesMeta": {
     "@vultisig/sdk": {
