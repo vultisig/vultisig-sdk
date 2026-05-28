@@ -14,10 +14,36 @@ import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 
-type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
+type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
   amount: bigint
   affiliateBps?: number
 }
+
+// Stable-pair detection: tickers that commonly trade within a tight peg.
+// DAI is included because on most DEXs DAI/USDC depth is comparable to
+// USDC/USDT and the 0.3% ceiling is still safe headroom for MPC latency.
+/** @internal exported for unit tests only */
+export const STABLE_TICKERS: ReadonlySet<string> = new Set([
+  'USDC',
+  'USDT',
+  'DAI',
+  'BUSD',
+  'TUSD',
+  'FRAX',
+  'USDP',
+  'GUSD',
+  'LUSD',
+  'USDD',
+  'FDUSD',
+  'PYUSD',
+])
+
+const isStableTicker = (ticker: string | undefined): boolean =>
+  ticker !== undefined && STABLE_TICKERS.has(ticker.toUpperCase())
+
+/** @internal exported for unit tests only */
+export const isStablePair = (from: { ticker?: string }, to: { ticker?: string }): boolean =>
+  isStableTicker(from.ticker) && isStableTicker(to.ticker)
 
 const setupLifi = memoize(() => {
   createConfig({
@@ -68,7 +94,15 @@ const setupLifi = memoize(() => {
 // through the resolver, tracked at vultisig/vultisig-sdk#NEW — TODO
 // open) lands as a clean diff rather than reshaping the function
 // body. Codex Round 1b review feedback (vultisig-sdk#513 r1).
+//
+// Two tiers (vultisig-sdk#524):
+// - stable pairs (USDC/USDT/DAI/...): 0.3% — well above typical
+//   concentrated-liquidity spread (0.02-0.05%) but avoids the 1%
+//   MEV surface on tight-peg operations.
+// - volatile pairs: 1% — covers MPC ceremony latency (30-90s) where
+//   price can move >0.5% on thin pairs. See full rationale above.
 const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
+const STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE = 0.003
 
 // Combined affiliate + slippage ceiling. Defensive guard so a high
 // affiliateBps + the 1% slippage don't silently combine into a >3%
@@ -112,12 +146,16 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
+  const slippage = isStablePair(transfer.from, transfer.to)
+    ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE
+    : DEFAULT_LIFI_SLIPPAGE_TOLERANCE
+
   // Defensive: log when affiliate + slippage combined cost crosses the
   // 3% ceiling. Today affiliateBps is typically 0 and slippage is 1%,
   // so 100bps total — well under the ceiling — but a future bump to
   // affiliateBps shouldn't silently combine into a >3% effective cost
   // on the user without anyone noticing. NeOMakinG #513 r1.
-  const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
+  const combinedCostBps = (affiliateBps ?? 0) + slippage * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
     console.warn(
       `[getLifiSwapQuote] affiliate + slippage combined cost exceeds ${MAX_COMBINED_COST_BPS}bps: ${combinedCostBps}bps`
@@ -133,7 +171,7 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAddress,
     toAddress,
     fee: affiliateBps ? affiliateBps / 10000 : undefined,
-    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
+    slippage,
   })
 
   const { transactionRequest, estimate } = quote
