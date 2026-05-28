@@ -1,5 +1,7 @@
-export class NoSwapRoutesError extends Error {
+import { SwapError, SwapErrorCode } from './SwapError'
+
+export class NoSwapRoutesError extends SwapError {
   constructor() {
-    super(`No swap routes found.`)
+    super(SwapErrorCode.NoRoutesFound, `No swap routes found.`)
   }
 }
