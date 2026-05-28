@@ -12,15 +12,47 @@ const MAX_CHUNK_BYTES = 64
 
 /**
  * Split a memo string into chunks of at most 64 UTF-8 bytes each.
- * The split is on byte boundaries, so multi-byte chars are never torn.
+ *
+ * Each chunk respects UTF-8 character boundaries: a multi-byte codepoint
+ * straddling the 64-byte boundary is moved entirely to the next chunk
+ * instead of being torn (which would produce U+FFFD replacement chars on
+ * decode and corrupt the memo as it lands on-chain).
+ *
+ * UTF-8 leading bytes have the bit pattern 0xxxxxxx, 110xxxxx, 1110xxxx,
+ * or 11110xxx. Continuation bytes have the pattern 10xxxxxx. To find a
+ * safe cut point we walk back from the proposed end until the byte at
+ * `end` is a leading byte (or we hit the chunk start, in which case the
+ * input is malformed and we keep the original cut).
  */
 export function memoToChunks(memo: string): string[] {
   const bytes = new TextEncoder().encode(memo)
   if (bytes.length === 0) return ['']
   const chunks: string[] = []
   const decoder = new TextDecoder()
-  for (let i = 0; i < bytes.length; i += MAX_CHUNK_BYTES) {
-    chunks.push(decoder.decode(bytes.slice(i, i + MAX_CHUNK_BYTES)))
+
+  let start = 0
+  while (start < bytes.length) {
+    let end = Math.min(start + MAX_CHUNK_BYTES, bytes.length)
+
+    // If we are not at the end of the buffer and `end` lands on a UTF-8
+    // continuation byte (top bits 10xxxxxx), back up until we hit the
+    // start of that codepoint. The next chunk will pick up the codepoint
+    // intact.
+    if (end < bytes.length) {
+      while (end > start && (bytes[end]! & 0xc0) === 0x80) {
+        end--
+      }
+      // Defensive: if walking back consumed the whole chunk (malformed
+      // input — > 64 bytes of continuation bytes in a row, impossible
+      // for any valid UTF-8 codepoint which maxes at 4 bytes), fall back
+      // to the original cut so we make forward progress.
+      if (end === start) {
+        end = Math.min(start + MAX_CHUNK_BYTES, bytes.length)
+      }
+    }
+
+    chunks.push(decoder.decode(bytes.slice(start, end)))
+    start = end
   }
   return chunks
 }
