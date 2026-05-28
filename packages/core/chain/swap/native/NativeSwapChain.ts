@@ -15,7 +15,7 @@ export const nativeSwapStreamingInterval: Record<NativeSwapChain, number> = {
  * THORChain-only: when a rapid quote's `fees.total_bps` exceeds this, fetch a streaming quote and pick the better outcome.
  * Set to `Number.MAX_SAFE_INTEGER` to disable streaming fallback without removing code.
  */
-export const THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS = 300
+export const THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS = 100
 
 export const nativeSwapApiBaseUrl: Record<NativeSwapChain, string> = {
   [Chain.THORChain]: `${cosmosRpcUrl[Chain.THORChain]}/thorchain`,
