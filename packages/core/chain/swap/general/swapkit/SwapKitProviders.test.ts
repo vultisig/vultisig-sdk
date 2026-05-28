@@ -101,7 +101,7 @@ describe('SwapKitProviders', () => {
       await getSwapKitProviders()
 
       expect(fetchMock).toHaveBeenCalledTimes(1)
-      expect(fetchMock.mock.calls[0][0]).toBe(`${BASE_URL}/providers`)
+      expect(fetchMock).toHaveBeenCalledWith(`${BASE_URL}/providers`, expect.any(Object))
     })
 
     it('returns an empty list (no throw) when the request fails', async () => {
