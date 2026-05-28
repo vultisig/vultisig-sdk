@@ -77,7 +77,7 @@ const makeBitcoinPsbtFixture = ({
 
   return {
     address: p2wpkh.address!,
-    recipientAddress: RECIPIENT_ADDRESS,
+    recipientAddress: outputAddress ?? RECIPIENT_ADDRESS,
     payload: psbt.toBuffer(),
   }
 }
