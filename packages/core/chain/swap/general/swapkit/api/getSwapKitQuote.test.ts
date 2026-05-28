@@ -21,7 +21,6 @@ const textEncoder = new TextEncoder()
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
 const transferSourceFixtures: TransferSourceFixture[] = [
-  ['Bitcoin', Chain.Bitcoin, 'BTC', 8, 'bc1qsource', 'bc1qdeposit'],
   ['Litecoin', Chain.Litecoin, 'LTC', 8, 'ltc1qsource', 'Ldeposit'],
   ['Dogecoin', Chain.Dogecoin, 'DOGE', 8, 'Dsource', 'Ddeposit'],
   ['Bitcoin Cash', Chain.BitcoinCash, 'BCH', 8, 'bitcoincash:qsource', 'bitcoincash:qdeposit'],
@@ -257,35 +256,34 @@ describe('getSwapKitQuote', () => {
   })
 
   it('maps SwapKit transfer tx metadata into QR payload fields', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'psbt-route',
-                providers: ['CHAINFLIP'],
-                expectedBuyAmount: '0.01',
-              },
-            ],
-          })
-        )
-        .mockResolvedValueOnce(
-          response({
-            expectedBuyAmount: '0.009',
-            providers: ['CHAINFLIP'],
-            targetAddress: 'bc1qdeposit',
-            inboundAddress: 'bc1qinbound',
-            tx: 'cHNidA==',
-            meta: {
-              txType: 'PSBT',
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [
+            {
+              routeId: 'psbt-route',
+              providers: ['CHAINFLIP'],
+              expectedBuyAmount: '0.01',
             },
-            swapId: 'swapkit-id',
-          })
-        )
-    )
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.009',
+          providers: ['CHAINFLIP'],
+          targetAddress: 'bc1qdeposit',
+          inboundAddress: 'bc1qinbound',
+          tx: 'cHNidA==',
+          meta: {
+            txType: 'PSBT',
+          },
+          swapId: 'swapkit-id',
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
@@ -304,6 +302,13 @@ describe('getSwapKitQuote', () => {
       amount: 100_000n,
     })
 
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      routeId: 'psbt-route',
+      sourceAddress: 'bc1qsource',
+      destinationAddress: '0xdestination',
+      disableBalanceCheck: true,
+    })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
     expect(quote.tx).toEqual({
       transfer: {
         to: 'bc1qdeposit',
