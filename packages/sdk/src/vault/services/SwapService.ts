@@ -531,6 +531,16 @@ export class SwapService {
           return new VaultError(VaultErrorCode.InvalidConfig, message, error)
         case SwapErrorCode.InvalidConfig:
           return new VaultError(VaultErrorCode.InvalidConfig, `Swap configuration error: ${message}`, error)
+        default: {
+          // Exhaustiveness guard: TS fails the build if a new SwapErrorCode is
+          // added without a case here. Without it, an unmapped code would
+          // silently fall through to the generic `Swap failed` handler below
+          // and lose its typed mapping. At runtime we still return a VaultError
+          // (never throw from this catch-all) using the SwapError's own message.
+          const _exhaustive: never = error.code
+          void _exhaustive
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap failed: ${message}`, error)
+        }
       }
     }
 

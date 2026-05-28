@@ -439,6 +439,31 @@ describe('SwapService', () => {
       // Should emit error event
       expect(mockEmitEvent).toHaveBeenCalledWith('error', expect.any(Error))
     })
+
+    // Pins wrapSwapError's typed-code -> VaultError message contract. Each
+    // SwapErrorCode must produce its own user-facing message; a regression that
+    // drops a case would fall through to the generic 'Swap failed' handler.
+    // The exhaustiveness `never` guard in wrapSwapError additionally fails the
+    // build (not just a test) if a new code is added without a mapping.
+    it.each([
+      [SwapErrorCode.NoRoutesFound, 'No swap route found between these tokens', 'no routes'],
+      [SwapErrorCode.AllProvidersFailed, 'No swap route found between these tokens', 'all providers failed'],
+      [SwapErrorCode.AmountTooSmall, 'Swap amount too small', 'below dust'],
+      [SwapErrorCode.AmountBelowMinimum, 'Minimum amount is 0.5 BTC', 'Minimum amount is 0.5 BTC'],
+      [SwapErrorCode.InvalidConfig, 'Swap configuration error', 'mixed-case THORName'],
+    ])('maps SwapError(%s) to its own VaultError message', async (code, expectedMessage, rawMessage) => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(code, rawMessage))
+
+      await expect(
+        service.getQuote({
+          fromCoin: { chain: Chain.Ethereum },
+          toCoin: { chain: Chain.Bitcoin },
+          amount: 0.001,
+        })
+      ).rejects.toThrow(expectedMessage)
+    })
   })
 
   describe('prepareSwapTx', () => {
