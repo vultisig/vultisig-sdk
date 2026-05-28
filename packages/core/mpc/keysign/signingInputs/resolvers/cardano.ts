@@ -16,16 +16,6 @@ const amountToBytes = (amount: bigint): Uint8Array => {
 }
 
 export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keysignPayload, walletCore }) => {
-  // Cardano memos require CIP-20 auxiliary data whose hash is committed to in the
-  // signed tx body — they cannot be attached after signing. Until that path is
-  // implemented (see vultisig/vultisig-sdk#432), fail loudly instead of silently
-  // dropping the memo and producing a tx with `auxiliary_data = null`.
-  if (keysignPayload.memo) {
-    throw new Error(
-      'Cardano memo is not supported yet: this SDK cannot attach CIP-20 metadata to direct sends, so the memo would be dropped and never land on-chain. Please retry without a memo, or wait for CIP-20 support (vultisig/vultisig-sdk#432).'
-    )
-  }
-
   const { sendMaxAmount, ttl, byteFee } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'cardano')
 
   const coin = shouldBePresent(keysignPayload.coin)

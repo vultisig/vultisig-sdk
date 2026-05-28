@@ -11,6 +11,7 @@ import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'
 import { assertSignature } from '@vultisig/core-chain/utils/assertSignature'
 
 import { getQBTCSignedTransaction } from '../../chains/cosmos/qbtc/QBTCHelper'
+import { buildCip20AuxData, patchTxBodyWithAuxHash } from './cardano/buildCip20AuxData'
 import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
@@ -109,6 +110,9 @@ export const compileTx = ({
   }
 
   if (chain === Chain.Cardano) {
+    // hashes[0] is blake2b-256 of the tx body. When a memo is set,
+    // getPreSigningHashes returns blake2b of the patched body (with aux_data_hash
+    // at key 7) so both signing phase and compile phase agree on the same bytes.
     const hash = hashes[0]
     const hashHex = Buffer.from(hash).toString('hex')
 
@@ -125,24 +129,35 @@ export const compileTx = ({
       signatureFormat,
     })
 
-    // preOutput.data is the CBOR-encoded tx body
+    // Re-derive the tx body (and aux data when memo is set) to wrap it with
+    // the witness set and produce the final signed transaction.
     const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
       walletCore.TransactionCompiler.preImageHashes(getCoinType({ chain, walletCore }), txInputData)
     )
 
+    const memo = keysignPayload?.memo
+    let txBodyCbor = preOutput.data
+    let auxDataCbor: Uint8Array | undefined
+
+    if (memo) {
+      const cip20 = buildCip20AuxData(memo)
+      auxDataCbor = cip20.auxDataCbor
+      txBodyCbor = patchTxBodyWithAuxHash(txBodyCbor, cip20.auxDataHash)
+    }
+
     const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
     const encoded = buildSignedCardanoTx({
-      txBodyCbor: preOutput.data,
+      txBodyCbor,
       publicKey: spendingKey,
       signature: new Uint8Array(sig),
+      auxDataCbor,
     })
 
     return TW.Cardano.Proto.SigningOutput.encode(
       TW.Cardano.Proto.SigningOutput.create({
         encoded,
-        // Embed the correct tx hash so downstream code doesn't need to
-        // re-encode the body (cbor-x round-trip can alter bytes).
-        txId: preOutput.dataHash,
+        // hashes[0] is blake2b-256 of the body — correct txId for both paths
+        txId: hash,
       })
     ).finish()
   }

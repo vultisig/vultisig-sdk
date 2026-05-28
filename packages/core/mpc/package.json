@@ -772,6 +772,11 @@
       "import": "./dist/swap/utils/getSwapTrackingUrl.js",
       "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
+    "./tx/compile/cardano/buildCip20AuxData": {
+      "types": "./dist/tx/compile/cardano/buildCip20AuxData.d.ts",
+      "import": "./dist/tx/compile/cardano/buildCip20AuxData.js",
+      "default": "./dist/tx/compile/cardano/buildCip20AuxData.js"
+    },
     "./tx/compile/cardano/buildSignedCardanoTx": {
       "types": "./dist/tx/compile/cardano/buildSignedCardanoTx.d.ts",
       "import": "./dist/tx/compile/cardano/buildSignedCardanoTx.js",
