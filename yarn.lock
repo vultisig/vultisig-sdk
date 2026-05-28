@@ -7587,7 +7587,6 @@ __metadata:
     cbor-x: "npm:^1.6.4"
     date-fns: "npm:^4.1.0"
     ethers: "npm:^6.16.0"
-    i18next: "npm:^26.0.8"
     tiny-secp256k1: "npm:^2.2.4"
     viem: "npm:^2.51.0"
     xrpl: "npm:^4.6.0"

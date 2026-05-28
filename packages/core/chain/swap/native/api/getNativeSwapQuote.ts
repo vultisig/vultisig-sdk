@@ -4,7 +4,6 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
-import { t } from 'i18next'
 
 import { chainFeeCoin } from '../../../coin/chainFeeCoin'
 import { toNativeSwapAsset } from '../asset/toNativeSwapAsset'
@@ -89,7 +88,7 @@ const assertOkQuote = (
   if ('error' in result) {
     if (isInError(result.error, 'not enough asset to pay for fees')) {
       const { ticker } = chainFeeCoin[from.chain]
-      throw new Error(t('not_enough_asset_to_cover_gas_fees', { asset: ticker }))
+      throw new Error(`Not enough ${ticker} to cover gas fees.`)
     }
     throw new Error(result.error)
   }
