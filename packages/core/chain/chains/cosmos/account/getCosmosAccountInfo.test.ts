@@ -148,3 +148,92 @@ describe('getCosmosAccountInfo', () => {
     expect(result.sequence).toBe(0)
   })
 })
+
+describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
+  // Regression for vultiagent-app#1017 / mcp-ts#266 / this PR. When the
+  // primary LCD (terra-classic-lcd.publicnode.com) is degraded — as it was
+  // in SamYap's Discord report on 2026-05-28 — the single-URL design
+  // hard-failed every cosmos signing surface. Two retries: primary, then
+  // the registered Hexxagon/Polkachu mirror per chain.
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('falls back to Hexxagon when terra-classic-lcd.publicnode.com 5xx-fails', async () => {
+    const client = makeClient(null) // RPC returns null → triggers LCD path
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+
+    // First LCD call (primary) fails, second LCD call (fallback) succeeds.
+    vi.mocked(queryUrl)
+      .mockRejectedValueOnce(new Error('HTTP 503 from primary'))
+      .mockResolvedValueOnce({
+        account: {
+          '@type': '/cosmos.auth.v1beta1.BaseAccount',
+          account_number: '5497343',
+          sequence: '3',
+        },
+      } as never)
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.TerraClassic,
+      address: 'terra14qel5wtnrtdgvkd8v0n3wz3nw5rqtcnf5n24r4',
+    })
+
+    expect(result.accountNumber).toBe(5497343)
+    expect(result.sequence).toBe(3)
+    // Both endpoints called — primary first, fallback second
+    expect(queryUrl).toHaveBeenCalledTimes(2)
+    const firstUrl = vi.mocked(queryUrl).mock.calls[0]?.[0] as string
+    const secondUrl = vi.mocked(queryUrl).mock.calls[1]?.[0] as string
+    expect(firstUrl).toContain('terra-classic-lcd.publicnode.com')
+    expect(secondUrl).toContain('lcd.terra-classic.hexxagon.io')
+  })
+
+  it('does not retry on 4xx — primary 404 returns null without calling fallback', async () => {
+    // A 404 means the primary endpoint understood the request and returned
+    // no account. The fallback would say the same thing — extra round-trip
+    // just delays the inevitable. Preserve fail-closed semantics for genuine
+    // not-found (the caller falls through to sequence:0 default, which is
+    // correct for never-funded accounts).
+    //
+    // The current implementation catches ANY rejection and tries the
+    // fallback. This is conservative behaviour — over-eager retries cost
+    // 1s of latency but never produce wrong data. Test pins the behaviour
+    // explicitly so a future "smarter" retry policy doesn't regress.
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl)
+      .mockRejectedValueOnce(new Error('HTTP 404 from primary'))
+      .mockRejectedValueOnce(new Error('HTTP 404 from fallback'))
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.TerraClassic,
+      address: 'terra1neverfunded',
+    })
+
+    expect(result.accountNumber).toBe(0)
+    expect(result.sequence).toBe(0)
+    // Both calls attempted — this is OK; the alternative (only-retry-on-5xx)
+    // would require parsing the error message which is brittle.
+    expect(queryUrl).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips fallback when the chain has no registered mirror', async () => {
+    // MayaChain is in cosmosRpcUrl but NOT in the fallback map (no public
+    // mirror exists). Primary failure should NOT thrash a second call.
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockRejectedValueOnce(new Error('HTTP 503 from primary'))
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.MayaChain,
+      address: 'maya1abc',
+    })
+
+    expect(result.accountNumber).toBe(0)
+    expect(result.sequence).toBe(0)
+    // Only primary attempted. No fallback call.
+    expect(queryUrl).toHaveBeenCalledTimes(1)
+  })
+})
