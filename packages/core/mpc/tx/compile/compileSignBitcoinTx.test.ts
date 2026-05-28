@@ -34,8 +34,9 @@ import { compileTx } from './compileTx'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
+const RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
 const EXPECTED_BITCOINJS_RAW_TX =
-  '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff01905f010000000000160014751e76e8199196d454941c45d1b3a323f1433bd60247304402204f69fe236b040aa999563dd909273ee088df86e6e1c0c46a083399384c02fc12022038870510658d27312b253380b3b2bbfb1b5db4423399561a3e5737e1540f825b01210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179800000000'
+  '02000000000101aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000ffffffff01905f0100000000001600147dd65592d0ab2fe0d0257d571abf032cd9db93dc02483045022100cf5ed8951fc872ce1ec2021f76de2d191494c78f9ace2901c0ba41e9292bdd5d022018801adb6683ff7d68d0ccd02ecb001169f5f22c3ae0c2b3748bdad457fa649801210279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f8179800000000'
 
 describe('compileSignBitcoinTx', () => {
   let walletCore: WalletCore
@@ -56,7 +57,7 @@ describe('compileSignBitcoinTx', () => {
       witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
     })
     psbt.addOutput({
-      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      address: RECIPIENT_ADDRESS,
       value: 90000n,
     })
 
@@ -99,7 +100,7 @@ describe('compileSignBitcoinTx', () => {
       witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
     })
     psbtRef.addOutput({
-      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      address: RECIPIENT_ADDRESS,
       value: 90000n,
     })
     await psbtRef.signInputAsync(0, {
@@ -125,7 +126,7 @@ describe('compileSignBitcoinTx', () => {
       witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
     })
     psbt.addOutput({
-      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      address: RECIPIENT_ADDRESS,
       value: 90000n,
     })
 
@@ -136,6 +137,8 @@ describe('compileSignBitcoinTx', () => {
         address: p2wpkh.address!,
         decimals: 8,
       }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: '90000',
       swapPayload: {
         case: 'swapkitSwapPayload',
         value: create(SwapKitSwapPayloadSchema, {
@@ -181,7 +184,7 @@ describe('compileSignBitcoinTx', () => {
     expect(Buffer.from(decoded.encoded).toString('hex')).toBe(EXPECTED_BITCOINJS_RAW_TX)
   })
 
-  it('returns SwapKit PSBT hashes sorted to match iOS co-signing', () => {
+  it('returns SwapKit PSBT hashes in deterministic sorted ceremony order', () => {
     const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
     const psbt = new Psbt({ network: networks.bitcoin })
     psbt.addInput({
@@ -195,7 +198,7 @@ describe('compileSignBitcoinTx', () => {
       witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 200000n },
     })
     psbt.addOutput({
-      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      address: RECIPIENT_ADDRESS,
       value: 250000n,
     })
 
@@ -206,6 +209,8 @@ describe('compileSignBitcoinTx', () => {
         address: p2wpkh.address!,
         decimals: 8,
       }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: '250000',
       swapPayload: {
         case: 'swapkitSwapPayload',
         value: create(SwapKitSwapPayloadSchema, {
@@ -224,5 +229,46 @@ describe('compileSignBitcoinTx', () => {
 
     expect(hashes).toHaveLength(2)
     expect(hashes).toEqual([...hashes].sort())
+  })
+
+  it('rejects SwapKit PSBT payloads without a quoted amount', () => {
+    const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
+    const psbt = new Psbt({ network: networks.bitcoin })
+    psbt.addInput({
+      hash: 'aa'.repeat(32),
+      index: 0,
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
+    })
+    psbt.addOutput({
+      address: RECIPIENT_ADDRESS,
+      value: 90000n,
+    })
+
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Bitcoin,
+        ticker: 'BTC',
+        address: p2wpkh.address!,
+        decimals: 8,
+      }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: '',
+      swapPayload: {
+        case: 'swapkitSwapPayload',
+        value: create(SwapKitSwapPayloadSchema, {
+          txType: 'PSBT',
+          txPayload: psbt.toBuffer(),
+        }),
+      },
+    })
+
+    expect(() =>
+      getPreSigningHashes({
+        walletCore,
+        chain: Chain.Bitcoin,
+        txInputData: new Uint8Array(),
+        keysignPayload,
+      })
+    ).toThrow('expected amount is invalid')
   })
 })
