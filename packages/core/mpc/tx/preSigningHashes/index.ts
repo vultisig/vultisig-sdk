@@ -12,6 +12,7 @@ import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignC
 import { getPreSigningOutput } from '../../keysign/preSigningOutput'
 import { buildCip20AuxData, patchTxBodyWithAuxHash } from '../compile/cardano/buildCip20AuxData'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 
 type Input = {
   walletCore: WalletCore
@@ -20,10 +21,15 @@ type Input = {
   keysignPayload?: KeysignPayload
 }
 
+const sortHashes = (hashes: Uint8Array[]): Uint8Array[] =>
+  [...hashes].sort((one, another) => Buffer.from(one).compare(Buffer.from(another)))
+
 export const getPreSigningHashes = ({ walletCore, txInputData, chain, keysignPayload }: Input) => {
+  const signBitcoin = keysignPayload ? getSwapKitSignBitcoin(keysignPayload) : undefined
+
   // PSBT signing: compute BIP-143 sighashes directly from structured data
-  if (keysignPayload?.signData.case === 'signBitcoin') {
-    return computePreSigningHashes(keysignPayload.signData.value)
+  if (signBitcoin) {
+    return sortHashes(computePreSigningHashes(signBitcoin))
   }
 
   if (chain === Chain.QBTC) {

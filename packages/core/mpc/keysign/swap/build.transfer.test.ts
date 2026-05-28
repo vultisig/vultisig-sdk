@@ -1,7 +1,9 @@
+import { Buffer } from 'buffer'
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { networks, payments, Psbt } from 'bitcoinjs-lib'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -39,8 +41,30 @@ const publicKey = {
   data: () => new Uint8Array([1, 2, 3]),
 } as never
 
+const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
+
+const makeBitcoinPsbtFixture = () => {
+  const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
+  const psbt = new Psbt({ network: networks.bitcoin })
+
+  psbt.addInput({
+    hash: 'aa'.repeat(32),
+    index: 0,
+    witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100_000n },
+  })
+  psbt.addOutput({
+    address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+    value: 90_000n,
+  })
+
+  return {
+    address: p2wpkh.address!,
+    payload: psbt.toBuffer(),
+  }
+}
+
 describe('buildSwapKeysignPayload transfer routes', () => {
-  it('builds swapkitSwapPayload for UTXO source (Chainflip, no memo)', async () => {
+  it('rejects Bitcoin SwapKit transfer routes without PSBT data', async () => {
     mocks.getChainSpecific.mockResolvedValueOnce({
       case: 'utxoSpecific',
       value: { byteFee: '10', sendMaxAmount: false },
@@ -63,10 +87,62 @@ describe('buildSwapKeysignPayload transfer routes', () => {
       },
     }
 
+    await expect(
+      buildSwapKeysignPayload({
+        fromCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0xdestination',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 0.006,
+        swapQuote,
+        vaultId: 'vault-id',
+        localPartyId: 'local-party',
+        fromPublicKey: publicKey,
+        toPublicKey: publicKey,
+        libType: 'DKLS',
+        walletCore: {} as never,
+      })
+    ).rejects.toThrow('SwapKit Bitcoin transfer routes must include PSBT txType and txPayload.')
+  })
+
+  it('builds SwapKit Bitcoin PSBT payload and SignBitcoin data', async () => {
+    mocks.getChainSpecific.mockResolvedValueOnce({
+      case: 'utxoSpecific',
+      value: { byteFee: '10', sendMaxAmount: false },
+    })
+    const psbt = makeBitcoinPsbtFixture()
+
+    const swapQuote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '1800000000000000000',
+          provider: 'swapkit',
+          routeProvider: 'CHAINFLIP',
+          tx: {
+            transfer: {
+              to: 'bc1qchainflipdeposit',
+              amount: 600_000n,
+              txType: 'PSBT',
+              txPayload: psbt.payload,
+            },
+          },
+        },
+      },
+    }
+
     const payload = await buildSwapKeysignPayload({
       fromCoin: {
         chain: Chain.Bitcoin,
-        address: 'bc1qsource',
+        address: psbt.address,
         ticker: 'BTC',
         decimals: 8,
       },
@@ -94,7 +170,14 @@ describe('buildSwapKeysignPayload transfer routes', () => {
       expect(payload.swapPayload.value.fromAmount).toBe('600000')
       expect(payload.swapPayload.value.targetAddress).toBe('bc1qchainflipdeposit')
       expect(payload.swapPayload.value.subProvider).toBe('CHAINFLIP')
-      expect(payload.swapPayload.value.txPayload).toEqual(new Uint8Array())
+      expect(payload.swapPayload.value.txType).toBe('PSBT')
+      expect(payload.swapPayload.value.txPayload).toEqual(psbt.payload)
+    }
+    expect(payload.signData.case).toBe('signBitcoin')
+    if (payload.signData.case === 'signBitcoin') {
+      expect(payload.signData.value.inputs).toHaveLength(1)
+      expect(payload.signData.value.outputs).toHaveLength(1)
+      expect(payload.signData.value.inputs[0].isOurs).toBe(true)
     }
 
     const roundtrip = fromBinary(

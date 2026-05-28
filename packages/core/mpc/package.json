@@ -802,6 +802,11 @@
       "import": "./dist/tx/signature/generateSignature.js",
       "default": "./dist/tx/signature/generateSignature.js"
     },
+    "./tx/swapkitSignBitcoin": {
+      "types": "./dist/tx/swapkitSignBitcoin.d.ts",
+      "import": "./dist/tx/swapkitSignBitcoin.js",
+      "default": "./dist/tx/swapkitSignBitcoin.js"
+    },
     "./types/plugin/constraint_pb": {
       "types": "./dist/types/plugin/constraint_pb.d.ts",
       "import": "./dist/types/plugin/constraint_pb.js",
