@@ -1430,6 +1430,11 @@
       "import": "./dist/swap/swapEnabledChains.js",
       "default": "./dist/swap/swapEnabledChains.js"
     },
+    "./swap/SwapError": {
+      "types": "./dist/swap/SwapError.d.ts",
+      "import": "./dist/swap/SwapError.js",
+      "default": "./dist/swap/SwapError.js"
+    },
     "./swap/SwapFee": {
       "types": "./dist/swap/SwapFee.d.ts",
       "import": "./dist/swap/SwapFee.js",

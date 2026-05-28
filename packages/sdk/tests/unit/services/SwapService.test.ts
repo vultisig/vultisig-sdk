@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock core functions - must be before imports
@@ -425,7 +426,7 @@ describe('SwapService', () => {
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
-      vi.mocked(findSwapQuote).mockRejectedValue(new Error('No swap routes found'))
+      vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(SwapErrorCode.NoRoutesFound, 'No swap routes found'))
 
       await expect(
         service.getQuote({
