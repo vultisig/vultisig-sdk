@@ -99,13 +99,15 @@ const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderNa
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
 
-const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([
-    p,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`swap quote fetch timed out after ${ms}ms`)), ms)
-    ),
-  ])
+const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`swap quote fetch timed out after ${ms}ms`)), ms)
+  })
+  return Promise.race([p, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId)
+  })
+}
 
 /**
  * Declared preference order for AGGREGATOR ties — when two aggregators return
