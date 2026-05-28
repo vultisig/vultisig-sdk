@@ -18,6 +18,7 @@ import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bi
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
+import { getSwapKitSignBitcoin } from '../swapkitSignBitcoin'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
 type Input = {
@@ -37,12 +38,14 @@ export const compileTx = ({
   walletCore,
   keysignPayload,
 }: Input) => {
+  const signBitcoin = keysignPayload ? getSwapKitSignBitcoin(keysignPayload) : undefined
+
   // PSBT signing: build raw signed tx from SignBitcoin fields + MPC signatures
-  if (keysignPayload?.signData.case === 'signBitcoin') {
+  if (signBitcoin) {
     if (!publicKey) {
       throw new Error('publicKey is required for SignBitcoin compilation')
     }
-    return compileSignBitcoinTx(keysignPayload.signData.value, keysignSignatures, publicKey)
+    return compileSignBitcoinTx(signBitcoin, keysignSignatures, publicKey)
   }
 
   if (chain === Chain.QBTC) {

@@ -14,6 +14,7 @@
  * expects from MPC (`KeysignSignature.der_signature`).
  */
 import { Buffer } from 'buffer'
+import { create } from '@bufbuild/protobuf'
 import { describe, expect, it, beforeAll } from 'vitest'
 import { Psbt, payments, networks } from 'bitcoinjs-lib'
 import * as ecc from 'tiny-secp256k1'
@@ -25,6 +26,11 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 
 import { encodeDERSignature } from '../../derSignature'
 import { computePreSigningHashes } from '../../keysign/signingInputs/resolvers/bitcoin/sighash'
+import { CoinSchema } from '../../types/vultisig/keysign/v1/coin_pb'
+import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { SwapKitSwapPayloadSchema } from '../../types/vultisig/keysign/v1/swapkit_swap_payload_pb'
+import { getPreSigningHashes } from '../preSigningHashes'
+import { compileTx } from './compileTx'
 import { compileSignBitcoinTx } from './compileSignBitcoinTx'
 
 const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
@@ -105,5 +111,118 @@ describe('compileSignBitcoinTx', () => {
 
     expect(compiledRaw.toString('hex')).toBe(EXPECTED_BITCOINJS_RAW_TX)
     expect(compiledRaw.equals(expected)).toBe(true)
+  })
+
+  it('routes SwapKit PSBT payloads through the SignBitcoin hash and compile path', () => {
+    const privKey = new Uint8Array(32)
+    privKey[31] = 1
+
+    const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
+    const psbt = new Psbt({ network: networks.bitcoin })
+    psbt.addInput({
+      hash: 'aa'.repeat(32),
+      index: 0,
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
+    })
+    psbt.addOutput({
+      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      value: 90000n,
+    })
+
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Bitcoin,
+        ticker: 'BTC',
+        address: p2wpkh.address!,
+        decimals: 8,
+      }),
+      swapPayload: {
+        case: 'swapkitSwapPayload',
+        value: create(SwapKitSwapPayloadSchema, {
+          txType: 'PSBT',
+          txPayload: psbt.toBuffer(),
+        }),
+      },
+    })
+
+    const [hash] = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Bitcoin,
+      txInputData: new Uint8Array(),
+      keysignPayload,
+    })
+    const hashHex = Buffer.from(hash).toString('hex')
+    const compact = ecc.sign(hash, privKey)
+    const der = encodeDERSignature(compact.subarray(0, 32), compact.subarray(32, 64))
+
+    const twPublicKey = walletCore.PublicKey.createWithData(
+      new Uint8Array(TEST_PUBKEY),
+      getTwPublicKeyType({ walletCore, chain: Chain.Bitcoin })
+    )
+
+    const compiled = compileTx({
+      publicKey: twPublicKey,
+      txInputData: new Uint8Array(),
+      signatures: {
+        [hashHex]: {
+          msg: '',
+          r: '',
+          s: '',
+          der_signature: Buffer.from(der).toString('hex'),
+        },
+      },
+      chain: Chain.Bitcoin,
+      walletCore,
+      keysignPayload,
+    })
+
+    const decoded = TW.Bitcoin.Proto.SigningOutput.decode(compiled)
+
+    expect(Buffer.from(decoded.encoded).toString('hex')).toBe(EXPECTED_BITCOINJS_RAW_TX)
+  })
+
+  it('returns SwapKit PSBT hashes sorted to match iOS co-signing', () => {
+    const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
+    const psbt = new Psbt({ network: networks.bitcoin })
+    psbt.addInput({
+      hash: 'aa'.repeat(32),
+      index: 0,
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 100000n },
+    })
+    psbt.addInput({
+      hash: 'bb'.repeat(32),
+      index: 1,
+      witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 200000n },
+    })
+    psbt.addOutput({
+      address: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+      value: 250000n,
+    })
+
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Bitcoin,
+        ticker: 'BTC',
+        address: p2wpkh.address!,
+        decimals: 8,
+      }),
+      swapPayload: {
+        case: 'swapkitSwapPayload',
+        value: create(SwapKitSwapPayloadSchema, {
+          txType: 'PSBT',
+          txPayload: psbt.toBuffer(),
+        }),
+      },
+    })
+
+    const hashes = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Bitcoin,
+      txInputData: new Uint8Array(),
+      keysignPayload,
+    }).map(hash => Buffer.from(hash).toString('hex'))
+
+    expect(hashes).toHaveLength(2)
+    expect(hashes).toEqual([...hashes].sort())
   })
 })

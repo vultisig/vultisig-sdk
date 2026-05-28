@@ -683,7 +683,7 @@ export const getSwapKitQuote = async ({
       sourceAddress: from.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
-      disableBuildTx: shouldUseTransferTx(from.chain) ? true : undefined,
+      disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
     })
   )
 
