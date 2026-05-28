@@ -19,6 +19,7 @@ import { chainsWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/toke
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
@@ -515,24 +516,25 @@ export class SwapService {
 
     const message = error instanceof Error ? error.message : String(error)
 
-    // Check for known error patterns
-    if (message.includes('No swap routes') || message.includes('NoSwapRoutesError')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'No swap route found between these tokens. Try a different pair or provider.',
-        error instanceof Error ? error : undefined
-      )
+    if (error instanceof SwapError) {
+      switch (error.code) {
+        case SwapErrorCode.NoRoutesFound:
+        case SwapErrorCode.AllProvidersFailed:
+          return new VaultError(
+            VaultErrorCode.InvalidConfig,
+            'No swap route found between these tokens. Try a different pair or provider.',
+            error
+          )
+        case SwapErrorCode.AmountTooSmall:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap amount too small: ${message}`, error)
+        case SwapErrorCode.AmountBelowMinimum:
+          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+        case SwapErrorCode.InvalidConfig:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap configuration error: ${message}`, error)
+      }
     }
 
-    if (message.includes('amount too small') || message.includes('not enough asset')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Swap amount too small: ${message}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-
-    if (message.includes('insufficient')) {
+    if (message.includes('not enough asset') || message.includes('insufficient')) {
       return new VaultError(
         VaultErrorCode.InvalidConfig,
         `Insufficient funds: ${message}`,
