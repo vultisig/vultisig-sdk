@@ -6,7 +6,7 @@ import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/a
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { findSwapQuote } from './findSwapQuote'
 
@@ -581,5 +581,57 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
       throw new Error('Expected Maya native quote to win via bias on Arbitrum')
     }
     expect(quote.quote.native.swapChain).toBe(Chain.MayaChain)
+  })
+})
+
+describe('findSwapQuote per-fetcher timeout guard (issue #412)', () => {
+  beforeEach(() => {
+    vi.mocked(getKyberSwapQuote).mockReset()
+    vi.mocked(getOneInchSwapQuote).mockReset()
+    vi.mocked(getLifiSwapQuote).mockReset()
+    vi.mocked(getSwapKitQuote).mockReset()
+    vi.mocked(getNativeSwapQuote).mockReset()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not stall when one provider hangs - the other providers still resolve', async () => {
+    // KyberSwap hangs forever; the other providers resolve quickly.
+    vi.mocked(getKyberSwapQuote).mockReturnValue(new Promise(() => undefined))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
+
+    const resultPromise = findSwapQuote({ ...evmSameChainCoins, amount: 1n })
+
+    // Advance past the 30s per-fetcher timeout so the hanging provider is rejected.
+    await vi.runAllTimersAsync()
+
+    const quote = await resultPromise
+
+    expect('general' in quote.quote).toBe(true)
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected SwapKit quote')
+    }
+    expect(quote.quote.general.provider).toBe('swapkit')
+  })
+
+  it('rejects with no-route error when every provider hangs', async () => {
+    vi.mocked(getKyberSwapQuote).mockReturnValue(new Promise(() => undefined))
+    vi.mocked(getOneInchSwapQuote).mockReturnValue(new Promise(() => undefined))
+    vi.mocked(getLifiSwapQuote).mockReturnValue(new Promise(() => undefined))
+    vi.mocked(getSwapKitQuote).mockReturnValue(new Promise(() => undefined))
+    vi.mocked(getNativeSwapQuote).mockReturnValue(new Promise(() => undefined))
+
+    const resultPromise = findSwapQuote({ ...evmSameChainCoins, amount: 1n })
+    await vi.runAllTimersAsync()
+
+    await expect(resultPromise).rejects.toThrow(
+      'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+    )
   })
 })
