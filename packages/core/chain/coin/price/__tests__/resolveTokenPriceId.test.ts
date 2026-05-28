@@ -108,4 +108,26 @@ describe('resolveTokenPriceId', () => {
       expect(resolveTokenPriceId(Chain.Solana, 'So11111111111111111111111111111111111111112')).toBeUndefined()
     })
   })
+
+  describe('whitespace tolerance (upstream string sources may carry padding)', () => {
+    it('whitespace-padded EVM contract still resolves', () => {
+      expect(resolveTokenPriceId(Chain.Ethereum, '  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48  ')).toBe('usd-coin')
+    })
+
+    it('whitespace-padded cosmos denom still resolves', () => {
+      expect(resolveTokenPriceId(Chain.TerraClassic, ' uusd ')).toBe('terrausd')
+    })
+
+    it('whitespace-padded Solana mint still resolves', () => {
+      expect(resolveTokenPriceId(Chain.Solana, '\tEPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v\n')).toBe('usd-coin')
+    })
+
+    it('empty string falls through to native coin', () => {
+      expect(resolveTokenPriceId(Chain.Ethereum, '')).toBe('ethereum')
+    })
+
+    it('whitespace-only falls through to native coin (not a fabricated token miss)', () => {
+      expect(resolveTokenPriceId(Chain.Ethereum, '   ')).toBe('ethereum')
+    })
+  })
 })
