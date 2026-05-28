@@ -3,6 +3,8 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
+import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -51,7 +53,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   affiliateConfig?: SwapAffiliateConfig
 }
 
-type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -125,6 +127,9 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
  * @internal Exported for unit-test introspection only.
  */
 export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  // 'CowSwap' intentionally omitted in Phase 1 — see fetcher-registration
+  // comment lower in this file. Will be added (and slotted first for the
+  // large-trade RFQ benefit) when Phase 2 wires the build/sign path.
   'KyberSwap',
   '1inch',
   'LiFi',
@@ -277,6 +282,20 @@ export const findSwapQuote = async ({
     const toChain = to.chain
     const chainAmount = amount
 
+    // CowSwap: Phase 1 (SDK scaffold only). NOT registered as a live fetcher
+    // until Phase 2 wires the build/sign path through `getCowSwapOrder` +
+    // `submitCowSwapOrder` (the off-chain order flow, see #471). Registering
+    // here while the consumer pipeline can't sign would let CowSwap win a
+    // quote and then fail at sign time. The cowswap module + types + tests
+    // remain in this PR so Phase 2 only needs to plug in the fetcher block
+    // here and the consumer-side dispatch in mcp-ts. (#584 round-1 — Ehsan)
+    //
+    // void-imports so the dead-code linter doesn't gripe; they're used by
+    // sibling tests + ensure the module compiles cleanly.
+    void getCowSwapQuote
+    void cowSwapChainConfig
+    void cowSwapSupportedChains
+
     if (
       isOneOf(fromChain, kyberSwapEnabledChains) &&
       isOneOf(toChain, kyberSwapEnabledChains) &&
@@ -410,6 +429,7 @@ export const findSwapQuote = async ({
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
+    // 'CowSwap' omitted in Phase 1 (no live fetcher — see comment higher up).
     'KyberSwap',
     '1inch',
     'LiFi',

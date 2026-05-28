@@ -1265,6 +1265,46 @@
       "import": "./dist/swap/discount/SwapDiscount.js",
       "default": "./dist/swap/discount/SwapDiscount.js"
     },
+    "./swap/general/cowswap/api/getCowSwapOrderStatus": {
+      "types": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.d.ts",
+      "import": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.js",
+      "default": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.js"
+    },
+    "./swap/general/cowswap/api/getCowSwapQuote": {
+      "types": "./dist/swap/general/cowswap/api/getCowSwapQuote.d.ts",
+      "import": "./dist/swap/general/cowswap/api/getCowSwapQuote.js",
+      "default": "./dist/swap/general/cowswap/api/getCowSwapQuote.js"
+    },
+    "./swap/general/cowswap/api/submitCowSwapOrder": {
+      "types": "./dist/swap/general/cowswap/api/submitCowSwapOrder.d.ts",
+      "import": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js",
+      "default": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js"
+    },
+    "./swap/general/cowswap/config": {
+      "types": "./dist/swap/general/cowswap/config.d.ts",
+      "import": "./dist/swap/general/cowswap/config.js",
+      "default": "./dist/swap/general/cowswap/config.js"
+    },
+    "./swap/general/cowswap/permit/buildEip2612Permit": {
+      "types": "./dist/swap/general/cowswap/permit/buildEip2612Permit.d.ts",
+      "import": "./dist/swap/general/cowswap/permit/buildEip2612Permit.js",
+      "default": "./dist/swap/general/cowswap/permit/buildEip2612Permit.js"
+    },
+    "./swap/general/cowswap/sign/buildCowSwapOrder": {
+      "types": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.d.ts",
+      "import": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js",
+      "default": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js"
+    },
+    "./swap/general/cowswap/sign/buildEip712Domain": {
+      "types": "./dist/swap/general/cowswap/sign/buildEip712Domain.d.ts",
+      "import": "./dist/swap/general/cowswap/sign/buildEip712Domain.js",
+      "default": "./dist/swap/general/cowswap/sign/buildEip712Domain.js"
+    },
+    "./swap/general/cowswap/types": {
+      "types": "./dist/swap/general/cowswap/types.d.ts",
+      "import": "./dist/swap/general/cowswap/types.js",
+      "default": "./dist/swap/general/cowswap/types.js"
+    },
     "./swap/general/GeneralSwapProvider": {
       "types": "./dist/swap/general/GeneralSwapProvider.d.ts",
       "import": "./dist/swap/general/GeneralSwapProvider.js",

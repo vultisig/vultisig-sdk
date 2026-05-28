@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
@@ -9,6 +10,10 @@ import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuot
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { findSwapQuote } from './findSwapQuote'
+
+vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
+  getCowSwapQuote: vi.fn(),
+}))
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
@@ -79,6 +84,8 @@ function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): Nati
 
 describe('findSwapQuote parallel selection', () => {
   beforeEach(() => {
+    vi.mocked(getCowSwapQuote).mockReset()
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
     vi.mocked(getKyberSwapQuote).mockReset()
     vi.mocked(getOneInchSwapQuote).mockReset()
     vi.mocked(getLifiSwapQuote).mockReset()
@@ -255,6 +262,7 @@ describe('findSwapQuote parallel selection', () => {
 
   it('when all providers fail, reports every attempted provider', async () => {
     const mayaError = 'maya last error'
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('first fail'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('second fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('third fail'))
@@ -277,6 +285,7 @@ describe('findSwapQuote parallel selection', () => {
   it('omits noisy provider errors from the all-fail message', async () => {
     const longKyberError = `kyber ${'x'.repeat(220)}`
 
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error(longKyberError))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
@@ -375,6 +384,8 @@ describe('findSwapQuote parallel selection', () => {
 
 describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
   beforeEach(() => {
+    vi.mocked(getCowSwapQuote).mockReset()
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
     vi.mocked(getKyberSwapQuote).mockReset()
     vi.mocked(getOneInchSwapQuote).mockReset()
     vi.mocked(getLifiSwapQuote).mockReset()
