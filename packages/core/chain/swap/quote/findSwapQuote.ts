@@ -23,6 +23,7 @@ import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNati
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
@@ -227,7 +228,8 @@ export const findSwapQuote = async ({
     nativeAffiliateFeeAddress !== undefined &&
     nativeAffiliateFeeAddress !== nativeAffiliateFeeAddress.toLowerCase()
   ) {
-    throw new Error(
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
       `THORName affiliateFeeAddress must be lowercase. THORChain memo parsing is case-sensitive. Using "${nativeAffiliateFeeAddress}" will silently break affiliate fee routing.`
     )
   }
@@ -438,7 +440,7 @@ export const findSwapQuote = async ({
     const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
 
     if (isInError(result.reason, 'dust threshold') || isInError(result.reason, 'amount less than')) {
-      throw new Error('Swap amount too small. Please increase the amount to proceed.')
+      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
 
     if (isBelowMinimumMsg(msg)) {
@@ -455,7 +457,10 @@ export const findSwapQuote = async ({
     const belowMinimumMessage = preferred
       ? belowMinimumByProvider.get(preferred)!
       : [...belowMinimumByProvider.values()][0]
-    throw new Error(`Amount below the minimum required by a swap provider. ${belowMinimumMessage}`)
+    throw new SwapError(
+      SwapErrorCode.AmountBelowMinimum,
+      `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`
+    )
   }
 
   const failedProviders = settled
@@ -468,5 +473,8 @@ export const findSwapQuote = async ({
     })
     .filter((providerName): providerName is SwapQuoteProviderName => providerName !== null)
 
-  throw new Error(`No swap route found after trying ${failedProviders.join(', ')}.`)
+  throw new SwapError(
+    SwapErrorCode.AllProvidersFailed,
+    `No swap route found after trying ${failedProviders.join(', ')}.`
+  )
 }
