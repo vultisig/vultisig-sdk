@@ -6,6 +6,15 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import {
+  SwapKitAmountBelowMinimumError,
+  SwapKitNoEligibleRoutesError,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
+import {
+  isSwapKitPairSupported,
+  normalizeSwapKitProvider,
+  swapKitExcludedProviders,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
@@ -79,8 +88,6 @@ const swapKitProviderQuoteAttempts: SwapKitProvider[][] = [
     'OPENOCEAN_V2',
   ],
 ]
-
-const swapKitExcludedProviders = new Set(['THORCHAIN', 'THORCHAIN_STREAMING', 'MAYACHAIN', 'MAYACHAIN_STREAMING'])
 
 const swapKitChainId: Record<SwapKitEnabledChain, string> = {
   [Chain.Arbitrum]: 'ARB',
@@ -181,14 +188,12 @@ const formatBasicUnitAmount = (amount: bigint, decimals: number): string => {
   return fraction ? `${sign}${whole.toString()}.${fraction}` : `${sign}${whole.toString()}`
 }
 
-const normalizeProvider = (provider: string) => provider.trim().toUpperCase().replace(/[-\s]/g, '_')
-
 const routeProviderNames = ({ providers, legs }: Pick<SwapKitQuoteRoute, 'providers' | 'legs'>): string[] => {
   const names = [...(providers ?? []), ...(legs ?? []).map(({ provider }) => provider)].filter(
     (provider): provider is string => !!provider
   )
 
-  return [...new Set(names.map(normalizeProvider))]
+  return [...new Set(names.map(normalizeSwapKitProvider))]
 }
 
 const isAllowedRoute = (route: SwapKitQuoteRoute) =>
@@ -690,7 +695,7 @@ const getBestSwapKitRoute = async (body: Record<string, unknown>, decimals: numb
     }
   }
 
-  throw new Error('SwapKit returned no eligible routes.')
+  throw new SwapKitNoEligibleRoutesError()
 }
 
 export const getSwapKitQuote = async ({
@@ -707,7 +712,22 @@ export const getSwapKitQuote = async ({
     slippage,
     affiliateFee: affiliateBps,
   }
-  const route = await getBestSwapKitRoute(quoteBody, to.decimals)
+  let route: SwapKitQuoteRoute
+  try {
+    route = await getBestSwapKitRoute(quoteBody, to.decimals)
+  } catch (error) {
+    // SwapKit's `noRoutesFound` 404 can't distinguish "amount below provider
+    // minimum" from "pair unsupported". When the pair IS structurally supported
+    // (per the /providers snapshot), reclassify so the form shows the actionable
+    // "amount too small" copy instead of a misleading "no route" error (#4418).
+    if (
+      error instanceof SwapKitNoEligibleRoutesError &&
+      (await isSwapKitPairSupported({ from: from.chain, to: to.chain }))
+    ) {
+      throw new SwapKitAmountBelowMinimumError(from.chain, to.chain)
+    }
+    throw error
+  }
 
   const swapResponse = await postSwapKit<SwapKitSwapResponse>(
     '/v3/swap',

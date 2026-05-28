@@ -20,6 +20,7 @@ import {
   swapKitEnabledChains,
   swapKitSourceChains,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
@@ -459,7 +460,14 @@ export const findSwapQuote = async ({
 
     const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
 
-    if (isInError(result.reason, 'dust threshold') || isInError(result.reason, 'amount less than')) {
+    // SwapKit raises this only after confirming the pair is structurally
+    // supported, so it is unambiguously an amount problem (#4418). Reuse the
+    // same copy as the THORChain dust-threshold path.
+    if (
+      result.reason instanceof SwapKitAmountBelowMinimumError ||
+      isInError(result.reason, 'dust threshold') ||
+      isInError(result.reason, 'amount less than')
+    ) {
       throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
 

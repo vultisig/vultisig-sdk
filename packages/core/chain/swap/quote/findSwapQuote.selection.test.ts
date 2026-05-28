@@ -5,6 +5,7 @@ import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/q
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
+import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,6 +157,18 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('Expected native quote')
     }
     expect(quote.quote.native.expected_amount_out).toBe('100')
+  })
+
+  it('reclassifies a SwapKit below-minimum rejection as "amount too small" (#4418)', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new SwapKitAmountBelowMinimumError(Chain.Ethereum, Chain.Ethereum))
+
+    await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
+      'Swap amount too small. Please increase the amount to proceed.'
+    )
   })
 
   it('does not let a malformed provider amount hide a succeeding one', async () => {
