@@ -10,10 +10,6 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: queryUrlMock,
 }))
 
-vi.mock('i18next', () => ({
-  t: (key: string) => key,
-}))
-
 import { getNativeSwapQuote } from './getNativeSwapQuote'
 
 const btcFrom = {
