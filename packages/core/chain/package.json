@@ -1400,6 +1400,16 @@
       "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
       "default": "./dist/swap/general/swapkit/SwapKitEnabledChains.js"
     },
+    "./swap/general/swapkit/SwapKitErrors": {
+      "types": "./dist/swap/general/swapkit/SwapKitErrors.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitErrors.js",
+      "default": "./dist/swap/general/swapkit/SwapKitErrors.js"
+    },
+    "./swap/general/swapkit/SwapKitProviders": {
+      "types": "./dist/swap/general/swapkit/SwapKitProviders.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitProviders.js",
+      "default": "./dist/swap/general/swapkit/SwapKitProviders.js"
+    },
     "./swap/keysign/getSwapDestinationAddress": {
       "types": "./dist/swap/keysign/getSwapDestinationAddress.d.ts",
       "import": "./dist/swap/keysign/getSwapDestinationAddress.js",
