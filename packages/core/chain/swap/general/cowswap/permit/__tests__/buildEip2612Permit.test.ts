@@ -9,8 +9,8 @@ const BASE_INPUT = {
   owner: '0xOwner0000000000000000000000000000000000AA',
   spender: '0xC92E8bdf79f0507f65a392b0ab4667716BFE0110',
   value: 1_000_000n,
-  nonce: 0,
-  deadline: Math.floor(Date.now() / 1000) + 3600,
+  nonce: 0n,
+  deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
 }
 
 describe('buildEip2612Permit', () => {
@@ -44,7 +44,7 @@ describe('buildEip2612Permit', () => {
     expect(msg.owner).toBe(BASE_INPUT.owner.toLowerCase())
     expect(msg.spender).toBe(BASE_INPUT.spender.toLowerCase())
     expect(msg.value).toBe('1000000')
-    expect(msg.nonce).toBe(0)
+    expect(msg.nonce).toBe(0n)
     expect(msg.deadline).toBe(BASE_INPUT.deadline)
   })
 
@@ -73,8 +73,8 @@ describe('buildEip2612Permit', () => {
   })
 
   it('supports nonce > 0', () => {
-    const result = buildEip2612Permit({ ...BASE_INPUT, nonce: 42 })
-    expect(result.message.nonce).toBe(42)
+    const result = buildEip2612Permit({ ...BASE_INPUT, nonce: 42n })
+    expect(result.message.nonce).toBe(42n)
   })
 
   it('verifyingContract matches tokenAddress (not lowercased)', () => {

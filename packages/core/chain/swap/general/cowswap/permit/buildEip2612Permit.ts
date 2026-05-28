@@ -2,8 +2,9 @@ export type Eip2612PermitMessage = {
   owner: string
   spender: string
   value: string
-  nonce: number
-  deadline: number
+  // uint256 fields — represented as bigint to safely encode any on-chain value.
+  nonce: bigint
+  deadline: bigint
 }
 
 export type Eip2612PermitDomain = {
@@ -29,8 +30,10 @@ export type BuildEip2612PermitInput = {
   owner: string
   spender: string
   value: bigint
-  nonce: number
-  deadline: number
+  // uint256 on-chain — bigint to avoid 53-bit JS number truncation for very
+  // large nonces or far-future deadlines.
+  nonce: bigint
+  deadline: bigint
 }
 
 const PERMIT_TYPES = [
