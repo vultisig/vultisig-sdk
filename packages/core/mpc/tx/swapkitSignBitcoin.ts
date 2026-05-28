@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { Psbt } from 'bitcoinjs-lib'
