@@ -3,4 +3,4 @@
 '@vultisig/core-mpc': patch
 ---
 
-Enable pre-built SwapKit Bitcoin PSBT transactions and route payloads through the SignBitcoin hashing and compilation path.
+Enable pre-built SwapKit Bitcoin PSBT transactions, verify their destination outputs, and route payloads through the SignBitcoin hashing and compilation path.
