@@ -1,5 +1,16 @@
 # @vultisig/core-chain
 
+## 2.5.0
+
+### Minor Changes
+
+- [#587](https://github.com/vultisig/vultisig-sdk/pull/587) [`8932aff`](https://github.com/vultisig/vultisig-sdk/commit/8932afffbdd57112b9b8e59ac2e909e1654f54a3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## Added
+  - `resolveTokenPriceId(chain, denomOrAddress?)` helper in `@vultisig/core-chain/coin/price/resolveTokenPriceId` - pure synchronous lookup against the SDK's curated registry (`chainFeeCoin` + `knownTokensIndex`) that returns a CoinGecko priceProviderId for a chain's native coin or a known token by address/denom. Returns `undefined` when no registry entry exists so callers can fall back to other resolution paths. Phase 1 of registry-driven cross-chain price resolution (refs vultisig/mcp-ts#255).
+
+### Patch Changes
+
+- [#591](https://github.com/vultisig/vultisig-sdk/pull/591) [`88cd323`](https://github.com/vultisig/vultisig-sdk/commit/88cd3235ea463112d378d5e5a2c32aacabe08ab0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add 30s per-fetcher timeout guard to findSwapQuote — a hanging provider no longer stalls the whole allSettled fan-out
+
 ## 2.4.1
 
 ### Patch Changes
