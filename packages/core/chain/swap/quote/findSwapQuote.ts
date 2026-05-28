@@ -97,6 +97,18 @@ const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderName
 
 const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
 
+const QUOTE_FETCH_TIMEOUT_MS = 30_000
+
+const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`swap quote fetch timed out after ${ms}ms`)), ms)
+  })
+  return Promise.race([p, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId)
+  })
+}
+
 /**
  * Declared preference order for AGGREGATOR ties — when two aggregators return
  * identical `outputAmount`, the earlier entry wins. This makes the tie-break
@@ -368,7 +380,7 @@ export const findSwapQuote = async ({
 
   const settled = await Promise.allSettled(
     fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = await fetcher.fetch()
+      const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to),
