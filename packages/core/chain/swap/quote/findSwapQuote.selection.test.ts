@@ -628,10 +628,12 @@ describe('findSwapQuote per-fetcher timeout guard (issue #412)', () => {
     vi.mocked(getNativeSwapQuote).mockReturnValue(new Promise(() => undefined))
 
     const resultPromise = findSwapQuote({ ...evmSameChainCoins, amount: 1n })
-    await vi.runAllTimersAsync()
-
-    await expect(resultPromise).rejects.toThrow(
+    // Register the rejection handler BEFORE advancing timers - avoids an
+    // unhandled-rejection when the promise rejects mid-tick after runAllTimersAsync.
+    const assertion = expect(resultPromise).rejects.toThrow(
       'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
     )
+    await vi.runAllTimersAsync()
+    await assertion
   })
 })
