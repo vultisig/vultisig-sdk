@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.2.22",
+  "version": "1.2.23",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -772,6 +772,11 @@
       "import": "./dist/swap/utils/getSwapTrackingUrl.js",
       "default": "./dist/swap/utils/getSwapTrackingUrl.js"
     },
+    "./tx/compile/cardano/buildCip20AuxData": {
+      "types": "./dist/tx/compile/cardano/buildCip20AuxData.d.ts",
+      "import": "./dist/tx/compile/cardano/buildCip20AuxData.js",
+      "default": "./dist/tx/compile/cardano/buildCip20AuxData.js"
+    },
     "./tx/compile/cardano/buildSignedCardanoTx": {
       "types": "./dist/tx/compile/cardano/buildSignedCardanoTx.d.ts",
       "import": "./dist/tx/compile/cardano/buildSignedCardanoTx.js",
@@ -796,6 +801,11 @@
       "types": "./dist/tx/signature/generateSignature.d.ts",
       "import": "./dist/tx/signature/generateSignature.js",
       "default": "./dist/tx/signature/generateSignature.js"
+    },
+    "./tx/swapkitSignBitcoin": {
+      "types": "./dist/tx/swapkitSignBitcoin.d.ts",
+      "import": "./dist/tx/swapkitSignBitcoin.js",
+      "default": "./dist/tx/swapkitSignBitcoin.js"
     },
     "./types/plugin/constraint_pb": {
       "types": "./dist/types/plugin/constraint_pb.d.ts",
@@ -984,7 +994,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.9",
-    "@vultisig/core-chain": "2.3.1",
+    "@vultisig/core-chain": "2.3.2",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

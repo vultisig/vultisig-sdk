@@ -1,7 +1,9 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -17,6 +19,7 @@ import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
+import { verifySwapKitBitcoinPsbtOutputs } from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
   OneInchQuoteSchema,
@@ -30,6 +33,7 @@ import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keys
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { Psbt } from 'bitcoinjs-lib'
 
 export type BuildSwapKeysignPayloadInput = {
   fromCoin: AccountCoin
@@ -45,6 +49,40 @@ export type BuildSwapKeysignPayloadInput = {
 }
 
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+
+const isSwapKitBitcoinPsbt = (fromCoin: AccountCoin, transfer: TransferSwapTx) =>
+  fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT'
+
+const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
+  if (fromCoin.chain !== Chain.Bitcoin) {
+    return { case: undefined }
+  }
+
+  if (!isSwapKitBitcoinPsbt(fromCoin, transfer)) {
+    throw new Error('SwapKit Bitcoin transfer routes must include PSBT txType and txPayload.')
+  }
+
+  if (!transfer.txPayload?.length) {
+    throw new Error('SwapKit Bitcoin PSBT payload is empty.')
+  }
+
+  const signBitcoin = buildSignBitcoinFromPsbt({
+    psbt: Psbt.fromBuffer(Buffer.from(transfer.txPayload)),
+    senderAddress: fromCoin.address,
+  })
+
+  verifySwapKitBitcoinPsbtOutputs({
+    signBitcoin,
+    senderAddress: fromCoin.address,
+    expectedToAddress: transfer.to,
+    expectedToAmount: transfer.amount,
+  })
+
+  return {
+    case: 'signBitcoin',
+    value: signBitcoin,
+  }
+}
 
 /**
  * Builds a KeysignPayload for a swap transaction.
@@ -124,6 +162,8 @@ export const buildSwapKeysignPayload = async ({
       })
 
       if (quote.provider === 'swapkit' && transfer) {
+        keysignPayload.signData = getSwapKitBitcoinSignData(fromCoin, transfer)
+
         return {
           case: 'swapkitSwapPayload',
           value: create(SwapKitSwapPayloadSchema, {

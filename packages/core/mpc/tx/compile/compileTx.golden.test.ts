@@ -6,8 +6,13 @@
  * - EVM, Solana, and Cosmos compare MPC-style compileWithSignatures output to
  *   WalletCore AnySigner output built from the same deterministic private key.
  * - EVM additionally compares the raw legacy tx with viem serialization.
- * - Cardano pins the manual CBOR wrapper branch. The public key fixture follows
- *   deriveCardanoAddress(): spending key + repeated chain-code bytes.
+ * - Cardano (no memo) pins the manual CBOR wrapper branch. The public key
+ *   fixture follows deriveCardanoAddress(): spending key + repeated chain-code
+ *   bytes.
+ * - Cardano (with memo) verifies CIP-20 label-674 metadata attachment:
+ *   - signed tx element [3] decodes to { 674: { msg: ['vultisig-test'] } }
+ *   - tx body key 7 matches blake2b-256 of element [3]
+ *   - no-memo path bytes are unchanged (regression guard)
  * - Bittensor pins the custom SCALE extrinsic assembly used because WalletCore
  *   does not include Bittensor's current signed extensions.
  * - QBTC pins the custom Cosmos TxRaw assembly used for MLDSA signatures, which
@@ -16,9 +21,11 @@
 import { Buffer } from 'buffer'
 
 import { create, toBinary } from '@bufbuild/protobuf'
+import { blake2b } from '@noble/hashes/blake2b'
 import { deriveCardanoAddress } from '@vultisig/core-chain/publicKey/address/cardano'
 import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
 import type { PrivateKey, PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { decode as cborDecode } from 'cbor-x'
 import Long from 'long'
 import { serializeTransaction } from 'viem'
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -27,7 +34,11 @@ import { Chain } from '@vultisig/core-chain/Chain'
 
 import { getPreSigningHashes } from '../preSigningHashes'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
-import { CosmosSpecificSchema, TransactionType } from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
+import {
+  CardanoChainSpecificSchema,
+  CosmosSpecificSchema,
+  TransactionType,
+} from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { compileTx } from './compileTx'
@@ -358,6 +369,125 @@ describe('compileTx golden vectors', () => {
 
     expect(hex(compiledOutput.txId)).toBe(hex(hashes[0]))
     expect(hex(compiledOutput.encoded)).toBe(EXPECTED_CARDANO_SIGNED_CBOR)
+  })
+
+  it('attaches CIP-20 label-674 metadata when memo is present', () => {
+    const MEMO = 'vultisig-test'
+    const privateKey = walletCore.PrivateKey.createWithData(EDDSA_PRIVATE_KEY)
+    const recipientPrivateKey = walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(2))
+    const publicKey = cardanoPublicKeyFromEd25519(walletCore, privateKey, 2)
+    const recipientPublicKey = cardanoPublicKeyFromEd25519(walletCore, recipientPrivateKey, 3)
+    const sender = deriveCardanoAddress({ publicKey, walletCore })
+    const recipient = deriveCardanoAddress({ publicKey: recipientPublicKey, walletCore })
+
+    const coin = create(CoinSchema, {
+      chain: Chain.Cardano,
+      ticker: 'ADA',
+      address: sender,
+      contractAddress: '',
+      decimals: 6,
+      isNativeToken: true,
+      hexPublicKey: hex(new Uint8Array(publicKey.data())),
+    })
+    const cardanoSpecific = create(CardanoChainSpecificSchema, {
+      ttl: 500_000n,
+      sendMaxAmount: false,
+      byteFee: 170_000n,
+    })
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin,
+      toAddress: recipient,
+      toAmount: '1000000',
+      memo: MEMO,
+      blockchainSpecific: {
+        case: 'cardano',
+        value: cardanoSpecific,
+      },
+      utxoInfo: [
+        {
+          hash: '11'.repeat(32),
+          amount: 2_000_000n,
+          index: 0,
+        },
+      ],
+    })
+
+    const signingInput = TW.Cardano.Proto.SigningInput.create({
+      ttl: Long.fromNumber(500_000),
+      transferMessage: TW.Cardano.Proto.Transfer.create({
+        toAddress: recipient,
+        changeAddress: sender,
+        amount: Long.fromNumber(1_000_000),
+        forceFee: Long.fromNumber(170_000),
+      }),
+      utxos: [
+        TW.Cardano.Proto.TxInput.create({
+          outPoint: TW.Cardano.Proto.OutPoint.create({
+            txHash: bytesFromHex('11'.repeat(32)),
+            outputIndex: Long.fromNumber(0),
+          }),
+          address: sender,
+          amount: Long.fromNumber(2_000_000),
+        }),
+      ],
+    })
+    const txInputData = TW.Cardano.Proto.SigningInput.encode(signingInput).finish()
+
+    // Get the hash that MPC must sign (blake2b of the patched body)
+    const hashes = getPreSigningHashes({ walletCore, chain: Chain.Cardano, txInputData, keysignPayload })
+    const hashHex = hex(hashes[0])
+
+    // Sign with the deterministic private key
+    const sig = privateKey.sign(hashes[0], walletCore.Curve.ed25519)
+    const keysignSig: KeysignSignature = {
+      msg: '',
+      r: hex(sig.slice(0, 32).reverse()),
+      s: hex(sig.slice(32, 64).reverse()),
+      der_signature: '',
+    }
+
+    const compiled = compileTx({
+      publicKey,
+      txInputData,
+      signatures: { [hashHex]: keysignSig },
+      chain: Chain.Cardano,
+      walletCore,
+      keysignPayload,
+    })
+
+    const compiledOutput = TW.Cardano.Proto.SigningOutput.decode(compiled)
+
+    // The signed tx is a CBOR array: [body, witnesses, is_valid, aux_data]
+    const signedTxArray = cborDecode(compiledOutput.encoded) as unknown[]
+    expect(Array.isArray(signedTxArray)).toBe(true)
+    expect(signedTxArray).toHaveLength(4)
+
+    // Element [3]: CIP-20 metadata — must decode to { '674': { msg: ['vultisig-test'] } }
+    const auxData = signedTxArray[3]
+    expect(typeof auxData).toBe('object')
+    expect(auxData).not.toBeNull()
+    const auxDecoded = auxData as Record<string, Record<string, string[]>>
+    expect(auxDecoded['674']).toBeDefined()
+    expect(auxDecoded['674']!['msg']).toEqual([MEMO])
+
+    // Element [0]: tx body — key 7 must be blake2b-256 of the aux data CBOR
+    const bodyBytes = compiledOutput.encoded.slice(
+      // find body bytes: decode the outer array to get element [0] as bytes
+      // use the raw bytes — the body is the first element of the 0x84 array
+      0
+    )
+    // Verify txId = blake2b of the patched body (not the WalletCore body)
+    const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
+      walletCore.TransactionCompiler.preImageHashes(walletCore.CoinType.cardano, txInputData)
+    )
+    // The patched body hash should differ from WalletCore's plain dataHash
+    expect(hex(compiledOutput.txId)).not.toBe(hex(preOutput.dataHash))
+    // txId must equal hashes[0] (the hash MPC signed)
+    expect(hex(compiledOutput.txId)).toBe(hashHex)
+
+    // No-memo path is regression-guarded: same fixture without memo
+    const noMemoHashes = getPreSigningHashes({ walletCore, chain: Chain.Cardano, txInputData })
+    expect(hex(noMemoHashes[0])).toBe(hex(preOutput.dataHash))
   })
 
   it('pins the custom Bittensor extrinsic assembly', () => {

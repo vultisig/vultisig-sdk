@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { networks, payments, Psbt } from 'bitcoinjs-lib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { getSwapKitQuote } from './getSwapKitQuote'
@@ -17,11 +18,33 @@ const response = (body: unknown, ok = true, status = 200) => {
 }
 
 const textEncoder = new TextEncoder()
+const TEST_PUBKEY = Buffer.from('0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798', 'hex')
+const BTC_RECIPIENT_ADDRESS = 'bc1q0ht9tyks4vh7p5p904t340cr9nvahy7u3re7zg'
+
+const makeBitcoinPsbtPayload = (outputValue: bigint) => {
+  const p2wpkh = payments.p2wpkh({ pubkey: TEST_PUBKEY, network: networks.bitcoin })
+  const psbt = new Psbt({ network: networks.bitcoin })
+
+  psbt.addInput({
+    hash: 'aa'.repeat(32),
+    index: 0,
+    witnessUtxo: { script: Buffer.from(p2wpkh.output!), value: 110_000n },
+  })
+  psbt.addOutput({
+    address: BTC_RECIPIENT_ADDRESS,
+    value: outputValue,
+  })
+
+  return {
+    sourceAddress: p2wpkh.address!,
+    targetAddress: BTC_RECIPIENT_ADDRESS,
+    payload: psbt.toBuffer(),
+  }
+}
 
 type TransferSourceFixture = readonly [string, SwapKitSourceChain, string, number, string, string]
 
 const transferSourceFixtures: TransferSourceFixture[] = [
-  ['Bitcoin', Chain.Bitcoin, 'BTC', 8, 'bc1qsource', 'bc1qdeposit'],
   ['Litecoin', Chain.Litecoin, 'LTC', 8, 'ltc1qsource', 'Ldeposit'],
   ['Dogecoin', Chain.Dogecoin, 'DOGE', 8, 'Dsource', 'Ddeposit'],
   ['Bitcoin Cash', Chain.BitcoinCash, 'BCH', 8, 'bitcoincash:qsource', 'bitcoincash:qdeposit'],
@@ -257,41 +280,42 @@ describe('getSwapKitQuote', () => {
   })
 
   it('maps SwapKit transfer tx metadata into QR payload fields', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(
-          response({
-            routes: [
-              {
-                routeId: 'psbt-route',
-                providers: ['CHAINFLIP'],
-                expectedBuyAmount: '0.01',
-              },
-            ],
-          })
-        )
-        .mockResolvedValueOnce(
-          response({
-            expectedBuyAmount: '0.009',
-            providers: ['CHAINFLIP'],
-            targetAddress: 'bc1qdeposit',
-            inboundAddress: 'bc1qinbound',
-            tx: 'cHNidA==',
-            meta: {
-              txType: 'PSBT',
+    const psbt = makeBitcoinPsbtPayload(99_999n)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [
+            {
+              routeId: 'psbt-route',
+              providers: ['CHAINFLIP'],
+              expectedBuyAmount: '0.01',
             },
-            swapId: 'swapkit-id',
-          })
-        )
-    )
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.009',
+          providers: ['CHAINFLIP'],
+          targetAddress: psbt.targetAddress,
+          inboundAddress: 'bc1qinbound',
+          depositAmount: '0.001',
+          tx: Buffer.from(psbt.payload).toString('base64'),
+          meta: {
+            txType: 'PSBT',
+          },
+          swapId: 'swapkit-id',
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
     configureSwapKit({ apiKey: undefined })
 
     const quote = await getSwapKitQuote({
       from: {
         chain: Chain.Bitcoin,
-        address: 'bc1qsource',
+        address: psbt.sourceAddress,
         ticker: 'BTC',
         decimals: 8,
       },
@@ -304,12 +328,19 @@ describe('getSwapKitQuote', () => {
       amount: 100_000n,
     })
 
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      routeId: 'psbt-route',
+      sourceAddress: psbt.sourceAddress,
+      destinationAddress: '0xdestination',
+      disableBalanceCheck: true,
+    })
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).disableBuildTx).toBeUndefined()
     expect(quote.tx).toEqual({
       transfer: {
-        to: 'bc1qdeposit',
-        amount: 100_000n,
+        to: psbt.targetAddress,
+        amount: 99_999n,
         txType: 'PSBT',
-        txPayload: textEncoder.encode('psbt'),
+        txPayload: psbt.payload,
         inboundAddress: 'bc1qinbound',
         swapId: 'swapkit-id',
       },

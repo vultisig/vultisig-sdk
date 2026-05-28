@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 2.3.2
+
+### Patch Changes
+
+- [#588](https://github.com/vultisig/vultisig-sdk/pull/588) [`256f67d`](https://github.com/vultisig/vultisig-sdk/commit/256f67da13a6d96f34c83c9b56c1cfb574cd8fd1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable pre-built SwapKit Bitcoin PSBT transactions, verify their destination outputs, and route payloads through the SignBitcoin hashing and compilation path.
+
 ## 2.3.1
 
 ### Patch Changes
