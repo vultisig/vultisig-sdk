@@ -17,7 +17,8 @@ New `cowswap` module under `packages/core/chain/swap/general/cowswap/`:
 
 `GeneralSwapTx` union extended with `cowswap_order` arm.
 `GeneralSwapProvider` extended with `'cowswap'`.
-`findSwapQuote` registers CowSwap first in `aggregatorPreferenceOrder` for same-chain EVM pairs.
+CowSwap is intentionally NOT registered as a live `findSwapQuote` fetcher (nor in
+`aggregatorPreferenceOrder`) in phase 1 — the consumer build/sign path is wired in phase 2.
 All `matchRecordUnion` call-sites over `GeneralSwapTx` updated for exhaustiveness.
 
-No mcp-ts wiring, no app UI changes. Consumer (mcp-ts) is responsible for USD threshold gating.
+No live fetcher registration, no mcp-ts wiring, no app UI changes. Consumer (mcp-ts) is responsible for USD threshold gating in phase 2.
