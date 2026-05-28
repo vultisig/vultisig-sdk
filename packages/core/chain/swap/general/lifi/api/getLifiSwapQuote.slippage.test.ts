@@ -6,7 +6,20 @@ const coin = (ticker: string) => ({ ticker })
 
 describe('getLifiSwapQuote stable-pair slippage selection (issue #524)', () => {
   it('STABLE_TICKERS contains the canonical stable set', () => {
-    for (const ticker of ['USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USDP', 'GUSD', 'LUSD', 'USDD', 'FDUSD', 'PYUSD']) {
+    for (const ticker of [
+      'USDC',
+      'USDT',
+      'DAI',
+      'BUSD',
+      'TUSD',
+      'FRAX',
+      'USDP',
+      'GUSD',
+      'LUSD',
+      'USDD',
+      'FDUSD',
+      'PYUSD',
+    ]) {
       expect(STABLE_TICKERS.has(ticker)).toBe(true)
     }
   })
