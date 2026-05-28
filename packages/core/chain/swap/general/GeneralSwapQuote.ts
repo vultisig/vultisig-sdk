@@ -1,5 +1,7 @@
 import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 
+import { CowSwapTokenBalance } from './cowswap/sign/buildCowSwapOrder'
+import { CowSwapOrderKind } from './cowswap/types'
 import { GeneralSwapProvider } from './GeneralSwapProvider'
 
 export type GeneralSwapTx =
@@ -29,6 +31,29 @@ export type GeneralSwapTx =
         txPayload?: Uint8Array
         inboundAddress?: string
         swapId?: string
+      }
+    }
+  | {
+      cowswap_order: {
+        sellToken: string
+        buyToken: string
+        receiver: string
+        sellAmount: string
+        buyAmount: string
+        validTo: number
+        appData: string
+        appDataHash: string
+        feeAmount: string
+        kind: CowSwapOrderKind
+        partiallyFillable: boolean
+        sellTokenBalance: CowSwapTokenBalance
+        buyTokenBalance: CowSwapTokenBalance
+        chainId: number
+        apiBase: string
+        /** Set to true when the sellToken supports EIP-2612 permit. When true
+         * the signing flow should build and include a permit signature alongside
+         * the order signature, avoiding a separate ERC-20 approve transaction. */
+        permitRequired?: true
       }
     }
 

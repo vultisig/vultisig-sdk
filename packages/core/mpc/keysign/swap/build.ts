@@ -114,6 +114,7 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cowswap_order: () => undefined,
       }),
   })
   const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
@@ -128,6 +129,7 @@ export const buildSwapKeysignPayload = async ({
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
         transfer: () => undefined,
+        cowswap_order: () => undefined,
       }),
   })
 
@@ -149,6 +151,7 @@ export const buildSwapKeysignPayload = async ({
           evm: () => undefined,
           solana: () => undefined,
           transfer: ({ memo }) => memo,
+          cowswap_order: () => undefined,
         }),
     }),
   })
@@ -159,6 +162,7 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cowswap_order: () => undefined,
       })
 
       if (quote.provider === 'swapkit' && transfer) {
@@ -224,6 +228,18 @@ export const buildSwapKeysignPayload = async ({
         transfer: ({ to }) => ({
           from: fromCoin.address,
           to,
+          data: '',
+          value: '',
+          gasPrice: '',
+          gas: 0n,
+          swapFee: '',
+        }),
+        // CowSwap orders are settled off-chain by solvers — no calldata to encode
+        // in the keysign payload. Phase 2 will wire in the EIP-712 order signing
+        // path; for now we emit an empty placeholder so the struct is valid.
+        cowswap_order: () => ({
+          from: fromCoin.address,
+          to: '',
           data: '',
           value: '',
           gasPrice: '',
