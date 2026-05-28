@@ -22,6 +22,7 @@ describe('SwapKitProviders', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   describe('isSwapKitPairSupported', () => {
@@ -60,14 +61,14 @@ describe('SwapKitProviders', () => {
         'fetch',
         vi.fn(async () =>
           response([
-            { provider: 'MAYACHAIN_STREAMING', enabledChainIds: ['dash', '1'] },
+            { provider: 'MAYACHAIN_STREAMING', enabledChainIds: ['zcash', '1'] },
             { provider: 'NEAR', enabledChainIds: ['1'] },
           ])
         )
       )
 
-      // Dash -> ETH only co-enabled on MAYACHAIN_STREAMING, which is filtered out.
-      await expect(isSwapKitPairSupported({ from: Chain.Dash, to: Chain.Ethereum })).resolves.toBe(false)
+      // Zcash -> ETH only co-enabled on MAYACHAIN_STREAMING, which is filtered out.
+      await expect(isSwapKitPairSupported({ from: Chain.Zcash, to: Chain.Ethereum })).resolves.toBe(false)
     })
 
     it('fails open (returns true) when the providers snapshot is empty', async () => {
@@ -91,7 +92,9 @@ describe('SwapKitProviders', () => {
 
   describe('getSwapKitProviders', () => {
     it('caches the snapshot and does not refetch on the second call', async () => {
-      const fetchMock = vi.fn(async () => response([{ provider: 'NEAR', enabledChainIds: ['1', 'solana'] }]))
+      const fetchMock = vi.fn(async (_url: string) =>
+        response([{ provider: 'NEAR', enabledChainIds: ['1', 'solana'] }])
+      )
       vi.stubGlobal('fetch', fetchMock)
 
       await getSwapKitProviders()
@@ -110,6 +113,25 @@ describe('SwapKitProviders', () => {
       )
 
       await expect(getSwapKitProviders()).resolves.toEqual([])
+    })
+
+    it('fails open (returns []) when the providers request times out', async () => {
+      vi.useFakeTimers()
+      // Never resolves on its own; only the abort signal rejects it.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          (_url: string, init?: { signal?: AbortSignal }) =>
+            new Promise<Response>((_, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+            })
+        )
+      )
+
+      const providersPromise = getSwapKitProviders()
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(providersPromise).resolves.toEqual([])
     })
   })
 })

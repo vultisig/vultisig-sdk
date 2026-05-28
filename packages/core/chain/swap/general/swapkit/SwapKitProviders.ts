@@ -62,6 +62,11 @@ type ProvidersCache = {
 
 const PROVIDERS_CACHE_TTL_MS = 10 * 60 * 1000
 
+// Short timeout so a stalled /providers call fails open fast instead of dragging
+// out the no-route classification path (the outer findSwapQuote per-fetcher
+// timeout would also catch it, but much later).
+const PROVIDERS_FETCH_TIMEOUT_MS = 5_000
+
 let providersCache: ProvidersCache | null = null
 
 /** Test-only: clear the in-memory `/providers` snapshot. */
@@ -109,15 +114,23 @@ export const getSwapKitProviders = async (): Promise<SwapKitProviderInfo[]> => {
 
   const trimmedApiKey = apiKey?.trim()
   const result = await attempt(async () => {
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/providers`, {
-      headers: trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {},
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), PROVIDERS_FETCH_TIMEOUT_MS)
 
-    if (!response.ok) {
-      throw new Error(`SwapKit providers request failed (${response.status})`)
+    try {
+      const response = await fetch(`${baseUrl.replace(/\/$/, '')}/providers`, {
+        headers: trimmedApiKey ? { 'x-api-key': trimmedApiKey } : {},
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`SwapKit providers request failed (${response.status})`)
+      }
+
+      return parseProviders(await response.json())
+    } finally {
+      clearTimeout(timeoutId)
     }
-
-    return parseProviders(await response.json())
   })
 
   if ('error' in result) {
