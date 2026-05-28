@@ -172,6 +172,41 @@ describe('getCowSwapQuote', () => {
     expect(quote.tx.cowswap_order.permitRequired).toBeUndefined()
   })
 
+  // Regression guard: the permit allowlist must contain ONLY tokens that
+  // implement the canonical EIP-2612 Permit struct. Maker-style permit tokens
+  // (mainnet DAI) and no-permit tokens (mainnet USDT) must NOT be flagged
+  // `permitRequired`, otherwise Phase 2 would build an EIP-2612 signature the
+  // token can't honor and the CowSwap order fails at settlement. (#584 — Claude)
+  it.each([
+    ['mainnet DAI (Maker-style permit, not EIP-2612)', '0x6B175474E89094C44Da98b954EedeAC495271d0F'],
+    ['mainnet USDT (no EIP-2612 permit)', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
+  ])('does not flag permitRequired for %s', async (_label, sellToken) => {
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+    const quote = await getCowSwapQuote({
+      ...baseInput,
+      sellToken,
+      chainConfig: cowSwapChainConfig.Ethereum,
+    })
+
+    if (!('cowswap_order' in quote.tx)) {
+      throw new Error('Expected cowswap_order')
+    }
+    expect(quote.tx.cowswap_order.permitRequired).toBeUndefined()
+  })
+
+  it('every token in KNOWN_PERMIT_TOKENS is non-empty and 0x-prefixed', () => {
+    for (const [, tokens] of Object.entries(KNOWN_PERMIT_TOKENS)) {
+      for (const addr of tokens) {
+        expect(addr).toMatch(/^0x[0-9a-fA-F]{40}$/)
+      }
+    }
+    // mainnet allowlist must not contain the excluded non-EIP-2612 entries.
+    const mainnet = KNOWN_PERMIT_TOKENS[1].map(a => a.toLowerCase())
+    expect(mainnet).not.toContain('0x6b175474e89094c44da98b954eedeac495271d0f') // DAI
+    expect(mainnet).not.toContain('0xdac17f958d2ee523a2206206994597c13d831ec7') // USDT
+  })
+
   it('uses COWSWAP_DEFAULT_AFFILIATE_BPS when affiliateBps is not provided', async () => {
     vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
 
