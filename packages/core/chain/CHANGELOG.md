@@ -1,5 +1,22 @@
 # @vultisig/core-chain
 
+## 2.7.0
+
+### Minor Changes
+
+- [#585](https://github.com/vultisig/vultisig-sdk/pull/585) [`1bf8a6d`](https://github.com/vultisig/vultisig-sdk/commit/1bf8a6d36788b702092d92918294d67cdc6e11b7) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `getSwapExplorerUrl` helper for swap-provider tx links ([#426](https://github.com/vultisig/vultisig-sdk/issues/426)).
+
+  Tx history surfaces (vultisig-windows, vultiagent-app, future RN SDK) now have a single source of truth for "View on Explorer" URLs that point to the swap **provider's** scanner — `scan.li.fi`, `orb.helius.dev` for LI.FI Solana settlement, `runescan.io` for THORChain, and the MayaChain explorer — instead of every consumer reimplementing the routing and most defaulting to the source-chain explorer (which hides cross-chain routes from users).
+  - New: `getSwapExplorerUrl({ provider, txHash, fromChain })` in `@vultisig/core-chain/swap/utils/getSwapExplorerUrl`
+  - New: `Vultisig.getSwapExplorerUrl(provider, txHash, fromChain)` static method for parity with `getTxExplorerUrl`
+  - For `1inch` / `kyber` / `swapkit`, falls back to the source-chain explorer (no public per-tx aggregator page)
+  - Mirrors iOS `ExplorerLinkBuilder.swift` and Android `ExplorerLinkRepository.getSwapProgressLink`
+  - Pure URL builder, no new deps
+
+### Patch Changes
+
+- [#600](https://github.com/vultisig/vultisig-sdk/pull/600) [`d1c12b2`](https://github.com/vultisig/vultisig-sdk/commit/d1c12b24bc55a318a8f87998d2320651f875b00a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap/swapkit): reclassify noRoutesFound as "amount too small" when the pair is structurally supported - cross-checks the cached /providers snapshot so low-amount swaps (e.g. BCH->ETH) surface an actionable message instead of a misleading "no route" error
+
 ## 2.6.0
 
 ### Minor Changes
