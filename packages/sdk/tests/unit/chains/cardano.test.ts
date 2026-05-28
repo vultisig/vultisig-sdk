@@ -83,6 +83,28 @@ describe('cardano / buildSignedCardanoTx', () => {
 
     expect(bytesToHex(signed).startsWith('84' + 'a1626869182a')).toBe(true)
   })
+
+  it('uses auxDataCbor in element [3] instead of f6 null when provided', () => {
+    // Minimal CIP-20 aux data: a1 1902a2 a1 636d7367 81 6b68656c6c6f20776f726c64
+    // = { 674: { "msg": ["hello world"] } }
+    const auxDataCbor = hexToBytes('a11902a2a1636d7367816b68656c6c6f20776f726c64')
+    const txBodyCbor = hexToBytes(MINIMAL_BODY_HEX)
+    const signed = buildSignedCardanoTx({
+      txBodyCbor,
+      publicKey: PUB_KEY,
+      signature: SIGNATURE,
+      auxDataCbor,
+    })
+
+    const hex = bytesToHex(signed)
+
+    // Must start with 0x84 (array(4)) and contain body + witness
+    expect(hex.startsWith('84')).toBe(true)
+
+    // Element [3] must be the aux data (not f6)
+    expect(hex.endsWith('f6')).toBe(false)
+    expect(hex.endsWith(bytesToHex(auxDataCbor))).toBe(true)
+  })
 })
 
 describe('cardano / cardanoTxBodyHash', () => {

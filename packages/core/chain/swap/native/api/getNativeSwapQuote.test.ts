@@ -127,7 +127,7 @@ describe('getNativeSwapQuote', () => {
     queryUrlMock
       .mockResolvedValueOnce({
         ...baseOkBody,
-        fees: { ...baseOkBody.fees, total_bps: 301 },
+        fees: { ...baseOkBody.fees, total_bps: 150 },
         expected_amount_out: '1000',
         max_streaming_quantity: 7,
       })
@@ -152,6 +152,54 @@ describe('getNativeSwapQuote', () => {
     const streamUrl = String(queryUrlMock.mock.calls[1][0])
     expect(streamUrl).toContain('streaming_interval=1')
     expect(streamUrl).toContain('streaming_quantity=7')
+  })
+
+  it('THORChain: fetches streaming when total_bps is 120 (1.2%, above new 100 bps threshold)', async () => {
+    queryUrlMock
+      .mockResolvedValueOnce({
+        ...baseOkBody,
+        fees: { ...baseOkBody.fees, total_bps: 120 },
+        expected_amount_out: '1000',
+        max_streaming_quantity: 5,
+      })
+      .mockResolvedValueOnce({
+        ...baseOkBody,
+        fees: { ...baseOkBody.fees, total_bps: 15 },
+        expected_amount_out: '1200',
+        memo: '=:e:0x86d526d6624AbC0178cF7296cD538Ecc080A95F1:0/1/5',
+      })
+
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.THORChain,
+      destination: ethTo.address,
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+    })
+
+    expect(quote.expected_amount_out).toBe('1200')
+    expect(queryUrlMock).toHaveBeenCalledTimes(2)
+    const streamUrl = String(queryUrlMock.mock.calls[1][0])
+    expect(streamUrl).toContain('streaming_interval=1')
+  })
+
+  it('THORChain: does not fetch streaming when total_bps is exactly 100 (at threshold boundary)', async () => {
+    queryUrlMock.mockResolvedValueOnce({
+      ...baseOkBody,
+      fees: { ...baseOkBody.fees, total_bps: 100 },
+      expected_amount_out: '1000',
+    })
+
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.THORChain,
+      destination: ethTo.address,
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+    })
+
+    expect(quote.expected_amount_out).toBe('1000')
+    expect(queryUrlMock).toHaveBeenCalledTimes(1)
   })
 
   it('THORChain: keeps rapid when streaming expected_amount_out is not better', async () => {

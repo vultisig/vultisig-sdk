@@ -1,5 +1,59 @@
 # @vultisig/core-mpc
 
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`47860fc`](https://github.com/vultisig/vultisig-sdk/commit/47860fcc6a1fa3600c20b529d29af98d56cbc5b4)]:
+  - @vultisig/core-chain@2.4.1
+
+## 1.3.0
+
+### Minor Changes
+
+- [#583](https://github.com/vultisig/vultisig-sdk/pull/583) [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(cardano): attach CIP-20 label-674 metadata when memo is provided
+
+  Cardano direct sends with a non-empty memo now embed the memo as
+  CIP-20 on-chain metadata (`{ 674: { "msg": [...] } }`) instead of
+  silently dropping it.
+
+  Implementation:
+  - `buildCip20AuxData` encodes the memo into CIP-20 CBOR and computes
+    the blake2b-256 aux data hash
+  - `patchTxBodyWithAuxHash` byte-patches the WalletCore-produced tx body
+    to include the auxiliary_data_hash at key 7 (CBOR map header bump)
+  - `getPreSigningHashes` for Cardano now returns blake2b of the PATCHED
+    body when a memo is present, so all MPC devices sign the correct hash
+  - `compileTx` for Cardano re-derives the pre-signing output, patches
+    the body when memo is present, and passes auxDataCbor to
+    buildSignedCardanoTx so element [3] carries the metadata
+  - `getCardanoChainSpecific` bumps the forced fee by 44 \* len(auxDataCbor)
+    to account for the extra bytes WalletCore cannot anticipate
+  - Sends without memo are byte-identical to the pre-fix behavior
+
+### Patch Changes
+
+- [#583](https://github.com/vultisig/vultisig-sdk/pull/583) [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+- Updated dependencies [[`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31)]:
+  - @vultisig/core-chain@2.4.0
+
+## 1.2.23
+
+### Patch Changes
+
+- [#588](https://github.com/vultisig/vultisig-sdk/pull/588) [`256f67d`](https://github.com/vultisig/vultisig-sdk/commit/256f67da13a6d96f34c83c9b56c1cfb574cd8fd1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable pre-built SwapKit Bitcoin PSBT transactions, verify their destination outputs, and route payloads through the SignBitcoin hashing and compilation path.
+
+- Updated dependencies [[`256f67d`](https://github.com/vultisig/vultisig-sdk/commit/256f67da13a6d96f34c83c9b56c1cfb574cd8fd1)]:
+  - @vultisig/core-chain@2.3.2
+
 ## 1.2.22
 
 ### Patch Changes
