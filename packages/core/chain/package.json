@@ -1480,6 +1480,11 @@
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
     },
+    "./swap/utils/getSwapExplorerUrl": {
+      "types": "./dist/swap/utils/getSwapExplorerUrl/index.d.ts",
+      "import": "./dist/swap/utils/getSwapExplorerUrl/index.js",
+      "default": "./dist/swap/utils/getSwapExplorerUrl/index.js"
+    },
     "./tw/signingOutput": {
       "types": "./dist/tw/signingOutput.d.ts",
       "import": "./dist/tw/signingOutput.js",
