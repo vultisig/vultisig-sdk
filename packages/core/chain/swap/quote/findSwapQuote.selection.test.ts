@@ -517,6 +517,23 @@ describe('findSwapQuote parallel selection', () => {
 
     expect('general' in quote.quote).toBe(true)
   })
+
+  it('does NOT short-circuit when MayaChain also routes — THOR is not the sole native family (#604)', async () => {
+    // RUNE -> BTC routes on both THORChain and MayaChain with no aggregator. We
+    // only compute THORChain's minimum, so eager-failing on it would wrongly
+    // block an amount MayaChain might fill at a lower minimum. Quotes must fire.
+    const thorAndMayaCoins = {
+      from: { chain: Chain.THORChain, address: 'thor1src', decimals: 8, ticker: 'RUNE' },
+      to: { chain: Chain.Bitcoin, address: 'bc1qdst', decimals: 8, ticker: 'BTC' },
+    } as const
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.01'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100000000'))
+
+    const quote = await findSwapQuote({ ...thorAndMayaCoins, amount: 1n })
+
+    expect(getNativeSwapQuote).toHaveBeenCalled()
+    expect('native' in quote.quote).toBe(true)
+  })
 })
 
 describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {

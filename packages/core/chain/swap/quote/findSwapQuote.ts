@@ -418,14 +418,16 @@ export const findSwapQuote = async ({
       ? getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
       : Promise.resolve(null)
 
-  // Eager short-circuit ONLY when a native protocol is the sole route family:
-  // an amount below its minimum can never produce a route, so fail fast with
-  // the threshold before firing. For multi-provider pairs we must NOT
-  // short-circuit — an aggregator (e.g. SwapKit/Chainflip) may route at a
-  // lower minimum, so we let every provider run and use the minimum only if
-  // they all fail.
-  const nativeIsSoleFamily = nativeFetchers.length > 0 && generalFetchers.length === 0
-  if (nativeIsSoleFamily) {
+  // Eager short-circuit ONLY when THORChain is the *sole* possible route: no
+  // aggregators AND no MayaChain. We only compute a proactive minimum for
+  // THORChain (`computeNativeMin`), so if any other family can route — an
+  // aggregator (SwapKit/Chainflip) or MayaChain (its own, possibly lower
+  // minimum) — short-circuiting on THORChain's number would wrongly reject an
+  // amount they could fill. Multi-provider pairs let every provider run and
+  // only fall back to the computed minimum if they all fail. (#604, CodeRabbit)
+  const thorIsSoleRoute =
+    generalFetchers.length === 0 && matchingSwapChains.length === 1 && matchingSwapChains[0] === Chain.THORChain
+  if (thorIsSoleRoute) {
     const nativeMin = await computeNativeMin()
     if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
       throw belowNativeMinimumError(nativeMin, from)
@@ -486,10 +488,18 @@ export const findSwapQuote = async ({
   // pool ragnarok, churn). The quote API then rejects EVERY amount with
   // "trading is halted" — an operational state, not an amount problem. Detect it
   // so we surface a "temporarily unavailable" message instead of the misleading
-  // generic "no route" (which reads like the pair is unsupported). (#604)
+  // generic "no route" (which reads like the pair is unsupported). Also match the
+  // "trading paused" wordings emitted by the THOR halt helpers in
+  // `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
+  // `<chain> chain trading paused`). (#604, CodeRabbit)
   const isTradingHaltedMsg = (msg: string) => {
     const lower = msg.toLowerCase()
-    return lower.includes('halted') || lower.includes('trading halt') || lower.includes('trading is paused')
+    return (
+      lower.includes('halted') ||
+      lower.includes('trading halt') ||
+      lower.includes('trading paused') ||
+      lower.includes('trading is paused')
+    )
   }
 
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
