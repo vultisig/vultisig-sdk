@@ -393,6 +393,86 @@ describe('findSwapQuote parallel selection', () => {
       })
     ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
   })
+
+  // #604 — THORChain/MayaChain below-min wordings that slipped through the old
+  // allowlist and produced the generic "No swap route found" message instead.
+
+  it('#604: THORChain "swap amount is less than the minimum" surfaces as AmountTooSmall, not generic no-route', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('swap amount is less than the minimum')
+      }
+      throw new Error('maya fail')
+    })
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+  })
+
+  it('#604: THORChain "outbound amount does not meet requirements" surfaces as below-minimum, not generic no-route', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('outbound amount does not meet requirements')
+      }
+      throw new Error('maya fail')
+    })
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Amount below the minimum required by a swap provider.')
+  })
+
+  it('#604: MayaChain "amount is less than minimum" surfaces as AmountTooSmall, not generic no-route', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('thor fail')
+      }
+      // MayaChain variant of the same wording
+      throw new Error('amount is less than minimum')
+    })
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+  })
+
+  it('#604: true no-route (unsupported pair) still shows the generic provider-list message', async () => {
+    // All providers reject with generic non-amount errors → AllProvidersFailed
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('unsupported pair'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('unsupported pair'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('unsupported pair'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('unsupported pair'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('unsupported pair'))
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
+  })
 })
 
 describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {

@@ -446,7 +446,11 @@ export const findSwapQuote = async ({
       lower.includes('minimum amount') ||
       lower.includes('min amount') ||
       lower.includes('amount too small') ||
-      lower.includes('below the minimum')
+      lower.includes('below the minimum') ||
+      // THORChain/MayaChain: "swap amount is less than the minimum"
+      lower.includes('less than the minimum') ||
+      // THORChain/MayaChain: "outbound amount does not meet requirements"
+      lower.includes('does not meet requirements')
     )
   }
 
@@ -463,10 +467,13 @@ export const findSwapQuote = async ({
     // SwapKit raises this only after confirming the pair is structurally
     // supported, so it is unambiguously an amount problem (#4418). Reuse the
     // same copy as the THORChain dust-threshold path.
+    // `'amount is less than'` covers THORChain's "amount is less than X" wording
+    // (distinct from `'amount less than'` which misses the "is").
     if (
       result.reason instanceof SwapKitAmountBelowMinimumError ||
       isInError(result.reason, 'dust threshold') ||
-      isInError(result.reason, 'amount less than')
+      isInError(result.reason, 'amount less than') ||
+      isInError(result.reason, 'amount is less than')
     ) {
       throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
