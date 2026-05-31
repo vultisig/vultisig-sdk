@@ -23,6 +23,10 @@ import {
 import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import {
+  getNativeSwapMinAmountIn,
+  NativeSwapMinAmountIn,
+} from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
@@ -392,12 +396,40 @@ export const findSwapQuote = async ({
   const shouldPreferGeneralSwap =
     [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) && [from.id, to.id].some(v => v)
 
+  const generalFetchers = getGeneralFetchers()
+  const nativeFetchers = getNativeFetchers()
+
   const fetchers = shouldPreferGeneralSwap
-    ? [...getGeneralFetchers(), ...getNativeFetchers()]
-    : [...getNativeFetchers(), ...getGeneralFetchers()]
+    ? [...generalFetchers, ...nativeFetchers]
+    : [...nativeFetchers, ...generalFetchers]
 
   if (isEmpty(fetchers)) {
     throw new NoSwapRoutesError()
+  }
+
+  // Proactive THORChain minimum (#604). Derived from the destination chain's
+  // `outbound_fee` and spot pool prices, this yields an actionable threshold
+  // instead of a generic "no route" for sub-minimum amounts. Computed only when
+  // a native protocol can route AND we actually need it (sole-family pre-flight
+  // or the all-fail path) — never on every quote — so valid swaps pay no extra
+  // network cost. Resolves to `null` when not determinable.
+  const computeNativeMin = (): Promise<NativeSwapMinAmountIn | null> =>
+    matchingSwapChains.includes(Chain.THORChain)
+      ? getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
+      : Promise.resolve(null)
+
+  // Eager short-circuit ONLY when a native protocol is the sole route family:
+  // an amount below its minimum can never produce a route, so fail fast with
+  // the threshold before firing. For multi-provider pairs we must NOT
+  // short-circuit — an aggregator (e.g. SwapKit/Chainflip) may route at a
+  // lower minimum, so we let every provider run and use the minimum only if
+  // they all fail.
+  const nativeIsSoleFamily = nativeFetchers.length > 0 && generalFetchers.length === 0
+  if (nativeIsSoleFamily) {
+    const nativeMin = await computeNativeMin()
+    if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
+      throw belowNativeMinimumError(nativeMin, from)
+    }
   }
 
   const settled = await Promise.allSettled(
@@ -491,6 +523,15 @@ export const findSwapQuote = async ({
     )
   }
 
+  // No provider returned a parseable below-minimum hint. Before falling back to
+  // the generic "no route" message, check the proactively-computed THORChain
+  // minimum: providers reject sub-minimum swaps with wordings we can't reliably
+  // match, so the computed threshold is the authoritative signal here (#604).
+  const nativeMin = await computeNativeMin()
+  if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
+    throw belowNativeMinimumError(nativeMin, from)
+  }
+
   const failedProviders = settled
     .map((result, index) => {
       if (result.status === 'fulfilled') {
@@ -501,8 +542,28 @@ export const findSwapQuote = async ({
     })
     .filter((providerName): providerName is SwapQuoteProviderName => providerName !== null)
 
+  // Instrument the fallback (#604): the raw provider messages are the only way
+  // to learn which sub-minimum/error wordings still slip through. Logging them
+  // makes future classification data-driven instead of guessed.
+  const rawProviderErrors = settled
+    .map((result, index) =>
+      result.status === 'rejected'
+        ? `${fetchers[index].providerName}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+        : null
+    )
+    .filter((entry): entry is string => entry !== null)
+  console.warn(
+    `[findSwapQuote] no route for ${from.ticker} -> ${to.ticker}; raw provider errors: ${rawProviderErrors.join(' | ')}`
+  )
+
   throw new SwapError(
     SwapErrorCode.AllProvidersFailed,
     `No swap route found after trying ${failedProviders.join(', ')}.`
   )
 }
+
+const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
+  new SwapError(
+    SwapErrorCode.AmountBelowMinimum,
+    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`
+  )
