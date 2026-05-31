@@ -462,6 +462,7 @@ describe('findSwapQuote parallel selection', () => {
     minAmountInBaseUnits,
     minAmountInHuman,
     outboundFeeBaseUnit: '60000',
+    binding: 'outbound',
   })
 
   it('surfaces the computed minimum when no provider returns a parseable below-min hint (#604)', async () => {
