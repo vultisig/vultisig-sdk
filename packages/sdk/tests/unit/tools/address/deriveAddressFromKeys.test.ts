@@ -290,5 +290,91 @@ describe('deriveAddressFromKeys', () => {
       ).rejects.toThrow(/Invalid chainPublicKeys entry for TerraClassic: pubkey must be non-empty/)
       expect(mockGetPublicKey).not.toHaveBeenCalled()
     })
+
+    // Cosmos-family chains (issue vultisig-sdk#613, mcp-ts#294 E2E discovery).
+    // These chains use BIP44 coin_type 118 with HARDENED derivation
+    // (m/44'/118'/0'/0/0), which cannot be re-walked from a pubkey alone — the
+    // MPC root + chaincode path produces the wrong address. Callers (mcp-ts
+    // execute_swap, agent-backend tool dispatch) MUST forward
+    // chainPublicKeys.<Chain> for these to work; we pin the contract here.
+    //
+    // The pubkey/address fixtures below are from a real on-chain account
+    // (cosmos1ky4k58aq…3xvy, account_number 2782851, 51 prior cosmoshub-4 txs),
+    // verified against the live LCD: the on-chain registered pubkey matches
+    // the chainPublicKeys.Cosmos value exactly. Same hardened key derives the
+    // bech32 for every cosmos-prefix family chain (different hrp per chain).
+    describe('cosmos-family chains', () => {
+      const cosmosHardenedPubkey = '029588aa44a9e3576f0db42de62fa69a528c5c61757284622ae436b9646e6cd513'
+      const cosmosFundedAddress = 'cosmos1ky4k58aq36yx6gvz34xcu2tzhhsvrewyxa3xvy'
+
+      it('uses chainPublicKeys[Cosmos] directly and returns funded cosmoshub-4 address', async () => {
+        mockDeriveAddress.mockReturnValueOnce(cosmosFundedAddress)
+        const result = await deriveAddressFromKeys({
+          chain: Chain.Cosmos,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Cosmos]: cosmosHardenedPubkey },
+        })
+        expect(result).toEqual({ chain: Chain.Cosmos, address: cosmosFundedAddress })
+        expect(mockGetPublicKey).toHaveBeenCalledWith(
+          expect.objectContaining({
+            chain: Chain.Cosmos,
+            chainPublicKeys: { [Chain.Cosmos]: cosmosHardenedPubkey },
+          })
+        )
+      })
+
+      it('forwards chainPublicKeys[Osmosis] for osmosis-1 derivation', async () => {
+        const osmoHardenedPubkey = '029588aa44a9e3576f0db42de62fa69a528c5c61757284622ae436b9646e6cd513'
+        const osmoAddress = 'osmo1ky4k58aq36yx6gvz34xcu2tzhhsvrewywxzk6k'
+        mockDeriveAddress.mockReturnValueOnce(osmoAddress)
+        await deriveAddressFromKeys({
+          chain: Chain.Osmosis,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Osmosis]: osmoHardenedPubkey },
+        })
+        expect(mockGetPublicKey).toHaveBeenCalledWith(
+          expect.objectContaining({
+            chain: Chain.Osmosis,
+            chainPublicKeys: { [Chain.Osmosis]: osmoHardenedPubkey },
+          })
+        )
+      })
+
+      it('forwards chainPublicKeys[Kujira] for kujira-1 derivation', async () => {
+        const kujiHardenedPubkey = '029588aa44a9e3576f0db42de62fa69a528c5c61757284622ae436b9646e6cd513'
+        const kujiAddress = 'kujira1ky4k58aq36yx6gvz34xcu2tzhhsvrewyh4n7pw'
+        mockDeriveAddress.mockReturnValueOnce(kujiAddress)
+        await deriveAddressFromKeys({
+          chain: Chain.Kujira,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Kujira]: kujiHardenedPubkey },
+        })
+        expect(mockGetPublicKey).toHaveBeenCalledWith(
+          expect.objectContaining({
+            chain: Chain.Kujira,
+            chainPublicKeys: { [Chain.Kujira]: kujiHardenedPubkey },
+          })
+        )
+      })
+
+      it('Cosmos request with only Osmosis key supplied: map is NOT forwarded, BIP32 fallback runs', async () => {
+        // Each cosmos chain is its own entry in chainPublicKeys (unlike Terra↔TerraClassic
+        // which share coin_type 330). Cosmos↔Osmosis do NOT alias; a partial map for
+        // a sibling chain must not bleed into another chain's derivation.
+        mockDeriveAddress.mockReturnValueOnce('cosmos1bip32fallback')
+        await deriveAddressFromKeys({
+          chain: Chain.Cosmos,
+          ecdsaPublicKey: 'root_pubkey_hex',
+          hexChainCode: 'chain_code_hex',
+          chainPublicKeys: { [Chain.Osmosis]: '029588aa44a9e3576f0db42de62fa69a528c5c61757284622ae436b9646e6cd513' },
+        })
+        expect(mockGetPublicKey).toHaveBeenCalledWith(
+          expect.objectContaining({ chain: Chain.Cosmos, chainPublicKeys: undefined })
+        )
+      })
+    })
   })
 })
