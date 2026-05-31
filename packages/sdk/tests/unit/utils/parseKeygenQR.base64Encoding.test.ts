@@ -22,7 +22,6 @@ const validKeygenBinary = toBinary(
 
 // Track what base64 data was written to the mock FS
 let writtenBase64: string | null = null
-let callMainCalled = false
 
 const mockSevenZip = {
   FS: {
@@ -37,10 +36,7 @@ const mockSevenZip = {
     }),
     unlink: vi.fn(),
   },
-  callMain: vi.fn(() => {
-    callMainCalled = true
-    return 0
-  }),
+  callMain: vi.fn(() => 0),
 }
 
 vi.mock('@vultisig/core-mpc/compression/getSevenZip', () => ({
@@ -50,7 +46,6 @@ vi.mock('@vultisig/core-mpc/compression/getSevenZip', () => ({
 describe('parseKeygenQR — base64 encoding with + characters', () => {
   beforeEach(() => {
     writtenBase64 = null
-    callMainCalled = false
     vi.clearAllMocks()
   })
 
