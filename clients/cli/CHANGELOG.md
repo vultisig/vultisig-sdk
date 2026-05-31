@@ -1,5 +1,14 @@
 # @vultisig/cli
 
+## 1.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`9e405c9`](https://github.com/vultisig/vultisig-sdk/commit/9e405c9459713c5391ca6a85a548eb3750ec2872), [`04cd9e3`](https://github.com/vultisig/vultisig-sdk/commit/04cd9e3881cb0e8cab5b1783be6e8d86970001d6)]:
+  - @vultisig/core-chain@2.8.0
+  - @vultisig/sdk@1.6.0
+  - @vultisig/rujira@30.0.0
+
 ## 1.5.0
 
 ### Patch Changes
