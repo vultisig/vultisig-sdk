@@ -43,15 +43,7 @@ const isIdempotentBroadcastError = (text: string): boolean =>
  * etc.) lives in `data`. Surfacing only `message` makes every failure look
  * identical in the UI and strips the information we need to triage.
  */
-const formatRpcError = ({
-  code,
-  message,
-  data,
-}: {
-  code: number
-  message: string
-  data?: string
-}): string => {
+const formatRpcError = ({ code, message, data }: { code: number; message: string; data?: string }): string => {
   const head = message ?? `code ${code}`
   return data ? `${head}: ${data}` : head
 }

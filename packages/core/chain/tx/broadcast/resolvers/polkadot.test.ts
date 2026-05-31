@@ -128,9 +128,7 @@ describe('broadcastPolkadotTx', () => {
       await broadcastPolkadotTx({ chain, tx })
 
       const callArg = mocks.verifyBroadcastByHash.mock.calls[0]![0]
-      expect((callArg.error as Error).message).toBe(
-        'Polkadot broadcast failed: Invalid Transaction'
-      )
+      expect((callArg.error as Error).message).toBe('Polkadot broadcast failed: Invalid Transaction')
     })
 
     it('swallows InvalidTransaction whose data marks it duplicate', async () => {
@@ -157,9 +155,7 @@ describe('broadcastPolkadotTx', () => {
 
       expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
       const callArg = mocks.verifyBroadcastByHash.mock.calls[0]![0]
-      expect((callArg.error as Error).message).toContain(
-        'missing extrinsic hash'
-      )
+      expect((callArg.error as Error).message).toContain('missing extrinsic hash')
     })
 
     it('routes network-level errors through verifyBroadcastByHash', async () => {
@@ -170,9 +166,7 @@ describe('broadcastPolkadotTx', () => {
       await broadcastPolkadotTx({ chain, tx })
 
       expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
-      expect(mocks.verifyBroadcastByHash.mock.calls[0]![0]!.error).toBe(
-        networkErr
-      )
+      expect(mocks.verifyBroadcastByHash.mock.calls[0]![0]!.error).toBe(networkErr)
     })
   })
 })

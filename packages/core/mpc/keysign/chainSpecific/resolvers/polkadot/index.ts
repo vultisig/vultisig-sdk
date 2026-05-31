@@ -26,13 +26,12 @@ export const getPolkadotChainSpecific: GetChainSpecificResolver<'polkadotSpecifi
   // extrinsic hash so every retry comes back as "Transaction is
   // temporarily banned". On Asset Hub this race fires often enough to be
   // user-visible.
-  const [{ specVersion, transactionVersion }, header, nextIndex, genesisHash] =
-    await Promise.all([
-      client.rpc.state.getRuntimeVersion(),
-      client.rpc.chain.getHeader(),
-      client.rpc.system.accountNextIndex(address),
-      client.rpc.chain.getBlockHash(0),
-    ])
+  const [{ specVersion, transactionVersion }, header, nextIndex, genesisHash] = await Promise.all([
+    client.rpc.state.getRuntimeVersion(),
+    client.rpc.chain.getHeader(),
+    client.rpc.system.accountNextIndex(address),
+    client.rpc.chain.getBlockHash(0),
+  ])
 
   const chainSpecific = create(PolkadotSpecificSchema, {
     recentBlockHash: header.hash.toHex(),
