@@ -55,40 +55,42 @@ describe('parseKeygenQR — base64 encoding with + characters', () => {
   })
 
   it('handles jsonData with raw + signs (not URL-encoded)', async () => {
-    // Base64 data that contains + characters: "hello+world/=="
-    // When placed in a URL query param without encoding, URLSearchParams
-    // will decode + as space, corrupting the base64.
-    const base64WithPlus = 'aGVsbG8rd29ybGQv'
+    // 'ICA+' is a base64 string that literally contains '+'.
+    // URLSearchParams decodes '+' as space per the form-urlencoded spec,
+    // so placing this raw in the query string produces 'ICA ' (corrupted).
+    // The fix must restore the space back to '+' before decoding.
+    const base64WithPlus = 'ICA+'
     const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${base64WithPlus}`
 
     await parseKeygenQR(qrPayload)
 
-    // The fix should restore + from space before calling decompressData
-    // Verify the mock FS received correct base64 (with + intact)
-    expect(writtenBase64).toBe('hello+world/')
+    // Buffer.from('ICA+', 'base64') decodes to bytes [32, 32, 62] -> '  >'
+    // If the fix is absent, writtenBase64 would be '  ' (only 2 bytes from 'ICA ')
+    expect(writtenBase64).toBe('  >')
   })
 
-  it('handles jsonData with URL-encoded + signs (%2B)', async () => {
-    // Properly URL-encoded: + becomes %2B
-    const base64Encoded = 'aGVsbG8lMkJ3b3JsZC8%3D'
+  it('handles jsonData with URL-encoded = signs (%3D)', async () => {
+    // base64 of 'hello+world/=' with padding encoded as %3D
+    // URLSearchParams decodes %3D back to =, no + corruption in this path
+    const base64Encoded = 'aGVsbG8rd29ybGQvPQ%3D%3D'
     const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${base64Encoded}`
 
     await parseKeygenQR(qrPayload)
 
-    // decodeURIComponent(%2B) → +, so FS should get correct base64
+    // Buffer.from('aGVsbG8rd29ybGQvPQ==', 'base64') = 'hello+world/='
     expect(writtenBase64).toBe('hello+world/=')
   })
 
   it('handles jsonData with both + and / characters (standard base64)', async () => {
     // Standard base64 often has both + and / chars
-    // "abc+def/ghi=" → base64 "YWJjK2RlZi9naGk="
+    // 'YWJjK2RlZi9naGk=' is base64 for 'abc+def/ghi' (no trailing =)
     const base64Standard = 'YWJjK2RlZi9naGk%3D'
     const qrPayload = `vultisig://?type=NewVault&tssType=Keygen&jsonData=${base64Standard}`
 
     await parseKeygenQR(qrPayload)
 
-    // Verify the correct base64 reaches the decompressor
-    expect(writtenBase64).toBe('abc+def/ghi=')
+    // Buffer.from('YWJjK2RlZi9naGk=', 'base64') = 'abc+def/ghi'
+    expect(writtenBase64).toBe('abc+def/ghi')
   })
 
   it('still parses core protobuf fields when + encoding is used', async () => {
