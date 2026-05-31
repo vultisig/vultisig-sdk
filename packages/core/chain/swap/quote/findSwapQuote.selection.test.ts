@@ -313,7 +313,9 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(
-      new Error("failed to simulate swap: failed to simulate handler: trading is halted, can't process swap: invalid request")
+      new Error(
+        "failed to simulate swap: failed to simulate handler: trading is halted, can't process swap: invalid request"
+      )
     )
 
     await expect(
@@ -527,7 +529,9 @@ describe('findSwapQuote parallel selection', () => {
       to: { chain: Chain.Bitcoin, address: 'bc1qdst', decimals: 8, ticker: 'BTC' },
     } as const
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.01'))
-    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100000000'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
+      minimalNativeQuote(swapChain, '100000000')
+    )
 
     const quote = await findSwapQuote({ ...thorAndMayaCoins, amount: 1n })
 
