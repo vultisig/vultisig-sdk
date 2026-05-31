@@ -306,6 +306,40 @@ describe('findSwapQuote parallel selection', () => {
     ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
   })
 
+  it('surfaces a trading-halted message when a native protocol reports a halt', async () => {
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(
+      new Error("failed to simulate swap: failed to simulate handler: trading is halted, can't process swap: invalid request")
+    )
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('temporarily unavailable — trading is halted on')
+  })
+
+  it('prefers a provider below-minimum over a native trading halt', async () => {
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('inch fail'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('lifi fail'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('CHAINFLIP: Amount below minimum: 0.0003 BTC required'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('trading is halted'))
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow('Amount below the minimum required by a swap provider.')
+  })
+
   it('omits noisy provider errors from the all-fail message', async () => {
     const longKyberError = `kyber ${'x'.repeat(220)}`
 

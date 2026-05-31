@@ -482,7 +482,18 @@ export const findSwapQuote = async ({
     )
   }
 
+  // Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
+  // pool ragnarok, churn). The quote API then rejects EVERY amount with
+  // "trading is halted" — an operational state, not an amount problem. Detect it
+  // so we surface a "temporarily unavailable" message instead of the misleading
+  // generic "no route" (which reads like the pair is unsupported). (#604)
+  const isTradingHaltedMsg = (msg: string) => {
+    const lower = msg.toLowerCase()
+    return lower.includes('halted') || lower.includes('trading halt') || lower.includes('trading is paused')
+  }
+
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
+  const haltedProviders = new Set<SwapQuoteProviderName>()
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -509,6 +520,10 @@ export const findSwapQuote = async ({
         belowMinimumByProvider.set(providerName, msg)
       }
     }
+
+    if (isTradingHaltedMsg(msg)) {
+      haltedProviders.add(fetchers[i].providerName)
+    }
   }
 
   if (belowMinimumByProvider.size > 0) {
@@ -520,6 +535,18 @@ export const findSwapQuote = async ({
     throw new SwapError(
       SwapErrorCode.AmountBelowMinimum,
       `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`
+    )
+  }
+
+  // Trading-halt takes precedence over the speculative computed minimum and the
+  // generic fallback: when a native protocol reports a halt, NO amount can route,
+  // so telling the user to "increase the amount" would be actively misleading. A
+  // genuine provider-reported below-minimum (handled above) still wins, since
+  // that provider is responding and the amount is the actionable lever. (#604)
+  if (haltedProviders.size > 0) {
+    throw new SwapError(
+      SwapErrorCode.TradingHalted,
+      `This swap route is temporarily unavailable — trading is halted on ${[...haltedProviders].join(', ')}. Please try again later.`
     )
   }
 
