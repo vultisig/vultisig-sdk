@@ -61,7 +61,7 @@ const evmSameChainCoins = {
   },
 } as const
 
-function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch' | 'swapkit'): GeneralSwapQuote {
+function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi'): GeneralSwapQuote {
   const base = {
     dstAmount,
     tx: {
@@ -260,12 +260,10 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('kyber')
   })
 
-  it('tie-break: 1inch wins over SwapKit on equal output by declared preference', async () => {
-    // 1inch is ranked 2nd, SwapKit is ranked 4th in aggregatorPreferenceOrder.
-    // On an equal-output tie, 1inch must win regardless of fetcher array order
-    // (which is determined dynamically by shouldPreferGeneralSwap). This
-    // exercises the declared-preference tie-break introduced in #521 r3 to
-    // replace the previous implicit index-based tie-break. (NeO should-fix.)
+  it('tie-break: SwapKit wins over 1inch on equal output by declared provider preference', async () => {
+    // SwapKit now sits above the EVM aggregators in providerPreferenceOrder.
+    // On an equal-output tie, it must win regardless of fetcher array order
+    // (which is determined dynamically by shouldPreferGeneralSwap).
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
@@ -281,7 +279,7 @@ describe('findSwapQuote parallel selection', () => {
     if (!('general' in quote.quote)) {
       throw new Error('Expected general quote')
     }
-    expect(quote.quote.general.provider).toBe('1inch')
+    expect(quote.quote.general.provider).toBe('swapkit')
   })
 
   it('when all providers fail, reports every attempted provider', async () => {
@@ -542,7 +540,7 @@ describe('findSwapQuote parallel selection', () => {
   })
 })
 
-describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
+describe('findSwapQuote banded provider preference (issue #605)', () => {
   beforeEach(() => {
     vi.mocked(getCowSwapQuote).mockReset()
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
@@ -561,13 +559,13 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
   // value = raw / 10^(8 - 6) = raw / 100. So to make THOR comparable-output ≈ X
   // (in 6 decimals), set native expected_amount_out = X * 100.
 
-  it('prefers direct THORChain when SwapKit is better by 2% (inside 5% bias)', async () => {
+  it('same-chain ERC20 route picks SwapKit over THORChain when SwapKit is more than 1% better', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     // SwapKit: gross output 1_020_000 (in 6 dec).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1020000', 'swapkit'))
-    // THORChain native: comparable 1_000_000 (raw 100_000_000 in 8-dec). 1.96% lower → inside bias.
+    // THORChain native: comparable 1_000_000 (raw 100_000_000 in 8-dec). 1.96% lower -> outside band.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         return minimalNativeQuote(swapChain, '100000000')
@@ -580,20 +578,19 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
       amount: 1n,
     })
 
-    if (!('native' in quote.quote)) {
-      throw new Error('Expected native THORChain quote to win via bias')
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected SwapKit quote to win by rate outside the band')
     }
-    expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
-    expect(quote.quote.native.expected_amount_out).toBe('100000000')
+    expect(quote.quote.general.provider).toBe('swapkit')
   })
 
-  it('prefers THORChain over SwapKit even when SwapKit is 10% better (hard priority, no output comparison)', async () => {
+  it('outside band: the better-rate provider wins regardless of preference order', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     // SwapKit: gross output 1_100_000 (10% higher than THORChain).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1100000', 'swapkit'))
-    // THORChain native: comparable 1_000_000. Hard priority means THOR still wins.
+    // THORChain native: comparable 1_000_000. SwapKit is outside the 1% band, so rate wins.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         return minimalNativeQuote(swapChain, '100000000')
@@ -606,10 +603,10 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
       amount: 1n,
     })
 
-    if (!('native' in quote.quote)) {
-      throw new Error('Expected THORChain to win via hard priority regardless of SwapKit output')
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected SwapKit quote to win by rate outside the band')
     }
-    expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
+    expect(quote.quote.general.provider).toBe('swapkit')
   })
 
   it('only SwapKit available → SwapKit wins (no native bias applies)', async () => {
@@ -653,7 +650,7 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
   })
 
-  it('SwapKit ties THORChain on output → THORChain wins via bias (Δ=0 is within any bias)', async () => {
+  it('SwapKit ties THORChain on output -> THORChain wins by provider preference', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
@@ -672,11 +669,9 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
       amount: 1n,
     })
 
-    // On an exact tie, the EVM-EVM same-chain path puts general first, so
-    // tie-break makes SwapKit the initial `best`. But THORChain is within bias
-    // (Δ=0) so it should be selected by the bias step.
+    // On an exact tie, THORChain is within the band and outranks SwapKit.
     if (!('native' in quote.quote)) {
-      throw new Error('Expected THORChain native quote to win on tie via bias')
+      throw new Error('Expected THORChain native quote to win on tie by provider preference')
     }
     expect(quote.quote.native.swapChain).toBe(Chain.THORChain)
   })
@@ -713,7 +708,7 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     expect(quote.quote.native.expected_amount_out).toBe('120000000')
   })
 
-  it('MayaChain also benefits from the bias when it is the only native option', async () => {
+  it('near-tie: MayaChain wins when SwapKit is within the 1% band', async () => {
     // Use Arbitrum ↔ Arbitrum: Maya supports Arbitrum (per nativeSwapEnabledChainsRecord),
     // SwapKit supports Arbitrum as well. THORChain does NOT support Arbitrum.
     const arbCoins = {
@@ -736,8 +731,8 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    // SwapKit better by ~2%.
-    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1020000', 'swapkit'))
+    // SwapKit better by 0.5%, within the 1% band.
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'swapkit'))
     // Maya native: 8-dec canonical → 1_000_000 comparable.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.MayaChain) {
@@ -752,9 +747,28 @@ describe('findSwapQuote THOR/Maya bias (paaao directive 2026-05-22)', () => {
     })
 
     if (!('native' in quote.quote)) {
-      throw new Error('Expected Maya native quote to win via bias on Arbitrum')
+      throw new Error('Expected Maya native quote to win by provider preference on Arbitrum')
     }
     expect(quote.quote.native.swapChain).toBe(Chain.MayaChain)
+  })
+
+  it('near-tie: SwapKit beats LiFi when within the 1% band', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    // LiFi has the best output, but SwapKit is only 0.5% lower and ranks higher.
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('swapkit')
   })
 })
 
