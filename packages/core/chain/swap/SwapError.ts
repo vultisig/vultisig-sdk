@@ -7,6 +7,8 @@ export enum SwapErrorCode {
   AmountBelowMinimum = 'SWAP_AMOUNT_BELOW_MINIMUM',
   /** All configured providers were attempted and all failed */
   AllProvidersFailed = 'SWAP_ALL_PROVIDERS_FAILED',
+  /** Trading for this pair is temporarily halted by the provider (not an amount problem) */
+  TradingHalted = 'SWAP_TRADING_HALTED',
   /** Caller passed invalid configuration (e.g. mixed-case THORName affiliateFeeAddress) */
   InvalidConfig = 'SWAP_INVALID_CONFIG',
 }

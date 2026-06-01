@@ -1,5 +1,20 @@
 # @vultisig/sdk
 
+## 1.6.0
+
+### Minor Changes
+
+- [#611](https://github.com/vultisig/vultisig-sdk/pull/611) [`9e405c9`](https://github.com/vultisig/vultisig-sdk/commit/9e405c9459713c5391ca6a85a548eb3750ec2872) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Osmosis added to `AUTO_DISCOVERY_CHAINS` — IBC balance discovery is now active for Osmosis ([#611](https://github.com/vultisig/vultisig-sdk/issues/611))
+  - Osmosis IBC token registry: ATOM (channel-0), USDC/Noble (channel-750), axlUSDC/Axelar (channel-208), stATOM (channel-326), stOSMO (channel-326), TIA/Celestia (channel-6994) — all hashes LCD-verified against osmosis-rest.publicnode.com and cross-referenced with cosmos/chain-registry ([#611](https://github.com/vultisig/vultisig-sdk/issues/611))
+
+- [#606](https://github.com/vultisig/vultisig-sdk/pull/606) [`04cd9e3`](https://github.com/vultisig/vultisig-sdk/commit/04cd9e3881cb0e8cab5b1783be6e8d86970001d6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add optional `appId` to push device registration (`registerDevice`). Apps that
+  share a vault with the regular wallet (e.g. Station, `money.terra.station`) can
+  now register/unregister under their own bundle id, so the notification service
+  routes their pushes to the correct app instead of the wallet that shares the
+  vault. The field is optional and omitted by default, so existing wallet
+  registrations are unchanged.
+
 ## 1.5.0
 
 ### Minor Changes

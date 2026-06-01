@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1429,6 +1429,11 @@
       "types": "./dist/swap/native/asset/toNativeSwapAsset.d.ts",
       "import": "./dist/swap/native/asset/toNativeSwapAsset.js",
       "default": "./dist/swap/native/asset/toNativeSwapAsset.js"
+    },
+    "./swap/native/minimum/getNativeSwapMinAmountIn": {
+      "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
+      "import": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js",
+      "default": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js"
     },
     "./swap/native/nativeSwapAffiliateConfig": {
       "types": "./dist/swap/native/nativeSwapAffiliateConfig.d.ts",
