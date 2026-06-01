@@ -29,6 +29,12 @@ vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
   getNativeSwapQuote: vi.fn(),
 }))
 
+// Keep the proactive THORChain minimum hermetic — no live inbound_addresses /
+// pool fetches in unit tests. `null` = "no proactive signal" (#604).
+vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
+  getNativeSwapMinAmountIn: vi.fn().mockResolvedValue(null),
+}))
+
 describe('findSwapQuote Kyber affiliate fee', () => {
   it('passes effective affiliate BPS after VULT discount', async () => {
     const expectedBps = getSwapAffiliateBps('gold')

@@ -1430,6 +1430,11 @@
       "import": "./dist/swap/native/asset/toNativeSwapAsset.js",
       "default": "./dist/swap/native/asset/toNativeSwapAsset.js"
     },
+    "./swap/native/minimum/getNativeSwapMinAmountIn": {
+      "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
+      "import": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js",
+      "default": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js"
+    },
     "./swap/native/nativeSwapAffiliateConfig": {
       "types": "./dist/swap/native/nativeSwapAffiliateConfig.d.ts",
       "import": "./dist/swap/native/nativeSwapAffiliateConfig.js",
