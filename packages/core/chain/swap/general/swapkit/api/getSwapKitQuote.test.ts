@@ -1,6 +1,11 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import type { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import {
+  SwapKitAmountBelowMinimumError,
+  SwapKitNoEligibleRoutesError,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
+import { resetSwapKitProvidersCache } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { networks, payments, Psbt } from 'bitcoinjs-lib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -791,5 +796,51 @@ describe('getSwapKitQuote', () => {
         },
       },
     })
+  })
+
+  it('reclassifies noRoutesFound to an amount-below-minimum error when the pair is structurally supported (#4418)', async () => {
+    resetSwapKitProvidersCache()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/providers')) {
+        return response([{ provider: 'NEAR', enabledChainIds: ['bitcoincash', '1'] }])
+      }
+      return response({ error: 'noRoutesFound', message: 'No routes found for BCH.BCH -> ETH.ETH' }, false, 404)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
+
+    // The issue #3987 pair: BCH -> ETH at a below-minimum amount. SwapKit only
+    // returns noRoutesFound (no providerErrors), but NEAR structurally supports
+    // the pair, so we surface an actionable amount error instead of "no route".
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.BitcoinCash, address: 'bitcoincash:qsource', ticker: 'BCH', decimals: 8 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_150_000n,
+      })
+    ).rejects.toBeInstanceOf(SwapKitAmountBelowMinimumError)
+  })
+
+  it('rethrows the no-eligible-routes error when the pair is not structurally supported', async () => {
+    resetSwapKitProvidersCache()
+    const fetchMock = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.endsWith('/providers')) {
+        // No provider co-enables litecoin + ETH, so the pair is genuinely unsupported.
+        return response([{ provider: 'NEAR', enabledChainIds: ['1', 'solana'] }])
+      }
+      return response({ error: 'noRoutesFound' }, false, 404)
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: undefined, baseUrl: 'https://api.vultisig.com/swapkit-win' })
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Litecoin, address: 'ltc1qsource', ticker: 'LTC', decimals: 8 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1000n,
+      })
+    ).rejects.toBeInstanceOf(SwapKitNoEligibleRoutesError)
   })
 })

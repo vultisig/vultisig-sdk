@@ -1,5 +1,107 @@
 # @vultisig/core-mpc
 
+## 1.3.5
+
+### Patch Changes
+
+- Updated dependencies [[`9e405c9`](https://github.com/vultisig/vultisig-sdk/commit/9e405c9459713c5391ca6a85a548eb3750ec2872)]:
+  - @vultisig/core-chain@2.8.0
+
+## 1.3.4
+
+### Patch Changes
+
+- Updated dependencies [[`1bf8a6d`](https://github.com/vultisig/vultisig-sdk/commit/1bf8a6d36788b702092d92918294d67cdc6e11b7), [`d1c12b2`](https://github.com/vultisig/vultisig-sdk/commit/d1c12b24bc55a318a8f87998d2320651f875b00a)]:
+  - @vultisig/core-chain@2.7.0
+
+## 1.3.3
+
+### Patch Changes
+
+- [#584](https://github.com/vultisig/vultisig-sdk/pull/584) [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(cowswap): add CowSwap RFQ as swap provider for same-chain EVM trades (phase 1 sdk scaffold)
+
+  New `cowswap` module under `packages/core/chain/swap/general/cowswap/`:
+  - `config.ts` - chain configs (Ethereum, Arbitrum, Base, Avalanche), static EIP-2612 permit allowlist, app code / affiliate constants
+  - `types.ts` - CowSwap API response types
+  - `sign/buildCowSwapOrder.ts` - builds the EIP-712 CowSwap order struct; exports `buildCowSwapAppData` and `keccak256Hex` (uses viem)
+  - `sign/buildEip712Domain.ts` - EIP-712 domain for GPv2 settlement contract
+  - `api/getCowSwapQuote.ts` - POSTs to `/api/v1/quote`, returns `GeneralSwapQuote` with new `cowswap_order` tx arm
+  - `api/submitCowSwapOrder.ts` - POSTs signed order to `/api/v1/orders`
+  - `api/getCowSwapOrderStatus.ts` - polls order status
+  - `permit/buildEip2612Permit.ts` - builds EIP-2612 permit typed data for permit-eligible sell tokens
+
+  `GeneralSwapTx` union extended with `cowswap_order` arm.
+  `GeneralSwapProvider` extended with `'cowswap'`.
+  CowSwap is intentionally NOT registered as a live `findSwapQuote` fetcher (nor in
+  `aggregatorPreferenceOrder`) in phase 1 — the consumer build/sign path is wired in phase 2.
+  All `matchRecordUnion` call-sites over `GeneralSwapTx` updated for exhaustiveness.
+
+  No live fetcher registration, no mcp-ts wiring, no app UI changes. Consumer (mcp-ts) is responsible for USD threshold gating in phase 2.
+
+- [#584](https://github.com/vultisig/vultisig-sdk/pull/584) [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+- Updated dependencies [[`5bb56a4`](https://github.com/vultisig/vultisig-sdk/commit/5bb56a4daba8b896626c54fabd94fd6c9a35320e), [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585), [`c4b4560`](https://github.com/vultisig/vultisig-sdk/commit/c4b45604f043700068aaf1c3c1a1ecad5c8a874f), [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585), [`880cde0`](https://github.com/vultisig/vultisig-sdk/commit/880cde00a5978e8a4dff2cf8adb627059e4af5bf), [`5d11cf3`](https://github.com/vultisig/vultisig-sdk/commit/5d11cf3bfb81aba929fe8e81bb77e7aebff15129)]:
+  - @vultisig/core-chain@2.6.0
+
+## 1.3.2
+
+### Patch Changes
+
+- Updated dependencies [[`8932aff`](https://github.com/vultisig/vultisig-sdk/commit/8932afffbdd57112b9b8e59ac2e909e1654f54a3), [`88cd323`](https://github.com/vultisig/vultisig-sdk/commit/88cd3235ea463112d378d5e5a2c32aacabe08ab0)]:
+  - @vultisig/core-chain@2.5.0
+
+## 1.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`47860fc`](https://github.com/vultisig/vultisig-sdk/commit/47860fcc6a1fa3600c20b529d29af98d56cbc5b4)]:
+  - @vultisig/core-chain@2.4.1
+
+## 1.3.0
+
+### Minor Changes
+
+- [#583](https://github.com/vultisig/vultisig-sdk/pull/583) [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(cardano): attach CIP-20 label-674 metadata when memo is provided
+
+  Cardano direct sends with a non-empty memo now embed the memo as
+  CIP-20 on-chain metadata (`{ 674: { "msg": [...] } }`) instead of
+  silently dropping it.
+
+  Implementation:
+  - `buildCip20AuxData` encodes the memo into CIP-20 CBOR and computes
+    the blake2b-256 aux data hash
+  - `patchTxBodyWithAuxHash` byte-patches the WalletCore-produced tx body
+    to include the auxiliary_data_hash at key 7 (CBOR map header bump)
+  - `getPreSigningHashes` for Cardano now returns blake2b of the PATCHED
+    body when a memo is present, so all MPC devices sign the correct hash
+  - `compileTx` for Cardano re-derives the pre-signing output, patches
+    the body when memo is present, and passes auxDataCbor to
+    buildSignedCardanoTx so element [3] carries the metadata
+  - `getCardanoChainSpecific` bumps the forced fee by 44 \* len(auxDataCbor)
+    to account for the extra bytes WalletCore cannot anticipate
+  - Sends without memo are byte-identical to the pre-fix behavior
+
+### Patch Changes
+
+- [#583](https://github.com/vultisig/vultisig-sdk/pull/583) [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+- Updated dependencies [[`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31)]:
+  - @vultisig/core-chain@2.4.0
+
 ## 1.2.23
 
 ### Patch Changes

@@ -3,6 +3,8 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
+import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -18,11 +20,17 @@ import {
   swapKitEnabledChains,
   swapKitSourceChains,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import {
+  getNativeSwapMinAmountIn,
+  NativeSwapMinAmountIn,
+} from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
@@ -50,7 +58,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   affiliateConfig?: SwapAffiliateConfig
 }
 
-type SwapQuoteProviderName = 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -97,6 +105,18 @@ const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderName
 
 const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
 
+const QUOTE_FETCH_TIMEOUT_MS = 30_000
+
+const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`swap quote fetch timed out after ${ms}ms`)), ms)
+  })
+  return Promise.race([p, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId)
+  })
+}
+
 /**
  * Declared preference order for AGGREGATOR ties — when two aggregators return
  * identical `outputAmount`, the earlier entry wins. This makes the tie-break
@@ -112,6 +132,9 @@ const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderNa
  * @internal Exported for unit-test introspection only.
  */
 export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  // 'CowSwap' intentionally omitted in Phase 1 — see fetcher-registration
+  // comment lower in this file. Will be added (and slotted first for the
+  // large-trade RFQ benefit) when Phase 2 wires the build/sign path.
   'KyberSwap',
   '1inch',
   'LiFi',
@@ -215,7 +238,8 @@ export const findSwapQuote = async ({
     nativeAffiliateFeeAddress !== undefined &&
     nativeAffiliateFeeAddress !== nativeAffiliateFeeAddress.toLowerCase()
   ) {
-    throw new Error(
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
       `THORName affiliateFeeAddress must be lowercase. THORChain memo parsing is case-sensitive. Using "${nativeAffiliateFeeAddress}" will silently break affiliate fee routing.`
     )
   }
@@ -262,6 +286,20 @@ export const findSwapQuote = async ({
     const fromChain = from.chain
     const toChain = to.chain
     const chainAmount = amount
+
+    // CowSwap: Phase 1 (SDK scaffold only). NOT registered as a live fetcher
+    // until Phase 2 wires the build/sign path through `getCowSwapOrder` +
+    // `submitCowSwapOrder` (the off-chain order flow, see #471). Registering
+    // here while the consumer pipeline can't sign would let CowSwap win a
+    // quote and then fail at sign time. The cowswap module + types + tests
+    // remain in this PR so Phase 2 only needs to plug in the fetcher block
+    // here and the consumer-side dispatch in mcp-ts. (#584 round-1 — Ehsan)
+    //
+    // void-imports so the dead-code linter doesn't gripe; they're used by
+    // sibling tests + ensure the module compiles cleanly.
+    void getCowSwapQuote
+    void cowSwapChainConfig
+    void cowSwapSupportedChains
 
     if (
       isOneOf(fromChain, kyberSwapEnabledChains) &&
@@ -358,17 +396,47 @@ export const findSwapQuote = async ({
   const shouldPreferGeneralSwap =
     [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) && [from.id, to.id].some(v => v)
 
+  const generalFetchers = getGeneralFetchers()
+  const nativeFetchers = getNativeFetchers()
+
   const fetchers = shouldPreferGeneralSwap
-    ? [...getGeneralFetchers(), ...getNativeFetchers()]
-    : [...getNativeFetchers(), ...getGeneralFetchers()]
+    ? [...generalFetchers, ...nativeFetchers]
+    : [...nativeFetchers, ...generalFetchers]
 
   if (isEmpty(fetchers)) {
     throw new NoSwapRoutesError()
   }
 
+  // Proactive THORChain minimum (#604). Derived from the destination chain's
+  // `outbound_fee` and spot pool prices, this yields an actionable threshold
+  // instead of a generic "no route" for sub-minimum amounts. Computed only when
+  // a native protocol can route AND we actually need it (sole-family pre-flight
+  // or the all-fail path) — never on every quote — so valid swaps pay no extra
+  // network cost. Resolves to `null` when not determinable.
+  const computeNativeMin = (): Promise<NativeSwapMinAmountIn | null> =>
+    matchingSwapChains.includes(Chain.THORChain)
+      ? getNativeSwapMinAmountIn({ from, to, swapChain: Chain.THORChain })
+      : Promise.resolve(null)
+
+  // Eager short-circuit ONLY when THORChain is the *sole* possible route: no
+  // aggregators AND no MayaChain. We only compute a proactive minimum for
+  // THORChain (`computeNativeMin`), so if any other family can route — an
+  // aggregator (SwapKit/Chainflip) or MayaChain (its own, possibly lower
+  // minimum) — short-circuiting on THORChain's number would wrongly reject an
+  // amount they could fill. Multi-provider pairs let every provider run and
+  // only fall back to the computed minimum if they all fail. (#604, CodeRabbit)
+  const thorIsSoleRoute =
+    generalFetchers.length === 0 && matchingSwapChains.length === 1 && matchingSwapChains[0] === Chain.THORChain
+  if (thorIsSoleRoute) {
+    const nativeMin = await computeNativeMin()
+    if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
+      throw belowNativeMinimumError(nativeMin, from)
+    }
+  }
+
   const settled = await Promise.allSettled(
     fetchers.map(async (fetcher): Promise<RankedSwapQuote> => {
-      const quote = await fetcher.fetch()
+      const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
         outputAmount: getComparableOutputAmount(quote, to),
@@ -396,6 +464,7 @@ export const findSwapQuote = async ({
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
+    // 'CowSwap' omitted in Phase 1 (no live fetcher — see comment higher up).
     'KyberSwap',
     '1inch',
     'LiFi',
@@ -415,7 +484,26 @@ export const findSwapQuote = async ({
     )
   }
 
+  // Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
+  // pool ragnarok, churn). The quote API then rejects EVERY amount with
+  // "trading is halted" — an operational state, not an amount problem. Detect it
+  // so we surface a "temporarily unavailable" message instead of the misleading
+  // generic "no route" (which reads like the pair is unsupported). Also match the
+  // "trading paused" wordings emitted by the THOR halt helpers in
+  // `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
+  // `<chain> chain trading paused`). (#604, CodeRabbit)
+  const isTradingHaltedMsg = (msg: string) => {
+    const lower = msg.toLowerCase()
+    return (
+      lower.includes('halted') ||
+      lower.includes('trading halt') ||
+      lower.includes('trading paused') ||
+      lower.includes('trading is paused')
+    )
+  }
+
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
+  const haltedProviders = new Set<SwapQuoteProviderName>()
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -425,8 +513,15 @@ export const findSwapQuote = async ({
 
     const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
 
-    if (isInError(result.reason, 'dust threshold') || isInError(result.reason, 'amount less than')) {
-      throw new Error('Swap amount too small. Please increase the amount to proceed.')
+    // SwapKit raises this only after confirming the pair is structurally
+    // supported, so it is unambiguously an amount problem (#4418). Reuse the
+    // same copy as the THORChain dust-threshold path.
+    if (
+      result.reason instanceof SwapKitAmountBelowMinimumError ||
+      isInError(result.reason, 'dust threshold') ||
+      isInError(result.reason, 'amount less than')
+    ) {
+      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
 
     if (isBelowMinimumMsg(msg)) {
@@ -434,6 +529,10 @@ export const findSwapQuote = async ({
       if (!belowMinimumByProvider.has(providerName)) {
         belowMinimumByProvider.set(providerName, msg)
       }
+    }
+
+    if (isTradingHaltedMsg(msg)) {
+      haltedProviders.add(fetchers[i].providerName)
     }
   }
 
@@ -443,7 +542,31 @@ export const findSwapQuote = async ({
     const belowMinimumMessage = preferred
       ? belowMinimumByProvider.get(preferred)!
       : [...belowMinimumByProvider.values()][0]
-    throw new Error(`Amount below the minimum required by a swap provider. ${belowMinimumMessage}`)
+    throw new SwapError(
+      SwapErrorCode.AmountBelowMinimum,
+      `Amount below the minimum required by a swap provider. ${belowMinimumMessage}`
+    )
+  }
+
+  // Trading-halt takes precedence over the speculative computed minimum and the
+  // generic fallback: when a native protocol reports a halt, NO amount can route,
+  // so telling the user to "increase the amount" would be actively misleading. A
+  // genuine provider-reported below-minimum (handled above) still wins, since
+  // that provider is responding and the amount is the actionable lever. (#604)
+  if (haltedProviders.size > 0) {
+    throw new SwapError(
+      SwapErrorCode.TradingHalted,
+      `This swap route is temporarily unavailable — trading is halted on ${[...haltedProviders].join(', ')}. Please try again later.`
+    )
+  }
+
+  // No provider returned a parseable below-minimum hint. Before falling back to
+  // the generic "no route" message, check the proactively-computed THORChain
+  // minimum: providers reject sub-minimum swaps with wordings we can't reliably
+  // match, so the computed threshold is the authoritative signal here (#604).
+  const nativeMin = await computeNativeMin()
+  if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
+    throw belowNativeMinimumError(nativeMin, from)
   }
 
   const failedProviders = settled
@@ -456,5 +579,28 @@ export const findSwapQuote = async ({
     })
     .filter((providerName): providerName is SwapQuoteProviderName => providerName !== null)
 
-  throw new Error(`No swap route found after trying ${failedProviders.join(', ')}.`)
+  // Instrument the fallback (#604): the raw provider messages are the only way
+  // to learn which sub-minimum/error wordings still slip through. Logging them
+  // makes future classification data-driven instead of guessed.
+  const rawProviderErrors = settled
+    .map((result, index) =>
+      result.status === 'rejected'
+        ? `${fetchers[index].providerName}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+        : null
+    )
+    .filter((entry): entry is string => entry !== null)
+  console.warn(
+    `[findSwapQuote] no route for ${from.ticker} -> ${to.ticker}; raw provider errors: ${rawProviderErrors.join(' | ')}`
+  )
+
+  throw new SwapError(
+    SwapErrorCode.AllProvidersFailed,
+    `No swap route found after trying ${failedProviders.join(', ')}.`
+  )
 }
+
+const belowNativeMinimumError = (min: NativeSwapMinAmountIn, from: AccountCoin): SwapError =>
+  new SwapError(
+    SwapErrorCode.AmountBelowMinimum,
+    `Amount is below the minimum for this swap. Minimum is ~${min.minAmountInHuman} ${from.ticker}. Please increase the amount.`
+  )

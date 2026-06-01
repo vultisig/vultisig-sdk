@@ -20,6 +20,7 @@ import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -515,24 +516,37 @@ export class SwapService {
 
     const message = error instanceof Error ? error.message : String(error)
 
-    // Check for known error patterns
-    if (message.includes('No swap routes') || message.includes('NoSwapRoutesError')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'No swap route found between these tokens. Try a different pair or provider.',
-        error instanceof Error ? error : undefined
-      )
+    if (error instanceof SwapError) {
+      switch (error.code) {
+        case SwapErrorCode.NoRoutesFound:
+        case SwapErrorCode.AllProvidersFailed:
+          return new VaultError(
+            VaultErrorCode.InvalidConfig,
+            'No swap route found between these tokens. Try a different pair or provider.',
+            error
+          )
+        case SwapErrorCode.AmountTooSmall:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap amount too small: ${message}`, error)
+        case SwapErrorCode.AmountBelowMinimum:
+          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+        case SwapErrorCode.TradingHalted:
+          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+        case SwapErrorCode.InvalidConfig:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap configuration error: ${message}`, error)
+        default: {
+          // Exhaustiveness guard: TS fails the build if a new SwapErrorCode is
+          // added without a case here. Without it, an unmapped code would
+          // silently fall through to the generic `Swap failed` handler below
+          // and lose its typed mapping. At runtime we still return a VaultError
+          // (never throw from this catch-all) using the SwapError's own message.
+          const _exhaustive: never = error.code
+          void _exhaustive
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap failed: ${message}`, error)
+        }
+      }
     }
 
-    if (message.includes('amount too small') || message.includes('not enough asset')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Swap amount too small: ${message}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-
-    if (message.includes('insufficient')) {
+    if (message.includes('not enough asset') || message.includes('insufficient')) {
       return new VaultError(
         VaultErrorCode.InvalidConfig,
         `Insufficient funds: ${message}`,

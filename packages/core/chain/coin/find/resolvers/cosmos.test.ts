@@ -338,4 +338,36 @@ describe('findCosmosCoins', () => {
     ).resolves.toEqual([])
     expect(getAllBalancesMock).not.toHaveBeenCalled()
   })
+
+  // Osmosis is now in AUTO_DISCOVERY_CHAINS - pin that it actually invokes
+  // balance discovery rather than returning an empty list.
+  it('auto-discovers Osmosis IBC balances (Chain.Osmosis now in AUTO_DISCOVERY_CHAINS)', async () => {
+    const atomHash = 'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2'
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'uosmo', amount: '1000000' },
+      { denom: atomHash, amount: '500000' },
+    ])
+    getCosmosTokenMetadataMock.mockResolvedValue({
+      ticker: 'ATOM',
+      decimals: 6,
+      logo: 'atom',
+      priceProviderId: 'cosmos',
+    })
+
+    const coins = await findCosmosCoins({
+      address: 'osmo1address',
+      chain: Chain.Osmosis,
+    })
+
+    expect(getAllBalancesMock).toHaveBeenCalled()
+    expect(coins).toEqual([
+      expect.objectContaining({
+        id: atomHash,
+        chain: Chain.Osmosis,
+        decimals: 6,
+        ticker: 'ATOM',
+        priceProviderId: 'cosmos',
+      }),
+    ])
+  })
 })

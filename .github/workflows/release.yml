@@ -29,6 +29,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       should_publish: ${{ steps.version.outputs.should_publish }}
+      should_tag_release: ${{ steps.version.outputs.should_tag_release }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
@@ -73,6 +74,7 @@ jobs:
           )
 
           SHOULD_PUBLISH=false
+          SHOULD_TAG_RELEASE=false
 
           for PKG_PATH in "${PACKAGES[@]}"; do
             PKG_NAME=$(node -p "require('./${PKG_PATH}/package.json').name")
@@ -83,6 +85,9 @@ jobs:
 
             if [ "$PKG_LOCAL" != "$PKG_NPM" ]; then
               SHOULD_PUBLISH=true
+              if [ "$PKG_NAME" = "@vultisig/sdk" ]; then
+                SHOULD_TAG_RELEASE=true
+              fi
             fi
           done
 
@@ -93,6 +98,7 @@ jobs:
             echo "Unpublished packages found, proceeding with publish"
             echo "should_publish=true" >> $GITHUB_OUTPUT
           fi
+          echo "should_tag_release=$SHOULD_TAG_RELEASE" >> $GITHUB_OUTPUT
 
       - name: Upload SDK dist
         uses: actions/upload-artifact@v7
@@ -260,8 +266,8 @@ jobs:
   # ============ JOB 4: Tag + GitHub Release ============
   tag-and-release:
     name: Tag & GitHub Release
-    needs: [build, test]
-    if: needs.build.outputs.should_publish == 'true'
+    needs: [build, test, publish]
+    if: needs.build.outputs.should_tag_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -271,9 +277,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v4
 
       - name: Create and push tag
+        id: tag
         run: |
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists, skipping tag creation"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Remote tag v$VERSION already exists, skipping tag creation"
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -281,7 +288,19 @@ jobs:
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
 
+      - name: Check existing GitHub Release
+        id: github_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
+        if: steps.github_release.outputs.exists != 'true'
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v2
         with:
           tag_name: v${{ env.VERSION }}
@@ -291,13 +310,15 @@ jobs:
 
   # ============ JOB 5: Deploy Vercel ============
   deploy-vercel:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: needs.build.outputs.should_tag_release == 'true'
     uses: ./.github/workflows/deploy-vercel.yml
     secrets: inherit
 
   # ============ JOB 6: Sync Docs ============
   sync-docs:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: needs.build.outputs.should_tag_release == 'true'
     uses: ./.github/workflows/sync-docs.yml
     with:
       version: ${{ needs.build.outputs.version }}
@@ -305,14 +326,15 @@ jobs:
 
   # ============ JOB 7: Sync Skills ============
   sync-skills:
-    needs: [build, test]
+    needs: [build, test, publish]
+    if: needs.build.outputs.should_tag_release == 'true'
     uses: ./.github/workflows/sync-skills.yml
     secrets: inherit
 
   # ============ JOB 8: Discord Notify ============
   notify:
     needs: [build, test, publish, tag-and-release, deploy-vercel, sync-docs, sync-skills]
-    if: always() && needs.build.outputs.should_publish == 'true'
+    if: always() && needs.build.outputs.should_tag_release == 'true'
     uses: ./.github/workflows/notify-discord.yml
     with:
       version: ${{ needs.build.outputs.version }}

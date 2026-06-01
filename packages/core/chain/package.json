@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.3.2",
+  "version": "2.8.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -974,6 +974,11 @@
       "import": "./dist/coin/price/queryCoingeickoPricesWithChange.js",
       "default": "./dist/coin/price/queryCoingeickoPricesWithChange.js"
     },
+    "./coin/price/resolveTokenPriceId": {
+      "types": "./dist/coin/price/resolveTokenPriceId.d.ts",
+      "import": "./dist/coin/price/resolveTokenPriceId.js",
+      "default": "./dist/coin/price/resolveTokenPriceId.js"
+    },
     "./coin/token/metadata": {
       "types": "./dist/coin/token/metadata/index.d.ts",
       "import": "./dist/coin/token/metadata/index.js",
@@ -1260,6 +1265,46 @@
       "import": "./dist/swap/discount/SwapDiscount.js",
       "default": "./dist/swap/discount/SwapDiscount.js"
     },
+    "./swap/general/cowswap/api/getCowSwapOrderStatus": {
+      "types": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.d.ts",
+      "import": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.js",
+      "default": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.js"
+    },
+    "./swap/general/cowswap/api/getCowSwapQuote": {
+      "types": "./dist/swap/general/cowswap/api/getCowSwapQuote.d.ts",
+      "import": "./dist/swap/general/cowswap/api/getCowSwapQuote.js",
+      "default": "./dist/swap/general/cowswap/api/getCowSwapQuote.js"
+    },
+    "./swap/general/cowswap/api/submitCowSwapOrder": {
+      "types": "./dist/swap/general/cowswap/api/submitCowSwapOrder.d.ts",
+      "import": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js",
+      "default": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js"
+    },
+    "./swap/general/cowswap/config": {
+      "types": "./dist/swap/general/cowswap/config.d.ts",
+      "import": "./dist/swap/general/cowswap/config.js",
+      "default": "./dist/swap/general/cowswap/config.js"
+    },
+    "./swap/general/cowswap/permit/buildEip2612Permit": {
+      "types": "./dist/swap/general/cowswap/permit/buildEip2612Permit.d.ts",
+      "import": "./dist/swap/general/cowswap/permit/buildEip2612Permit.js",
+      "default": "./dist/swap/general/cowswap/permit/buildEip2612Permit.js"
+    },
+    "./swap/general/cowswap/sign/buildCowSwapOrder": {
+      "types": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.d.ts",
+      "import": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js",
+      "default": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js"
+    },
+    "./swap/general/cowswap/sign/buildEip712Domain": {
+      "types": "./dist/swap/general/cowswap/sign/buildEip712Domain.d.ts",
+      "import": "./dist/swap/general/cowswap/sign/buildEip712Domain.js",
+      "default": "./dist/swap/general/cowswap/sign/buildEip712Domain.js"
+    },
+    "./swap/general/cowswap/types": {
+      "types": "./dist/swap/general/cowswap/types.d.ts",
+      "import": "./dist/swap/general/cowswap/types.js",
+      "default": "./dist/swap/general/cowswap/types.js"
+    },
     "./swap/general/GeneralSwapProvider": {
       "types": "./dist/swap/general/GeneralSwapProvider.d.ts",
       "import": "./dist/swap/general/GeneralSwapProvider.js",
@@ -1355,6 +1400,16 @@
       "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
       "default": "./dist/swap/general/swapkit/SwapKitEnabledChains.js"
     },
+    "./swap/general/swapkit/SwapKitErrors": {
+      "types": "./dist/swap/general/swapkit/SwapKitErrors.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitErrors.js",
+      "default": "./dist/swap/general/swapkit/SwapKitErrors.js"
+    },
+    "./swap/general/swapkit/SwapKitProviders": {
+      "types": "./dist/swap/general/swapkit/SwapKitProviders.d.ts",
+      "import": "./dist/swap/general/swapkit/SwapKitProviders.js",
+      "default": "./dist/swap/general/swapkit/SwapKitProviders.js"
+    },
     "./swap/keysign/getSwapDestinationAddress": {
       "types": "./dist/swap/keysign/getSwapDestinationAddress.d.ts",
       "import": "./dist/swap/keysign/getSwapDestinationAddress.js",
@@ -1374,6 +1429,11 @@
       "types": "./dist/swap/native/asset/toNativeSwapAsset.d.ts",
       "import": "./dist/swap/native/asset/toNativeSwapAsset.js",
       "default": "./dist/swap/native/asset/toNativeSwapAsset.js"
+    },
+    "./swap/native/minimum/getNativeSwapMinAmountIn": {
+      "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
+      "import": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js",
+      "default": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.js"
     },
     "./swap/native/nativeSwapAffiliateConfig": {
       "types": "./dist/swap/native/nativeSwapAffiliateConfig.d.ts",
@@ -1425,10 +1485,20 @@
       "import": "./dist/swap/swapEnabledChains.js",
       "default": "./dist/swap/swapEnabledChains.js"
     },
+    "./swap/SwapError": {
+      "types": "./dist/swap/SwapError.d.ts",
+      "import": "./dist/swap/SwapError.js",
+      "default": "./dist/swap/SwapError.js"
+    },
     "./swap/SwapFee": {
       "types": "./dist/swap/SwapFee.d.ts",
       "import": "./dist/swap/SwapFee.js",
       "default": "./dist/swap/SwapFee.js"
+    },
+    "./swap/utils/getSwapExplorerUrl": {
+      "types": "./dist/swap/utils/getSwapExplorerUrl/index.d.ts",
+      "import": "./dist/swap/utils/getSwapExplorerUrl/index.js",
+      "default": "./dist/swap/utils/getSwapExplorerUrl/index.js"
     },
     "./tw/signingOutput": {
       "types": "./dist/tw/signingOutput.d.ts",
@@ -1741,7 +1811,6 @@
     "cbor-x": "^1.6.4",
     "date-fns": "^4.1.0",
     "ethers": "^6.16.0",
-    "i18next": "^26.0.8",
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.51.0",
     "xrpl": "^4.6.0"

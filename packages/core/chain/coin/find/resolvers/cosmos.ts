@@ -8,7 +8,12 @@ import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
 import { without } from '@vultisig/lib-utils/array/without'
 
-const AUTO_DISCOVERY_CHAINS = new Set<CosmosChain>([CosmosChain.THORChain, CosmosChain.Terra, CosmosChain.TerraClassic])
+const AUTO_DISCOVERY_CHAINS = new Set<CosmosChain>([
+  CosmosChain.THORChain,
+  CosmosChain.Terra,
+  CosmosChain.TerraClassic,
+  CosmosChain.Osmosis,
+])
 
 type DiscoveredDenom = {
   denom: string
