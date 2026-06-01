@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { aggregatorPreferenceOrder } from '../findSwapQuote'
+import { providerPreferenceOrder } from '../findSwapQuote'
 
 // Phase 1 (SDK scaffold only) — CowSwap is deliberately NOT registered as a
 // live fetcher in `findSwapQuote` until Phase 2 wires the build/sign path
@@ -12,8 +12,8 @@ import { aggregatorPreferenceOrder } from '../findSwapQuote'
 // during a future merge would be caught here, not by a user.
 
 describe('CowSwap — Phase 1 invariants (#471 / #584)', () => {
-  it('aggregatorPreferenceOrder does NOT include CowSwap until Phase 2', () => {
-    expect(aggregatorPreferenceOrder.includes('CowSwap' as never)).toBe(false)
+  it('providerPreferenceOrder does NOT include CowSwap until Phase 2', () => {
+    expect(providerPreferenceOrder.includes('CowSwap' as never)).toBe(false)
   })
 
   it('cowswap module is importable and the scaffolded helpers exist', async () => {

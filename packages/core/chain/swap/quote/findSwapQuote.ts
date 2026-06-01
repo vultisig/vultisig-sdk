@@ -71,40 +71,6 @@ type RankedSwapQuote = {
   providerName: SwapQuoteProviderName
 }
 
-/**
- * Hard native priority: when any direct THORChain or MayaChain route is available,
- * it is always preferred over any aggregator (SwapKit, LiFi, etc.) regardless of
- * gross output. When both THOR and Maya succeed, the one with the higher comparable
- * output wins; among aggregator-only results the normal output ranking applies.
- *
- * Rationale (paaao, 2026-05-22): for L1 swaps that native protocols serve directly,
- * the protocol-aligned route is always preferred. Direct routes capture full
- * vultisig affiliate revenue and avoid the aggregator fee skim; the protocol is
- * the moat. Mirrors the priority-first-success pattern in vultisig-ios's
- * `SwapService.fetchQuote` + `Coin+Swaps.swapProviders`.
- */
-
-/**
- * Native swap providers — direct on-chain protocols (no aggregator layer).
- *
- * Adding a new native protocol (e.g. Chainflip-direct in the future) requires:
- *   1. Adding its name to `SwapQuoteProviderName` above
- *   2. Adding it here so `isNativeProvider` recognises it for hard-priority
- *      selection in `selectBestEligibleQuote`
- *   3. Wiring its fetcher into `getNativeFetchers`
- *
- * The `satisfies` clause gives compile-time safety against typos, but the
- * semantic mapping (which providers count as "native") still lives in this
- * file and must be kept aligned with the protocol's actual integration mode.
- */
-const nativeProviderNames = ['THORChain', 'MayaChain'] as const satisfies readonly SwapQuoteProviderName[]
-
-type NativeProviderName = (typeof nativeProviderNames)[number]
-
-const nativeProviderNamesSet = new Set<SwapQuoteProviderName>(nativeProviderNames)
-
-const isNativeProvider = (name: SwapQuoteProviderName): name is NativeProviderName => nativeProviderNamesSet.has(name)
-
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
 
 const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
@@ -118,35 +84,41 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
 }
 
 /**
- * Declared preference order for AGGREGATOR ties — when two aggregators return
- * identical `outputAmount`, the earlier entry wins. This makes the tie-break
- * explicit (the previous implementation tied via `fetchers[]` array index,
- * which was determined dynamically by `shouldPreferGeneralSwap` and therefore
- * harder to reason about). Native providers (THORChain/MayaChain) bypass this
- * because they have hard priority over aggregators regardless of output.
+ * Declared preference order for economically equivalent quotes. Quotes are
+ * first ranked by comparable net output across all providers. Providers within
+ * `SWAP_QUOTE_PREFERENCE_BAND_BPS` of the best output are then selected by this
+ * order, so users stay close to the best rate while near-ties prefer native
+ * routes and SwapKit economics.
  *
- * Order rationale: KyberSwap and 1inch typically surface the best on-chain
- * liquidity for EVM-only swaps; LiFi covers the broader cross-chain matrix;
- * SwapKit is the catch-all fallback. Adjust as data changes.
+ * CowSwap is intentionally omitted in Phase 1 — see fetcher-registration
+ * comment lower in this file. Add it here when the build/sign path is wired.
  *
  * @internal Exported for unit-test introspection only.
  */
-export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
-  // 'CowSwap' intentionally omitted in Phase 1 — see fetcher-registration
-  // comment lower in this file. Will be added (and slotted first for the
-  // large-trade RFQ benefit) when Phase 2 wires the build/sign path.
+export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
+  'THORChain',
+  'MayaChain',
+  'SwapKit',
   'KyberSwap',
   '1inch',
   'LiFi',
-  'SwapKit',
 ] as const
 
-const aggregatorPreferenceIndex = new Map<SwapQuoteProviderName, number>(
-  aggregatorPreferenceOrder.map((name, idx) => [name, idx])
+/** @deprecated Use `providerPreferenceOrder`. */
+export const aggregatorPreferenceOrder = providerPreferenceOrder
+
+const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
+  providerPreferenceOrder.map((name, idx) => [name, idx])
 )
 
-const getAggregatorPreferenceRank = (name: SwapQuoteProviderName): number =>
-  aggregatorPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
+const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
+  providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
+
+const SWAP_QUOTE_PREFERENCE_BAND_BPS = 100n
+const BPS_DENOMINATOR = 10_000n
+
+const isWithinPreferenceBand = (outputAmount: bigint, bestOutputAmount: bigint): boolean =>
+  outputAmount * BPS_DENOMINATOR >= bestOutputAmount * (BPS_DENOMINATOR - SWAP_QUOTE_PREFERENCE_BAND_BPS)
 
 /** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
 function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
@@ -181,44 +153,44 @@ function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
-  let bestNative: RankedSwapQuote | null = null
-  let bestAggregator: RankedSwapQuote | null = null
-  let bestAggregatorPreferenceRank = Number.POSITIVE_INFINITY
+  const candidates: RankedSwapQuote[] = []
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
-    if (result.status !== 'fulfilled') {
-      continue
-    }
-    const candidate = result.value
-
-    if (isNativeProvider(candidate.providerName)) {
-      // Among natives (THOR + Maya), prefer higher output.
-      if (bestNative === null || candidate.outputAmount > bestNative.outputAmount) {
-        bestNative = candidate
-      }
-    } else {
-      // Tie-break by declared aggregator preference (lower rank wins). This
-      // replaces the previous index-based tie-break, which was determined
-      // dynamically by `shouldPreferGeneralSwap` and therefore harder to
-      // reason about. The declared order lives in `aggregatorPreferenceOrder`
-      // above. (#521 r3 — NeO should-fix.)
-      const candidateRank = getAggregatorPreferenceRank(candidate.providerName)
-      if (
-        bestAggregator === null ||
-        candidate.outputAmount > bestAggregator.outputAmount ||
-        (candidate.outputAmount === bestAggregator.outputAmount && candidateRank < bestAggregatorPreferenceRank)
-      ) {
-        bestAggregator = candidate
-        bestAggregatorPreferenceRank = candidateRank
-      }
+    if (result.status === 'fulfilled') {
+      candidates.push(result.value)
     }
   }
 
-  // Hard THORChain/Maya priority: if any native route exists, always prefer it
-  // over any aggregator route. Mirrors vultisig-ios's priority-first-success
-  // pattern. No output comparison between native and aggregator.
-  return (bestNative ?? bestAggregator)?.quote ?? null
+  if (candidates.length === 0) {
+    return null
+  }
+
+  const bestOutputAmount = candidates.reduce(
+    (best, candidate) => (candidate.outputAmount > best ? candidate.outputAmount : best),
+    candidates[0].outputAmount
+  )
+
+  let selected: RankedSwapQuote | null = null
+  let selectedPreferenceRank = Number.POSITIVE_INFINITY
+
+  for (const candidate of candidates) {
+    if (!isWithinPreferenceBand(candidate.outputAmount, bestOutputAmount)) {
+      continue
+    }
+
+    const candidatePreferenceRank = getProviderPreferenceRank(candidate.providerName)
+    if (
+      selected === null ||
+      candidatePreferenceRank < selectedPreferenceRank ||
+      (candidatePreferenceRank === selectedPreferenceRank && candidate.outputAmount > selected.outputAmount)
+    ) {
+      selected = candidate
+      selectedPreferenceRank = candidatePreferenceRank
+    }
+  }
+
+  return selected?.quote ?? null
 }
 
 export const findSwapQuote = async ({
