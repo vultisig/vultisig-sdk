@@ -1014,6 +1014,11 @@
       "import": "./dist/coin/token/metadata/resolvers/solana.js",
       "default": "./dist/coin/token/metadata/resolvers/solana.js"
     },
+    "./coin/token/metadata/resolvers/ton": {
+      "types": "./dist/coin/token/metadata/resolvers/ton.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/ton.js",
+      "default": "./dist/coin/token/metadata/resolvers/ton.js"
+    },
     "./coin/token/metadata/resolvers/tron": {
       "types": "./dist/coin/token/metadata/resolvers/tron.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/tron.js",
