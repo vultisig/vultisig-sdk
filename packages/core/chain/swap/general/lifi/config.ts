@@ -70,9 +70,11 @@ let configured = false
  * - Consumer-before-lazy: consumer wins (the only `createConfig` call).
  * - Lazy-before-consumer: lazy installs defaults, then the consumer's
  *   explicit call overwrites them via the explicit-bootstrap branch above.
- * - Consumer-after-consumer: first consumer-bootstrap call still wins for
- *   `lifiConfig` state, but the second consumer-bootstrap call re-runs
- *   `createConfig`. In practice consumers should only call this once.
+ * - Consumer-after-consumer: the latest consumer-bootstrap call overwrites
+ *   `lifiConfig` and re-runs `createConfig` (last-writer wins). In practice
+ *   consumers should only call this once. The `getLifiSwapQuote.integrator`
+ *   test `'repeated calls re-run createConfig with each new config'` pins
+ *   this contract. (Ehsan-saradar #618 r2.)
  */
 export const setupLifi = (config?: LifiBootstrapConfig): void => {
   // Consumer-bootstrap branch — always applies, regardless of `configured`.
