@@ -24,12 +24,17 @@ type GetJettonWalletInput = {
   jettonMasterAddress: string
 }
 
-/** Builds the toncenter v3 jetton wallets query URL, converting addresses to raw format. */
+/**
+ * Builds the Vultisig proxy jetton wallets query URL.
+ * The proxy expects `owner_id` + `jetton_master_id` (not `owner_address` / `jetton_address`).
+ * Using the wrong param names returns an empty array without an error, silently
+ * making every jetton balance call return 0 and every transfer fail with "no jetton wallet".
+ */
 const getJettonWalletsUrl = ({ ownerAddress, jettonMasterAddress }: GetJettonWalletInput): string => {
   const rawOwner = tonAddressToRaw(ownerAddress)
   const rawMaster = tonAddressToRaw(jettonMasterAddress)
 
-  return `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&jetton_address=${rawMaster}`
+  return `${tonApiUrl}/v3/jetton/wallets?owner_id=${rawOwner}&jetton_master_id=${rawMaster}`
 }
 
 /** Resolves the user-friendly jetton wallet address for a given owner and jetton master. */
