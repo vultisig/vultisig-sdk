@@ -44,7 +44,12 @@ describe('buildCosmosSendTx feeDenom (sdk#624)', () => {
   })
 
   it('native LUNC send: fee and send both in uluna (no regression)', () => {
-    const result = buildCosmosSendTx({ ...BASE_OPTS, denom: 'uluna', feeDenom: 'uluna', feeAmount: '100000000' })
+    const result = buildCosmosSendTx({
+      ...BASE_OPTS,
+      denom: 'uluna',
+      feeDenom: 'uluna',
+      feeAmount: '100000000',
+    })
     const authInfo = AuthInfo.decode(result.authInfoBytes)
     expect(authInfo.fee?.amount[0]?.denom).toBe('uluna')
   })

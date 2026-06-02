@@ -352,7 +352,11 @@ export type CosmosTxBuilderResult = {
    * `0x` prefix is tolerated. Anything else throws so the caller sees a
    * clear failure rather than a silently-malformed TxRaw.
    */
-  finalize: (sigHex: string) => { txRawBytes: Uint8Array; txBytesBase64: string; txHashHex: string }
+  finalize: (sigHex: string) => {
+    txRawBytes: Uint8Array
+    txBytesBase64: string
+    txHashHex: string
+  }
 }
 
 export type BuildCosmosSendOptions = {
@@ -382,7 +386,13 @@ export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilder
     : buildBankMsgSend(opts.fromAddress, opts.toAddress, opts.amount, opts.denom)
   const msgAny = wrapAny(getMsgSendTypeUrl(opts.chainName), msgSend)
   const txBodyBytes = buildTxBody(msgAny, opts.memo ?? '')
-  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom ?? opts.denom, opts.feeAmount)
+  const authInfoBytes = buildAuthInfo(
+    opts.pubKeyBytes,
+    opts.sequence,
+    opts.gasLimit,
+    opts.feeDenom ?? opts.denom,
+    opts.feeAmount
+  )
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
 
