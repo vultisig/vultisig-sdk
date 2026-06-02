@@ -55,7 +55,7 @@ export const getJettonBalance = async (input: GetJettonWalletInput): Promise<big
   const response = await queryUrl<JettonWalletResponse>(getJettonWalletsUrl(input))
 
   const balance = response.jetton_wallets[0]?.balance
-  return BigInt(balance ?? 0)
+  return BigInt(balance || '0')
 }
 
 type AddressInformationResponse = {
