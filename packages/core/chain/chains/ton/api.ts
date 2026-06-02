@@ -119,7 +119,7 @@ export type JettonMasterInfo = {
  * falling back to the on-chain TEP-64 `jetton_content` stored in the master.
  */
 export const getJettonMasterInfo = async (jettonMasterAddress: string): Promise<JettonMasterInfo> => {
-  const url = `${tonApiUrl}/v3/jetton/masters?address=${jettonMasterAddress}&limit=1`
+  const url = `${tonApiUrl}/v3/jetton/masters?address=${encodeURIComponent(jettonMasterAddress)}&limit=1`
   const response = await queryUrl<JettonMastersResponse>(url)
 
   const master = response.jetton_masters[0]
@@ -141,7 +141,8 @@ export const getJettonMasterInfo = async (jettonMasterAddress: string): Promise<
   }
 
   const decimalsRaw = indexed?.extra?.decimals ?? content?.decimals
-  const decimals = decimalsRaw !== undefined ? parseInt(decimalsRaw, 10) : 9
+  const parsedDecimals = decimalsRaw !== undefined ? parseInt(decimalsRaw, 10) : NaN
+  const decimals = Number.isFinite(parsedDecimals) ? parsedDecimals : 9
 
   // Prefer Toncenter's imgproxy URLs: the original `image` URL often serves
   // with `Cross-Origin-Resource-Policy: same-origin`, which browsers refuse
