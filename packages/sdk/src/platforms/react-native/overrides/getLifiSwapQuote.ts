@@ -21,9 +21,10 @@ import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
-import { LifiAffiliateConfig, lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
+import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { memoize } from '@vultisig/lib-utils/memoize'
 import { match } from '@vultisig/lib-utils/match'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
@@ -72,17 +73,17 @@ const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): 
 // `lifiConfig` (via core's `setupLifi(bootstrap)` or direct field writes)
 // are picked up even when those mutations happen AFTER a previous quote
 // already ran. This is the RN twin of the consumer-bootstrap fix from
-// Ehsan-saradar #618 review on the core `config.ts`.
-//
-// Cost: one extra `@lifi/sdk` `createConfig` call per quote (which itself
-// memoises against unchanged input, so the real cost is a property-equality
-// check). Worth it to avoid silently dropping consumer apiUrl proxies.
-const bootstrapLifiSdkInRN = async (): Promise<void> => {
-  const { createConfig } = await import('@lifi/sdk')
-  const integrator = lifiConfig.integratorName
-  const apiUrl = lifiConfig.apiUrl
-  createConfig(apiUrl ? { integrator, apiUrl } : { integrator })
-}
+// Lazy bootstrap — mirrors the `ensureLifiConfigured` pattern in core
+// getLifiSwapQuote.ts. Runs once (memoized); re-runs automatically when
+// `setupLifi(config)` is called with consumer config because `setupLifi`
+// calls `createConfig` itself and re-marks the SDK as configured.
+// Using `setupLifi()` (not raw `createConfig`) keeps config.ts as the
+// single source of truth for integrator/apiUrl and avoids the per-call
+// `getChains()` network round-trip that `createConfig` with
+// `preloadChains: true` (the @lifi/sdk default) would trigger.
+const ensureLifiConfiguredInRN = memoize(() => {
+  setupLifi()
+})
 
 export const getLifiSwapQuote = async ({
   amount,
@@ -90,7 +91,7 @@ export const getLifiSwapQuote = async ({
   lifiAffiliateConfig,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
-  await bootstrapLifiSdkInRN()
+  ensureLifiConfiguredInRN()
 
   const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {

@@ -229,6 +229,8 @@ export {
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
+export type { LifiBootstrapConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
