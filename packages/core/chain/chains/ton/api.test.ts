@@ -20,7 +20,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   },
 }))
 
-import { getJettonBalance,getJettonWalletAddress } from './api'
+import { getJettonBalance, getJettonWalletAddress } from './api'
 
 const OWNER = 'EQDAFuDWly4z3eA16Ej_JHpoL6CcXdt0IRUrODKKsu60HYMi'
 const MASTER = 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs' // USDT mainnet
