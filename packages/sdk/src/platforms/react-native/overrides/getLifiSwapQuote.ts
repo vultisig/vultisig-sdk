@@ -67,20 +67,22 @@ const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): 
   return resolved
 }
 
-// RN-specific bootstrap: lazy-imports `@lifi/sdk` (Hermes/polyfill workaround
-// — see top-of-file header) and forwards the current `lifiConfig` to LI.FI's
-// `createConfig`. Re-runs on every quote so consumer mutations to
-// `lifiConfig` (via core's `setupLifi(bootstrap)` or direct field writes)
-// are picked up even when those mutations happen AFTER a previous quote
-// already ran. This is the RN twin of the consumer-bootstrap fix from
-// Lazy bootstrap — mirrors the `ensureLifiConfigured` pattern in core
-// getLifiSwapQuote.ts. Runs once (memoized); re-runs automatically when
-// `setupLifi(config)` is called with consumer config because `setupLifi`
-// calls `createConfig` itself and re-marks the SDK as configured.
+// RN-specific bootstrap. Mirrors the `ensureLifiConfigured` pattern from
+// core's `getLifiSwapQuote.ts`. Runs `setupLifi()` exactly once via the
+// `memoize` wrapper; subsequent quote calls hit the cached return and skip
+// the work entirely. setupLifi's lazy branch then calls `createConfig`
+// exactly once via its own `configured` latch, so the `@lifi/sdk` default
+// `preloadChains: true` HTTP fetch fires once at first-quote time, not
+// per-quote. (NeOMakinG #618 r2 blocker.)
+//
+// Consumer-bootstrap path stays safe: an explicit
+// `setupLifi({integratorName, apiUrl})` called from a consumer app's boot
+// path overwrites `lifiConfig` and re-runs `createConfig` once at that
+// point. The memoize'd `ensureLifiConfiguredInRN` then no-ops on quotes
+// because `configured = true` is already set inside `setupLifi`.
+//
 // Using `setupLifi()` (not raw `createConfig`) keeps config.ts as the
-// single source of truth for integrator/apiUrl and avoids the per-call
-// `getChains()` network round-trip that `createConfig` with
-// `preloadChains: true` (the @lifi/sdk default) would trigger.
+// single source of truth for integrator/apiUrl.
 const ensureLifiConfiguredInRN = memoize(() => {
   setupLifi()
 })
