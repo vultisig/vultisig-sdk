@@ -127,10 +127,42 @@ describe('getLifiSwapQuote — integrator override', () => {
     expect(createConfigSpy).toHaveBeenCalledWith({ integrator: 'vultisig-0' })
   })
 
-  it('setupLifi is idempotent — second call is a no-op', () => {
+  it('lazy setupLifi() AFTER consumer setupLifi(config) is a no-op (consumer wins)', () => {
+    // The lazy path (called by ensureLifiConfigured before each getQuote)
+    // must not undo a consumer bootstrap. Once a consumer explicitly
+    // configured Station, a subsequent lazy default call should NOT
+    // re-issue createConfig with vultisig-0.
     setupLifi({ integratorName: 'station', apiUrl: 'https://api.vultisig.com/lifi/' })
-    setupLifi({ integratorName: 'someone-else' })
+    setupLifi() // lazy fallback
     expect(createConfigSpy).toHaveBeenCalledTimes(1)
     expect(lifiConfig.integratorName).toBe('station')
+  })
+
+  it('consumer setupLifi(config) AFTER lazy default re-runs createConfig (footgun fix)', () => {
+    // Ehsan-saradar #618: previously the lazy default would latch
+    // configured=true with vultisig-0, and a later consumer bootstrap
+    // would silently no-op — Station's apiUrl proxy gets lost. The fix:
+    // the consumer-bootstrap branch always runs createConfig regardless
+    // of latch state.
+    setupLifi() // lazy path runs first (e.g. a swap quote fires early)
+    setupLifi({ integratorName: 'station', apiUrl: 'https://api.vultisig.com/lifi/' })
+    expect(createConfigSpy).toHaveBeenCalledTimes(2)
+    expect(createConfigSpy).toHaveBeenLastCalledWith({
+      integrator: 'station',
+      apiUrl: 'https://api.vultisig.com/lifi/',
+    })
+    expect(lifiConfig.integratorName).toBe('station')
+    expect(lifiConfig.apiUrl).toBe('https://api.vultisig.com/lifi/')
+  })
+
+  it('consumer setupLifi(config) repeated calls re-run createConfig with each new config', () => {
+    // Mirrors the production reality where a misuse (two consumers in the
+    // same process) results in the second-caller's createConfig taking
+    // effect on the LI.FI SDK. Document the semantics so a future
+    // multi-tenant setup doesn't surprise anyone.
+    setupLifi({ integratorName: 'station' })
+    setupLifi({ integratorName: 'someone-else' })
+    expect(createConfigSpy).toHaveBeenCalledTimes(2)
+    expect(lifiConfig.integratorName).toBe('someone-else')
   })
 })
