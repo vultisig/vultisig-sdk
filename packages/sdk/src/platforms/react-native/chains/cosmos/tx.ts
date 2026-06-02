@@ -362,6 +362,10 @@ export type BuildCosmosSendOptions = {
   toAddress: string
   amount: string
   denom: string
+  /** Gas-fee coin denom. Defaults to `denom` when absent.
+   * Provide this on multi-denom chains (e.g. TerraClassic USTC sends
+   * where fees must be paid in LUNC, not USTC — see vultisig-sdk#624). */
+  feeDenom?: string
   feeAmount: string
   gasLimit: number
   sequence: number
@@ -378,7 +382,7 @@ export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilder
     : buildBankMsgSend(opts.fromAddress, opts.toAddress, opts.amount, opts.denom)
   const msgAny = wrapAny(getMsgSendTypeUrl(opts.chainName), msgSend)
   const txBodyBytes = buildTxBody(msgAny, opts.memo ?? '')
-  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.denom, opts.feeAmount)
+  const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom ?? opts.denom, opts.feeAmount)
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)
   const signingHashHex = bytesToHex(sha256(signDocBytes))
 
