@@ -188,7 +188,13 @@ export const getLifiSwapQuote = async ({
     fromAmount: amount.toString(),
     fromAddress,
     toAddress,
-    fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    // NeOMakinG #618 r2 should-fix: explicit `undefined` only when affiliateBps
+    // is genuinely unset. `affiliateBps: 0` previously fell into the truthy-test
+    // and became `undefined`, which let LiFi's getQuote silently fall back to
+    // `_config.routeOptions?.fee` (see @lifi/sdk src/services/api.js: `params.fee
+    // ??= _config.routeOptions?.fee`). For a consumer that explicitly set 0,
+    // that's a silent non-zero fee. Now: 0 stays 0.
+    fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
     slippage,
     integrator,
   })

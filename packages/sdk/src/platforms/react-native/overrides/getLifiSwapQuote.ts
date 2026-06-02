@@ -24,8 +24,8 @@ import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi
 import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { memoize } from '@vultisig/lib-utils/memoize'
 import { match } from '@vultisig/lib-utils/match'
+import { memoize } from '@vultisig/lib-utils/memoize'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -122,7 +122,12 @@ export const getLifiSwapQuote = async ({
     fromAmount: amount.toString(),
     fromAddress,
     toAddress,
-    fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    // NeOMakinG #618 r2 should-fix mirror: explicit `undefined` only when
+    // affiliateBps is genuinely unset. `affiliateBps: 0` previously fell into
+    // the truthy-test and became `undefined`, which let LiFi's getQuote
+    // silently fall back to `_config.routeOptions?.fee`. For a consumer that
+    // explicitly set 0, that's a silent non-zero fee. Now: 0 stays 0.
+    fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
     slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
     integrator,
   })
