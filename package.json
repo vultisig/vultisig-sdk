@@ -148,7 +148,7 @@
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.0",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^11.0.0",
