@@ -118,6 +118,10 @@ const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
 const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
   providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
 
+/**
+ * Tuning point for issue #605's banded routing rule. 100 bps = 1%.
+ * Adjust this when product wants a wider or narrower provider-preference band.
+ */
 const SWAP_QUOTE_PREFERENCE_BAND_BPS = 100n
 const BPS_DENOMINATOR = 10_000n
 

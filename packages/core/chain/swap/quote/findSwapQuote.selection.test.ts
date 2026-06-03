@@ -588,6 +588,8 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    // Regression for reversing the paaao 2026-05-22 hard THOR priority directive:
+    // under the old rule, THORChain won even when SwapKit was 10% better.
     // SwapKit: gross output 1_100_000 (10% higher than THORChain).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1100000', 'swapkit'))
     // THORChain native: comparable 1_000_000. SwapKit is outside the 1% band, so rate wins.
