@@ -987,6 +987,39 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     return this.vaultManager.getVaultById(vaultId)
   }
 
+  /**
+   * Get vault instance by display name. Case-sensitive lookup against the
+   * `name` field on every stored vault. Returns `null` if no vault has a
+   * matching name. See `VaultManager.getVaultByName` for the full contract
+   * (including the duplicate-name tie-break: first match in listVaults order).
+   *
+   * @param name - Vault display name as set at creation / shown in the UI
+   * @returns Vault instance or null if no vault has that name
+   * @example
+   * ```typescript
+   * const vault = await sdk.getVaultByName('Main Wallet')
+   * if (vault) {
+   *   const balance = await vault.balance('Bitcoin')
+   * }
+   * ```
+   */
+  async getVaultByName(name: string): Promise<VaultBase | null> {
+    return this.vaultManager.getVaultByName(name)
+  }
+
+  /**
+   * Get vault instance by display name, throwing with a helpful error that
+   * lists available vault names when no match is found. See
+   * `VaultManager.getVaultByNameOrThrow` for the full contract.
+   *
+   * @param name - Vault display name
+   * @returns Vault instance
+   * @throws Error if no vault matches, listing available names in the message
+   */
+  async getVaultByNameOrThrow(name: string): Promise<VaultBase> {
+    return this.vaultManager.getVaultByNameOrThrow(name)
+  }
+
   // === GLOBAL CONFIGURATION ===
 
   /**
