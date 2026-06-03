@@ -1290,6 +1290,16 @@
       "import": "./dist/swap/general/cowswap/config.js",
       "default": "./dist/swap/general/cowswap/config.js"
     },
+    "./swap/general/cowswap/getCowSwapExplorerOrderUrl": {
+      "types": "./dist/swap/general/cowswap/getCowSwapExplorerOrderUrl.d.ts",
+      "import": "./dist/swap/general/cowswap/getCowSwapExplorerOrderUrl.js",
+      "default": "./dist/swap/general/cowswap/getCowSwapExplorerOrderUrl.js"
+    },
+    "./swap/general/cowswap/keysign/cowSwapKeysignData": {
+      "types": "./dist/swap/general/cowswap/keysign/cowSwapKeysignData.d.ts",
+      "import": "./dist/swap/general/cowswap/keysign/cowSwapKeysignData.js",
+      "default": "./dist/swap/general/cowswap/keysign/cowSwapKeysignData.js"
+    },
     "./swap/general/cowswap/permit/buildEip2612Permit": {
       "types": "./dist/swap/general/cowswap/permit/buildEip2612Permit.d.ts",
       "import": "./dist/swap/general/cowswap/permit/buildEip2612Permit.js",
@@ -1299,6 +1309,11 @@
       "types": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.d.ts",
       "import": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js",
       "default": "./dist/swap/general/cowswap/sign/buildCowSwapOrder.js"
+    },
+    "./swap/general/cowswap/sign/buildCowSwapOrderTypedData": {
+      "types": "./dist/swap/general/cowswap/sign/buildCowSwapOrderTypedData.d.ts",
+      "import": "./dist/swap/general/cowswap/sign/buildCowSwapOrderTypedData.js",
+      "default": "./dist/swap/general/cowswap/sign/buildCowSwapOrderTypedData.js"
     },
     "./swap/general/cowswap/sign/buildEip712Domain": {
       "types": "./dist/swap/general/cowswap/sign/buildEip712Domain.d.ts",

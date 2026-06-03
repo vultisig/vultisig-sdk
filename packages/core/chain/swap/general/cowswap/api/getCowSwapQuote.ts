@@ -70,6 +70,16 @@ export async function getCowSwapQuote({
     addr => addr.toLowerCase() === sellToken.toLowerCase()
   )
 
+  // The CoW orderbook requires submitted orders to carry `feeAmount = 0` — the
+  // network/solver fee is folded into the price (taken from order surplus), not
+  // charged as a discrete field. A non-zero fee is rejected with
+  // `{"errorType":"NonZeroFee"}`. The quote returns the NET sellAmount plus a
+  // separate feeAmount, so we sell the GROSS amount (net + fee) with a zero fee:
+  // the solver recovers its cost from the surplus over `buyAmount`, which was
+  // quoted for the net amount. This value is signed AND submitted, so both stay
+  // consistent.
+  const grossSellAmount = (BigInt(quote.sellAmount) + BigInt(quote.feeAmount)).toString()
+
   return {
     dstAmount: quote.buyAmount,
     provider: 'cowswap',
@@ -78,12 +88,12 @@ export async function getCowSwapQuote({
         sellToken: quote.sellToken,
         buyToken: quote.buyToken,
         receiver,
-        sellAmount: quote.sellAmount,
+        sellAmount: grossSellAmount,
         buyAmount: quote.buyAmount,
         validTo: quote.validTo,
         appData,
         appDataHash,
-        feeAmount: quote.feeAmount,
+        feeAmount: '0',
         kind: quote.kind,
         partiallyFillable: quote.partiallyFillable,
         sellTokenBalance: 'erc20',

@@ -2,21 +2,22 @@ import { describe, expect, it } from 'vitest'
 
 import { aggregatorPreferenceOrder } from '../findSwapQuote'
 
-// Phase 1 (SDK scaffold only) — CowSwap is deliberately NOT registered as a
-// live fetcher in `findSwapQuote` until Phase 2 wires the build/sign path
-// through `getCowSwapOrder` + `submitCowSwapOrder`. Registering it before the
-// consumer pipeline can sign would let CowSwap win a quote and then fail at
-// sign time. (#584 round-1 — Ehsan)
-//
-// This test file pins the Phase 1 invariants so an accidental Phase 1 wiring
-// during a future merge would be caught here, not by a user.
+// Phase 2 (#471 / #584 / #3930) — CowSwap is now wired as a live fetcher in
+// `findSwapQuote`: the consumer pipeline can rebuild the order's EIP-712 digest,
+// sign it via MPC, and submit it through `submitCowSwapOrder`. These tests pin
+// the Phase 2 invariants (registration + preference ranking) so an accidental
+// regression is caught here, not by a user.
 
-describe('CowSwap — Phase 1 invariants (#471 / #584)', () => {
-  it('aggregatorPreferenceOrder does NOT include CowSwap until Phase 2', () => {
-    expect(aggregatorPreferenceOrder.includes('CowSwap' as never)).toBe(false)
+describe('CowSwap — Phase 2 invariants (#471 / #584 / #3930)', () => {
+  it('aggregatorPreferenceOrder includes CowSwap', () => {
+    expect(aggregatorPreferenceOrder.includes('CowSwap')).toBe(true)
   })
 
-  it('cowswap module is importable and the scaffolded helpers exist', async () => {
+  it('ranks CowSwap first — MEV-protected, gas-less fills win exact-output ties', () => {
+    expect(aggregatorPreferenceOrder[0]).toBe('CowSwap')
+  })
+
+  it('cowswap module is importable and the Phase 2 helpers exist', async () => {
     const config = await import('@vultisig/core-chain/swap/general/cowswap/config')
     expect(config.cowSwapChainConfig).toBeDefined()
     expect(config.cowSwapSupportedChains).toBeDefined()
@@ -33,5 +34,12 @@ describe('CowSwap — Phase 1 invariants (#471 / #584)', () => {
 
     const order = await import('@vultisig/core-chain/swap/general/cowswap/sign/buildCowSwapOrder')
     expect(typeof order.buildCowSwapOrder).toBe('function')
+
+    const typedData = await import('@vultisig/core-chain/swap/general/cowswap/sign/buildCowSwapOrderTypedData')
+    expect(typeof typedData.buildCowSwapOrderTypedData).toBe('function')
+
+    const keysignData = await import('@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData')
+    expect(typeof keysignData.encodeCowSwapKeysignData).toBe('function')
+    expect(typeof keysignData.decodeCowSwapKeysignData).toBe('function')
   })
 })

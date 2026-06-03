@@ -85,6 +85,25 @@ describe('getCowSwapQuote', () => {
     expect(order.buyTokenBalance).toBe('erc20')
   })
 
+  // The CoW orderbook rejects orders with a non-zero fee (`NonZeroFee` / "Fee
+  // must be zero"). The order must carry feeAmount '0' and sell the GROSS amount
+  // (quote.sellAmount + quote.feeAmount); the fee is recovered from surplus.
+  it('builds a fee-less order: feeAmount 0 and gross sellAmount', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+    const quote = await getCowSwapQuote({
+      ...baseInput,
+      chainConfig: cowSwapChainConfig.Ethereum,
+    })
+
+    if (!('cowswap_order' in quote.tx)) {
+      throw new Error('Expected cowswap_order')
+    }
+    // makeQuoteResponse: sellAmount 1e18 + feeAmount 1e16 = 1.01e18 gross.
+    expect(quote.tx.cowswap_order.feeAmount).toBe('0')
+    expect(quote.tx.cowswap_order.sellAmount).toBe('1010000000000000000')
+  })
+
   it('appData hash varies with affiliateBps (50 bps vs 0 bps)', async () => {
     vi.mocked(queryUrl).mockResolvedValue(makeQuoteResponse(1))
 

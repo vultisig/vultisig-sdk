@@ -303,7 +303,7 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow('No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
+    ).rejects.toThrow('No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
   })
 
   it('surfaces a trading-halted message when a native protocol reports a halt', async () => {
@@ -364,7 +364,7 @@ describe('findSwapQuote parallel selection', () => {
       }
 
       expect(error.message).toBe(
-        'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+        'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
       )
       expect(error.message).not.toContain(longKyberError)
       expect(error.message).not.toContain('inch fail')
@@ -806,7 +806,7 @@ describe('findSwapQuote per-fetcher timeout guard (issue #412)', () => {
     // Register the rejection handler BEFORE advancing timers - avoids an
     // unhandled-rejection when the promise rejects mid-tick after runAllTimersAsync.
     const assertion = expect(resultPromise).rejects.toThrow(
-      'No swap route found after trying KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+      'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
     )
     await vi.runAllTimersAsync()
     await assertion

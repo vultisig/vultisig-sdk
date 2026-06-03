@@ -9,6 +9,8 @@ import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc2
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
+import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
+import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
@@ -234,13 +236,38 @@ export const buildSwapKeysignPayload = async ({
           gas: 0n,
           swapFee: '',
         }),
-        // CowSwap orders are settled off-chain by solvers — no calldata to encode
-        // in the keysign payload. Phase 2 will wire in the EIP-712 order signing
-        // path; for now we emit an empty placeholder so the struct is valid.
-        cowswap_order: () => ({
+        // CowSwap orders are settled off-chain by solvers — there is no on-chain
+        // calldata to sign. Instead we serialize the order (everything needed to
+        // rebuild the EIP-712 digest and submit it) into `data`, keyed by the
+        // `cowswap-order:` marker. The consumer detects the marker, signs the
+        // order digest via the EIP-712 path, and POSTs it to the orderbook
+        // instead of broadcasting. `to` is the GPv2VaultRelayer (the ERC-20
+        // spender) so any required on-chain approval — added below for tokens
+        // without sufficient allowance — targets the correct contract.
+        cowswap_order: order => ({
           from: fromCoin.address,
-          to: '',
-          data: '',
+          to: COW_VAULT_RELAYER_ADDRESS,
+          data: encodeCowSwapKeysignData({
+            order: {
+              sellToken: order.sellToken,
+              buyToken: order.buyToken,
+              receiver: order.receiver,
+              sellAmount: order.sellAmount,
+              buyAmount: order.buyAmount,
+              validTo: order.validTo,
+              appData: order.appData,
+              appDataHash: order.appDataHash,
+              feeAmount: order.feeAmount,
+              kind: order.kind,
+              partiallyFillable: order.partiallyFillable,
+              sellTokenBalance: order.sellTokenBalance,
+              buyTokenBalance: order.buyTokenBalance,
+            },
+            chainId: order.chainId,
+            apiBase: order.apiBase,
+            from: fromCoin.address,
+            ...(order.permitRequired ? { permitRequired: true } : {}),
+          }),
           value: '',
           gasPrice: '',
           gas: 0n,
