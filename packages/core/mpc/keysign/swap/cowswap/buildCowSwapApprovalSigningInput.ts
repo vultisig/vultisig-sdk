@@ -22,10 +22,7 @@ type Input = {
  * the standalone VaultRelayer approval, ready for `getPreSigningHashes` /
  * `compileTx` / `broadcastTx`.
  */
-export const buildCowSwapApprovalSigningInput = ({
-  keysignPayload,
-  walletCore,
-}: Input): Uint8Array | undefined => {
+export const buildCowSwapApprovalSigningInput = ({ keysignPayload, walletCore }: Input): Uint8Array | undefined => {
   if (!keysignPayload.erc20ApprovePayload) {
     return undefined
   }

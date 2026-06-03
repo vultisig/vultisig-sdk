@@ -303,7 +303,9 @@ describe('findSwapQuote parallel selection', () => {
         ...evmSameChainCoins,
         amount: 1n,
       })
-    ).rejects.toThrow('No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.')
+    ).rejects.toThrow(
+      'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+    )
   })
 
   it('surfaces a trading-halted message when a native protocol reports a halt', async () => {
