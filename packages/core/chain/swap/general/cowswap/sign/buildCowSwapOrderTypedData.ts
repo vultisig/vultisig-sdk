@@ -1,5 +1,5 @@
-import { buildEip712Domain, Eip712Domain } from './buildEip712Domain'
 import { CowSwapOrder } from './buildCowSwapOrder'
+import { buildEip712Domain, Eip712Domain } from './buildEip712Domain'
 
 /**
  * EIP-712 field descriptors for the CoW Protocol (GPv2) `Order` struct.

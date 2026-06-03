@@ -18,6 +18,12 @@ const cowExplorerNetworkSegment: Partial<Record<Chain, string>> = {
  */
 export const getCowSwapExplorerOrderUrl = ({ chain, uid }: { chain: Chain; uid: string }): string => {
   const segment = cowExplorerNetworkSegment[chain]
+  // `undefined` (unsupported chain) is distinct from `''` (mainnet, no segment).
+  // Fail fast rather than silently aliasing an unknown chain to the Ethereum
+  // explorer route — CowSwap only ever routes on the chains mapped above.
+  if (segment === undefined) {
+    throw new Error(`CowSwap explorer URL is not supported for chain: ${chain}`)
+  }
   const prefix = segment ? `/${segment}` : ''
   return `https://explorer.cow.fi${prefix}/orders/${uid}`
 }

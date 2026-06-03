@@ -42,8 +42,22 @@ export const decodeCowSwapKeysignData = (data: string): CowSwapKeysignData | nul
 
   const json = data.slice(cowSwapKeysignDataPrefix.length)
   const result = attempt(() => JSON.parse(json) as CowSwapKeysignData)
+  if (!('data' in result) || result.data == null || typeof result.data !== 'object') {
+    return null
+  }
 
-  return 'data' in result ? (result.data ?? null) : null
+  // Validate the decoded shape before handing it past the decode boundary — a
+  // malformed payload (missing/wrong-typed fields) must not slip through and
+  // fail later at sign/submit time.
+  const parsed = result.data
+  const isValid =
+    typeof parsed.chainId === 'number' &&
+    typeof parsed.apiBase === 'string' &&
+    typeof parsed.from === 'string' &&
+    parsed.order != null &&
+    typeof parsed.order === 'object'
+
+  return isValid ? parsed : null
 }
 
 /** Cheap discriminator for the consumer's keysign branch. */

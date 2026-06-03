@@ -63,4 +63,20 @@ describe('cowSwapKeysignData', () => {
   it('returns null for a marked-but-malformed payload instead of throwing', () => {
     expect(decodeCowSwapKeysignData(`${cowSwapKeysignDataPrefix}{not valid json`)).toBeNull()
   })
+
+  it('returns null for valid JSON with a missing/wrong-typed field', () => {
+    // missing `from`
+    const withoutFrom = { order: data.order, chainId: data.chainId, apiBase: data.apiBase }
+    expect(decodeCowSwapKeysignData(`${cowSwapKeysignDataPrefix}${JSON.stringify(withoutFrom)}`)).toBeNull()
+    // chainId wrong type
+    expect(
+      decodeCowSwapKeysignData(`${cowSwapKeysignDataPrefix}${JSON.stringify({ ...data, chainId: '1' })}`)
+    ).toBeNull()
+    // order missing
+    expect(
+      decodeCowSwapKeysignData(`${cowSwapKeysignDataPrefix}${JSON.stringify({ ...data, order: null })}`)
+    ).toBeNull()
+    // a bare JSON primitive
+    expect(decodeCowSwapKeysignData(`${cowSwapKeysignDataPrefix}42`)).toBeNull()
+  })
 })
