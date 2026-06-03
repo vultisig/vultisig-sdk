@@ -1,7 +1,7 @@
 import { create, toBinary } from '@bufbuild/protobuf'
 import { KeygenMessageSchema } from '@vultisig/core-mpc/types/vultisig/keygen/v1/keygen_message_pb'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { parseKeygenQR } from '../../../src/utils/parseKeygenQR'
 
