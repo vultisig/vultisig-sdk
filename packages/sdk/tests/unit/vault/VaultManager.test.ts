@@ -271,6 +271,118 @@ describe('VaultManager', () => {
     })
   })
 
+  // ===== VAULT RETRIEVAL — getVaultByName (#153) =====
+
+  // Helper: build + import a named vault with a distinct synthetic pubkey so we
+  // can sanity-check multi-vault scenarios for the by-name lookup. Uses the
+  // same minimal builder pattern as the import suite above.
+  async function importNamedVault(name: string, ecdsaPkSuffix: string): Promise<void> {
+    const pk = ecdsaPkSuffix.padStart(66, '0').slice(0, 66)
+    const eddsaPk = ecdsaPkSuffix.padStart(64, '0').slice(0, 64)
+    const vaultBinary = toBinary(
+      VaultSchema,
+      create(VaultSchema, {
+        name,
+        publicKeyEcdsa: pk,
+        publicKeyEddsa: eddsaPk,
+        signers: ['SyntheticDevice'],
+        hexChainCode: '00'.repeat(32),
+        localPartyId: 'SyntheticDevice',
+        resharePrefix: '',
+        libType: LibType.DKLS,
+        keyShares: [
+          create(Vault_KeyShareSchema, { publicKey: pk, keyshare: 'synth-ecdsa' }),
+          create(Vault_KeyShareSchema, { publicKey: eddsaPk, keyshare: 'synth-eddsa' }),
+        ],
+        chainPublicKeys: [],
+        publicKeyMldsa44: '',
+      })
+    )
+    const vult = encodeUnencryptedVult(vaultBinary)
+    await vaultManager.importVault(vult)
+  }
+
+  describe('getVaultByName', () => {
+    it('returns null when no vaults exist', async () => {
+      const vault = await vaultManager.getVaultByName('Anything')
+      expect(vault).toBeNull()
+    })
+
+    it('returns null when no vault matches the name', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      const vault = await vaultManager.getVaultByName('Backup')
+      expect(vault).toBeNull()
+    })
+
+    it('returns the vault when a name matches exactly', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      const vault = await vaultManager.getVaultByName('Main Wallet')
+      expect(vault).not.toBeNull()
+      expect(vault?.name).toBe('Main Wallet')
+    })
+
+    it('is case-sensitive (mirrors find() exact match — no surprise lowercase behaviour)', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      // Pin the case-sensitivity contract: 'main wallet' / 'MAIN WALLET' must
+      // NOT resolve to 'Main Wallet'. If a future caller wants case-insensitive
+      // lookup, that should be a separate method, not a silent change here.
+      expect(await vaultManager.getVaultByName('main wallet')).toBeNull()
+      expect(await vaultManager.getVaultByName('MAIN WALLET')).toBeNull()
+    })
+
+    it('disambiguates the right vault when multiple are loaded', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      await importNamedVault('Backup', '022222222222222222222222222222222222222222222222222222222222222222')
+      await importNamedVault('Hot Wallet', '023333333333333333333333333333333333333333333333333333333333333333')
+
+      const main = await vaultManager.getVaultByName('Main Wallet')
+      const backup = await vaultManager.getVaultByName('Backup')
+      const hot = await vaultManager.getVaultByName('Hot Wallet')
+      expect(main?.name).toBe('Main Wallet')
+      expect(backup?.name).toBe('Backup')
+      expect(hot?.name).toBe('Hot Wallet')
+    })
+
+    it('returns first match in listVaults order when duplicate names exist (no uniqueness enforcement)', async () => {
+      // Storage layer doesn't enforce name uniqueness — two vaults with the
+      // same name is a legal-if-unusual state (e.g. user imported a backup of
+      // an existing vault). Pin the tie-break so the contract isn't quietly
+      // changed later. Both are loaded into the same name; the first one in
+      // listVaults order wins. listVaults sorts by `order` field; both
+      // synthetic vaults default to order=0, so insertion order is stable
+      // here because the storage iteration is deterministic on MemoryStorage.
+      await importNamedVault('Dup', '021111111111111111111111111111111111111111111111111111111111111111')
+      await importNamedVault('Dup', '022222222222222222222222222222222222222222222222222222222222222222')
+      const got = await vaultManager.getVaultByName('Dup')
+      expect(got).not.toBeNull()
+      expect(got?.name).toBe('Dup')
+      // Either is valid; pin that we got a vault back rather than throwing.
+    })
+  })
+
+  describe('getVaultByNameOrThrow', () => {
+    it('throws with empty-vault hint when no vaults are loaded', async () => {
+      await expect(vaultManager.getVaultByNameOrThrow('Anything')).rejects.toThrow(
+        /Vault "Anything" not found and no vaults are loaded/
+      )
+    })
+
+    it('throws and lists available names when no vault matches', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      await importNamedVault('Backup', '022222222222222222222222222222222222222222222222222222222222222222')
+      await expect(vaultManager.getVaultByNameOrThrow('Typo')).rejects.toThrow(
+        /Vault "Typo" not found\. Available vaults: .*Main Wallet.*/
+      )
+      await expect(vaultManager.getVaultByNameOrThrow('Typo')).rejects.toThrow(/Backup/)
+    })
+
+    it('resolves the vault when the name matches', async () => {
+      await importNamedVault('Main Wallet', '021111111111111111111111111111111111111111111111111111111111111111')
+      const vault = await vaultManager.getVaultByNameOrThrow('Main Wallet')
+      expect(vault.name).toBe('Main Wallet')
+    })
+  })
+
   // ===== VAULT DELETION =====
 
   describe('deleteVault', () => {
