@@ -81,42 +81,30 @@ describe('buildCowSwapOrderTypedData', () => {
     expect(message.buyTokenBalance).toBe('erc20')
   })
 
+  // The cast localizes the boundary between our `string`-typed order fields and
+  // viem's strict `0x${string}` / `bigint` typed-data inference; viem still
+  // validates the structure at runtime and throws on a malformed document.
+  const digestOf = (td: ReturnType<typeof buildCowSwapOrderTypedData>) =>
+    hashTypedData({
+      domain: td.domain,
+      types: { Order: [...td.types.Order] },
+      primaryType: 'Order',
+      message: td.message,
+    } as Parameters<typeof hashTypedData>[0])
+
   it('produces a typed-data document that viem accepts and hashes deterministically', () => {
     const typedData = buildCowSwapOrderTypedData({ order, chainId: ETHEREUM_CHAIN_ID })
 
-    // viem strictly validates the types/message against each other — a malformed
-    // field type or missing value throws here. A stable 32-byte digest is the
-    // value the MPC ceremony signs.
-    const digest = hashTypedData({
-      domain: typedData.domain,
-      types: { Order: [...typedData.types.Order] },
-      primaryType: 'Order',
-      message: typedData.message,
-    })
+    const digest = digestOf(typedData)
 
     expect(digest).toMatch(/^0x[0-9a-f]{64}$/)
-    expect(digest).toBe(
-      hashTypedData({
-        domain: typedData.domain,
-        types: { Order: [...typedData.types.Order] },
-        primaryType: 'Order',
-        message: typedData.message,
-      })
-    )
+    expect(digest).toBe(digestOf(typedData))
   })
 
   it('changes the digest when the chainId changes (domain separation)', () => {
     const base = buildCowSwapOrderTypedData({ order, chainId: 1 })
     const arbitrum = buildCowSwapOrderTypedData({ order, chainId: 42161 })
 
-    const digestFor = (td: typeof base) =>
-      hashTypedData({
-        domain: td.domain,
-        types: { Order: [...td.types.Order] },
-        primaryType: 'Order',
-        message: td.message,
-      })
-
-    expect(digestFor(base)).not.toBe(digestFor(arbitrum))
+    expect(digestOf(base)).not.toBe(digestOf(arbitrum))
   })
 })
