@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { aggregatorPreferenceOrder } from '../findSwapQuote'
+import { providerPreferenceOrder } from '../findSwapQuote'
 
 // Phase 2 (#471 / #584 / #3930) — CowSwap is now wired as a live fetcher in
 // `findSwapQuote`: the consumer pipeline can rebuild the order's EIP-712 digest,
@@ -9,12 +9,12 @@ import { aggregatorPreferenceOrder } from '../findSwapQuote'
 // regression is caught here, not by a user.
 
 describe('CowSwap — Phase 2 invariants (#471 / #584 / #3930)', () => {
-  it('aggregatorPreferenceOrder includes CowSwap', () => {
-    expect(aggregatorPreferenceOrder.includes('CowSwap')).toBe(true)
+  it('providerPreferenceOrder includes CowSwap', () => {
+    expect(providerPreferenceOrder.includes('CowSwap')).toBe(true)
   })
 
   it('ranks CowSwap first — MEV-protected, gas-less fills win exact-output ties', () => {
-    expect(aggregatorPreferenceOrder[0]).toBe('CowSwap')
+    expect(providerPreferenceOrder[0]).toBe('CowSwap')
   })
 
   it('cowswap module is importable and the Phase 2 helpers exist', async () => {
