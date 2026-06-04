@@ -134,9 +134,11 @@ const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
  * @internal Exported for unit-test introspection only.
  */
 export const aggregatorPreferenceOrder: readonly SwapQuoteProviderName[] = [
-  // 'CowSwap' intentionally omitted in Phase 1 — see fetcher-registration
-  // comment lower in this file. Will be added (and slotted first for the
-  // large-trade RFQ benefit) when Phase 2 wires the build/sign path.
+  // CowSwap is slotted FIRST: its solver-driven RFQ fills are MEV-protected and
+  // gas-less, so on an exact-output tie it is the preferred route. It only
+  // competes for same-chain ERC-20 EVM pairs (see fetcher registration below);
+  // for every other pair it simply isn't in the candidate set.
+  'CowSwap',
   'KyberSwap',
   '1inch',
   'LiFi',
@@ -289,19 +291,39 @@ export const findSwapQuote = async ({
     const toChain = to.chain
     const chainAmount = amount
 
-    // CowSwap: Phase 1 (SDK scaffold only). NOT registered as a live fetcher
-    // until Phase 2 wires the build/sign path through `getCowSwapOrder` +
-    // `submitCowSwapOrder` (the off-chain order flow, see #471). Registering
-    // here while the consumer pipeline can't sign would let CowSwap win a
-    // quote and then fail at sign time. The cowswap module + types + tests
-    // remain in this PR so Phase 2 only needs to plug in the fetcher block
-    // here and the consumer-side dispatch in mcp-ts. (#584 round-1 — Ehsan)
-    //
-    // void-imports so the dead-code linter doesn't gripe; they're used by
-    // sibling tests + ensure the module compiles cleanly.
-    void getCowSwapQuote
-    void cowSwapChainConfig
-    void cowSwapSupportedChains
+    // CowSwap (Phase 2 — off-chain RFQ orders). Gated to same-chain ERC-20 →
+    // ERC-20 pairs on a CowSwap-supported EVM chain. Both sides must be ERC-20
+    // (`from.id` and `to.id` present): selling native ETH needs the GPv2
+    // eth-flow contract (out of scope here) and the off-chain order is settled
+    // by solvers against ERC-20 balances. The consumer signs the order's
+    // EIP-712 digest and submits it via `submitCowSwapOrder` — see
+    // `cowswap_order` handling in `buildSwapKeysignPayload`.
+    if (
+      fromChain === toChain &&
+      isOneOf(fromChain, cowSwapSupportedChains) &&
+      from.id !== undefined &&
+      to.id !== undefined
+    ) {
+      const cowChainConfig = cowSwapChainConfig[fromChain]
+      const sellToken = from.id
+      const buyToken = to.id
+      result.push({
+        providerName: 'CowSwap',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getCowSwapQuote({
+            sellToken,
+            buyToken,
+            sellAmount: chainAmount,
+            from: from.address,
+            receiver: from.address,
+            chainConfig: cowChainConfig,
+            affiliateBps,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
 
     if (
       isOneOf(fromChain, kyberSwapEnabledChains) &&
@@ -467,7 +489,7 @@ export const findSwapQuote = async ({
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
-    // 'CowSwap' omitted in Phase 1 (no live fetcher — see comment higher up).
+    'CowSwap',
     'KyberSwap',
     '1inch',
     'LiFi',
