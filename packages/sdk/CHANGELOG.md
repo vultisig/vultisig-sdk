@@ -1,5 +1,205 @@
 # @vultisig/sdk
 
+## 1.8.1
+
+### Patch Changes
+
+- [#617](https://github.com/vultisig/vultisig-sdk/pull/617) [`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Select swap quotes with a 1% provider preference band instead of hard native priority.
+
+- [#644](https://github.com/vultisig/vultisig-sdk/pull/644) [`2417949`](https://github.com/vultisig/vultisig-sdk/commit/24179490c1f80ca55b166a2a33e607574a140782) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix fiatToAmount throwing "EVM chains only" for Cosmos and other non-EVM token swaps. USD-denominated swap amounts now resolve correctly for TerraClassic (USTC/LUNC), Cosmos Hub (ATOM), Osmosis (IBC denoms), Solana SPL tokens, Polkadot asset-hub tokens, TON jettons, and any chain with entries in the knownTokens registry. Native Cosmos denoms (uluna, uatom, etc.) are also handled via cosmosFeeCoinDenom fallback.
+
+## 1.8.0
+
+### Minor Changes
+
+- [#618](https://github.com/vultisig/vultisig-sdk/pull/618) [`ddf0bf4`](https://github.com/vultisig/vultisig-sdk/commit/ddf0bf44cc38905370f60246b88503954b3e3418) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(swap/lifi): consumer-supplied LI.FI integrator + apiUrl override
+
+  Adds `SwapAffiliateConfig.lifi: LifiAffiliateConfig` so consumers (e.g. Station via `vultisig/mcp-ts`) can redirect LI.FI affiliate fees to their own portal integrator instead of the SDK-default `vultisig-0`.
+
+  New surface:
+  - `LifiAffiliateConfig` type — `{ integratorName: string; apiUrl?: string }`
+  - `setupLifi(config?)` — global LI.FI SDK bootstrap; idempotent first-caller-wins. Consumers call this once at module boot to set both the global `integrator` and (optional) `apiUrl` proxy.
+  - `getLifiSwapQuote` now accepts an optional `lifiAffiliateConfig` and uses its `integratorName` as the per-call `integrator` in `getQuote(...)`, overriding the global default for THIS quote without mutating the module-level `lifiConfig`.
+  - `findSwapQuote` threads `affiliateConfig?.lifi` into `getLifiSwapQuote`.
+
+  No behaviour change for callers that don't supply a `lifi` config — `getLifiSwapQuote` still routes through the existing `vultisig-0` default.
+
+### Patch Changes
+
+- [#631](https://github.com/vultisig/vultisig-sdk/pull/631) [`2ab9eb2`](https://github.com/vultisig/vultisig-sdk/commit/2ab9eb2ad5e2b180078389815f3158b5eb8e602b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(cosmos): add optional `feeDenom` to `BuildCosmosSendOptions`
+
+  Allows callers to specify a separate gas-fee coin denom when it differs from the send amount denom. Previously `buildCosmosSendTx` always used `denom` (the send coin) as the fee coin — on TerraClassic this meant USTC sends charged fees in USTC instead of LUNC, causing on-chain rejection when the USTC balance was below the fee threshold. Closes vultisig-sdk#624.
+
+## 1.7.0
+
+### Minor Changes
+
+- [#610](https://github.com/vultisig/vultisig-sdk/pull/610) [`c87816b`](https://github.com/vultisig/vultisig-sdk/commit/c87816b6797e8237d7a94923025311e479e0c520) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): proactively detect below-minimum native swaps ([#604](https://github.com/vultisig/vultisig-sdk/issues/604))
+
+  Small cross-chain swaps below the economic minimum (e.g. ETH→BTC ~$2.81) no longer surface a misleading generic "No swap route found" error. `findSwapQuote` now computes the THORChain minimum up front from the destination chain's `outbound_fee` and spot pool prices, and surfaces an actionable `AmountBelowMinimum` error with the concrete threshold ("Minimum is ~0.012 ETH. Please increase the amount.") instead of relying on brittle provider error-string matching.
+  - New exported helper `getNativeSwapMinAmountIn` (and `NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER`) so consumers can show the minimum proactively as the user types.
+  - The computed minimum is now `max(outbound-fee minimum, source dust threshold)` — THORChain rejects an input below the source chain's `dust_threshold` ("amount less than dust threshold") before economics apply (e.g. DOGE's ~1 DOGE floor), so the threshold is included alongside the outbound-fee economics. The result exposes `dustThresholdBaseUnit` and `binding: 'outbound' | 'dust'` for diagnostics.
+  - Eager short-circuit only when a native protocol is the sole route family; multi-provider pairs still query every provider so an aggregator with a lower minimum is never blocked.
+  - The generic all-fail path now logs raw provider error messages so future sub-minimum wordings become data-driven instead of guessed.
+  - Trading-halt detection: when a native protocol rejects with "trading is halted" (THORChain mimir `HALT<CHAIN>TRADING`, pool ragnarok, churn) the pair fails for _every_ amount, so a new `TradingHalted` error surfaces "This swap route is temporarily unavailable — trading is halted on …" instead of the misleading generic "No swap route found" / "increase the amount".
+
+## 1.6.0
+
+### Minor Changes
+
+- [#611](https://github.com/vultisig/vultisig-sdk/pull/611) [`9e405c9`](https://github.com/vultisig/vultisig-sdk/commit/9e405c9459713c5391ca6a85a548eb3750ec2872) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Osmosis added to `AUTO_DISCOVERY_CHAINS` — IBC balance discovery is now active for Osmosis ([#611](https://github.com/vultisig/vultisig-sdk/issues/611))
+  - Osmosis IBC token registry: ATOM (channel-0), USDC/Noble (channel-750), axlUSDC/Axelar (channel-208), stATOM (channel-326), stOSMO (channel-326), TIA/Celestia (channel-6994) — all hashes LCD-verified against osmosis-rest.publicnode.com and cross-referenced with cosmos/chain-registry ([#611](https://github.com/vultisig/vultisig-sdk/issues/611))
+
+- [#606](https://github.com/vultisig/vultisig-sdk/pull/606) [`04cd9e3`](https://github.com/vultisig/vultisig-sdk/commit/04cd9e3881cb0e8cab5b1783be6e8d86970001d6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add optional `appId` to push device registration (`registerDevice`). Apps that
+  share a vault with the regular wallet (e.g. Station, `money.terra.station`) can
+  now register/unregister under their own bundle id, so the notification service
+  routes their pushes to the correct app instead of the wallet that shares the
+  vault. The field is optional and omitted by default, so existing wallet
+  registrations are unchanged.
+
+## 1.5.0
+
+### Minor Changes
+
+- [#585](https://github.com/vultisig/vultisig-sdk/pull/585) [`1bf8a6d`](https://github.com/vultisig/vultisig-sdk/commit/1bf8a6d36788b702092d92918294d67cdc6e11b7) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `getSwapExplorerUrl` helper for swap-provider tx links ([#426](https://github.com/vultisig/vultisig-sdk/issues/426)).
+
+  Tx history surfaces (vultisig-windows, vultiagent-app, future RN SDK) now have a single source of truth for "View on Explorer" URLs that point to the swap **provider's** scanner — `scan.li.fi`, `orb.helius.dev` for LI.FI Solana settlement, `runescan.io` for THORChain, and the MayaChain explorer — instead of every consumer reimplementing the routing and most defaulting to the source-chain explorer (which hides cross-chain routes from users).
+  - New: `getSwapExplorerUrl({ provider, txHash, fromChain })` in `@vultisig/core-chain/swap/utils/getSwapExplorerUrl`
+  - New: `Vultisig.getSwapExplorerUrl(provider, txHash, fromChain)` static method for parity with `getTxExplorerUrl`
+  - For `1inch` / `kyber` / `swapkit`, falls back to the source-chain explorer (no public per-tx aggregator page)
+  - Mirrors iOS `ExplorerLinkBuilder.swift` and Android `ExplorerLinkRepository.getSwapProgressLink`
+  - Pure URL builder, no new deps
+
+## 1.4.0
+
+### Minor Changes
+
+- [#584](https://github.com/vultisig/vultisig-sdk/pull/584) [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+### Patch Changes
+
+- [#602](https://github.com/vultisig/vultisig-sdk/pull/602) [`5bb56a4`](https://github.com/vultisig/vultisig-sdk/commit/5bb56a4daba8b896626c54fabd94fd6c9a35320e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - `getCosmosAccountInfo` now retries against a registered fallback LCD when the primary endpoint fails. Without this, a single-provider degradation (e.g. `terra-classic-lcd.publicnode.com` outage on 2026-05-28) hard-failed every cosmos signing surface that touches this code path — there was no recovery.
+
+  Fallback URLs per chain (Polkachu mirrors where available; Hexxagon for `TerraClassic` since polkachu has no Terra Classic endpoint, verified 2026-05-28). Chains not in the map preserve fail-closed behaviour.
+
+  Parallel to vultiagent-app#1017 (app-side fix) + mcp-ts#266 (mcp-side fix).
+
+- [#601](https://github.com/vultisig/vultisig-sdk/pull/601) [`3eb9b18`](https://github.com/vultisig/vultisig-sdk/commit/3eb9b186b0d021455cf47f957b15a45fcbb2798e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Republish the `@vultisig/sdk` bundle so consumers (mcp-ts, vultiagent-app) pick up the latest `@vultisig/core-chain` features that landed without an `@vultisig/sdk` changeset:
+  - `resolveTokenPriceId(chain, denomOrAddress?)` helper for registry-driven token price resolution ([#587](https://github.com/vultisig/vultisig-sdk/pull/587))
+  - LiFi stable-pair slippage tuning ([changeset](.changeset/lifi-stable-pair-slippage.md))
+  - Plus any other pending `@vultisig/core-chain` minors that have been merged without a corresponding sdk-package changeset.
+
+  Pure repackage — no consumer-facing API change; the bundle just embeds the latest core-chain dist.
+
+- [#593](https://github.com/vultisig/vultisig-sdk/pull/593) [`5d11cf3`](https://github.com/vultisig/vultisig-sdk/commit/5d11cf3bfb81aba929fe8e81bb77e7aebff15129) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - refactor(swap): typed SwapError class with stable codes at findSwapQuote throw sites - enables instanceof checks instead of message string matching
+
+## 1.3.1
+
+### Patch Changes
+
+- [#582](https://github.com/vultisig/vultisig-sdk/pull/582) [`47860fc`](https://github.com/vultisig/vultisig-sdk/commit/47860fcc6a1fa3600c20b529d29af98d56cbc5b4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## Changed
+  - Lower THORChain streaming-quote trigger threshold from 300 bps (3%) to 100 bps (1%) - more mid-size cross-chain trades now compare a streaming quote against the rapid quote and pick the better expected_amount_out. ([#470](https://github.com/vultisig/vultisig-sdk/issues/470))
+
+## 1.3.0
+
+### Minor Changes
+
+- [#583](https://github.com/vultisig/vultisig-sdk/pull/583) [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+### Patch Changes
+
+- [#594](https://github.com/vultisig/vultisig-sdk/pull/594) [`c1cca9a`](https://github.com/vultisig/vultisig-sdk/commit/c1cca9aa88acef2c0b31884154af2ed1e6b8ff92) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the SDK bundle with the latest SwapKit Bitcoin PSBT signing path from `@vultisig/core-chain` and `@vultisig/core-mpc`.
+
+## 1.2.1
+
+### Patch Changes
+
+- [#579](https://github.com/vultisig/vultisig-sdk/pull/579) [`c3881e5`](https://github.com/vultisig/vultisig-sdk/commit/c3881e549e5678e8806eba5defb2d2d6eefc2cc5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## Fixed
+  - Cosmos account info LCD fallback for extended account types that StargateClient cannot decode (vesting wrappers, module accounts) — prevents doomed txs with `sequence:0` that fail at broadcast with `account sequence mismatch, expected N, got 0` ([#579](https://github.com/vultisig/vultisig-sdk/issues/579))
+  - Cosmos coin balance LCD fallback when StargateClient returns `amount:"0"` on a funded address — fixes a packaging-level discrepancy in cosmjs's HTTP layer under Hermes/React Native that silently surfaced as "you have 0" on funded Terra/TerraClassic wallets ([#579](https://github.com/vultisig/vultisig-sdk/issues/579))
+
+## 1.2.0
+
+### Minor Changes
+
+- [#577](https://github.com/vultisig/vultisig-sdk/pull/577) [`cc9d67f`](https://github.com/vultisig/vultisig-sdk/commit/cc9d67f0c61d9ebdfc133beac5ef04658d37a37f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - ## New
+  - Polkadot Asset Hub USDT (asset_id 1984) + USDC (asset_id 1337) token registry ([#562](https://github.com/vultisig/vultisig-sdk/issues/562))
+  - Polkadot `pallet_assets.Account` balance resolver for Asset Hub tokens - replaces placeholder 0n guard ([#563](https://github.com/vultisig/vultisig-sdk/issues/563))
+  - Tron native send `data` field (proto field 12) for THORChain memos + exchange deposit memos; `BuildTronSendOptions` and `BuildTrc20TransferOptions` gain optional `data?: Uint8Array` field ([#559](https://github.com/vultisig/vultisig-sdk/issues/559))
+
+  ## Fixed
+  - Tron TRC-20 fee estimate now subtracts sender's available energy before charging TRX ([#556](https://github.com/vultisig/vultisig-sdk/issues/556))
+  - Tron native send free bandwidth check prevents spurious fee charge when bandwidth is available ([#555](https://github.com/vultisig/vultisig-sdk/issues/555))
+
+## 1.1.3
+
+### Patch Changes
+
+- [#544](https://github.com/vultisig/vultisig-sdk/pull/544) [`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable unsupported Bittensor seedphrase import and expose the SDK-owned seedphrase import chain support list.
+
+## 1.1.2
+
+### Patch Changes
+
+- [#554](https://github.com/vultisig/vultisig-sdk/pull/554) [`bf7278c`](https://github.com/vultisig/vultisig-sdk/commit/bf7278c5886789c4a181169a36bc9296ef81b79c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Emit the dedicated commondata SwapKit swap payload for source-chain transfer routes so QR cosigners can distinguish SwapKit swaps from OneInch-compatible swap payloads.
+
+## 1.1.1
+
+### Patch Changes
+
+- [#512](https://github.com/vultisig/vultisig-sdk/pull/512) [`72eb200`](https://github.com/vultisig/vultisig-sdk/commit/72eb200ec647a707d1ebdc1f8b6f0f5243780477) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Station Terra import primitives for legacy seed-byte, mnemonic, and raw private-key migration flows.
+
+## 1.1.0
+
+### Minor Changes
+
+- [#515](https://github.com/vultisig/vultisig-sdk/pull/515) [`5ef62f1`](https://github.com/vultisig/vultisig-sdk/commit/5ef62f1aa20202f4a4eb97afa0cf20216dc5a1f1) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTronTxFromRawData(rawDataHex)` to sign yield.xyz Tron actions whose `raw_data` is already encoded upstream (FreezeBalanceV2, UnfreezeBalanceV2, VoteWitnessContract, …). Hashes the raw_data bytes with SHA-256, takes the MPC signature, and wraps the final `Transaction { raw_data, signature }` envelope — same `{signingHashHex, unsignedRawHex, finalize(sig)}` contract as `buildTronSendTx`. Includes strict hex-character validation so malformed input fails fast instead of silently producing a wrong signing payload.
+
+## 1.0.0
+
+### Major Changes
+
+- [#537](https://github.com/vultisig/vultisig-sdk/pull/537) [`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - chore: remove Station affiliate constants from shared SDK (closes [#536](https://github.com/vultisig/vultisig-sdk/issues/536))
+
+  Station-specific constants (`stvs` THORName, `0x649E...076D` EVM fee receiver) do not belong in a public package consumed by Windows and external users. The generic `affiliateConfig` injection seam on `findSwapQuote` + `SwapAffiliateConfig` type remain — those are correct SDK design. Station reconstructs the same three configs in its own consumer package (mcp-ts#201).
+
+  **BREAKING CHANGE:** `stationKyberSwapAffiliateConfig`, `stationNativeSwapAffiliateConfig`, and `stationOneInchAffiliateConfig` are no longer exported from `@vultisig/sdk`. See MIGRATING.md for the reconstruction pattern.
+
+  > **WARNING: DO NOT MERGE until vultisig/mcp-ts#201 lands.** Station must reconstruct these constants in its consumer package before this removal ships. Merging early will silently fall back to vultisig-0 affiliate defaults, breaking Station's affiliate fee routing on native swaps.
+
+## 0.28.0
+
+### Minor Changes
+
+- [#530](https://github.com/vultisig/vultisig-sdk/pull/530) [`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - feat(seedphrase): probe Cosmos-coin-type Terra path (118) for Keplr/Leap seeds when standard 330-path is empty
+
+## 0.27.0
+
+### Minor Changes
+
+- [#516](https://github.com/vultisig/vultisig-sdk/pull/516) [`9a80907`](https://github.com/vultisig/vultisig-sdk/commit/9a8090721008f2a10dffa9cf2d3fac479d65481c) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add `buildTonTxFromSigningPayload({publicKeyEd25519, signingPayloadBoc, includeStateInit, workchain})` to sign yield.xyz TON actions whose signing payload BoC is already constructed upstream. Parses the BoC, hashes the payload cell, takes the MPC signature, and wraps the final external message — same `{signingHashHex, unsignedBocHex, fromAddress, finalize(sig)}` contract as `buildTonSendTx`. Accepts either base64 or hex BoC input. Optional `includeStateInit` flag deploys the v4r2 wallet contract alongside the tx for first-send (seqno === 0) scenarios.
+
+## 0.26.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
 ## 0.26.0
 
 ### Minor Changes

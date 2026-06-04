@@ -1,8 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import { fiatCurrencies, type FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
 /** Thrown when a fiat -> token amount conversion fails. Message is LLM-readable. */
@@ -95,17 +97,34 @@ export const fiatToAmount = async (params: FiatToAmountParams): Promise<string> 
   let price: number
   try {
     if (tokenId) {
-      if (!isChainOfKind(chain, 'evm')) {
-        throw new FiatToAmountError(
-          `Token price lookup by contract address is only supported on EVM chains. Got chain "${chain}" with tokenId "${tokenId}".`
-        )
+      if (isChainOfKind(chain, 'evm')) {
+        const prices = await getErc20Prices({
+          ids: [tokenId],
+          chain,
+          fiatCurrency: normalizedCurrency,
+        })
+        price = prices[tokenId.toLowerCase()] ?? 0
+      } else {
+        // Non-EVM chains (Cosmos, Solana, TON, Polkadot, etc.) identify tokens by
+        // denom / mint / asset-id, not a contract address. Resolve via the curated
+        // knownTokens registry which already maps these to CoinGecko ids.
+        // For Cosmos chains, also accept the native fee-coin denom (e.g. "uluna" on
+        // TerraClassic, "uatom" on Cosmos) which identifies the native coin by its
+        // on-chain denomination rather than the absence of a tokenId.
+        const nativeCosmosDenom = cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom]
+        const isNativeCosmosDenom = nativeCosmosDenom != null && tokenId.toLowerCase() === nativeCosmosDenom
+        const priceId =
+          resolveTokenPriceId(chain, tokenId) ??
+          (isNativeCosmosDenom ? chainFeeCoin[chain]?.priceProviderId : undefined)
+        if (!priceId) {
+          throw new FiatToAmountError(
+            `Could not resolve a price provider id for token "${tokenId}" on chain "${chain}". ` +
+              `The token may not be in the known-tokens registry.`
+          )
+        }
+        const prices = await getCoinPrices({ ids: [priceId], fiatCurrency: normalizedCurrency })
+        price = prices[priceId.toLowerCase()] ?? 0
       }
-      const prices = await getErc20Prices({
-        ids: [tokenId],
-        chain,
-        fiatCurrency: normalizedCurrency,
-      })
-      price = prices[tokenId.toLowerCase()] ?? 0
     } else {
       const feeCoin = chainFeeCoin[chain]
       if (!feeCoin) {

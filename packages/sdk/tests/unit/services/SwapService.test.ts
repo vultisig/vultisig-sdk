@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock core functions - must be before imports
@@ -374,10 +375,58 @@ describe('SwapService', () => {
       )
     })
 
+    it('should return fees.network=0n for UTXO deposit-channel (transfer) routes', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      // SwapKit transfer routes: source chain sends to a deposit address.
+      // Source-chain fees are not known at quote time — only at broadcast.
+      const mockTransferQuote = {
+        quote: {
+          general: {
+            // 0.1 ETH in wei — realistic output for a small BTC -> ETH cross-chain swap
+            dstAmount: '100000000000000000',
+            provider: 'swapkit' as const,
+            tx: {
+              transfer: {
+                to: 'bc1qdeposit',
+                amount: 500_000n,
+                memo: 'route-memo',
+              },
+            },
+          },
+        },
+        discounts: [],
+      }
+
+      vi.mocked(findSwapQuote).mockResolvedValue(mockTransferQuote as any)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qsource',
+          ticker: 'BTC',
+          decimals: 8,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 0.005,
+      })
+
+      // extractFees must return 0n for transfer routes — real source-chain fees are
+      // only estimable at broadcast time via getSendFeeEstimate(). A non-zero value
+      // would be a fabricated placeholder and mislead maxSwapable in VaultBase.
+      expect(result.fees.network).toBe(0n)
+      expect(result.fees.total).toBe(0n)
+    })
+
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
-      vi.mocked(findSwapQuote).mockRejectedValue(new Error('No swap routes found'))
+      vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(SwapErrorCode.NoRoutesFound, 'No swap routes found'))
 
       await expect(
         service.getQuote({
@@ -389,6 +438,31 @@ describe('SwapService', () => {
 
       // Should emit error event
       expect(mockEmitEvent).toHaveBeenCalledWith('error', expect.any(Error))
+    })
+
+    // Pins wrapSwapError's typed-code -> VaultError message contract. Each
+    // SwapErrorCode must produce its own user-facing message; a regression that
+    // drops a case would fall through to the generic 'Swap failed' handler.
+    // The exhaustiveness `never` guard in wrapSwapError additionally fails the
+    // build (not just a test) if a new code is added without a mapping.
+    it.each([
+      [SwapErrorCode.NoRoutesFound, 'No swap route found between these tokens', 'no routes'],
+      [SwapErrorCode.AllProvidersFailed, 'No swap route found between these tokens', 'all providers failed'],
+      [SwapErrorCode.AmountTooSmall, 'Swap amount too small', 'below dust'],
+      [SwapErrorCode.AmountBelowMinimum, 'Minimum amount is 0.5 BTC', 'Minimum amount is 0.5 BTC'],
+      [SwapErrorCode.InvalidConfig, 'Swap configuration error', 'mixed-case THORName'],
+    ])('maps SwapError(%s) to its own VaultError message', async (code, expectedMessage, rawMessage) => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(code, rawMessage))
+
+      await expect(
+        service.getQuote({
+          fromCoin: { chain: Chain.Ethereum },
+          toCoin: { chain: Chain.Bitcoin },
+          amount: 0.001,
+        })
+      ).rejects.toThrow(expectedMessage)
     })
   })
 

@@ -9,6 +9,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { phantomSolanaPath } from '@vultisig/core-chain/publicKey/address/deriveSolanaAddressFromMnemonic'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
+import { assertSeedphraseImportSupportsChains } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
 import { clampThenUniformScalar } from '../crypto/ed25519ScalarClamp'
 import { cleanMnemonic } from './SeedphraseValidator'
@@ -48,7 +49,18 @@ export type DerivedChainKey = {
 export type DeriveChainPrivateKeysOptions = {
   /** Use Phantom wallet derivation path for Solana instead of standard BIP44 path */
   usePhantomSolanaPath?: boolean
+  /**
+   * Use Cosmos coin-type derivation path (m/44'/118'/0'/0/0) for the Terra
+   * family (Terra v2 LUNA AND TerraClassic LUNC) instead of their native
+   * SLIP-44 paths. Applies to BOTH chains when true; the MasterKeyDeriver
+   * caller checks chain === 'Terra' || chain === 'TerraClassic'.
+   * The field name's "Terra" prefix means the Terra family, not Terra v2 alone.
+   */
+  useCosmosPathTerra?: boolean
 }
+
+/** Cosmos coin-type derivation path used by Keplr/Leap for Terra */
+export const cosmosPathTerra = "m/44'/118'/0'/0/0"
 
 /**
  * MasterKeyDeriver - Derives cryptographic keys from BIP39 mnemonic
@@ -121,6 +133,8 @@ export class MasterKeyDeriver {
    * @returns Chain-specific key information
    */
   async deriveChainKey(mnemonic: string, chain: Chain, isEddsa: boolean): Promise<DerivedChainKey> {
+    assertSeedphraseImportSupportsChains([chain])
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -184,6 +198,8 @@ export class MasterKeyDeriver {
     chains: Chain[],
     options?: DeriveChainPrivateKeysOptions
   ): Promise<ChainPrivateKey[]> {
+    assertSeedphraseImportSupportsChains(chains)
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -200,10 +216,13 @@ export class MasterKeyDeriver {
 
         // Derive chain-specific key
         // For Solana with Phantom path, use custom derivation path
+        // For Terra/TerraClassic with Cosmos path, use m/44'/118'/0'/0/0
         const chainKey =
           chain === 'Solana' && options?.usePhantomSolanaPath
             ? hdWallet.getKey(coinType, phantomSolanaPath)
-            : hdWallet.getKeyForCoin(coinType)
+            : (chain === 'Terra' || chain === 'TerraClassic') && options?.useCosmosPathTerra
+              ? hdWallet.getKey(coinType, cosmosPathTerra)
+              : hdWallet.getKeyForCoin(coinType)
         const chainKeyData = new Uint8Array(chainKey.data())
 
         let privateKeyHex: string
@@ -238,6 +257,8 @@ export class MasterKeyDeriver {
    * @returns Address for the chain
    */
   async deriveAddress(mnemonic: string, chain: Chain): Promise<string> {
+    assertSeedphraseImportSupportsChains([chain])
+
     const walletCore = await this.wasmProvider.getWalletCore()
     const cleaned = cleanMnemonic(mnemonic)
 
@@ -291,6 +312,73 @@ export class MasterKeyDeriver {
       privateKey.delete()
       publicKey.delete()
 
+      return address
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive Terra address using Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Keplr and Leap historically derived Terra under the Cosmos coin type (118),
+   * producing the same terra1... bech32 address format but from a different HD path.
+   * This is needed to discover wallets originally created in Keplr/Leap.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns Terra address derived using the Cosmos coin-type path
+   */
+  async deriveTerraAddressWithCosmosPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      // Use terraV2 coin type for terra1... address encoding, but derive from path 118
+      const coinType = walletCore.CoinType.terraV2
+      const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
+      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+
+      privateKey.delete()
+      publicKey.delete()
+
+      return address
+    } finally {
+      if (hdWallet.delete) {
+        hdWallet.delete()
+      }
+    }
+  }
+
+  /**
+   * Derive TerraClassic address using Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Mirrors deriveTerraAddressWithCosmosPath but uses the TerraClassic (LUNC) coin type
+   * so the resulting address is a terra1... address compatible with Chain.TerraClassic.
+   * Keplr/Leap-created TerraClassic-only seeds also use the Cosmos 118 derivation path
+   * instead of TerraClassic's native SLIP-44 path.
+   *
+   * @param mnemonic - BIP39 mnemonic phrase
+   * @returns TerraClassic address derived using the Cosmos coin-type path
+   */
+  async deriveTerraClassicAddressWithCosmosPath(mnemonic: string): Promise<string> {
+    const walletCore = await this.wasmProvider.getWalletCore()
+    const cleaned = cleanMnemonic(mnemonic)
+
+    const hdWallet = walletCore.HDWallet.createWithMnemonic(cleaned, '')
+
+    try {
+      // Use terra (classic, LUNC) coin type for address encoding, derive from path 118
+      const coinType = walletCore.CoinType.terra
+      const privateKey = hdWallet.getKey(coinType, cosmosPathTerra)
+      const publicKey = privateKey.getPublicKeySecp256k1(true) // compressed
+      const address = walletCore.CoinTypeExt.deriveAddressFromPublicKey(coinType, publicKey)
+      publicKey.delete()
+      privateKey.delete()
       return address
     } finally {
       if (hdWallet.delete) {

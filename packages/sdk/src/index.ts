@@ -44,11 +44,40 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // ============================================================================
+// PUBLIC API - Station Migration Primitives
+// ============================================================================
+
+export type {
+  StationImportSource,
+  StationMnemonicImportSource,
+  StationPrivateKeyImportSource,
+  StationSeedImportSource,
+  StationTerraChain,
+  StationTerraChainPublicData,
+  StationTerraCoinType,
+  StationTerraKeyMaterial,
+} from '@vultisig/core-chain/station/importPrimitives'
+export {
+  deriveStationTerraKeyMaterial,
+  getStationTerraDerivationPath,
+  normalizeStationPrivateKeyHex,
+  stationTerraCoinTypes,
+  validateStationPrivateKeyHex,
+} from '@vultisig/core-chain/station/importPrimitives'
+
+// ============================================================================
 // PUBLIC API - Chain Configuration
 // ============================================================================
 
-// Supported chains constant
-export { SUPPORTED_CHAINS } from './Vultisig'
+// Supported chains constants
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+  SUPPORTED_CHAINS,
+} from './Vultisig'
 
 // ============================================================================
 // PUBLIC API - Storage
@@ -151,6 +180,12 @@ export type {
 // Swap type guards
 export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 
+// Swap explorer URL helper (parity with iOS ExplorerLinkBuilder /
+// Android ExplorerLinkRepository.getSwapProgressLink). Use this instead of
+// chain-only explorer URLs when rendering swap tx history.
+export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation
 // ============================================================================
@@ -191,8 +226,11 @@ export {
   vultDiscountTierMinBalances,
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
+export type { LifiAffiliateConfig, LifiBootstrapConfig } from '@vultisig/core-chain/swap/general/lifi/config'
+export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
+export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'

@@ -75,6 +75,9 @@ export class PushNotificationService {
         party_name: opts.partyName,
         token: opts.token,
         device_type: toServerDeviceType(opts.deviceType),
+        // Only send app_id when supplied; omitting it preserves the server's
+        // wallet-default routing for existing (wallet) callers.
+        ...(opts.appId ? { app_id: opts.appId } : {}),
       }),
     })
 
@@ -82,12 +85,13 @@ export class PushNotificationService {
       throw new Error(`Failed to register device: ${response.status} ${response.statusText}`)
     }
 
-    // Persist locally
+    // Persist locally (incl. appId so unregister can scope to the same app)
     const registrations = await this.getRegistrations()
     registrations[opts.vaultId] = {
       vaultId: opts.vaultId,
       partyName: opts.partyName,
       registeredAt: Date.now(),
+      ...(opts.appId ? { appId: opts.appId } : {}),
     }
     await this.storage.set(STORAGE_KEY, registrations)
   }
@@ -110,6 +114,11 @@ export class PushNotificationService {
         body: JSON.stringify({
           vault_id: vaultId,
           party_name: reg.partyName,
+          // Scope the tokenless delete to the app this device registered under.
+          // The server defaults a missing app_id to the wallet bucket, so a
+          // non-wallet app (e.g. Station) must send it or its row is never
+          // removed. Wallet registrations have no appId and keep the default.
+          ...(reg.appId ? { app_id: reg.appId } : {}),
         }),
       })
       if (!response.ok) {
@@ -128,9 +137,18 @@ export class PushNotificationService {
   /**
    * Check if a vault is registered locally for push notifications.
    */
-  async isVaultRegistered(vaultId: string): Promise<boolean> {
+  async isVaultRegistered(vaultId: string, appId?: string): Promise<boolean> {
     const registrations = await this.getRegistrations()
-    return vaultId in registrations
+    const reg = registrations[vaultId]
+    if (!reg) return false
+    // Migration-aware: when the caller specifies the app it intends to register
+    // under, a local record stored under a different (or missing) appId counts
+    // as NOT registered, so the consumer's isVaultRegistered-gated
+    // registerDevice re-runs and moves the device onto the right app_id. A bare
+    // call (no appId) keeps the legacy "any local record counts" behaviour, so
+    // existing wallet callers are unchanged.
+    if (appId !== undefined && (reg.appId ?? '') !== appId) return false
+    return true
   }
 
   /**
@@ -161,6 +179,13 @@ export class PushNotificationService {
    * Note: The server deduplicates notifications per vault_id (30-second window).
    */
   async notifyVaultMembers(opts: NotifyVaultMembersOptions): Promise<void> {
+    // app_id is OPT-IN here and deliberately NOT inferred from local storage.
+    // notifyVaultMembers is the keysign-coordination path: it must reach every
+    // device on the vault regardless of which app each peer registered under.
+    // Auto-scoping to the sender's app would make mixed-version vaults (one
+    // signer migrated, another still wallet-default) miss keysign pushes. The
+    // app-scoped delivery that the leak fix needs is the SCHEDULED path, which
+    // goes through the agent-backend notifier, not this method.
     const response = await fetch(`${this.serverUrl}/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -169,6 +194,8 @@ export class PushNotificationService {
         vault_name: opts.vaultName,
         local_party_id: opts.localPartyId,
         qr_code_data: opts.qrCodeData,
+        // Only target a specific app when the caller explicitly opts in.
+        ...(opts.appId ? { app_id: opts.appId } : {}),
       }),
     })
 

@@ -1,5 +1,136 @@
 # @vultisig/cli
 
+## 1.8.1
+
+### Patch Changes
+
+- [#617](https://github.com/vultisig/vultisig-sdk/pull/617) [`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Select swap quotes with a 1% provider preference band instead of hard native priority.
+
+- Updated dependencies [[`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb), [`2417949`](https://github.com/vultisig/vultisig-sdk/commit/24179490c1f80ca55b166a2a33e607574a140782)]:
+  - @vultisig/core-chain@2.10.1
+  - @vultisig/sdk@1.8.1
+
+## 1.8.0
+
+### Patch Changes
+
+- Updated dependencies [[`2ab9eb2`](https://github.com/vultisig/vultisig-sdk/commit/2ab9eb2ad5e2b180078389815f3158b5eb8e602b), [`ddf0bf4`](https://github.com/vultisig/vultisig-sdk/commit/ddf0bf44cc38905370f60246b88503954b3e3418), [`c63c713`](https://github.com/vultisig/vultisig-sdk/commit/c63c713de30c847a98d3b73c8ba5b5a882c0699b)]:
+  - @vultisig/sdk@1.8.0
+  - @vultisig/core-chain@2.10.0
+  - @vultisig/rujira@32.0.0
+
+## 1.7.0
+
+### Patch Changes
+
+- Updated dependencies [[`c87816b`](https://github.com/vultisig/vultisig-sdk/commit/c87816b6797e8237d7a94923025311e479e0c520)]:
+  - @vultisig/core-chain@2.9.0
+  - @vultisig/sdk@1.7.0
+  - @vultisig/rujira@31.0.0
+
+## 1.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`9e405c9`](https://github.com/vultisig/vultisig-sdk/commit/9e405c9459713c5391ca6a85a548eb3750ec2872), [`04cd9e3`](https://github.com/vultisig/vultisig-sdk/commit/04cd9e3881cb0e8cab5b1783be6e8d86970001d6)]:
+  - @vultisig/core-chain@2.8.0
+  - @vultisig/sdk@1.6.0
+  - @vultisig/rujira@30.0.0
+
+## 1.5.0
+
+### Patch Changes
+
+- Updated dependencies [[`1bf8a6d`](https://github.com/vultisig/vultisig-sdk/commit/1bf8a6d36788b702092d92918294d67cdc6e11b7), [`d1c12b2`](https://github.com/vultisig/vultisig-sdk/commit/d1c12b24bc55a318a8f87998d2320651f875b00a)]:
+  - @vultisig/core-chain@2.7.0
+  - @vultisig/sdk@1.5.0
+  - @vultisig/rujira@29.0.0
+
+## 1.4.0
+
+### Patch Changes
+
+- Updated dependencies [[`5bb56a4`](https://github.com/vultisig/vultisig-sdk/commit/5bb56a4daba8b896626c54fabd94fd6c9a35320e), [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585), [`c4b4560`](https://github.com/vultisig/vultisig-sdk/commit/c4b45604f043700068aaf1c3c1a1ecad5c8a874f), [`a13c644`](https://github.com/vultisig/vultisig-sdk/commit/a13c644be796a7bf10dc0ab426ac888b9e962585), [`880cde0`](https://github.com/vultisig/vultisig-sdk/commit/880cde00a5978e8a4dff2cf8adb627059e4af5bf), [`3eb9b18`](https://github.com/vultisig/vultisig-sdk/commit/3eb9b186b0d021455cf47f957b15a45fcbb2798e), [`5d11cf3`](https://github.com/vultisig/vultisig-sdk/commit/5d11cf3bfb81aba929fe8e81bb77e7aebff15129)]:
+  - @vultisig/core-chain@2.6.0
+  - @vultisig/sdk@1.4.0
+  - @vultisig/rujira@28.0.0
+
+## 1.3.0
+
+### Patch Changes
+
+- [#594](https://github.com/vultisig/vultisig-sdk/pull/594) [`c1cca9a`](https://github.com/vultisig/vultisig-sdk/commit/c1cca9aa88acef2c0b31884154af2ed1e6b8ff92) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the SDK bundle with the latest SwapKit Bitcoin PSBT signing path from `@vultisig/core-chain` and `@vultisig/core-mpc`.
+
+- Updated dependencies [[`c1cca9a`](https://github.com/vultisig/vultisig-sdk/commit/c1cca9aa88acef2c0b31884154af2ed1e6b8ff92), [`f2270cd`](https://github.com/vultisig/vultisig-sdk/commit/f2270cd6aaa741d6800bd2d21e9775092be25d31)]:
+  - @vultisig/sdk@1.3.0
+  - @vultisig/core-chain@2.4.0
+  - @vultisig/rujira@27.0.0
+
+## 1.2.0
+
+### Patch Changes
+
+- Updated dependencies [[`cc9d67f`](https://github.com/vultisig/vultisig-sdk/commit/cc9d67f0c61d9ebdfc133beac5ef04658d37a37f)]:
+  - @vultisig/core-chain@2.3.0
+  - @vultisig/sdk@1.2.0
+  - @vultisig/rujira@26.0.0
+
+## 1.1.3
+
+### Patch Changes
+
+- [#544](https://github.com/vultisig/vultisig-sdk/pull/544) [`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable unsupported Bittensor seedphrase import and expose the SDK-owned seedphrase import chain support list.
+
+- Updated dependencies [[`a0b7b6b`](https://github.com/vultisig/vultisig-sdk/commit/a0b7b6b440e0584f4436a81ddf983d0dd28b7a95)]:
+  - @vultisig/sdk@1.1.3
+
+## 1.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`4c9454e`](https://github.com/vultisig/vultisig-sdk/commit/4c9454eca99f43a2ce572732c3d6fcc74c99e89e), [`5ef62f1`](https://github.com/vultisig/vultisig-sdk/commit/5ef62f1aa20202f4a4eb97afa0cf20216dc5a1f1)]:
+  - @vultisig/core-chain@2.2.3
+  - @vultisig/sdk@1.1.0
+  - @vultisig/rujira@25.0.0
+
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`fa95600`](https://github.com/vultisig/vultisig-sdk/commit/fa95600887cb8ca603e8ddcb9c8558eff2d0ea6b)]:
+  - @vultisig/sdk@1.0.0
+  - @vultisig/core-chain@2.2.2
+  - @vultisig/client-shared@0.2.13
+  - @vultisig/rujira@24.0.0
+
+## 0.28.0
+
+### Patch Changes
+
+- Updated dependencies [[`cb21dcf`](https://github.com/vultisig/vultisig-sdk/commit/cb21dcf127e8e08ceaca76439fa28d557cf0fed9)]:
+  - @vultisig/sdk@0.28.0
+  - @vultisig/client-shared@0.2.12
+  - @vultisig/rujira@23.0.0
+
+## 0.27.0
+
+### Patch Changes
+
+- Updated dependencies [[`9a80907`](https://github.com/vultisig/vultisig-sdk/commit/9a8090721008f2a10dffa9cf2d3fac479d65481c)]:
+  - @vultisig/sdk@0.27.0
+  - @vultisig/client-shared@0.2.11
+  - @vultisig/rujira@22.0.0
+
+## 0.26.1
+
+### Patch Changes
+
+- [#525](https://github.com/vultisig/vultisig-sdk/pull/525) [`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable SwapKit source routes for BTC, BCH, DOGE, LTC, XRP, ZEC, TRON, and TON by signing non-EVM SwapKit routes as source-chain transfers.
+
+- Updated dependencies [[`b0d0ba9`](https://github.com/vultisig/vultisig-sdk/commit/b0d0ba9d3ff0226149aca9a7446ff07a9eba84fc)]:
+  - @vultisig/core-chain@2.2.1
+  - @vultisig/sdk@0.26.1
+
 ## 0.26.0
 
 ### Minor Changes

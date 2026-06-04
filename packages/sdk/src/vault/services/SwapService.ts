@@ -20,6 +20,7 @@ import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
+import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -330,6 +331,10 @@ export class SwapService {
       if ('evm' in quoteData.general.tx) {
         return quoteData.general.tx.evm.to
       }
+      // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
+      if ('transfer' in quoteData.general.tx) {
+        return undefined
+      }
     }
     if ('native' in quoteData && quoteData.native.router) {
       return quoteData.native.router
@@ -481,6 +486,19 @@ export class SwapService {
       }
     }
 
+    // UTXO/Cosmos source via deposit channel: fees come from the source-chain tx,
+    // not from the SwapKit quote. Return 0n — real source-chain fees are estimated
+    // at broadcast time by TransactionBuilder.estimateSendFee() (which wraps
+    // getSendFeeEstimate() from @vultisig/core-mpc). This is the same estimator
+    // used for regular UTXO sends. VaultBase.getSwapQuote detects this 0n and
+    // keeps maxSwapable=0n rather than overstating it as the full balance.
+    if ('transfer' in tx) {
+      return {
+        network: 0n,
+        total: 0n,
+      }
+    }
+
     // Fallback for unknown swap types
     return {
       network: 0n,
@@ -498,24 +516,37 @@ export class SwapService {
 
     const message = error instanceof Error ? error.message : String(error)
 
-    // Check for known error patterns
-    if (message.includes('No swap routes') || message.includes('NoSwapRoutesError')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        'No swap route found between these tokens. Try a different pair or provider.',
-        error instanceof Error ? error : undefined
-      )
+    if (error instanceof SwapError) {
+      switch (error.code) {
+        case SwapErrorCode.NoRoutesFound:
+        case SwapErrorCode.AllProvidersFailed:
+          return new VaultError(
+            VaultErrorCode.InvalidConfig,
+            'No swap route found between these tokens. Try a different pair or provider.',
+            error
+          )
+        case SwapErrorCode.AmountTooSmall:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap amount too small: ${message}`, error)
+        case SwapErrorCode.AmountBelowMinimum:
+          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+        case SwapErrorCode.TradingHalted:
+          return new VaultError(VaultErrorCode.InvalidConfig, message, error)
+        case SwapErrorCode.InvalidConfig:
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap configuration error: ${message}`, error)
+        default: {
+          // Exhaustiveness guard: TS fails the build if a new SwapErrorCode is
+          // added without a case here. Without it, an unmapped code would
+          // silently fall through to the generic `Swap failed` handler below
+          // and lose its typed mapping. At runtime we still return a VaultError
+          // (never throw from this catch-all) using the SwapError's own message.
+          const _exhaustive: never = error.code
+          void _exhaustive
+          return new VaultError(VaultErrorCode.InvalidConfig, `Swap failed: ${message}`, error)
+        }
+      }
     }
 
-    if (message.includes('amount too small') || message.includes('not enough asset')) {
-      return new VaultError(
-        VaultErrorCode.InvalidConfig,
-        `Swap amount too small: ${message}`,
-        error instanceof Error ? error : undefined
-      )
-    }
-
-    if (message.includes('insufficient')) {
+    if (message.includes('not enough asset') || message.includes('insufficient')) {
       return new VaultError(
         VaultErrorCode.InvalidConfig,
         `Insufficient funds: ${message}`,

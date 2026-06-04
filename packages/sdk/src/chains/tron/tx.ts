@@ -86,6 +86,25 @@ export type BuildTronSendOptions = {
   expiration: bigint
   /** Transaction timestamp (ms). Required — typically `BigInt(Date.now())`. */
   timestamp: bigint
+  /**
+   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   *
+   * IMPORTANT: this is the *Transaction-level* memo on `raw_data.data`, NOT
+   * any contract-call data. For native TRX sends the memo is the free-form
+   * payload most exchanges and THORChain expect.
+   *
+   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   *
+   * Used by:
+   *   - THORChain swap memos (`SWAP:CHAIN.ASSET:dest:limit`)
+   *   - Exchange deposit memos (Binance / OKX / KuCoin user-tag memos)
+   *   - Any flow that needs to attach an arbitrary identifier to a transfer
+   *
+   * Parity: iOS sets `TronTransaction.memo = memoString` which WalletCore
+   * encodes identically as field 12; the legacy keysign resolver wires
+   * `memo: keysignPayload.memo` on the TW proto for the same effect.
+   */
+  data?: Uint8Array
 }
 
 export type BuildTrc20TransferOptions = {
@@ -112,6 +131,27 @@ export type BuildTrc20TransferOptions = {
   expiration: bigint
   /** Timestamp (ms). Required — see `BuildTronSendOptions`. */
   timestamp: bigint
+  /**
+   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   *
+   * IMPORTANT: this is the *Transaction-level* memo on the WRAPPING
+   * Transaction, NOT the TRC-20 contract call data. The contract call data
+   * (4-byte selector + 32-byte recipient + 32-byte amount) is built
+   * separately and lives on the inner `TriggerSmartContract.data` field.
+   *
+   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   *
+   * Used by:
+   *   - Exchange deposit memos for TRC-20 USDT / USDC user-tag identifiers
+   *     (Binance / OKX / KuCoin require this for crediting deposits)
+   *   - Any flow that needs to attach an arbitrary identifier to a token
+   *     transfer
+   *
+   * Parity: iOS sets `TronTransaction.memo = memoString` for both native
+   * and TRC-20 paths; WalletCore encodes it as field 12 on the wrapping
+   * Transaction in both cases.
+   */
+  data?: Uint8Array
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +268,7 @@ function buildRawData(opts: {
   contractTypeUrl: string
   contractValue: Uint8Array
   feeLimit?: bigint
+  data?: Uint8Array
 }): Uint8Array {
   // `google.protobuf.Any` wrapper: { type_url (1), value (2) }.
   const anyParam = concatProtoBytes(fieldString(1, opts.contractTypeUrl), fieldBytes(2, opts.contractValue))
@@ -242,9 +283,18 @@ function buildRawData(opts: {
     fieldBytes(1, opts.refBlockBytes),
     fieldBytes(4, opts.refBlockHash),
     fieldInt64(8, opts.expiration),
-    fieldBytes(11, contract),
-    fieldInt64(14, opts.timestamp)
+    fieldBytes(11, contract)
   )
+
+  // Field 12: data (proto field 12, wire type 2 = length-delimited bytes).
+  // Encodes swap memos, exchange deposit memos, etc. Matches the behaviour of
+  // WalletCore's TronTransaction.memo field and the legacy keysign resolver.
+  // Empty arrays are treated as absent — Tron nodes reject zero-length data.
+  if (opts.data != null && opts.data.length > 0) {
+    raw = concatProtoBytes(raw, fieldBytes(12, opts.data))
+  }
+
+  raw = concatProtoBytes(raw, fieldInt64(14, opts.timestamp))
 
   if (opts.feeLimit != null && opts.feeLimit > 0n) {
     raw = concatProtoBytes(raw, fieldInt64(18, opts.feeLimit))
@@ -289,10 +339,89 @@ export function buildTronSendTx(opts: BuildTronSendOptions): TronTxBuilderResult
     contractType: 1,
     contractTypeUrl: 'type.googleapis.com/protocol.TransferContract',
     contractValue,
+    data: opts.data,
   })
 
   const signingHashBytes = sha256(rawData)
   const signingHashHex = bytesToHex(signingHashBytes)
+  const unsignedRawHex = bytesToHex(rawData)
+
+  const finalize = (sigHex: string): { signedTxHex: string; txId: string } => {
+    const sig = parseSignature(sigHex)
+    const signedTx = wrapTransaction(rawData, sig)
+    return { signedTxHex: bytesToHex(signedTx), txId: signingHashHex }
+  }
+
+  return { signingHashHex, unsignedRawHex, finalize }
+}
+
+/**
+ * Same signing-hash + finalize contract as `buildTronSendTx` /
+ * `buildTrc20TransferTx`, but takes a PRE-BUILT `raw_data` protobuf byte
+ * sequence instead of building it from a TransferContract or
+ * TriggerSmartContract. Use when an upstream service (e.g. yield.xyz,
+ * stakek.it, a delegation-service backend) hands you the encoded
+ * raw_data hex and you only need to:
+ *   1. compute the signing hash (sha256(raw_data)),
+ *   2. MPC-sign it,
+ *   3. wrap raw_data + signature into the outer Transaction protobuf
+ *      for broadcast.
+ *
+ * No validation of the protobuf contents — the caller has already
+ * decided the tx shape is correct. Validation lives one layer up
+ * (yield.xyz's preview, the user's review card, etc.).
+ *
+ * Why expose this:
+ *
+ *   - yield.xyz Tron actions (`tron-trx-native-staking`,
+ *     `tron-trx-strx-staking`) return a pre-encoded `raw_data` hex
+ *     covering FreezeBalanceV2 / UnfreezeBalanceV2 / VoteWitness etc.
+ *     contracts. Replicating those builders here would mean shipping
+ *     N more contract types just so the SDK can produce identical
+ *     bytes — wasteful when the upstream already did the work.
+ *
+ *   - Delegated-staking / dApp signing flows (e.g. wallet-connect
+ *     style) pre-build the tx on a remote node and expect the wallet
+ *     to sign without re-deriving the bytes. Same primitive serves
+ *     that use case too.
+ *
+ * @param rawDataHex  hex-encoded protobuf `Transaction.raw_data` bytes,
+ *                    with or without `0x` prefix. Must NOT be the full
+ *                    signed-tx envelope — only the inner raw_data.
+ * @returns same shape as `buildTronSendTx`. `unsignedRawHex` is the
+ *          *normalized* hex of the decoded raw_data bytes — equal to
+ *          the input after stripping any leading `0x`/`0X` prefix and
+ *          lowercasing. Byte-parity checks against the decoded bytes
+ *          hold; a naive string-level `===` against the original input
+ *          may differ on prefix or hex casing.
+ */
+export function buildTronTxFromRawData(rawDataHex: string): TronTxBuilderResult {
+  if (typeof rawDataHex !== 'string') {
+    throw new Error('buildTronTxFromRawData: rawDataHex must be a hex string')
+  }
+  // Reject non-hex characters explicitly. `hexToBytes` uses
+  // `parseInt(_, 16)` which silently returns NaN for invalid chars,
+  // producing garbage bytes that hash to a wrong signing payload and
+  // ultimately MPC-sign over nothing meaningful. The strict guard
+  // ensures malformed input from yield.xyz / app callers fails fast
+  // with a clear message rather than producing an unbroadcastable tx.
+  const stripped = rawDataHex.startsWith('0x') || rawDataHex.startsWith('0X') ? rawDataHex.slice(2) : rawDataHex
+  if (!/^[0-9a-fA-F]*$/.test(stripped)) {
+    throw new Error('buildTronTxFromRawData: rawDataHex contains non-hex characters')
+  }
+  // Decode from the prefix-stripped form so `hexToBytes` doesn't have to
+  // re-do prefix handling (and so a `0X` prefix doesn't ride through to
+  // any future decoder that's `0x`-case-sensitive).
+  const rawData = hexToBytes(stripped)
+  if (rawData.length === 0) {
+    throw new Error('buildTronTxFromRawData: rawDataHex decoded to zero bytes')
+  }
+
+  const signingHashBytes = sha256(rawData)
+  const signingHashHex = bytesToHex(signingHashBytes)
+  // Normalise the round-trip representation so callers comparing the
+  // returned `unsignedRawHex` against the input string don't have to
+  // strip the optional `0x` prefix themselves.
   const unsignedRawHex = bytesToHex(rawData)
 
   const finalize = (sigHex: string): { signedTxHex: string; txId: string } => {
@@ -324,6 +453,7 @@ export function buildTrc20TransferTx(opts: BuildTrc20TransferOptions): TronTxBui
     contractTypeUrl: 'type.googleapis.com/protocol.TriggerSmartContract',
     contractValue,
     feeLimit: opts.feeLimit,
+    data: opts.data,
   })
 
   const signingHashBytes = sha256(rawData)

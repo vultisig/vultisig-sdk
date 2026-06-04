@@ -27,13 +27,22 @@ export const getPolkadotTxStatus: TxStatusResolver<OtherChain.Polkadot> = async 
   )
 
   if (error || !response || response.code !== 0 || !response.data) {
-    return { status: 'pending' }
+    // Subscan does not know this hash (or the API errored). Mark
+    // `isKnown: false` so the verify-by-hash safety net does NOT swallow
+    // the original broadcast error. Otherwise an `author_submitExtrinsic`
+    // rejection is silently reported as success and the UI shows a fake
+    // "done" with a hash that has no on-chain counterpart. Mirrors
+    // ripple.ts:25 / solana.ts:19.
+    return { status: 'pending', isKnown: false }
   }
 
   const { success, finalized, fee_used } = response.data
 
   if (!finalized) {
-    return { status: 'pending' }
+    // Subscan has indexed the extrinsic but it is not finalized yet —
+    // genuinely in flight. This is the legitimate peer-race case where
+    // verify-by-hash should swallow the slower device's duplicate error.
+    return { status: 'pending', isKnown: true }
   }
 
   const feeCoin = chainFeeCoin[Chain.Polkadot]
