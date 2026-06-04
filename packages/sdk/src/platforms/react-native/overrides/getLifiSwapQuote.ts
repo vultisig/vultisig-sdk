@@ -21,7 +21,7 @@ import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
-import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
+import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -32,6 +32,11 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
+  /** Consumer-supplied LI.FI integrator override — mirrors the core
+   * `getLifiSwapQuote` Input. Threaded through to the per-call `integrator`
+   * arg on `getQuote` so RN consumers get the same affiliate-routing surface
+   * as Node consumers. (Ehsan-saradar #618 review.) */
+  lifiAffiliateConfig?: LifiAffiliateConfig
 }
 
 // 1% slippage tolerance — same as core implementation (see getLifiSwapQuote.ts in core).
@@ -62,15 +67,33 @@ const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): 
   return resolved
 }
 
-const setupLifi = memoize(async () => {
-  const { createConfig } = await import('@lifi/sdk')
-  createConfig({
-    integrator: lifiConfig.integratorName,
-  })
+// RN-specific bootstrap. Mirrors the `ensureLifiConfigured` pattern from
+// core's `getLifiSwapQuote.ts`. Runs `setupLifi()` exactly once via the
+// `memoize` wrapper; subsequent quote calls hit the cached return and skip
+// the work entirely. setupLifi's lazy branch then calls `createConfig`
+// exactly once via its own `configured` latch, so the `@lifi/sdk` default
+// `preloadChains: true` HTTP fetch fires once at first-quote time, not
+// per-quote. (NeOMakinG #618 r2 blocker.)
+//
+// Consumer-bootstrap path stays safe: an explicit
+// `setupLifi({integratorName, apiUrl})` called from a consumer app's boot
+// path overwrites `lifiConfig` and re-runs `createConfig` once at that
+// point. The memoize'd `ensureLifiConfiguredInRN` then no-ops on quotes
+// because `configured = true` is already set inside `setupLifi`.
+//
+// Using `setupLifi()` (not raw `createConfig`) keeps config.ts as the
+// single source of truth for integrator/apiUrl.
+const ensureLifiConfiguredInRN = memoize(() => {
+  setupLifi()
 })
 
-export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
-  await setupLifi()
+export const getLifiSwapQuote = async ({
+  amount,
+  affiliateBps,
+  lifiAffiliateConfig,
+  ...transfer
+}: Input): Promise<GeneralSwapQuote> => {
+  ensureLifiConfiguredInRN()
 
   const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
@@ -86,6 +109,13 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
+  // Mirror core's per-call integrator override (Ehsan-saradar #618 review):
+  // when the consumer supplied a `lifiAffiliateConfig` via
+  // `SwapAffiliateConfig.lifi`, tag this quote with their portal integrator
+  // instead of whatever sits in `lifiConfig.integratorName` (vultisig-0 by
+  // default; consumer's value if they ran `setupLifi(bootstrap)` at boot).
+  const integrator = lifiAffiliateConfig?.integratorName ?? lifiConfig.integratorName
+
   const quote = await getQuote({
     fromChain,
     toChain,
@@ -94,8 +124,14 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAmount: amount.toString(),
     fromAddress,
     toAddress,
-    fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    // NeOMakinG #618 r2 should-fix mirror: explicit `undefined` only when
+    // affiliateBps is genuinely unset. `affiliateBps: 0` previously fell into
+    // the truthy-test and became `undefined`, which let LiFi's getQuote
+    // silently fall back to `_config.routeOptions?.fee`. For a consumer that
+    // explicitly set 0, that's a silent non-zero fee. Now: 0 stays 0.
+    fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
     slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
+    integrator,
   })
 
   const { transactionRequest, estimate } = quote

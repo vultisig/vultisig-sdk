@@ -1,8 +1,8 @@
-import { ChainId, createConfig, getQuote } from '@lifi/sdk'
+import { ChainId, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { lifiConfig } from '@vultisig/core-chain/swap/general/lifi/config'
+import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -17,6 +17,9 @@ import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
   amount: bigint
   affiliateBps?: number
+  /** Consumer-supplied LI.FI integrator override. When omitted, falls back
+   * to the global `lifiConfig.integratorName` (vultisig-0 by default). */
+  lifiAffiliateConfig?: LifiAffiliateConfig
 }
 
 // Stable-pair detection: tickers that commonly trade within a tight peg.
@@ -45,10 +48,13 @@ const isStableTicker = (ticker: string | undefined): boolean =>
 export const isStablePair = (from: { ticker?: string }, to: { ticker?: string }): boolean =>
   isStableTicker(from.ticker) && isStableTicker(to.ticker)
 
-const setupLifi = memoize(() => {
-  createConfig({
-    integrator: lifiConfig.integratorName,
-  })
+/** Lazy bootstrap for callers that never invoked the public `setupLifi`
+ * — uses whatever defaults sit on `lifiConfig` (vultisig-0 + no apiUrl
+ * unless a consumer mutated them at module load). The public `setupLifi`
+ * exported from ../config is idempotent and short-circuits subsequent
+ * calls, so this is safe to call on every quote. */
+const ensureLifiConfigured = memoize(() => {
+  setupLifi()
 })
 
 // Slippage tolerance baked into the LiFi-prebuilt swap tx. The
@@ -138,8 +144,13 @@ const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): 
   return resolved
 }
 
-export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: Input): Promise<GeneralSwapQuote> => {
-  setupLifi()
+export const getLifiSwapQuote = async ({
+  amount,
+  affiliateBps,
+  lifiAffiliateConfig,
+  ...transfer
+}: Input): Promise<GeneralSwapQuote> => {
+  ensureLifiConfigured()
 
   const [fromChain, toChain] = [transfer.from, transfer.to].map(({ chain }) => lifiSwapChainId[chain])
 
@@ -162,6 +173,13 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     )
   }
 
+  // Per-call integrator override — when the consumer supplied a
+  // `lifiAffiliateConfig` (e.g. Station via mcp-ts) the affiliate fee
+  // for THIS quote is tagged to their portal integrator instead of the
+  // SDK-default. Falls back to whatever `lifiConfig.integratorName`
+  // resolves to (vultisig-0 unless the consumer's setupLifi() ran first).
+  const integrator = lifiAffiliateConfig?.integratorName ?? lifiConfig.integratorName
+
   const quote = await getQuote({
     fromChain,
     toChain,
@@ -170,8 +188,15 @@ export const getLifiSwapQuote = async ({ amount, affiliateBps, ...transfer }: In
     fromAmount: amount.toString(),
     fromAddress,
     toAddress,
-    fee: affiliateBps ? affiliateBps / 10000 : undefined,
+    // NeOMakinG #618 r2 should-fix: explicit `undefined` only when affiliateBps
+    // is genuinely unset. `affiliateBps: 0` previously fell into the truthy-test
+    // and became `undefined`, which let LiFi's getQuote silently fall back to
+    // `_config.routeOptions?.fee` (see @lifi/sdk src/services/api.js: `params.fee
+    // ??= _config.routeOptions?.fee`). For a consumer that explicitly set 0,
+    // that's a silent non-zero fee. Now: 0 stays 0.
+    fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
     slippage,
+    integrator,
   })
 
   const { transactionRequest, estimate } = quote

@@ -9,6 +9,7 @@ import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/q
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
+import { LifiAffiliateConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapEnabledChains } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import {
   getOneInchSwapQuote,
@@ -49,6 +50,7 @@ export type SwapAffiliateConfig = {
   native?: NativeSwapAffiliateConfig
   oneInch?: OneInchAffiliateConfig
   kyber?: KyberSwapBaseAffiliateConfig
+  lifi?: LifiAffiliateConfig
 }
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -383,6 +385,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            lifiAffiliateConfig: affiliateConfig?.lifi,
           })
 
           return { quote: { general }, discounts: vultDiscount }

@@ -437,32 +437,72 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Create a new fast vault (2-of-2 with VultiServer)
    *
-   * The vault is created in memory but NOT persisted until email verification succeeds.
-   * Call `verifyVault()` with the email code to complete creation and get the vault.
+   * Default flow: vault is created in memory but NOT persisted until email
+   * verification succeeds. Call `verifyVault()` with the email code to
+   * complete creation and get the vault.
+   *
+   * `skipVerification: true` mode (issue #161, for AI agents + automated
+   * scripts): the email verification step is bypassed entirely — the vault
+   * is saved + activated in this call and the FastVault instance is returned
+   * directly. MPC keygen with VultiServer still runs, so the keyshares ARE
+   * generated. Use this when the caller cannot retrieve an OTP from email
+   * (CI scripts, agent eval scenarios, programmatic vault provisioning).
+   *
+   * Caller is responsible for keyshare security when skipping verification.
+   * VultiServer may still require email verification for *signing* operations
+   * on this vault depending on server policy (cf. #161 scope notes).
    *
    * @param options - Vault creation options
-   * @returns Vault ID (call verifyVault with this ID to get the vault)
+   * @returns Vault ID when verification is required (default), or the
+   *   activated FastVault instance directly when `skipVerification: true`.
    *
-   * @example
+   * @example default verification flow
    * ```typescript
    * const vaultId = await sdk.createFastVault({
    *   name: 'My Fast Vault',
    *   password: 'securePassword123',
    *   email: 'user@example.com',
-   *   onProgress: (step) => console.log(step.message)
    * })
-   *
-   * // User receives email with verification code
    * const code = await promptUser('Enter verification code:')
    * const vault = await sdk.verifyVault(vaultId, code)
+   * ```
    *
-   * // Now use the vault
+   * @example skipVerification (agent / automation)
+   * ```typescript
+   * const vault = await sdk.createFastVault({
+   *   name: 'CI Vault',
+   *   password: 'securePassword123',
+   *   email: 'ci-bot@example.com',
+   *   skipVerification: true,
+   * })
+   * // vault is saved + activated immediately, no OTP step
    * const address = await vault.address(Chain.Bitcoin)
-   *
-   * // Optional: add ML-DSA post-quantum keys later (VultiServer POST /mldsa)
-   * await sdk.addPostQuantumKeysToFastVault(vault, { email: 'user@example.com', password: '...' })
    * ```
    */
+  // Overload: `skipVerification: true` → returns the FastVault directly.
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    signal?: AbortSignal
+    onProgress?: (step: VaultCreationStep) => void
+    persistPending?: boolean
+    tssBatching?: boolean
+    skipVerification: true
+  }): Promise<FastVault>
+  // Overload: no flag (or `skipVerification: false`) → returns the vaultId
+  // string and the caller must call verifyVault() to complete (default flow,
+  // unchanged from pre-#161 behaviour).
+  async createFastVault(options: {
+    name: string
+    password: string
+    email: string
+    signal?: AbortSignal
+    onProgress?: (step: VaultCreationStep) => void
+    persistPending?: boolean
+    tssBatching?: boolean
+    skipVerification?: false
+  }): Promise<string>
   async createFastVault(options: {
     name: string
     password: string
@@ -473,11 +513,33 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
     persistPending?: boolean
     /** Enable batched MPC ceremonies for this vault creation. */
     tssBatching?: boolean
-  }): Promise<string> {
+    /**
+     * Skip the email-verification step (#161). When true: the vault is saved
+     * + activated immediately and the FastVault instance is returned. When
+     * false / unset: default flow — caller must call verifyVault() with the
+     * OTP from email. `persistPending` is ignored on the skip-verification
+     * branch because there is no pending state to persist.
+     */
+    skipVerification?: boolean
+  }): Promise<string | FastVault> {
     await this.ensureInitialized()
     const result = await FastVault.create(this.context, options)
 
-    // Store vault in pending map - it will be saved after email verification succeeds
+    if (options.skipVerification) {
+      // Bypass email verification: save + activate the vault directly. Mirrors
+      // the post-verifyVault sequence (save → setActiveVault → emit) so the
+      // returned vault is in the same state as a verifyVault-completed one.
+      await result.vault.save()
+      await this.vaultManager.setActiveVault(result.vaultId)
+      this.emit('vaultChanged', { vaultId: result.vaultId })
+      // Don't touch pendingVaults / pending-on-disk: nothing was added in
+      // this branch so there's nothing to clean up. persistPending is
+      // intentionally ignored here (no pending state to persist).
+      return result.vault
+    }
+
+    // Default flow: store vault in pending map — it will be saved after email
+    // verification succeeds via verifyVault().
     this.pendingVaults.set(result.vaultId, result.vault)
 
     // Optionally persist to disk for two-step creation (survives process exit)
@@ -985,6 +1047,39 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async getVaultById(vaultId: string): Promise<VaultBase | null> {
     return this.vaultManager.getVaultById(vaultId)
+  }
+
+  /**
+   * Get vault instance by display name. Case-sensitive lookup against the
+   * `name` field on every stored vault. Returns `null` if no vault has a
+   * matching name. See `VaultManager.getVaultByName` for the full contract
+   * (including the duplicate-name tie-break: first match in listVaults order).
+   *
+   * @param name - Vault display name as set at creation / shown in the UI
+   * @returns Vault instance or null if no vault has that name
+   * @example
+   * ```typescript
+   * const vault = await sdk.getVaultByName('Main Wallet')
+   * if (vault) {
+   *   const balance = await vault.balance('Bitcoin')
+   * }
+   * ```
+   */
+  async getVaultByName(name: string): Promise<VaultBase | null> {
+    return this.vaultManager.getVaultByName(name)
+  }
+
+  /**
+   * Get vault instance by display name, throwing with a helpful error that
+   * lists available vault names when no match is found. See
+   * `VaultManager.getVaultByNameOrThrow` for the full contract.
+   *
+   * @param name - Vault display name
+   * @returns Vault instance
+   * @throws Error if no vault matches, listing available names in the message
+   */
+  async getVaultByNameOrThrow(name: string): Promise<VaultBase> {
+    return this.vaultManager.getVaultByNameOrThrow(name)
   }
 
   // === GLOBAL CONFIGURATION ===

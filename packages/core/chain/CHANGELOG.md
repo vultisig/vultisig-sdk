@@ -1,5 +1,30 @@
 # @vultisig/core-chain
 
+## 2.10.0
+
+### Minor Changes
+
+- [#618](https://github.com/vultisig/vultisig-sdk/pull/618) [`ddf0bf4`](https://github.com/vultisig/vultisig-sdk/commit/ddf0bf44cc38905370f60246b88503954b3e3418) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(swap/lifi): consumer-supplied LI.FI integrator + apiUrl override
+
+  Adds `SwapAffiliateConfig.lifi: LifiAffiliateConfig` so consumers (e.g. Station via `vultisig/mcp-ts`) can redirect LI.FI affiliate fees to their own portal integrator instead of the SDK-default `vultisig-0`.
+
+  New surface:
+  - `LifiAffiliateConfig` type — `{ integratorName: string; apiUrl?: string }`
+  - `setupLifi(config?)` — global LI.FI SDK bootstrap; idempotent first-caller-wins. Consumers call this once at module boot to set both the global `integrator` and (optional) `apiUrl` proxy.
+  - `getLifiSwapQuote` now accepts an optional `lifiAffiliateConfig` and uses its `integratorName` as the per-call `integrator` in `getQuote(...)`, overriding the global default for THIS quote without mutating the module-level `lifiConfig`.
+  - `findSwapQuote` threads `affiliateConfig?.lifi` into `getLifiSwapQuote`.
+
+  No behaviour change for callers that don't supply a `lifi` config — `getLifiSwapQuote` still routes through the existing `vultisig-0` default.
+
+- [#619](https://github.com/vultisig/vultisig-sdk/pull/619) [`c63c713`](https://github.com/vultisig/vultisig-sdk/commit/c63c713de30c847a98d3b73c8ba5b5a882c0699b) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): add jetton master token metadata discovery
+
+  Adds a TON token metadata resolver so pasting a jetton master address (`EQ.../UQ...`) auto-fills ticker, decimals, and logo — same UX as EVM/Solana/Tron custom token discovery.
+  - New `getJettonMasterInfo()` helper hits Toncenter v3 `/jetton/masters`, preferring the validated indexer `token_info` entry over on-chain TEP-64 `jetton_content`.
+  - Logo selection prefers Toncenter's `imgproxy.toncenter.com` variants (`_image_medium` → `_image_small` → `_image_big`) before the raw `image` URL. Many jetton issuers serve their PNG with `Cross-Origin-Resource-Policy: same-origin`, which browsers refuse to embed cross-origin; the proxied variants load reliably.
+  - `OtherChain.Ton` added to `chainsWithTokenMetadataDiscovery`; the new `getTonTokenMetadata` resolver is registered under the `ton` chain kind.
+
+  Unblocks vultisig/vultisig-windows#4029.
+
 ## 2.9.0
 
 ### Minor Changes
