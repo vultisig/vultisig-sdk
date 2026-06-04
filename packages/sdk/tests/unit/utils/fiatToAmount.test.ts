@@ -14,6 +14,10 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
       priceProviderId: 'polygon-ecosystem-token',
     },
     Bittensor: { ticker: 'TAO', decimals: 9, priceProviderId: 'bittensor' },
+    TerraClassic: { ticker: 'LUNC', decimals: 6, priceProviderId: 'terra-luna' },
+    Cosmos: { ticker: 'ATOM', decimals: 6, priceProviderId: 'cosmos' },
+    // Required by kujiraCoinsOnThorChain module init — reads THORChain decimals at import time
+    THORChain: { ticker: 'RUNE', decimals: 8, priceProviderId: 'thorchain' },
   },
 }))
 
@@ -143,15 +147,86 @@ describe('fiatToAmount', () => {
     await expect(fiatToAmount({ fiatValue: 'abc', chain: Chain.Ethereum, decimals: 18 })).rejects.toThrow(/fiat value/i)
   })
 
-  it('throws when ERC-20 price lookup is requested on a non-EVM chain', async () => {
-    await expect(
-      fiatToAmount({
-        fiatValue: 10,
-        chain: Chain.Solana,
-        tokenId: 'some-mint',
-        decimals: 6,
-      })
-    ).rejects.toThrow(/EVM/i)
+  it('throws a registry-miss error (not EVM-only) when tokenId is unknown on a non-EVM chain', async () => {
+    // 'some-unknown-mint' is not in knownTokensIndex for Solana
+    const err = await fiatToAmount({
+      fiatValue: 10,
+      chain: Chain.Solana,
+      tokenId: 'some-unknown-mint',
+      decimals: 6,
+    }).catch(e => e)
+
+    expect(err).toBeInstanceOf(FiatToAmountError)
+    // Must NOT say "EVM chains" — that message is wrong for non-EVM tokens
+    expect(err.message).not.toMatch(/EVM/i)
+    // Must mention the registry so the LLM can understand the gap
+    expect(err.message).toMatch(/registry/i)
+  })
+
+  it('resolves USTC (uusd) on TerraClassic via knownTokens registry', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+    // USTC ~ $0.02
+    vi.mocked(getCoinPrices).mockResolvedValue({ terrausd: 0.02 })
+
+    // $1 / $0.02 per USTC = 50 USTC
+    const result = await fiatToAmount({
+      fiatValue: 1,
+      chain: Chain.TerraClassic,
+      tokenId: 'uusd',
+      decimals: 6,
+    })
+
+    expect(getCoinPrices).toHaveBeenCalledWith(expect.objectContaining({ ids: ['terrausd'] }))
+    expect(result).toBe('50')
+  })
+
+  it('resolves LUNC (uluna) on TerraClassic via knownTokens registry', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+    // LUNC ~ $0.0001
+    vi.mocked(getCoinPrices).mockResolvedValue({ 'terra-luna': 0.0001 })
+
+    // $0.1 / $0.0001 per LUNC = 1000 LUNC
+    const result = await fiatToAmount({
+      fiatValue: 0.1,
+      chain: Chain.TerraClassic,
+      tokenId: 'uluna',
+      decimals: 6,
+    })
+
+    expect(getCoinPrices).toHaveBeenCalledWith(expect.objectContaining({ ids: ['terra-luna'] }))
+    expect(result).toBe('1000')
+  })
+
+  it('resolves ATOM IBC denom on Osmosis via knownTokens registry', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+    vi.mocked(getCoinPrices).mockResolvedValue({ cosmos: 8 })
+
+    // $40 / $8 per ATOM = 5 ATOM
+    const result = await fiatToAmount({
+      fiatValue: 40,
+      chain: Chain.Osmosis,
+      tokenId: 'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2',
+      decimals: 6,
+    })
+
+    expect(getCoinPrices).toHaveBeenCalledWith(expect.objectContaining({ ids: ['cosmos'] }))
+    expect(result).toBe('5')
+  })
+
+  it('resolves EVM USDC on Ethereum via getErc20Prices — no regression', async () => {
+    const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+    const usdcAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.mocked(getErc20Prices).mockResolvedValue({ [usdcAddress.toLowerCase()]: 1 })
+
+    const result = await fiatToAmount({
+      fiatValue: 25,
+      chain: Chain.Ethereum,
+      tokenId: usdcAddress,
+      decimals: 6,
+    })
+
+    expect(getErc20Prices).toHaveBeenCalledWith(expect.objectContaining({ ids: [usdcAddress], chain: Chain.Ethereum }))
+    expect(result).toBe('25')
   })
 
   it('expands scientific-notation results into plain decimal strings', async () => {
