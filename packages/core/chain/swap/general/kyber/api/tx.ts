@@ -13,6 +13,7 @@ import {
   getKyberSwapAffiliateParams,
   hasAffiliateBps,
   kyberSwapAffiliateConfig,
+  KyberSwapBaseAffiliateConfig,
   kyberSwapSlippageTolerance,
   kyberSwapTxLifespan,
 } from '../config'
@@ -24,6 +25,7 @@ type GetKyberSwapTxInput = Record<TransferDirection, AccountCoin<KyberSwapEnable
   amount: bigint
   enableGasEstimation: boolean
   affiliateBps?: number
+  kyberConfig?: KyberSwapBaseAffiliateConfig
 }
 
 type KyberSwapBuildResponse = {
@@ -70,6 +72,7 @@ export const getKyberSwapTx = async ({
   amount,
   enableGasEstimation,
   affiliateBps,
+  kyberConfig = kyberSwapAffiliateConfig,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
   const buildPayload = {
     routeSummary,
@@ -78,13 +81,13 @@ export const getKyberSwapTx = async ({
     slippageTolerance: kyberSwapSlippageTolerance,
     deadline: Math.round(convertDuration(Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'), 'ms', 's')),
     enableGasEstimation,
-    ...getKyberSwapAffiliateParams(affiliateBps),
+    ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),
     ignoreCappedSlippage: false,
   }
 
   const buildResponse = await queryUrl<KyberSwapBuildResponse>(`${getKyberSwapBaseUrl(from.chain)}/route/build`, {
     headers: {
-      'X-Client-Id': kyberSwapAffiliateConfig.source,
+      'X-Client-Id': kyberConfig.source,
     },
     body: buildPayload,
   })

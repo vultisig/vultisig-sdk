@@ -1,6 +1,12 @@
 // Pure tx builders — no network I/O, no vault.
 export type { BuildTrc20TransferOptions, BuildTronSendOptions, TronTxBuilderResult } from './tx'
-export { buildTrc20CallData, buildTrc20TransferTx, buildTronSendTx, tronAddressToBytes } from './tx'
+export {
+  buildTrc20CallData,
+  buildTrc20TransferTx,
+  buildTronSendTx,
+  buildTronTxFromRawData,
+  tronAddressToBytes,
+} from './tx'
 
 // Protobuf primitives — exposed so downstream code can extend this surface
 // with `FreezeBalance` etc. without re-implementing varint / tag encoding.

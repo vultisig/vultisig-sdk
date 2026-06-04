@@ -1,7 +1,16 @@
+import { base64Decode } from '@bufbuild/protobuf/wire'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
 import { bigishToString, emptyToUndefined } from '../utils'
 import { mapNestedCoin } from './mapNestedCoin'
+
+const mapBytes = (value: unknown): Uint8Array => {
+  if (value instanceof Uint8Array) {
+    return value
+  }
+
+  return typeof value === 'string' ? base64Decode(value) : new Uint8Array()
+}
 
 export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | undefined => {
   if (!spRaw) return
@@ -23,7 +32,25 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
               dstAmount: String(o.quote.dst_amount ?? o.quote.dstAmount),
               tx: o.quote.tx
                 ? {
-                    swapFee: String(o.quote.swap_fee ?? 0),
+                    // `swap_fee` lives on `tx` per the proto, but historical iOS
+                    // fixtures have surfaced it one level up on `quote`; accept
+                    // both paths so existing roundtrip fixtures keep working.
+                    swapFee: String(o.quote.tx.swap_fee ?? o.quote.tx.swapFee ?? o.quote.swap_fee ?? 0),
+                    // Coin context for `swap_fee` (proto fields 8/9/10, optional).
+                    // Forward whichever casing iOS emits so the cosigner can
+                    // render the fee row with correct decimals/asset attribution
+                    // — without this, the new fields would be silently dropped
+                    // on iOS → TS fixture roundtrips and KyberSwap-style payloads
+                    // would misread a destination-token fee as the source fee
+                    // coin. (NeOMakinG #540 preferably-blocking #1.)
+                    swapFeeChain: o.quote.tx.swap_fee_chain ?? o.quote.tx.swapFeeChain,
+                    swapFeeTokenId: o.quote.tx.swap_fee_token_id ?? o.quote.tx.swapFeeTokenId,
+                    swapFeeDecimals:
+                      o.quote.tx.swap_fee_decimals != null
+                        ? Number(o.quote.tx.swap_fee_decimals)
+                        : o.quote.tx.swapFeeDecimals != null
+                          ? Number(o.quote.tx.swapFeeDecimals)
+                          : undefined,
                     $typeName: '' as any,
                     data: o.quote.tx.data,
                     from: o.quote.tx.from,
@@ -66,6 +93,30 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
         isAffiliate: Boolean(t.is_affiliate ?? t.isAffiliate),
         fee: feeIn === undefined ? '' : String(feeIn),
         expirationTime: BigInt(t.expiration_time ?? t.expirationTime ?? 0),
+      },
+    }
+
+    return res
+  }
+
+  if (spRaw.SwapKitSwapPayload || spRaw.swapkitSwapPayload) {
+    const s = spRaw.SwapKitSwapPayload ?? spRaw.swapkitSwapPayload
+
+    const res: KeysignPayload['swapPayload'] = {
+      case: 'swapkitSwapPayload',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SwapKitSwapPayload',
+        fromCoin: mapNestedCoin(s.from_coin ?? s.fromCoin),
+        toCoin: mapNestedCoin(s.to_coin ?? s.toCoin),
+        fromAmount: String(s.from_amount ?? s.fromAmount),
+        toAmountDecimal: s.to_amount_decimal ?? s.toAmountDecimal,
+        txType: s.tx_type ?? s.txType ?? '',
+        txPayload: mapBytes(s.tx_payload ?? s.txPayload),
+        targetAddress: s.target_address ?? s.targetAddress ?? '',
+        inboundAddress: s.inbound_address ?? s.inboundAddress,
+        memo: s.memo,
+        subProvider: s.sub_provider ?? s.subProvider ?? '',
+        swapId: s.swap_id ?? s.swapId ?? '',
       },
     }
 

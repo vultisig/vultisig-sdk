@@ -16,15 +16,30 @@ export const getPolkadotChainSpecific: GetChainSpecificResolver<'polkadotSpecifi
 
   const { address } = getKeysignCoin(keysignPayload)
 
-  const { specVersion, transactionVersion } = await client.rpc.state.getRuntimeVersion()
+  // Fetch the header ONCE and derive both the era checkpoint block number
+  // and its block hash from the same response. Doing them as two separate
+  // RPC calls (getBlockHash + getHeader) lets the chain head advance
+  // between the two — the era then encodes phase = (N+1) % period while
+  // `additional_signed.blockHash` still holds the hash of block N. The
+  // runtime recomputes the checkpoint at validation, finds the wrong hash,
+  // and rejects with InvalidTransaction::BadProof; substrate then bans the
+  // extrinsic hash so every retry comes back as "Transaction is
+  // temporarily banned". On Asset Hub this race fires often enough to be
+  // user-visible.
+  const [{ specVersion, transactionVersion }, header, nextIndex, genesisHash] = await Promise.all([
+    client.rpc.state.getRuntimeVersion(),
+    client.rpc.chain.getHeader(),
+    client.rpc.system.accountNextIndex(address),
+    client.rpc.chain.getBlockHash(0),
+  ])
 
   const chainSpecific = create(PolkadotSpecificSchema, {
-    recentBlockHash: (await client.rpc.chain.getBlockHash()).toHex(),
-    nonce: (await client.rpc.system.accountNextIndex(address)).toBigInt(),
-    currentBlockNumber: (await client.rpc.chain.getHeader()).number.toString(),
+    recentBlockHash: header.hash.toHex(),
+    nonce: nextIndex.toBigInt(),
+    currentBlockNumber: header.number.toString(),
     specVersion: specVersion.toNumber(),
     transactionVersion: transactionVersion.toNumber(),
-    genesisHash: (await client.rpc.chain.getBlockHash(0)).toHex(),
+    genesisHash: genesisHash.toHex(),
     gas: polkadotConfig.fee,
   })
 

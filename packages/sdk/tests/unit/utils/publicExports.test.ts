@@ -21,6 +21,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.VaultBase).toBe('function')
   })
 
+  it('exports seedphrase import chain support policy for consumers', () => {
+    expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
+    expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
+    expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
   it('VaultBase prototype exposes prep-only primitives used by mcp-ts execute_* tools', () => {
     // prepareSendTx / prepareSwapTx / prepareContractCallTx are public instance
     // methods on VaultBase — they build a KeysignPayload without broadcasting.

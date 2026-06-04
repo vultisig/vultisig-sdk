@@ -50,6 +50,10 @@ export default [
       // WASM files copied by build tools
       '**/public/wallet-core.js',
       '**/public/wallet-core.wasm',
+      // Metro symlink+exports shim — CommonJS module.exports required so
+      // Metro's resolver can pick it up at runtime. Source lint rules don't
+      // apply; this is build-tool plumbing, not application source.
+      'packages/sdk/react-native.js',
     ],
   },
   ...fixupConfigRules(

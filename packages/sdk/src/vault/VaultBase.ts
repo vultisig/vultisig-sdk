@@ -1285,7 +1285,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       const balanceResult = await this.balanceService.getBalance(resolvedFromCoin.chain, resolvedFromCoin.tokenId)
       balance = BigInt(balanceResult.amount)
       const isNative = !resolvedFromCoin.tokenId
-      maxSwapable = isNative ? getMaxValue(balance, quoteResult.fees.network) : balance
+
+      // For deposit-channel (transfer) routes, fees.network is 0n because source-chain
+      // fees are estimated at broadcast time, not in the SwapKit quote. Using 0n here
+      // would give maxSwapable = balance, which overstates what is safely swappable
+      // (real UTXO fees are ~500 sat for BTC). Leave maxSwapable = 0n to signal
+      // "not computable from this quote". Consumers needing the real max must call
+      // estimateSendFee() separately.
+      const isTransferRoute = 'general' in quoteResult.quote.quote && 'transfer' in quoteResult.quote.quote.general.tx
+
+      if (!isNative) {
+        maxSwapable = balance
+      } else if (!isTransferRoute) {
+        maxSwapable = getMaxValue(balance, quoteResult.fees.network)
+      }
+      // else: transfer route native — maxSwapable stays 0n (unknown until broadcast-time fee estimate)
     } catch {
       // Balance enrichment is best-effort — quote is still valid without it
     }

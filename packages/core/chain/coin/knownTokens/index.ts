@@ -83,6 +83,25 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'tether',
     },
+    // CoinGecko canonical address. TronScan shows publicTag="USDCOLD" but blueTag="USDC" + 2.5M+ txns confirm this is Circle's USDC.
+    TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8: {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz: {
+      ticker: 'USDD',
+      logo: 'usdd',
+      decimals: 18,
+      priceProviderId: 'usdd',
+    },
+    TThzxNRLrW2Brp9DcTQU8i4Wd9udCWEdZ3: {
+      ticker: 'stUSDT',
+      logo: 'stusdt',
+      decimals: 18,
+      priceProviderId: 'staked-usdt',
+    },
   },
   [Chain.Solana]: {
     // QA dogfood Bug J (paaao 2026-05-02): USDC and USDT on Solana
@@ -736,6 +755,29 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       priceProviderId: 'ventuals-vhype',
     },
     '0xb88339CB7199b77E23DB6E890353E22632Ba630f': {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+  },
+  [Chain.Polkadot]: {
+    // Polkadot Asset Hub (parachain 1000) — pallet_assets tokens.
+    // asset_id is used as the token identifier instead of a contract address.
+    // Decimals verified live via state_getStorage on Assets.Metadata at 2026-05-25.
+    // On-chain symbol for 1984 is "USDt" but we normalise to "USDT" for consistency.
+    '1984': {
+      ticker: 'USDT',
+      logo: 'usdt',
+      decimals: 6,
+      // NOTE: CoinGecko's 'tether' coin doesn't list polkadot-asset-hub in its
+      // platforms map (only Ethereum/Solana/Tron/TON/Near/etc). Price still resolves
+      // correctly via /simple/price?ids=tether but any future platform-verification
+      // logic (e.g. checking coin.platforms['polkadot-asset-hub']) will find nothing
+      // and should special-case this entry.
+      priceProviderId: 'tether',
+    },
+    '1337': {
       ticker: 'USDC',
       logo: 'usdc',
       decimals: 6,

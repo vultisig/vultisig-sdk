@@ -7,9 +7,11 @@
  * 3. knownTokens auto-resolve fallback with user-token priority
  * 4. Approval confirmation wait behavior in the swap flow
  */
+import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
+import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { VaultError, VaultErrorCode } from '../../src/vault/VaultError'
@@ -612,5 +614,112 @@ describe('waitForConfirmation behavior', () => {
     }
 
     expect(getTxStatus).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// maxSwapable enrichment logic (mirrors VaultBase.getSwapQuote exactly)
+//
+// VaultBase is too expensive to construct in a unit test (requires storage,
+// wasmProvider, relay server, etc.). We reproduce the enrichment logic inline
+// so the fix has automated coverage without a full integration harness.
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors VaultBase.getSwapQuote enrichment logic exactly.
+ * Keep in sync with packages/sdk/src/vault/VaultBase.ts.
+ */
+function computeMaxSwapable(params: {
+  balance: bigint
+  tokenId: string | undefined
+  fees: { network: bigint }
+  quote: SwapQuote
+}): bigint {
+  const isNative = !params.tokenId
+  const isTransferRoute = 'general' in params.quote.quote && 'transfer' in params.quote.quote.general.tx
+
+  if (!isNative) {
+    return params.balance
+  } else if (!isTransferRoute) {
+    return getMaxValue(params.balance, params.fees.network)
+  }
+  // transfer route native — not computable from quote-time data
+  return 0n
+}
+
+describe('maxSwapable enrichment (VaultBase.getSwapQuote logic)', () => {
+  const balance = 100_000_000n // 1 BTC in satoshis
+
+  it('returns balance for non-native (ERC-20) token regardless of route type', () => {
+    const quote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '1000',
+          provider: 'swapkit',
+          tx: { transfer: { to: 'bc1qdeposit', amount: 50_000n, memo: 'memo' } },
+        },
+      },
+    }
+    expect(computeMaxSwapable({ balance, tokenId: '0xtoken', fees: { network: 0n }, quote })).toBe(balance)
+  })
+
+  it('returns balance - fee for native EVM swap (evm route)', () => {
+    const networkFee = 21_000n
+    const quote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '1000',
+          provider: '1inch',
+          tx: { evm: { from: '0xfrom', to: '0xrouter', data: '0x', value: '0', gasLimit: 100_000n } },
+        },
+      },
+    }
+    expect(computeMaxSwapable({ balance, tokenId: undefined, fees: { network: networkFee }, quote })).toBe(
+      balance - networkFee
+    )
+  })
+
+  it('returns 0n for native UTXO deposit-channel (transfer) route — real fee only known at broadcast', () => {
+    // This is the bug NeO flagged: before the fix, maxSwapable was `balance - 0n = balance`,
+    // which overstated the safe swap amount by ~500 sat (BTC tx fee). Users would get an
+    // "insufficient funds" error at broadcast. Now we return 0n to signal the consumer must
+    // call estimateSendFee() separately.
+    const quote: SwapQuote = {
+      discounts: [],
+      quote: {
+        general: {
+          dstAmount: '50000000',
+          provider: 'swapkit',
+          tx: { transfer: { to: 'bc1qdeposit', amount: 99_500_000n, memo: 'route-memo' } },
+        },
+      },
+    }
+    expect(computeMaxSwapable({ balance, tokenId: undefined, fees: { network: 0n }, quote })).toBe(0n)
+  })
+
+  it('returns balance - fee for native THORChain (native route, fees.network > 0)', () => {
+    const networkFee = 2_000_000n
+    const quote: SwapQuote = {
+      discounts: [],
+      quote: {
+        native: {
+          swapChain: 'THORChain',
+          expected_amount_out: '90000000',
+          expiry: Math.floor(Date.now() / 1000) + 600,
+          fees: { affiliate: '0', asset: 'BTC', outbound: '2000000', total: '2000000' },
+          memo: '=:BTC.BTC:bc1q...',
+          notes: '',
+          outbound_delay_blocks: 0,
+          outbound_delay_seconds: 0,
+          recommended_min_amount_in: '100000',
+          warning: '',
+        },
+      },
+    }
+    expect(computeMaxSwapable({ balance, tokenId: undefined, fees: { network: networkFee }, quote })).toBe(
+      balance - networkFee
+    )
   })
 })

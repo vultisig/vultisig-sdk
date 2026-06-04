@@ -3,10 +3,13 @@ import { baseAffiliateBps } from '../../affiliate/config'
 import { nativeSwapAffiliateConfig } from '../nativeSwapAffiliateConfig'
 import { NativeSwapChain } from '../NativeSwapChain'
 
+export type NativeSwapAffiliateConfig = typeof nativeSwapAffiliateConfig
+
 type BuildAffiliateParamsInput = {
   swapChain: NativeSwapChain
   referral?: string
   affiliateBps: number
+  config?: NativeSwapAffiliateConfig
 }
 
 type AffiliateParams = {
@@ -18,24 +21,22 @@ export const buildAffiliateParams = ({
   swapChain,
   referral,
   affiliateBps,
+  config = nativeSwapAffiliateConfig,
 }: BuildAffiliateParamsInput): AffiliateParams => {
   const affiliateParams: Array<{ affiliate: string; bps: number }> = []
 
   if (swapChain === Chain.THORChain && referral) {
     affiliateParams.push({
       affiliate: referral,
-      bps: nativeSwapAffiliateConfig.referrerFeeRateBps,
+      bps: config.referrerFeeRateBps,
     })
     affiliateParams.push({
-      affiliate: nativeSwapAffiliateConfig.affiliateFeeAddress,
-      bps: Math.max(
-        0,
-        affiliateBps - (baseAffiliateBps - nativeSwapAffiliateConfig.referralDiscountAffiliateFeeRateBps)
-      ),
+      affiliate: config.affiliateFeeAddress,
+      bps: Math.max(0, affiliateBps - (baseAffiliateBps - config.referralDiscountAffiliateFeeRateBps)),
     })
   } else {
     affiliateParams.push({
-      affiliate: nativeSwapAffiliateConfig.affiliateFeeAddress,
+      affiliate: config.affiliateFeeAddress,
       bps: affiliateBps,
     })
   }

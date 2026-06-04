@@ -42,4 +42,13 @@ export { cleanMnemonic, SeedphraseValidator, validateSeedphrase } from './Seedph
 export { type DerivedChainKey, MasterKeyDeriver } from './MasterKeyDeriver'
 
 // Chain Discovery
-export { type ChainDiscoveryConfig, ChainDiscoveryService } from './ChainDiscoveryService'
+export { type ChainDiscoveryConfig, ChainDiscoveryService, TransportError } from './ChainDiscoveryService'
+
+// Chain support policy
+export {
+  assertSeedphraseImportSupportsChains,
+  getUnsupportedSeedphraseImportChains,
+  isSeedphraseImportSupportedChain,
+  SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
+  SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
+} from '../constants'

@@ -22,6 +22,12 @@ type BuildSignedCardanoTxInput = {
   publicKey: Uint8Array
   /** 64-byte Ed25519 signature (r || s, each little-endian) */
   signature: Uint8Array
+  /**
+   * CIP-20 auxiliary data CBOR (the full { 674: { "msg": [...] } } map).
+   * When provided, replaces the `0xf6` null sentinel at element [3] of the
+   * signed transaction array. When absent, `0xf6` is used (no aux data).
+   */
+  auxDataCbor?: Uint8Array
 }
 
 /**
@@ -80,7 +86,12 @@ const concat = (parts: Uint8Array[]): Uint8Array => {
 }
 
 /** Returns the full signed Cardano transaction as CBOR bytes. */
-export const buildSignedCardanoTx = ({ txBodyCbor, publicKey, signature }: BuildSignedCardanoTxInput): Uint8Array => {
+export const buildSignedCardanoTx = ({
+  txBodyCbor,
+  publicKey,
+  signature,
+  auxDataCbor,
+}: BuildSignedCardanoTxInput): Uint8Array => {
   const witnessCbor = buildWitnessCbor(publicKey, signature)
 
   // Signed tx: 0x84 [tx_body, witnesses, isValid, auxiliary_data]
@@ -89,6 +100,6 @@ export const buildSignedCardanoTx = ({ txBodyCbor, publicKey, signature }: Build
     txBodyCbor,
     witnessCbor,
     new Uint8Array([0xf5]), // CBOR true (is_valid)
-    new Uint8Array([0xf6]), // CBOR null (no auxiliary data)
+    auxDataCbor ?? new Uint8Array([0xf6]), // CIP-20 metadata or CBOR null
   ])
 }

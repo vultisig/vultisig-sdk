@@ -7,11 +7,30 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { getSignatureAlgorithm } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 
-import { SUPPORTED_CHAINS } from '../constants'
+import { assertSeedphraseImportSupportsChains, SEEDPHRASE_IMPORT_SUPPORTED_CHAINS } from '../constants'
 import type { WasmProvider } from '../context/SdkContext'
 import { MasterKeyDeriver } from './MasterKeyDeriver'
 import type { ChainDiscoveryAggregate, ChainDiscoveryProgress, ChainDiscoveryResult } from './types'
+
+/**
+ * Thrown when a balance RPC call fails due to a transport-level error
+ * (network timeout, DNS failure, non-2xx HTTP status).
+ *
+ * Callers must distinguish this from a confirmed-zero-balance result:
+ * - TransportError  → RPC unreachable; balance unknown; warn + continue
+ * - probe returns   → RPC responded; balance confirmed (may be zero)
+ */
+export class TransportError extends Error {
+  override readonly name = 'TransportError'
+  constructor(
+    message: string,
+    public readonly cause?: unknown
+  ) {
+    super(message)
+  }
+}
 
 /**
  * Configuration for chain discovery
@@ -19,16 +38,11 @@ import type { ChainDiscoveryAggregate, ChainDiscoveryProgress, ChainDiscoveryRes
 export type ChainDiscoveryConfig = {
   /** Maximum concurrent balance requests (default: 5) */
   concurrencyLimit?: number
-  /** Chains to scan (default: SUPPORTED_CHAINS) */
+  /** Chains to scan (default: SEEDPHRASE_IMPORT_SUPPORTED_CHAINS) */
   chains?: Chain[]
   /** Timeout per chain in ms (default: 10000) */
   timeoutPerChain?: number
 }
-
-/**
- * Chains that use EdDSA signature algorithm
- */
-const EDDSA_CHAINS: Chain[] = [Chain.Solana, Chain.Sui, Chain.Polkadot, Chain.Bittensor, Chain.Ton, Chain.Cardano]
 
 /**
  * ChainDiscoveryService - Scans blockchains for existing balances
@@ -81,7 +95,8 @@ export class ChainDiscoveryService {
     const onProgress = options?.onProgress
     // Ensure concurrencyLimit is at least 1 to prevent infinite loop
     const concurrencyLimit = Math.max(1, config.concurrencyLimit ?? 5)
-    const chains = config.chains ?? SUPPORTED_CHAINS
+    const chains = config.chains ?? SEEDPHRASE_IMPORT_SUPPORTED_CHAINS
+    assertSeedphraseImportSupportsChains(chains)
     const timeoutPerChain = config.timeoutPerChain ?? 10000
 
     const results: ChainDiscoveryResult[] = []
@@ -176,6 +191,21 @@ export class ChainDiscoveryService {
       }
     }
 
+    // Check Cosmos-coin-type Terra/TerraClassic path (m/44'/118'/0'/0/0) if either
+    // chain was in the scan. Keplr and Leap historically derived Terra/TerraClassic
+    // under coin type 118 instead of their native SLIP-44 paths.
+    // Use the 118 path when it has balance AND the standard path has no balance.
+    const terraResult = results.find(r => r.chain === Chain.Terra)
+    const terraClassicResult = results.find(r => r.chain === Chain.TerraClassic)
+
+    const useCosmosPathTerra = await this.probeCosmosPathForTerraChains({
+      mnemonic,
+      timeoutPerChain,
+      terraResult,
+      terraClassicResult,
+      chainsWithBalance,
+    })
+
     // Report completion
     onProgress?.({
       phase: 'complete',
@@ -188,7 +218,110 @@ export class ChainDiscoveryService {
     return {
       results,
       usePhantomSolanaPath,
+      useCosmosPathTerra,
     }
+  }
+
+  /**
+   * Probe Terra and TerraClassic for Cosmos-coin-type (m/44'/118') balances.
+   * Extracted from discoverChains to keep cognitive complexity in range.
+   *
+   * Returns true when either chain's Cosmos-path balance is non-zero AND the
+   * standard 330-path balance is zero. Mutates the relevant ChainDiscoveryResult
+   * + appends to chainsWithBalance when the swap fires.
+   */
+  private async probeCosmosPathForTerraChains(args: {
+    mnemonic: string
+    timeoutPerChain: number
+    terraResult: ChainDiscoveryResult | undefined
+    terraClassicResult: ChainDiscoveryResult | undefined
+    chainsWithBalance: Chain[]
+  }): Promise<boolean> {
+    const { mnemonic, timeoutPerChain, terraResult, terraClassicResult, chainsWithBalance } = args
+
+    // Terra (Luna v2) probe runs first if Terra was in scan.
+    if (terraResult) {
+      try {
+        const fired = await this.tryApplyCosmosPath({
+          result: terraResult,
+          chainsWithBalance,
+          chain: Chain.Terra,
+          probe: () => this.checkCosmosPathTerraBalance(mnemonic, timeoutPerChain),
+          logLabel: 'Cosmos-path Terra',
+        })
+        if (fired) return true
+      } catch (error) {
+        // Only swallow TransportError (RPC unreachable). Non-transport errors
+        // (WASM init failure, invalid mnemonic) propagate — they indicate a
+        // broken caller state, not a transient network condition.
+        if (!(error instanceof TransportError)) throw error
+        console.warn(`Cosmos-path Terra balance check failed (transport):`, {
+          chain: Chain.Terra,
+          path: '118',
+          error: error.message,
+          cause: error.cause,
+        })
+      }
+    }
+
+    // TerraClassic (LUNC) probe only runs if Terra wasn't in scan, so the contract
+    // (Terra-first preference) is preserved. (sdk#530 post-merge CR follow-up.)
+    if (!terraResult && terraClassicResult) {
+      try {
+        const fired = await this.tryApplyCosmosPath({
+          result: terraClassicResult,
+          chainsWithBalance,
+          chain: Chain.TerraClassic,
+          probe: () => this.checkCosmosPathTerraClassicBalance(mnemonic, timeoutPerChain),
+          logLabel: 'Cosmos-path TerraClassic',
+        })
+        if (fired) return true
+      } catch (error) {
+        if (!(error instanceof TransportError)) throw error
+        console.warn(`Cosmos-path TerraClassic balance check failed (transport):`, {
+          chain: Chain.TerraClassic,
+          path: '118',
+          error: error.message,
+          cause: error.cause,
+        })
+      }
+    }
+
+    return false
+  }
+
+  /**
+   * Run a single Cosmos-path probe and apply the result if the 118 path has
+   * balance and the 330 path doesn't. Returns true when the swap fires.
+   *
+   * Throws {@link TransportError} when the RPC call fails (timeout, network,
+   * non-2xx). Only returns false on a confirmed zero balance. Callers that
+   * want best-effort behaviour (warn + continue) should catch TransportError.
+   */
+  private async tryApplyCosmosPath(args: {
+    result: ChainDiscoveryResult
+    chainsWithBalance: Chain[]
+    chain: Chain
+    probe: () => Promise<{ address: string; balance: bigint }>
+    logLabel: string
+  }): Promise<boolean> {
+    const { result, chainsWithBalance, chain, probe } = args
+    // probe() throws TransportError for RPC failures (wrapped by the probe
+    // implementation). Non-transport errors (WASM init, invalid mnemonic) are
+    // NOT TransportErrors and should propagate unmodified so callers apply the
+    // correct recovery semantics instead of silently continuing.
+    const cosmosPathCheck = await probe()
+
+    const standard330Balance = BigInt(result.balance || '0')
+    const fired = cosmosPathCheck.balance > 0n && standard330Balance === 0n
+    if (!fired) return false
+    result.address = cosmosPathCheck.address
+    result.balance = cosmosPathCheck.balance.toString()
+    result.hasBalance = true
+    if (!chainsWithBalance.includes(chain)) {
+      chainsWithBalance.push(chain)
+    }
+    return true
   }
 
   /**
@@ -294,6 +427,71 @@ export class ChainDiscoveryService {
   }
 
   /**
+   * Check Terra balance using the Cosmos coin-type derivation path (m/44'/118'/0'/0/0)
+   *
+   * Keplr and Leap historically derived Terra under coin type 118 (Cosmos) instead
+   * of Terra's native SLIP-44 330. This detects wallets originally created in those apps.
+   */
+  private async checkCosmosPathTerraBalance(
+    mnemonic: string,
+    timeout: number
+  ): Promise<{ address: string; balance: bigint }> {
+    // Derivation is client-side WASM — errors here (invalid mnemonic, WASM not
+    // initialised) are NOT transport errors and must propagate unmodified.
+    const address = await this.keyDeriver.deriveTerraAddressWithCosmosPath(mnemonic)
+
+    // Only the RPC fetch is subject to transport failure / timeout.
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new TransportError('Timeout checking Cosmos-path Terra address')), timeout)
+    })
+
+    try {
+      const balance = await Promise.race([getCoinBalance({ chain: Chain.Terra, address }), timeoutPromise])
+      return { address, balance }
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      throw new TransportError('Cosmos-path Terra RPC unreachable', error)
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }
+
+  /**
+   * Check TerraClassic (LUNC) balance using the Cosmos coin-type derivation path.
+   *
+   * TerraClassic-only seeds created in Keplr/Leap also use coin type 118 instead
+   * of TerraClassic's native SLIP-44 path. This is the TerraClassic counterpart of
+   * checkCosmosPathTerraBalance. (sdk#530 post-merge CR follow-up.)
+   */
+  private async checkCosmosPathTerraClassicBalance(
+    mnemonic: string,
+    timeout: number
+  ): Promise<{ address: string; balance: bigint }> {
+    // Derivation is client-side WASM — errors here must propagate unmodified.
+    const address = await this.keyDeriver.deriveTerraClassicAddressWithCosmosPath(mnemonic)
+
+    // Only the RPC fetch is subject to transport failure / timeout.
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new TransportError('Timeout checking Cosmos-path TerraClassic address')),
+        timeout
+      )
+    })
+
+    try {
+      const balance = await Promise.race([getCoinBalance({ chain: Chain.TerraClassic, address }), timeoutPromise])
+      return { address, balance }
+    } catch (error) {
+      if (error instanceof TransportError) throw error
+      throw new TransportError('Cosmos-path TerraClassic RPC unreachable', error)
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
+  }
+
+  /**
    * Get chains sorted by balance (highest first)
    */
   sortByBalance(results: ChainDiscoveryResult[]): ChainDiscoveryResult[] {
@@ -315,6 +513,6 @@ export class ChainDiscoveryService {
    * Check if a chain uses EdDSA signature algorithm
    */
   isEddsaChain(chain: Chain): boolean {
-    return EDDSA_CHAINS.includes(chain)
+    return getSignatureAlgorithm(chain) === 'eddsa'
   }
 }

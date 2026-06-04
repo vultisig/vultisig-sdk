@@ -19,6 +19,7 @@ const createMockWalletCore = () => {
 
   const mockPublicKey = {
     data: () => new Uint8Array(33).fill(0x02), // compressed secp256k1 format
+    delete: vi.fn(),
   }
 
   const mockPrivateKey = {
@@ -35,10 +36,12 @@ const createMockWalletCore = () => {
       lastPublicKeyCall = 'ed25519Cardano'
       return mockPublicKey
     }),
+    delete: vi.fn(),
   }
 
   const mockHdWallet = {
     getKeyForCoin: vi.fn(() => mockPrivateKey),
+    getKey: vi.fn((_coinType: unknown, _path: string) => mockPrivateKey),
     getAddressForCoin: vi.fn(() => '0xMockAddress'),
     getMasterKey: vi.fn(() => mockPrivateKey),
     getExtendedPrivateKey: vi.fn(() => 'xprv...'),
@@ -64,6 +67,11 @@ const createMockWalletCore = () => {
         cosmos: 118,
         thorchain: 931,
         litecoin: 2,
+        terraV2: 10000330,
+        terra: 330,
+      },
+      CoinTypeExt: {
+        deriveAddressFromPublicKey: vi.fn((_coinType: unknown, _pubKey: unknown) => 'terra1mockcosmospathaddr'),
       },
       Curve: {
         secp256k1: 'secp256k1',
@@ -77,6 +85,7 @@ const createMockWalletCore = () => {
       },
     },
     mockPrivateKey,
+    mockHdWallet,
     getLastPublicKeyCall: () => lastPublicKeyCall,
     resetPublicKeyCall: () => {
       lastPublicKeyCall = null
@@ -92,6 +101,15 @@ describe('MasterKeyDeriver', () => {
   const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 
   describe('deriveChainKey - public key type selection', () => {
+    it('rejects chains disabled for seedphrase import before loading WalletCore', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveChainKey(testMnemonic, Chain.Bittensor, true)).rejects.toThrow(/Bittensor/)
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+
     it('should use secp256k1 public key for ECDSA chains (Bitcoin)', async () => {
       const mock = createMockWalletCore()
       const provider = createMockWasmProvider(mock)
@@ -154,15 +172,15 @@ describe('MasterKeyDeriver', () => {
       expect(mock.getLastPublicKeyCall()).toBe('ed25519')
     })
 
-    it('should use ed25519Cardano public key for Cardano', async () => {
+    it('rejects Cardano until seedphrase import has full signing support for it', async () => {
       const mock = createMockWalletCore()
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)
+      await expect(deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)).rejects.toThrow(/Cardano/)
 
-      expect(mock.getLastPublicKeyCall()).toBe('ed25519Cardano')
-      expect(mock.mockPrivateKey.getPublicKeyEd25519Cardano).toHaveBeenCalled()
+      expect(mock.getLastPublicKeyCall()).toBe(null)
+      expect(mock.mockPrivateKey.getPublicKeyEd25519Cardano).not.toHaveBeenCalled()
     })
 
     it('should use secp256k1 for Cosmos chains (ECDSA)', async () => {
@@ -219,6 +237,81 @@ describe('MasterKeyDeriver', () => {
       const deriver = new MasterKeyDeriver(provider)
 
       await deriver.deriveChainKey(testMnemonic, Chain.Bitcoin, false)
+
+      const hdWallet = mock.walletCore.HDWallet.createWithMnemonic.mock.results[0].value
+      expect(hdWallet.delete).toHaveBeenCalled()
+    })
+  })
+
+  describe('seedphrase import chain support', () => {
+    it('rejects disabled chains when deriving multiple private keys', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveChainPrivateKeys(testMnemonic, [Chain.Ethereum, Chain.Bittensor])).rejects.toThrow(
+        /Bittensor/
+      )
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+
+    it('rejects disabled chains when deriving addresses for discovery', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await expect(deriver.deriveAddress(testMnemonic, Chain.Bittensor)).rejects.toThrow(/Bittensor/)
+      expect(provider.getWalletCore).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('deriveTerraAddressWithCosmosPath', () => {
+    it('should derive a terra1... address using the Cosmos coin-type path', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      const address = await deriver.deriveTerraAddressWithCosmosPath(testMnemonic)
+
+      expect(address).toBe('terra1mockcosmospathaddr')
+    })
+
+    it("should call getKey with terraV2 coin type and m/44'/118'/0'/0/0 path", async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await deriver.deriveTerraAddressWithCosmosPath(testMnemonic)
+
+      expect(mock.mockHdWallet.getKey).toHaveBeenCalledWith(mock.walletCore.CoinType.terraV2, "m/44'/118'/0'/0/0")
+    })
+
+    it('should use secp256k1 compressed public key for address derivation', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await deriver.deriveTerraAddressWithCosmosPath(testMnemonic)
+
+      expect(mock.mockPrivateKey.getPublicKeySecp256k1).toHaveBeenCalledWith(true) // compressed
+    })
+
+    it('should clean up private key and public key objects', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await deriver.deriveTerraAddressWithCosmosPath(testMnemonic)
+
+      expect(mock.mockPrivateKey.delete).toHaveBeenCalled()
+    })
+
+    it('should delete HDWallet after derivation', async () => {
+      const mock = createMockWalletCore()
+      const provider = createMockWasmProvider(mock)
+      const deriver = new MasterKeyDeriver(provider)
+
+      await deriver.deriveTerraAddressWithCosmosPath(testMnemonic)
 
       const hdWallet = mock.walletCore.HDWallet.createWithMnemonic.mock.results[0].value
       expect(hdWallet.delete).toHaveBeenCalled()
