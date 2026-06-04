@@ -230,7 +230,7 @@
     "@rollup/plugin-typescript": "^12.1.1",
     "@types/chrome": "^0.1.27",
     "@types/events": "^3",
-    "@types/node": "^22.13.10",
+    "@types/node": "^25.9.1",
     "@types/path-browserify": "^1",
     "@vitest/coverage-v8": "4.1.8",
     "concurrently": "^9.2.1",
