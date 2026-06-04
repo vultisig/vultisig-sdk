@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-electron",
-  "version": "0.1.53",
+  "version": "0.1.61",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -29,7 +29,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.27",
     "concurrently": "^9.2.1",
-    "electron": "^42.1.0",
+    "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",

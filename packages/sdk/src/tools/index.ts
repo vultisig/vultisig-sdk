@@ -9,8 +9,13 @@ export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMe
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
 // Swap
-export type { FindSwapQuoteParams, SwapQuote } from './swap'
-export { findSwapQuote, getNativeSwapDecimals } from './swap'
+export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
+export {
+  findSwapQuote,
+  getNativeSwapDecimals,
+  getNativeSwapMinAmountIn,
+  NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+} from './swap'
 
 // Verifier client
 export { VerifierClient } from './verifier'

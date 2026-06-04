@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCowSwapExplorerOrderUrl } from '@vultisig/core-chain/swap/general/cowswap/getCowSwapExplorerOrderUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 import { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
@@ -55,6 +56,14 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
       })
     },
     general: ({ provider }) => {
+      // CowSwap orders settle off-chain; while PENDING the `txHash` is the order
+      // UID (not an on-chain hash), so link to the order's CoW Explorer page. On
+      // fill, the consumer replaces this with the settlement tx's block-explorer
+      // link.
+      if (provider === 'cowswap') {
+        // The order UID keeps its 0x prefix in CoW Explorer order URLs.
+        return getCowSwapExplorerOrderUrl({ chain: sourceChain, uid: txHash })
+      }
       if (provider === 'li.fi') {
         return `https://scan.li.fi/tx/${txHash}`
       }

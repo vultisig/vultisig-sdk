@@ -1,12 +1,16 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
+import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
+import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
@@ -17,6 +21,7 @@ import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
 import { CommKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
+import { verifySwapKitBitcoinPsbtOutputs } from '@vultisig/core-mpc/tx/swapkitSignBitcoin'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
   OneInchQuoteSchema,
@@ -30,6 +35,7 @@ import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keys
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { Psbt } from 'bitcoinjs-lib'
 
 export type BuildSwapKeysignPayloadInput = {
   fromCoin: AccountCoin
@@ -45,6 +51,40 @@ export type BuildSwapKeysignPayloadInput = {
 }
 
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
+
+const isSwapKitBitcoinPsbt = (fromCoin: AccountCoin, transfer: TransferSwapTx) =>
+  fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT'
+
+const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
+  if (fromCoin.chain !== Chain.Bitcoin) {
+    return { case: undefined }
+  }
+
+  if (!isSwapKitBitcoinPsbt(fromCoin, transfer)) {
+    throw new Error('SwapKit Bitcoin transfer routes must include PSBT txType and txPayload.')
+  }
+
+  if (!transfer.txPayload?.length) {
+    throw new Error('SwapKit Bitcoin PSBT payload is empty.')
+  }
+
+  const signBitcoin = buildSignBitcoinFromPsbt({
+    psbt: Psbt.fromBuffer(Buffer.from(transfer.txPayload)),
+    senderAddress: fromCoin.address,
+  })
+
+  verifySwapKitBitcoinPsbtOutputs({
+    signBitcoin,
+    senderAddress: fromCoin.address,
+    expectedToAddress: transfer.to,
+    expectedToAmount: transfer.amount,
+  })
+
+  return {
+    case: 'signBitcoin',
+    value: signBitcoin,
+  }
+}
 
 /**
  * Builds a KeysignPayload for a swap transaction.
@@ -76,6 +116,7 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cowswap_order: () => undefined,
       }),
   })
   const chainAmount = transferTx?.amount ?? toChainAmount(amount, fromCoin.decimals)
@@ -90,6 +131,7 @@ export const buildSwapKeysignPayload = async ({
         evm: ({ gasLimit }) => gasLimit,
         solana: () => undefined,
         transfer: () => undefined,
+        cowswap_order: () => undefined,
       }),
   })
 
@@ -111,6 +153,7 @@ export const buildSwapKeysignPayload = async ({
           evm: () => undefined,
           solana: () => undefined,
           transfer: ({ memo }) => memo,
+          cowswap_order: () => undefined,
         }),
     }),
   })
@@ -121,9 +164,12 @@ export const buildSwapKeysignPayload = async ({
         evm: () => undefined,
         solana: () => undefined,
         transfer: tx => tx,
+        cowswap_order: () => undefined,
       })
 
       if (quote.provider === 'swapkit' && transfer) {
+        keysignPayload.signData = getSwapKitBitcoinSignData(fromCoin, transfer)
+
         return {
           case: 'swapkitSwapPayload',
           value: create(SwapKitSwapPayloadSchema, {
@@ -185,6 +231,43 @@ export const buildSwapKeysignPayload = async ({
           from: fromCoin.address,
           to,
           data: '',
+          value: '',
+          gasPrice: '',
+          gas: 0n,
+          swapFee: '',
+        }),
+        // CowSwap orders are settled off-chain by solvers — there is no on-chain
+        // calldata to sign. Instead we serialize the order (everything needed to
+        // rebuild the EIP-712 digest and submit it) into `data`, keyed by the
+        // `cowswap-order:` marker. The consumer detects the marker, signs the
+        // order digest via the EIP-712 path, and POSTs it to the orderbook
+        // instead of broadcasting. `to` is the GPv2VaultRelayer (the ERC-20
+        // spender) so any required on-chain approval — added below for tokens
+        // without sufficient allowance — targets the correct contract.
+        cowswap_order: order => ({
+          from: fromCoin.address,
+          to: COW_VAULT_RELAYER_ADDRESS,
+          data: encodeCowSwapKeysignData({
+            order: {
+              sellToken: order.sellToken,
+              buyToken: order.buyToken,
+              receiver: order.receiver,
+              sellAmount: order.sellAmount,
+              buyAmount: order.buyAmount,
+              validTo: order.validTo,
+              appData: order.appData,
+              appDataHash: order.appDataHash,
+              feeAmount: order.feeAmount,
+              kind: order.kind,
+              partiallyFillable: order.partiallyFillable,
+              sellTokenBalance: order.sellTokenBalance,
+              buyTokenBalance: order.buyTokenBalance,
+            },
+            chainId: order.chainId,
+            apiBase: order.apiBase,
+            from: fromCoin.address,
+            ...(order.permitRequired ? { permitRequired: true } : {}),
+          }),
           value: '',
           gasPrice: '',
           gas: 0n,

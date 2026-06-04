@@ -108,6 +108,45 @@ export const knownCosmosTokens: Record<CosmosChain, Record<string, KnownCoinMeta
       ...kujiraCoinsMigratedToThorChainMetadata.lvn,
       decimals: 6,
     },
+    // IBC tokens - hashes LCD-verified via osmosis-rest.publicnode.com
+    // cross-referenced with cosmos/chain-registry osmosis/assetlist.json
+    // See: https://gist.github.com/gomesalexandre/c0f889c7c8b1f5fe698c08542cd2402a
+    'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2': {
+      ticker: 'ATOM',
+      logo: 'atom',
+      decimals: 6,
+      priceProviderId: 'cosmos',
+    },
+    'ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4': {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    'ibc/D189335C6E4A68B513C10AB227BF1C1D38C746766278BA3EEB4FB14124F1D858': {
+      ticker: 'axlUSDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
+    'ibc/C140AFD542AE77BD7DCC83F13FDD8C5E5BB8C4929785E6EC2F4C636F98F17901': {
+      ticker: 'stATOM',
+      logo: 'statom',
+      decimals: 6,
+      priceProviderId: 'stride-staked-atom',
+    },
+    'ibc/D176154B0C63D1F9C6DCFB4F70349EBF2E2B5A87A05902F57A6AE92B863E9AEC': {
+      ticker: 'stOSMO',
+      logo: 'stosmo',
+      decimals: 6,
+      priceProviderId: 'stride-staked-osmo',
+    },
+    'ibc/D79E7D83AB399BFFF93433E54FAA480C191248FC556924A2A8351AE2638B3877': {
+      ticker: 'TIA',
+      logo: 'tia',
+      decimals: 6,
+      priceProviderId: 'celestia',
+    },
   },
   [Chain.Kujira]: {
     'factory/kujira1qk00h5atutpsv900x202pxx42npjr9thg58dnqpa72f2p7m2luase444a7/uusk': {

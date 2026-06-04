@@ -312,6 +312,62 @@ export class VaultManager {
   }
 
   /**
+   * Get vault instance by display name. Case-sensitive lookup against the
+   * `name` field on every stored vault. Returns `null` if no vault has a
+   * matching name; if multiple vaults share the same name (the storage layer
+   * doesn't enforce uniqueness), returns the FIRST match in `listVaults()`
+   * order (the same `order` field listVaults sorts by).
+   *
+   * Convenience wrapper around `listVaults().find()` — every autoresearch
+   * agent scenario that loaded a vault by name had to independently rediscover
+   * that pattern (see issue #153). This method makes "find my vault by the
+   * name the user typed" a single call.
+   *
+   * @param name - Vault display name as set at creation / shown in the UI
+   * @returns VaultBase instance or null if no vault has that name
+   * @example
+   * ```typescript
+   * const vault = await vaultManager.getVaultByName('Main Wallet')
+   * if (vault) {
+   *   const balance = await vault.balance('Bitcoin')
+   * }
+   * ```
+   */
+  async getVaultByName(name: string): Promise<VaultBase | null> {
+    const vaults = await this.listVaults()
+    return vaults.find(v => v.name === name) ?? null
+  }
+
+  /**
+   * Get vault instance by display name, throwing with a helpful error that
+   * lists available vault names when no match is found. Use this when a
+   * missing vault is a programming error in the caller (CLI argument typo,
+   * eval scenario misconfigured) rather than a user-facing fallthrough.
+   *
+   * @param name - Vault display name
+   * @returns VaultBase instance
+   * @throws Error if no vault matches, with the available vault names in the
+   *   message so the caller can see what they should have asked for.
+   * @example
+   * ```typescript
+   * try {
+   *   const vault = await vaultManager.getVaultByNameOrThrow('TestVault')
+   * } catch (e) {
+   *   // e.message: 'Vault "TestVault" not found. Available vaults: Main Wallet, Backup'
+   * }
+   * ```
+   */
+  async getVaultByNameOrThrow(name: string): Promise<VaultBase> {
+    const vault = await this.getVaultByName(name)
+    if (vault) {
+      return vault
+    }
+    const available = (await this.listVaults()).map(v => v.name).join(', ')
+    const suffix = available.length > 0 ? `. Available vaults: ${available}` : ' and no vaults are loaded'
+    throw new Error(`Vault "${name}" not found${suffix}`)
+  }
+
+  /**
    * Get all vault instances
    * Async equivalent to listVaults()
    *

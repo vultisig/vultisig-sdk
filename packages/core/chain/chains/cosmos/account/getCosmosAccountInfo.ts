@@ -1,4 +1,4 @@
-import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
@@ -57,16 +57,51 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
 // LCD uses a different infra path (REST vs Tendermint RPC), supports
 // extended account types (vesting, module wrappers) via JSON shape parsing,
 // and gives us a second chance before we ship a doomed tx.
-const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
-  const base = cosmosRpcUrl[chain]
-  if (!base) return null
+//
+// SamYap timeout report (vultiagent-app#1017, 2026-05-28): the primary LCD
+// for Terra Classic (terra-classic-lcd.publicnode.com) was degraded for
+// hours, causing every cosmos signing surface that touches this code path
+// to hard-fail. The single-URL design had no recovery. Add a fallback URL
+// per chain so a publicnode degradation doesn't take out signing entirely.
+//
+// Polkachu mirrors per cosmos chain. Hexxagon for columbus-5 since polkachu
+// has no Terra Classic endpoint (verified 2026-05-28 — see
+// vultiagent-app#1017 + mcp-ts#266). Keys are the chain id used by
+// cosmos-sdk; chains not in this map have no fallback (degrade fail-closed
+// behaviour preserved).
+const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
+  [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
+  [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
+  [Chain.Kujira]: 'https://kujira-api.polkachu.com',
+  [Chain.Terra]: 'https://terra-api.polkachu.com',
+  [Chain.TerraClassic]: 'https://lcd.terra-classic.hexxagon.io',
+  [Chain.THORChain]: 'https://thorchain-api.polkachu.com',
+  [Chain.Noble]: 'https://noble-api.polkachu.com',
+  [Chain.Dydx]: 'https://dydx-api.polkachu.com',
+  [Chain.Akash]: 'https://akash-api.polkachu.com',
+}
+
+const tryLcd = async (base: string, address: string): Promise<ParsedAccount | null> => {
   try {
     const resp = await queryUrl<LcdAccountResponse>(`${base}/cosmos/auth/v1beta1/accounts/${address}`)
     return parseLcdAccount(resp)
   } catch {
-    // 404 (account not found) or transient LCD error — caller decides.
     return null
   }
+}
+
+const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
+  const base = cosmosRpcUrl[chain]
+  if (!base) return null
+  const primary = await tryLcd(base, address)
+  if (primary) return primary
+  // Primary failed (network / 5xx / shape mismatch). Try the registered
+  // fallback for this chain. Both-failed surfaces as null and the caller
+  // ships with sequence:0 default — same legacy behaviour, but only after
+  // we've actually exhausted both endpoints.
+  const fallback = COSMOS_LCD_FALLBACK_URLS[chain]
+  if (!fallback) return null
+  return tryLcd(fallback, address)
 }
 
 export const getCosmosAccountInfo = async ({ chain, address }: ChainAccount<CosmosChain>) => {

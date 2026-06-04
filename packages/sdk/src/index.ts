@@ -180,6 +180,12 @@ export type {
 // Swap type guards
 export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 
+// Swap explorer URL helper (parity with iOS ExplorerLinkBuilder /
+// Android ExplorerLinkRepository.getSwapProgressLink). Use this instead of
+// chain-only explorer URLs when rendering swap tx history.
+export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation
 // ============================================================================
@@ -220,6 +226,8 @@ export {
   vultDiscountTierMinBalances,
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
+export type { LifiAffiliateConfig, LifiBootstrapConfig } from '@vultisig/core-chain/swap/general/lifi/config'
+export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'

@@ -110,7 +110,7 @@ packages/trading-bot/
 .beads/
 packages/expo-mpc/
 
-# Cursor / Codex (local IDE agent config; not pushed to remote)
+# Cursor local IDE agent config and Codex machine-local state.
 .cursor/
 .codex/
 .agents/

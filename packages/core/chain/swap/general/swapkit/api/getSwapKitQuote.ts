@@ -6,9 +6,19 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
+import {
+  SwapKitAmountBelowMinimumError,
+  SwapKitNoEligibleRoutesError,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
+import {
+  isSwapKitPairSupported,
+  normalizeSwapKitProvider,
+  swapKitExcludedProviders,
+} from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
+import { address as btcAddress, networks, Psbt } from 'bitcoinjs-lib'
 
 type Input = Record<TransferDirection, AccountCoin<SwapKitEnabledChain>> & {
   from: AccountCoin<SwapKitSourceChain>
@@ -78,8 +88,6 @@ const swapKitProviderQuoteAttempts: SwapKitProvider[][] = [
     'OPENOCEAN_V2',
   ],
 ]
-
-const swapKitExcludedProviders = new Set(['THORCHAIN', 'THORCHAIN_STREAMING', 'MAYACHAIN', 'MAYACHAIN_STREAMING'])
 
 const swapKitChainId: Record<SwapKitEnabledChain, string> = {
   [Chain.Arbitrum]: 'ARB',
@@ -180,14 +188,12 @@ const formatBasicUnitAmount = (amount: bigint, decimals: number): string => {
   return fraction ? `${sign}${whole.toString()}.${fraction}` : `${sign}${whole.toString()}`
 }
 
-const normalizeProvider = (provider: string) => provider.trim().toUpperCase().replace(/[-\s]/g, '_')
-
 const routeProviderNames = ({ providers, legs }: Pick<SwapKitQuoteRoute, 'providers' | 'legs'>): string[] => {
   const names = [...(providers ?? []), ...(legs ?? []).map(({ provider }) => provider)].filter(
     (provider): provider is string => !!provider
   )
 
-  return [...new Set(names.map(normalizeProvider))]
+  return [...new Set(names.map(normalizeSwapKitProvider))]
 }
 
 const isAllowedRoute = (route: SwapKitQuoteRoute) =>
@@ -480,6 +486,31 @@ const encodeSwapKitTxPayload = (tx: unknown, txType?: string): Uint8Array => {
   return textEncoder.encode(stringifyCanonicalJson(tx))
 }
 
+const getBitcoinPsbtDestinationAmount = ({
+  txPayload,
+  senderAddress,
+  targetAddress,
+}: {
+  txPayload: Uint8Array
+  senderAddress: string
+  targetAddress: string
+}): bigint | undefined => {
+  try {
+    const psbt = Psbt.fromBuffer(Buffer.from(txPayload))
+    const senderScript = Buffer.from(btcAddress.toOutputScript(senderAddress, networks.bitcoin))
+    const targetScript = Buffer.from(btcAddress.toOutputScript(targetAddress, networks.bitcoin))
+    const destinationOutputs = psbt.txOutputs.filter(({ script }) => {
+      const outputScript = Buffer.from(script)
+
+      return !outputScript.equals(senderScript) && outputScript.equals(targetScript)
+    })
+
+    return destinationOutputs.length === 1 ? BigInt(destinationOutputs[0].value) : undefined
+  } catch {
+    return undefined
+  }
+}
+
 const buildTransferTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
@@ -491,16 +522,23 @@ const buildTransferTx = (
     throw new Error('SwapKit transfer route did not return a target address.')
   }
 
+  const txType = response.meta?.txType
+  const txPayload = response.tx ? encodeSwapKitTxPayload(response.tx, txType) : undefined
+  const psbtDestinationAmount =
+    from.chain === Chain.Bitcoin && txType?.toUpperCase() === 'PSBT' && txPayload?.length
+      ? getBitcoinPsbtDestinationAmount({
+          txPayload,
+          senderAddress: from.address,
+          targetAddress: to,
+        })
+      : undefined
+
   const transfer = {
     to,
-    amount: getTransferAmount(response, amount, from.decimals),
+    amount: psbtDestinationAmount ?? getTransferAmount(response, amount, from.decimals),
     ...(response.memo ? { memo: response.memo } : {}),
-    ...(response.meta?.txType ? { txType: response.meta.txType } : {}),
-    ...(response.tx
-      ? {
-          txPayload: encodeSwapKitTxPayload(response.tx, response.meta?.txType),
-        }
-      : {}),
+    ...(txType ? { txType } : {}),
+    ...(response.tx ? { txPayload } : {}),
     ...(response.inboundAddress ? { inboundAddress: response.inboundAddress } : {}),
     ...(response.swapId ? { swapId: response.swapId } : {}),
   }
@@ -657,7 +695,7 @@ const getBestSwapKitRoute = async (body: Record<string, unknown>, decimals: numb
     }
   }
 
-  throw new Error('SwapKit returned no eligible routes.')
+  throw new SwapKitNoEligibleRoutesError()
 }
 
 export const getSwapKitQuote = async ({
@@ -674,7 +712,22 @@ export const getSwapKitQuote = async ({
     slippage,
     affiliateFee: affiliateBps,
   }
-  const route = await getBestSwapKitRoute(quoteBody, to.decimals)
+  let route: SwapKitQuoteRoute
+  try {
+    route = await getBestSwapKitRoute(quoteBody, to.decimals)
+  } catch (error) {
+    // SwapKit's `noRoutesFound` 404 can't distinguish "amount below provider
+    // minimum" from "pair unsupported". When the pair IS structurally supported
+    // (per the /providers snapshot), reclassify so the form shows the actionable
+    // "amount too small" copy instead of a misleading "no route" error (#4418).
+    if (
+      error instanceof SwapKitNoEligibleRoutesError &&
+      (await isSwapKitPairSupported({ from: from.chain, to: to.chain }))
+    ) {
+      throw new SwapKitAmountBelowMinimumError(from.chain, to.chain)
+    }
+    throw error
+  }
 
   const swapResponse = await postSwapKit<SwapKitSwapResponse>(
     '/v3/swap',
@@ -683,7 +736,7 @@ export const getSwapKitQuote = async ({
       sourceAddress: from.address,
       destinationAddress: to.address,
       disableBalanceCheck: true,
-      disableBuildTx: shouldUseTransferTx(from.chain) ? true : undefined,
+      disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
     })
   )
 
