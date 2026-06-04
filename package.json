@@ -142,7 +142,7 @@
     "@eslint/compat": "^2.1.0",
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^9.22.0",
-    "@google-cloud/translate": "^9.3.0",
+    "@google-cloud/translate": "^9.4.1",
     "@react-native-async-storage/async-storage": "^3.1.0",
     "@rollup/plugin-commonjs": "^29.0.2",
     "@rollup/plugin-node-resolve": "^16.0.3",

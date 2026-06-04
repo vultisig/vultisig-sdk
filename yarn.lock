@@ -3200,9 +3200,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@google-cloud/translate@npm:^9.3.0":
-  version: 9.3.0
-  resolution: "@google-cloud/translate@npm:9.3.0"
+"@google-cloud/translate@npm:^9.4.1":
+  version: 9.4.1
+  resolution: "@google-cloud/translate@npm:9.4.1"
   dependencies:
     "@google-cloud/common": "npm:^6.0.0"
     "@google-cloud/promisify": "npm:^5.0.0"
@@ -3210,7 +3210,7 @@ __metadata:
     extend: "npm:^3.0.2"
     google-gax: "npm:^5.0.0"
     is-html: "npm:^2.0.0"
-  checksum: 10c0/0d2fc5db718fe3d75e680981bc04c1394f78c6c49ffbec3ca5434e77f6b3dadd0eb3636b35fafcfca1701b99fe166c5ac783a9865155491f7f0fbd5b8a4f7f9a
+  checksum: 10c0/36ee10f5d9acdae7f0394ce0f52d5a8a2c11ff30d86cc9ac111d8e1d963baca2298de708a427f0ca9be8f3cbe48797aa41de4556168bbf79978363712c0acf2f
   languageName: node
   linkType: hard
 
@@ -21685,7 +21685,7 @@ __metadata:
     "@eslint/compat": "npm:^2.1.0"
     "@eslint/eslintrc": "npm:^3.3.5"
     "@eslint/js": "npm:^9.22.0"
-    "@google-cloud/translate": "npm:^9.3.0"
+    "@google-cloud/translate": "npm:^9.4.1"
     "@react-native-async-storage/async-storage": "npm:^3.1.0"
     "@rollup/plugin-commonjs": "npm:^29.0.2"
     "@rollup/plugin-node-resolve": "npm:^16.0.3"
