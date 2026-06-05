@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.8.2
+
+### Patch Changes
+
+- [#646](https://github.com/vultisig/vultisig-sdk/pull/646) [`72bbcd1`](https://github.com/vultisig/vultisig-sdk/commit/72bbcd17ee5327390c98784f861b7c6b8829cf2f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update the default Zcash consensus branch ID to NU6.2 (`30f33754`) for SDK UTXO signing and WalletCore signing inputs.
+
 ## 1.8.1
 
 ### Patch Changes
