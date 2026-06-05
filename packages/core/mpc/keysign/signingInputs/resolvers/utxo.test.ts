@@ -119,3 +119,10 @@ describe('getUtxoSigningInputs — general swap address validation', () => {
     ).not.toThrow('destination address')
   })
 })
+
+describe('Zcash branch ID', () => {
+  it('pins the NU6.2 consensus branch ID in WalletCore little-endian hex order', async () => {
+    const mod = await import('./utxo')
+    expect(mod.ZCASH_BRANCH_ID_NU6_2_LE_HEX).toBe('30f33754')
+  })
+})
