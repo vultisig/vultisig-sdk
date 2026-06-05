@@ -14,11 +14,15 @@ npm install -g @vultisig/mcp
 # Set up credentials via the CLI first
 vsig auth setup
 
-# Then run the MCP server (stdio)
+# Then run the MCP server (stdio) by vault ID or file path
 vmcp --vault <id-or-path>
 
 # Read-only profile (disables send/swap)
 vmcp --vault <id-or-path> --profile harness
+
+# Explicit forms are also supported
+vmcp --vault-id <id>
+vmcp --vault-file <path>
 ```
 
 ## Tools
