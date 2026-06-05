@@ -70,13 +70,13 @@
   },
   "devDependencies": {
     "@types/big.js": "^6.2.2",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.9.1",
     "@vultisig/sdk": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=1.8.0"
+    "@vultisig/sdk": ">=1.8.1"
   },
   "peerDependenciesMeta": {
     "@vultisig/sdk": {
