@@ -18,7 +18,10 @@ const baseBlock = {
   header: { time: '2026-05-27T00:00:00.000Z', height: '12345' },
 }
 
-const makeClient = (account: { accountNumber: number; sequence: number; pubkey?: unknown } | null) => ({
+// cosmjs/stargate 0.39 widened Account.accountNumber to `bigint`; sequence
+// stays `number`. Mock signature mirrors the real shape so test fixtures
+// catch a future cosmjs bump that widens sequence too.
+const makeClient = (account: { accountNumber: bigint; sequence: number; pubkey?: unknown } | null) => ({
   getAccount: vi.fn().mockResolvedValue(account),
   getBlock: vi.fn().mockResolvedValue(baseBlock),
 })
@@ -33,7 +36,7 @@ describe('getCosmosAccountInfo', () => {
   })
 
   it('returns sequence directly when StargateClient resolves the account', async () => {
-    const client = makeClient({ accountNumber: 12, sequence: 84 })
+    const client = makeClient({ accountNumber: 12n, sequence: 84 })
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)
 
     const result = await getCosmosAccountInfo({
@@ -41,7 +44,7 @@ describe('getCosmosAccountInfo', () => {
       address: 'terra1real',
     })
 
-    expect(result.accountNumber).toBe(12)
+    expect(result.accountNumber).toBe(12n)
     expect(result.sequence).toBe(84)
     expect(queryUrl).not.toHaveBeenCalled()
   })
@@ -64,7 +67,7 @@ describe('getCosmosAccountInfo', () => {
       address: 'terra1real',
     })
 
-    expect(result.accountNumber).toBe(12)
+    expect(result.accountNumber).toBe(12n)
     expect(result.sequence).toBe(84)
     expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toContain('/cosmos/auth/v1beta1/accounts/terra1real')
   })
@@ -91,7 +94,7 @@ describe('getCosmosAccountInfo', () => {
       address: 'terra1vest',
     })
 
-    expect(result.accountNumber).toBe(99)
+    expect(result.accountNumber).toBe(99n)
     expect(result.sequence).toBe(42)
   })
 
@@ -115,7 +118,7 @@ describe('getCosmosAccountInfo', () => {
       address: 'terra1mod',
     })
 
-    expect(result.accountNumber).toBe(7)
+    expect(result.accountNumber).toBe(7n)
     expect(result.sequence).toBe(3)
   })
 
@@ -130,7 +133,7 @@ describe('getCosmosAccountInfo', () => {
     })
 
     // Correct behavior for a brand-new on-chain account: sequence 0
-    expect(result.accountNumber).toBe(0)
+    expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
   })
 
@@ -144,7 +147,7 @@ describe('getCosmosAccountInfo', () => {
       address: 'terra1empty',
     })
 
-    expect(result.accountNumber).toBe(0)
+    expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
   })
 })
@@ -180,7 +183,7 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
       address: 'terra14qel5wtnrtdgvkd8v0n3wz3nw5rqtcnf5n24r4',
     })
 
-    expect(result.accountNumber).toBe(5497343)
+    expect(result.accountNumber).toBe(5497343n)
     expect(result.sequence).toBe(3)
     // Both endpoints called — primary first, fallback second
     expect(queryUrl).toHaveBeenCalledTimes(2)
@@ -212,7 +215,7 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
       address: 'terra1neverfunded',
     })
 
-    expect(result.accountNumber).toBe(0)
+    expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
     // Both calls attempted — this is OK; the alternative (only-retry-on-5xx)
     // would require parsing the error message which is brittle.
@@ -231,7 +234,7 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
       address: 'maya1abc',
     })
 
-    expect(result.accountNumber).toBe(0)
+    expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
     // Only primary attempted. No fallback call.
     expect(queryUrl).toHaveBeenCalledTimes(1)
