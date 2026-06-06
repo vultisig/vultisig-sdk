@@ -1,5 +1,14 @@
 # @vultisig/core-mpc
 
+## 1.3.10
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
+- Updated dependencies [[`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f)]:
+  - @vultisig/core-chain@2.10.2
+
 ## 1.3.9
 
 ### Patch Changes
