@@ -15,12 +15,11 @@
     "docs/**/*.md",
     "examples/**/*.md",
     "packages/**/*.md",
-    "#node_modules",
-    "#**/node_modules/**",
-    "#docs/api",
-    "#docs/plans",
-    "#skills",
-    "#tasks",
-    "#**/CHANGELOG.md"
+    "!**/node_modules/**",
+    "!docs/api/**",
+    "!docs/plans/**",
+    "!skills/**",
+    "!tasks/**",
+    "!**/CHANGELOG.md"
   ]
 }
