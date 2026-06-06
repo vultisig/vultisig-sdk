@@ -11,10 +11,7 @@ import { TokenMetadataResolver } from '../resolver'
 export const getSuiTokenMetadata: TokenMetadataResolver<OtherChain.Sui> = async ({ id }) => {
   const client = getSuiClient()
 
-  const metadata = shouldBePresent(
-    await client.getCoinMetadata({ coinType: id }),
-    `SUI coin metadata for ${id}`
-  )
+  const metadata = shouldBePresent(await client.getCoinMetadata({ coinType: id }), `SUI coin metadata for ${id}`)
 
   return {
     ticker: metadata.symbol,

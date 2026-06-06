@@ -24,9 +24,7 @@ describe('getSuiTokenMetadata', () => {
       iconUrl: 'https://example.com/sui.png',
     })
 
-    await expect(
-      getSuiTokenMetadata({ chain: OtherChain.Sui, id })
-    ).resolves.toEqual({
+    await expect(getSuiTokenMetadata({ chain: OtherChain.Sui, id })).resolves.toEqual({
       ticker: 'SUI',
       decimals: 9,
       logo: 'https://example.com/sui.png',
@@ -59,8 +57,6 @@ describe('getSuiTokenMetadata', () => {
   it('throws when no metadata is returned for the coin type', async () => {
     getCoinMetadataMock.mockResolvedValue(null)
 
-    await expect(
-      getSuiTokenMetadata({ chain: OtherChain.Sui, id: '0x123::foo::BAR' })
-    ).rejects.toThrow()
+    await expect(getSuiTokenMetadata({ chain: OtherChain.Sui, id: '0x123::foo::BAR' })).rejects.toThrow()
   })
 })
