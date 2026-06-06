@@ -74,6 +74,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
     toAddress: destinationAddress,
     changeAddress: coin.address,
     byteFee: Long.fromString(byteFee),
+    zip_0317: chain === UtxoChain.Zcash,
     coinType: coinType.value,
     fixedDustThreshold: Long.fromBigInt(minUtxo[chain]),
     scripts: {
