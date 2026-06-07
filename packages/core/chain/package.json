@@ -614,6 +614,11 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/sui/buildTransactionFromJson": {
+      "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
+      "import": "./dist/chains/sui/buildTransactionFromJson.js",
+      "default": "./dist/chains/sui/buildTransactionFromJson.js"
+    },
     "./chains/sui/client": {
       "types": "./dist/chains/sui/client.d.ts",
       "import": "./dist/chains/sui/client.js",
@@ -623,6 +628,11 @@
       "types": "./dist/chains/sui/config.d.ts",
       "import": "./dist/chains/sui/config.js",
       "default": "./dist/chains/sui/config.js"
+    },
+    "./chains/sui/sign": {
+      "types": "./dist/chains/sui/sign.d.ts",
+      "import": "./dist/chains/sui/sign.js",
+      "default": "./dist/chains/sui/sign.js"
     },
     "./chains/thorchain/ruji/services/fetchMergeableTokenBalances": {
       "types": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.d.ts",
