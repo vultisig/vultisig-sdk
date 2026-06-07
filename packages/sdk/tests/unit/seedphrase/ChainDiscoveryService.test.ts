@@ -80,6 +80,18 @@ describe('ChainDiscoveryService', () => {
     expect(mockDeriveAddress).not.toHaveBeenCalled()
   })
 
+  it('allows explicit discovery of Bittensor (re-enabled for seedphrase import)', async () => {
+    const s = new ChainDiscoveryService(wasmProvider)
+
+    const { results } = await s.discoverChains('test mnemonic twelve words here about', {
+      config: { chains: [Chain.Bittensor] },
+    })
+
+    expect(results).toHaveLength(1)
+    expect(results[0].chain).toBe(Chain.Bittensor)
+    expect(mockDeriveAddress).toHaveBeenCalledWith(expect.any(String), Chain.Bittensor)
+  })
+
   it('sortByBalance puts funded chains first then sorts by amount descending', () => {
     const s = new ChainDiscoveryService(wasmProvider)
     const sorted = s.sortByBalance([
