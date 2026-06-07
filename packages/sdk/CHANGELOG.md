@@ -1,5 +1,16 @@
 # @vultisig/sdk
 
+## 1.8.4
+
+### Patch Changes
+
+- [#649](https://github.com/vultisig/vultisig-sdk/pull/649) [`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add custom token support for SUI. SUI is now included in
+  `chainsWithTokenMetadataDiscovery`, and a new resolver fetches coin metadata
+  (ticker, decimals, logo) from the SUI RPC via `suix_getCoinMetadata`. A new
+  `isValidTokenId` helper validates token identifiers per chain — SUI tokens are
+  validated as Move struct tags (e.g. `0x2::sui::SUI`) while all other chains keep
+  delegating to `isValidAddress`.
+
 ## 1.8.3
 
 ### Patch Changes
