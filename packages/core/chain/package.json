@@ -1014,6 +1014,11 @@
       "import": "./dist/coin/token/metadata/resolvers/solana.js",
       "default": "./dist/coin/token/metadata/resolvers/solana.js"
     },
+    "./coin/token/metadata/resolvers/sui": {
+      "types": "./dist/coin/token/metadata/resolvers/sui.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/sui.js",
+      "default": "./dist/coin/token/metadata/resolvers/sui.js"
+    },
     "./coin/token/metadata/resolvers/ton": {
       "types": "./dist/coin/token/metadata/resolvers/ton.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/ton.js",
@@ -1789,6 +1794,11 @@
       "types": "./dist/utils/isValidAddress.d.ts",
       "import": "./dist/utils/isValidAddress.js",
       "default": "./dist/utils/isValidAddress.js"
+    },
+    "./utils/isValidTokenId": {
+      "types": "./dist/utils/isValidTokenId.d.ts",
+      "import": "./dist/utils/isValidTokenId.js",
+      "default": "./dist/utils/isValidTokenId.js"
     },
     "./utils/protobuf/toCompressedString": {
       "types": "./dist/utils/protobuf/toCompressedString.d.ts",
