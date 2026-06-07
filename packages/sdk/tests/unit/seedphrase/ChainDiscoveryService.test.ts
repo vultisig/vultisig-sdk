@@ -74,9 +74,9 @@ describe('ChainDiscoveryService', () => {
 
     await expect(
       s.discoverChains('test mnemonic twelve words here about', {
-        config: { chains: [Chain.Bittensor] },
+        config: { chains: [Chain.Cardano] },
       })
-    ).rejects.toThrow(/Bittensor/)
+    ).rejects.toThrow(/Cardano/)
     expect(mockDeriveAddress).not.toHaveBeenCalled()
   })
 

@@ -22,7 +22,7 @@ export const SUPPORTED_CHAINS: Chain[] = Object.values(Chain)
  * Chains intentionally hidden from seedphrase import until their key material
  * and signing paths are fully supported end-to-end.
  */
-export const SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS: Chain[] = [Chain.Cardano, Chain.QBTC, Chain.Bittensor]
+export const SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS: Chain[] = [Chain.Cardano, Chain.QBTC]
 
 const unsupportedSeedphraseImportChains = new Set<Chain>(SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)
 
