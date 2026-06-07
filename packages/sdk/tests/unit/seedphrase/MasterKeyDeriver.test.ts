@@ -106,7 +106,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await expect(deriver.deriveChainKey(testMnemonic, Chain.Bittensor, true)).rejects.toThrow(/Bittensor/)
+      await expect(deriver.deriveChainKey(testMnemonic, Chain.Cardano, true)).rejects.toThrow(/Cardano/)
       expect(provider.getWalletCore).not.toHaveBeenCalled()
     })
 
@@ -249,8 +249,8 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await expect(deriver.deriveChainPrivateKeys(testMnemonic, [Chain.Ethereum, Chain.Bittensor])).rejects.toThrow(
-        /Bittensor/
+      await expect(deriver.deriveChainPrivateKeys(testMnemonic, [Chain.Ethereum, Chain.Cardano])).rejects.toThrow(
+        /Cardano/
       )
       expect(provider.getWalletCore).not.toHaveBeenCalled()
     })
@@ -260,7 +260,7 @@ describe('MasterKeyDeriver', () => {
       const provider = createMockWasmProvider(mock)
       const deriver = new MasterKeyDeriver(provider)
 
-      await expect(deriver.deriveAddress(testMnemonic, Chain.Bittensor)).rejects.toThrow(/Bittensor/)
+      await expect(deriver.deriveAddress(testMnemonic, Chain.Cardano)).rejects.toThrow(/Cardano/)
       expect(provider.getWalletCore).not.toHaveBeenCalled()
     })
   })
