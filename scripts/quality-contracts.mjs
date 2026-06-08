@@ -307,7 +307,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
     ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
   }
 
-  runYarn(['install'], {
+  runYarn(['install', '--no-immutable'], {
     cwd: consumer,
     env,
     stdio: 'inherit',
