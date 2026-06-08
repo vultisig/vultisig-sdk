@@ -34,6 +34,13 @@ function requireNonEmptyString(field: string, value: unknown): string {
   return value
 }
 
+function requireString(field: string, value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new Error(`FastVault GET /get: invalid or missing "${field}" in response`)
+  }
+  return value
+}
+
 function mapVaultGetJsonToResponse(data: unknown): VaultFromServerResponse {
   if (data === null || typeof data !== 'object') {
     throw new Error('FastVault GET /get: expected JSON object in response')
@@ -42,7 +49,7 @@ function mapVaultGetJsonToResponse(data: unknown): VaultFromServerResponse {
   return {
     name: requireNonEmptyString('name', o.name),
     publicKeyEcdsa: requireNonEmptyString('public_key_ecdsa', o.public_key_ecdsa),
-    publicKeyEddsa: requireNonEmptyString('public_key_eddsa', o.public_key_eddsa),
+    publicKeyEddsa: requireString('public_key_eddsa', o.public_key_eddsa),
     hexChainCode: requireNonEmptyString('hex_chain_code', o.hex_chain_code),
     localPartyId: requireNonEmptyString('local_party_id', o.local_party_id),
   }

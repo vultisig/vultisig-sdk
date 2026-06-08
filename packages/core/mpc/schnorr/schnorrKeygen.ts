@@ -103,6 +103,10 @@ export class Schnorr {
       return await this.processOutbound(session, messageId)
     } catch (error) {
       console.error('processOutbound error:', error)
+      if (this.isKeygenComplete) {
+        console.log('stop processOutbound')
+        return true
+      }
       await sleep(100)
       return await this.processOutbound(session, messageId)
     }
