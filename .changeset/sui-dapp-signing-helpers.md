@@ -1,5 +1,6 @@
 ---
 '@vultisig/core-chain': minor
+'@vultisig/sdk': patch
 ---
 
 Add Sui dApp signing helpers to `@vultisig/core-chain/chains/sui`. Two new
