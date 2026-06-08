@@ -275,7 +275,7 @@ export type Y = Vultisig
   }
 }
 
-function packedMcpBinSmoke(workRoot, tgzPath) {
+function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
   const consumer = path.join(workRoot, 'mcp-consumer')
   mkdirSync(consumer, { recursive: true })
 
@@ -287,6 +287,13 @@ function packedMcpBinSmoke(workRoot, tgzPath) {
         private: true,
         type: 'module',
         packageManager: 'yarn@4.13.0',
+        dependencies: {
+          '@vultisig/mcp': `file:${tgzPath}`,
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
+        resolutions: {
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
       },
       null,
       2
@@ -300,7 +307,11 @@ function packedMcpBinSmoke(workRoot, tgzPath) {
     ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
   }
 
-  runYarn(['add', `@vultisig/mcp@file:${tgzPath}`], { cwd: consumer, env, stdio: 'inherit' })
+  runYarn(['install', '--no-immutable'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
 
   for (const binName of ['vmcp', 'vultisig-mcp']) {
     const binPath = path.join(consumer, 'node_modules/.bin', binName)
@@ -340,7 +351,7 @@ function main() {
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
     validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
-    packedMcpBinSmoke(workRoot, mcpTgzPath)
+    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath)
 
     console.log('quality:contracts OK')
   } finally {

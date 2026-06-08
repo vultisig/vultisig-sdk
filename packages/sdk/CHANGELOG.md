@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.8.5
+
+### Patch Changes
+
+- [#655](https://github.com/vultisig/vultisig-sdk/pull/655) [`ef22e78`](https://github.com/vultisig/vultisig-sdk/commit/ef22e785ccb5d772bc144febb64dd394f3211799) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the Fast Vault KeyImport fix from bundled core MPC code in the SDK package.
+
 ## 1.8.4
 
 ### Patch Changes
