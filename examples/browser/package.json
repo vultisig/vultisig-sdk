@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-browser",
-  "version": "0.1.61",
+  "version": "0.1.65",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.9.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",

@@ -64,19 +64,19 @@
     "@bufbuild/protobuf": "^2.11.0",
     "@cosmjs/cosmwasm-stargate": "^0.38.1",
     "@cosmjs/proto-signing": "^0.38.1",
-    "@cosmjs/stargate": "^0.38.1",
+    "@cosmjs/stargate": "^0.39.0",
     "big.js": "^7.0.1",
     "cosmjs-types": "^0.11.0"
   },
   "devDependencies": {
     "@types/big.js": "^6.2.2",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.9.1",
     "@vultisig/sdk": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=1.8.0"
+    "@vultisig/sdk": ">=1.8.4"
   },
   "peerDependenciesMeta": {
     "@vultisig/sdk": {

@@ -1,5 +1,28 @@
 # @vultisig/core-chain
 
+## 2.11.0
+
+### Minor Changes
+
+- [#649](https://github.com/vultisig/vultisig-sdk/pull/649) [`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add custom token support for SUI. SUI is now included in
+  `chainsWithTokenMetadataDiscovery`, and a new resolver fetches coin metadata
+  (ticker, decimals, logo) from the SUI RPC via `suix_getCoinMetadata`. A new
+  `isValidTokenId` helper validates token identifiers per chain — SUI tokens are
+  validated as Move struct tags (e.g. `0x2::sui::SUI`) while all other chains keep
+  delegating to `isValidAddress`.
+
+## 2.10.2
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
+## 2.10.1
+
+### Patch Changes
+
+- [#617](https://github.com/vultisig/vultisig-sdk/pull/617) [`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Select swap quotes with a 1% provider preference band instead of hard native priority.
+
 ## 2.10.0
 
 ### Minor Changes

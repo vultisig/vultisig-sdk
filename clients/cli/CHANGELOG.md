@@ -1,5 +1,15 @@
 # @vultisig/cli
 
+## 1.8.1
+
+### Patch Changes
+
+- [#617](https://github.com/vultisig/vultisig-sdk/pull/617) [`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Select swap quotes with a 1% provider preference band instead of hard native priority.
+
+- Updated dependencies [[`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb), [`2417949`](https://github.com/vultisig/vultisig-sdk/commit/24179490c1f80ca55b166a2a33e607574a140782)]:
+  - @vultisig/core-chain@2.10.1
+  - @vultisig/sdk@1.8.1
+
 ## 1.8.0
 
 ### Patch Changes

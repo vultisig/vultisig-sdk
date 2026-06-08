@@ -1967,7 +1967,7 @@ async function computeEIP712Hash(
   primaryType: string,
   message: Record<string, unknown>
 ): Promise<string> {
-  const { keccak_256 } = await import('@noble/hashes/sha3')
+  const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
   const domainSeparator = hashStruct('EIP712Domain', domain, types, keccak_256)
   const messageHash = hashStruct(primaryType, message, types, keccak_256)

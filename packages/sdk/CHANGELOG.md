@@ -1,5 +1,36 @@
 # @vultisig/sdk
 
+## 1.8.4
+
+### Patch Changes
+
+- [#649](https://github.com/vultisig/vultisig-sdk/pull/649) [`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add custom token support for SUI. SUI is now included in
+  `chainsWithTokenMetadataDiscovery`, and a new resolver fetches coin metadata
+  (ticker, decimals, logo) from the SUI RPC via `suix_getCoinMetadata`. A new
+  `isValidTokenId` helper validates token identifiers per chain — SUI tokens are
+  validated as Move struct tags (e.g. `0x2::sui::SUI`) while all other chains keep
+  delegating to `isValidAddress`.
+
+## 1.8.3
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
+## 1.8.2
+
+### Patch Changes
+
+- [#646](https://github.com/vultisig/vultisig-sdk/pull/646) [`72bbcd1`](https://github.com/vultisig/vultisig-sdk/commit/72bbcd17ee5327390c98784f861b7c6b8829cf2f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update the default Zcash consensus branch ID to NU6.2 (`30f33754`) for SDK UTXO signing and WalletCore signing inputs.
+
+## 1.8.1
+
+### Patch Changes
+
+- [#617](https://github.com/vultisig/vultisig-sdk/pull/617) [`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Select swap quotes with a 1% provider preference band instead of hard native priority.
+
+- [#644](https://github.com/vultisig/vultisig-sdk/pull/644) [`2417949`](https://github.com/vultisig/vultisig-sdk/commit/24179490c1f80ca55b166a2a33e607574a140782) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix fiatToAmount throwing "EVM chains only" for Cosmos and other non-EVM token swaps. USD-denominated swap amounts now resolve correctly for TerraClassic (USTC/LUNC), Cosmos Hub (ATOM), Osmosis (IBC denoms), Solana SPL tokens, Polkadot asset-hub tokens, TON jettons, and any chain with entries in the knownTokens registry. Native Cosmos denoms (uluna, uatom, etc.) are also handled via cosmosFeeCoinDenom fallback.
+
 ## 1.8.0
 
 ### Minor Changes
