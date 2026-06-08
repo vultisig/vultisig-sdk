@@ -2,8 +2,9 @@
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const repoRoot = path.resolve(new URL('..', import.meta.url).pathname)
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const bundledSourcePrefixes = [
   'packages/core/chain/',
@@ -49,7 +50,7 @@ function hasSdkChangeset() {
     if (!file.endsWith('.md') || file === 'README.md') continue
     const body = readFileSync(path.join(changesetDir, file), 'utf8')
     const frontmatter = body.match(/^---\n([\s\S]*?)\n---/)
-    if (frontmatter?.[1].includes('"@vultisig/sdk"')) return true
+    if (frontmatter?.[1].match(/['"]@vultisig\/sdk['"]/)) return true
   }
   return false
 }
