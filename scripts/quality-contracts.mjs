@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
- * SDK tarball export validation + temp packed-consumer smoke (Node-safe entrypoints).
- * CLI dist smoke: --help and hidden `schema` JSON.
+ * Published package contract validation:
+ * - SDK tarball export validation + temp packed-consumer smoke (Node-safe entrypoints)
+ * - Rujira / MPC package export target validation from packed tarballs
+ * - MCP packed bin metadata + temp installed `vmcp --help` smoke
+ * - CLI dist smoke: --help and hidden `schema` JSON
  *
  * Temp installs use YARN_CACHE_FOLDER pointing at the repo's Yarn cache so CI stays
  * mostly offline after `yarn install --immutable`.
  */
 
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,6 +22,11 @@ const repoRoot = path.resolve(__dirname, '..')
 const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
 const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.13.0.cjs')
+const PACKAGE_CONTRACT_WORKSPACES = [
+  '@vultisig/rujira',
+  '@vultisig/mpc-types',
+  '@vultisig/mpc-wasm',
+]
 
 /** Collect relative paths like `./dist/foo.js` from package.json `exports` */
 function collectExportRelativePaths(exportsField, out = new Set()) {
@@ -31,10 +39,14 @@ function collectExportRelativePaths(exportsField, out = new Set()) {
     for (const x of exportsField) collectExportRelativePaths(x, out)
     return out
   }
-  if (typeof exportsField === 'object') {
+  if (exportsField && typeof exportsField === 'object') {
     for (const v of Object.values(exportsField)) collectExportRelativePaths(v, out)
   }
   return out
+}
+
+function packageRelativePath(packageRoot, rel) {
+  return path.join(packageRoot, rel.startsWith('./') ? rel.slice(2) : rel)
 }
 
 function run(cmd, args, opts = {}) {
@@ -108,13 +120,67 @@ function validateTarballExportFiles(packageRoot) {
   const pkgPath = path.join(packageRoot, 'package.json')
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
   const rels = collectExportRelativePaths(pkg.exports)
-  if (!rels.size) throw new Error('Packed package.json has no resolvable export paths')
+  if (!rels.size) throw new Error(`${pkg.name} packed package.json has no resolvable export paths`)
   for (const rel of rels) {
-    const abs = path.join(packageRoot, rel.slice(2))
+    const abs = packageRelativePath(packageRoot, rel)
     if (!existsSync(abs)) {
-      throw new Error(`Export target missing from packed tarball: ${rel} -> ${abs}`)
+      throw new Error(`${pkg.name} export target missing from packed tarball: ${rel} -> ${abs}`)
     }
   }
+}
+
+function validateTarballBinFiles(packageRoot, expectedBins) {
+  const pkgPath = path.join(packageRoot, 'package.json')
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
+  if (!pkg.bin || typeof pkg.bin !== 'object' || Array.isArray(pkg.bin)) {
+    throw new Error(`${pkg.name} packed package.json has no bin map`)
+  }
+
+  for (const binName of expectedBins) {
+    const rel = pkg.bin[binName]
+    if (typeof rel !== 'string' || !rel) {
+      throw new Error(`${pkg.name} packed package.json is missing bin ${binName}`)
+    }
+
+    const abs = packageRelativePath(packageRoot, rel)
+    if (!existsSync(abs)) {
+      throw new Error(`${pkg.name} bin target missing from packed tarball: ${binName} -> ${abs}`)
+    }
+
+    const mode = statSync(abs).mode
+    if ((mode & 0o111) === 0) {
+      throw new Error(`${pkg.name} bin target is not executable in packed tarball: ${binName} -> ${abs}`)
+    }
+
+    const firstLine = readFileSync(abs, 'utf8').split(/\r?\n/, 1)[0]
+    if (!firstLine.startsWith('#!/usr/bin/env node')) {
+      throw new Error(`${pkg.name} bin target is missing the Node shebang: ${binName} -> ${abs}`)
+    }
+  }
+}
+
+function packWorkspace(workRoot, workspaceName, outName) {
+  const tgzPath = path.join(workRoot, outName)
+  runYarn(['workspace', workspaceName, 'pack', '--out', tgzPath], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  })
+  return tgzPath
+}
+
+function extractPackage(workRoot, tgzPath, folderName) {
+  const extractRoot = path.join(workRoot, 'extract', folderName)
+  mkdirSync(extractRoot, { recursive: true })
+  run('tar', ['-xzf', tgzPath, '-C', extractRoot])
+  return path.join(extractRoot, 'package')
+}
+
+function validatePackedWorkspaceExports(workRoot, workspaceName) {
+  const outName = `${workspaceName.replace(/^@/, '').replaceAll(/[^a-z0-9]+/gi, '-')}.tgz`
+  const tgzPath = packWorkspace(workRoot, workspaceName, outName)
+  const packageRoot = extractPackage(workRoot, tgzPath, outName.replace(/\.tgz$/, ''))
+  validateTarballExportFiles(packageRoot)
+  return { packageRoot, tgzPath }
 }
 
 function packedConsumerSmoke(workRoot, tgzPath) {
@@ -209,6 +275,61 @@ export type Y = Vultisig
   }
 }
 
+function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
+  const consumer = path.join(workRoot, 'mcp-consumer')
+  mkdirSync(consumer, { recursive: true })
+
+  writeFileSync(
+    path.join(consumer, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'vultisig-mcp-contract-consumer',
+        private: true,
+        type: 'module',
+        packageManager: 'yarn@4.13.0',
+        dependencies: {
+          '@vultisig/mcp': `file:${tgzPath}`,
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
+        resolutions: {
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
+      },
+      null,
+      2
+    ) + '\n'
+  )
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+
+  const cacheFolder = path.join(repoRoot, '.yarn/cache')
+  const env = {
+    ...process.env,
+    ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
+  }
+
+  runYarn(['install', '--no-immutable'], {
+    cwd: consumer,
+    env,
+    stdio: 'inherit',
+  })
+
+  for (const binName of ['vmcp', 'vultisig-mcp']) {
+    const binPath = path.join(consumer, 'node_modules/.bin', binName)
+    if (!existsSync(binPath)) {
+      throw new Error(`Packed MCP install did not create expected bin: ${binName}`)
+    }
+  }
+
+  const vmcpHelp = run(path.join(consumer, 'node_modules/.bin/vmcp'), ['--help'], {
+    cwd: consumer,
+    env,
+  })
+  const output = `${vmcpHelp.stdout}\n${vmcpHelp.stderr}`
+  if (!output.includes('vultisig-mcp') || !output.includes('--profile <harness|defi>')) {
+    throw new Error('Packed MCP vmcp --help output did not include expected CLI usage.')
+  }
+}
+
 function main() {
   smokeCli()
   assertSdkBuilt()
@@ -217,16 +338,20 @@ function main() {
   try {
     workRoot = mkdtempSync(path.join(os.tmpdir(), 'vultisig-quality-contracts-'))
 
-    const tgzPath = path.join(workRoot, 'sdk.tgz')
-    runYarn(['workspace', '@vultisig/sdk', 'pack', '--out', tgzPath], {
-      cwd: repoRoot,
-      stdio: 'inherit',
-    })
+    const tgzPath = packWorkspace(workRoot, '@vultisig/sdk', 'sdk.tgz')
 
-    run('tar', ['-xzf', tgzPath, '-C', workRoot])
-    validateTarballExportFiles(path.join(workRoot, 'package'))
+    validateTarballExportFiles(extractPackage(workRoot, tgzPath, 'sdk'))
 
     packedConsumerSmoke(workRoot, tgzPath)
+
+    for (const workspaceName of PACKAGE_CONTRACT_WORKSPACES) {
+      validatePackedWorkspaceExports(workRoot, workspaceName)
+    }
+
+    const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
+    const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
+    validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
+    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath)
 
     console.log('quality:contracts OK')
   } finally {
