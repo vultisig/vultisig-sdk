@@ -287,6 +287,13 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
         private: true,
         type: 'module',
         packageManager: 'yarn@4.13.0',
+        dependencies: {
+          '@vultisig/mcp': `file:${tgzPath}`,
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
+        resolutions: {
+          '@vultisig/sdk': `file:${sdkTgzPath}`,
+        },
       },
       null,
       2
@@ -300,7 +307,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
     ...(existsSync(cacheFolder) ? { YARN_CACHE_FOLDER: cacheFolder } : {}),
   }
 
-  runYarn(['add', `@vultisig/sdk@file:${sdkTgzPath}`, `@vultisig/mcp@file:${tgzPath}`], {
+  runYarn(['install'], {
     cwd: consumer,
     env,
     stdio: 'inherit',
