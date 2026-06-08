@@ -13,78 +13,8 @@ import { readFileSync } from 'node:fs'
 import { executeAuthSetup, getServerPassword } from '@vultisig/client-shared'
 import { Vultisig } from '@vultisig/sdk'
 
-import type { Profile } from '../src/index.js'
+import { formatMcpHelp, parseMcpArgs } from '../src/args.js'
 import { startMcpServer } from '../src/index.js'
-
-const PROFILES = ['harness', 'defi'] as const
-
-function parseArgs(): { profile: Profile; vaultId?: string; vaultFile?: string; setup?: boolean } {
-  const args = process.argv.slice(2)
-
-  if (args.includes('--help') || args.includes('-h')) {
-    process.stderr.write(`
-vultisig-mcp — MCP server for Vultisig wallet operations
-
-SETUP (first time):
-  vmcp --setup            Import a vault and store credentials interactively
-  vmcp --setup --vault-file <path>   Import a specific vault file
-
-USAGE:
-  vmcp [options]
-
-OPTIONS:
-  --profile <harness|defi>   Tool profile (default: defi)
-                             harness = read-only tools only
-                             defi    = all tools including send/swap
-  --vault-id <id>            Use a specific vault (default: first found)
-  --setup                    Run interactive auth setup, then exit
-
-CI / HEADLESS (skip interactive auth):
-  --vault-file <path>        Load vault directly from a .vult file
-                             Requires VAULT_PASSWORD and/or VAULT_DECRYPT_PASSWORD
-                             environment variables for encrypted vaults
-
-EXAMPLES:
-  # First time setup:
-  vmcp --setup
-
-  # Start the server:
-  vmcp
-  vmcp --profile harness
-
-  # Claude Code integration:
-  claude mcp add vultisig -- vmcp
-  claude mcp add vultisig -- npx @vultisig/mcp
-
-  # CI / headless:
-  VAULT_PASSWORD=xxx vmcp --vault-file ./vault.vult
-`)
-    process.exit(0)
-  }
-
-  let profile: Profile = 'defi'
-  let vaultId: string | undefined
-  let vaultFile: string | undefined
-  const setup = args.includes('--setup')
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
-    if (arg === '--profile' && args[i + 1]) {
-      const value = args[++i] as Profile
-      if (!PROFILES.includes(value)) {
-        process.stderr.write(`Invalid profile "${value}". Must be one of: ${PROFILES.join(', ')}\n`)
-        process.exit(1)
-      }
-      profile = value
-    } else if (arg === '--vault-id' && args[i + 1]) {
-      vaultId = args[++i]
-    } else if (arg === '--vault-file' && args[i + 1]) {
-      vaultFile = args[++i]
-    }
-  }
-
-  return { profile, vaultId, vaultFile, setup }
-}
 
 async function runSetup(vaultFile?: string): Promise<void> {
   // During setup, restore stdout for interactive prompts
@@ -99,7 +29,12 @@ async function runSetup(vaultFile?: string): Promise<void> {
 }
 
 async function main() {
-  const { profile, vaultId, vaultFile, setup } = parseArgs()
+  const { profile, vaultId, vaultFile, setup, help } = parseMcpArgs(process.argv.slice(2))
+
+  if (help) {
+    process.stderr.write(formatMcpHelp())
+    return
+  }
 
   if (setup) {
     await runSetup(vaultFile)
@@ -159,6 +94,6 @@ async function main() {
 }
 
 main().catch(err => {
-  process.stderr.write(`${err}\n`)
+  process.stderr.write(`${err instanceof Error ? err.message : err}\n`)
   process.exit(1)
 })

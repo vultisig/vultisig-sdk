@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.10.0",
+  "version": "2.11.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1014,6 +1014,11 @@
       "import": "./dist/coin/token/metadata/resolvers/solana.js",
       "default": "./dist/coin/token/metadata/resolvers/solana.js"
     },
+    "./coin/token/metadata/resolvers/sui": {
+      "types": "./dist/coin/token/metadata/resolvers/sui.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/sui.js",
+      "default": "./dist/coin/token/metadata/resolvers/sui.js"
+    },
     "./coin/token/metadata/resolvers/ton": {
       "types": "./dist/coin/token/metadata/resolvers/ton.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/ton.js",
@@ -1790,6 +1795,11 @@
       "import": "./dist/utils/isValidAddress.js",
       "default": "./dist/utils/isValidAddress.js"
     },
+    "./utils/isValidTokenId": {
+      "types": "./dist/utils/isValidTokenId.d.ts",
+      "import": "./dist/utils/isValidTokenId.js",
+      "default": "./dist/utils/isValidTokenId.js"
+    },
     "./utils/protobuf/toCompressedString": {
       "types": "./dist/utils/protobuf/toCompressedString.d.ts",
       "import": "./dist/utils/protobuf/toCompressedString.js",
@@ -1810,7 +1820,7 @@
     "@cosmjs/amino": "^0.38.1",
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.38.1",
-    "@cosmjs/stargate": "^0.38.1",
+    "@cosmjs/stargate": "^0.39.0",
     "@lifi/sdk": "^3.16.2",
     "@mysten/sui": "^2.17.0",
     "@noble/hashes": "^1.8.0",
@@ -1821,7 +1831,7 @@
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
-    "@trustwallet/wallet-core": "^4.6.9",
+    "@trustwallet/wallet-core": "^4.6.13",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-utils": "0.10.1",
     "bip32": "^5.0.1",

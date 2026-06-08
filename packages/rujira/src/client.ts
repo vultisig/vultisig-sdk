@@ -114,8 +114,21 @@ export class RujiraClient {
       })
 
       if (this.signer) {
+        // `GasPrice` imported above resolves to `@cosmjs/stargate@0.39` (root)
+        // whereas `SigningCosmWasmClient.connectWithSigner` expects the
+        // GasPrice type from `@cosmjs/cosmwasm/node_modules/@cosmjs/stargate@0.38.1`
+        // (transitive). TS treats the two as distinct nominal types even
+        // though they're structurally identical at runtime. Cast through
+        // `unknown` to bridge them — safe because GasPrice is a value-class
+        // and the 0.38.1/0.39 shapes match. Sibling concern tracked at
+        // sdk#625; ideal fix is bumping cosmwasm-stargate to a release that
+        // depends on stargate@0.39.
         this.signingClient = await SigningCosmWasmClient.connectWithSigner(this.config.rpcEndpoint, this.signer, {
-          gasPrice: GasPrice.fromString(this.config.gasPrice),
+          gasPrice: GasPrice.fromString(this.config.gasPrice) as unknown as Parameters<
+            typeof SigningCosmWasmClient.connectWithSigner
+          >[2] extends { gasPrice?: infer T } | undefined
+            ? NonNullable<T>
+            : never,
         })
         this.log('Signing client connected')
       }

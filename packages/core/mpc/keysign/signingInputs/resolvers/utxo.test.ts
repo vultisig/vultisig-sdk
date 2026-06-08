@@ -1,4 +1,5 @@
 import { create } from '@bufbuild/protobuf'
+import { TW } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { UTXOSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
@@ -36,6 +37,7 @@ const makeWalletCore = ({ isValidAddress = true }: { isValidAddress?: boolean } 
     },
     CoinType: {
       bitcoin: { value: 0 },
+      zcash: { value: 133 },
     },
   }) as never
 
@@ -117,5 +119,42 @@ describe('getUtxoSigningInputs — general swap address validation', () => {
         publicKey: {} as never,
       })
     ).not.toThrow('destination address')
+  })
+})
+
+describe('Zcash branch ID', () => {
+  it('pins the NU6.2 consensus branch ID in WalletCore little-endian hex order', async () => {
+    const mod = await import('./utxo')
+    expect(mod.ZCASH_BRANCH_ID_NU6_2_LE_HEX).toBe('30f33754')
+  })
+})
+
+describe('Zcash ZIP-317 fee planning', () => {
+  it('enables ZIP-317 on the WalletCore planner input for Zcash sends', async () => {
+    const resolver = await getUtxoSigningInputs()
+    const walletCore = makeWalletCore()
+    const plan = (walletCore as unknown as { AnySigner: { plan: ReturnType<typeof vi.fn> } }).AnySigner.plan
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Zcash,
+        ticker: 'ZEC',
+        address: 't1Source',
+        decimals: 8,
+        isNativeToken: true,
+      }),
+      toAddress: 't1Destination',
+      toAmount: '600000',
+      blockchainSpecific: {
+        case: 'utxoSpecific',
+        value: create(UTXOSpecificSchema, { byteFee: '10', sendMaxAmount: false }),
+      },
+      utxoInfo: [],
+    })
+
+    resolver({ keysignPayload: payload, walletCore, publicKey: {} as never })
+
+    const planInput = vi.mocked(plan).mock.calls[0]?.[0]
+    expect(planInput).toBeDefined()
+    expect(TW.Bitcoin.Proto.SigningInput.decode(planInput).zip_0317).toBe(true)
   })
 })

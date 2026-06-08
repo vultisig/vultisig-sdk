@@ -1,5 +1,14 @@
 # @vultisig/mcp
 
+## 0.1.15
+
+### Patch Changes
+
+- [#642](https://github.com/vultisig/vultisig-sdk/pull/642) [`cc7fc61`](https://github.com/vultisig/vultisig-sdk/commit/cc7fc61f7720f8c218bccc90b276808c71263651) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Accept documented `vmcp --vault <id-or-path>` arguments and reject unknown MCP CLI options.
+
+- Updated dependencies [[`72bbcd1`](https://github.com/vultisig/vultisig-sdk/commit/72bbcd17ee5327390c98784f861b7c6b8829cf2f)]:
+  - @vultisig/sdk@1.8.2
+
 ## 0.1.14
 
 ### Patch Changes

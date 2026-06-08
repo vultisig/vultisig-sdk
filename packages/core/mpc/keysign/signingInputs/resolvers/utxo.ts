@@ -16,6 +16,8 @@ import { KeysignSwapPayload } from '../../swap/KeysignSwapPayload'
 import { getKeysignChain } from '../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../resolver'
 
+export const ZCASH_BRANCH_ID_NU6_2_LE_HEX = '30f33754'
+
 export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'utxo'>(keysignPayload)
 
@@ -72,6 +74,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
     toAddress: destinationAddress,
     changeAddress: coin.address,
     byteFee: Long.fromString(byteFee),
+    zip_0317: chain === UtxoChain.Zcash,
     coinType: coinType.value,
     fixedDustThreshold: Long.fromBigInt(minUtxo[chain]),
     scripts: {
@@ -102,7 +105,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
   input.plan = TW.Bitcoin.Proto.TransactionPlan.decode(plan)
 
   if (chain === UtxoChain.Zcash) {
-    input.plan.branchId = Buffer.from('f04dec4d', 'hex')
+    input.plan.branchId = Buffer.from(ZCASH_BRANCH_ID_NU6_2_LE_HEX, 'hex')
   }
 
   return [input]

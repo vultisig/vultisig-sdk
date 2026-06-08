@@ -443,15 +443,21 @@ export function getSighashLegacy(opts: SighashLegacyOptions): Uint8Array {
 // ---------------------------------------------------------------------------
 
 /**
- * Default Zcash consensus branch ID (NU6.1, the epoch active at the time
- * of writing). Consumers SHOULD override via `buildUtxoSendTx({zcashBranchId})`
- * for pre-activation signing — relying on a compiled-in default means every
+ * Zcash consensus branch ID for NU6.1. Kept exported for callers that need
+ * to reproduce transactions from the previous consensus epoch.
+ */
+export const ZCASH_BRANCH_ID_NU6_1 = 0x4dec4df0
+
+/**
+ * Default Zcash consensus branch ID (NU6.2, the epoch active at the time of
+ * writing). Consumers SHOULD override via `buildUtxoSendTx({zcashBranchId})`
+ * for pre-activation signing - relying on a compiled-in default means every
  * Zcash network upgrade turns into a shipped-SDK-release blocker.
  *
  * Look up the current value at tx-build time from a Zcash node:
  *   zcash-cli getblockchaininfo | jq '.consensus.nextblock'
  */
-export const ZCASH_BRANCH_ID_NU6_1 = 0x4dec4df0
+export const ZCASH_BRANCH_ID_NU6_2 = 0x5437f330
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
 const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
 
@@ -700,7 +706,7 @@ export type BuildUtxoSendOptions = {
   compressedPubKey: Uint8Array
   /**
    * Zcash consensus branch ID (ignored for non-Zcash chains). Defaults to
-   * `ZCASH_BRANCH_ID_NU6_1` at the time of release. Consumers SHOULD fetch
+   * `ZCASH_BRANCH_ID_NU6_2` at the time of release. Consumers SHOULD fetch
    * the current value from a zcash-cli `getblockchaininfo` at tx-build time
    * — hardcoding means every future consensus upgrade requires a shipped
    * SDK release.
@@ -794,7 +800,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
-  const zcashBranchId = opts.zcashBranchId ?? ZCASH_BRANCH_ID_NU6_1
+  const zcashBranchId = opts.zcashBranchId ?? ZCASH_BRANCH_ID_NU6_2
 
   const signingHashes: Uint8Array[] = []
   for (let i = 0; i < inputs.length; i++) {

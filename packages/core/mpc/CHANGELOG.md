@@ -1,5 +1,34 @@
 # @vultisig/core-mpc
 
+## 1.3.11
+
+### Patch Changes
+
+- Updated dependencies [[`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069)]:
+  - @vultisig/core-chain@2.11.0
+
+## 1.3.10
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
+- Updated dependencies [[`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f)]:
+  - @vultisig/core-chain@2.10.2
+
+## 1.3.9
+
+### Patch Changes
+
+- [#646](https://github.com/vultisig/vultisig-sdk/pull/646) [`72bbcd1`](https://github.com/vultisig/vultisig-sdk/commit/72bbcd17ee5327390c98784f861b7c6b8829cf2f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update the default Zcash consensus branch ID to NU6.2 (`30f33754`) for SDK UTXO signing and WalletCore signing inputs.
+
+## 1.3.8
+
+### Patch Changes
+
+- Updated dependencies [[`7145713`](https://github.com/vultisig/vultisig-sdk/commit/7145713992199f084d826f160cc20a4c445b14fb)]:
+  - @vultisig/core-chain@2.10.1
+
 ## 1.3.7
 
 ### Patch Changes
