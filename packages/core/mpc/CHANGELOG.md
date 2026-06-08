@@ -1,5 +1,11 @@
 # @vultisig/core-mpc
 
+## 1.3.12
+
+### Patch Changes
+
+- [#652](https://github.com/vultisig/vultisig-sdk/pull/652) [`0eaa76a`](https://github.com/vultisig/vultisig-sdk/commit/0eaa76a08394e21a1280a6a69a9dc540837dd59c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Fast Vault KeyImport handling for ECDSA-only vaults and completed outbound keygen retries.
+
 ## 1.3.11
 
 ### Patch Changes
