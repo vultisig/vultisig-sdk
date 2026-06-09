@@ -13,13 +13,7 @@ type SuiBlockaidScanResponse = {
  * only. The same endpoint also serves validation (security risk) — the
  * separate `getSuiTxBlockaidValidation` resolver requests that.
  */
-export const getSuiTxBlockaidSimulation: BlockaidTxSimulationResolver<
-  OtherChain.Sui,
-  'sui'
-> = async ({ data }) => {
-  const { simulation } = await queryBlockaid<SuiBlockaidScanResponse>(
-    '/sui/transaction/scan',
-    data
-  )
+export const getSuiTxBlockaidSimulation: BlockaidTxSimulationResolver<OtherChain.Sui, 'sui'> = async ({ data }) => {
+  const { simulation } = await queryBlockaid<SuiBlockaidScanResponse>('/sui/transaction/scan', data)
   return simulation
 }

@@ -73,13 +73,19 @@ const coinTypeFromAsset = (asset: BlockaidSuiRawAsset): string | null => {
   return null
 }
 
-const toBigInt = (raw: number | string): bigint => {
-  if (typeof raw === 'bigint') return raw
-  if (typeof raw === 'number') return BigInt(Math.trunc(raw))
-  if (/^-?\d+$/.test(raw)) return BigInt(raw)
-  // Fallback for decimal strings ("1.234"). Blockaid usually emits integer
-  // raw_values, but normalise just in case.
-  return BigInt(Math.trunc(Number(raw)))
+// Convert Blockaid's `raw_value` (always an integer in the asset's base unit,
+// emitted as either a JS number or a numeric string) to a bigint. Returns
+// `null` for any input we can't safely represent — `NaN`, `Infinity`, unsafe
+// JS numbers (precision loss above 2^53), or non-integer strings. The parser
+// propagates the `null` so a malformed amount degrades to "no preview"
+// instead of throwing or quietly corrupting the displayed value.
+const toBigInt = (raw: number | string): bigint | null => {
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || !Number.isSafeInteger(raw)) return null
+    return BigInt(raw)
+  }
+  if (!/^-?\d+$/.test(raw)) return null
+  return BigInt(raw)
 }
 
 /**
@@ -91,9 +97,7 @@ const toBigInt = (raw: number | string): bigint => {
 export const parseBlockaidSuiSimulation = async (
   simulation: BlockaidSuiSimulation
 ): Promise<BlockaidSuiSimulationInfo | null> => {
-  const assetDiffs =
-    simulation.account_summary?.account_assets_diffs ??
-    simulation.account_summary?.account_assets_diff
+  const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
   if (!assetDiffs || assetDiffs.length === 0) return null
 
   // When we have 3 items and one is native SUI, filter it out and use the
@@ -112,10 +116,12 @@ export const parseBlockaidSuiSimulation = async (
     if (!diff.out) return null
     const from = blockaidSuiAssetFrom(diff.asset)
     if (!from) return null
+    const fromAmount = toBigInt(diff.out.raw_value)
+    if (fromAmount === null) return null
     return {
       transfer: {
         from,
-        fromAmount: toBigInt(diff.out.raw_value),
+        fromAmount,
       },
     }
   }
@@ -129,12 +135,15 @@ export const parseBlockaidSuiSimulation = async (
     const from = blockaidSuiAssetFrom(outDiff.asset)
     const to = blockaidSuiAssetFrom(inDiff.asset)
     if (from && to && from.coinType !== to.coinType) {
+      const fromAmount = toBigInt(outDiff.out.raw_value)
+      const toAmount = toBigInt(inDiff.in.raw_value)
+      if (fromAmount === null || toAmount === null) return null
       return {
         swap: {
           from,
           to,
-          fromAmount: toBigInt(outDiff.out.raw_value),
-          toAmount: toBigInt(inDiff.in.raw_value),
+          fromAmount,
+          toAmount,
         },
       }
     }
@@ -143,10 +152,12 @@ export const parseBlockaidSuiSimulation = async (
   if (outDiff && outDiff.out) {
     const from = blockaidSuiAssetFrom(outDiff.asset)
     if (from) {
+      const fromAmount = toBigInt(outDiff.out.raw_value)
+      if (fromAmount === null) return null
       return {
         transfer: {
           from,
-          fromAmount: toBigInt(outDiff.out.raw_value),
+          fromAmount,
         },
       }
     }
@@ -155,9 +166,7 @@ export const parseBlockaidSuiSimulation = async (
   return null
 }
 
-const blockaidSuiAssetFrom = (
-  asset: BlockaidSuiRawAsset
-): BlockaidSuiAsset | null => {
+const blockaidSuiAssetFrom = (asset: BlockaidSuiRawAsset): BlockaidSuiAsset | null => {
   const coinType = coinTypeFromAsset(asset)
   if (!coinType) return null
   return {

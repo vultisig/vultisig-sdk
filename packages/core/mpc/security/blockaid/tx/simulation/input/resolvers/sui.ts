@@ -15,6 +15,7 @@ export const getSuiBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<
     payload,
     walletCore,
   })
+  if (compiledTxs.length === 0) return null
 
   const [transaction] = compiledTxs.map(compiledTx => decodeSigningOutput(OtherChain.Sui, compiledTx).unsignedTx)
 
