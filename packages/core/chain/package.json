@@ -1210,6 +1210,11 @@
       "import": "./dist/security/blockaid/tx/simulation/resolvers/solana.js",
       "default": "./dist/security/blockaid/tx/simulation/resolvers/solana.js"
     },
+    "./security/blockaid/tx/simulation/resolvers/sui": {
+      "types": "./dist/security/blockaid/tx/simulation/resolvers/sui.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/resolvers/sui.js",
+      "default": "./dist/security/blockaid/tx/simulation/resolvers/sui.js"
+    },
     "./security/blockaid/tx/validation": {
       "types": "./dist/security/blockaid/tx/validation/index.d.ts",
       "import": "./dist/security/blockaid/tx/validation/index.js",
