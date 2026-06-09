@@ -722,6 +722,11 @@
       "import": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js",
       "default": "./dist/security/blockaid/tx/simulation/input/resolvers/solana.js"
     },
+    "./security/blockaid/tx/simulation/input/resolvers/sui": {
+      "types": "./dist/security/blockaid/tx/simulation/input/resolvers/sui.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/input/resolvers/sui.js",
+      "default": "./dist/security/blockaid/tx/simulation/input/resolvers/sui.js"
+    },
     "./security/blockaid/tx/utils/getCompiledTxsForBlockaidInput": {
       "types": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.d.ts",
       "import": "./dist/security/blockaid/tx/utils/getCompiledTxsForBlockaidInput.js",
