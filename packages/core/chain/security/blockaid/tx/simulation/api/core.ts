@@ -91,8 +91,16 @@ const toBigInt = (raw: number | string): bigint | null => {
 /**
  * Parse a Blockaid Sui simulation into the user's net balance changes,
  * mirroring how Solana classifies into a `swap` or `transfer` headline.
- * Returns `null` if the response shape doesn't expose any asset diffs we can
- * interpret — the popup falls back to the decoded-command view in that case.
+ *
+ * Only emits a headline when the relevant diff set is unambiguous:
+ *   - exactly one out-only diff → `transfer`
+ *   - exactly two diffs, one out-only + one in-only on different assets
+ *     → `swap`
+ *
+ * Anything more complex (e.g. a swap that also sends a third asset)
+ * returns `null` — a partial "you're swapping…" headline would hide the
+ * additional movement and mislead users approving the transaction. The
+ * popup falls back to the decoded-command view when this returns `null`.
  */
 export const parseBlockaidSuiSimulation = async (
   simulation: BlockaidSuiSimulation
@@ -113,7 +121,9 @@ export const parseBlockaidSuiSimulation = async (
 
   if (relevantDiffs.length === 1) {
     const [diff] = relevantDiffs
-    if (!diff.out) return null
+    // A single diff with an `in` side but no `out` would be a pure receive;
+    // we don't surface that as a "you're sending" headline.
+    if (!diff.out || diff.in) return null
     const from = blockaidSuiAssetFrom(diff.asset)
     if (!from) return null
     const fromAmount = toBigInt(diff.out.raw_value)
@@ -126,44 +136,34 @@ export const parseBlockaidSuiSimulation = async (
     }
   }
 
-  // Two or more diffs — try to surface a swap (one out + one in on different
-  // assets). Falls back to a transfer headline if we can't pair them.
-  const outDiff = relevantDiffs.find(d => d.out !== null)
-  const inDiff = relevantDiffs.find(d => d.in !== null && d !== outDiff)
+  // Strict two-diff swap: one diff is out-only, the other is in-only, and
+  // they're on different assets. Anything else (mixed in+out on one side,
+  // three+ relevant diffs, same-asset refund pair) returns `null` rather
+  // than risk a misleading partial headline.
+  if (relevantDiffs.length !== 2) return null
 
-  if (outDiff && outDiff.out && inDiff && inDiff.in) {
-    const from = blockaidSuiAssetFrom(outDiff.asset)
-    const to = blockaidSuiAssetFrom(inDiff.asset)
-    if (from && to && from.coinType !== to.coinType) {
-      const fromAmount = toBigInt(outDiff.out.raw_value)
-      const toAmount = toBigInt(inDiff.in.raw_value)
-      if (fromAmount === null || toAmount === null) return null
-      return {
-        swap: {
-          from,
-          to,
-          fromAmount,
-          toAmount,
-        },
-      }
-    }
+  const [a, b] = relevantDiffs
+  const outDiff = !a.in && a.out ? a : !b.in && b.out ? b : null
+  const inDiff = !a.out && a.in ? a : !b.out && b.in ? b : null
+  if (!outDiff || !inDiff || outDiff === inDiff) return null
+  if (!outDiff.out || !inDiff.in) return null
+
+  const from = blockaidSuiAssetFrom(outDiff.asset)
+  const to = blockaidSuiAssetFrom(inDiff.asset)
+  if (!from || !to || from.coinType === to.coinType) return null
+
+  const fromAmount = toBigInt(outDiff.out.raw_value)
+  const toAmount = toBigInt(inDiff.in.raw_value)
+  if (fromAmount === null || toAmount === null) return null
+
+  return {
+    swap: {
+      from,
+      to,
+      fromAmount,
+      toAmount,
+    },
   }
-
-  if (outDiff && outDiff.out) {
-    const from = blockaidSuiAssetFrom(outDiff.asset)
-    if (from) {
-      const fromAmount = toBigInt(outDiff.out.raw_value)
-      if (fromAmount === null) return null
-      return {
-        transfer: {
-          from,
-          fromAmount,
-        },
-      }
-    }
-  }
-
-  return null
 }
 
 const blockaidSuiAssetFrom = (asset: BlockaidSuiRawAsset): BlockaidSuiAsset | null => {
