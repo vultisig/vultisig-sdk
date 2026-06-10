@@ -169,7 +169,7 @@ jobs:
         working-directory: vultisig-sdk
         run: |
           corepack enable
-          corepack prepare yarn@4.13.0 --activate
+          corepack prepare yarn@4.16.0 --activate
 
       - name: Install vultisig-sdk dependencies
         working-directory: vultisig-sdk

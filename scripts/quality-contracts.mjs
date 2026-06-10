@@ -21,7 +21,7 @@ const repoRoot = path.resolve(__dirname, '..')
 
 const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
-const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.13.0.cjs')
+const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const PACKAGE_CONTRACT_WORKSPACES = [
   '@vultisig/rujira',
   '@vultisig/mpc-types',
@@ -194,7 +194,7 @@ function packedConsumerSmoke(workRoot, tgzPath) {
         name: 'vultisig-contract-consumer',
         private: true,
         type: 'module',
-        packageManager: 'yarn@4.13.0',
+        packageManager: 'yarn@4.16.0',
       },
       null,
       2
@@ -275,7 +275,7 @@ export type Y = Vultisig
   }
 }
 
-function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
+function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
   const consumer = path.join(workRoot, 'mcp-consumer')
   mkdirSync(consumer, { recursive: true })
 
@@ -286,12 +286,14 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
         name: 'vultisig-mcp-contract-consumer',
         private: true,
         type: 'module',
-        packageManager: 'yarn@4.13.0',
+        packageManager: 'yarn@4.16.0',
         dependencies: {
+          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
           '@vultisig/mcp': `file:${tgzPath}`,
           '@vultisig/sdk': `file:${sdkTgzPath}`,
         },
         resolutions: {
+          '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
           '@vultisig/sdk': `file:${sdkTgzPath}`,
         },
       },
@@ -348,10 +350,15 @@ function main() {
       validatePackedWorkspaceExports(workRoot, workspaceName)
     }
 
+    const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(
+      workRoot,
+      '@vultisig/client-shared'
+    )
+
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')
     validateTarballBinFiles(mcpPackageRoot, ['vmcp', 'vultisig-mcp'])
-    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath)
+    packedMcpBinSmoke(workRoot, mcpTgzPath, tgzPath, clientSharedTgzPath)
 
     console.log('quality:contracts OK')
   } finally {

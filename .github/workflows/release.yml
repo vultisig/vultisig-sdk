@@ -39,7 +39,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.13.0 --activate
+      - run: corepack prepare yarn@4.16.0 --activate
       - run: yarn install --immutable
 
       - name: Build all packages
@@ -178,7 +178,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.13.0 --activate
+      - run: corepack prepare yarn@4.16.0 --activate
       - run: yarn install --immutable
 
       - name: Build packages (required for tests)
@@ -217,7 +217,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.13.0 --activate
+      - run: corepack prepare yarn@4.16.0 --activate
       - run: yarn install --immutable
 
       - name: Download SDK dist
