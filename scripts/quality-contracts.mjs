@@ -194,7 +194,7 @@ function packedConsumerSmoke(workRoot, tgzPath) {
         name: 'vultisig-contract-consumer',
         private: true,
         type: 'module',
-        packageManager: 'yarn@4.13.0',
+        packageManager: 'yarn@4.16.0',
       },
       null,
       2
@@ -286,7 +286,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath) {
         name: 'vultisig-mcp-contract-consumer',
         private: true,
         type: 'module',
-        packageManager: 'yarn@4.13.0',
+        packageManager: 'yarn@4.16.0',
         dependencies: {
           '@vultisig/mcp': `file:${tgzPath}`,
           '@vultisig/sdk': `file:${sdkTgzPath}`,
