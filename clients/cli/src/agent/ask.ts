@@ -35,13 +35,15 @@ export type AskResult = {
 export class AskInterface {
   private session: AgentSession
   private verbose: boolean
+  private autoApprove: boolean
   private responseParts: string[] = []
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
 
-  constructor(session: AgentSession, verbose = false) {
+  constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
     this.verbose = verbose
+    this.autoApprove = autoApprove
   }
 
   /**
@@ -107,9 +109,15 @@ export class AskInterface {
         throw new Error('Password required but not provided. Use --password flag.')
       },
 
-      requestConfirmation: async (_message: string): Promise<boolean> => {
-        // Auto-confirm all actions in ask mode
-        return true
+      requestConfirmation: async (message: string): Promise<boolean> => {
+        // Ask mode is non-interactive, so signing must be explicitly authorized
+        // with --yes. Default is DENY so a misrouted read-only prompt (e.g. the
+        // backend routing "list swap routes" to execute_swap) can't silently
+        // move funds. With --yes, unattended signing is opted into deliberately.
+        if (!this.autoApprove) {
+          process.stderr.write(`[confirm] signing requires --yes — NOT broadcasting: ${message}\n`)
+        }
+        return this.autoApprove
       },
     }
   }

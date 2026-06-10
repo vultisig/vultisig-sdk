@@ -291,6 +291,38 @@ export class AgentExecutor {
   }
 
   /**
+   * Human-readable one-line summary of the currently-buffered server tx
+   * (set by storeServerTransaction), for the pre-sign confirmation prompt.
+   * Returns null when nothing is buffered (e.g. sign_typed_data, which has
+   * no tx_ready payload — callers fall back to the tool input).
+   */
+  getPendingSummary(): string | null {
+    const stored = this.pendingPayloads.get('latest')
+    if (!stored) return null
+    const p = stored.payload as any
+    const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+    const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
+    if (isSwap) {
+      // quote_summary already embeds the provider ("… via kyber"); only append
+      // the provider when we fall back to building the head ourselves.
+      const usedQuoteSummary = !!labels.quote_summary
+      const head =
+        labels.quote_summary ||
+        `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
+          labels.to_token_symbol ?? ''
+        }`.trim()
+      const parts = [head, `on ${stored.chain}`]
+      if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
+      if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
+      if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
+      return parts.join(' ')
+    }
+    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
+    return `send ${amount} on ${stored.chain} to ${to}`
+  }
+
+  /**
    * Wrap a per-tool handler body with normalised success/failure → RecentAction
    * conversion. Replaces the legacy executeAction → ActionResult adapter that
    * the dispatch chokepoint used before this refactor.

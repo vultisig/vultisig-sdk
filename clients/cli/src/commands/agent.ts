@@ -89,6 +89,8 @@ export type AgentAskOptions = {
   verbose?: boolean
   json?: boolean
   profile?: string
+  /** Opt in to unattended signing/broadcast (`--yes`). Default: deny + report the proposed tx. */
+  autoApprove?: boolean
 }
 
 /**
@@ -130,7 +132,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     }
 
     const session = new AgentSession(vault, config)
-    const ask = new AskInterface(session, !!config.verbose)
+    const ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
     const callbacks = ask.getCallbacks()
 
     await session.initialize(callbacks)
