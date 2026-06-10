@@ -212,7 +212,7 @@
     "tiny-secp256k1": "^2.2.4",
     "util": "^0.12.5",
     "uuid": "^13.0.0",
-    "viem": "^2.51.0",
+    "viem": "^2.52.2",
     "vite-plugin-node-polyfills": "^0.26.0",
     "vite-plugin-wasm": "^3.6.0",
     "ws": "^8.21.0",
