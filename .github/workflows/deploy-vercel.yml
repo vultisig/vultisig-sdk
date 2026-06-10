@@ -23,7 +23,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.13.0 --activate
+      - run: corepack prepare yarn@4.16.0 --activate
       - run: yarn install --immutable
       # build:shared must run before build:sdk: the SDK rollup bundle
       # imports from packages/mpc-wasm/dist/index.js (and friends) which

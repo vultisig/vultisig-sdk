@@ -92,6 +92,24 @@ type BuildTxComponentsOutput = {
 }
 
 const buildTxComponents = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput): BuildTxComponentsOutput => {
+  // Cosmos-SDK native staking (delegate / undelegate / redelegate / claim)
+  // carries the pre-built SignDoc components on `signData.signDirect` — the
+  // same round-trip-safe vehicle Terra uses. The `bodyBytes` / `authInfoBytes`
+  // are already encoded with the MLDSA pubkey Any, gas and fee, so consume them
+  // verbatim: the initiator and every co-signing peer rebuild an identical
+  // SignDoc hash from these exact bytes. Rebuilding here would diverge.
+  const { signData } = keysignPayload
+  if (signData.case === 'signDirect') {
+    return {
+      bodyBytes: Buffer.from(signData.value.bodyBytes, 'base64'),
+      authInfoBytes: Buffer.from(signData.value.authInfoBytes, 'base64'),
+    }
+  }
+  if (signData.case === 'signAmino') {
+    // MLDSA has no amino signing mode; an amino request cannot be honoured.
+    throw new Error('QBTC: amino signing is not supported (MLDSA is SIGN_MODE_DIRECT only)')
+  }
+
   const coin = shouldBePresent(keysignPayload.coin)
   const pubKeyData = Buffer.from(coin.hexPublicKey, 'hex')
 
