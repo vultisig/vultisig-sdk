@@ -1,5 +1,93 @@
 # @vultisig/sdk
 
+## 1.8.11
+
+### Patch Changes
+
+- [#686](https://github.com/vultisig/vultisig-sdk/pull/686) [`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC support to the Cosmos staking signing path and LCD query layer. QBTC
+  is a Cosmos-SDK chain (post-quantum testnet, ML-DSA-signed) but lives in
+  `OtherChain`, so it sat outside the staking helpers' typing and LCD root
+  resolution.
+
+  - `QBTCHelper.buildTxComponents` now consumes a `signData.signDirect` payload
+    verbatim — the `bodyBytes` / `authInfoBytes` already carry the ML-DSA pubkey
+    `Any`, gas and fee, so the initiator and every co-signing peer rebuild an
+    identical SignDoc hash. Previously it always rebuilt the body from
+    `transactionType` (MsgSend / IBC / Vote), which silently turned a staking
+    SignDoc into a `MsgSend`. `signAmino` is rejected (ML-DSA is
+    SIGN_MODE_DIRECT only). The normal send path (no `signData`) is unchanged.
+  - `chains/cosmos/staking/lcdQueries` exports a widened
+    `StakingChain = IbcEnabledCosmosChain | Chain.QBTC` and resolves the LCD root
+    through a helper that routes QBTC to `qbtcRestUrl` and every other staking
+    chain to `cosmosRpcUrl[chain]`.
+
+  Backward compatible: existing IBC-enabled staking chains route exactly as
+  before.
+
+## 1.8.10
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+## 1.8.9
+
+### Patch Changes
+
+- [#678](https://github.com/vultisig/vultisig-sdk/pull/678) [`46d584f`](https://github.com/vultisig/vultisig-sdk/commit/46d584f5c62d0331e652811aaf8d2a3c4a436094) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Document Tron USDD and stUSDT token identity in the known-token registry.
+
+## 1.8.8
+
+### Patch Changes
+
+- [#676](https://github.com/vultisig/vultisig-sdk/pull/676) [`7572dc0`](https://github.com/vultisig/vultisig-sdk/commit/7572dc0e7fa785453e36a419d678f8a1bf17c8b5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add THORChain limit swap memo builder, validation helpers, and JSON test vectors.
+
+## 1.8.7
+
+### Patch Changes
+
+- [#672](https://github.com/vultisig/vultisig-sdk/pull/672) [`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Blockaid Sui transaction simulation support. The existing Sui Blockaid
+  scan resolver only requested `validation`; this exposes the simulation block
+  returned by the same `/sui/transaction/scan` endpoint via a new
+  `getSuiTxBlockaidSimulation` resolver and a `parseBlockaidSuiSimulation`
+  parser that produces a UI-facing `{ swap } | { transfer }` headline
+  (mirroring the Solana shape). `OtherChain.Sui` is now a member of
+  `blockaidSimulationSupportedChains`, with a new `getTxBlockaidSimulation`
+  overload, and the mpc package gains a matching
+  `getSuiBlockaidTxSimulationInput` for the `KeysignPayload`-driven flow.
+
+  The parser keeps `null` as its failure mode rather than throwing — Blockaid
+  field renames degrade to "no preview" instead of breaking consumers.
+
+  Closes [#671](https://github.com/vultisig/vultisig-sdk/issues/671)
+
+## 1.8.6
+
+### Patch Changes
+
+- [#651](https://github.com/vultisig/vultisig-sdk/pull/651) [`e9c4997`](https://github.com/vultisig/vultisig-sdk/commit/e9c4997bae3a499785295b76dbc956807cc704f5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Sui dApp signing helpers to `@vultisig/core-chain/chains/sui`. Two new
+  public modules:
+  - `./chains/sui/sign` exports `suiTransactionDataIntent` /
+    `suiPersonalMessageIntent` (defensive clones of the 3-byte intent
+    prefixes), `getSuiTransactionDataDigest(txBytes)` and
+    `getSuiPersonalMessageDigest(messageBytes)` for the intent-prefixed
+    blake2b-256 digests the wallet's Ed25519 signer signs, and
+    `buildSuiSerializedSignature({ signature, publicKey })` for the 97-byte
+    `flag(1) || sig(64) || pubkey(32)` Wallet Standard wire signature.
+  - `./chains/sui/buildTransactionFromJson` exports
+    `buildSuiTransactionFromJson({ transactionJson, sender })` which hydrates
+    a serialized Sui `Transaction` (V1 or V2 JSON) and resolves it to BCS
+    bytes via `Transaction.build({ client: getSuiClient() })`. Lets
+    extension callers move the build step off the dApp page (where the dApp
+    page's Content Security Policy blocks the Sui RPC) and into the
+    extension's own context.
+
+## 1.8.5
+
+### Patch Changes
+
+- [#655](https://github.com/vultisig/vultisig-sdk/pull/655) [`ef22e78`](https://github.com/vultisig/vultisig-sdk/commit/ef22e785ccb5d772bc144febb64dd394f3211799) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Publish the Fast Vault KeyImport fix from bundled core MPC code in the SDK package.
+
 ## 1.8.4
 
 ### Patch Changes

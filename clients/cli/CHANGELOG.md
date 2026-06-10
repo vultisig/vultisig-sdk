@@ -1,5 +1,17 @@
 # @vultisig/cli
 
+## 1.8.10
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/client-shared@0.2.14
+  - @vultisig/core-chain@2.14.1
+  - @vultisig/rujira@32.0.1
+  - @vultisig/sdk@1.8.10
+
 ## 1.8.1
 
 ### Patch Changes
