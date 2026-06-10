@@ -67,7 +67,7 @@
   },
   "homepage": "https://vultisig.com",
   "dependencies": {
-    "@cosmjs/cosmwasm-stargate": "^0.38.1",
+    "@cosmjs/cosmwasm-stargate": "^0.39.0",
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",

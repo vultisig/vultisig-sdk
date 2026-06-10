@@ -1393,16 +1393,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cosmjs/cosmwasm-stargate@npm:^0.38.1":
-  version: 0.38.1
-  resolution: "@cosmjs/cosmwasm-stargate@npm:0.38.1"
+"@cosmjs/cosmwasm-stargate@npm:^0.39.0":
+  version: 0.39.0
+  resolution: "@cosmjs/cosmwasm-stargate@npm:0.39.0"
   dependencies:
-    "@cosmjs/cosmwasm": "npm:^0.38.1"
-  checksum: 10c0/f8857715914ac91c2b4f72ac632d1dfaef090c229cdd88abe9c077cf09e314fc028bcc8238874406208254922ac47cd3030578004aa0516107db73bcd5a99afd
+    "@cosmjs/cosmwasm": "npm:^0.38.0"
+  checksum: 10c0/c59effaee1c649dfd3174ca5ec730fe0dc7813680b0fcfe3baee31ac28f3b75006ef43ff2ac24f6b51c8a1b01240f672a9652daea6549a67b517ab696e4807a8
   languageName: node
   linkType: hard
 
-"@cosmjs/cosmwasm@npm:^0.38.1":
+"@cosmjs/cosmwasm@npm:^0.38.0":
   version: 0.38.1
   resolution: "@cosmjs/cosmwasm@npm:0.38.1"
   dependencies:
@@ -6960,7 +6960,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/cli@workspace:clients/cli"
   dependencies:
-    "@cosmjs/cosmwasm-stargate": "npm:^0.38.1"
+    "@cosmjs/cosmwasm-stargate": "npm:^0.39.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
@@ -7227,7 +7227,7 @@ __metadata:
   resolution: "@vultisig/rujira@workspace:packages/rujira"
   dependencies:
     "@bufbuild/protobuf": "npm:^2.12.0"
-    "@cosmjs/cosmwasm-stargate": "npm:^0.38.1"
+    "@cosmjs/cosmwasm-stargate": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@types/big.js": "npm:^7.0.0"

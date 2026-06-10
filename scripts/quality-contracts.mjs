@@ -21,7 +21,7 @@ const repoRoot = path.resolve(__dirname, '..')
 
 const CLI_ENTRY = path.join(repoRoot, 'clients/cli/dist/index.js')
 const SDK_DIST_MARKER = path.join(repoRoot, 'packages/sdk/dist/index.node.esm.js')
-const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.13.0.cjs')
+const YARN_CLI = path.join(repoRoot, '.yarn/releases/yarn-4.16.0.cjs')
 const PACKAGE_CONTRACT_WORKSPACES = [
   '@vultisig/rujira',
   '@vultisig/mpc-types',
