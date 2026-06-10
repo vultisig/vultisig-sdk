@@ -116,6 +116,9 @@ export class AskInterface {
         // move funds. With --yes, unattended signing is opted into deliberately.
         if (!this.autoApprove) {
           process.stderr.write(`[confirm] signing requires --yes — NOT broadcasting: ${message}\n`)
+        } else {
+          // Audit trail for unattended runs: log exactly what --yes authorized.
+          process.stderr.write(`[confirm] auto-approved (--yes): ${message}\n`)
         }
         return this.autoApprove
       },

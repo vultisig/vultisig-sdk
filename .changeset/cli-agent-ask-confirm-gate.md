@@ -1,8 +1,8 @@
 ---
-'@vultisig/cli': minor
+'@vultisig/cli': major
 ---
 
-Gate signing in `agent ask` mode behind explicit confirmation (security fix).
+Gate signing in `agent ask` mode behind explicit confirmation (security fix, **breaking**).
 
 Previously `vsig agent ask` auto-signed and broadcast any transaction envelope the
 backend returned, gated only by whether a password was present. Because the backend
@@ -16,4 +16,11 @@ dispatch, covering both legs of a multi-leg swap). In ask mode this defaults to
 the proposed transaction is reported (`CONFIRMATION_REQUIRED`) and nothing is signed.
 Interactive (TUI) and pipe (`--via-agent`) modes already prompt/defer for confirmation.
 
-Behavior change: unattended signing via `agent ask` must now pass `--yes`.
+**BREAKING — migration for unattended pipelines:** any automation that relied on
+`agent ask` auto-signing must now pass `--yes`. A denied signing still exits **0**
+(a misrouted read-only prompt remains a successful query); detect it via the new
+top-level `confirmation_required: true` field in `--output json` mode, the
+`confirmation-required:` line in text mode, or `tool_calls[].code ===
+"CONFIRMATION_REQUIRED"`. Do not infer "broadcast happened" from exit code alone —
+check the `transactions` array. With `--yes`, each authorization is logged to stderr
+(`[confirm] auto-approved (--yes): <summary>`).

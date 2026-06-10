@@ -457,6 +457,11 @@ export class AgentSession {
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
+        // Drop the rejected envelope so it can't linger into later turns
+        // (stale legs/summary). sign_typed_data has no buffered tx to drop.
+        if (toolName === 'sign_tx') {
+          this.executor.clearPendingTransaction()
+        }
         const declined: RecentAction = {
           tool: toolName,
           success: false,

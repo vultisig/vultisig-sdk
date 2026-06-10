@@ -247,6 +247,7 @@ export class AgentExecutor {
         const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
         if (getChainKind(chain) !== 'evm') {
           this.pendingPayloads.clear()
+          this.pendingLegs = []
           this.pendingPayloads.set('latest', {
             payload: { __serverTx: true, ...txReadyData },
             coin: { chain, address: '', decimals: 18, ticker: '' },
@@ -270,8 +271,10 @@ export class AgentExecutor {
 
     const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
 
-    // Clear stale payloads before storing the new server tx
+    // Clear stale payloads (and any leftover multi-leg legs from a declined
+    // 2-leg envelope) before storing the new single-leg server tx
     this.pendingPayloads.clear()
+    this.pendingLegs = []
     this.pendingPayloads.set('latest', {
       payload: { __serverTx: true, ...txReadyData },
       coin: { chain, address: '', decimals: 18, ticker: '' },
@@ -288,6 +291,17 @@ export class AgentExecutor {
 
   hasPendingTransaction(): boolean {
     return this.pendingPayloads.has('latest')
+  }
+
+  /**
+   * Drop the buffered server tx and any staged multi-leg state. Called when
+   * the user declines the pre-sign confirmation: the rejected envelope must
+   * not linger (a fresh tx_ready always overwrites, but stale legs/payloads
+   * would otherwise survive into later turns).
+   */
+  clearPendingTransaction(): void {
+    this.pendingPayloads.clear()
+    this.pendingLegs = []
   }
 
   /**

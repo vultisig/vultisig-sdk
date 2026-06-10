@@ -17,7 +17,7 @@ import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
 import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
-import { normalizeAgentError } from '../agent/agentErrors'
+import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
 import type { CommandContext } from '../core'
 import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
 
@@ -138,16 +138,27 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     await session.initialize(callbacks)
     const result = await ask.ask(message)
 
+    // Machine-detectable signal that a signing step was proposed but denied
+    // (no --yes): callers that expect a broadcast must check this instead of
+    // inferring success from exit code 0. Exit stays 0 deliberately — a
+    // misrouted read-only prompt (the #679 scenario) is still a successful
+    // query, just not a broadcast.
+    const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
+
     if (options.json || isJsonOutput()) {
       outputJson({
         session_id: result.sessionId,
         response: result.response,
         tool_calls: result.toolCalls,
         transactions: result.transactions,
+        ...(confirmationRequired ? { confirmation_required: true } : {}),
       })
     } else {
       // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
       process.stdout.write(`session:${result.sessionId}\n`)
+      if (confirmationRequired) {
+        process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
+      }
 
       // Response text
       if (result.response) {
