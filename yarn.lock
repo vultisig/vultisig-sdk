@@ -1361,9 +1361,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@coral-xyz/anchor@npm:^0.31.1":
-  version: 0.31.1
-  resolution: "@coral-xyz/anchor@npm:0.31.1"
+"@coral-xyz/anchor@npm:^0.32.1":
+  version: 0.32.1
+  resolution: "@coral-xyz/anchor@npm:0.32.1"
   dependencies:
     "@coral-xyz/anchor-errors": "npm:^0.31.1"
     "@coral-xyz/borsh": "npm:^0.31.1"
@@ -1378,7 +1378,7 @@ __metadata:
     pako: "npm:^2.0.3"
     superstruct: "npm:^0.15.4"
     toml: "npm:^3.0.0"
-  checksum: 10c0/244e4e9e047e700372d0d0c35683dec186d54a6c8593680bbf987051aa999f75d7764024e2d13bd593b848f7788e7a10b4fa06b31be297f2c8ad8355f5040675
+  checksum: 10c0/669b6f54efb0a5a96dad9e055d30b3b803f691b1b058379efefb87c11f97a9d369d513b2f200082c0b55b4cb31540dc5404e244c6f23f0a14b6d2ad2e18f08b7
   languageName: node
   linkType: hard
 
@@ -7785,7 +7785,7 @@ __metadata:
   dependencies:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.11.0"
-    "@coral-xyz/anchor": "npm:^0.31.1"
+    "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@formatjs/intl-getcanonicallocales": "npm:^2.5.0"
     "@formatjs/intl-locale": "npm:^4.2.0"
