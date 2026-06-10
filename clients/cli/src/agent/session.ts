@@ -448,8 +448,13 @@ export class AgentSession {
     // unless `--yes` was passed; the TUI prompts y/N and pipe mode defers to
     // the host — see each UICallbacks.requestConfirmation impl.
     if (PASSWORD_REQUIRED_TOOLS.has(toolName)) {
+      // getPendingSummary describes the tx_ready buffer, which only sign_tx
+      // consumes. A declined sign_tx leaves that buffer populated, so a later
+      // sign_typed_data must NOT pick it up — the user would be approving
+      // typed-data while reading a stale send/swap summary.
       const summary =
-        this.executor.getPendingSummary() ?? `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
+        (toolName === 'sign_tx' ? this.executor.getPendingSummary() : null) ??
+        `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
         const declined: RecentAction = {
