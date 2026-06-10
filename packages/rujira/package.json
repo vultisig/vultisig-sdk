@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/rujira",
-  "version": "32.0.0",
+  "version": "32.0.1",
   "type": "module",
   "description": "Rujira DEX SDK for Vultisig — THORChain-native swaps, limit orders, staking. Built for MPC wallets and AI agents. TypeScript, modular, self-custody.",
   "main": "./dist/index.js",
@@ -76,7 +76,7 @@
     "vitest": "^4.1.8"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=1.8.9"
+    "@vultisig/sdk": ">=1.8.10"
   },
   "keywords": [
     "vultisig",
