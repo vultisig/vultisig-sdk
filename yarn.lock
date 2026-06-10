@@ -6251,10 +6251,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@secretlint/secretlint-rule-preset-recommend@npm:^13.0.0":
-  version: 13.0.0
-  resolution: "@secretlint/secretlint-rule-preset-recommend@npm:13.0.0"
-  checksum: 10c0/fb7a73683afec7c2fe6912879f9056ff82d8aa78b22b79feedd6e6d8bd227695396cb6fb12eeff732c1fb5b22ca2c6ab187203dfbdcd727dd0496ba55fd20c31
+"@secretlint/secretlint-rule-preset-recommend@npm:^13.0.2":
+  version: 13.0.2
+  resolution: "@secretlint/secretlint-rule-preset-recommend@npm:13.0.2"
+  checksum: 10c0/32cd19dbcf97a5ead81280efa4d2ac20a05252f90c0318738d7679c4c438dfc8ed48da92eb3464578a1d91ba508af081166fb0b25e1c4ce96ec213f92ec2cc84
   languageName: node
   linkType: hard
 
@@ -21695,7 +21695,7 @@ __metadata:
     "@rollup/plugin-node-resolve": "npm:^16.0.3"
     "@rollup/plugin-terser": "npm:^1.0.0"
     "@rollup/plugin-typescript": "npm:^12.3.0"
-    "@secretlint/secretlint-rule-preset-recommend": "npm:^13.0.0"
+    "@secretlint/secretlint-rule-preset-recommend": "npm:^13.0.2"
     "@types/node": "npm:^25.9.2"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
