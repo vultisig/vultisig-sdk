@@ -103,6 +103,27 @@ describe('validateLimitSwapInputs', () => {
         dest_addr: 'aaaaaaaaaa',
       })
     ).toThrow(/valid Ethereum address/)
+
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        dest_addr: 'thor1abc:def',
+      })
+    ).toThrow(/must not contain memo separators/)
+
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        dest_addr: 'thor1abc/def',
+      })
+    ).toThrow(/must not contain memo separators/)
+
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        dest_addr: 'thor1x2whgc2nt665y0kc44uywhynazvp0l8tp0vtu6\u20ac',
+      })
+    ).toThrow(/printable ASCII/)
   })
 
   it('rejects invalid source amounts', () => {
