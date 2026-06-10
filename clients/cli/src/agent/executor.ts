@@ -332,8 +332,13 @@ export class AgentExecutor {
       return parts.join(' ')
     }
     const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    // Include the asset symbol so a confirmation prompt can never be ambiguous
+    // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
+    // resolved_amount usually already embeds it; de-dup when both are set.
+    const symbol = labels.token_resolved || labels.token_symbol || ''
+    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    return `send ${amount} on ${stored.chain} to ${to}`
+    return `send ${amountWithSymbol} on ${stored.chain} to ${to}`
   }
 
   /**

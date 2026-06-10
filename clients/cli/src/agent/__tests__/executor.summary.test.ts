@@ -97,6 +97,33 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(summary).toContain('send ?')
     expect(summary).toContain('to ?')
   })
+
+  // PR #682 CodeRabbit follow-up: a bare numeric amount must carry the asset
+  // symbol so the confirmation prompt can never be ambiguous between native
+  // and tokens on the same chain ("send 100 on Base to …" — ETH or USDC?).
+  it('send with token_resolved label injects symbol after a bare amount', () => {
+    const executor = new AgentExecutor(createMockVault())
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xRecipientAddr', value: '0' } },
+        resolved: { labels: { token_resolved: 'USDC' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 500000 USDC on Base to 0xRecipientAddr')
+  })
+
+  it('send with resolved_amount that already embeds the symbol does not duplicate it', () => {
+    const executor = new AgentExecutor(createMockVault())
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xRecipientAddr', value: '0' } },
+        resolved: { labels: { resolved_amount: '0.5 USDC', token_resolved: 'USDC' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.5 USDC on Base to 0xRecipientAddr')
+  })
 })
 
 describe('AgentExecutor pending-state hygiene (decline path)', () => {

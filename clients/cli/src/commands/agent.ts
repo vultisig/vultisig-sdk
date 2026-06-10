@@ -144,6 +144,13 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // misrouted read-only prompt (the #679 scenario) is still a successful
     // query, just not a broadcast.
     const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
+    // The same summary the gate showed the user (or would have, in --yes mode).
+    // Surfacing it on stdout lets a script see what `--yes` would authorize
+    // without scraping stderr or the backend narration in `response`.
+    const proposedCall = result.toolCalls.find(
+      tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
+    )
+    const proposed = proposedCall?.data?.proposed as string | undefined
 
     if (options.json || isJsonOutput()) {
       outputJson({
@@ -152,12 +159,16 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         tool_calls: result.toolCalls,
         transactions: result.transactions,
         ...(confirmationRequired ? { confirmation_required: true } : {}),
+        ...(proposed ? { proposed } : {}),
       })
     } else {
       // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
       process.stdout.write(`session:${result.sessionId}\n`)
       if (confirmationRequired) {
         process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
+        if (proposed) {
+          process.stdout.write(`proposed:${proposed}\n`)
+        }
       }
 
       // Response text
