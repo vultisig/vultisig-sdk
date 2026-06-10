@@ -247,6 +247,7 @@ export class AgentExecutor {
         const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
         if (getChainKind(chain) !== 'evm') {
           this.pendingPayloads.clear()
+          this.pendingLegs = []
           this.pendingPayloads.set('latest', {
             payload: { __serverTx: true, ...txReadyData },
             coin: { chain, address: '', decimals: 18, ticker: '' },
@@ -270,8 +271,10 @@ export class AgentExecutor {
 
     const chain = resolveChainFromTxReady(txReadyData) || Chain.Ethereum
 
-    // Clear stale payloads before storing the new server tx
+    // Clear stale payloads (and any leftover multi-leg legs from a declined
+    // 2-leg envelope) before storing the new single-leg server tx
     this.pendingPayloads.clear()
+    this.pendingLegs = []
     this.pendingPayloads.set('latest', {
       payload: { __serverTx: true, ...txReadyData },
       coin: { chain, address: '', decimals: 18, ticker: '' },
@@ -288,6 +291,54 @@ export class AgentExecutor {
 
   hasPendingTransaction(): boolean {
     return this.pendingPayloads.has('latest')
+  }
+
+  /**
+   * Drop the buffered server tx and any staged multi-leg state. Called when
+   * the user declines the pre-sign confirmation: the rejected envelope must
+   * not linger (a fresh tx_ready always overwrites, but stale legs/payloads
+   * would otherwise survive into later turns).
+   */
+  clearPendingTransaction(): void {
+    this.pendingPayloads.clear()
+    this.pendingLegs = []
+  }
+
+  /**
+   * Human-readable one-line summary of the currently-buffered server tx
+   * (set by storeServerTransaction), for the pre-sign confirmation prompt.
+   * Returns null when nothing is buffered (e.g. sign_typed_data, which has
+   * no tx_ready payload — callers fall back to the tool input).
+   */
+  getPendingSummary(): string | null {
+    const stored = this.pendingPayloads.get('latest')
+    if (!stored) return null
+    const p = stored.payload as any
+    const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+    const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
+    if (isSwap) {
+      // quote_summary already embeds the provider ("… via kyber"); only append
+      // the provider when we fall back to building the head ourselves.
+      const usedQuoteSummary = !!labels.quote_summary
+      const head =
+        labels.quote_summary ||
+        `swap ${labels.amount_in ?? p?.txArgs?.amount ?? '?'} ${labels.from_token_symbol ?? ''} → ${
+          labels.to_token_symbol ?? ''
+        }`.trim()
+      const parts = [head, `on ${stored.chain}`]
+      if (!usedQuoteSummary && labels.provider) parts.push(`via ${labels.provider}`)
+      if (p?.__multiLeg) parts.push('(+ token approval — 2 transactions)')
+      if (labels.estimated_fee) parts.push(`est. fee ${labels.estimated_fee}`)
+      return parts.join(' ')
+    }
+    const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
+    // Include the asset symbol so a confirmation prompt can never be ambiguous
+    // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
+    // resolved_amount usually already embeds it; de-dup when both are set.
+    const symbol = labels.token_resolved || labels.token_symbol || ''
+    const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
+    const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
+    return `send ${amountWithSymbol} on ${stored.chain} to ${to}`
   }
 
   /**
