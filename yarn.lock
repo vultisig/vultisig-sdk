@@ -7035,12 +7035,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^25.9.1":
-  version: 25.9.1
-  resolution: "@types/node@npm:25.9.1"
+"@types/node@npm:^25.9.2":
+  version: 25.9.2
+  resolution: "@types/node@npm:25.9.2"
   dependencies:
     undici-types: "npm:>=7.24.0 <7.24.7"
-  checksum: 10c0/9a04682842bebbcf21a1779dfeab9aa733d7bd7bbc0a0edb641ab3a9a3d43eac543225acf669c334f458f1956443ebc072bc3c72840c543b8b356cab5c82d456
+  checksum: 10c0/f14c0d56361febb985eccc45cf0834ee6e2f07c4389a636f3e1a55ebde320077a80bface18c9afd3092f5fa295925502c1a9d55f805efa813f634aa9c941cbac
   languageName: node
   linkType: hard
 
@@ -7504,7 +7504,7 @@ __metadata:
     "@napi-rs/keyring": "npm:^1.3.0"
     "@noble/hashes": "npm:^2.0.1"
     "@types/inquirer": "npm:^9.0.9"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@types/tabtab": "npm:^3.0.4"
     "@types/ws": "npm:^8.18.1"
     "@vultisig/client-shared": "workspace:^"
@@ -7535,7 +7535,7 @@ __metadata:
   resolution: "@vultisig/client-shared@workspace:packages/client-shared"
   dependencies:
     "@napi-rs/keyring": "npm:^1.3.0"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@vultisig/sdk": "workspace:^"
     inquirer: "npm:^13.4.2"
     typescript: "npm:^6.0.3"
@@ -7615,7 +7615,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/example-browser@workspace:examples/browser"
   dependencies:
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
     "@vitejs/plugin-react": "npm:^6.0.1"
@@ -7642,7 +7642,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/example-electron@workspace:examples/electron"
   dependencies:
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
     "@vitejs/plugin-react": "npm:^6.0.1"
@@ -7714,7 +7714,7 @@ __metadata:
   dependencies:
     "@modelcontextprotocol/sdk": "npm:~1.29.0"
     "@napi-rs/keyring": "npm:^1.3.0"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/sdk": "workspace:^"
     esbuild: "npm:^0.27.4"
@@ -7768,7 +7768,7 @@ __metadata:
     "@cosmjs/proto-signing": "npm:^0.38.1"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@types/big.js": "npm:^6.2.2"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@vultisig/sdk": "workspace:*"
     big.js: "npm:^7.0.1"
     cosmjs-types: "npm:^0.11.0"
@@ -7811,7 +7811,7 @@ __metadata:
     "@trustwallet/wallet-core": "npm:^4.6.13"
     "@types/chrome": "npm:^0.1.27"
     "@types/events": "npm:^3"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@types/path-browserify": "npm:^1"
     "@vitest/coverage-v8": "npm:4.1.8"
     "@vultisig/lib-dkls": "workspace:*"
@@ -21696,7 +21696,7 @@ __metadata:
     "@rollup/plugin-terser": "npm:^1.0.0"
     "@rollup/plugin-typescript": "npm:^12.3.0"
     "@secretlint/secretlint-rule-preset-recommend": "npm:^13.0.0"
-    "@types/node": "npm:^25.9.1"
+    "@types/node": "npm:^25.9.2"
     "@types/react": "npm:^19.2.14"
     "@types/react-dom": "npm:^19.2.3"
     "@types/uuid": "npm:^11.0.0"
