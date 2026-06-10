@@ -149,7 +149,7 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
-    "@secretlint/secretlint-rule-preset-recommend": "^13.0.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@types/node": "^25.9.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
