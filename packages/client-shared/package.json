@@ -35,7 +35,7 @@
     "inquirer": "^13.4.2"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "typescript": "^6.0.3"
   },
   "publishConfig": {
