@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.8.8
+
+### Patch Changes
+
+- [#676](https://github.com/vultisig/vultisig-sdk/pull/676) [`7572dc0`](https://github.com/vultisig/vultisig-sdk/commit/7572dc0e7fa785453e36a419d678f8a1bf17c8b5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add THORChain limit swap memo builder, validation helpers, and JSON test vectors.
+
 ## 1.8.7
 
 ### Patch Changes
