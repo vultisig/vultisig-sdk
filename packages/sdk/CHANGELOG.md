@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 1.8.9
+
+### Patch Changes
+
+- [#678](https://github.com/vultisig/vultisig-sdk/pull/678) [`46d584f`](https://github.com/vultisig/vultisig-sdk/commit/46d584f5c62d0331e652811aaf8d2a3c4a436094) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Document Tron USDD and stUSDT token identity in the known-token registry.
+
 ## 1.8.8
 
 ### Patch Changes
