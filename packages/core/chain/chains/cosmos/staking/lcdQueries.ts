@@ -158,8 +158,7 @@ export type StakingChain = IbcEnabledCosmosChain | typeof Chain.QBTC
  * route it to its dedicated REST endpoint; every other staking chain is a
  * `CosmosChain` and indexes `cosmosRpcUrl` directly.
  */
-const stakingLcdRoot = (chain: StakingChain): string =>
-  chain === Chain.QBTC ? qbtcRestUrl : cosmosRpcUrl[chain]
+const stakingLcdRoot = (chain: StakingChain): string => (chain === Chain.QBTC ? qbtcRestUrl : cosmosRpcUrl[chain])
 
 export const getDelegationsUrl = (chain: StakingChain, delegatorAddress: string): string =>
   `${stakingLcdRoot(chain)}/cosmos/staking/v1beta1/delegations/${delegatorAddress}`
