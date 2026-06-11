@@ -1,5 +1,16 @@
 # @vultisig/sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- [#703](https://github.com/vultisig/vultisig-sdk/pull/703) [`3030c7a`](https://github.com/vultisig/vultisig-sdk/commit/3030c7a718947396de5d6b6de1b044640368aab5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Expose chain-kind classification and Cosmos chain metadata from the SDK boundary so downstream consumers (mcp-ts, agent-backend) stop re-inventing per-chain tables (the cross-repo drift root cause):
+
+  - `getChainKind`, `isChainOfKind`, `ChainKind` (re-exported from `@vultisig/core-chain/ChainKind`) - classify a chain by family (evm/utxo/cosmos/...).
+  - `cosmosFeeCoinDenom`, `getCosmosGasLimit`, `getCosmosStakingGasLimit`, `cosmosRpcUrl` - Cosmos LCD/fee-denom/gas-limit metadata.
+
+  Unblocks the mcp-ts chain-classification consolidation (retiring ~291 lines of re-invented classification + duplicated cosmos chain config).
+
 ## 2.0.0
 
 ### Patch Changes
