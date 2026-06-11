@@ -887,7 +887,11 @@ export class AgentExecutor {
     if (this.verbose)
       process.stderr.write(`[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`)
 
-    const result = await this.vault.signMsgDeposit({ chain, amountBaseUnits: amountRaw, memo })
+    const result = await this.vault.signMsgDeposit({
+      chain,
+      amountBaseUnits: amountRaw,
+      memo,
+    })
     this.pendingPayloads.clear()
 
     const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, result.txHash)
@@ -2020,8 +2024,21 @@ async function computeEIP712Hash(
 ): Promise<string> {
   const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
-  const domainSeparator = hashStruct('EIP712Domain', domain, types, keccak_256)
-  const messageHash = hashStruct(primaryType, message, types, keccak_256)
+  // The EIP712Domain type must contain exactly the fields present in the
+  // domain object (EIP-712 §"definition of domainSeparator"). A fixed
+  // 4-field type breaks domains that omit verifyingContract (e.g.
+  // Polymarket's ClobAuthDomain {name, version, chainId}): the typeHash
+  // would claim 4 fields while the data encodes 3, producing a hash no
+  // verifier can reproduce.
+  const typesWithDomain = types['EIP712Domain']
+    ? types
+    : {
+        ...types,
+        EIP712Domain: EIP712_DOMAIN_FIELDS.filter(f => domain[f.name] !== undefined && domain[f.name] !== null),
+      }
+
+  const domainSeparator = hashStruct('EIP712Domain', domain, typesWithDomain, keccak_256)
+  const messageHash = hashStruct(primaryType, message, typesWithDomain, keccak_256)
 
   // \x19\x01 || domainSeparator || messageHash
   const prefix = new Uint8Array([0x19, 0x01])
@@ -2108,25 +2125,27 @@ function findReferencedTypes(
 }
 
 /**
- * Get fields for a type, including implicit EIP712Domain fields.
+ * Standard EIP-712 domain fields in canonical order. computeEIP712Hash
+ * filters this list down to the fields actually present in the domain
+ * object — including absent fields in the type corrupts the domain
+ * separator (see ClobAuthDomain note in computeEIP712Hash).
+ */
+const EIP712_DOMAIN_FIELDS: Array<{ name: string; type: string }> = [
+  { name: 'name', type: 'string' },
+  { name: 'version', type: 'string' },
+  { name: 'chainId', type: 'uint256' },
+  { name: 'verifyingContract', type: 'address' },
+  { name: 'salt', type: 'bytes32' },
+]
+
+/**
+ * Get fields for a type.
  */
 function getTypeFields(
   typeName: string,
   types: Record<string, Array<{ name: string; type: string }>>
 ): Array<{ name: string; type: string }> | undefined {
-  if (types[typeName]) return types[typeName]
-
-  // EIP712Domain is implicit — infer from domain object fields
-  if (typeName === 'EIP712Domain') {
-    // Standard EIP-712 domain fields in canonical order
-    return [
-      { name: 'name', type: 'string' },
-      { name: 'version', type: 'string' },
-      { name: 'chainId', type: 'uint256' },
-      { name: 'verifyingContract', type: 'address' },
-    ]
-  }
-  return undefined
+  return types[typeName]
 }
 
 /**
