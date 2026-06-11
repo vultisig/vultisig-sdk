@@ -46,7 +46,7 @@ describe('prepareSeedphraseImportPrelude', () => {
   })
 
   it('rejects explicitly selected chains that are disabled for seedphrase import before deriving master keys', async () => {
-    await expect(prepareSeedphraseImportPrelude(input({ chains: [Chain.Bittensor] }))).rejects.toThrow(/Bittensor/)
+    await expect(prepareSeedphraseImportPrelude(input({ chains: [Chain.Cardano] }))).rejects.toThrow(/Cardano/)
     expect(keyDeriver.deriveMasterKeys).not.toHaveBeenCalled()
   })
 
@@ -54,11 +54,11 @@ describe('prepareSeedphraseImportPrelude', () => {
     discoveryService.discoverChains.mockResolvedValue({
       results: [
         {
-          chain: Chain.Bittensor,
-          address: '5fake',
+          chain: Chain.Cardano,
+          address: 'addr1fake',
           balance: '1',
-          decimals: 9,
-          symbol: 'TAO',
+          decimals: 6,
+          symbol: 'ADA',
           hasBalance: true,
         },
       ],
@@ -66,7 +66,7 @@ describe('prepareSeedphraseImportPrelude', () => {
       useCosmosPathTerra: false,
     })
 
-    await expect(prepareSeedphraseImportPrelude(input({ discoverChains: true }))).rejects.toThrow(/Bittensor/)
+    await expect(prepareSeedphraseImportPrelude(input({ discoverChains: true }))).rejects.toThrow(/Cardano/)
     expect(keyDeriver.deriveMasterKeys).not.toHaveBeenCalled()
   })
 })

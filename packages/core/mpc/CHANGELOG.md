@@ -1,5 +1,94 @@
 # @vultisig/core-mpc
 
+## 1.5.0
+
+### Minor Changes
+
+- [#686](https://github.com/vultisig/vultisig-sdk/pull/686) [`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC support to the Cosmos staking signing path and LCD query layer. QBTC
+  is a Cosmos-SDK chain (post-quantum testnet, ML-DSA-signed) but lives in
+  `OtherChain`, so it sat outside the staking helpers' typing and LCD root
+  resolution.
+
+  - `QBTCHelper.buildTxComponents` now consumes a `signData.signDirect` payload
+    verbatim — the `bodyBytes` / `authInfoBytes` already carry the ML-DSA pubkey
+    `Any`, gas and fee, so the initiator and every co-signing peer rebuild an
+    identical SignDoc hash. Previously it always rebuilt the body from
+    `transactionType` (MsgSend / IBC / Vote), which silently turned a staking
+    SignDoc into a `MsgSend`. `signAmino` is rejected (ML-DSA is
+    SIGN_MODE_DIRECT only). The normal send path (no `signData`) is unchanged.
+  - `chains/cosmos/staking/lcdQueries` exports a widened
+    `StakingChain = IbcEnabledCosmosChain | Chain.QBTC` and resolves the LCD root
+    through a helper that routes QBTC to `qbtcRestUrl` and every other staking
+    chain to `cosmosRpcUrl[chain]`.
+
+  Backward compatible: existing IBC-enabled staking chains route exactly as
+  before.
+
+### Patch Changes
+
+- Updated dependencies [[`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98)]:
+  - @vultisig/core-chain@2.15.0
+
+## 1.4.2
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/core-chain@2.14.1
+
+## 1.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`7572dc0`](https://github.com/vultisig/vultisig-sdk/commit/7572dc0e7fa785453e36a419d678f8a1bf17c8b5)]:
+  - @vultisig/core-chain@2.14.0
+
+## 1.4.0
+
+### Minor Changes
+
+- [#672](https://github.com/vultisig/vultisig-sdk/pull/672) [`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Blockaid Sui transaction simulation support. The existing Sui Blockaid
+  scan resolver only requested `validation`; this exposes the simulation block
+  returned by the same `/sui/transaction/scan` endpoint via a new
+  `getSuiTxBlockaidSimulation` resolver and a `parseBlockaidSuiSimulation`
+  parser that produces a UI-facing `{ swap } | { transfer }` headline
+  (mirroring the Solana shape). `OtherChain.Sui` is now a member of
+  `blockaidSimulationSupportedChains`, with a new `getTxBlockaidSimulation`
+  overload, and the mpc package gains a matching
+  `getSuiBlockaidTxSimulationInput` for the `KeysignPayload`-driven flow.
+
+  The parser keeps `null` as its failure mode rather than throwing — Blockaid
+  field renames degrade to "no preview" instead of breaking consumers.
+
+  Closes [#671](https://github.com/vultisig/vultisig-sdk/issues/671)
+
+### Patch Changes
+
+- Updated dependencies [[`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6)]:
+  - @vultisig/core-chain@2.13.0
+
+## 1.3.13
+
+### Patch Changes
+
+- Updated dependencies [[`e9c4997`](https://github.com/vultisig/vultisig-sdk/commit/e9c4997bae3a499785295b76dbc956807cc704f5)]:
+  - @vultisig/core-chain@2.12.0
+
+## 1.3.12
+
+### Patch Changes
+
+- [#652](https://github.com/vultisig/vultisig-sdk/pull/652) [`0eaa76a`](https://github.com/vultisig/vultisig-sdk/commit/0eaa76a08394e21a1280a6a69a9dc540837dd59c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Fast Vault KeyImport handling for ECDSA-only vaults and completed outbound keygen retries.
+
+## 1.3.11
+
+### Patch Changes
+
+- Updated dependencies [[`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069)]:
+  - @vultisig/core-chain@2.11.0
+
 ## 1.3.10
 
 ### Patch Changes

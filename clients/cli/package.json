@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/cli",
-  "version": "1.8.1",
+  "version": "2.0.0",
   "description": "The self-custody MPC wallet CLI for AI coding agents (Claude Code, Cursor, OpenCode). Natural-language agent mode, 36+ chains, DKLS23 threshold signatures. Seedless.",
   "type": "module",
   "bin": {
@@ -67,35 +67,35 @@
   },
   "homepage": "https://vultisig.com",
   "dependencies": {
-    "@cosmjs/cosmwasm-stargate": "^0.38.1",
+    "@cosmjs/cosmwasm-stargate": "^0.39.0",
     "@cosmjs/encoding": "^0.39.0",
-    "@cosmjs/proto-signing": "^0.38.1",
-    "@cosmjs/stargate": "^0.38.1",
+    "@cosmjs/proto-signing": "^0.39.0",
+    "@cosmjs/stargate": "^0.39.0",
     "@napi-rs/keyring": "^1.3.0",
-    "@noble/hashes": "^2.0.1",
+    "@noble/hashes": "^2.2.0",
     "@vultisig/client-shared": "workspace:^",
     "@vultisig/core-chain": "workspace:^",
     "@vultisig/rujira": "workspace:^",
     "@vultisig/sdk": "workspace:^",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
-    "commander": "^14.0.3",
-    "dotenv": "^17.3.1",
+    "commander": "^15.0.0",
+    "dotenv": "^17.4.2",
     "ora": "^9.4.0",
     "qrcode-terminal": "^0.12.0",
     "tabtab": "^3.0.2",
-    "viem": "^2.51.0",
+    "viem": "^2.52.2",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.9",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
-    "esbuild": "^0.27.4",
-    "tsx": "^4.22.3",
+    "esbuild": "^0.28.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -56,4 +56,45 @@ describe('getVaultFromServer', () => {
       /public_key_ecdsa/
     )
   })
+
+  it('allows an empty EdDSA public key for ECDSA-only Fast Vaults', async () => {
+    vi.mocked(queryUrl).mockResolvedValue({
+      name: 'ecdsa-only vault',
+      public_key_ecdsa: '04aa',
+      public_key_eddsa: '',
+      hex_chain_code: 'cc',
+      local_party_id: 'Server-1',
+    })
+
+    const result = await getVaultFromServer({
+      vaultId: 'vault-id',
+      password: 'secret',
+      vaultBaseUrl: 'https://example.com/vault',
+    })
+
+    expect(result.publicKeyEddsa).toBe('')
+  })
+
+  it('throws when the EdDSA public key is missing or not a string', async () => {
+    vi.mocked(queryUrl).mockResolvedValue({
+      name: 'vault',
+      public_key_ecdsa: '04aa',
+      hex_chain_code: 'cc',
+      local_party_id: 'Server-1',
+    })
+    await expect(getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })).rejects.toThrow(
+      /public_key_eddsa/
+    )
+
+    vi.mocked(queryUrl).mockResolvedValue({
+      name: 'vault',
+      public_key_ecdsa: '04aa',
+      public_key_eddsa: null,
+      hex_chain_code: 'cc',
+      local_party_id: 'Server-1',
+    })
+    await expect(getVaultFromServer({ vaultId: 'v', password: 'p', vaultBaseUrl: 'https://x/vault' })).rejects.toThrow(
+      /public_key_eddsa/
+    )
+  })
 })

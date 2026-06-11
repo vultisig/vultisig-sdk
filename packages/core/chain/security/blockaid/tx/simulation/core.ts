@@ -1,5 +1,28 @@
 import { Coin } from '../../../../coin/Coin'
 
+export type BlockaidSuiAsset = {
+  coinType: string
+  symbol: string
+  decimals: number
+  logo?: string
+}
+
+export type BlockaidSuiSimulationInfo =
+  | {
+      swap: {
+        from: BlockaidSuiAsset
+        to: BlockaidSuiAsset
+        fromAmount: bigint
+        toAmount: bigint
+      }
+    }
+  | {
+      transfer: {
+        from: BlockaidSuiAsset
+        fromAmount: bigint
+      }
+    }
+
 export type BlockaidSolanaSimulationInfo =
   | {
       swap: {

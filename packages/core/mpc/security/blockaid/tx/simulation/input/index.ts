@@ -10,10 +10,12 @@ import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { BlockaidTxSimulationInputResolver, BlockaidTxSimulationInputResolverInput } from './resolver'
 import { getEvmBlockaidTxSimulationInput } from './resolvers/evm'
 import { getSolanaBlockaidTxSimulationInput } from './resolvers/solana'
+import { getSuiBlockaidTxSimulationInput } from './resolvers/sui'
 
 const resolvers: Record<BlockaidSimulationSupportedChainKind, BlockaidTxSimulationInputResolver<any>> = {
   solana: getSolanaBlockaidTxSimulationInput,
   evm: getEvmBlockaidTxSimulationInput,
+  sui: getSuiBlockaidTxSimulationInput,
 }
 
 export const getBlockaidTxSimulationInput = (
