@@ -2163,7 +2163,19 @@ function encodeData(
   const chunks: Uint8Array[] = []
   for (const field of fields) {
     const value = data[field.name]
-    if (value === undefined || value === null) continue
+    // EIP-712 has no optional struct members: every field declared in the
+    // type contributes to the encoding. A missing value for a declared
+    // field can only mean the caller's `types` and `message`/`domain`
+    // disagree — silently skipping it would yield a digest no on-chain
+    // verifier (or the CLOB) can reproduce, i.e. the wallet would sign
+    // something other than what the type claims. Fail loud instead.
+    // (The domain path can't reach this: computeEIP712Hash filters the
+    // synthesized EIP712Domain type to fields actually present.)
+    if (value === undefined || value === null) {
+      throw new Error(
+        `EIP-712 encode: missing value for declared field "${field.name}" (${field.type}) in struct "${typeName}"`
+      )
+    }
     chunks.push(encodeField(field.type, value, types, keccak))
   }
 

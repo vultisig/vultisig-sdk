@@ -122,6 +122,29 @@ function canonicalClobAuthHash(): string {
   })
 }
 
+// 5-field domain exercising the `salt` (bytes32) path — Polymarket doesn't
+// use salt, but it's in EIP712_DOMAIN_FIELDS and was otherwise untested.
+const SALT_DOMAIN = {
+  name: 'Salted',
+  version: '2',
+  chainId: 137,
+  verifyingContract: '0x1111111111111111111111111111111111111111',
+  salt: '0x' + '00'.repeat(31) + '2a',
+}
+const SALT_TYPES = {
+  Mail: [{ name: 'contents', type: 'string' }],
+}
+const SALT_MESSAGE = { contents: 'hello salt' }
+
+function canonicalSaltHash(): string {
+  return hashTypedData({
+    domain: SALT_DOMAIN as never,
+    types: SALT_TYPES,
+    primaryType: 'Mail',
+    message: SALT_MESSAGE as never,
+  })
+}
+
 describe('signTypedData — EIP-712 hash correctness vs viem', () => {
   it('full 4-field domain (Polymarket Order) matches canonical hash', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
@@ -197,5 +220,38 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('5-field domain with salt (bytes32) matches canonical hash', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-712-salt', {
+      domain: SALT_DOMAIN,
+      types: SALT_TYPES,
+      primaryType: 'Mail',
+      message: SALT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    expect(recent.data?.hash).toBe(canonicalSaltHash())
+  })
+
+  it('fails loud (no silent wrong hash) when a declared struct field is missing', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    // Drop a declared Order field. The old encoder silently skipped it and
+    // produced a digest no verifier could reproduce; the guard must turn
+    // that into a visible tool failure instead of a signed bad hash.
+    const orderMissingTaker: Record<string, unknown> = { ...ORDER_MESSAGE }
+    delete orderMissingTaker.taker
+    const recent = await executor.signTypedData('call-712-missing', {
+      domain: ORDER_DOMAIN,
+      types: ORDER_TYPES,
+      primaryType: 'Order',
+      message: orderMissingTaker,
+    })
+
+    expect(recent.success).toBe(false)
+    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/missing value for declared field "taker"/)
   })
 })
