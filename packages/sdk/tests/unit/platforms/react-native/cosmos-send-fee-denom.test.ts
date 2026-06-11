@@ -49,6 +49,13 @@ describe('buildCosmosSendTx feeDenom (sdk#624, sdk#697)', () => {
     expect(feeCoin?.denom).toBe('uusd')
   })
 
+  it('falls back to denom for chain names that match object prototype keys', () => {
+    const result = buildCosmosSendTx({ ...BASE_OPTS, chainName: 'toString' })
+    const authInfo = AuthInfo.decode(result.authInfoBytes)
+    const feeCoin = authInfo.fee?.amount[0]
+    expect(feeCoin?.denom).toBe('uusd')
+  })
+
   it('native LUNC send: fee and send both in uluna (no regression)', () => {
     const result = buildCosmosSendTx({
       ...BASE_OPTS,

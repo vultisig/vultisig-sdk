@@ -382,7 +382,9 @@ export type BuildCosmosSendOptions = {
 }
 
 const getDefaultFeeDenom = (chainName: string, denom: string) =>
-  chainName in cosmosFeeCoinDenom ? cosmosFeeCoinDenom[chainName as CosmosChain] : denom
+  Object.prototype.hasOwnProperty.call(cosmosFeeCoinDenom, chainName)
+    ? cosmosFeeCoinDenom[chainName as CosmosChain]
+    : denom
 
 export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilderResult {
   const isThor = opts.chainName === 'THORChain' || opts.chainName === 'MayaChain'
