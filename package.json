@@ -189,6 +189,7 @@
   },
   "resolutions": {
     "readable-stream": "3.6.2",
+    "@grpc/grpc-js": "1.14.4",
     "@lifi/sdk/@solana/web3.js": "1.98.4",
     "@cosmjs/encoding/@scure/base": "1.2.6",
     "shell-quote": "1.8.4",
