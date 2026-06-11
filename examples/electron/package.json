@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-electron",
-  "version": "0.1.71",
+  "version": "0.1.72",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
