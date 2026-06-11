@@ -1,5 +1,11 @@
 # @vultisig/core-mpc
 
+## 1.6.0
+
+### Minor Changes
+
+- [#705](https://github.com/vultisig/vultisig-sdk/pull/705) [`391e42d`](https://github.com/vultisig/vultisig-sdk/commit/391e42d020ea96407eb122de762234c9443392fc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add a `SignSui` variant to `KeysignPayload.signData` so pre-built Sui Programmable Transaction Blocks (Sui Wallet Standard dApp signing) flow through the standard keysign pipeline instead of a custom-message path. `getSuiSigningInputs` forwards the BCS bytes verbatim via `signDirectMessage`, and `getSuiChainSpecific` returns an empty `SuiSpecific` for this variant (the coins, gas budget and reference gas price are already baked into the bytes, so no RPC lookup is needed).
+
 ## 1.5.0
 
 ### Minor Changes
