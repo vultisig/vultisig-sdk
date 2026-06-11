@@ -1,7 +1,7 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
-import { cosmosGasRecord } from '@vultisig/core-chain/chains/cosmos/gas'
+import { getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
 import {
   applyTerraClassicTax,
   getTerraClassicTaxCap,
@@ -66,7 +66,7 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
     accountNumber: BigInt(accountNumber),
     sequence: BigInt(sequence),
     transactionType,
-    gas: cosmosGasRecord[coin.chain],
+    gas: await getCosmosFeeAmount(coin),
     ibcDenomTraces: {
       latestBlock: timeoutTimestamp ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}` : latestBlock,
       baseDenom: burnTaxBaseDenom,
