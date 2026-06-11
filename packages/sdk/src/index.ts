@@ -100,6 +100,18 @@ export type { SdkEvents, VaultEvents } from './events/types'
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
 export { Chain } from './types'
 
+// Chain-kind classification — the canonical 12-family dispatch key. Exposed so
+// downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
+// re-inventing per-chain classification tables (the cross-repo drift root cause).
+export type { ChainKind } from '@vultisig/core-chain/ChainKind'
+export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
+
+// Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
+// fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
+export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {
