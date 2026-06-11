@@ -11,6 +11,23 @@ const suiContractAddress = '0x2::sui::SUI'
 
 export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
+
+  // dApp-supplied PTBs (Sui Wallet Standard) arrive already BCS-serialized in
+  // `signData.signSui`. WalletCore signs them verbatim via `signDirectMessage`
+  // — coins, gas and recipients are already baked into the bytes, so we never
+  // reconstruct a Pay / PaySui input for this path.
+  if (keysignPayload.signData.case === 'signSui') {
+    const { unsignedTxMsg } = keysignPayload.signData.value
+    return [
+      TW.Sui.Proto.SigningInput.create({
+        signer: coin.address,
+        signDirectMessage: TW.Sui.Proto.SignDirect.create({
+          unsignedTxMsg,
+        }),
+      }),
+    ]
+  }
+
   const { coins, referenceGasPrice, gasBudget } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'suicheSpecific'

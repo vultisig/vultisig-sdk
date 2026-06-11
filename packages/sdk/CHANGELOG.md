@@ -1,5 +1,30 @@
 # @vultisig/sdk
 
+## 2.2.0
+
+### Minor Changes
+
+- [#705](https://github.com/vultisig/vultisig-sdk/pull/705) [`391e42d`](https://github.com/vultisig/vultisig-sdk/commit/391e42d020ea96407eb122de762234c9443392fc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add a `SignSui` variant to `KeysignPayload.signData` so pre-built Sui Programmable Transaction Blocks (Sui Wallet Standard dApp signing) flow through the standard keysign pipeline instead of a custom-message path. `getSuiSigningInputs` forwards the BCS bytes verbatim via `signDirectMessage`, and `getSuiChainSpecific` returns an empty `SuiSpecific` for this variant (the coins, gas budget and reference gas price are already baked into the bytes, so no RPC lookup is needed).
+
+## 2.1.0
+
+### Minor Changes
+
+- [#703](https://github.com/vultisig/vultisig-sdk/pull/703) [`3030c7a`](https://github.com/vultisig/vultisig-sdk/commit/3030c7a718947396de5d6b6de1b044640368aab5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Expose chain-kind classification and Cosmos chain metadata from the SDK boundary so downstream consumers (mcp-ts, agent-backend) stop re-inventing per-chain tables (the cross-repo drift root cause):
+
+  - `getChainKind`, `isChainOfKind`, `ChainKind` (re-exported from `@vultisig/core-chain/ChainKind`) - classify a chain by family (evm/utxo/cosmos/...).
+  - `cosmosFeeCoinDenom`, `getCosmosGasLimit`, `getCosmosStakingGasLimit`, `cosmosRpcUrl` - Cosmos LCD/fee-denom/gas-limit metadata.
+
+  Unblocks the mcp-ts chain-classification consolidation (retiring ~291 lines of re-invented classification + duplicated cosmos chain config).
+
+## 2.0.0
+
+### Patch Changes
+
+- [#653](https://github.com/vultisig/vultisig-sdk/pull/653) [`dc75595`](https://github.com/vultisig/vultisig-sdk/commit/dc75595e83360f5bda84b2d91cae177bc7c8c966) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Re-enable Bittensor for seed-phrase import by removing it from `SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS`. The server-side curve misclassification that caused Bittensor imports to hang (vultiserver classified it as ECDSA and ran DKLS while clients run Schnorr) is fixed in vultiserver#157.
+
+  ⚠️ **Deployment dependency:** this change depends on the server-side fix. vultiserver#157 must be deployed to **production** before consumers upgrade to this SDK. If the server fix is not live, enabling Bittensor seed-phrase imports will hang or fail, exactly as before. Do not consume this release until the server deploy is confirmed.
+
 ## 1.8.11
 
 ### Patch Changes
