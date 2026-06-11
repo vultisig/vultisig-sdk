@@ -27,8 +27,7 @@ type GetJettonWalletInput = {
   jettonMasterAddress: string
 }
 
-const matchesRawAddress = (value: string, expected: string): boolean =>
-  value.toLowerCase() === expected.toLowerCase()
+const matchesRawAddress = (value: string, expected: string): boolean => value.toLowerCase() === expected.toLowerCase()
 
 /**
  * Queries the Vultisig proxy (pass-through to toncenter v3) for the jetton wallet
