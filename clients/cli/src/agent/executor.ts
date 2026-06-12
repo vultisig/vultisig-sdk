@@ -2088,7 +2088,6 @@ function hashType(
  */
 function encodeType(typeName: string, types: Record<string, Array<{ name: string; type: string }>>): string {
   const fields = getTypeFields(typeName, types)
-  if (!fields) return ''
 
   // Find all referenced struct types
   const refs = new Set<string>()
@@ -2100,9 +2099,7 @@ function encodeType(typeName: string, types: Record<string, Array<{ name: string
   let result = `${typeName}(${fields.map(f => `${f.type} ${f.name}`).join(',')})`
   for (const ref of sortedRefs) {
     const refFields = getTypeFields(ref, types)
-    if (refFields) {
-      result += `${ref}(${refFields.map(f => `${f.type} ${f.name}`).join(',')})`
-    }
+    result += `${ref}(${refFields.map(f => `${f.type} ${f.name}`).join(',')})`
   }
   return result
 }
@@ -2114,7 +2111,6 @@ function findReferencedTypes(
 ): void {
   if (refs.has(typeName)) return
   const fields = getTypeFields(typeName, types)
-  if (!fields) return
   refs.add(typeName)
   for (const field of fields) {
     const baseType = field.type.replace(/\[\d*\]$/, '')
@@ -2139,13 +2135,23 @@ const EIP712_DOMAIN_FIELDS: Array<{ name: string; type: string }> = [
 ]
 
 /**
- * Get fields for a type.
+ * Get fields for a type. Throws when the type isn't declared: every caller
+ * is either looking up a type the payload claims to use (primaryType /
+ * EIP712Domain) or a ref already verified present via `types[baseType]`,
+ * so a miss means the payload's `types` and `primaryType` disagree.
+ * Treating it as an empty struct (the old behavior) would hash and sign
+ * a digest no verifier can reproduce — same fail-loud contract as the
+ * missing-field guard in encodeData.
  */
 function getTypeFields(
   typeName: string,
   types: Record<string, Array<{ name: string; type: string }>>
-): Array<{ name: string; type: string }> | undefined {
-  return types[typeName]
+): Array<{ name: string; type: string }> {
+  const fields = types[typeName]
+  if (!fields) {
+    throw new Error(`EIP-712 encode: missing type definition for struct "${typeName}"`)
+  }
+  return fields
 }
 
 /**
@@ -2158,7 +2164,6 @@ function encodeData(
   keccak: (data: Uint8Array) => Uint8Array
 ): Uint8Array {
   const fields = getTypeFields(typeName, types)
-  if (!fields) return new Uint8Array(0)
 
   const chunks: Uint8Array[] = []
   for (const field of fields) {

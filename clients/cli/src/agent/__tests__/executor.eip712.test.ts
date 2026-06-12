@@ -254,4 +254,49 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     expect(recent.success).toBe(false)
     expect(String((recent.data as Record<string, unknown>).error)).toMatch(/missing value for declared field "taker"/)
   })
+
+  it('fails loud when primaryType has no type definition (no empty-struct hash)', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    // primaryType says Order but `types` doesn't declare it. The old
+    // getTypeFields returned undefined and callers encoded an empty
+    // struct — hashing and signing a digest no verifier can reproduce.
+    const recent = await executor.signTypedData('call-712-no-typedef', {
+      domain: ORDER_DOMAIN,
+      types: { NotOrder: ORDER_TYPES.Order },
+      primaryType: 'Order',
+      message: ORDER_MESSAGE,
+    })
+
+    expect(recent.success).toBe(false)
+    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/missing type definition for struct "Order"/)
+  })
+
+  it('caller-supplied explicit types.EIP712Domain matches canonical hash', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    // Typed-data builders in this repo emit an explicit EIP712Domain entry;
+    // computeEIP712Hash must use it verbatim (separate branch from the
+    // synthesized-domain path the tests above pin).
+    const typesWithDomain = {
+      EIP712Domain: [
+        { name: 'name', type: 'string' },
+        { name: 'version', type: 'string' },
+        { name: 'chainId', type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' },
+      ],
+      ...ORDER_TYPES,
+    }
+    const recent = await executor.signTypedData('call-712-explicit-domain', {
+      domain: ORDER_DOMAIN,
+      types: typesWithDomain,
+      primaryType: 'Order',
+      message: ORDER_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    // viem ignores/synthesizes the domain type identically for the standard
+    // 4-field domain, so the canonical Order hash is the same fixture.
+    expect(recent.data?.hash).toBe(canonicalOrderHash())
+  })
 })
