@@ -7,7 +7,7 @@ import { getBlockchairBaseUrl } from './getBlockchairBaseUrl'
 type BlockchairAddressResponse = {
   data: {
     [address: string]: {
-      address: {
+      address?: {
         balance: number
         unspent_output_count?: number
       }
@@ -39,6 +39,7 @@ const getAddressInfoUrl = ({
 export const getUtxoAddressInfo = async (account: ChainAccount<UtxoChain>) => {
   const utxo: BlockchairAddressResponse['data'][string]['utxo'] = []
   let firstPage: BlockchairAddressResponse | undefined
+  let expectedUtxoCount: number | undefined
 
   for (let offset = 0; ; offset += blockchairUtxoPageSize) {
     const page = await queryUrl<BlockchairAddressResponse>(getAddressInfoUrl({ ...account, offset }))
@@ -48,7 +49,7 @@ export const getUtxoAddressInfo = async (account: ChainAccount<UtxoChain>) => {
     const pageUtxos = entry?.utxo ?? []
     utxo.push(...pageUtxos)
 
-    const expectedUtxoCount = entry?.address.unspent_output_count
+    expectedUtxoCount ??= entry?.address?.unspent_output_count
     const hasAllReportedUtxos = expectedUtxoCount !== undefined && utxo.length >= expectedUtxoCount
     const hasNoMorePages = expectedUtxoCount === undefined && pageUtxos.length < blockchairUtxoPageSize
 

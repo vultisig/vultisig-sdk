@@ -50,7 +50,6 @@ describe('getUtxoAddressInfo', () => {
       .mockResolvedValueOnce({
         data: {
           bc1qsource: {
-            address: { balance: 3_000, unspent_output_count: 3 },
             utxo: [
               {
                 block_id: 102,
@@ -112,7 +111,6 @@ describe('getUtxoAddressInfo', () => {
       .mockResolvedValueOnce({
         data: {
           bc1qsource: {
-            address: { balance: 2_000, unspent_output_count: 2 },
             utxo: [],
           },
         },

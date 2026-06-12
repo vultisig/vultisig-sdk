@@ -79,7 +79,6 @@ describe('Blockchair URL construction does not duplicate chain slug', () => {
       {
         data: {
           [ADDRESS]: {
-            address: { unspent_output_count: 4 },
             utxo: [
               {
                 block_id: 12,
@@ -128,7 +127,6 @@ describe('Blockchair URL construction does not duplicate chain slug', () => {
       {
         data: {
           [ADDRESS]: {
-            address: { unspent_output_count: 2 },
             utxo: [],
           },
         },

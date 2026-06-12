@@ -93,6 +93,7 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
     data: Record<string, { address?: { unspent_output_count?: number }; utxo: BlockchairUtxo[] }>
   }
   const blockchairUtxos: BlockchairUtxo[] = []
+  let expectedUtxoCount: number | undefined
 
   for (let offset = 0; ; offset += blockchairUtxoPageSize) {
     const resp = await fetchJson<BlockchairResp>(
@@ -102,7 +103,7 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
     const pageUtxos = entry?.utxo ?? []
     blockchairUtxos.push(...pageUtxos)
 
-    const expectedUtxoCount = entry?.address?.unspent_output_count
+    expectedUtxoCount ??= entry?.address?.unspent_output_count
     const hasAllReportedUtxos = expectedUtxoCount !== undefined && blockchairUtxos.length >= expectedUtxoCount
     const hasNoMorePages = expectedUtxoCount === undefined && pageUtxos.length < blockchairUtxoPageSize
 
