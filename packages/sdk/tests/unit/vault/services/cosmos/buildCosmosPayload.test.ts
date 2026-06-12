@@ -1,5 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
-import { cosmosGasRecord } from '@vultisig/core-chain/chains/cosmos/gas'
+import { cosmosGasRecord, getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
 import type { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +10,17 @@ const { mockGetCosmosAccountInfo } = vi.hoisted(() => ({
 vi.mock('@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo', () => ({
   getCosmosAccountInfo: mockGetCosmosAccountInfo,
 }))
+
+vi.mock('@vultisig/core-chain/chains/cosmos/gas', async importOriginal => {
+  const real = await importOriginal<typeof import('@vultisig/core-chain/chains/cosmos/gas')>()
+
+  return {
+    ...real,
+    getCosmosFeeAmount: vi.fn(({ chain }: { chain: keyof typeof real.cosmosGasRecord }) =>
+      Promise.resolve(real.cosmosGasRecord[chain])
+    ),
+  }
+})
 
 import { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '@/vault/services/cosmos/buildCosmosPayload'
 
@@ -31,6 +42,7 @@ describe('buildCosmosPayload', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetCosmosAccountInfo.mockResolvedValue(accountInfoFixture)
+    vi.mocked(getCosmosFeeAmount).mockImplementation(({ chain }) => Promise.resolve(cosmosGasRecord[chain]))
   })
 
   describe('buildSignAminoKeysignPayload', () => {
@@ -135,6 +147,7 @@ describe('buildCosmosPayload', () => {
           sequence: bigint
         }
         expect(osmo.gas).toBe(cosmosGasRecord.Osmosis)
+        expect(getCosmosFeeAmount).not.toHaveBeenCalled()
         expect(osmo.accountNumber).toBe(0n)
         expect(osmo.sequence).toBe(0n)
       })
@@ -186,6 +199,12 @@ describe('buildCosmosPayload', () => {
       expect(atom.accountNumber).toBe(7n)
       expect(atom.sequence).toBe(3n)
       expect(atom.gas).toBe(cosmosGasRecord.Cosmos)
+      expect(getCosmosFeeAmount).toHaveBeenCalledWith({
+        chain: Chain.Cosmos,
+        address,
+        decimals: 6,
+        ticker: 'ATOM',
+      })
     })
   })
 
@@ -222,6 +241,7 @@ describe('buildCosmosPayload', () => {
       }
       expect(directSkip.accountNumber).toBe(42n)
       expect(directSkip.sequence).toBe(0n)
+      expect(getCosmosFeeAmount).not.toHaveBeenCalled()
     })
 
     it('calls getCosmosAccountInfo when skipChainSpecificFetch is false; sequence comes from chain', async () => {

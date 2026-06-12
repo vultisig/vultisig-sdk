@@ -9,4 +9,4 @@ type FeeAmountResolverInput = {
   publicKey: PublicKey
 }
 
-export type FeeAmountResolver = Resolver<FeeAmountResolverInput, bigint>
+export type FeeAmountResolver = Resolver<FeeAmountResolverInput, bigint | Promise<bigint>>

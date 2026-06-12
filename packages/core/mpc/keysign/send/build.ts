@@ -91,7 +91,7 @@ export const buildSendKeysignPayload = async ({
   const balance = await getCoinBalance(coin)
 
   if (publicKey) {
-    keysignPayload = refineKeysignAmount({
+    keysignPayload = await refineKeysignAmount({
       keysignPayload,
       walletCore,
       publicKey,
@@ -99,7 +99,7 @@ export const buildSendKeysignPayload = async ({
     })
 
     if (isChainOfKind(coin.chain, 'utxo')) {
-      keysignPayload = refineKeysignUtxo({
+      keysignPayload = await refineKeysignUtxo({
         keysignPayload,
         walletCore,
         publicKey,

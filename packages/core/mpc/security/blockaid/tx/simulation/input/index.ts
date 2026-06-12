@@ -18,9 +18,9 @@ const resolvers: Record<BlockaidSimulationSupportedChainKind, BlockaidTxSimulati
   sui: getSuiBlockaidTxSimulationInput,
 }
 
-export const getBlockaidTxSimulationInput = (
+export const getBlockaidTxSimulationInput = async (
   input: Omit<BlockaidTxSimulationInputResolverInput, 'chain'>
-): BlockaidTxSimulationInput | null => {
+): Promise<BlockaidTxSimulationInput | null> => {
   const chain = getKeysignChain(input.payload)
   if (!isOneOf(chain, blockaidSimulationSupportedChains)) {
     return null
@@ -28,7 +28,7 @@ export const getBlockaidTxSimulationInput = (
 
   const chainKind = getChainKind(chain)
 
-  const data = resolvers[chainKind]({
+  const data = await resolvers[chainKind]({
     ...input,
     chain,
   })

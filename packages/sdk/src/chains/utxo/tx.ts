@@ -449,13 +449,8 @@ export function getSighashLegacy(opts: SighashLegacyOptions): Uint8Array {
 export const ZCASH_BRANCH_ID_NU6_1 = 0x4dec4df0
 
 /**
- * Default Zcash consensus branch ID (NU6.2, the epoch active at the time of
- * writing). Consumers SHOULD override via `buildUtxoSendTx({zcashBranchId})`
- * for pre-activation signing - relying on a compiled-in default means every
- * Zcash network upgrade turns into a shipped-SDK-release blocker.
- *
- * Look up the current value at tx-build time from a Zcash node:
- *   zcash-cli getblockchaininfo | jq '.consensus.nextblock'
+ * Zcash consensus branch ID for NU6.2. Kept exported only for callers that
+ * need to reproduce historical transactions from that consensus epoch.
  */
 export const ZCASH_BRANCH_ID_NU6_2 = 0x5437f330
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
@@ -705,11 +700,9 @@ export type BuildUtxoSendOptions = {
   /** Compressed pubkey (33 bytes) used for scriptSig / witness */
   compressedPubKey: Uint8Array
   /**
-   * Zcash consensus branch ID (ignored for non-Zcash chains). Defaults to
-   * `ZCASH_BRANCH_ID_NU6_2` at the time of release. Consumers SHOULD fetch
-   * the current value from a zcash-cli `getblockchaininfo` at tx-build time
-   * — hardcoding means every future consensus upgrade requires a shipped
-   * SDK release.
+   * Zcash consensus branch ID (ignored for non-Zcash chains). Required for
+   * Zcash so future consensus upgrades fail loud instead of signing with a
+   * stale compiled fallback.
    */
   zcashBranchId?: number
 }
@@ -800,13 +793,16 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
-  const zcashBranchId = opts.zcashBranchId ?? ZCASH_BRANCH_ID_NU6_2
+  const zcashBranchId = opts.zcashBranchId
+  if (isZcash && zcashBranchId === undefined) {
+    throw new Error('buildUtxoSendTx: zcashBranchId is required for Zcash')
+  }
 
   const signingHashes: Uint8Array[] = []
   for (let i = 0; i < inputs.length; i++) {
     let h: Uint8Array
     if (isZcash) {
-      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash, zcashBranchId)
+      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash, zcashBranchId!)
     } else if (isBCH) {
       h = getSighashBIP143({
         inputs,

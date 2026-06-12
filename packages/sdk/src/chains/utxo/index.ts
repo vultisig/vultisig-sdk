@@ -27,3 +27,9 @@ export {
   ZCASH_BRANCH_ID_NU6_1,
   ZCASH_BRANCH_ID_NU6_2,
 } from './tx'
+export {
+  getZcashBranchId,
+  getZcashBranchIdHex,
+  zcashBranchIdToNumber,
+  zcashBranchIdToWalletCoreHex,
+} from '@vultisig/core-chain/chains/utxo/zcashBranchId'

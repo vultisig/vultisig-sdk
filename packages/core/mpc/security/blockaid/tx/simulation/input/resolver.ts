@@ -23,5 +23,5 @@ export type BlockaidTxSimulationInputResolver<
     chain: T
     raw?: string[]
   },
-  BlockaidTxSimulationInput['data'] | null
+  BlockaidTxSimulationInput['data'] | null | Promise<BlockaidTxSimulationInput['data'] | null>
 >

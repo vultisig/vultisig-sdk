@@ -7,6 +7,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
 import { getTerraClassicTaxRate, getTerraClassicTaxCap } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 
 // ---------------------------------------------------------------------------
@@ -19,6 +20,10 @@ vi.mock('@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo', () =>
     sequence: '7',
     latestBlock: '1234567_0',
   }),
+}))
+
+vi.mock('@vultisig/core-chain/chains/cosmos/gas', () => ({
+  getCosmosFeeAmount: vi.fn().mockResolvedValue(7500n),
 }))
 
 // Partially mock terraClassicTax — stub the LCD fetchers, keep applyTerraClassicTax real.
@@ -75,6 +80,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
   beforeEach(() => {
     vi.mocked(getTerraClassicTaxRate).mockReset()
     vi.mocked(getTerraClassicTaxCap).mockReset()
+    vi.mocked(getCosmosFeeAmount).mockResolvedValue(7500n)
   })
 
   it('sets baseDenom to "0" when burn-tax rate is zero (current chain state)', async () => {
@@ -87,6 +93,7 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     })
 
     expect(result.ibcDenomTraces?.baseDenom).toBe('0')
+    expect(result.gas).toBe(7500n)
     // Cap lookup is skipped when rate is 0 (applyTerraClassicTax early-returns)
     expect(getTerraClassicTaxCap).not.toHaveBeenCalled()
   })
