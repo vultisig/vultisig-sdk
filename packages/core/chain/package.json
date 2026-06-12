@@ -750,6 +750,11 @@
       "import": "./dist/chains/utxo/fee/byteFee.js",
       "default": "./dist/chains/utxo/fee/byteFee.js"
     },
+    "./chains/utxo/fee/zip317": {
+      "types": "./dist/chains/utxo/fee/zip317.d.ts",
+      "import": "./dist/chains/utxo/fee/zip317.js",
+      "default": "./dist/chains/utxo/fee/zip317.js"
+    },
     "./chains/utxo/minUtxo": {
       "types": "./dist/chains/utxo/minUtxo.d.ts",
       "import": "./dist/chains/utxo/minUtxo.js",
