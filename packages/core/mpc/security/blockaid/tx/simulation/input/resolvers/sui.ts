@@ -5,13 +5,13 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxSimulationInputResolver } from '../resolver'
 
-export const getSuiBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<OtherChain.Sui> = ({
+export const getSuiBlockaidTxSimulationInput: BlockaidTxSimulationInputResolver<OtherChain.Sui> = async ({
   payload,
   walletCore,
 }) => {
   const coin = assertField(payload, 'coin')
 
-  const compiledTxs = getCompiledTxsForBlockaidInput({
+  const compiledTxs = await getCompiledTxsForBlockaidInput({
     payload,
     walletCore,
   })

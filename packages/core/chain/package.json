@@ -785,6 +785,11 @@
       "import": "./dist/chains/utxo/tx/UtxoScriptType.js",
       "default": "./dist/chains/utxo/tx/UtxoScriptType.js"
     },
+    "./chains/utxo/zcashBranchId": {
+      "types": "./dist/chains/utxo/zcashBranchId.d.ts",
+      "import": "./dist/chains/utxo/zcashBranchId.js",
+      "default": "./dist/chains/utxo/zcashBranchId.js"
+    },
     "./coin/AccountCoin": {
       "types": "./dist/coin/AccountCoin.d.ts",
       "import": "./dist/coin/AccountCoin.js",

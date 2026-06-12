@@ -158,7 +158,7 @@ async function main() {
     chainPublicKeys: vault.chainPublicKeys,
   })
 
-  const inputs = getEncodedSigningInputs({
+  const inputs = await getEncodedSigningInputs({
     keysignPayload,
     walletCore,
     publicKey,

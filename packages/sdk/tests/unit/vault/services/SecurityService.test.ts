@@ -95,7 +95,7 @@ describe('SecurityService', () => {
     })
 
     it('should return null for unsupported chains', async () => {
-      vi.mocked(getBlockaidTxValidationInput).mockReturnValue(null)
+      vi.mocked(getBlockaidTxValidationInput).mockResolvedValue(null)
 
       const result = await service.validateTransaction(mockKeysignPayload)
 
@@ -103,7 +103,7 @@ describe('SecurityService', () => {
     })
 
     it('should pass walletCore to input resolver', async () => {
-      vi.mocked(getBlockaidTxValidationInput).mockReturnValue(null)
+      vi.mocked(getBlockaidTxValidationInput).mockResolvedValue(null)
 
       await service.validateTransaction(mockKeysignPayload)
 
@@ -153,7 +153,7 @@ describe('SecurityService', () => {
     })
 
     it('should return null for unsupported chains', async () => {
-      vi.mocked(getBlockaidTxSimulationInput).mockReturnValue(null)
+      vi.mocked(getBlockaidTxSimulationInput).mockResolvedValue(null)
 
       const result = await service.simulateTransaction(mockKeysignPayload)
 
@@ -177,7 +177,7 @@ describe('SecurityService', () => {
     })
 
     it('should pass walletCore to simulation input resolver', async () => {
-      vi.mocked(getBlockaidTxSimulationInput).mockReturnValue(null)
+      vi.mocked(getBlockaidTxSimulationInput).mockResolvedValue(null)
 
       await service.simulateTransaction(mockKeysignPayload)
 

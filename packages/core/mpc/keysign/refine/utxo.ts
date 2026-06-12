@@ -37,7 +37,7 @@ const convertPlanUtxosToUtxoInfo = ({ utxos, walletCore }: ConvertPlanUtxosToUtx
     })
   })
 
-export const refineKeysignUtxo = (input: RefineKeysignUtxoInput): KeysignPayload => {
+export const refineKeysignUtxo = async (input: RefineKeysignUtxoInput): Promise<KeysignPayload> => {
   const utxoSpecific = getBlockchainSpecificValue(input.keysignPayload.blockchainSpecific, 'utxoSpecific')
 
   // PSBTs already have UTXOs defined — skip refinement.
@@ -46,7 +46,7 @@ export const refineKeysignUtxo = (input: RefineKeysignUtxoInput): KeysignPayload
     return input.keysignPayload
   }
 
-  const [signingInput] = getUtxoSigningInputs(input)
+  const [signingInput] = await getUtxoSigningInputs(input)
 
   const plan = shouldBePresent(signingInput.plan, 'UTXO signing input plan')
   const planUtxos = plan.utxos
