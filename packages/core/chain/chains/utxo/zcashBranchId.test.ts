@@ -1,5 +1,5 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getZcashBranchId,
@@ -19,6 +19,10 @@ describe('Zcash branch id', () => {
   beforeEach(() => {
     resetZcashBranchIdCacheForTests()
     queryUrlMock.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('converts consensus.nextblock to WalletCore little-endian hex', () => {
@@ -72,5 +76,25 @@ describe('Zcash branch id', () => {
     })
 
     await expect(getZcashBranchIdHex()).rejects.toThrow('consensus.nextblock')
+  })
+
+  it('times out when RPC does not respond', async () => {
+    vi.useFakeTimers()
+
+    queryUrlMock.mockImplementation(
+      (_url, options) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        })
+    )
+
+    const promise = getZcashBranchIdHex()
+    const expectation = expect(promise).rejects.toThrow('Zcash RPC timed out')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expectation
   })
 })

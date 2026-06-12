@@ -2,6 +2,7 @@ import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 const cacheTtlMs = 60 * 60 * 1000
+const rpcTimeoutMs = 10_000
 const zcashRpcUrl = `${rootApiUrl}/zcash`
 
 type ZcashBlockchainInfoResponse = {
@@ -40,14 +41,31 @@ export const zcashBranchIdToNumber = (bigEndianHex: string): number =>
   Number.parseInt(assertFourByteHex(bigEndianHex), 16)
 
 const fetchZcashBranchIdHex = async (): Promise<string> => {
-  const response = await queryUrl<ZcashBlockchainInfoResponse>(zcashRpcUrl, {
-    body: {
-      jsonrpc: '1.0',
-      id: 'vultisig-sdk',
-      method: 'getblockchaininfo',
-      params: [],
-    },
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => {
+    controller.abort()
+  }, rpcTimeoutMs)
+
+  let response: ZcashBlockchainInfoResponse
+  try {
+    response = await queryUrl<ZcashBlockchainInfoResponse>(zcashRpcUrl, {
+      body: {
+        jsonrpc: '1.0',
+        id: 'vultisig-sdk',
+        method: 'getblockchaininfo',
+        params: [],
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('Zcash RPC timed out while fetching consensus branch id')
+    }
+
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (response.error) {
     throw new Error(`Zcash RPC error: ${response.error.message ?? 'unknown error'}`)
