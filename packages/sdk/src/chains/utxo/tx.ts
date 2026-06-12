@@ -456,6 +456,21 @@ export const ZCASH_BRANCH_ID_NU6_2 = 0x5437f330
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
 const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
 
+/**
+ * ZIP-317 conventional-fee floor (https://zips.z.cash/zip-0317). Nodes relay
+ * zero "unpaid actions", so a tx must pay 5,000 zats per logical action with
+ * a 2-action grace window. This builder emits at most two P2PKH outputs
+ * (ceil(68 / 34) = 2 actions), so actions reduce to max(2, inputCount).
+ * Canonical formula: packages/core/chain/chains/utxo/fee/zip317.ts.
+ */
+const ZCASH_MARGINAL_FEE = 5000n
+const ZCASH_GRACE_ACTIONS = 2n
+
+function zcashConventionalFee(inputCount: number): bigint {
+  const actions = BigInt(inputCount)
+  return ZCASH_MARGINAL_FEE * (actions > ZCASH_GRACE_ACTIONS ? actions : ZCASH_GRACE_ACTIONS)
+}
+
 function zcashPersonalization(prefix: string, branchId: number): Uint8Array {
   const prefixBytes = new TextEncoder().encode(prefix)
   if (prefixBytes.length === 16) {
@@ -751,7 +766,9 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   // Approximate tx size for fee calc — matches app's heuristic.
   const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
   const txSize = inputs.length * bytesPerInput + 2 * 34 + 10
-  const fee = BigInt(Math.ceil(txSize * opts.feeRate))
+  const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
+  const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
+  const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
     throw new Error(
