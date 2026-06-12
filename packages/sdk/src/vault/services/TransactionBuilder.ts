@@ -273,7 +273,7 @@ export class TransactionBuilder {
             })()
 
       // Get encoded signing inputs (compiled transaction data)
-      const txInputsArray = getEncodedSigningInputs({
+      const txInputsArray = await getEncodedSigningInputs({
         keysignPayload,
         walletCore,
         publicKey,

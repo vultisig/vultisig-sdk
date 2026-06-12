@@ -39,7 +39,7 @@ export const refinePolkadotChainSpecific = async ({
     },
   })
 
-  const [txInputData] = getEncodedSigningInputs({
+  const [txInputData] = await getEncodedSigningInputs({
     keysignPayload: payloadWithChainSpecific,
     walletCore,
   })

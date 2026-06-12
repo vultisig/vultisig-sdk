@@ -14,7 +14,7 @@ export const getSendFeeEstimate = async (input: BuildSendKeysignPayloadInput): P
     return cosmosSpecific.gas
   }
 
-  return getFeeAmount({
+  return await getFeeAmount({
     keysignPayload,
     walletCore: input.walletCore,
     publicKey: shouldBePresent(input.publicKey, 'publicKey required for fee estimate on this chain'),
