@@ -460,15 +460,20 @@ const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
  * ZIP-317 conventional-fee floor (https://zips.z.cash/zip-0317). Nodes relay
  * zero "unpaid actions", so a tx must pay 5,000 zats per logical action with
  * a 2-action grace window. This builder emits at most two P2PKH outputs
- * (ceil(68 / 34) = 2 actions), so actions reduce to max(2, inputCount).
+ * (ceil(68 / 34) = 2 actions), so actions reduce to
+ * max(2, ceil(input bytes / 150)).
  * Canonical formula: packages/core/chain/chains/utxo/fee/zip317.ts.
  */
 const ZCASH_MARGINAL_FEE = 5000n
 const ZCASH_GRACE_ACTIONS = 2n
+const ZCASH_P2PKH_INPUT_SIZE = 148n
+const ZCASH_INPUT_ACTION_SIZE = 150n
 
 function zcashConventionalFee(inputCount: number): bigint {
-  const actions = BigInt(inputCount)
-  return ZCASH_MARGINAL_FEE * (actions > ZCASH_GRACE_ACTIONS ? actions : ZCASH_GRACE_ACTIONS)
+  const inputBytes = BigInt(inputCount) * ZCASH_P2PKH_INPUT_SIZE
+  const inputActions = (inputBytes + ZCASH_INPUT_ACTION_SIZE - 1n) / ZCASH_INPUT_ACTION_SIZE
+  const actions = inputActions > ZCASH_GRACE_ACTIONS ? inputActions : ZCASH_GRACE_ACTIONS
+  return ZCASH_MARGINAL_FEE * actions
 }
 
 function zcashPersonalization(prefix: string, branchId: number): Uint8Array {
