@@ -41,6 +41,7 @@ import {
 } from '../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { buildCip20AuxData } from './cardano/buildCip20AuxData'
 import { compileTx } from './compileTx'
 
 const ECDSA_PRIVATE_KEY = new Uint8Array(32).fill(1)
@@ -412,8 +413,12 @@ describe('compileTx golden vectors', () => {
       ],
     })
 
+    // Mirror getCardanoSigningInputs: the resolver hands the CIP-20 CBOR to
+    // WalletCore via auxiliary_data, which commits its hash into the body.
+    const { auxDataCbor } = buildCip20AuxData(MEMO)
     const signingInput = TW.Cardano.Proto.SigningInput.create({
       ttl: Long.fromNumber(500_000),
+      auxiliaryData: auxDataCbor,
       transferMessage: TW.Cardano.Proto.Transfer.create({
         toAddress: recipient,
         changeAddress: sender,
@@ -433,7 +438,7 @@ describe('compileTx golden vectors', () => {
     })
     const txInputData = TW.Cardano.Proto.SigningInput.encode(signingInput).finish()
 
-    // Get the hash that MPC must sign (blake2b of the patched body)
+    // Get the hash that MPC must sign (blake2b of the aux-committed body)
     const hashes = getPreSigningHashes({ walletCore, chain: Chain.Cardano, txInputData, keysignPayload })
     const hashHex = hex(hashes[0])
 
@@ -470,24 +475,48 @@ describe('compileTx golden vectors', () => {
     expect(auxDecoded['674']).toBeDefined()
     expect(auxDecoded['674']!['msg']).toEqual([MEMO])
 
-    // Element [0]: tx body — key 7 must be blake2b-256 of the aux data CBOR
-    const bodyBytes = compiledOutput.encoded.slice(
-      // find body bytes: decode the outer array to get element [0] as bytes
-      // use the raw bytes — the body is the first element of the 0x84 array
-      0
-    )
-    // Verify txId = blake2b of the patched body (not the WalletCore body)
+    // Element [0]: tx body must commit blake2b-256(aux data) at key 7. cbor-x
+    // decodes the integer-keyed body map to an object with stringified keys.
+    const body = signedTxArray[0] as Record<string, Uint8Array>
+    expect(hex(body['7']!)).toBe(hex(blake2b(auxDataCbor, { dkLen: 32 })))
+
+    // WalletCore now commits the aux hash natively, so its pre-image data hash
+    // already equals the signed txId — no client-side patching involved.
     const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
       walletCore.TransactionCompiler.preImageHashes(walletCore.CoinType.cardano, txInputData)
     )
-    // The patched body hash should differ from WalletCore's plain dataHash
-    expect(hex(compiledOutput.txId)).not.toBe(hex(preOutput.dataHash))
-    // txId must equal hashes[0] (the hash MPC signed)
     expect(hex(compiledOutput.txId)).toBe(hashHex)
+    expect(hex(compiledOutput.txId)).toBe(hex(preOutput.dataHash))
 
-    // No-memo path is regression-guarded: same fixture without memo
-    const noMemoHashes = getPreSigningHashes({ walletCore, chain: Chain.Cardano, txInputData })
-    expect(hex(noMemoHashes[0])).toBe(hex(preOutput.dataHash))
+    // Regression guard: the same fixture without auxiliary data yields a
+    // different body hash (no key 7), and its signing hash is that plain hash.
+    const noMemoInput = TW.Cardano.Proto.SigningInput.encode(
+      TW.Cardano.Proto.SigningInput.create({
+        ttl: Long.fromNumber(500_000),
+        transferMessage: TW.Cardano.Proto.Transfer.create({
+          toAddress: recipient,
+          changeAddress: sender,
+          amount: Long.fromNumber(1_000_000),
+          forceFee: Long.fromNumber(170_000),
+        }),
+        utxos: [
+          TW.Cardano.Proto.TxInput.create({
+            outPoint: TW.Cardano.Proto.OutPoint.create({
+              txHash: bytesFromHex('11'.repeat(32)),
+              outputIndex: Long.fromNumber(0),
+            }),
+            address: sender,
+            amount: Long.fromNumber(2_000_000),
+          }),
+        ],
+      })
+    ).finish()
+    const noMemoPre = TW.TxCompiler.Proto.PreSigningOutput.decode(
+      walletCore.TransactionCompiler.preImageHashes(walletCore.CoinType.cardano, noMemoInput)
+    )
+    const noMemoHashes = getPreSigningHashes({ walletCore, chain: Chain.Cardano, txInputData: noMemoInput })
+    expect(hex(noMemoHashes[0])).toBe(hex(noMemoPre.dataHash))
+    expect(hex(preOutput.dataHash)).not.toBe(hex(noMemoPre.dataHash))
   })
 
   it('pins the custom Bittensor extrinsic assembly', () => {
