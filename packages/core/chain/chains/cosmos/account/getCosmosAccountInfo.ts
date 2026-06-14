@@ -2,7 +2,7 @@ import type { Pubkey } from '@cosmjs/amino'
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
-import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '../getCosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type LcdAccountResponse = {
@@ -104,7 +104,7 @@ const tryLcd = async (base: string, address: string): Promise<ParsedAccount | nu
 }
 
 const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
-  const base = cosmosRpcUrl[chain]
+  const base = getCosmosRpcUrl(chain)
   if (!base) return null
   const primary = await tryLcd(base, address)
   if (primary) return primary
