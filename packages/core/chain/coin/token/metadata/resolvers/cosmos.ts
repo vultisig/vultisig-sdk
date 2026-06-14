@@ -1,9 +1,5 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
-import {
-  getCosmosWasmTokenInfoUrl,
-  isCosmosWasmTokenId,
-} from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
-import { getCosmosRpcUrl } from '../../../../chains/cosmos/getCosmosRpcUrl'
+import { getCosmosWasmTokenInfoUrl, isCosmosWasmTokenId } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { CoinMetadata } from '@vultisig/core-chain/coin/Coin'
 import { knownCosmosTokens } from '@vultisig/core-chain/coin/knownTokens/cosmos'
@@ -12,6 +8,8 @@ import { getLastItem } from '@vultisig/lib-utils/array/getLastItem'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { asyncFallbackChain } from '@vultisig/lib-utils/promise/asyncFallbackChain'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+
+import { getCosmosRpcUrl } from '../../../../chains/cosmos/getCosmosRpcUrl'
 
 type DenomUnits = { denom: string; exponent: number }
 type DenomMetadata = {

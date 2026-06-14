@@ -18,13 +18,24 @@ import { Chain } from '@vultisig/core-chain/Chain'
  */
 const overridesByChain = new Map<string, string>()
 
-/** Synchronous lookup of the override URL for `chain`, or `undefined` when unset. */
-export const getCustomRpcOverride = (chain: Chain): string | undefined =>
-  overridesByChain.get(chain)
+// Trims surrounding whitespace and treats a blank URL as "no override", so an
+// empty string can never become an active override that breaks RPC resolution.
+const normalizeOverrideUrl = (url: string): string | undefined => {
+  const trimmed = url.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
 
-/** Persist a single override into the in-memory mirror. */
+/** Synchronous lookup of the override URL for `chain`, or `undefined` when unset. */
+export const getCustomRpcOverride = (chain: Chain): string | undefined => overridesByChain.get(chain)
+
+/** Persist a single override into the in-memory mirror. A blank URL clears it. */
 export const setCustomRpcOverride = (chain: Chain, url: string): void => {
-  overridesByChain.set(chain, url)
+  const normalized = normalizeOverrideUrl(url)
+  if (normalized) {
+    overridesByChain.set(chain, normalized)
+  } else {
+    overridesByChain.delete(chain)
+  }
 }
 
 /** Remove a single override from the in-memory mirror. */
@@ -37,17 +48,17 @@ export const clearCustomRpcOverride = (chain: Chain): void => {
  * from persisted storage at launch and after each write, so the networking
  * layer always reflects the latest persisted state.
  */
-export const setCustomRpcOverrides = (
-  overrides: Partial<Record<Chain, string>>
-): void => {
+export const setCustomRpcOverrides = (overrides: Partial<Record<Chain, string>>): void => {
   overridesByChain.clear()
   for (const [chain, url] of Object.entries(overrides)) {
-    if (url) {
-      overridesByChain.set(chain, url)
+    if (typeof url === 'string') {
+      const normalized = normalizeOverrideUrl(url)
+      if (normalized) {
+        overridesByChain.set(chain, normalized)
+      }
     }
   }
 }
 
 /** Snapshot of all current overrides, keyed by chain. */
-export const getCustomRpcOverrides = (): Partial<Record<Chain, string>> =>
-  Object.fromEntries(overridesByChain)
+export const getCustomRpcOverrides = (): Partial<Record<Chain, string>> => Object.fromEntries(overridesByChain)

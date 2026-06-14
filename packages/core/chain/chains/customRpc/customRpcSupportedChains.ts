@@ -1,8 +1,4 @@
-import {
-  Chain,
-  EvmChain,
-  IbcEnabledCosmosChain,
-} from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 
 /**
  * Single source of truth for which chains accept an app-wide custom RPC
@@ -22,17 +18,12 @@ export const customRpcSupportedEvmChains: EvmChain[] = Object.values(EvmChain)
  * Cosmos chains that accept a custom RPC override. The IBC-enabled set excludes
  * the vault-based chains (THORChain / MayaChain) and QBTC by construction.
  */
-export const customRpcSupportedCosmosChains: IbcEnabledCosmosChain[] =
-  Object.values(IbcEnabledCosmosChain)
+export const customRpcSupportedCosmosChains: IbcEnabledCosmosChain[] = Object.values(IbcEnabledCosmosChain)
 
 /** All chains that accept a custom RPC override, in display order (EVM then Cosmos). */
-export const customRpcSupportedChains: Chain[] = [
-  ...customRpcSupportedEvmChains,
-  ...customRpcSupportedCosmosChains,
-]
+export const customRpcSupportedChains: Chain[] = [...customRpcSupportedEvmChains, ...customRpcSupportedCosmosChains]
 
 const supportedChainIds = new Set<string>(customRpcSupportedChains)
 
 /** Whether `chain` accepts an app-wide custom RPC override. */
-export const isCustomRpcSupported = (chain: Chain): boolean =>
-  supportedChainIds.has(chain)
+export const isCustomRpcSupported = (chain: Chain): boolean => supportedChainIds.has(chain)

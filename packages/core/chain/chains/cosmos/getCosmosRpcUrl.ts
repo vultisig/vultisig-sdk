@@ -8,5 +8,4 @@ import { cosmosRpcUrl } from './cosmosRpcUrl'
  * custom RPC override when one is set and falling back to the default endpoint
  * otherwise. Byte-identical to the default when no override is configured.
  */
-export const getCosmosRpcUrl = (chain: CosmosChain): string =>
-  getCustomRpcOverride(chain) ?? cosmosRpcUrl[chain]
+export const getCosmosRpcUrl = (chain: CosmosChain): string => getCustomRpcOverride(chain) ?? cosmosRpcUrl[chain]

@@ -1,19 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { Chain, CosmosChain, EvmChain, UtxoChain } from '../../Chain'
-import { getEvmRpcUrl } from '../evm/chainInfo'
-import { getCosmosRpcUrl } from '../cosmos/getCosmosRpcUrl'
 import { cosmosRpcUrl } from '../cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '../cosmos/getCosmosRpcUrl'
+import { getEvmRpcUrl } from '../evm/chainInfo'
 import {
   clearCustomRpcOverride,
   getCustomRpcOverride,
   setCustomRpcOverride,
   setCustomRpcOverrides,
 } from './customRpcOverrides'
-import {
-  customRpcSupportedChains,
-  isCustomRpcSupported,
-} from './customRpcSupportedChains'
+import { customRpcSupportedChains, isCustomRpcSupported } from './customRpcSupportedChains'
 
 const ethDefaultRpcUrl = getEvmRpcUrl(EvmChain.Ethereum)
 
@@ -36,9 +33,7 @@ describe('custom RPC override registry', () => {
   })
 
   it('resolves the override Cosmos LCD URL when set, default otherwise', () => {
-    expect(getCosmosRpcUrl(CosmosChain.Cosmos)).toBe(
-      cosmosRpcUrl[CosmosChain.Cosmos]
-    )
+    expect(getCosmosRpcUrl(CosmosChain.Cosmos)).toBe(cosmosRpcUrl[CosmosChain.Cosmos])
 
     setCustomRpcOverride(CosmosChain.Cosmos, 'https://my-cosmos.example')
     expect(getCosmosRpcUrl(CosmosChain.Cosmos)).toBe('https://my-cosmos.example')
@@ -46,9 +41,7 @@ describe('custom RPC override registry', () => {
 
   it('keeps overrides isolated per chain', () => {
     setCustomRpcOverride(EvmChain.Ethereum, 'https://eth-node.example/')
-    expect(getCustomRpcOverride(EvmChain.Ethereum)).toBe(
-      'https://eth-node.example/'
-    )
+    expect(getCustomRpcOverride(EvmChain.Ethereum)).toBe('https://eth-node.example/')
     expect(getCustomRpcOverride(EvmChain.Avalanche)).toBeUndefined()
   })
 
@@ -57,15 +50,17 @@ describe('custom RPC override registry', () => {
     setCustomRpcOverrides({ [EvmChain.Base]: 'https://base-node.example/' })
 
     expect(getCustomRpcOverride(EvmChain.Ethereum)).toBeUndefined()
-    expect(getCustomRpcOverride(EvmChain.Base)).toBe(
-      'https://base-node.example/'
-    )
+    expect(getCustomRpcOverride(EvmChain.Base)).toBe('https://base-node.example/')
   })
 })
 
 describe('custom RPC supported chains', () => {
   it('includes every EVM chain and the IBC-enabled Cosmos chains', () => {
-    expect(customRpcSupportedChains).toContain(EvmChain.Ethereum)
+    for (const chain of Object.values(EvmChain)) {
+      expect(customRpcSupportedChains).toContain(chain)
+      expect(isCustomRpcSupported(chain)).toBe(true)
+    }
+
     expect(customRpcSupportedChains).toContain(CosmosChain.Osmosis)
   })
 

@@ -1,5 +1,4 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { rootApiUrl } from '@vultisig/core-config'
 import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
@@ -20,6 +19,8 @@ import {
   sei,
   zksync,
 } from 'viem/chains'
+
+import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
 export const hyperliquidBlockExplorerUrl = 'https://liquidscan.io'
@@ -94,8 +95,7 @@ export const evmChainInfo = recordMap(evmDefaultChainInfo, (chain, chainKey) => 
  * override when one is set and falling back to the default endpoint otherwise.
  * Byte-identical to the default when no override is configured.
  */
-export const getEvmRpcUrl = (chain: EvmChain): string =>
-  getCustomRpcOverride(chain) ?? evmChainRpcUrls[chain]
+export const getEvmRpcUrl = (chain: EvmChain): string => getCustomRpcOverride(chain) ?? evmChainRpcUrls[chain]
 
 export const getEvmChainId = (chain: EvmChain): string => {
   return evmChainId[chain]

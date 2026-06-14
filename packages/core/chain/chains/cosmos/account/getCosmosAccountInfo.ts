@@ -2,8 +2,9 @@ import type { Pubkey } from '@cosmjs/amino'
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
-import { getCosmosRpcUrl } from '../getCosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+
+import { getCosmosRpcUrl } from '../getCosmosRpcUrl'
 
 type LcdAccountResponse = {
   account?: {

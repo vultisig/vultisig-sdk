@@ -26,11 +26,7 @@ export type RpcHealthResult =
 const probeTimeoutMs = 8_000
 const cosmosNodeInfoPath = 'cosmos/base/tendermint/v1beta1/node_info'
 
-const probeEvm = async (
-  chain: Chain,
-  url: string,
-  signal: AbortSignal
-): Promise<RpcHealthResult> => {
+const probeEvm = async (chain: Chain, url: string, signal: AbortSignal): Promise<RpcHealthResult> => {
   const startedAt = Date.now()
   const response = await fetch(url, {
     method: 'POST',
@@ -49,19 +45,25 @@ const probeEvm = async (
     return { status: 'unreachable' }
   }
 
-  const body: { result?: unknown } = await response.json()
-  if (typeof body.result !== 'string') {
+  // A non-JSON body means the endpoint is alive but not speaking JSON-RPC, so
+  // classify it as invalidResponse rather than letting it fall through to the
+  // caller's catch (which would mislabel a live endpoint as unreachable).
+  let body: { result?: unknown }
+  try {
+    body = await response.json()
+  } catch {
+    return { status: 'invalidResponse' }
+  }
+
+  // Strict hex match: Number.parseInt stops at the first invalid digit, so
+  // "0x1g" would otherwise parse to 1 and could false-match a chain id.
+  if (typeof body.result !== 'string' || !/^0x[0-9a-f]+$/i.test(body.result)) {
     return { status: 'invalidResponse' }
   }
 
   const reportedChainId = Number.parseInt(body.result, 16)
-  if (Number.isNaN(reportedChainId)) {
-    return { status: 'invalidResponse' }
-  }
 
-  const expectedChainId = isChainOfKind(chain, 'evm')
-    ? Number.parseInt(getEvmChainId(chain), 16)
-    : undefined
+  const expectedChainId = isChainOfKind(chain, 'evm') ? Number.parseInt(getEvmChainId(chain), 16) : undefined
 
   if (expectedChainId === undefined) {
     return { status: 'reachable', latencyMs, networkVerified: false }
@@ -72,35 +74,22 @@ const probeEvm = async (
     : { status: 'wrongChain' }
 }
 
-const probeCosmos = async (
-  url: string,
-  signal: AbortSignal
-): Promise<RpcHealthResult> => {
+const probeCosmos = async (url: string, signal: AbortSignal): Promise<RpcHealthResult> => {
   const startedAt = Date.now()
   // The LCD node_info endpoint confirms liveness. We don't verify the reported
   // network id against the chain here, so this stays a liveness-only result.
-  const response = await fetch(
-    `${url.replace(/\/+$/, '')}/${cosmosNodeInfoPath}`,
-    { signal }
-  )
+  const response = await fetch(`${url.replace(/\/+$/, '')}/${cosmosNodeInfoPath}`, { signal })
   const latencyMs = Date.now() - startedAt
 
-  return response.ok
-    ? { status: 'reachable', latencyMs, networkVerified: false }
-    : { status: 'unreachable' }
+  return response.ok ? { status: 'reachable', latencyMs, networkVerified: false } : { status: 'unreachable' }
 }
 
-const probeReachability = async (
-  url: string,
-  signal: AbortSignal
-): Promise<RpcHealthResult> => {
+const probeReachability = async (url: string, signal: AbortSignal): Promise<RpcHealthResult> => {
   const startedAt = Date.now()
   const response = await fetch(url, { signal })
   const latencyMs = Date.now() - startedAt
 
-  return response.ok
-    ? { status: 'reachable', latencyMs, networkVerified: false }
-    : { status: 'unreachable' }
+  return response.ok ? { status: 'reachable', latencyMs, networkVerified: false } : { status: 'unreachable' }
 }
 
 type ProbeRpcHealthInput = {
@@ -114,10 +103,7 @@ type ProbeRpcHealthInput = {
  * back to a plain reachability check. A timeout or transport error resolves to
  * `unreachable` rather than throwing.
  */
-export const probeRpcHealth = async ({
-  chain,
-  url,
-}: ProbeRpcHealthInput): Promise<RpcHealthResult> => {
+export const probeRpcHealth = async ({ chain, url }: ProbeRpcHealthInput): Promise<RpcHealthResult> => {
   const endpoint = url.trim()
   if (!endpoint) {
     return { status: 'unreachable' }
