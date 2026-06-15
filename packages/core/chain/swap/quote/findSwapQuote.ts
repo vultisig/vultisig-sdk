@@ -58,6 +58,15 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
   affiliateConfig?: SwapAffiliateConfig
+  /**
+   * Optional external recipient for the swapped output. When omitted the swap
+   * pays out to the user's own derived address (existing behavior). When set,
+   * only providers that route the output to an explicit address are used —
+   * native THORChain/MayaChain (memo destination) and CowSwap (order
+   * `receiver`); aggregators that would silently pay the initiator are skipped
+   * so funds are never sent to the wrong address.
+   */
+  recipient?: string
 }
 
 type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
@@ -208,6 +217,7 @@ export const findSwapQuote = async ({
   referral,
   vultDiscountTier,
   affiliateConfig,
+  recipient,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -230,6 +240,13 @@ export const findSwapQuote = async ({
 
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
+  // When the caller requests an external recipient, restrict routing to the
+  // providers that send the swapped output to an explicit address (native +
+  // CowSwap). Aggregators that pay the initiator would silently misroute funds,
+  // so they are not offered for custom-recipient swaps until they thread the
+  // receiver through (tracked in vultisig/vultisig-windows#4131).
+  const hasCustomRecipient = recipient !== undefined
+
   const involvedChains = [from.chain, to.chain]
 
   const matchingSwapChains = nativeSwapChains.filter(swapChain =>
@@ -244,7 +261,7 @@ export const findSwapQuote = async ({
         const amountNumber = bigIntToNumber(amount, fromDecimals)
         const native = await getNativeSwapQuote({
           swapChain,
-          destination: to.address,
+          destination: recipient ?? to.address,
           from,
           to,
           amount: amountNumber,
@@ -291,7 +308,7 @@ export const findSwapQuote = async ({
             buyToken,
             sellAmount: chainAmount,
             from: from.address,
-            receiver: from.address,
+            receiver: recipient ?? from.address,
             chainConfig: cowChainConfig,
             affiliateBps,
           })
@@ -302,6 +319,7 @@ export const findSwapQuote = async ({
     }
 
     if (
+      !hasCustomRecipient &&
       isOneOf(fromChain, kyberSwapEnabledChains) &&
       isOneOf(toChain, kyberSwapEnabledChains) &&
       fromChain === toChain
@@ -328,7 +346,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
+    if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
         fetch: async (): Promise<SwapQuote> => {
@@ -346,7 +364,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
         fetch: async (): Promise<SwapQuote> => {
@@ -369,7 +387,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
         fetch: async (): Promise<SwapQuote> => {
