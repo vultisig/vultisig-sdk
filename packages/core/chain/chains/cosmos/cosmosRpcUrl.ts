@@ -3,6 +3,8 @@ import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
 
+import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
+
 type CosmosWasmContract = {
   chain: CosmosChain
   id: string
@@ -32,7 +34,7 @@ export const isCosmosWasmTokenId = (id?: string): id is string => {
 }
 
 export const getCosmosWasmSmartQueryUrl = ({ chain, id }: CosmosWasmContract, query: object) =>
-  `${cosmosRpcUrl[chain]}/cosmwasm/wasm/v1/contract/${id}/smart/${base64Encode(JSON.stringify(query))}`
+  `${getCustomRpcOverride(chain) ?? cosmosRpcUrl[chain]}/cosmwasm/wasm/v1/contract/${id}/smart/${base64Encode(JSON.stringify(query))}`
 
 export const getCosmosWasmTokenBalanceUrl = ({ chain, id, address }: AccountCoinKey<CosmosChain>) =>
   getCosmosWasmSmartQueryUrl(

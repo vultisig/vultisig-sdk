@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { Chain, CosmosChain, EvmChain, UtxoChain } from '../../Chain'
-import { cosmosRpcUrl } from '../cosmos/cosmosRpcUrl'
+import { cosmosRpcUrl, getCosmosWasmTokenBalanceUrl } from '../cosmos/cosmosRpcUrl'
 import { getCosmosRpcUrl } from '../cosmos/getCosmosRpcUrl'
 import { getEvmRpcUrl } from '../evm/chainInfo'
 import {
@@ -37,6 +37,25 @@ describe('custom RPC override registry', () => {
 
     setCustomRpcOverride(CosmosChain.Cosmos, 'https://my-cosmos.example')
     expect(getCosmosRpcUrl(CosmosChain.Cosmos)).toBe('https://my-cosmos.example')
+  })
+
+  it('routes CW20 wasm queries through the override host', () => {
+    const wasmId = `osmo1${'a'.repeat(40)}`
+
+    const defaultUrl = getCosmosWasmTokenBalanceUrl({
+      chain: CosmosChain.Osmosis,
+      id: wasmId,
+      address: 'osmo1abc',
+    })
+    expect(defaultUrl.startsWith(cosmosRpcUrl[CosmosChain.Osmosis])).toBe(true)
+
+    setCustomRpcOverride(CosmosChain.Osmosis, 'https://my-cosmos.example')
+    const overriddenUrl = getCosmosWasmTokenBalanceUrl({
+      chain: CosmosChain.Osmosis,
+      id: wasmId,
+      address: 'osmo1abc',
+    })
+    expect(overriddenUrl.startsWith('https://my-cosmos.example/')).toBe(true)
   })
 
   it('keeps overrides isolated per chain', () => {
