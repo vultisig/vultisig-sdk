@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.15.2",
+  "version": "2.16.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -225,6 +225,11 @@
       "import": "./dist/chains/cosmos/gas.js",
       "default": "./dist/chains/cosmos/gas.js"
     },
+    "./chains/cosmos/getCosmosRpcUrl": {
+      "types": "./dist/chains/cosmos/getCosmosRpcUrl.d.ts",
+      "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
+      "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
+    },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/protoEncoding.js",
@@ -439,6 +444,21 @@
       "types": "./dist/chains/cosmos/utils/parseCosmosSerialized.d.ts",
       "import": "./dist/chains/cosmos/utils/parseCosmosSerialized.js",
       "default": "./dist/chains/cosmos/utils/parseCosmosSerialized.js"
+    },
+    "./chains/customRpc/customRpcOverrides": {
+      "types": "./dist/chains/customRpc/customRpcOverrides.d.ts",
+      "import": "./dist/chains/customRpc/customRpcOverrides.js",
+      "default": "./dist/chains/customRpc/customRpcOverrides.js"
+    },
+    "./chains/customRpc/customRpcSupportedChains": {
+      "types": "./dist/chains/customRpc/customRpcSupportedChains.d.ts",
+      "import": "./dist/chains/customRpc/customRpcSupportedChains.js",
+      "default": "./dist/chains/customRpc/customRpcSupportedChains.js"
+    },
+    "./chains/customRpc/rpcHealthProbe": {
+      "types": "./dist/chains/customRpc/rpcHealthProbe.d.ts",
+      "import": "./dist/chains/customRpc/rpcHealthProbe.js",
+      "default": "./dist/chains/customRpc/rpcHealthProbe.js"
     },
     "./chains/evm/chainInfo": {
       "types": "./dist/chains/evm/chainInfo.d.ts",

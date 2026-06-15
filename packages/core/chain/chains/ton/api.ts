@@ -5,12 +5,15 @@ import { tonAddressToRaw } from './address'
 
 const tonApiUrl = `${rootApiUrl}/ton`
 
+type JettonWallet = {
+  address: string
+  owner: string
+  jetton: string
+  balance: string
+}
+
 type JettonWalletResponse = {
-  jetton_wallets: Array<{
-    address: string
-    jetton: string
-    balance: string
-  }>
+  jetton_wallets: JettonWallet[]
   address_book: Record<
     string,
     {
@@ -24,38 +27,52 @@ type GetJettonWalletInput = {
   jettonMasterAddress: string
 }
 
+const matchesRawAddress = (value: string, expected: string): boolean => value.toLowerCase() === expected.toLowerCase()
+
 /**
- * Builds the Vultisig proxy jetton wallets query URL.
- * The proxy expects `owner_id` + `jetton_master_id` (not `owner_address` / `jetton_address`).
- * Using the wrong param names returns an empty array without an error, silently
- * making every jetton balance call return 0 and every transfer fail with "no jetton wallet".
+ * Queries the Vultisig proxy (pass-through to toncenter v3) for the jetton wallet
+ * matching a given owner + jetton master.
+ *
+ * toncenter filters on `owner_address` + `jetton_address`. We additionally filter
+ * the response client-side: if the proxy ever ignores those params it returns an
+ * unfiltered global list, and blindly taking the first entry would surface a
+ * stranger's balance (e.g. a whale's 200M USDT instead of the user's 0).
  */
-const getJettonWalletsUrl = ({ ownerAddress, jettonMasterAddress }: GetJettonWalletInput): string => {
+const queryOwnerJettonWallet = async ({
+  ownerAddress,
+  jettonMasterAddress,
+}: GetJettonWalletInput): Promise<{
+  wallet?: JettonWallet
+  addressBook: JettonWalletResponse['address_book']
+}> => {
   const rawOwner = tonAddressToRaw(ownerAddress)
   const rawMaster = tonAddressToRaw(jettonMasterAddress)
 
-  return `${tonApiUrl}/v3/jetton/wallets?owner_id=${rawOwner}&jetton_master_id=${rawMaster}`
+  const url = `${tonApiUrl}/v3/jetton/wallets?owner_address=${rawOwner}&jetton_address=${rawMaster}`
+  const response = await queryUrl<JettonWalletResponse>(url)
+
+  const wallet = response.jetton_wallets.find(
+    ({ owner, jetton }) => matchesRawAddress(owner, rawOwner) && matchesRawAddress(jetton, rawMaster)
+  )
+
+  return { wallet, addressBook: response.address_book }
 }
 
 /** Resolves the user-friendly jetton wallet address for a given owner and jetton master. */
 export const getJettonWalletAddress = async (input: GetJettonWalletInput): Promise<string> => {
-  const response = await queryUrl<JettonWalletResponse>(getJettonWalletsUrl(input))
-
-  const jettonAddress = response.jetton_wallets[0]?.address
-  if (!jettonAddress) {
+  const { wallet, addressBook } = await queryOwnerJettonWallet(input)
+  if (!wallet) {
     throw new Error('No jetton wallet found')
   }
 
-  const addressEntry = response.address_book[jettonAddress]
-  return addressEntry?.user_friendly || jettonAddress
+  return addressBook[wallet.address]?.user_friendly || wallet.address
 }
 
 /** Fetches the balance of a specific jetton for a given owner address. */
 export const getJettonBalance = async (input: GetJettonWalletInput): Promise<bigint> => {
-  const response = await queryUrl<JettonWalletResponse>(getJettonWalletsUrl(input))
+  const { wallet } = await queryOwnerJettonWallet(input)
 
-  const balance = response.jetton_wallets[0]?.balance
-  return BigInt(balance || '0')
+  return BigInt(wallet?.balance || '0')
 }
 
 type AddressInformationResponse = {

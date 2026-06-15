@@ -1,5 +1,24 @@
 # @vultisig/cli
 
+## 2.3.1
+
+### Patch Changes
+
+- [#701](https://github.com/vultisig/vultisig-sdk/pull/701) [`1bcb195`](https://github.com/vultisig/vultisig-sdk/commit/1bcb195013b9730bf6ed0e2c42209d2285a357e8) Thanks [@neavra](https://github.com/neavra)! - Fix EIP-712 domain hashing for domains that omit standard fields. The agent executor's `sign_typed_data` hardcoded the `EIP712Domain` type to all four standard fields while skipping absent values during data encoding, producing non-canonical hashes for domains without `verifyingContract` (e.g. Polymarket's `ClobAuthDomain`) — CLOB rejected every auto-submitted order with `401 Invalid L1 Request headers`. The domain type is now derived from the fields actually present, matching viem/ethers canonical hashing (verified live against the Polymarket CLOB: L1 auth now accepted and L2 API credentials derived).
+
+- Updated dependencies [[`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c)]:
+  - @vultisig/core-chain@2.16.1
+  - @vultisig/sdk@2.3.1
+
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/core-chain@2.16.0
+  - @vultisig/sdk@2.3.0
+  - @vultisig/rujira@36.0.0
+
 ## 2.2.0
 
 ### Patch Changes
