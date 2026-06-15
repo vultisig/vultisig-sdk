@@ -568,11 +568,28 @@ program
   .description('Verify vault with email verification code')
   .option('-r, --resend', 'Resend verification email')
   .option('--code <code>', 'Verification code')
-  .option('--email <email>', 'Email address (required for --resend)')
+  .option('--email <email>', 'Email address (required for --resend / --auto-verify)')
   .option('--password <password>', 'Vault password (required for --resend)')
+  .option(
+    '--auto-verify',
+    'Poll AgentMail for the OTP instead of prompting (headless/CI). Needs AGENTMAIL_API_KEY (or --agentmail-key), --email, and --name'
+  )
+  .option('--agentmail-key <key>', 'AgentMail API key (defaults to AGENTMAIL_API_KEY env)')
+  .option('--name <name>', 'Vault name, used to match the AgentMail verification message (with --auto-verify)')
   .action(
     withExit(
-      async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
+      async (
+        vaultId: string,
+        options: {
+          resend?: boolean
+          code?: string
+          email?: string
+          password?: string
+          autoVerify?: boolean
+          agentmailKey?: string
+          name?: string
+        }
+      ) => {
         const context = await init(program.opts().vault)
         const verified = await executeVerify(context, vaultId, options)
         if (!verified) {

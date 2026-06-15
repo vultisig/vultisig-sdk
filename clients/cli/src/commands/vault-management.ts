@@ -318,7 +318,21 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
 export async function executeVerify(
   ctx: CommandContext,
   vaultId: string,
-  options: { resend?: boolean; code?: string; email?: string; password?: string } = {}
+  options: {
+    resend?: boolean
+    code?: string
+    email?: string
+    password?: string
+    /**
+     * Poll AgentMail for the OTP instead of prompting (headless/CI). Requires
+     * AGENTMAIL_API_KEY (env or --agentmail-key) + the inbox email (--email)
+     * + the vault name (--name) so the message can be matched.
+     */
+    autoVerify?: boolean
+    agentmailKey?: string
+    name?: string
+    signal?: AbortSignal
+  } = {}
 ): Promise<boolean> {
   if (options.resend) {
     // Get email and password - prompt if not provided via flags
@@ -367,6 +381,30 @@ export async function executeVerify(
   }
 
   let code = options.code
+
+  // Headless OTP: poll AgentMail for the code instead of prompting. Needs the
+  // inbox email + vault name to match the message, and the API key (flag/env).
+  if (!code && options.autoVerify) {
+    const apiKey = options.agentmailKey || process.env.AGENTMAIL_API_KEY
+    const inboxEmail = options.email || process.env.AGENTMAIL_EMAIL
+    const vaultName = options.name
+    if (!apiKey || !inboxEmail || !vaultName) {
+      error(
+        '--auto-verify needs an AgentMail key (AGENTMAIL_API_KEY or --agentmail-key), the inbox email (--email), and the vault name (--name).'
+      )
+      return false
+    }
+    const { fetchVaultOtp } = await import('../lib/agentmail-otp')
+    const spinner = createSpinner('Waiting for the AgentMail verification code…')
+    try {
+      code = await fetchVaultOtp({ inboxEmail, apiKey, vaultName, signal: options.signal })
+      spinner.succeed('Verification code received from AgentMail.')
+    } catch (otpErr: any) {
+      spinner.fail('Could not auto-fetch the verification code')
+      error(otpErr?.message || 'AgentMail OTP polling failed.')
+      return false
+    }
+  }
 
   if (!code) {
     const codeAnswer = await inquirer.prompt([
