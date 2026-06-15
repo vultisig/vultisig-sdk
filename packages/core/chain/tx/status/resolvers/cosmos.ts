@@ -9,12 +9,16 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { TxStatusResolver } from '../resolver'
 
 export const getCosmosTxStatus: TxStatusResolver<CosmosChain> = async ({ chain, hash }) => {
-  const client = await getCosmosClient(chain)
+  const { data: client, error: clientError } = await attempt(getCosmosClient(chain))
+
+  if (clientError || !client) {
+    return { status: 'pending', isKnown: false }
+  }
 
   const { data: tx, error } = await attempt(client.getTx(hash))
 
   if (error || !tx) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const status = tx.code === 0 ? 'success' : 'error'
