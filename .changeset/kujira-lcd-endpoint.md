@@ -1,5 +1,6 @@
 ---
 "@vultisig/core-chain": patch
+"@vultisig/sdk": patch
 ---
 
 fix(cosmos): use polkachu for the Kujira LCD + RPC endpoints
