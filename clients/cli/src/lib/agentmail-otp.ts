@@ -12,7 +12,7 @@
 const AGENTMAIL_BASE = 'https://api.agentmail.to/v0/inboxes'
 const OTP_CODE_RE = /\b(\d{4,6})\b/
 
-export interface AgentMailOtpOptions {
+export type AgentMailOtpOptions = {
   /** AgentMail inbox address the verification email is sent to. */
   inboxEmail: string
   /** AgentMail API key (Bearer). */
@@ -27,7 +27,7 @@ export interface AgentMailOtpOptions {
   signal?: AbortSignal
 }
 
-interface AgentMailMessage {
+type AgentMailMessage = {
   message_id: string
   subject?: string
   preview?: string
