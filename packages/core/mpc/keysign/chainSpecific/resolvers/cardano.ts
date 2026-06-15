@@ -3,7 +3,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getCardanoCurrentSlot } from '@vultisig/core-chain/chains/cardano/client/currentSlot'
 import { cardanoDefaultFee } from '@vultisig/core-chain/chains/cardano/config'
 import { cardanoSlotOffset } from '@vultisig/core-chain/chains/cardano/config'
-import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { getPreSigningOutput } from '@vultisig/core-mpc/keysign/preSigningOutput'
 import { CardanoChainSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { TW, type WalletCore } from '@trustwallet/wallet-core'
@@ -57,9 +57,7 @@ const estimateCardanoByteFee = async ({
       walletCore,
     })
     const txInputData = TW.Cardano.Proto.SigningInput.encode(signingInput).finish()
-    const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
-      walletCore.TransactionCompiler.preImageHashes(getCoinType({ chain: Chain.Cardano, walletCore }), txInputData)
-    )
+    const preOutput = getPreSigningOutput({ walletCore, txInputData, chain: Chain.Cardano })
     const nextByteFee =
       CARDANO_A_PARAM * BigInt(getCardanoPricedSize({ txBodyCbor: preOutput.data, memo: keysignPayload.memo })) +
       CARDANO_B_PARAM
