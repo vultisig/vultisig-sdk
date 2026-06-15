@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.15.0",
+  "version": "2.15.2",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -750,6 +750,11 @@
       "import": "./dist/chains/utxo/fee/byteFee.js",
       "default": "./dist/chains/utxo/fee/byteFee.js"
     },
+    "./chains/utxo/fee/zip317": {
+      "types": "./dist/chains/utxo/fee/zip317.d.ts",
+      "import": "./dist/chains/utxo/fee/zip317.js",
+      "default": "./dist/chains/utxo/fee/zip317.js"
+    },
     "./chains/utxo/minUtxo": {
       "types": "./dist/chains/utxo/minUtxo.d.ts",
       "import": "./dist/chains/utxo/minUtxo.js",
@@ -784,6 +789,11 @@
       "types": "./dist/chains/utxo/tx/UtxoScriptType.d.ts",
       "import": "./dist/chains/utxo/tx/UtxoScriptType.js",
       "default": "./dist/chains/utxo/tx/UtxoScriptType.js"
+    },
+    "./chains/utxo/zcashBranchId": {
+      "types": "./dist/chains/utxo/zcashBranchId.d.ts",
+      "import": "./dist/chains/utxo/zcashBranchId.js",
+      "default": "./dist/chains/utxo/zcashBranchId.js"
     },
     "./coin/AccountCoin": {
       "types": "./dist/coin/AccountCoin.d.ts",

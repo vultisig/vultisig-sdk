@@ -20,9 +20,9 @@ const resolvers: Record<BlockaidValidationSupportedChainKind, BlockaidTxValidati
   sui: getSuiBlockaidTxValidationInput,
 }
 
-export const getBlockaidTxValidationInput = (
+export const getBlockaidTxValidationInput = async (
   input: Omit<BlockaidTxValidationInputResolverInput, 'chain'>
-): BlockaidTxValidationInput | null => {
+): Promise<BlockaidTxValidationInput | null> => {
   const chain = getKeysignChain(input.payload)
   if (!isOneOf(chain, blockaidValidationSupportedChains)) {
     return null
@@ -30,7 +30,7 @@ export const getBlockaidTxValidationInput = (
 
   const chainKind = getChainKind(chain)
 
-  const data = resolvers[chainKind]({
+  const data = await resolvers[chainKind]({
     ...input,
     chain,
   })
