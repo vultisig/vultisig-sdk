@@ -36,14 +36,14 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
  * `getCosmosGasLimit` defaults, which are calibrated for `bank.MsgSend` and
  * `ibc.MsgTransfer`.
  *
- * TerraClassic's classic-terra fork has a known gas-accounting quirk:
- * `MsgDelegate` runs out of gas at almost exactly the requested limit
- * (`gasUsed = gasWanted + ~500`, repeatedly observed at multiple limits).
- * The `ValuePerByte` location in the error points at the gas meter
- * charging for byte writes inside the treasury / tax post-handler, which
- * isn't reflected in the standard SDK gas estimate. The pragmatic fix is
- * a generous over-allocation — fees only pay for `gas_used`, so
- * overestimating costs nothing on success but prevents the failure mode.
+ * TerraClassic's classic-terra fork has a gas-accounting quirk in the
+ * treasury / tax post-handler: the `ValuePerByte` meter charges for byte
+ * writes that the standard SDK gas estimate omits. In practice this adds
+ * ~200-800 gas on top of the base delegate cost (~2M), so a 2M limit fails
+ * consistently ("out of gas in location: ValuePerByte; gasWanted: 2000000,
+ * gasUsed: 200X"). 3M sits safely under the 100 LUNC fee floor
+ * (3M * 28.325 uluna/gas = ~84.97 LUNC < 100 LUNC) while leaving plenty of
+ * headroom for the actual spend.
  */
 const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: 350_000n,
@@ -53,7 +53,7 @@ const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Noble]: 350_000n,
   [Chain.Akash]: 350_000n,
   [Chain.Terra]: 500_000n,
-  [Chain.TerraClassic]: 2_000_000n,
+  [Chain.TerraClassic]: 3_000_000n,
 }
 
 type GetCosmosStakingGasLimitInput = {
