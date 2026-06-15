@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { rootApiUrl } from '@vultisig/core-config'
 import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
@@ -19,8 +20,6 @@ import {
   sei,
   zksync,
 } from 'viem/chains'
-
-import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
 export const hyperliquidBlockExplorerUrl = 'https://liquidscan.io'

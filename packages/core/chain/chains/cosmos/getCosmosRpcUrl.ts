@@ -1,6 +1,6 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 
-import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
 import { cosmosRpcUrl } from './cosmosRpcUrl'
 
 /**

@@ -1,10 +1,10 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { getCosmosWasmTokenBalanceUrl, isCosmosWasmTokenId } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { getDenom } from '@vultisig/core-chain/coin/utils/getDenom'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { getCosmosRpcUrl } from '../../../chains/cosmos/getCosmosRpcUrl'
 import { CoinBalanceResolver } from '../resolver'
 
 type LcdBalanceResponse = {

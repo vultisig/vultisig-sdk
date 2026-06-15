@@ -1,9 +1,8 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { base64Encode } from '@vultisig/lib-utils/base64Encode'
-
-import { getCustomRpcOverride } from '../customRpc/customRpcOverrides'
 
 type CosmosWasmContract = {
   chain: CosmosChain
