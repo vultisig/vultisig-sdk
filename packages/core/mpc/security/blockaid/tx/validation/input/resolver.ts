@@ -21,5 +21,5 @@ export type BlockaidTxValidationInputResolver<
     walletCore: WalletCore
     chain: T
   },
-  BlockaidTxValidationInput['data'] | null
+  BlockaidTxValidationInput['data'] | null | Promise<BlockaidTxValidationInput['data'] | null>
 >

@@ -90,12 +90,14 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'usd-coin',
     },
+    // USDD canonical token. USDDOLD is the deprecated migration source and should not be used for new transfers.
     TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz: {
       ticker: 'USDD',
       logo: 'usdd',
       decimals: 18,
       priceProviderId: 'usdd',
     },
+    // stUSDT JustLend liquid staking receipt token, not the Sunswap LP token with a similar symbol.
     TThzxNRLrW2Brp9DcTQU8i4Wd9udCWEdZ3: {
       ticker: 'stUSDT',
       logo: 'stusdt',

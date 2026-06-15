@@ -11,11 +11,11 @@ export const getEvmTxStatus: TxStatusResolver<EvmChain> = async ({ chain, hash }
   const { data, error } = await attempt(client.getTransactionReceipt({ hash: hash as `0x${string}` }))
 
   if (error) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   if (!data) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const status = data.status === 'success' ? 'success' : 'error'

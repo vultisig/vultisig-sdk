@@ -13,6 +13,14 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   keysignPayload,
   walletCore,
 }) => {
+  // dApp-supplied PTBs (`signData.signSui`) are already fully built: coins,
+  // gas budget and reference gas price are baked into the BCS bytes that
+  // `getSuiSigningInputs` forwards verbatim. There are no construction inputs
+  // to fetch, so return an empty SuiSpecific instead of hitting the RPC.
+  if (keysignPayload.signData.case === 'signSui') {
+    return create(SuiSpecificSchema, {})
+  }
+
   const coin = getKeysignCoin(keysignPayload)
   const { address } = coin
   const client = getSuiClient()

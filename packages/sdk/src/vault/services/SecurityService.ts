@@ -17,7 +17,7 @@ export class SecurityService {
     const walletCore = await this.wasmProvider.getWalletCore()
 
     // Build chain-specific input (returns null if chain unsupported)
-    const input = getBlockaidTxValidationInput({
+    const input = await getBlockaidTxValidationInput({
       payload: keysignPayload,
       walletCore,
     })
@@ -43,7 +43,7 @@ export class SecurityService {
     const walletCore = await this.wasmProvider.getWalletCore()
 
     // Build chain-specific input (returns null if chain unsupported)
-    const input = getBlockaidTxSimulationInput({
+    const input = await getBlockaidTxSimulationInput({
       payload: keysignPayload,
       walletCore,
     })

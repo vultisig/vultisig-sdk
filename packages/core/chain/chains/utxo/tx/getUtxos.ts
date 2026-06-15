@@ -17,7 +17,9 @@ export const getUtxos = async (account: ChainAccount<UtxoChain>): Promise<ChainP
   const { utxo } = data[account.address]
 
   return utxo
-    .filter(({ value }) => value > minUtxo[account.chain])
+    .filter(
+      ({ block_id, is_spendable, value }) => value > minUtxo[account.chain] && is_spendable !== false && block_id > 0
+    )
     .map(({ transaction_hash, value, index }) => ({
       hash: transaction_hash,
       amount: BigInt(value),

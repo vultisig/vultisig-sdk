@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file vultisig/keysign/v1/wasm_execute_contract_payload.proto.
  */
 export const file_vultisig_keysign_v1_wasm_execute_contract_payload: GenFile = /*@__PURE__*/
-  fileDesc("Cjd2dWx0aXNpZy9rZXlzaWduL3YxL3dhc21fZXhlY3V0ZV9jb250cmFjdF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxIisKCkNvc21vc0NvaW4SDQoFZGVub20YASABKAkSDgoGYW1vdW50GAIgASgJIq8BCglDb3Ntb3NGZWUSLwoGYW1vdW50GAEgAygLMh8udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NDb2luEgsKA2dhcxgCIAEoCRISCgVwYXllchgDIAEoCUgAiAEBEhQKB2dyYW50ZXIYBCABKAlIAYgBARIWCglmZWVfcGF5ZXIYBSABKAlIAogBAUIICgZfcGF5ZXJCCgoIX2dyYW50ZXJCDAoKX2ZlZV9wYXllciIoCglDb3Ntb3NNc2cSDAoEdHlwZRgBIAEoCRINCgV2YWx1ZRgCIAEoCSJmCglTaWduQW1pbm8SKwoDZmVlGAEgASgLMh4udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NGZWUSLAoEbXNncxgCIAMoCzIeLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zTXNnImMKClNpZ25EaXJlY3QSEgoKYm9keV9ieXRlcxgBIAEoCRIXCg9hdXRoX2luZm9fYnl0ZXMYAiABKAkSEAoIY2hhaW5faWQYAyABKAkSFgoOYWNjb3VudF9udW1iZXIYBCABKAkiJgoKU2lnblNvbGFuYRIYChByYXdfdHJhbnNhY3Rpb25zGAEgAygJInIKClRvbk1lc3NhZ2USCgoCdG8YASABKAkSDgoGYW1vdW50GAIgASgJEhQKB3BheWxvYWQYAyABKAlIAIgBARIXCgpzdGF0ZV9pbml0GAQgASgJSAGIAQFCCgoIX3BheWxvYWRCDQoLX3N0YXRlX2luaXQiQAoHU2lnblRvbhI1Cgx0b25fbWVzc2FnZXMYAiADKAsyHy52dWx0aXNpZy5rZXlzaWduLnYxLlRvbk1lc3NhZ2UikwEKGldhc21FeGVjdXRlQ29udHJhY3RQYXlsb2FkEhYKDnNlbmRlcl9hZGRyZXNzGAEgASgJEhgKEGNvbnRyYWN0X2FkZHJlc3MYAiABKAkSEwoLZXhlY3V0ZV9tc2cYAyABKAkSLgoFY29pbnMYBCADKAsyHy52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0NvaW4i9wEKDEJpdGNvaW5JbnB1dBIMCgRoYXNoGAEgASgJEg0KBWluZGV4GAIgASgNEg4KBmFtb3VudBgDIAEoAxIWCg5zY3JpcHRfcHViX2tleRgEIAEoCRITCgtzY3JpcHRfdHlwZRgFIAEoCRIZCgxzaWdoYXNoX3R5cGUYBiABKA1IAIgBARIPCgdpc19vdXJzGAcgASgIEhoKDXJlZGVlbV9zY3JpcHQYCCABKAlIAYgBARIVCghzZXF1ZW5jZRgJIAEoDUgCiAEBQg8KDV9zaWdoYXNoX3R5cGVCEAoOX3JlZGVlbV9zY3JpcHRCCwoJX3NlcXVlbmNlIosBCg1CaXRjb2luT3V0cHV0Eg4KBmFtb3VudBgBIAEoAxIPCgdhZGRyZXNzGAIgASgJEhsKDm9wX3JldHVybl9kYXRhGAMgASgJSACIAQESFgoOc2NyaXB0X3B1Yl9rZXkYBCABKAkSEQoJaXNfY2hhbmdlGAUgASgIQhEKD19vcF9yZXR1cm5fZGF0YSKYAQoLU2lnbkJpdGNvaW4SDwoHdmVyc2lvbhgBIAEoDRIQCghsb2NrdGltZRgCIAEoDRIxCgZpbnB1dHMYAyADKAsyIS52dWx0aXNpZy5rZXlzaWduLnYxLkJpdGNvaW5JbnB1dBIzCgdvdXRwdXRzGAQgAygLMiIudnVsdGlzaWcua2V5c2lnbi52MS5CaXRjb2luT3V0cHV0QlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw==");
+  fileDesc("Cjd2dWx0aXNpZy9rZXlzaWduL3YxL3dhc21fZXhlY3V0ZV9jb250cmFjdF9wYXlsb2FkLnByb3RvEhN2dWx0aXNpZy5rZXlzaWduLnYxIisKCkNvc21vc0NvaW4SDQoFZGVub20YASABKAkSDgoGYW1vdW50GAIgASgJIq8BCglDb3Ntb3NGZWUSLwoGYW1vdW50GAEgAygLMh8udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NDb2luEgsKA2dhcxgCIAEoCRISCgVwYXllchgDIAEoCUgAiAEBEhQKB2dyYW50ZXIYBCABKAlIAYgBARIWCglmZWVfcGF5ZXIYBSABKAlIAogBAUIICgZfcGF5ZXJCCgoIX2dyYW50ZXJCDAoKX2ZlZV9wYXllciIoCglDb3Ntb3NNc2cSDAoEdHlwZRgBIAEoCRINCgV2YWx1ZRgCIAEoCSJmCglTaWduQW1pbm8SKwoDZmVlGAEgASgLMh4udnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NGZWUSLAoEbXNncxgCIAMoCzIeLnZ1bHRpc2lnLmtleXNpZ24udjEuQ29zbW9zTXNnImMKClNpZ25EaXJlY3QSEgoKYm9keV9ieXRlcxgBIAEoCRIXCg9hdXRoX2luZm9fYnl0ZXMYAiABKAkSEAoIY2hhaW5faWQYAyABKAkSFgoOYWNjb3VudF9udW1iZXIYBCABKAkiJgoKU2lnblNvbGFuYRIYChByYXdfdHJhbnNhY3Rpb25zGAEgAygJInIKClRvbk1lc3NhZ2USCgoCdG8YASABKAkSDgoGYW1vdW50GAIgASgJEhQKB3BheWxvYWQYAyABKAlIAIgBARIXCgpzdGF0ZV9pbml0GAQgASgJSAGIAQFCCgoIX3BheWxvYWRCDQoLX3N0YXRlX2luaXQiQAoHU2lnblRvbhI1Cgx0b25fbWVzc2FnZXMYAiADKAsyHy52dWx0aXNpZy5rZXlzaWduLnYxLlRvbk1lc3NhZ2UiIgoHU2lnblN1aRIXCg91bnNpZ25lZF90eF9tc2cYASABKAkikwEKGldhc21FeGVjdXRlQ29udHJhY3RQYXlsb2FkEhYKDnNlbmRlcl9hZGRyZXNzGAEgASgJEhgKEGNvbnRyYWN0X2FkZHJlc3MYAiABKAkSEwoLZXhlY3V0ZV9tc2cYAyABKAkSLgoFY29pbnMYBCADKAsyHy52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0NvaW4i9wEKDEJpdGNvaW5JbnB1dBIMCgRoYXNoGAEgASgJEg0KBWluZGV4GAIgASgNEg4KBmFtb3VudBgDIAEoAxIWCg5zY3JpcHRfcHViX2tleRgEIAEoCRITCgtzY3JpcHRfdHlwZRgFIAEoCRIZCgxzaWdoYXNoX3R5cGUYBiABKA1IAIgBARIPCgdpc19vdXJzGAcgASgIEhoKDXJlZGVlbV9zY3JpcHQYCCABKAlIAYgBARIVCghzZXF1ZW5jZRgJIAEoDUgCiAEBQg8KDV9zaWdoYXNoX3R5cGVCEAoOX3JlZGVlbV9zY3JpcHRCCwoJX3NlcXVlbmNlIosBCg1CaXRjb2luT3V0cHV0Eg4KBmFtb3VudBgBIAEoAxIPCgdhZGRyZXNzGAIgASgJEhsKDm9wX3JldHVybl9kYXRhGAMgASgJSACIAQESFgoOc2NyaXB0X3B1Yl9rZXkYBCABKAkSEQoJaXNfY2hhbmdlGAUgASgIQhEKD19vcF9yZXR1cm5fZGF0YSKYAQoLU2lnbkJpdGNvaW4SDwoHdmVyc2lvbhgBIAEoDRIQCghsb2NrdGltZRgCIAEoDRIxCgZpbnB1dHMYAyADKAsyIS52dWx0aXNpZy5rZXlzaWduLnYxLkJpdGNvaW5JbnB1dBIzCgdvdXRwdXRzGAQgAygLMiIudnVsdGlzaWcua2V5c2lnbi52MS5CaXRjb2luT3V0cHV0QlQKE3Z1bHRpc2lnLmtleXNpZ24udjFaOGdpdGh1Yi5jb20vdnVsdGlzaWcvY29tbW9uZGF0YS9nby92dWx0aXNpZy9rZXlzaWduL3YxO3YxugICVlNiBnByb3RvMw");
 
 /**
  * @generated from message vultisig.keysign.v1.CosmosCoin
@@ -216,6 +216,29 @@ export const SignTonSchema: GenMessage<SignTon> = /*@__PURE__*/
   messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 7);
 
 /**
+ * Pre-built Sui Programmable Transaction Block supplied by a dApp via the
+ * Sui Wallet Standard. The bytes are already serialized in BCS form, ready
+ * for the signing pipeline to digest and sign
+ *
+ * @generated from message vultisig.keysign.v1.SignSui
+ */
+export type SignSui = Message<"vultisig.keysign.v1.SignSui"> & {
+  /**
+   * base64-encoded TransactionData BCS bytes
+   *
+   * @generated from field: string unsigned_tx_msg = 1;
+   */
+  unsignedTxMsg: string;
+};
+
+/**
+ * Describes the message vultisig.keysign.v1.SignSui.
+ * Use `create(SignSuiSchema)` to create a new message.
+ */
+export const SignSuiSchema: GenMessage<SignSui> = /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 8);
+
+/**
  * @generated from message vultisig.keysign.v1.WasmExecuteContractPayload
  */
 export type WasmExecuteContractPayload = Message<"vultisig.keysign.v1.WasmExecuteContractPayload"> & {
@@ -245,7 +268,7 @@ export type WasmExecuteContractPayload = Message<"vultisig.keysign.v1.WasmExecut
  * Use `create(WasmExecuteContractPayloadSchema)` to create a new message.
  */
 export const WasmExecuteContractPayloadSchema: GenMessage<WasmExecuteContractPayload> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 8);
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 9);
 
 /**
  * A single Bitcoin transaction input decomposed from a PSBT.
@@ -323,7 +346,7 @@ export type BitcoinInput = Message<"vultisig.keysign.v1.BitcoinInput"> & {
  * Use `create(BitcoinInputSchema)` to create a new message.
  */
 export const BitcoinInputSchema: GenMessage<BitcoinInput> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 9);
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 10);
 
 /**
  * A single Bitcoin transaction output decomposed from a PSBT.
@@ -372,7 +395,7 @@ export type BitcoinOutput = Message<"vultisig.keysign.v1.BitcoinOutput"> & {
  * Use `create(BitcoinOutputSchema)` to create a new message.
  */
 export const BitcoinOutputSchema: GenMessage<BitcoinOutput> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 10);
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 11);
 
 /**
  * Structured PSBT representation for Bitcoin dApp signing.
@@ -417,5 +440,5 @@ export type SignBitcoin = Message<"vultisig.keysign.v1.SignBitcoin"> & {
  * Use `create(SignBitcoinSchema)` to create a new message.
  */
 export const SignBitcoinSchema: GenMessage<SignBitcoin> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 11);
+  messageDesc(file_vultisig_keysign_v1_wasm_execute_contract_payload, 12);
 

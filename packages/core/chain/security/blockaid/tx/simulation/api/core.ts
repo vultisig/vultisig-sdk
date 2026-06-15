@@ -3,7 +3,179 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
 import { Coin } from '../../../../../coin/Coin'
-import { BlockaidEvmBalanceChange, BlockaidEvmSimulationInfo, BlockaidSolanaSimulationInfo } from '../core'
+import {
+  BlockaidEvmBalanceChange,
+  BlockaidEvmSimulationInfo,
+  BlockaidSolanaSimulationInfo,
+  BlockaidSuiAsset,
+  BlockaidSuiSimulationInfo,
+} from '../core'
+
+const SUI_NATIVE_COIN_TYPE = '0x2::sui::SUI'
+
+// Blockaid's `/sui/transaction/scan` simulation block exposes per-asset diffs
+// under `account_summary.account_assets_diffs` (plural). Asset entries use
+// `type === 'NATIVE'` for SUI and `type === 'COIN'` for fungible Move coins,
+// with the Move type tag at `asset.id`. `raw_value` is returned as a JS
+// number for Sui, in the asset's base units. The parser falls back to `null`
+// on any shape it doesn't recognise so a Blockaid response change surfaces
+// as "no preview" instead of crashing the popup.
+type BlockaidSuiRawAssetSide = {
+  usd_price?: number
+  summary?: string
+  value?: number | string
+  raw_value: number | string
+}
+
+type BlockaidSuiRawAsset = {
+  type?: 'NATIVE' | 'COIN' | 'TOKEN' | 'SUI' | string
+  asset_type?: 'NATIVE' | 'COIN' | 'TOKEN' | 'SUI' | string
+  name?: string
+  symbol?: string
+  // Sui Move type tag, e.g. `0xa9…::navx::NAVX`. Native SUI has no `id`.
+  id?: string
+  coin_type?: string
+  address?: string
+  decimals: number
+  logo?: string
+  logo_url?: string
+}
+
+type BlockaidSuiRawAssetDiff = {
+  asset: BlockaidSuiRawAsset
+  in: BlockaidSuiRawAssetSide | null
+  out: BlockaidSuiRawAssetSide | null
+  asset_type?: 'NATIVE' | 'COIN' | 'TOKEN' | 'SUI' | string
+}
+
+export type BlockaidSuiSimulation = {
+  status?: 'Success' | 'Failure'
+  account_summary?: {
+    account_assets_diffs?: BlockaidSuiRawAssetDiff[]
+    // Older / alternate key — keep the singular fallback in case Blockaid
+    // swaps naming without notice.
+    account_assets_diff?: BlockaidSuiRawAssetDiff[]
+  }
+}
+
+const isNativeSui = (asset: BlockaidSuiRawAsset): boolean =>
+  asset.type === 'NATIVE' ||
+  asset.type === 'SUI' ||
+  asset.asset_type === 'NATIVE' ||
+  asset.coin_type === SUI_NATIVE_COIN_TYPE ||
+  (!asset.id && !asset.coin_type && !asset.address && asset.symbol === 'SUI')
+
+const coinTypeFromAsset = (asset: BlockaidSuiRawAsset): string | null => {
+  if (asset.id) return asset.id
+  if (asset.coin_type) return asset.coin_type
+  if (asset.address) return asset.address
+  if (isNativeSui(asset)) return SUI_NATIVE_COIN_TYPE
+  return null
+}
+
+// Convert Blockaid's `raw_value` (always an integer in the asset's base unit,
+// emitted as either a JS number or a numeric string) to a bigint. Returns
+// `null` for any input we can't safely represent — `NaN`, `Infinity`, unsafe
+// JS numbers (precision loss above 2^53), or non-integer strings. The parser
+// propagates the `null` so a malformed amount degrades to "no preview"
+// instead of throwing or quietly corrupting the displayed value.
+const toBigInt = (raw: number | string): bigint | null => {
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || !Number.isSafeInteger(raw)) return null
+    return BigInt(raw)
+  }
+  if (!/^-?\d+$/.test(raw)) return null
+  return BigInt(raw)
+}
+
+/**
+ * Parse a Blockaid Sui simulation into the user's net balance changes,
+ * mirroring how Solana classifies into a `swap` or `transfer` headline.
+ *
+ * Only emits a headline when the relevant diff set is unambiguous:
+ *   - exactly one out-only diff → `transfer`
+ *   - exactly two diffs, one out-only + one in-only on different assets
+ *     → `swap`
+ *
+ * Anything more complex (e.g. a swap that also sends a third asset)
+ * returns `null` — a partial "you're swapping…" headline would hide the
+ * additional movement and mislead users approving the transaction. The
+ * popup falls back to the decoded-command view when this returns `null`.
+ */
+export const parseBlockaidSuiSimulation = async (
+  simulation: BlockaidSuiSimulation
+): Promise<BlockaidSuiSimulationInfo | null> => {
+  const assetDiffs = simulation.account_summary?.account_assets_diffs ?? simulation.account_summary?.account_assets_diff
+  if (!assetDiffs || assetDiffs.length === 0) return null
+
+  // When we have 3 items and one is native SUI, filter it out and use the
+  // other two tokens — the native SUI is likely the gas charge, not part of
+  // the swap itself. Same heuristic as Solana.
+  let relevantDiffs = assetDiffs
+  if (assetDiffs.length === 3) {
+    const nativeIdx = assetDiffs.findIndex(diff => isNativeSui(diff.asset))
+    if (nativeIdx !== -1) {
+      relevantDiffs = assetDiffs.filter((_, i) => i !== nativeIdx)
+    }
+  }
+
+  if (relevantDiffs.length === 1) {
+    const [diff] = relevantDiffs
+    // A single diff with an `in` side but no `out` would be a pure receive;
+    // we don't surface that as a "you're sending" headline.
+    if (!diff.out || diff.in) return null
+    const from = blockaidSuiAssetFrom(diff.asset)
+    if (!from) return null
+    const fromAmount = toBigInt(diff.out.raw_value)
+    if (fromAmount === null) return null
+    return {
+      transfer: {
+        from,
+        fromAmount,
+      },
+    }
+  }
+
+  // Strict two-diff swap: one diff is out-only, the other is in-only, and
+  // they're on different assets. Anything else (mixed in+out on one side,
+  // three+ relevant diffs, same-asset refund pair) returns `null` rather
+  // than risk a misleading partial headline.
+  if (relevantDiffs.length !== 2) return null
+
+  const [a, b] = relevantDiffs
+  const outDiff = !a.in && a.out ? a : !b.in && b.out ? b : null
+  const inDiff = !a.out && a.in ? a : !b.out && b.in ? b : null
+  if (!outDiff || !inDiff || outDiff === inDiff) return null
+  if (!outDiff.out || !inDiff.in) return null
+
+  const from = blockaidSuiAssetFrom(outDiff.asset)
+  const to = blockaidSuiAssetFrom(inDiff.asset)
+  if (!from || !to || from.coinType === to.coinType) return null
+
+  const fromAmount = toBigInt(outDiff.out.raw_value)
+  const toAmount = toBigInt(inDiff.in.raw_value)
+  if (fromAmount === null || toAmount === null) return null
+
+  return {
+    swap: {
+      from,
+      to,
+      fromAmount,
+      toAmount,
+    },
+  }
+}
+
+const blockaidSuiAssetFrom = (asset: BlockaidSuiRawAsset): BlockaidSuiAsset | null => {
+  const coinType = coinTypeFromAsset(asset)
+  if (!coinType) return null
+  return {
+    coinType,
+    symbol: asset.symbol || coinType.split('::').pop() || coinType,
+    decimals: asset.decimals,
+    logo: asset.logo_url ?? asset.logo,
+  }
+}
 
 export type BlockaidSolanaSimulation = {
   account_summary: {

@@ -440,6 +440,50 @@ export class AgentSession {
     body: () => Promise<RecentAction>,
     input?: Record<string, unknown>
   ): Promise<RecentAction> {
+    // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
+    // explicitly approved before it signs + broadcasts. This is the single
+    // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
+    // gate here covers every signing route (incl. both legs of a multi-leg
+    // swap, which sign in one body() call). In ask mode this defaults to DENY
+    // unless `--yes` was passed; the TUI prompts y/N and pipe mode defers to
+    // the host — see each UICallbacks.requestConfirmation impl.
+    if (PASSWORD_REQUIRED_TOOLS.has(toolName)) {
+      // getPendingSummary describes the tx_ready buffer, which only sign_tx
+      // consumes. A declined sign_tx leaves that buffer populated, so a later
+      // sign_typed_data must NOT pick it up — the user would be approving
+      // typed-data while reading a stale send/swap summary.
+      const summary =
+        (toolName === 'sign_tx' ? this.executor.getPendingSummary() : null) ??
+        `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
+      const approved = await ui.requestConfirmation(summary)
+      if (!approved) {
+        // Drop the rejected envelope so it can't linger into later turns
+        // (stale legs/summary). sign_typed_data has no buffered tx to drop.
+        if (toolName === 'sign_tx') {
+          this.executor.clearPendingTransaction()
+        }
+        const declined: RecentAction = {
+          tool: toolName,
+          success: false,
+          data: {
+            error: 'Transaction not confirmed',
+            code: AgentErrorCode.CONFIRMATION_REQUIRED,
+            proposed: summary,
+          },
+        }
+        ui.onToolCall(toolCallId, toolName, input)
+        ui.onToolResult(
+          toolCallId,
+          toolName,
+          false,
+          declined.data,
+          'Transaction not confirmed',
+          AgentErrorCode.CONFIRMATION_REQUIRED
+        )
+        return declined
+      }
+    }
+
     // Delay caching the prompted password until after body() succeeds so a
     // wrong password triggers a re-prompt on the next call rather than
     // staying silently locked in to a bad value.

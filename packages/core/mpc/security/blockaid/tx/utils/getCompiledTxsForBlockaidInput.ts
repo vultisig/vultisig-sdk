@@ -17,7 +17,7 @@ type Input = {
   walletCore: WalletCore
 }
 
-export const getCompiledTxsForBlockaidInput = ({ payload, walletCore }: Input) => {
+export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: Input) => {
   const chain = getKeysignChain(payload)
   const chainKind = getChainKind(chain)
 
@@ -29,7 +29,7 @@ export const getCompiledTxsForBlockaidInput = ({ payload, walletCore }: Input) =
     walletCore,
   })
 
-  const inputs = getEncodedSigningInputs({
+  const inputs = await getEncodedSigningInputs({
     keysignPayload: payload,
     walletCore,
     publicKey,

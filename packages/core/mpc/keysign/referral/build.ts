@@ -52,7 +52,7 @@ export const buildReferralKeysignPayload = async ({
 
   const balance = await getCoinBalance(coin)
 
-  keysignPayload = refineKeysignAmount({
+  keysignPayload = await refineKeysignAmount({
     keysignPayload,
     walletCore,
     publicKey,

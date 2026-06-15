@@ -64,10 +64,20 @@ describe('AskInterface.getCallbacks', () => {
     expect(result.response).toBe('final answer')
   })
 
-  it('requestConfirmation auto-returns true', async () => {
-    const ask = createAsk()
+  it('requestConfirmation defaults to DENY (no --yes) so a misrouted prompt cannot sign', async () => {
+    const ask = createAsk() // autoApprove defaults to false
     const ui = ask.getCallbacks()
-    await expect(ui.requestConfirmation('Proceed?')).resolves.toBe(true)
+    await expect(ui.requestConfirmation('swap 0.01 USDC → ETH on Base')).resolves.toBe(false)
+  })
+
+  it('requestConfirmation returns true only when autoApprove (--yes) is set', async () => {
+    const session = {
+      getConversationId: () => 'conv-1',
+      sendMessage: vi.fn(),
+    } as unknown as AgentSession
+    const ask = new AskInterface(session, false, true) // --yes
+    const ui = ask.getCallbacks()
+    await expect(ui.requestConfirmation('send 0.001 ETH on Base')).resolves.toBe(true)
   })
 
   it('requestPassword throws without --password', async () => {

@@ -10,15 +10,17 @@ import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { BlockaidTxSimulationInputResolver, BlockaidTxSimulationInputResolverInput } from './resolver'
 import { getEvmBlockaidTxSimulationInput } from './resolvers/evm'
 import { getSolanaBlockaidTxSimulationInput } from './resolvers/solana'
+import { getSuiBlockaidTxSimulationInput } from './resolvers/sui'
 
 const resolvers: Record<BlockaidSimulationSupportedChainKind, BlockaidTxSimulationInputResolver<any>> = {
   solana: getSolanaBlockaidTxSimulationInput,
   evm: getEvmBlockaidTxSimulationInput,
+  sui: getSuiBlockaidTxSimulationInput,
 }
 
-export const getBlockaidTxSimulationInput = (
+export const getBlockaidTxSimulationInput = async (
   input: Omit<BlockaidTxSimulationInputResolverInput, 'chain'>
-): BlockaidTxSimulationInput | null => {
+): Promise<BlockaidTxSimulationInput | null> => {
   const chain = getKeysignChain(input.payload)
   if (!isOneOf(chain, blockaidSimulationSupportedChains)) {
     return null
@@ -26,7 +28,7 @@ export const getBlockaidTxSimulationInput = (
 
   const chainKind = getChainKind(chain)
 
-  const data = resolvers[chainKind]({
+  const data = await resolvers[chainKind]({
     ...input,
     chain,
   })
