@@ -136,6 +136,26 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
   })
 })
 
+describe('getSuiSigningInputs — native send', () => {
+  it('rejects a memo (Sui has no native memo field)', async () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      memo: 'deposit-12345',
+    })
+
+    expect(() =>
+      getSuiSigningInputs({ keysignPayload, walletCore })
+    ).toThrow('do not support a memo')
+  })
+})
+
 describe('getSuiChainSpecific — signSui (pre-built PTB)', () => {
   it('returns an empty SuiSpecific without touching the RPC', async () => {
     const chainSpecific = await getSuiChainSpecific({
