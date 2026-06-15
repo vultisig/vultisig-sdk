@@ -22,7 +22,7 @@ import {
 } from 'viem/chains'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
-export const hyperliquidBlockExplorerUrl = 'https://liquidscan.io'
+export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io'
 const hyperliquidNativeCoin = chainFeeCoin[EvmChain.Hyperliquid]
 
 export const hyperliquid = defineChain({
@@ -39,7 +39,7 @@ export const hyperliquid = defineChain({
     public: { http: [hyperliquidRpcUrl] },
   },
   blockExplorers: {
-    default: { name: 'LiquidScan', url: hyperliquidBlockExplorerUrl },
+    default: { name: 'Hypurrscan', url: hyperliquidBlockExplorerUrl },
   },
 })
 

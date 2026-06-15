@@ -13,7 +13,9 @@ export const cosmosRpcUrl: Record<CosmosChain, string> = {
   Cosmos: 'https://cosmos-rest.publicnode.com',
   Osmosis: 'https://osmosis-rest.publicnode.com',
   Dydx: 'https://dydx-rest.publicnode.com',
-  Kujira: 'https://kujira-rest.publicnode.com',
+  // kujira-rest.publicnode.com returns HTTP 403 "unsupported platform"; use polkachu
+  // (same provider Noble uses below + COSMOS_LCD_FALLBACK_URLS in getCosmosAccountInfo).
+  Kujira: 'https://kujira-api.polkachu.com',
   Terra: 'https://terra-lcd.publicnode.com',
   TerraClassic: 'https://terra-classic-lcd.publicnode.com',
   Noble: 'https://noble-api.polkachu.com',
