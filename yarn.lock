@@ -1001,31 +1001,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@bigmi/core@npm:^0.7.1":
-  version: 0.7.1
-  resolution: "@bigmi/core@npm:0.7.1"
-  dependencies:
-    "@noble/hashes": "npm:^1.8.0"
-    bech32: "npm:^2.0.0"
-    bitcoinjs-lib: "npm:^7.0.1"
-    bs58: "npm:^6.0.0"
-    eventemitter3: "npm:^5.0.4"
-    zustand: "npm:^5.0.11"
-  peerDependencies:
-    bs58: ^6.0.0
-  checksum: 10c0/8e076b17a19d38dc21146a8a4ad9761021e857e6154f0579d7f806ba4e5506b2931129fe6952c8f106ba3a8551157ac9c41da97468e16843ab0739ca021a92a9
-  languageName: node
-  linkType: hard
-
-"@bitcoinerlab/secp256k1@npm:^1.2.0":
-  version: 1.2.0
-  resolution: "@bitcoinerlab/secp256k1@npm:1.2.0"
-  dependencies:
-    "@noble/curves": "npm:^1.7.0"
-  checksum: 10c0/ab5196e6052b60cbfee347434105dee59ecd93cb73473706252d35581b63dec2f4241b9e5ce7d5bbb062fb3fa9898a78660c886be8ae2d375480080c30a3a4b3
-  languageName: node
-  linkType: hard
-
 "@bufbuild/protobuf@npm:^2.12.0":
   version: 2.12.0
   resolution: "@bufbuild/protobuf@npm:2.12.0"
@@ -3369,36 +3344,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lifi/sdk@npm:^3.15.5, @lifi/sdk@npm:^3.16.2":
-  version: 3.16.3
-  resolution: "@lifi/sdk@npm:3.16.3"
+"@lifi/sdk@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "@lifi/sdk@npm:4.0.0"
   dependencies:
-    "@bigmi/core": "npm:^0.7.1"
-    "@bitcoinerlab/secp256k1": "npm:^1.2.0"
-    "@lifi/types": "npm:17.65.0"
-    "@mysten/sui": "npm:^1.45.2"
-    "@mysten/wallet-standard": "npm:^0.19.9"
-    "@noble/curves": "npm:^1.9.7"
-    "@solana/wallet-adapter-base": "npm:^0.9.27"
-    "@solana/web3.js": "npm:^1.98.4"
-    bech32: "npm:^2.0.0"
-    bitcoinjs-lib: "npm:^7.0.1"
-    bs58: "npm:^6.0.0"
-    viem: "npm:^2.47.2"
-  peerDependencies:
-    "@solana/wallet-adapter-base": ^0.9.0
-    "@solana/web3.js": ^1.98.0
-    viem: ^2.21.0
-  checksum: 10c0/be86937783509303a10f92bb2a97723e6b7e6cc604c9adbddb55833e685b623ebdc7a5749835ad5cd59f4eeac939cdc26ddb931ef3872536ace4c7d722d55690
+    "@lifi/types": "npm:17.82.1"
+  checksum: 10c0/7a7310c5ecb2cb33b262a633676418191f305386e823a69dd15725d39b91a100a5ec78bc82a8d4cc132af4a5351a435f9f90c529eb1119c424bbd5afd77edec4
   languageName: node
   linkType: hard
 
-"@lifi/types@npm:17.65.0":
-  version: 17.65.0
-  resolution: "@lifi/types@npm:17.65.0"
-  dependencies:
-    viem: "npm:^2.33.2"
-  checksum: 10c0/7655ea71009ee2bd7fcd5b0117ea359dc66dcd325e1f7d24703c76fc0e25b5053e8f7ff502b1b78fdb92c3d876791778a929af8abadfc56b6900ed57b76abcb9
+"@lifi/types@npm:17.82.1":
+  version: 17.82.1
+  resolution: "@lifi/types@npm:17.82.1"
+  checksum: 10c0/756489d8308849d1ed86dd441defa19567122fab1699a98df7a6952cde47697ce330bc15091882a6ec3010f1d8d42506cd2b1de5d67a48bb26bd96bb664df8fe
   languageName: node
   linkType: hard
 
@@ -3524,16 +3482,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/bcs@npm:1.9.2":
-  version: 1.9.2
-  resolution: "@mysten/bcs@npm:1.9.2"
-  dependencies:
-    "@mysten/utils": "npm:0.2.0"
-    "@scure/base": "npm:^1.2.6"
-  checksum: 10c0/121a5520f1945333cf34ed655e6d35e73d3ae8a07f415f0a511533e45b7850598ad0878284752a94df560c893e6f3150d64b67545189e9a52dae065d37610bba
-  languageName: node
-  linkType: hard
-
 "@mysten/bcs@npm:^2.0.5":
   version: 2.0.5
   resolution: "@mysten/bcs@npm:2.0.5"
@@ -3541,29 +3489,6 @@ __metadata:
     "@mysten/utils": "npm:^0.3.3"
     "@scure/base": "npm:^2.0.0"
   checksum: 10c0/ef86f7deb9376e337b8dd6e55a13a8f12d3ef21eb0dd01f7a5410f5105ff0f19560d9d74d00fc07e0912c26469b26d079ca2b5201abcc978a5efa15f1e876e3e
-  languageName: node
-  linkType: hard
-
-"@mysten/sui@npm:1.45.2, @mysten/sui@npm:^1.45.2":
-  version: 1.45.2
-  resolution: "@mysten/sui@npm:1.45.2"
-  dependencies:
-    "@graphql-typed-document-node/core": "npm:^3.2.0"
-    "@mysten/bcs": "npm:1.9.2"
-    "@mysten/utils": "npm:0.2.0"
-    "@noble/curves": "npm:=1.9.4"
-    "@noble/hashes": "npm:^1.8.0"
-    "@protobuf-ts/grpcweb-transport": "npm:^2.11.1"
-    "@protobuf-ts/runtime": "npm:^2.11.1"
-    "@protobuf-ts/runtime-rpc": "npm:^2.11.1"
-    "@scure/base": "npm:^1.2.6"
-    "@scure/bip32": "npm:^1.7.0"
-    "@scure/bip39": "npm:^1.6.0"
-    gql.tada: "npm:^1.8.13"
-    graphql: "npm:^16.11.0"
-    poseidon-lite: "npm:0.2.1"
-    valibot: "npm:^1.2.0"
-  checksum: 10c0/f58817835bec990cb26e419b460b431583d0a62bf089fdf401efcfde5d0f32b2558f89f5d987e05fb45ad014cfb8629f28f12308cb43970b7e6cad60aca410fb
   languageName: node
   linkType: hard
 
@@ -3590,31 +3515,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/utils@npm:0.2.0":
-  version: 0.2.0
-  resolution: "@mysten/utils@npm:0.2.0"
-  dependencies:
-    "@scure/base": "npm:^1.2.6"
-  checksum: 10c0/016b8dca513ba268f6d48137fad2298bea009e2ead3bdfed90350651a8c95ff2b9eb7141ee7176e28a57565033410de2fbc8004bcd9fafc8679e6b1a743328a9
-  languageName: node
-  linkType: hard
-
 "@mysten/utils@npm:^0.3.3":
   version: 0.3.3
   resolution: "@mysten/utils@npm:0.3.3"
   dependencies:
     "@scure/base": "npm:^2.0.0"
   checksum: 10c0/e04876af863679dbe16ad9272a069881a8d1254f3e0296d2f76cec1fc13f972f4ba75a92d6554be8853db742f5c31035c8f2a5bd86695a53dfbebe6913a45580
-  languageName: node
-  linkType: hard
-
-"@mysten/wallet-standard@npm:^0.19.9":
-  version: 0.19.9
-  resolution: "@mysten/wallet-standard@npm:0.19.9"
-  dependencies:
-    "@mysten/sui": "npm:1.45.2"
-    "@wallet-standard/core": "npm:1.1.1"
-  checksum: 10c0/c329ecddedeac07cf235106ab90432d4dbfe0dba0c6a677146ae539ba41602de4d4f12ab93e329365a617e41de93a063196ab03484ef196683b5867829011323
   languageName: node
   linkType: hard
 
@@ -3800,16 +3706,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:=1.9.4":
-  version: 1.9.4
-  resolution: "@noble/curves@npm:1.9.4"
-  dependencies:
-    "@noble/hashes": "npm:1.8.0"
-  checksum: 10c0/c5ac42bf0c4ac822ee7c107f7b5647140a4209bce6929cdf21a38bc575be8aa91c130c4d4bea5a8a3100c53728fc0c6757382f005779cd14b10ea9a00f1a4592
-  languageName: node
-  linkType: hard
-
-"@noble/curves@npm:^1.3.0, @noble/curves@npm:^1.4.2, @noble/curves@npm:^1.7.0, @noble/curves@npm:^1.9.2, @noble/curves@npm:^1.9.7, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
+"@noble/curves@npm:^1.3.0, @noble/curves@npm:^1.4.2, @noble/curves@npm:^1.9.2, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
   dependencies:
@@ -5389,7 +5286,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:1.2.6, @scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:^1.2.6, @scure/base@npm:~1.2.5":
+"@scure/base@npm:1.2.6, @scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:~1.2.5":
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
@@ -5828,31 +5725,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/wallet-adapter-base@npm:^0.9.27":
-  version: 0.9.27
-  resolution: "@solana/wallet-adapter-base@npm:0.9.27"
-  dependencies:
-    "@solana/wallet-standard-features": "npm:^1.3.0"
-    "@wallet-standard/base": "npm:^1.1.0"
-    "@wallet-standard/features": "npm:^1.1.0"
-    eventemitter3: "npm:^5.0.1"
-  peerDependencies:
-    "@solana/web3.js": ^1.98.0
-  checksum: 10c0/b9df73f96f068bafb6cd021f61ab839303093f144a9c73a4a4f7a8de929038207153bb15e4e7fefa703ba37938049adc01311a724a83214a1e30c9b58ce4590b
-  languageName: node
-  linkType: hard
-
-"@solana/wallet-standard-features@npm:^1.3.0":
-  version: 1.3.0
-  resolution: "@solana/wallet-standard-features@npm:1.3.0"
-  dependencies:
-    "@wallet-standard/base": "npm:^1.1.0"
-    "@wallet-standard/features": "npm:^1.1.0"
-  checksum: 10c0/a71f797d81103697eb2878ce301a493a95a057dd2b3daa92faeb7b53f3c5e0655f41de6ea5260571b34b1c819a74a42c72213ada714edb4fbd27c6cf85d4036d
-  languageName: node
-  linkType: hard
-
-"@solana/web3.js@npm:1.98.4, @solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.69.0, @solana/web3.js@npm:^1.98.4":
+"@solana/web3.js@npm:^1.32.0, @solana/web3.js@npm:^1.69.0, @solana/web3.js@npm:^1.98.4":
   version: 1.98.4
   resolution: "@solana/web3.js@npm:1.98.4"
   dependencies:
@@ -6884,7 +6757,7 @@ __metadata:
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
-    "@lifi/sdk": "npm:^3.16.2"
+    "@lifi/sdk": "npm:^4.0.0"
     "@mysten/sui": "npm:^2.17.0"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
@@ -7123,7 +6996,7 @@ __metadata:
     "@formatjs/intl-locale": "npm:^4.2.0"
     "@formatjs/intl-numberformat": "npm:^8.15.0"
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
-    "@lifi/sdk": "npm:^3.15.5"
+    "@lifi/sdk": "npm:^4.0.0"
     "@mysten/sui": "npm:^2.17.0"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
@@ -7219,65 +7092,6 @@ __metadata:
     expo: ">=56.0.8"
   languageName: unknown
   linkType: soft
-
-"@wallet-standard/app@npm:^1.1.0":
-  version: 1.1.1
-  resolution: "@wallet-standard/app@npm:1.1.1"
-  dependencies:
-    "@wallet-standard/base": "npm:^1.1.1"
-  checksum: 10c0/d8aebcfa0528dd6c5956f819fd45792487d75dfd3d89b5995f46c8ae6c2f31cf0d05594f98a10f1345aaf30b5fa823c061c8e68c75506a267faa4d0beb62bbdd
-  languageName: node
-  linkType: hard
-
-"@wallet-standard/base@npm:^1.1.0, @wallet-standard/base@npm:^1.1.1":
-  version: 1.1.1
-  resolution: "@wallet-standard/base@npm:1.1.1"
-  checksum: 10c0/b5ea7bef9d1c7a72e3737d48347d255e43a3fff666ee971c6b5f98bde43c6f3caa742c5c22c64687222ac8091ed917227332000297dffd65817cf355fbf73565
-  languageName: node
-  linkType: hard
-
-"@wallet-standard/core@npm:1.1.1":
-  version: 1.1.1
-  resolution: "@wallet-standard/core@npm:1.1.1"
-  dependencies:
-    "@wallet-standard/app": "npm:^1.1.0"
-    "@wallet-standard/base": "npm:^1.1.0"
-    "@wallet-standard/errors": "npm:^0.1.1"
-    "@wallet-standard/features": "npm:^1.1.0"
-    "@wallet-standard/wallet": "npm:^1.1.0"
-  checksum: 10c0/fb0398869de6858df1ce0e1abe4f9fb59c52f98eae5a493d908c5b961a59d4ce94b2fe937e4395408ab1dbd3de921710d7441addc5ce14366c4747fc77286cf8
-  languageName: node
-  linkType: hard
-
-"@wallet-standard/errors@npm:^0.1.1":
-  version: 0.1.2
-  resolution: "@wallet-standard/errors@npm:0.1.2"
-  dependencies:
-    chalk: "npm:^5.4.1"
-    commander: "npm:^13.1.0"
-  bin:
-    errors: bin/cli.mjs
-  checksum: 10c0/f002a3d5c47248dfbfab1564b95adca78526e51eb933b79de70d9d49e900ddcd9cce9b1ffc5886ba6646537622391dd73f74e3fca3a7fe2b364b623c47f70413
-  languageName: node
-  linkType: hard
-
-"@wallet-standard/features@npm:^1.1.0":
-  version: 1.1.1
-  resolution: "@wallet-standard/features@npm:1.1.1"
-  dependencies:
-    "@wallet-standard/base": "npm:^1.1.1"
-  checksum: 10c0/01e936a3c36bf2b0e6fbaeab21af0a6a2693f0348b781e18695e0103afebebb2ebb0f3524616c837fa05b2737c0327377820cd22fb1d5d30e20b10bb7709375a
-  languageName: node
-  linkType: hard
-
-"@wallet-standard/wallet@npm:^1.1.0":
-  version: 1.1.1
-  resolution: "@wallet-standard/wallet@npm:1.1.1"
-  dependencies:
-    "@wallet-standard/base": "npm:^1.1.1"
-  checksum: 10c0/869222b91f0fc791dbbc47e71d74ffa5ce031cc4aaca9c5bcd129c50f7d42abd46a9721e1abc286464f5269db6879d34c421b45d87a3fe7454ba394b3698a315
-  languageName: node
-  linkType: hard
 
 "@xmldom/xmldom@npm:^0.8.8":
   version: 0.8.13
@@ -9242,13 +9056,6 @@ __metadata:
   version: 12.1.0
   resolution: "commander@npm:12.1.0"
   checksum: 10c0/6e1996680c083b3b897bfc1cfe1c58dfbcd9842fd43e1aaf8a795fbc237f65efcc860a3ef457b318e73f29a4f4a28f6403c3d653d021d960e4632dd45bde54a9
-  languageName: node
-  linkType: hard
-
-"commander@npm:^13.1.0":
-  version: 13.1.0
-  resolution: "commander@npm:13.1.0"
-  checksum: 10c0/7b8c5544bba704fbe84b7cab2e043df8586d5c114a4c5b607f83ae5060708940ed0b5bd5838cf8ce27539cde265c1cbd59ce3c8c6b017ed3eec8943e3a415164
   languageName: node
   linkType: hard
 
@@ -12174,7 +11981,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"gql.tada@npm:^1.8.13, gql.tada@npm:^1.9.0":
+"gql.tada@npm:^1.9.0":
   version: 1.9.2
   resolution: "gql.tada@npm:1.9.2"
   dependencies:
@@ -12202,13 +12009,6 @@ __metadata:
   version: 16.13.2
   resolution: "graphql@npm:16.13.2"
   checksum: 10c0/64e822a0a0e4398781e4bc9765b88d370c08261498b517add4b878038ef7be2005b6b394a79a5102b9379d57052f60bc7f23fec8f39808d101984a74772ebd9d
-  languageName: node
-  linkType: hard
-
-"graphql@npm:^16.11.0":
-  version: 16.14.1
-  resolution: "graphql@npm:16.14.1"
-  checksum: 10c0/a67358b4c6bbda0876903d3f6bbba46058ac7bc00c043ae0b435148e2a00481e9c7716f54f271659786f27f58bf355245216938d98ade980fd141885c907efff
   languageName: node
   linkType: hard
 
@@ -20147,7 +19947,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.33.2, viem@npm:^2.47.2, viem@npm:^2.52.2":
+"viem@npm:^2.52.2":
   version: 2.52.2
   resolution: "viem@npm:2.52.2"
   dependencies:
@@ -20972,26 +20772,5 @@ __metadata:
   version: 4.4.3
   resolution: "zod@npm:4.4.3"
   checksum: 10c0/7ea31b558e88f9faf44f31dd185e2e1cbf51fed3081787fb96cc2534749b50c0acfc6da7f0922a7353ed092dd358c7d50c28ea96c94d04af64191bd33152eca3
-  languageName: node
-  linkType: hard
-
-"zustand@npm:^5.0.11":
-  version: 5.0.14
-  resolution: "zustand@npm:5.0.14"
-  peerDependencies:
-    "@types/react": ">=18.0.0"
-    immer: ">=9.0.6"
-    react: ">=18.0.0"
-    use-sync-external-store: ">=1.2.0"
-  peerDependenciesMeta:
-    "@types/react":
-      optional: true
-    immer:
-      optional: true
-    react:
-      optional: true
-    use-sync-external-store:
-      optional: true
-  checksum: 10c0/89de0c8119f1e0861b2f896a0b4df0d67994a373ecee02628d4e7b97cee1885207f646917d3ede395c3a5083316d48846855cfbc84aced7cd23a6db3238930a8
   languageName: node
   linkType: hard
