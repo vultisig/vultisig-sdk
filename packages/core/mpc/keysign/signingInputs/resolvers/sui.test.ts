@@ -150,9 +150,7 @@ describe('getSuiSigningInputs — native send', () => {
       memo: 'deposit-12345',
     })
 
-    expect(() =>
-      getSuiSigningInputs({ keysignPayload, walletCore })
-    ).toThrow('do not support a memo')
+    expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('do not support a memo')
   })
 })
 
