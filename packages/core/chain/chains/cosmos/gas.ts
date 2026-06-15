@@ -2,7 +2,7 @@ import { Chain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from './cosmosGasLimitRecord'
-import { cosmosRpcUrl } from './cosmosRpcUrl'
+import { getCosmosRpcUrl } from './getCosmosRpcUrl'
 
 const defaultGas = 7500n
 
@@ -111,7 +111,7 @@ const fetchMinGasPrice = async (chain: IbcEnabledCosmosChain, { fetchImpl = fetc
   try {
     return await Promise.race([
       (async () => {
-        const response = await fetchImpl(`${cosmosRpcUrl[chain]}${minGasPriceConfigPath}`, {
+        const response = await fetchImpl(`${getCosmosRpcUrl(chain)}${minGasPriceConfigPath}`, {
           signal: timeoutController.controller.signal,
         })
 
