@@ -11,8 +11,9 @@ describe('cosmosGasLimitRecord', () => {
 
   it('returns higher staking gas limits and scales bulk reward claim messages', () => {
     expect(getCosmosStakingGasLimit({ chain: Chain.Terra })).toBe(500_000n)
-    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic })).toBe(2_000_000n)
-    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic, msgCount: 3 })).toBe(3_000_000n)
+    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic })).toBe(3_000_000n)
+    // msgCount=3: 3M + ((3-1)*3M)/4 = 3M + 1.5M = 4.5M
+    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic, msgCount: 3 })).toBe(4_500_000n)
   })
 
   it('rejects invalid staking message counts before BigInt conversion', () => {
