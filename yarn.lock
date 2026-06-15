@@ -6985,7 +6985,7 @@ __metadata:
     cli-table3: "npm:^0.6.5"
     commander: "npm:^15.0.0"
     dotenv: "npm:^17.4.2"
-    esbuild: "npm:^0.28.0"
+    esbuild: "npm:^0.28.1"
     ora: "npm:^9.4.0"
     qrcode-terminal: "npm:^0.12.0"
     tabtab: "npm:^3.0.2"
@@ -7012,7 +7012,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.15.2, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:2.15.3, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -7065,7 +7065,7 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.13"
-    "@vultisig/core-chain": "npm:2.15.2"
+    "@vultisig/core-chain": "npm:2.15.3"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7187,7 +7187,7 @@ __metadata:
     "@types/node": "npm:^25.9.2"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/sdk": "workspace:^"
-    esbuild: "npm:^0.28.0"
+    esbuild: "npm:^0.28.1"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
@@ -7245,7 +7245,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=2.2.2"
+    "@vultisig/sdk": ">=2.2.3"
   languageName: unknown
   linkType: soft
 
@@ -10649,7 +10649,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:^0.28.1":
+"esbuild@npm:0.28.1, esbuild@npm:^0.28.1":
   version: 0.28.1
   resolution: "esbuild@npm:0.28.1"
   dependencies:
