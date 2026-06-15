@@ -50,9 +50,9 @@ const erc20B = {
 
 const generalQuote = {
   dstAmount: '10000000',
-  provider: 'mock',
+  provider: 'kyber',
   tx: { evm: { from: '0xsender', to: '0xrouter', data: '0x', value: '0' } },
-}
+} as const
 
 beforeEach(() => {
   vi.clearAllMocks()

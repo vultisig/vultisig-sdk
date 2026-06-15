@@ -67,6 +67,14 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * so funds are never sent to the wrong address.
    */
   recipient?: string
+  /**
+   * Optional slippage tolerance, expressed in PERCENT (e.g. `0.5` = 0.5%,
+   * `3` = 3%). When omitted each provider keeps its own default. Applied to the
+   * general aggregators that accept a slippage override (1inch, KyberSwap, LiFi,
+   * SwapKit); CowSwap (RFQ limit order) and the native THORChain/MayaChain
+   * protocols use their own protection mechanisms and ignore this value.
+   */
+  slippageTolerance?: number
 }
 
 type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
@@ -218,6 +226,7 @@ export const findSwapQuote = async ({
   vultDiscountTier,
   affiliateConfig,
   recipient,
+  slippageTolerance,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -246,6 +255,14 @@ export const findSwapQuote = async ({
   // so they are not offered for custom-recipient swaps until they thread the
   // receiver through (tracked in vultisig/vultisig-windows#4131).
   const hasCustomRecipient = recipient !== undefined
+
+  // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Convert it to each
+  // aggregator's native unit; `undefined` leaves each provider on its own
+  // default (no behavior change).
+  const oneInchSlippagePercent = slippageTolerance
+  const swapKitSlippagePercent = slippageTolerance
+  const lifiSlippageFraction = slippageTolerance !== undefined ? slippageTolerance / 100 : undefined
+  const kyberSlippageBps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
 
   const involvedChains = [from.chain, to.chain]
 
@@ -339,6 +356,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             kyberConfig: affiliateConfig?.kyber,
+            slippageTolerance: kyberSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -357,6 +375,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
+            slippage: oneInchSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -380,6 +399,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             lifiAffiliateConfig: affiliateConfig?.lifi,
+            slippage: lifiSlippageFraction,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -402,6 +422,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            slippage: swapKitSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }
