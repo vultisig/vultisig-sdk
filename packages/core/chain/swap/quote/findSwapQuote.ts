@@ -218,6 +218,18 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
   return selected?.quote ?? null
 }
 
+// `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
+// front so they don't propagate into every provider call and fail with
+// non-actionable downstream errors.
+const assertValidSlippageTolerance = (slippageTolerance: number | undefined): void => {
+  if (slippageTolerance !== undefined && (!Number.isFinite(slippageTolerance) || slippageTolerance < 0)) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `slippageTolerance must be a finite, non-negative percent value. Received "${slippageTolerance}".`
+    )
+  }
+}
+
 export const findSwapQuote = async ({
   from,
   to,
@@ -262,12 +274,7 @@ export const findSwapQuote = async ({
   // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
   // up front so they don't propagate into every provider call and fail with
   // non-actionable downstream errors.
-  if (slippageTolerance !== undefined && (!Number.isFinite(slippageTolerance) || slippageTolerance < 0)) {
-    throw new SwapError(
-      SwapErrorCode.InvalidConfig,
-      `slippageTolerance must be a finite, non-negative percent value. Received "${slippageTolerance}".`
-    )
-  }
+  assertValidSlippageTolerance(slippageTolerance)
 
   // Convert it to each aggregator's native unit; `undefined` leaves each
   // provider on its own default (no behavior change).
