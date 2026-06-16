@@ -1,9 +1,6 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
-import {
-  cosmosRpcUrl,
-  getCosmosWasmTokenInfoUrl,
-  isCosmosWasmTokenId,
-} from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosWasmTokenInfoUrl, isCosmosWasmTokenId } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { CoinMetadata } from '@vultisig/core-chain/coin/Coin'
 import { knownCosmosTokens } from '@vultisig/core-chain/coin/knownTokens/cosmos'
@@ -152,7 +149,7 @@ const getIbcDenomTraceFromLCD = async (lcdBase: string, denom: string): Promise<
 }
 
 const getBankDenomMetadata = async (chain: CosmosChain, id: string): Promise<CoinMetadata> => {
-  const lcd = cosmosRpcUrl[chain]
+  const lcd = getCosmosRpcUrl(chain)
   const meta = await getDenomMetaFromLCD(lcd, id)
   if (meta) {
     try {

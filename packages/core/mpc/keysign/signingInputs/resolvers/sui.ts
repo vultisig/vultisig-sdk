@@ -28,6 +28,13 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
     ]
   }
 
+  // Sui has no native memo concept — a transaction is a Programmable
+  // Transaction Block with no memo field. Rather than silently dropping a
+  // memo, fail loudly so callers don't assume it was attached.
+  if (keysignPayload.memo) {
+    throw new Error('Sui transactions do not support a memo')
+  }
+
   const { coins, referenceGasPrice, gasBudget } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'suicheSpecific'

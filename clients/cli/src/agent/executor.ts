@@ -887,7 +887,11 @@ export class AgentExecutor {
     if (this.verbose)
       process.stderr.write(`[sign_thor_msg_deposit_lp] chain=${chain}, memo='${memo}', amountBaseUnits=${amountRaw}\n`)
 
-    const result = await this.vault.signMsgDeposit({ chain, amountBaseUnits: amountRaw, memo })
+    const result = await this.vault.signMsgDeposit({
+      chain,
+      amountBaseUnits: amountRaw,
+      memo,
+    })
     this.pendingPayloads.clear()
 
     const explorerUrl = VultisigSdk.getTxExplorerUrl(chain, result.txHash)
@@ -2020,8 +2024,21 @@ async function computeEIP712Hash(
 ): Promise<string> {
   const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
-  const domainSeparator = hashStruct('EIP712Domain', domain, types, keccak_256)
-  const messageHash = hashStruct(primaryType, message, types, keccak_256)
+  // The EIP712Domain type must contain exactly the fields present in the
+  // domain object (EIP-712 §"definition of domainSeparator"). A fixed
+  // 4-field type breaks domains that omit verifyingContract (e.g.
+  // Polymarket's ClobAuthDomain {name, version, chainId}): the typeHash
+  // would claim 4 fields while the data encodes 3, producing a hash no
+  // verifier can reproduce.
+  const typesWithDomain = types['EIP712Domain']
+    ? types
+    : {
+        ...types,
+        EIP712Domain: EIP712_DOMAIN_FIELDS.filter(f => domain[f.name] !== undefined && domain[f.name] !== null),
+      }
+
+  const domainSeparator = hashStruct('EIP712Domain', domain, typesWithDomain, keccak_256)
+  const messageHash = hashStruct(primaryType, message, typesWithDomain, keccak_256)
 
   // \x19\x01 || domainSeparator || messageHash
   const prefix = new Uint8Array([0x19, 0x01])
@@ -2071,7 +2088,6 @@ function hashType(
  */
 function encodeType(typeName: string, types: Record<string, Array<{ name: string; type: string }>>): string {
   const fields = getTypeFields(typeName, types)
-  if (!fields) return ''
 
   // Find all referenced struct types
   const refs = new Set<string>()
@@ -2083,9 +2099,7 @@ function encodeType(typeName: string, types: Record<string, Array<{ name: string
   let result = `${typeName}(${fields.map(f => `${f.type} ${f.name}`).join(',')})`
   for (const ref of sortedRefs) {
     const refFields = getTypeFields(ref, types)
-    if (refFields) {
-      result += `${ref}(${refFields.map(f => `${f.type} ${f.name}`).join(',')})`
-    }
+    result += `${ref}(${refFields.map(f => `${f.type} ${f.name}`).join(',')})`
   }
   return result
 }
@@ -2097,7 +2111,6 @@ function findReferencedTypes(
 ): void {
   if (refs.has(typeName)) return
   const fields = getTypeFields(typeName, types)
-  if (!fields) return
   refs.add(typeName)
   for (const field of fields) {
     const baseType = field.type.replace(/\[\d*\]$/, '')
@@ -2108,25 +2121,37 @@ function findReferencedTypes(
 }
 
 /**
- * Get fields for a type, including implicit EIP712Domain fields.
+ * Standard EIP-712 domain fields in canonical order. computeEIP712Hash
+ * filters this list down to the fields actually present in the domain
+ * object — including absent fields in the type corrupts the domain
+ * separator (see ClobAuthDomain note in computeEIP712Hash).
+ */
+const EIP712_DOMAIN_FIELDS: Array<{ name: string; type: string }> = [
+  { name: 'name', type: 'string' },
+  { name: 'version', type: 'string' },
+  { name: 'chainId', type: 'uint256' },
+  { name: 'verifyingContract', type: 'address' },
+  { name: 'salt', type: 'bytes32' },
+]
+
+/**
+ * Get fields for a type. Throws when the type isn't declared: every caller
+ * is either looking up a type the payload claims to use (primaryType /
+ * EIP712Domain) or a ref already verified present via `types[baseType]`,
+ * so a miss means the payload's `types` and `primaryType` disagree.
+ * Treating it as an empty struct (the old behavior) would hash and sign
+ * a digest no verifier can reproduce — same fail-loud contract as the
+ * missing-field guard in encodeData.
  */
 function getTypeFields(
   typeName: string,
   types: Record<string, Array<{ name: string; type: string }>>
-): Array<{ name: string; type: string }> | undefined {
-  if (types[typeName]) return types[typeName]
-
-  // EIP712Domain is implicit — infer from domain object fields
-  if (typeName === 'EIP712Domain') {
-    // Standard EIP-712 domain fields in canonical order
-    return [
-      { name: 'name', type: 'string' },
-      { name: 'version', type: 'string' },
-      { name: 'chainId', type: 'uint256' },
-      { name: 'verifyingContract', type: 'address' },
-    ]
+): Array<{ name: string; type: string }> {
+  const fields = types[typeName]
+  if (!fields) {
+    throw new Error(`EIP-712 encode: missing type definition for struct "${typeName}"`)
   }
-  return undefined
+  return fields
 }
 
 /**
@@ -2139,12 +2164,23 @@ function encodeData(
   keccak: (data: Uint8Array) => Uint8Array
 ): Uint8Array {
   const fields = getTypeFields(typeName, types)
-  if (!fields) return new Uint8Array(0)
 
   const chunks: Uint8Array[] = []
   for (const field of fields) {
     const value = data[field.name]
-    if (value === undefined || value === null) continue
+    // EIP-712 has no optional struct members: every field declared in the
+    // type contributes to the encoding. A missing value for a declared
+    // field can only mean the caller's `types` and `message`/`domain`
+    // disagree — silently skipping it would yield a digest no on-chain
+    // verifier (or the CLOB) can reproduce, i.e. the wallet would sign
+    // something other than what the type claims. Fail loud instead.
+    // (The domain path can't reach this: computeEIP712Hash filters the
+    // synthesized EIP712Domain type to fields actually present.)
+    if (value === undefined || value === null) {
+      throw new Error(
+        `EIP-712 encode: missing value for declared field "${field.name}" (${field.type}) in struct "${typeName}"`
+      )
+    }
     chunks.push(encodeField(field.type, value, types, keccak))
   }
 

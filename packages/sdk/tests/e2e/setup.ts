@@ -26,7 +26,7 @@ vi.mock('@lifi/sdk', () => ({
   },
   getQuote: vi.fn(),
   getRoutes: vi.fn(),
-  createConfig: vi.fn(() => ({})),
+  createClient: vi.fn(() => ({ config: {}, providers: [] })),
   EVM: vi.fn(),
 }))
 

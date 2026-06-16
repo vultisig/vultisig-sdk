@@ -198,6 +198,47 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 
+// Noon USDC yield vault SDK boundary. Consumers should use these helpers
+// instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
+export type {
+  NoonContractCall,
+  NoonDepositTxPlan,
+  NoonVaultMetrics,
+  NoonVaultPosition,
+  NoonVaultQueue,
+  NoonVaultState,
+} from '@vultisig/core-chain/chains/evm/noon'
+export {
+  encodeNoonDeposit,
+  encodeNoonRequestRedeem,
+  encodeNoonUsdcApprove,
+  encodeNoonWithdraw,
+  fetchNoonUsdcVaultApy,
+  fetchNoonUsdcVaultMetrics,
+  fetchNoonUsdcVaultTvl,
+  getNoonDepositContractCall,
+  getNoonDepositTxPlan,
+  getNoonRequestRedeemContractCall,
+  getNoonUsdcAllowance,
+  getNoonUsdcApproveContractCall,
+  getNoonWithdrawContractCall,
+  noonUsdcVaultConfig,
+  noonVaultAbi,
+  readNoonClaimableRedeemRequest,
+  readNoonPendingRedeemRequest,
+  readNoonVaultConvertToAssets,
+  readNoonVaultMinAmountWei,
+  readNoonVaultPosition,
+  readNoonVaultPreviewDeposit,
+  readNoonVaultPreviewRedeem,
+  readNoonVaultPreviewWithdraw,
+  readNoonVaultQueue,
+  readNoonVaultSharePrice,
+  readNoonVaultState,
+  readNoonWithdrawalRequestRaw,
+  readNoonWithdrawalRequestsRaw,
+} from '@vultisig/core-chain/chains/evm/noon'
+
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation
 // ============================================================================

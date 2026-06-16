@@ -23,6 +23,7 @@ vi.mock('@lifi/sdk', () => ({
   },
   getQuote: vi.fn(),
   getRoutes: vi.fn(),
+  createClient: vi.fn(() => ({ config: {}, providers: [] })),
 }))
 
 import { configureCrypto } from '../../src/crypto'

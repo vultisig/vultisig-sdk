@@ -3,7 +3,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentClient } from '../client'
-import { CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
+import { AgentSession, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
+import type { RecentAction } from '../types'
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
   // Locks the registry surface — drift is caught at test time, not runtime.
@@ -374,5 +375,145 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     )
 
     expect(onClientSideToolCall).toHaveBeenCalledWith('c', 'vault_coin', {})
+  })
+})
+
+describe('Polymarket marker echo — dispatchClientSideTool protocol contract', () => {
+  // agent-backend's autoSubmitPolymarketOrder consumes pm_order_ref +
+  // __pm_auto_submit + __pm_submit_token from the recent_action data on the
+  // return leg. The CLI never interprets these — dispatchClientSideTool
+  // copies every input key starting with "__" (plus pm_order_ref) into the
+  // result data so they survive the signing roundtrip. If this echo breaks,
+  // every Polymarket auto-submit fails closed at the server's token gate.
+  function makeUi() {
+    return {
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      requestConfirmation: vi.fn(async () => true),
+      requestPassword: vi.fn(async () => 'pw'),
+    }
+  }
+
+  // Mirrors the live mcp-ts envelope: rewritePolymarketSignBet emits
+  // sign_typed_data input with payloads + markers.
+  const POLYMARKET_SIGN_INPUT = {
+    payloads: [
+      {
+        id: 'order',
+        primaryType: 'Order',
+        domain: {},
+        types: {},
+        message: {},
+        chain: 'Polygon',
+      },
+      {
+        id: 'auth',
+        primaryType: 'ClobAuth',
+        domain: {},
+        types: {},
+        message: {},
+        chain: 'Ethereum',
+      },
+    ],
+    pm_order_ref: 'ref-fb415704',
+    __pm_auto_submit: true,
+    __pm_submit_token: 'token-24236b30',
+  }
+
+  async function dispatch(input: Record<string, unknown>, executorResult: Record<string, unknown>) {
+    const pendingToolResults: Array<{
+      tool: string
+      success: boolean
+      data?: Record<string, unknown>
+    }> = []
+    const fakeThis = {
+      executor: {
+        signTypedData: vi.fn(
+          async () =>
+            ({
+              tool: 'sign_typed_data',
+              success: true,
+              data: executorResult,
+            }) as RecentAction
+        ),
+        getPendingSummary: () => null,
+        clearPendingTransaction: vi.fn(),
+      },
+      config: { password: 'pw', autoApprove: true },
+      pendingToolResults,
+      // dispatchClientSideTool routes through runPasswordGatedTool — reuse
+      // the real prototype method so the gate behavior stays integrated.
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+    }
+    await (AgentSession.prototype as any).dispatchClientSideTool.call(
+      fakeThis,
+      'tc-pm-1',
+      'sign_typed_data',
+      input,
+      makeUi()
+    )
+    return pendingToolResults
+  }
+
+  it('echoes __pm markers + pm_order_ref into the recent_action data', async () => {
+    const results = await dispatch(POLYMARKET_SIGN_INPUT, {
+      signatures: [
+        { id: 'order', signature: '0xorder' },
+        { id: 'auth', signature: '0xauth' },
+      ],
+      pm_order_ref: 'ref-fb415704',
+      auto_submit: true,
+    })
+
+    expect(results).toHaveLength(1)
+    expect(results[0].tool).toBe('sign_typed_data')
+    expect(results[0].success).toBe(true)
+    const data = results[0].data!
+    // The server-side auto-submit gate needs all three of these.
+    expect(data.__pm_submit_token).toBe('token-24236b30')
+    expect(data.__pm_auto_submit).toBe(true)
+    expect(data.pm_order_ref).toBe('ref-fb415704')
+    // The executor's own result fields ride along untouched.
+    expect((data.signatures as unknown[]).length).toBe(2)
+  })
+
+  it('does NOT echo non-marker input keys (payloads stay out of the result)', async () => {
+    const results = await dispatch(POLYMARKET_SIGN_INPUT, { signatures: [] })
+    const data = results[0].data!
+    expect(data).not.toHaveProperty('payloads')
+  })
+
+  it('echoes markers even when the handler fails (server can still classify)', async () => {
+    const pendingToolResults: Array<{
+      tool: string
+      success: boolean
+      data?: Record<string, unknown>
+    }> = []
+    const fakeThis = {
+      executor: {
+        signTypedData: vi.fn(async () => {
+          throw new Error('MPC session failed')
+        }),
+        getPendingSummary: () => null,
+        clearPendingTransaction: vi.fn(),
+      },
+      config: { password: 'pw', autoApprove: true },
+      pendingToolResults,
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+    }
+    await (AgentSession.prototype as any).dispatchClientSideTool.call(
+      fakeThis,
+      'tc-pm-2',
+      'sign_typed_data',
+      POLYMARKET_SIGN_INPUT,
+      makeUi()
+    )
+
+    expect(pendingToolResults).toHaveLength(1)
+    expect(pendingToolResults[0].success).toBe(false)
+    // Markers still echoed on failure — the server's gate (not the CLI)
+    // decides what a failed-sign return means.
+    expect(pendingToolResults[0].data?.__pm_submit_token).toBe('token-24236b30')
+    expect(pendingToolResults[0].data?.pm_order_ref).toBe('ref-fb415704')
   })
 })

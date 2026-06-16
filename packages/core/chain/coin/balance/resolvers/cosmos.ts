@@ -1,10 +1,7 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
-import {
-  cosmosRpcUrl,
-  getCosmosWasmTokenBalanceUrl,
-  isCosmosWasmTokenId,
-} from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosWasmTokenBalanceUrl, isCosmosWasmTokenId } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { getDenom } from '@vultisig/core-chain/coin/utils/getDenom'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
@@ -31,7 +28,7 @@ type LcdBalanceResponse = {
 // a second chance before we ship a "you have 0" UX that contradicts the
 // on-chain reality.
 const fetchBalanceViaLcd = async (chain: CosmosChain, address: string, denom: string): Promise<bigint | null> => {
-  const base = cosmosRpcUrl[chain]
+  const base = getCosmosRpcUrl(chain)
   if (!base) return null
   try {
     const resp = await queryUrl<LcdBalanceResponse>(
