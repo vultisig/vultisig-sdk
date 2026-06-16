@@ -24,7 +24,8 @@ vi.mock('../verifyBroadcastByHash', () => ({
   verifyBroadcastByHash: mocks.verifyBroadcastByHash,
 }))
 
-import { OtherChain } from '../../../Chain'
+import { OtherChain } from '@vultisig/core-chain/Chain'
+
 import { broadcastCardanoTx } from './cardano'
 
 const txWithTtl = (ttl: number) =>
