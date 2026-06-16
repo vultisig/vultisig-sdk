@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.16.2",
+  "version": "2.16.3",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1878,7 +1878,7 @@
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@lifi/sdk": "^3.16.2",
+    "@lifi/sdk": "^4.0.0",
     "@mysten/sui": "^2.17.0",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
