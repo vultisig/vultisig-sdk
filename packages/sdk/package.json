@@ -171,7 +171,7 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@cosmjs/stargate": "^0.39.0",
     "@formatjs/intl-getcanonicallocales": "^2.5.0",
-    "@formatjs/intl-locale": "^4.2.0",
+    "@formatjs/intl-locale": "^5.3.8",
     "@formatjs/intl-numberformat": "^9.3.11",
     "@formatjs/intl-pluralrules": "^6.3.10",
     "@lifi/sdk": "^4.0.0",
