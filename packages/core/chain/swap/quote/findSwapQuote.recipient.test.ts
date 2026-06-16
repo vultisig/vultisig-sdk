@@ -115,4 +115,20 @@ describe('findSwapQuote external recipient', () => {
 
     expect(getNativeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ destination: '0xowner' }))
   })
+
+  it('treats a blank/whitespace recipient as no recipient (keeps aggregators, falls back to own address)', async () => {
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(generalQuote)
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getCowSwapQuote).mockResolvedValue(generalQuote)
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    await findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, recipient: '   ' })
+
+    // Initiator-paying aggregator stays available rather than being gated off.
+    expect(getKyberSwapQuote).toHaveBeenCalled()
+    // CowSwap falls back to the sender's own address, not the blank string.
+    expect(getCowSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ receiver: erc20A.address }))
+  })
 })

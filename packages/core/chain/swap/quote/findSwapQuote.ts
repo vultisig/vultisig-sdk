@@ -254,11 +254,23 @@ export const findSwapQuote = async ({
   // CowSwap). Aggregators that pay the initiator would silently misroute funds,
   // so they are not offered for custom-recipient swaps until they thread the
   // receiver through (tracked in vultisig/vultisig-windows#4131).
-  const hasCustomRecipient = recipient !== undefined
+  // Trim and treat empty/whitespace strings as no recipient, so route gating
+  // and recipient forwarding only react to a genuine custom address.
+  const normalizedRecipient = recipient?.trim() || undefined
+  const hasCustomRecipient = normalizedRecipient !== undefined
 
-  // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Convert it to each
-  // aggregator's native unit; `undefined` leaves each provider on its own
-  // default (no behavior change).
+  // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
+  // up front so they don't propagate into every provider call and fail with
+  // non-actionable downstream errors.
+  if (slippageTolerance !== undefined && (!Number.isFinite(slippageTolerance) || slippageTolerance < 0)) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `slippageTolerance must be a finite, non-negative percent value. Received "${slippageTolerance}".`
+    )
+  }
+
+  // Convert it to each aggregator's native unit; `undefined` leaves each
+  // provider on its own default (no behavior change).
   const oneInchSlippagePercent = slippageTolerance
   const swapKitSlippagePercent = slippageTolerance
   const lifiSlippageFraction = slippageTolerance !== undefined ? slippageTolerance / 100 : undefined
@@ -278,7 +290,7 @@ export const findSwapQuote = async ({
         const amountNumber = bigIntToNumber(amount, fromDecimals)
         const native = await getNativeSwapQuote({
           swapChain,
-          destination: recipient ?? to.address,
+          destination: normalizedRecipient ?? to.address,
           from,
           to,
           amount: amountNumber,
@@ -325,7 +337,7 @@ export const findSwapQuote = async ({
             buyToken,
             sellAmount: chainAmount,
             from: from.address,
-            receiver: recipient ?? from.address,
+            receiver: normalizedRecipient ?? from.address,
             chainConfig: cowChainConfig,
             affiliateBps,
           })

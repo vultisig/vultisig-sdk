@@ -78,4 +78,14 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getKyberSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageTolerance: undefined }))
     expect(getLifiSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
   })
+
+  it.each([-1, NaN, Infinity, -Infinity])('rejects invalid slippage %p before calling any provider', async invalid => {
+    await expect(
+      findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, slippageTolerance: invalid })
+    ).rejects.toThrow(/slippageTolerance/)
+
+    expect(getOneInchSwapQuote).not.toHaveBeenCalled()
+    expect(getKyberSwapQuote).not.toHaveBeenCalled()
+    expect(getLifiSwapQuote).not.toHaveBeenCalled()
+  })
 })
