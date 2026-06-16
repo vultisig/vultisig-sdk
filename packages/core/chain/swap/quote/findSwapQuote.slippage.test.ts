@@ -69,6 +69,8 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getKyberSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageTolerance: 100 }))
     // LiFi wants a fraction
     expect(getLifiSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: 0.01 }))
+    // SwapKit wants percent
+    expect(getSwapKitQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: 1 }))
   })
 
   it('leaves each provider on its default when no tolerance is given', async () => {
@@ -77,6 +79,7 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getOneInchSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
     expect(getKyberSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageTolerance: undefined }))
     expect(getLifiSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
+    expect(getSwapKitQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
   })
 
   it.each([-1, NaN, Infinity, -Infinity])('rejects invalid slippage %p before calling any provider', async invalid => {

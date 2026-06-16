@@ -327,6 +327,12 @@ export const findSwapQuote = async ({
     // by solvers against ERC-20 balances. The consumer signs the order's
     // EIP-712 digest and submits it via `submitCowSwapOrder` — see
     // `cowswap_order` handling in `buildSwapKeysignPayload`.
+    //
+    // Because of that ERC-20 gate, a native-ETH (`from.id === undefined`) pair
+    // never reaches this fetcher, so the `receiver` guard below is unreachable
+    // for native-token swaps. A custom recipient on such a pair is therefore
+    // only ever honoured through the native THORChain/MayaChain `destination`
+    // path above — not here.
     if (
       fromChain === toChain &&
       isOneOf(fromChain, cowSwapSupportedChains) &&
