@@ -2658,15 +2658,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-numberformat@npm:^8.15.0":
-  version: 8.15.6
-  resolution: "@formatjs/intl-numberformat@npm:8.15.6"
+"@formatjs/intl-numberformat@npm:^9.3.11":
+  version: 9.3.11
+  resolution: "@formatjs/intl-numberformat@npm:9.3.11"
   dependencies:
-    "@formatjs/ecma402-abstract": "npm:2.3.6"
-    "@formatjs/intl-localematcher": "npm:0.6.2"
-    decimal.js: "npm:^10.4.3"
-    tslib: "npm:^2.8.0"
-  checksum: 10c0/cdee6aaa8a7f9c0b19631b8414fe877034c666dffac6fa3cdbff539d75cc83b8120520ee69541675310f662f89a403ba663895b5e3846423d3b310d8e81d6329
+    "@formatjs/bigdecimal": "npm:0.2.6"
+    "@formatjs/intl-localematcher": "npm:0.8.10"
+  checksum: 10c0/645864cff17f650488e69c68c1206889f09fde52c57445c5d9d049a5737d420a99d2e827f002e1f65c856694d9e945f61c92840444f0c6486b55cbd6980a59b5
   languageName: node
   linkType: hard
 
@@ -6995,7 +6993,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@formatjs/intl-getcanonicallocales": "npm:^2.5.0"
     "@formatjs/intl-locale": "npm:^4.2.0"
-    "@formatjs/intl-numberformat": "npm:^8.15.0"
+    "@formatjs/intl-numberformat": "npm:^9.3.11"
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
     "@lifi/sdk": "npm:^4.0.0"
     "@mysten/sui": "npm:^2.17.0"
