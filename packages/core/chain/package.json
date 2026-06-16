@@ -530,6 +530,11 @@
       "import": "./dist/chains/evm/erc721/getErc721Balance.js",
       "default": "./dist/chains/evm/erc721/getErc721Balance.js"
     },
+    "./chains/evm/noon": {
+      "types": "./dist/chains/evm/noon/index.d.ts",
+      "import": "./dist/chains/evm/noon/index.js",
+      "default": "./dist/chains/evm/noon/index.js"
+    },
     "./chains/evm/tx/fee": {
       "types": "./dist/chains/evm/tx/fee/index.d.ts",
       "import": "./dist/chains/evm/tx/fee/index.js",
