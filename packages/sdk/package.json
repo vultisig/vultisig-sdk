@@ -172,7 +172,7 @@
     "@cosmjs/stargate": "^0.39.0",
     "@formatjs/intl-getcanonicallocales": "^3.2.10",
     "@formatjs/intl-locale": "^5.3.8",
-    "@formatjs/intl-numberformat": "^8.15.0",
+    "@formatjs/intl-numberformat": "^9.3.11",
     "@formatjs/intl-pluralrules": "^6.3.10",
     "@lifi/sdk": "^4.0.0",
     "@mysten/sui": "^2.17.0",
