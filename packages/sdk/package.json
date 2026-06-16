@@ -238,7 +238,7 @@
     "electron": "^42.4.0",
     "fake-indexeddb": "^6.2.5",
     "node-localstorage": "^3.0.5",
-    "rollup": "^4.61.1",
+    "rollup": "^4.62.0",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-dts": "^6.4.1",
     "rollup-plugin-esbuild": "^6.2.1",
