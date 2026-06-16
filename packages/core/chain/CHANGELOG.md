@@ -1,5 +1,42 @@
 # @vultisig/core-chain
 
+## 2.16.4
+
+### Patch Changes
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(pubkey): fall back to bip32 derivation when chainPublicKey is 32 bytes on ecdsa chains
+
+  Older KeyImport vault backups sometimes store the raw 32-byte X coordinate
+  for secp256k1 chains instead of the standard 33-byte compressed form.
+  WalletCore's createWithData rejects these with "Invalid length: Expected 33
+  but received 32", breaking execute_swap / show_receive_request for affected
+  users (~7 events/day in prod).
+
+  The fix detects the 32-byte case at runtime for ecdsa chains and falls back
+  to BIP32 derivation from the root ECDSA key, which always produces a valid
+  33-byte compressed pubkey.
+
+- [#758](https://github.com/vultisig/vultisig-sdk/pull/758) [`10a058b`](https://github.com/vultisig/vultisig-sdk/commit/10a058bf1a2a2c1ed9ba4ec9c4a29830ec6f1aae) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Use a distinct provider for Kujira's LCD fallback so primary (polkachu) and fallback (rest.cosmos.directory) are independent - restoring real redundancy if polkachu degrades.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: await assertFetchResponse in queryOneInch to prevent "Already read" body error
+
+  assertFetchResponse is an async function that reads the response body. Without
+  await, the body read started in the background while response.json() was called
+  concurrently - resulting in a "Already read" TypeError on non-2xx EVM discovery
+  responses. Fixes dashboard_sdk_discovery_failure events for Ethereum/BSC/Arbitrum.
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): bump TerraClassic staking gas limit from 2M to 3M
+
+  The 2M limit was consistently failing with "out of gas in location:
+  ValuePerByte" on TerraClassic MsgDelegate / MsgUndelegate / claim-rewards
+  txs (gasUsed: 2000201-2000774). The ValuePerByte meter in the classic-terra
+  treasury/tax post-handler adds ~200-800 gas on top of the base delegate
+  cost, which the standard SDK estimate doesn't account for. 3M fits safely
+  within the 100 LUNC fee floor (3M \* 28.325 uluna/gas ≈ 84.97 LUNC < 100
+  LUNC).
+
 ## 2.16.3
 
 ### Patch Changes
