@@ -76,7 +76,7 @@
     "vitest": "^4.1.8"
   },
   "peerDependencies": {
-    "@vultisig/sdk": ">=2.3.4"
+    "@vultisig/sdk": ">=2.3.5"
   },
   "keywords": [
     "vultisig",
