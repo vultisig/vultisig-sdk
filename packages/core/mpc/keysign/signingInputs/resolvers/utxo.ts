@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { UtxoChain } from '@vultisig/core-chain/Chain'
 import { minUtxo } from '@vultisig/core-chain/chains/utxo/minUtxo'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
+import { getZcashBranchIdHex } from '@vultisig/core-chain/chains/utxo/zcashBranchId'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -16,8 +17,9 @@ import { KeysignSwapPayload } from '../../swap/KeysignSwapPayload'
 import { getKeysignChain } from '../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../resolver'
 
-export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPayload, walletCore }) => {
+export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'utxo'>(keysignPayload)
+  const zcashBranchIdHex = chain === UtxoChain.Zcash ? await getZcashBranchIdHex() : undefined
 
   const { byteFee, sendMaxAmount } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'utxoSpecific')
 
@@ -72,6 +74,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
     toAddress: destinationAddress,
     changeAddress: coin.address,
     byteFee: Long.fromString(byteFee),
+    zip_0317: chain === UtxoChain.Zcash,
     coinType: coinType.value,
     fixedDustThreshold: Long.fromBigInt(minUtxo[chain]),
     scripts: {
@@ -102,7 +105,7 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = ({ keysignPay
   input.plan = TW.Bitcoin.Proto.TransactionPlan.decode(plan)
 
   if (chain === UtxoChain.Zcash) {
-    input.plan.branchId = Buffer.from('f04dec4d', 'hex')
+    input.plan.branchId = Buffer.from(shouldBePresent(zcashBranchIdHex, 'Zcash branch id'), 'hex')
   }
 
   return [input]

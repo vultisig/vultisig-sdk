@@ -11,4 +11,7 @@ type SigningInputsResolverInput<T extends ChainKind> = {
   walletCore: WalletCore
 } & (T extends 'utxo' ? { publicKey: PublicKey } : {})
 
-export type SigningInputsResolver<T extends ChainKind> = Resolver<SigningInputsResolverInput<T>, SigningInput<T>[]>
+export type SigningInputsResolver<T extends ChainKind> = Resolver<
+  SigningInputsResolverInput<T>,
+  SigningInput<T>[] | Promise<SigningInput<T>[]>
+>

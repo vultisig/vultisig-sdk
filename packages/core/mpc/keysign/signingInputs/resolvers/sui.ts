@@ -11,6 +11,30 @@ const suiContractAddress = '0x2::sui::SUI'
 
 export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
+
+  // dApp-supplied PTBs (Sui Wallet Standard) arrive already BCS-serialized in
+  // `signData.signSui`. WalletCore signs them verbatim via `signDirectMessage`
+  // — coins, gas and recipients are already baked into the bytes, so we never
+  // reconstruct a Pay / PaySui input for this path.
+  if (keysignPayload.signData.case === 'signSui') {
+    const { unsignedTxMsg } = keysignPayload.signData.value
+    return [
+      TW.Sui.Proto.SigningInput.create({
+        signer: coin.address,
+        signDirectMessage: TW.Sui.Proto.SignDirect.create({
+          unsignedTxMsg,
+        }),
+      }),
+    ]
+  }
+
+  // Sui has no native memo concept — a transaction is a Programmable
+  // Transaction Block with no memo field. Rather than silently dropping a
+  // memo, fail loudly so callers don't assume it was attached.
+  if (keysignPayload.memo) {
+    throw new Error('Sui transactions do not support a memo')
+  }
+
   const { coins, referenceGasPrice, gasBudget } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'suicheSpecific'

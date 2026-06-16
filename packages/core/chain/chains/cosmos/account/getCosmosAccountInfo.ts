@@ -1,7 +1,8 @@
+import type { Pubkey } from '@cosmjs/amino'
 import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
-import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type LcdAccountResponse = {
@@ -31,8 +32,14 @@ type LcdAccountResponse = {
   }
 }
 
+// cosmjs/stargate 0.39 widened Account.accountNumber from `number` to
+// `bigint` (Cosmos SDK 0.53+ GenerateID can exceed Number.MAX_SAFE_INTEGER)
+// while keeping Account.sequence as `number`. Mirror that asymmetry here
+// so the type flows cleanly through reassignment + the LCD fallback path;
+// downstream consumers already wrap accountNumber in BigInt() and pass
+// sequence through, so no callsite needs to change.
 type ParsedAccount = {
-  accountNumber: number
+  accountNumber: bigint
   sequence: number
 }
 
@@ -40,10 +47,16 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
   const acc = resp.account
   if (!acc) return null
   const base = acc.base_vesting_account?.base_account ?? acc.base_account ?? acc
-  const accountNumber = Number(base.account_number ?? '0')
-  const sequence = Number(base.sequence ?? '0')
-  if (!Number.isFinite(accountNumber) || !Number.isFinite(sequence)) return null
-  return { accountNumber, sequence }
+  try {
+    const accountNumber = BigInt(base.account_number ?? '0')
+    const sequence = Number(base.sequence ?? '0')
+    if (!Number.isFinite(sequence)) return null
+    return { accountNumber, sequence }
+  } catch {
+    // BigInt() throws on malformed input (non-numeric string, decimal,
+    // empty). Match the old Number.isFinite gate by failing closed.
+    return null
+  }
 }
 
 // LCD fallback for Tendermint-RPC account lookups that return null.
@@ -72,7 +85,11 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
 const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
   [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
   [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
-  [Chain.Kujira]: 'https://kujira-api.polkachu.com',
+  // rest.cosmos.directory/kujira proxies across multiple independent providers
+  // (confirmed live 2026-06-16 via node_info + auth endpoint returning valid cosmos SDK JSON).
+  // Distinct from the polkachu primary in cosmosRpcUrl.ts so a polkachu degradation
+  // does not take out both legs simultaneously (the failure mode flagged in #735).
+  [Chain.Kujira]: 'https://rest.cosmos.directory/kujira',
   [Chain.Terra]: 'https://terra-api.polkachu.com',
   [Chain.TerraClassic]: 'https://lcd.terra-classic.hexxagon.io',
   [Chain.THORChain]: 'https://thorchain-api.polkachu.com',
@@ -91,7 +108,7 @@ const tryLcd = async (base: string, address: string): Promise<ParsedAccount | nu
 }
 
 const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
-  const base = cosmosRpcUrl[chain]
+  const base = getCosmosRpcUrl(chain)
   if (!base) return null
   const primary = await tryLcd(base, address)
   if (primary) return primary
@@ -104,12 +121,28 @@ const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<
   return tryLcd(fallback, address)
 }
 
-export const getCosmosAccountInfo = async ({ chain, address }: ChainAccount<CosmosChain>) => {
+// Explicit return type so TS doesn't have to name the deeply-nested
+// Pubkey path from `@cosmjs/stargate/node_modules/@cosmjs/amino` in the
+// inferred export type (TS2883 against the 0.39 bump). `Pubkey | null`
+// re-references the same shape via the surface package so the inferred
+// type is portable.
+type CosmosAccountInfo = {
+  address: string
+  pubkey: Pubkey | null
+  accountNumber: bigint
+  sequence: number
+  latestBlock: string
+}
+
+export const getCosmosAccountInfo = async ({
+  chain,
+  address,
+}: ChainAccount<CosmosChain>): Promise<CosmosAccountInfo> => {
   const client = await getCosmosClient(chain)
   const [accountInfo, block] = await Promise.all([client.getAccount(address), client.getBlock()])
 
-  let accountNumber = accountInfo?.accountNumber
-  let sequence = accountInfo?.sequence
+  let accountNumber: bigint | undefined = accountInfo?.accountNumber
+  let sequence: number | undefined = accountInfo?.sequence
 
   // RPC returned null. Try the LCD shape parser before falling back to
   // sequence:0 — that fallback is correct only for accounts that have
@@ -132,7 +165,7 @@ export const getCosmosAccountInfo = async ({ chain, address }: ChainAccount<Cosm
   return {
     address,
     pubkey: accountInfo?.pubkey ?? null,
-    accountNumber: accountNumber ?? 0,
+    accountNumber: accountNumber ?? 0n,
     sequence: sequence ?? 0,
     latestBlock,
   }

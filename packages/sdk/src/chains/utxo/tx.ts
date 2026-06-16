@@ -443,17 +443,38 @@ export function getSighashLegacy(opts: SighashLegacyOptions): Uint8Array {
 // ---------------------------------------------------------------------------
 
 /**
- * Default Zcash consensus branch ID (NU6.1, the epoch active at the time
- * of writing). Consumers SHOULD override via `buildUtxoSendTx({zcashBranchId})`
- * for pre-activation signing — relying on a compiled-in default means every
- * Zcash network upgrade turns into a shipped-SDK-release blocker.
- *
- * Look up the current value at tx-build time from a Zcash node:
- *   zcash-cli getblockchaininfo | jq '.consensus.nextblock'
+ * Zcash consensus branch ID for NU6.1. Kept exported for callers that need
+ * to reproduce transactions from the previous consensus epoch.
  */
 export const ZCASH_BRANCH_ID_NU6_1 = 0x4dec4df0
+
+/**
+ * Zcash consensus branch ID for NU6.2. Kept exported only for callers that
+ * need to reproduce historical transactions from that consensus epoch.
+ */
+export const ZCASH_BRANCH_ID_NU6_2 = 0x5437f330
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
 const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
+
+/**
+ * ZIP-317 conventional-fee floor (https://zips.z.cash/zip-0317). Nodes relay
+ * zero "unpaid actions", so a tx must pay 5,000 zats per logical action with
+ * a 2-action grace window. This builder emits at most two P2PKH outputs
+ * (ceil(68 / 34) = 2 actions), so actions reduce to
+ * max(2, ceil(input bytes / 150)).
+ * Canonical formula: packages/core/chain/chains/utxo/fee/zip317.ts.
+ */
+const ZCASH_MARGINAL_FEE = 5000n
+const ZCASH_GRACE_ACTIONS = 2n
+const ZCASH_P2PKH_INPUT_SIZE = 148n
+const ZCASH_INPUT_ACTION_SIZE = 150n
+
+function zcashConventionalFee(inputCount: number): bigint {
+  const inputBytes = BigInt(inputCount) * ZCASH_P2PKH_INPUT_SIZE
+  const inputActions = (inputBytes + ZCASH_INPUT_ACTION_SIZE - 1n) / ZCASH_INPUT_ACTION_SIZE
+  const actions = inputActions > ZCASH_GRACE_ACTIONS ? inputActions : ZCASH_GRACE_ACTIONS
+  return ZCASH_MARGINAL_FEE * actions
+}
 
 function zcashPersonalization(prefix: string, branchId: number): Uint8Array {
   const prefixBytes = new TextEncoder().encode(prefix)
@@ -699,11 +720,9 @@ export type BuildUtxoSendOptions = {
   /** Compressed pubkey (33 bytes) used for scriptSig / witness */
   compressedPubKey: Uint8Array
   /**
-   * Zcash consensus branch ID (ignored for non-Zcash chains). Defaults to
-   * `ZCASH_BRANCH_ID_NU6_1` at the time of release. Consumers SHOULD fetch
-   * the current value from a zcash-cli `getblockchaininfo` at tx-build time
-   * — hardcoding means every future consensus upgrade requires a shipped
-   * SDK release.
+   * Zcash consensus branch ID (ignored for non-Zcash chains). Required for
+   * Zcash so future consensus upgrades fail loud instead of signing with a
+   * stale compiled fallback.
    */
   zcashBranchId?: number
 }
@@ -752,7 +771,9 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   // Approximate tx size for fee calc — matches app's heuristic.
   const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
   const txSize = inputs.length * bytesPerInput + 2 * 34 + 10
-  const fee = BigInt(Math.ceil(txSize * opts.feeRate))
+  const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
+  const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
+  const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
     throw new Error(
@@ -794,13 +815,16 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
-  const zcashBranchId = opts.zcashBranchId ?? ZCASH_BRANCH_ID_NU6_1
+  const zcashBranchId = opts.zcashBranchId
+  if (isZcash && zcashBranchId === undefined) {
+    throw new Error('buildUtxoSendTx: zcashBranchId is required for Zcash')
+  }
 
   const signingHashes: Uint8Array[] = []
   for (let i = 0; i < inputs.length; i++) {
     let h: Uint8Array
     if (isZcash) {
-      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash, zcashBranchId)
+      h = getSighashZcash(inputs, outputsRaw, i, fromDec.pubKeyHash, zcashBranchId!)
     } else if (isBCH) {
       h = getSighashBIP143({
         inputs,

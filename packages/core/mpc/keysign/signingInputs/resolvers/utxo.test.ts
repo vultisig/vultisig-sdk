@@ -1,4 +1,6 @@
+import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { TW } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { UTXOSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
@@ -9,6 +11,10 @@ import {
   OneInchTransactionSchema,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@vultisig/core-chain/chains/utxo/zcashBranchId', () => ({
+  getZcashBranchIdHex: vi.fn(async () => '30f33754'),
+}))
 
 // Minimal walletCore stub — only the surface used by getUtxoSigningInputs general-swap arm.
 // Full signing-path tests (UTXO selection, fee, broadcast) require real WalletCore binaries
@@ -36,6 +42,7 @@ const makeWalletCore = ({ isValidAddress = true }: { isValidAddress?: boolean } 
     },
     CoinType: {
       bitcoin: { value: 0 },
+      zcash: { value: 133 },
     },
   }) as never
 
@@ -86,21 +93,21 @@ describe('getUtxoSigningInputs — general swap address validation', () => {
   it('throws when toAddress is empty string', async () => {
     const resolver = await getUtxoSigningInputs()
     const payload = buildGeneralSwapPayload('')
-    expect(() => resolver({ keysignPayload: payload, walletCore: makeWalletCore(), publicKey: {} as never })).toThrow(
-      'destination address is missing'
-    )
+    await expect(
+      resolver({ keysignPayload: payload, walletCore: makeWalletCore(), publicKey: {} as never })
+    ).rejects.toThrow('destination address is missing')
   })
 
   it('throws when walletCore rejects the destination address format', async () => {
     const resolver = await getUtxoSigningInputs()
     const payload = buildGeneralSwapPayload('not-a-valid-btc-address')
-    expect(() =>
+    await expect(
       resolver({
         keysignPayload: payload,
         walletCore: makeWalletCore({ isValidAddress: false }),
         publicKey: {} as never,
       })
-    ).toThrow('not valid for this chain')
+    ).rejects.toThrow('not valid for this chain')
   })
 
   it('proceeds when toAddress is a valid address', async () => {
@@ -110,12 +117,71 @@ describe('getUtxoSigningInputs — general swap address validation', () => {
     // With the stub walletCore, AnySigner.plan returns empty bytes which
     // will fail to decode a TransactionPlan — that is expected and not what
     // we are testing here. We only assert the validation guard does NOT throw.
-    expect(() =>
-      resolver({
+    try {
+      await resolver({
         keysignPayload: payload,
         walletCore: makeWalletCore({ isValidAddress: true }),
         publicKey: {} as never,
       })
-    ).not.toThrow('destination address')
+    } catch (error) {
+      expect(error instanceof Error ? error.message : String(error)).not.toContain('destination address')
+    }
+  })
+})
+
+describe('Zcash branch ID', () => {
+  it('stamps the live consensus branch ID in WalletCore little-endian hex order', async () => {
+    const resolver = await getUtxoSigningInputs()
+    const walletCore = makeWalletCore()
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Zcash,
+        ticker: 'ZEC',
+        address: 't1Source',
+        decimals: 8,
+        isNativeToken: true,
+      }),
+      toAddress: 't1Destination',
+      toAmount: '600000',
+      blockchainSpecific: {
+        case: 'utxoSpecific',
+        value: create(UTXOSpecificSchema, { byteFee: '10', sendMaxAmount: false }),
+      },
+      utxoInfo: [],
+    })
+
+    const [input] = await resolver({ keysignPayload: payload, walletCore, publicKey: {} as never })
+
+    expect(Buffer.from(input.plan!.branchId!).toString('hex')).toBe('30f33754')
+  })
+})
+
+describe('Zcash ZIP-317 fee planning', () => {
+  it('enables ZIP-317 on the WalletCore planner input for Zcash sends', async () => {
+    const resolver = await getUtxoSigningInputs()
+    const walletCore = makeWalletCore()
+    const plan = (walletCore as unknown as { AnySigner: { plan: ReturnType<typeof vi.fn> } }).AnySigner.plan
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Zcash,
+        ticker: 'ZEC',
+        address: 't1Source',
+        decimals: 8,
+        isNativeToken: true,
+      }),
+      toAddress: 't1Destination',
+      toAmount: '600000',
+      blockchainSpecific: {
+        case: 'utxoSpecific',
+        value: create(UTXOSpecificSchema, { byteFee: '10', sendMaxAmount: false }),
+      },
+      utxoInfo: [],
+    })
+
+    await resolver({ keysignPayload: payload, walletCore, publicKey: {} as never })
+
+    const planInput = vi.mocked(plan).mock.calls[0]?.[0]
+    expect(planInput).toBeDefined()
+    expect(TW.Bitcoin.Proto.SigningInput.decode(planInput).zip_0317).toBe(true)
   })
 })

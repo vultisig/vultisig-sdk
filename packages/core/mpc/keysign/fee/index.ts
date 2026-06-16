@@ -39,7 +39,7 @@ const resolvers: Record<ChainKind, FeeAmountResolver> = {
   tron: getTronFeeAmount,
 }
 
-export const getFeeAmount = (input: Input): bigint => {
+export const getFeeAmount = async (input: Input): Promise<bigint> => {
   const chain = getKeysignChain(input.keysignPayload)
   const kind = getChainKind(chain)
 

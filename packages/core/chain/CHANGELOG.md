@@ -1,5 +1,206 @@
 # @vultisig/core-chain
 
+## 2.16.5
+
+### Patch Changes
+
+- [#749](https://github.com/vultisig/vultisig-sdk/pull/749) [`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - cosmos/gas: bump TerraClassic staking gas limit from 2M to 3M and cap msgCount scaling
+
+  `getCosmosStakingGasLimit` now returns 3M for `Chain.TerraClassic` regardless of `msgCount`. The previous 2M base caused consistent out-of-gas failures (`ValuePerByte` meter in the classic-terra treasury/tax post-handler adds ~200-800 gas beyond the standard SDK estimate). The msgCount scaling is disabled for TerraClassic: at `msgCount >= 2` the scaled gasWanted would exceed the 100 LUNC fee floor, causing node rejection. Columbus-5 callers must split multi-validator reward claims into separate transactions.
+
+## 2.16.4
+
+### Patch Changes
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(pubkey): fall back to bip32 derivation when chainPublicKey is 32 bytes on ecdsa chains
+
+  Older KeyImport vault backups sometimes store the raw 32-byte X coordinate
+  for secp256k1 chains instead of the standard 33-byte compressed form.
+  WalletCore's createWithData rejects these with "Invalid length: Expected 33
+  but received 32", breaking execute_swap / show_receive_request for affected
+  users (~7 events/day in prod).
+
+  The fix detects the 32-byte case at runtime for ecdsa chains and falls back
+  to BIP32 derivation from the root ECDSA key, which always produces a valid
+  33-byte compressed pubkey.
+
+- [#758](https://github.com/vultisig/vultisig-sdk/pull/758) [`10a058b`](https://github.com/vultisig/vultisig-sdk/commit/10a058bf1a2a2c1ed9ba4ec9c4a29830ec6f1aae) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Use a distinct provider for Kujira's LCD fallback so primary (polkachu) and fallback (rest.cosmos.directory) are independent - restoring real redundancy if polkachu degrades.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: await assertFetchResponse in queryOneInch to prevent "Already read" body error
+
+  assertFetchResponse is an async function that reads the response body. Without
+  await, the body read started in the background while response.json() was called
+  concurrently - resulting in a "Already read" TypeError on non-2xx EVM discovery
+  responses. Fixes dashboard_sdk_discovery_failure events for Ethereum/BSC/Arbitrum.
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): bump TerraClassic staking gas limit from 2M to 3M
+
+  The 2M limit was consistently failing with "out of gas in location:
+  ValuePerByte" on TerraClassic MsgDelegate / MsgUndelegate / claim-rewards
+  txs (gasUsed: 2000201-2000774). The ValuePerByte meter in the classic-terra
+  treasury/tax post-handler adds ~200-800 gas on top of the base delegate
+  cost, which the standard SDK estimate doesn't account for. 3M fits safely
+  within the 100 LUNC fee floor (3M \* 28.325 uluna/gas ≈ 84.97 LUNC < 100
+  LUNC).
+
+## 2.16.3
+
+### Patch Changes
+
+- [#748](https://github.com/vultisig/vultisig-sdk/pull/748) [`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add canonical Circle USDC on Base (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) to the known-token registry. It was the only major-EVM canonical USDC missing, so swaps to Base USDC resolved via the coingecko source and the app flagged the canonical stablecoin as "unverified token". Now it resolves as a known token (verified).
+
+## 2.16.2
+
+### Patch Changes
+
+- [#718](https://github.com/vultisig/vultisig-sdk/pull/718) [`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3) Thanks [@realpaaao](https://github.com/realpaaao)! - Replace the dead Hyperliquid block explorer liquidscan.io with hypurrscan.io.
+
+- [#735](https://github.com/vultisig/vultisig-sdk/pull/735) [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): use polkachu for the Kujira LCD + RPC endpoints
+
+  `kujira-rest.publicnode.com` and `kujira-rpc.publicnode.com` both now return
+  HTTP 403 "unsupported platform" for our clients, breaking Kujira balance reads
+  and tx broadcasts. Point `cosmosRpcUrl` and `tendermintRpcUrl` for Kujira at
+  polkachu (the same provider Noble uses, and the one `getCosmosAccountInfo`
+  already falls back to). Live-verified 200 with the real ukuji balance.
+
+## 2.16.1
+
+### Patch Changes
+
+- [#702](https://github.com/vultisig/vultisig-sdk/pull/702) [`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix TON jetton balances showing a stranger's holdings. Jetton wallet lookups
+  queried the proxy with `owner_id` + `jetton_master_id`, which toncenter v3
+  ignores (it filters on `owner_address` + `jetton_address`). The proxy then
+  returned an unfiltered global list and the code took the first entry — a random
+  wallet — so an address with no USDT reported ~200M USDT. Restore the correct
+  params and filter the response by both owner and jetton master instead of
+  trusting the first entry. This also keeps jetton transfers from resolving the
+  wrong source wallet.
+
+## 2.16.0
+
+### Minor Changes
+
+- [#724](https://github.com/vultisig/vultisig-sdk/pull/724) [`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(custom-rpc): app-wide per-chain custom RPC endpoint overrides
+
+  Add an in-memory override registry that the EVM and Cosmos URL resolvers consult, so a host app can point a supported chain at its own node. v1 covers the EVM chains and the IBC-enabled Cosmos chains; the override maps to the EVM RPC URL for EVM chains and to the LCD/REST endpoint for Cosmos (balance fallback, account info, fee). Includes `customRpcSupportedChains` as a single source of truth and an `rpcHealthProbe` (EVM `eth_chainId` identity check, Cosmos `node_info` liveness). Default behaviour is byte-identical when no override is set.
+
+## 2.15.3
+
+### Patch Changes
+
+- [#708](https://github.com/vultisig/vultisig-sdk/pull/708) [`d4fa237`](https://github.com/vultisig/vultisig-sdk/commit/d4fa23796053f1a15fcce8b1fad5e9ccbbfbeb3d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Mark unknown EVM and Cosmos transaction hashes as `isKnown: false` so broadcast verification rethrows real broadcast failures instead of treating unindexed hashes as known pending transactions.
+
+## 2.15.2
+
+### Patch Changes
+
+- [#716](https://github.com/vultisig/vultisig-sdk/pull/716) [`3f622f6`](https://github.com/vultisig/vultisig-sdk/commit/3f622f631089d0e33eb879be3407401887ebf0c8) Thanks [@realpaaao](https://github.com/realpaaao)! - Add a canonical ZIP-317 conventional-fee module to core-chain and floor the Zcash send-builder fee at 5,000 zats per logical action, so low fee rates can no longer produce transactions the network rejects with "tx unpaid action limit exceeded".
+
+## 2.15.1
+
+### Patch Changes
+
+- [#709](https://github.com/vultisig/vultisig-sdk/pull/709) [`de621f3`](https://github.com/vultisig/vultisig-sdk/commit/de621f3fd2a8c1ca64e73f6fe64afb7d77fb3e43) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve Cosmos fee amounts from live node min gas prices when available, keeping the existing static amounts as safe floors.
+
+- [#712](https://github.com/vultisig/vultisig-sdk/pull/712) [`9439a61`](https://github.com/vultisig/vultisig-sdk/commit/9439a6194abf3533ad06aa84847c81b2af7fe8df) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Filter Blockchair UTXO selection to confirmed spendable outputs and request an explicit address-info UTXO limit.
+
+- [#714](https://github.com/vultisig/vultisig-sdk/pull/714) [`625fb42`](https://github.com/vultisig/vultisig-sdk/commit/625fb4205f265587f66f447b4059543756ef1095) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch the live Zcash ZIP-243 consensus branch ID for SDK signing and fail loudly instead of using a stale compiled fallback.
+
+## 2.15.0
+
+### Minor Changes
+
+- [#686](https://github.com/vultisig/vultisig-sdk/pull/686) [`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC support to the Cosmos staking signing path and LCD query layer. QBTC
+  is a Cosmos-SDK chain (post-quantum testnet, ML-DSA-signed) but lives in
+  `OtherChain`, so it sat outside the staking helpers' typing and LCD root
+  resolution.
+
+  - `QBTCHelper.buildTxComponents` now consumes a `signData.signDirect` payload
+    verbatim — the `bodyBytes` / `authInfoBytes` already carry the ML-DSA pubkey
+    `Any`, gas and fee, so the initiator and every co-signing peer rebuild an
+    identical SignDoc hash. Previously it always rebuilt the body from
+    `transactionType` (MsgSend / IBC / Vote), which silently turned a staking
+    SignDoc into a `MsgSend`. `signAmino` is rejected (ML-DSA is
+    SIGN_MODE_DIRECT only). The normal send path (no `signData`) is unchanged.
+  - `chains/cosmos/staking/lcdQueries` exports a widened
+    `StakingChain = IbcEnabledCosmosChain | Chain.QBTC` and resolves the LCD root
+    through a helper that routes QBTC to `qbtcRestUrl` and every other staking
+    chain to `cosmosRpcUrl[chain]`.
+
+  Backward compatible: existing IBC-enabled staking chains route exactly as
+  before.
+
+## 2.14.1
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+## 2.14.0
+
+### Minor Changes
+
+- [#676](https://github.com/vultisig/vultisig-sdk/pull/676) [`7572dc0`](https://github.com/vultisig/vultisig-sdk/commit/7572dc0e7fa785453e36a419d678f8a1bf17c8b5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add THORChain limit swap memo builder, validation helpers, and JSON test vectors.
+
+## 2.13.0
+
+### Minor Changes
+
+- [#672](https://github.com/vultisig/vultisig-sdk/pull/672) [`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Blockaid Sui transaction simulation support. The existing Sui Blockaid
+  scan resolver only requested `validation`; this exposes the simulation block
+  returned by the same `/sui/transaction/scan` endpoint via a new
+  `getSuiTxBlockaidSimulation` resolver and a `parseBlockaidSuiSimulation`
+  parser that produces a UI-facing `{ swap } | { transfer }` headline
+  (mirroring the Solana shape). `OtherChain.Sui` is now a member of
+  `blockaidSimulationSupportedChains`, with a new `getTxBlockaidSimulation`
+  overload, and the mpc package gains a matching
+  `getSuiBlockaidTxSimulationInput` for the `KeysignPayload`-driven flow.
+
+  The parser keeps `null` as its failure mode rather than throwing — Blockaid
+  field renames degrade to "no preview" instead of breaking consumers.
+
+  Closes [#671](https://github.com/vultisig/vultisig-sdk/issues/671)
+
+## 2.12.0
+
+### Minor Changes
+
+- [#651](https://github.com/vultisig/vultisig-sdk/pull/651) [`e9c4997`](https://github.com/vultisig/vultisig-sdk/commit/e9c4997bae3a499785295b76dbc956807cc704f5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Sui dApp signing helpers to `@vultisig/core-chain/chains/sui`. Two new
+  public modules:
+  - `./chains/sui/sign` exports `suiTransactionDataIntent` /
+    `suiPersonalMessageIntent` (defensive clones of the 3-byte intent
+    prefixes), `getSuiTransactionDataDigest(txBytes)` and
+    `getSuiPersonalMessageDigest(messageBytes)` for the intent-prefixed
+    blake2b-256 digests the wallet's Ed25519 signer signs, and
+    `buildSuiSerializedSignature({ signature, publicKey })` for the 97-byte
+    `flag(1) || sig(64) || pubkey(32)` Wallet Standard wire signature.
+  - `./chains/sui/buildTransactionFromJson` exports
+    `buildSuiTransactionFromJson({ transactionJson, sender })` which hydrates
+    a serialized Sui `Transaction` (V1 or V2 JSON) and resolves it to BCS
+    bytes via `Transaction.build({ client: getSuiClient() })`. Lets
+    extension callers move the build step off the dApp page (where the dApp
+    page's Content Security Policy blocks the Sui RPC) and into the
+    extension's own context.
+
+## 2.11.0
+
+### Minor Changes
+
+- [#649](https://github.com/vultisig/vultisig-sdk/pull/649) [`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add custom token support for SUI. SUI is now included in
+  `chainsWithTokenMetadataDiscovery`, and a new resolver fetches coin metadata
+  (ticker, decimals, logo) from the SUI RPC via `suix_getCoinMetadata`. A new
+  `isValidTokenId` helper validates token identifiers per chain — SUI tokens are
+  validated as Move struct tags (e.g. `0x2::sui::SUI`) while all other chains keep
+  delegating to `isValidAddress`.
+
+## 2.10.2
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
 ## 2.10.1
 
 ### Patch Changes

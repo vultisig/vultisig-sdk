@@ -33,6 +33,12 @@ function scaffold(files, pkg = {}) {
   }
 }
 
+function writeFixture(root, rel, contents = '{}') {
+  const abs = path.join(root, 'fixtures', rel)
+  mkdirSync(path.dirname(abs), { recursive: true })
+  writeFileSync(abs, contents)
+}
+
 test('generateSharedExports maps flat, directory, and package.json exports', () => {
   const { dist, cleanup } = scaffold(['index.js', 'foo.js', 'bar/index.js'])
   try {
@@ -52,6 +58,25 @@ test('generateSharedExports maps flat, directory, and package.json exports', () 
         import: './dist/foo.js',
         default: './dist/foo.js',
       },
+      './package.json': './package.json',
+    })
+  } finally {
+    cleanup()
+  }
+})
+
+test('generateSharedExports maps package fixture JSON files', () => {
+  const { root, dist, cleanup } = scaffold(['index.js'])
+  writeFixture(root, 'limit-swap-memos.json', '[]')
+
+  try {
+    assert.deepEqual(generateSharedExports(dist), {
+      '.': {
+        types: './dist/index.d.ts',
+        import: './dist/index.js',
+        default: './dist/index.js',
+      },
+      './fixtures/limit-swap-memos.json': './fixtures/limit-swap-memos.json',
       './package.json': './package.json',
     })
   } finally {

@@ -86,7 +86,7 @@ export class BroadcastService {
       }
 
       // Get transaction input data (same data used during signing)
-      const txInputsArray = getEncodedSigningInputs({
+      const txInputsArray = await getEncodedSigningInputs({
         keysignPayload,
         walletCore,
         publicKey,

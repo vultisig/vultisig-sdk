@@ -8,9 +8,10 @@
  * Generic across every cosmos-sdk chain we support — same paths, just
  * different LCD root. No chain-specific branching.
  */
-import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
+import { Chain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 
 import { cosmosRpcUrl } from '../cosmosRpcUrl'
+import { qbtcRestUrl } from '../qbtc/tendermintRpcUrl'
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -143,20 +144,33 @@ export type VestingAccount = PeriodicVestingAccount | ContinuousVestingAccount |
  * make sense on `IbcEnabledCosmosChain`. Tighten the type at the boundary
  * so callers can't accidentally hit `/cosmos/staking/...` against a
  * THORChain LCD that doesn't serve it.
+ *
+ * QBTC is a Cosmos-SDK chain too (post-quantum testnet, MLDSA-signed) and
+ * serves the same x/staking + x/distribution endpoints, but it lives in
+ * `OtherChain` rather than `CosmosChain` (WalletCore can't sign it), so it
+ * isn't a key of `cosmosRpcUrl`. Include it explicitly and resolve its LCD
+ * root via `qbtcRestUrl`.
  */
-type StakingChain = (typeof IbcEnabledCosmosChain)[keyof typeof IbcEnabledCosmosChain]
+export type StakingChain = IbcEnabledCosmosChain | typeof Chain.QBTC
+
+/**
+ * LCD/REST root for a staking chain. QBTC isn't keyed in `cosmosRpcUrl`, so
+ * route it to its dedicated REST endpoint; every other staking chain is a
+ * `CosmosChain` and indexes `cosmosRpcUrl` directly.
+ */
+const stakingLcdRoot = (chain: StakingChain): string => (chain === Chain.QBTC ? qbtcRestUrl : cosmosRpcUrl[chain])
 
 export const getDelegationsUrl = (chain: StakingChain, delegatorAddress: string): string =>
-  `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/delegations/${delegatorAddress}`
+  `${stakingLcdRoot(chain)}/cosmos/staking/v1beta1/delegations/${delegatorAddress}`
 
 export const getUnbondingDelegationsUrl = (chain: StakingChain, delegatorAddress: string): string =>
-  `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/delegators/${delegatorAddress}/unbonding_delegations`
+  `${stakingLcdRoot(chain)}/cosmos/staking/v1beta1/delegators/${delegatorAddress}/unbonding_delegations`
 
 export const getDelegatorRewardsUrl = (chain: StakingChain, delegatorAddress: string): string =>
-  `${cosmosRpcUrl[chain]}/cosmos/distribution/v1beta1/delegators/${delegatorAddress}/rewards`
+  `${stakingLcdRoot(chain)}/cosmos/distribution/v1beta1/delegators/${delegatorAddress}/rewards`
 
 export const getAuthAccountUrl = (chain: StakingChain, address: string): string =>
-  `${cosmosRpcUrl[chain]}/cosmos/auth/v1beta1/accounts/${address}`
+  `${stakingLcdRoot(chain)}/cosmos/auth/v1beta1/accounts/${address}`
 
 /**
  * Validator list endpoint. Optional `status` filter is the canonical way to
@@ -173,11 +187,11 @@ export const getValidatorsUrl = (
   if (opts.limit !== undefined) params.set('pagination.limit', String(opts.limit))
   if (opts.paginationKey) params.set('pagination.key', opts.paginationKey)
   const qs = params.toString()
-  return `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/validators${qs ? `?${qs}` : ''}`
+  return `${stakingLcdRoot(chain)}/cosmos/staking/v1beta1/validators${qs ? `?${qs}` : ''}`
 }
 
 export const getValidatorUrl = (chain: StakingChain, validatorAddress: string): string =>
-  `${cosmosRpcUrl[chain]}/cosmos/staking/v1beta1/validators/${validatorAddress}`
+  `${stakingLcdRoot(chain)}/cosmos/staking/v1beta1/validators/${validatorAddress}`
 
 // ---------------------------------------------------------------------------
 // Fetchers (raw fetch, no Stargate dep — works in RN + Node + browser)

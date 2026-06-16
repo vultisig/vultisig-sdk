@@ -1,5 +1,184 @@
 # @vultisig/core-mpc
 
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f)]:
+  - @vultisig/core-chain@2.16.5
+
+## 1.6.8
+
+### Patch Changes
+
+- Updated dependencies [[`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90), [`10a058b`](https://github.com/vultisig/vultisig-sdk/commit/10a058bf1a2a2c1ed9ba4ec9c4a29830ec6f1aae), [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90), [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712), [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90)]:
+  - @vultisig/core-chain@2.16.4
+
+## 1.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11)]:
+  - @vultisig/core-chain@2.16.3
+
+## 1.6.6
+
+### Patch Changes
+
+- [#734](https://github.com/vultisig/vultisig-sdk/pull/734) [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reject a memo on Sui keysigns instead of silently dropping it. Sui has no native memo field (a transaction is a Programmable Transaction Block), so the Sui signing-input resolver now throws when `keysignPayload.memo` is set, surfacing the unsupported request to callers.
+
+- Updated dependencies [[`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3), [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34)]:
+  - @vultisig/core-chain@2.16.2
+
+## 1.6.5
+
+### Patch Changes
+
+- Updated dependencies [[`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c)]:
+  - @vultisig/core-chain@2.16.1
+
+## 1.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/core-chain@2.16.0
+
+## 1.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`d4fa237`](https://github.com/vultisig/vultisig-sdk/commit/d4fa23796053f1a15fcce8b1fad5e9ccbbfbeb3d)]:
+  - @vultisig/core-chain@2.15.3
+
+## 1.6.2
+
+### Patch Changes
+
+- Updated dependencies [[`3f622f6`](https://github.com/vultisig/vultisig-sdk/commit/3f622f631089d0e33eb879be3407401887ebf0c8)]:
+  - @vultisig/core-chain@2.15.2
+
+## 1.6.1
+
+### Patch Changes
+
+- [#709](https://github.com/vultisig/vultisig-sdk/pull/709) [`de621f3`](https://github.com/vultisig/vultisig-sdk/commit/de621f3fd2a8c1ca64e73f6fe64afb7d77fb3e43) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Resolve Cosmos fee amounts from live node min gas prices when available, keeping the existing static amounts as safe floors.
+
+- [#714](https://github.com/vultisig/vultisig-sdk/pull/714) [`625fb42`](https://github.com/vultisig/vultisig-sdk/commit/625fb4205f265587f66f447b4059543756ef1095) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch the live Zcash ZIP-243 consensus branch ID for SDK signing and fail loudly instead of using a stale compiled fallback.
+
+- Updated dependencies [[`de621f3`](https://github.com/vultisig/vultisig-sdk/commit/de621f3fd2a8c1ca64e73f6fe64afb7d77fb3e43), [`9439a61`](https://github.com/vultisig/vultisig-sdk/commit/9439a6194abf3533ad06aa84847c81b2af7fe8df), [`625fb42`](https://github.com/vultisig/vultisig-sdk/commit/625fb4205f265587f66f447b4059543756ef1095)]:
+  - @vultisig/core-chain@2.15.1
+
+## 1.6.0
+
+### Minor Changes
+
+- [#705](https://github.com/vultisig/vultisig-sdk/pull/705) [`391e42d`](https://github.com/vultisig/vultisig-sdk/commit/391e42d020ea96407eb122de762234c9443392fc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add a `SignSui` variant to `KeysignPayload.signData` so pre-built Sui Programmable Transaction Blocks (Sui Wallet Standard dApp signing) flow through the standard keysign pipeline instead of a custom-message path. `getSuiSigningInputs` forwards the BCS bytes verbatim via `signDirectMessage`, and `getSuiChainSpecific` returns an empty `SuiSpecific` for this variant (the coins, gas budget and reference gas price are already baked into the bytes, so no RPC lookup is needed).
+
+## 1.5.0
+
+### Minor Changes
+
+- [#686](https://github.com/vultisig/vultisig-sdk/pull/686) [`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC support to the Cosmos staking signing path and LCD query layer. QBTC
+  is a Cosmos-SDK chain (post-quantum testnet, ML-DSA-signed) but lives in
+  `OtherChain`, so it sat outside the staking helpers' typing and LCD root
+  resolution.
+
+  - `QBTCHelper.buildTxComponents` now consumes a `signData.signDirect` payload
+    verbatim — the `bodyBytes` / `authInfoBytes` already carry the ML-DSA pubkey
+    `Any`, gas and fee, so the initiator and every co-signing peer rebuild an
+    identical SignDoc hash. Previously it always rebuilt the body from
+    `transactionType` (MsgSend / IBC / Vote), which silently turned a staking
+    SignDoc into a `MsgSend`. `signAmino` is rejected (ML-DSA is
+    SIGN_MODE_DIRECT only). The normal send path (no `signData`) is unchanged.
+  - `chains/cosmos/staking/lcdQueries` exports a widened
+    `StakingChain = IbcEnabledCosmosChain | Chain.QBTC` and resolves the LCD root
+    through a helper that routes QBTC to `qbtcRestUrl` and every other staking
+    chain to `cosmosRpcUrl[chain]`.
+
+  Backward compatible: existing IBC-enabled staking chains route exactly as
+  before.
+
+### Patch Changes
+
+- Updated dependencies [[`b900fcf`](https://github.com/vultisig/vultisig-sdk/commit/b900fcf95709da28ea7add1ea144d126c9fbcd98)]:
+  - @vultisig/core-chain@2.15.0
+
+## 1.4.2
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/core-chain@2.14.1
+
+## 1.4.1
+
+### Patch Changes
+
+- Updated dependencies [[`7572dc0`](https://github.com/vultisig/vultisig-sdk/commit/7572dc0e7fa785453e36a419d678f8a1bf17c8b5)]:
+  - @vultisig/core-chain@2.14.0
+
+## 1.4.0
+
+### Minor Changes
+
+- [#672](https://github.com/vultisig/vultisig-sdk/pull/672) [`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add Blockaid Sui transaction simulation support. The existing Sui Blockaid
+  scan resolver only requested `validation`; this exposes the simulation block
+  returned by the same `/sui/transaction/scan` endpoint via a new
+  `getSuiTxBlockaidSimulation` resolver and a `parseBlockaidSuiSimulation`
+  parser that produces a UI-facing `{ swap } | { transfer }` headline
+  (mirroring the Solana shape). `OtherChain.Sui` is now a member of
+  `blockaidSimulationSupportedChains`, with a new `getTxBlockaidSimulation`
+  overload, and the mpc package gains a matching
+  `getSuiBlockaidTxSimulationInput` for the `KeysignPayload`-driven flow.
+
+  The parser keeps `null` as its failure mode rather than throwing — Blockaid
+  field renames degrade to "no preview" instead of breaking consumers.
+
+  Closes [#671](https://github.com/vultisig/vultisig-sdk/issues/671)
+
+### Patch Changes
+
+- Updated dependencies [[`7fa4860`](https://github.com/vultisig/vultisig-sdk/commit/7fa48602ba1acfb57746fd22c87ec3aa30bac4a6)]:
+  - @vultisig/core-chain@2.13.0
+
+## 1.3.13
+
+### Patch Changes
+
+- Updated dependencies [[`e9c4997`](https://github.com/vultisig/vultisig-sdk/commit/e9c4997bae3a499785295b76dbc956807cc704f5)]:
+  - @vultisig/core-chain@2.12.0
+
+## 1.3.12
+
+### Patch Changes
+
+- [#652](https://github.com/vultisig/vultisig-sdk/pull/652) [`0eaa76a`](https://github.com/vultisig/vultisig-sdk/commit/0eaa76a08394e21a1280a6a69a9dc540837dd59c) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Fast Vault KeyImport handling for ECDSA-only vaults and completed outbound keygen retries.
+
+## 1.3.11
+
+### Patch Changes
+
+- Updated dependencies [[`9271864`](https://github.com/vultisig/vultisig-sdk/commit/9271864c7cf1030b613f52b5564fc04d9309f069)]:
+  - @vultisig/core-chain@2.11.0
+
+## 1.3.10
+
+### Patch Changes
+
+- [#647](https://github.com/vultisig/vultisig-sdk/pull/647) [`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Enable WalletCore ZIP-317 fee planning for Zcash UTXO signing inputs.
+
+- Updated dependencies [[`55ed503`](https://github.com/vultisig/vultisig-sdk/commit/55ed503e103bdf8884c7ca7a8050742fb87d9e1f)]:
+  - @vultisig/core-chain@2.10.2
+
+## 1.3.9
+
+### Patch Changes
+
+- [#646](https://github.com/vultisig/vultisig-sdk/pull/646) [`72bbcd1`](https://github.com/vultisig/vultisig-sdk/commit/72bbcd17ee5327390c98784f861b7c6b8829cf2f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update the default Zcash consensus branch ID to NU6.2 (`30f33754`) for SDK UTXO signing and WalletCore signing inputs.
+
 ## 1.3.8
 
 ### Patch Changes

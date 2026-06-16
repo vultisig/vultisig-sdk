@@ -50,28 +50,28 @@ const buildPayload = (memo: string, toAmount = '1000000000') =>
   })
 
 describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)', () => {
-  it('FREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', () => {
-    const [input] = getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:BANDWIDTH'), walletCore })
+  it('FREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
+    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:BANDWIDTH'), walletCore })
     // FreezeBalanceV2 is a bandwidth op; energy feeLimit is semantically irrelevant.
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
-  it('FREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', () => {
-    const [input] = getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:ENERGY'), walletCore })
+  it('FREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
+    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:ENERGY'), walletCore })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
-  it('UNFREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', () => {
-    const [input] = getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'), walletCore })
+  it('UNFREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
+    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'), walletCore })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
-  it('UNFREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', () => {
-    const [input] = getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:ENERGY'), walletCore })
+  it('UNFREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
+    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:ENERGY'), walletCore })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
-  it('gasEstimation value does not leak into FREEZE feeLimit', () => {
+  it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
     // Pre-fix behaviour: feeLimit would have been Long.fromString('100000000').
     // Post-fix: always 0. This assertion pins the regression explicitly.
     const GAS_ESTIMATION = 100_000_000n
@@ -90,7 +90,7 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
       blockchainSpecific: { case: 'tronSpecific', value: specific },
     })
 
-    const [input] = getTronSigningInputs({ keysignPayload: payload, walletCore })
+    const [input] = await getTronSigningInputs({ keysignPayload: payload, walletCore })
     // Anti-regression: prior to fix, feeLimit was passed gasEstimation
     // (a non-zero energy estimate that's semantically meaningless for
     // system contracts and only served to confuse the UI fee display).

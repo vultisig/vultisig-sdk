@@ -7,21 +7,21 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { buildUtxoSendTx, ZCASH_BRANCH_ID_NU6_1 } from '../../../src/chains/utxo'
+import { buildUtxoSendTx, ZCASH_BRANCH_ID_NU6_1, ZCASH_BRANCH_ID_NU6_2 } from '../../../src/chains/utxo'
 
 const COMPRESSED_PUBKEY = Uint8Array.from(
   '02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'.match(/.{2}/g)!.map(b => parseInt(b, 16))
 )
 
 describe('Zcash — branchId parametrization', () => {
-  it('defaults to the NU6.1 constant when `zcashBranchId` is omitted', () => {
-    // Sanity: the exported constant matches the NU6.1 epoch value
+  it('keeps the NU6.2 constant available for callers that explicitly need that epoch', () => {
+    // Sanity: the exported constant matches the NU6.2 epoch value
     // (https://zips.z.cash/zip-0253) and is little-endian-encoded as
-    // `f04dec4d` into the BLAKE2b personalization.
-    expect(ZCASH_BRANCH_ID_NU6_1).toBe(0x4dec4df0)
+    // `30f33754` into the BLAKE2b personalization.
+    expect(ZCASH_BRANCH_ID_NU6_2).toBe(0x5437f330)
   })
 
-  it('produces the same sighash when branchId is omitted vs explicitly set to the default', () => {
+  it('throws when branchId is omitted for Zcash', () => {
     const baseArgs = {
       chain: 'Zcash' as const,
       fromAddress: 't1PoLLLwEcVhqMBhk53tANtSepnPXAQJkPM',
@@ -31,9 +31,7 @@ describe('Zcash — branchId parametrization', () => {
       feeRate: 1,
       compressedPubKey: COMPRESSED_PUBKEY,
     }
-    const defaultBuilder = buildUtxoSendTx(baseArgs)
-    const explicitBuilder = buildUtxoSendTx({ ...baseArgs, zcashBranchId: ZCASH_BRANCH_ID_NU6_1 })
-    expect(defaultBuilder.signingHashesHex).toEqual(explicitBuilder.signingHashesHex)
+    expect(() => buildUtxoSendTx(baseArgs)).toThrow('zcashBranchId is required')
   })
 
   it('produces a DIFFERENT sighash when branchId changes (i.e. the parameter actually reaches the personalization)', () => {
@@ -46,9 +44,12 @@ describe('Zcash — branchId parametrization', () => {
       feeRate: 1,
       compressedPubKey: COMPRESSED_PUBKEY,
     }
-    const nu6_1 = buildUtxoSendTx(baseArgs)
-    // Arbitrary non-NU6.1 branch id — simulates a hypothetical future epoch.
-    const futureEpoch = buildUtxoSendTx({ ...baseArgs, zcashBranchId: 0x12345678 })
-    expect(nu6_1.signingHashesHex).not.toEqual(futureEpoch.signingHashesHex)
+    const nu6_2 = buildUtxoSendTx({ ...baseArgs, zcashBranchId: ZCASH_BRANCH_ID_NU6_2 })
+    const previousEpoch = buildUtxoSendTx({ ...baseArgs, zcashBranchId: ZCASH_BRANCH_ID_NU6_1 })
+    expect(nu6_2.signingHashesHex).not.toEqual(previousEpoch.signingHashesHex)
+  })
+
+  it('keeps the NU6.1 constant available for callers that explicitly need the previous epoch', () => {
+    expect(ZCASH_BRANCH_ID_NU6_1).toBe(0x4dec4df0)
   })
 })

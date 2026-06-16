@@ -90,12 +90,14 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 6,
       priceProviderId: 'usd-coin',
     },
+    // USDD canonical token. USDDOLD is the deprecated migration source and should not be used for new transfers.
     TXDk8mbtRbXeYuMNS83CfKPaYYT8XWv9Hz: {
       ticker: 'USDD',
       logo: 'usdd',
       decimals: 18,
       priceProviderId: 'usdd',
     },
+    // stUSDT JustLend liquid staking receipt token, not the Sunswap LP token with a similar symbol.
     TThzxNRLrW2Brp9DcTQU8i4Wd9udCWEdZ3: {
       ticker: 'stUSDT',
       logo: 'stusdt',
@@ -360,6 +362,16 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
     },
   },
   [Chain.Base]: {
+    // Circle canonical USDC on Base (native CCTP issuance, not bridged).
+    // Was missing here while every other major EVM chain ships its USDC,
+    // so swaps to Base USDC fell through to the coingecko source and the
+    // app flagged the canonical stablecoin as "unverified token". (QA-SWAP-2)
+    '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913': {
+      ticker: 'USDC',
+      logo: 'usdc',
+      decimals: 6,
+      priceProviderId: 'usd-coin',
+    },
     '0x6b9bb36519538e0C073894E964E90172E1c0B41F': {
       ticker: 'WEWE',
       logo: 'wewe',

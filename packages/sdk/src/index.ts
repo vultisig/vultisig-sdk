@@ -100,6 +100,18 @@ export type { SdkEvents, VaultEvents } from './events/types'
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
 export { Chain } from './types'
 
+// Chain-kind classification — the canonical 12-family dispatch key. Exposed so
+// downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
+// re-inventing per-chain classification tables (the cross-repo drift root cause).
+export type { ChainKind } from '@vultisig/core-chain/ChainKind'
+export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
+
+// Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
+// fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
+export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {
@@ -185,6 +197,47 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
+// Noon USDC yield vault SDK boundary. Consumers should use these helpers
+// instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
+export type {
+  NoonContractCall,
+  NoonDepositTxPlan,
+  NoonVaultMetrics,
+  NoonVaultPosition,
+  NoonVaultQueue,
+  NoonVaultState,
+} from '@vultisig/core-chain/chains/evm/noon'
+export {
+  encodeNoonDeposit,
+  encodeNoonRequestRedeem,
+  encodeNoonUsdcApprove,
+  encodeNoonWithdraw,
+  fetchNoonUsdcVaultApy,
+  fetchNoonUsdcVaultMetrics,
+  fetchNoonUsdcVaultTvl,
+  getNoonDepositContractCall,
+  getNoonDepositTxPlan,
+  getNoonRequestRedeemContractCall,
+  getNoonUsdcAllowance,
+  getNoonUsdcApproveContractCall,
+  getNoonWithdrawContractCall,
+  noonUsdcVaultConfig,
+  noonVaultAbi,
+  readNoonClaimableRedeemRequest,
+  readNoonPendingRedeemRequest,
+  readNoonVaultConvertToAssets,
+  readNoonVaultMinAmountWei,
+  readNoonVaultPosition,
+  readNoonVaultPreviewDeposit,
+  readNoonVaultPreviewRedeem,
+  readNoonVaultPreviewWithdraw,
+  readNoonVaultQueue,
+  readNoonVaultSharePrice,
+  readNoonVaultState,
+  readNoonWithdrawalRequestRaw,
+  readNoonWithdrawalRequestsRaw,
+} from '@vultisig/core-chain/chains/evm/noon'
 
 // ============================================================================
 // PUBLIC API - Seedphrase & Multi-Device Vault Creation

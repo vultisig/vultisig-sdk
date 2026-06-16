@@ -5,17 +5,25 @@ import path from 'node:path'
  * Replaces package.json "exports" with explicit subpath entries so Node/TS/Vite
  * resolve both flat modules (foo.js) and directory modules (foo/index.js).
  */
-function walkJsFiles(distDir, visitor, rel = '') {
-  for (const name of readdirSync(distDir)) {
-    const full = path.join(distDir, name)
+function walkFiles(dir, visitor, rel = '') {
+  for (const name of readdirSync(dir)) {
+    const full = path.join(dir, name)
     const st = statSync(full)
     const r = rel ? `${rel}/${name}` : name
     if (st.isDirectory()) {
-      walkJsFiles(full, visitor, r)
-    } else if (name.endsWith('.js') && !name.endsWith('.js.map')) {
-      visitor(r.replace(/\\/g, '/'))
+      walkFiles(full, visitor, r)
+    } else {
+      visitor(r.replace(/\\/g, '/'), name)
     }
   }
+}
+
+function walkJsFiles(distDir, visitor) {
+  walkFiles(distDir, (rel, name) => {
+    if (name.endsWith('.js') && !name.endsWith('.js.map')) {
+      visitor(rel)
+    }
+  })
 }
 
 function jsRelToExportKey(rel) {
@@ -36,7 +44,7 @@ function jsRelToImportPath(rel) {
   return `./dist/${rel}`
 }
 
-export function generateSharedExports(distDir) {
+export function generateSharedExports(distDir, { packageRoot = path.dirname(distDir) } = {}) {
   const byKey = new Map()
 
   walkJsFiles(distDir, rel => {
@@ -51,6 +59,15 @@ export function generateSharedExports(distDir) {
   })
 
   byKey.set('./package.json', './package.json')
+
+  const fixturesDir = path.join(packageRoot, 'fixtures')
+  if (existsSync(fixturesDir)) {
+    walkFiles(fixturesDir, (rel, name) => {
+      if (name.endsWith('.json')) {
+        byKey.set(`./fixtures/${rel}`, `./fixtures/${rel}`)
+      }
+    })
+  }
 
   const exportsField = Object.fromEntries([...byKey.entries()].sort(([a], [b]) => a.localeCompare(b)))
 
@@ -83,7 +100,9 @@ function exportValueKey(value) {
 export function diffSharedExports(packageJsonPath, distDir) {
   const pkg = readPackageJson(packageJsonPath)
   const actual = pkg.exports ?? {}
-  const expected = generateSharedExports(distDir)
+  const expected = generateSharedExports(distDir, {
+    packageRoot: path.dirname(packageJsonPath),
+  })
   const actualKeys = new Set(Object.keys(actual))
   const expectedKeys = new Set(Object.keys(expected))
 
@@ -159,6 +178,8 @@ export function getSharedExportDiffMessage(packageJsonPath, distDir, options) {
 
 export function applySharedExports(packageJsonPath, distDir) {
   const pkg = readPackageJson(packageJsonPath)
-  pkg.exports = generateSharedExports(distDir)
+  pkg.exports = generateSharedExports(distDir, {
+    packageRoot: path.dirname(packageJsonPath),
+  })
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
 }

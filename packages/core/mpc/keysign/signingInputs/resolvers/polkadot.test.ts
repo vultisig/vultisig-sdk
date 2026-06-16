@@ -46,16 +46,16 @@ describe('getPolkadotSigningInputs', () => {
     walletCore = await initWasm()
   })
 
-  it('uses methodIndex 3 (transfer_keep_alive) not 0 (transfer_allow_death)', () => {
-    const [input] = getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
+  it('uses methodIndex 3 (transfer_keep_alive) not 0 (transfer_allow_death)', async () => {
+    const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
 
     const callIndices = input.balanceCall?.assetTransfer?.callIndices?.custom
     expect(callIndices).toBeDefined()
     expect(callIndices?.methodIndex).toBe(3)
   })
 
-  it('keeps moduleIndex 10 (pallet_balances on Asset Hub)', () => {
-    const [input] = getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
+  it('keeps moduleIndex 10 (pallet_balances on Asset Hub)', async () => {
+    const [input] = await getPolkadotSigningInputs({ keysignPayload: buildPayload(), walletCore })
 
     const callIndices = input.balanceCall?.assetTransfer?.callIndices?.custom
     expect(callIndices?.moduleIndex).toBe(10)

@@ -77,7 +77,7 @@ describe('cosmos staking / URL builders', () => {
 
   it('builds Kujira auth account URL (used for vesting account detection)', () => {
     expect(getAuthAccountUrl('Kujira', 'kujira1abc')).toBe(
-      'https://kujira-rest.publicnode.com/cosmos/auth/v1beta1/accounts/kujira1abc'
+      'https://kujira-api.polkachu.com/cosmos/auth/v1beta1/accounts/kujira1abc'
     )
   })
 })

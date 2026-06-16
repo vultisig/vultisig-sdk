@@ -361,7 +361,7 @@ export const buildSwapKeysignPayload = async ({
   }
 
   if (isChainOfKind(fromCoin.chain, 'utxo')) {
-    keysignPayload = refineKeysignUtxo({
+    keysignPayload = await refineKeysignUtxo({
       keysignPayload,
       walletCore,
       publicKey: fromPublicKey,

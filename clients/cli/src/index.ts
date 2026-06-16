@@ -1367,13 +1367,22 @@ agentCmd
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--yes',
+    'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
+  )
   .addHelpText(
     'after',
     `
 Examples:
   vultisig agent ask "What is my ETH balance?" --output json
-  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123
-  vultisig agent ask "..." --profile station-wallet`
+  vultisig agent ask "Send 0.1 ETH to 0x..." --session abc123 --yes
+  vultisig agent ask "..." --profile station-wallet
+
+Signing safety:
+  Without --yes, ask mode never signs or broadcasts — it reports the proposed
+  transaction so a read-only prompt can't move funds. Pass --yes to opt in to
+  unattended signing.`
   )
   .action(
     async (
@@ -1385,6 +1394,7 @@ Examples:
         verbose?: boolean
         json?: boolean
         profile?: string
+        yes?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1395,6 +1405,7 @@ Examples:
         password: options.password || parentOpts.password,
         verbose: options.verbose || parentOpts.verbose,
         profile: options.profile ?? parentOpts.profile,
+        autoApprove: options.yes,
       })
     }
   )
