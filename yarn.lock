@@ -6721,6 +6721,7 @@ __metadata:
     commander: "npm:^15.0.0"
     dotenv: "npm:^17.4.2"
     esbuild: "npm:^0.28.1"
+    inquirer: "npm:^14.0.2"
     ora: "npm:^9.4.0"
     qrcode-terminal: "npm:^0.12.0"
     tabtab: "npm:^3.0.2"
