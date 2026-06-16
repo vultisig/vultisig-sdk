@@ -1,4 +1,5 @@
 ---
+'@vultisig/core-chain': patch
 '@vultisig/sdk': patch
 ---
 
