@@ -41,11 +41,11 @@ export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsRe
   tron: getTronSigningInputs,
 }
 
-export const getEncodedSigningInputs = (input: Input): Uint8Array[] => {
+export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[]> => {
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
 
-  const signingInputs = signingInputResolversByChainKind[chainKind](input as any)
+  const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)
 
   // Bittensor returns pre-encoded Uint8Array (custom extrinsic builder, not TW proto)
   if (chainKind === 'bittensor' || chainKind === 'qbtc') {

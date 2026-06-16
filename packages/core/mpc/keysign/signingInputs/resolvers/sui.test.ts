@@ -60,8 +60,8 @@ beforeAll(async () => {
 })
 
 describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
-  it('forwards the PTB bytes verbatim via signDirectMessage', () => {
-    const [input] = getSuiSigningInputs({
+  it('forwards the PTB bytes verbatim via signDirectMessage', async () => {
+    const [input] = await getSuiSigningInputs({
       keysignPayload: buildSignSuiPayload(),
       walletCore,
     })
@@ -73,8 +73,8 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
     expect(input.paySui).toBeFalsy()
   })
 
-  it('hashes to the transaction-intent digest (parity with the legacy path)', () => {
-    const [txInputData] = getEncodedSigningInputs({
+  it('hashes to the transaction-intent digest (parity with the legacy path)', async () => {
+    const [txInputData] = await getEncodedSigningInputs({
       keysignPayload: buildSignSuiPayload(),
       walletCore,
     })
@@ -91,9 +91,9 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
     expect(hex(hashes[0])).toBe(hex(expected))
   })
 
-  it('compiles to a wallet-standard Ed25519 signature over the same bytes', () => {
+  it('compiles to a wallet-standard Ed25519 signature over the same bytes', async () => {
     const privateKey = walletCore.PrivateKey.createWithData(EDDSA_PRIVATE_KEY)
-    const [txInputData] = getEncodedSigningInputs({
+    const [txInputData] = await getEncodedSigningInputs({
       keysignPayload: buildSignSuiPayload(),
       walletCore,
     })
@@ -133,6 +133,24 @@ describe('getSuiSigningInputs — signSui (pre-built PTB)', () => {
     expect(serialized[0]).toBe(0x00)
     expect(hex(serialized.slice(65))).toBe(hex(publicKey.data()))
     expect(publicKey.verify(serialized.slice(1, 65), digest)).toBe(true)
+  })
+})
+
+describe('getSuiSigningInputs — native send', () => {
+  it('rejects a memo (Sui has no native memo field)', async () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      memo: 'deposit-12345',
+    })
+
+    expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('do not support a memo')
   })
 })
 

@@ -1,4 +1,5 @@
-import { createConfig } from '@lifi/sdk'
+import type { SDKClient } from '@lifi/sdk'
+import { createClient } from '@lifi/sdk'
 
 /**
  * SDK-default LI.FI integrator + (optional) API URL. Used when no consumer
@@ -34,7 +35,7 @@ export type LifiAffiliateConfig = {
 
 /**
  * Global LI.FI SDK bootstrap config. Strictly wider than `LifiAffiliateConfig`
- * because `apiUrl` is meaningful here (passed to `@lifi/sdk`'s `createConfig`
+ * because `apiUrl` is meaningful here (passed to `@lifi/sdk`'s `createClient`
  * as the base URL for every request the LI.FI SDK makes after this point) and
  * intentionally meaningless on the per-call surface.
  *
@@ -48,12 +49,33 @@ export type LifiBootstrapConfig = {
 let configured = false
 
 /**
+ * The active LI.FI v4 SDK client. v4 replaced the global mutable `createConfig`
+ * singleton with an explicit client object that every action (`getQuote`, ...)
+ * takes as its first argument. We hold the latest one here so the per-call
+ * swap-quote path can fetch it via `getLifiClient()` without threading it
+ * through every call site.
+ */
+let _lifiClient: SDKClient | undefined
+
+/**
+ * Returns the active LI.FI SDK client, throwing if `setupLifi` has not run yet.
+ * Callers (e.g. `getLifiSwapQuote`) MUST ensure config first via
+ * `ensureLifiConfigured`, so a throw here means a genuine ordering bug.
+ */
+export const getLifiClient = (): SDKClient => {
+  if (!_lifiClient) {
+    throw new Error('[lifi] getLifiClient() called before setupLifi() — the LI.FI SDK client is not initialised')
+  }
+  return _lifiClient
+}
+
+/**
  * Initialise the global LI.FI SDK config.
  *
  * Two call modes:
  *
  * 1. **Consumer bootstrap** (`setupLifi(config)` with a config arg):
- *    Always applies — re-invokes `createConfig` with the supplied
+ *    Always applies — re-invokes `createClient` with the supplied
  *    integrator + apiUrl regardless of whether a prior lazy default-fallback
  *    already ran. This protects against an "ordering footgun" where a swap
  *    quote runs before the consumer's boot-time setup and the lazy path
@@ -67,13 +89,13 @@ let configured = false
  *    them already.
  *
  * Net effect:
- * - Consumer-before-lazy: consumer wins (the only `createConfig` call).
+ * - Consumer-before-lazy: consumer wins (the only `createClient` call).
  * - Lazy-before-consumer: lazy installs defaults, then the consumer's
  *   explicit call overwrites them via the explicit-bootstrap branch above.
  * - Consumer-after-consumer: the latest consumer-bootstrap call overwrites
- *   `lifiConfig` and re-runs `createConfig` (last-writer wins). In practice
+ *   `lifiConfig` and re-runs `createClient` (last-writer wins). In practice
  *   consumers should only call this once. The `getLifiSwapQuote.integrator`
- *   test `'repeated calls re-run createConfig with each new config'` pins
+ *   test `'repeated calls re-run createClient with each new config'` pins
  *   this contract. (Ehsan-saradar #618 r2.)
  */
 export const setupLifi = (config?: LifiBootstrapConfig): void => {
@@ -81,7 +103,7 @@ export const setupLifi = (config?: LifiBootstrapConfig): void => {
   if (config) {
     lifiConfig.integratorName = config.integratorName
     lifiConfig.apiUrl = config.apiUrl
-    createConfig(
+    _lifiClient = createClient(
       config.apiUrl
         ? { integrator: config.integratorName, apiUrl: config.apiUrl }
         : { integrator: config.integratorName }
@@ -93,13 +115,14 @@ export const setupLifi = (config?: LifiBootstrapConfig): void => {
   if (configured) return
   const integrator = lifiConfig.integratorName
   const apiUrl = lifiConfig.apiUrl
-  createConfig(apiUrl ? { integrator, apiUrl } : { integrator })
+  _lifiClient = createClient(apiUrl ? { integrator, apiUrl } : { integrator })
   configured = true
 }
 
 /** @internal Test-only reset hook. Never call from production code. */
 export const _resetLifiConfigForTest = (): void => {
   configured = false
+  _lifiClient = undefined
   lifiConfig.integratorName = 'vultisig-0'
   lifiConfig.apiUrl = undefined
 }

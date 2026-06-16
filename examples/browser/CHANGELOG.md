@@ -1,5 +1,61 @@
 # @vultisig/example-browser
 
+## 0.1.82
+
+### Patch Changes
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11), [`c78c10d`](https://github.com/vultisig/vultisig-sdk/commit/c78c10d2b43f9ddd13b2c912a71f7d902f2694cc), [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019)]:
+  - @vultisig/sdk@2.3.3
+  - @vultisig/examples-shared@0.1.66
+
+## 0.1.81
+
+### Patch Changes
+
+- Updated dependencies [[`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3), [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34), [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3)]:
+  - @vultisig/sdk@2.3.2
+  - @vultisig/examples-shared@0.1.65
+
+## 0.1.80
+
+### Patch Changes
+
+- Updated dependencies [[`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c)]:
+  - @vultisig/sdk@2.3.1
+  - @vultisig/examples-shared@0.1.64
+
+## 0.1.79
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/sdk@2.3.0
+  - @vultisig/examples-shared@0.1.63
+
+## 0.1.78
+
+### Patch Changes
+
+- Updated dependencies [[`d4fa237`](https://github.com/vultisig/vultisig-sdk/commit/d4fa23796053f1a15fcce8b1fad5e9ccbbfbeb3d)]:
+  - @vultisig/sdk@2.2.3
+  - @vultisig/examples-shared@0.1.62
+
+## 0.1.77
+
+### Patch Changes
+
+- Updated dependencies [[`3f622f6`](https://github.com/vultisig/vultisig-sdk/commit/3f622f631089d0e33eb879be3407401887ebf0c8)]:
+  - @vultisig/sdk@2.2.2
+  - @vultisig/examples-shared@0.1.61
+
+## 0.1.76
+
+### Patch Changes
+
+- Updated dependencies [[`de621f3`](https://github.com/vultisig/vultisig-sdk/commit/de621f3fd2a8c1ca64e73f6fe64afb7d77fb3e43), [`9439a61`](https://github.com/vultisig/vultisig-sdk/commit/9439a6194abf3533ad06aa84847c81b2af7fe8df), [`625fb42`](https://github.com/vultisig/vultisig-sdk/commit/625fb4205f265587f66f447b4059543756ef1095)]:
+  - @vultisig/sdk@2.2.1
+  - @vultisig/examples-shared@0.1.60
+
 ## 0.1.75
 
 ### Patch Changes
