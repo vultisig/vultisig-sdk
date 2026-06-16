@@ -1,5 +1,48 @@
 # @vultisig/sdk
 
+## 2.3.3
+
+### Patch Changes
+
+- [#748](https://github.com/vultisig/vultisig-sdk/pull/748) [`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add canonical Circle USDC on Base (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) to the known-token registry. It was the only major-EVM canonical USDC missing, so swaps to Base USDC resolved via the coingecko source and the app flagged the canonical stablecoin as "unverified token". Now it resolves as a known token (verified).
+
+- [#740](https://github.com/vultisig/vultisig-sdk/pull/740) [`c78c10d`](https://github.com/vultisig/vultisig-sdk/commit/c78c10d2b43f9ddd13b2c912a71f7d902f2694cc) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): migrate @lifi/sdk v3 -> v4
+
+  @lifi/sdk v4 dropped the global mutable `createConfig` singleton in favour of
+  an explicit client object that every action (`getQuote`, ...) takes as its
+  first argument. Migrated `setupLifi` to build a v4 `createClient` and exposed
+  it via `getLifiClient()`; `getLifiSwapQuote` (core + RN override) now calls
+  `getQuote(client, params)`. Swap-quote behaviour, the per-call integrator tag,
+  and the affiliate-fee surface are unchanged. v4 also dropped its
+  `@solana/web3.js` transitive dep, so the now-dead `@lifi/sdk/@solana/web3.js`
+  yarn resolution was removed.
+
+- [#750](https://github.com/vultisig/vultisig-sdk/pull/750) [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - security: bump transitive deps to fix 5 high-severity advisories
+
+  - form-data: 4.0.5 -> 4.0.6 (CRLF injection, GHSA-hmw2-7cc7-3qxx)
+  - protobufjs: 7.5.8 -> 7.6.4, 8.3.0 -> 8.6.3 (DoS via unbounded Any expansion, GHSA-wcpc-wj8m-hjx6)
+  - tmp: 0.2.6 -> 0.2.7 (path traversal via type confusion, GHSA-7c78-jf6q-g5cm)
+  - vite: 8.0.10 -> 8.0.16 (server.fs.deny bypass on Windows, GHSA-fx2h-pf6j-xcff)
+  - ws: 7.5.10 -> 7.5.11, 8.17.1/8.20.x -> 8.21.0 (memory exhaustion DoS, GHSA-96hv-2xvq-fx4p)
+
+  all bumped via yarn resolutions; no direct dep changes.
+
+## 2.3.2
+
+### Patch Changes
+
+- [#718](https://github.com/vultisig/vultisig-sdk/pull/718) [`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3) Thanks [@realpaaao](https://github.com/realpaaao)! - Replace the dead Hyperliquid block explorer liquidscan.io with hypurrscan.io.
+
+- [#735](https://github.com/vultisig/vultisig-sdk/pull/735) [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): use polkachu for the Kujira LCD + RPC endpoints
+
+  `kujira-rest.publicnode.com` and `kujira-rpc.publicnode.com` both now return
+  HTTP 403 "unsupported platform" for our clients, breaking Kujira balance reads
+  and tx broadcasts. Point `cosmosRpcUrl` and `tendermintRpcUrl` for Kujira at
+  polkachu (the same provider Noble uses, and the one `getCosmosAccountInfo`
+  already falls back to). Live-verified 200 with the real ukuji balance.
+
+- [#734](https://github.com/vultisig/vultisig-sdk/pull/734) [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reject a memo on Sui keysigns instead of silently dropping it. Sui has no native memo field (a transaction is a Programmable Transaction Block), so the Sui signing-input resolver now throws when `keysignPayload.memo` is set, surfacing the unsupported request to callers.
+
 ## 2.3.1
 
 ### Patch Changes

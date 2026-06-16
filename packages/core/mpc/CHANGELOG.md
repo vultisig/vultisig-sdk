@@ -1,5 +1,21 @@
 # @vultisig/core-mpc
 
+## 1.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11)]:
+  - @vultisig/core-chain@2.16.3
+
+## 1.6.6
+
+### Patch Changes
+
+- [#734](https://github.com/vultisig/vultisig-sdk/pull/734) [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reject a memo on Sui keysigns instead of silently dropping it. Sui has no native memo field (a transaction is a Programmable Transaction Block), so the Sui signing-input resolver now throws when `keysignPayload.memo` is set, surfacing the unsupported request to callers.
+
+- Updated dependencies [[`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3), [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34)]:
+  - @vultisig/core-chain@2.16.2
+
 ## 1.6.5
 
 ### Patch Changes

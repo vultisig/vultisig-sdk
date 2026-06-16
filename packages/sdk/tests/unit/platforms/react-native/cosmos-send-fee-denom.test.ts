@@ -26,7 +26,7 @@ const BASE_OPTS = {
   memo: '',
 }
 
-describe('buildCosmosSendTx feeDenom (sdk#624)', () => {
+describe('buildCosmosSendTx feeDenom (sdk#624, sdk#697)', () => {
   it('uses feeDenom in AuthInfo fee when explicitly set', () => {
     const result = buildCosmosSendTx({ ...BASE_OPTS, feeDenom: 'uluna' })
     const authInfo = AuthInfo.decode(result.authInfoBytes)
@@ -35,11 +35,24 @@ describe('buildCosmosSendTx feeDenom (sdk#624)', () => {
     expect(feeCoin?.amount).toBe('1500000')
   })
 
-  it('still uses denom as fee denom when feeDenom is absent (back-compat)', () => {
+  it('defaults to the chain fee denom when feeDenom is absent', () => {
     const result = buildCosmosSendTx(BASE_OPTS)
     const authInfo = AuthInfo.decode(result.authInfoBytes)
     const feeCoin = authInfo.fee?.amount[0]
-    // Back-compat: no feeDenom → fee coin denom = send denom
+    expect(feeCoin?.denom).toBe('uluna')
+  })
+
+  it('falls back to denom for unknown custom chain names', () => {
+    const result = buildCosmosSendTx({ ...BASE_OPTS, chainName: 'CustomCosmos' })
+    const authInfo = AuthInfo.decode(result.authInfoBytes)
+    const feeCoin = authInfo.fee?.amount[0]
+    expect(feeCoin?.denom).toBe('uusd')
+  })
+
+  it('falls back to denom for chain names that match object prototype keys', () => {
+    const result = buildCosmosSendTx({ ...BASE_OPTS, chainName: 'toString' })
+    const authInfo = AuthInfo.decode(result.authInfoBytes)
+    const feeCoin = authInfo.fee?.amount[0]
     expect(feeCoin?.denom).toBe('uusd')
   })
 

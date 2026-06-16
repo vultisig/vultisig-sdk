@@ -22,6 +22,8 @@ import { hmac } from '@noble/hashes/hmac.js'
 import { ripemd160 } from '@noble/hashes/legacy.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { bech32 } from '@scure/base'
+import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 
 // ---------------------------------------------------------------------------
 // Hex utils (RN-safe, no Buffer)
@@ -366,7 +368,7 @@ export type BuildCosmosSendOptions = {
   toAddress: string
   amount: string
   denom: string
-  /** Gas-fee coin denom. Defaults to `denom` when absent.
+  /** Gas-fee coin denom. Defaults to the chain fee denom when absent.
    * Provide this on multi-denom chains (e.g. TerraClassic USTC sends
    * where fees must be paid in LUNC, not USTC — see vultisig-sdk#624). */
   feeDenom?: string
@@ -379,6 +381,11 @@ export type BuildCosmosSendOptions = {
   memo?: string
 }
 
+const getDefaultFeeDenom = (chainName: string, denom: string) =>
+  Object.prototype.hasOwnProperty.call(cosmosFeeCoinDenom, chainName)
+    ? cosmosFeeCoinDenom[chainName as CosmosChain]
+    : denom
+
 export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilderResult {
   const isThor = opts.chainName === 'THORChain' || opts.chainName === 'MayaChain'
   const msgSend = isThor
@@ -390,7 +397,7 @@ export function buildCosmosSendTx(opts: BuildCosmosSendOptions): CosmosTxBuilder
     opts.pubKeyBytes,
     opts.sequence,
     opts.gasLimit,
-    opts.feeDenom ?? opts.denom,
+    opts.feeDenom ?? getDefaultFeeDenom(opts.chainName, opts.denom),
     opts.feeAmount
   )
   const signDocBytes = buildSignDoc(txBodyBytes, authInfoBytes, opts.chainId, opts.accountNumber)

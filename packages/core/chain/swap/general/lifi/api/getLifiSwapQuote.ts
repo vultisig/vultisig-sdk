@@ -2,7 +2,12 @@ import { ChainId, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
+import {
+  getLifiClient,
+  LifiAffiliateConfig,
+  lifiConfig,
+  setupLifi,
+} from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -184,7 +189,10 @@ export const getLifiSwapQuote = async ({
   // resolves to (vultisig-0 unless the consumer's setupLifi() ran first).
   const integrator = lifiAffiliateConfig?.integratorName ?? lifiConfig.integratorName
 
-  const quote = await getQuote({
+  // v4: actions take the SDK client as their first argument (the v3 global
+  // mutable singleton is gone). `ensureLifiConfigured()` above guarantees the
+  // client is initialised before this call.
+  const quote = await getQuote(getLifiClient(), {
     fromChain,
     toChain,
     fromToken,
