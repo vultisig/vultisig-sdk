@@ -25,6 +25,9 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { 
   /** Consumer-supplied LI.FI integrator override. When omitted, falls back
    * to the global `lifiConfig.integratorName` (vultisig-0 by default). */
   lifiAffiliateConfig?: LifiAffiliateConfig
+  /** Slippage tolerance as a fraction (e.g. 0.01 = 1%). When omitted, falls
+   * back to the stable/non-stable pair default. */
+  slippage?: number
 }
 
 // Stable-pair detection: tickers that commonly trade within a tight peg.
@@ -153,6 +156,7 @@ export const getLifiSwapQuote = async ({
   amount,
   affiliateBps,
   lifiAffiliateConfig,
+  slippage: slippageOverride,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
   ensureLifiConfigured()
@@ -162,9 +166,9 @@ export const getLifiSwapQuote = async ({
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
-  const slippage = isStablePair(transfer.from, transfer.to)
-    ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE
-    : DEFAULT_LIFI_SLIPPAGE_TOLERANCE
+  const slippage =
+    slippageOverride ??
+    (isStablePair(transfer.from, transfer.to) ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE : DEFAULT_LIFI_SLIPPAGE_TOLERANCE)
 
   // Defensive: log when affiliate + slippage combined cost crosses the
   // 3% ceiling. Today affiliateBps is typically 0 and slippage is 1%,
