@@ -258,15 +258,24 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
 
 // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
 // front so they don't propagate into every provider call and fail with
-// non-actionable downstream errors.
+// non-actionable downstream errors. Cap at 50%: above that every provider
+// effectively accepts any output including near-zero, which is economically
+// indefensible and guards against decimal-unit typos (e.g. 100 instead of 1.00).
+const SLIPPAGE_TOLERANCE_MAX_PERCENT = 50
 const assertValidSlippageTolerance = (slippageTolerance: number | undefined): void => {
-  if (slippageTolerance !== undefined && (!Number.isFinite(slippageTolerance) || slippageTolerance < 0)) {
+  if (
+    slippageTolerance !== undefined &&
+    (!Number.isFinite(slippageTolerance) || slippageTolerance < 0 || slippageTolerance > SLIPPAGE_TOLERANCE_MAX_PERCENT)
+  ) {
     throw new SwapError(
       SwapErrorCode.InvalidConfig,
-      `slippageTolerance must be a finite, non-negative percent value. Received "${slippageTolerance}".`
+      `slippageTolerance must be a finite, non-negative percent value no greater than ${SLIPPAGE_TOLERANCE_MAX_PERCENT}. Received "${slippageTolerance}".`
     )
   }
 }
+
+// Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
 
 export const findSwapQuote = async ({
   from,
@@ -308,6 +317,32 @@ export const findSwapQuote = async ({
   // and recipient forwarding only react to a genuine custom address.
   const normalizedRecipient = recipient?.trim() || undefined
   const hasCustomRecipient = normalizedRecipient !== undefined
+
+  // Validate the custom recipient is a properly formatted EVM address before it
+  // reaches CowSwap. CowSwap calls `.toLowerCase()` on the receiver but does zero
+  // format validation - a plausible-but-wrong address (right hex length, wrong
+  // wallet) would produce a valid order that sends buy tokens to the wrong wallet
+  // with no on-chain recovery. Throw early so the user sees a clear error instead
+  // of a confusing "No swap route found" or, worse, a misrouted fill.
+  // The CowSwap path is always EVM (same-chain ERC-20 gate on cowSwapSupportedChains),
+  // so this check is always correct for that path. For native THOR/Maya the node
+  // validates the destination downstream; a malformed non-EVM address would fail
+  // there, so we skip the EVM check for cross-chain pairs.
+  if (hasCustomRecipient && !isEvmAddress(normalizedRecipient)) {
+    // Only enforce EVM format when the pair can reach CowSwap (same-chain EVM ERC-20).
+    // For native-only pairs (e.g. BTC→ETH through THOR) the recipient is chain-validated
+    // downstream by the native node; skip the EVM guard there.
+    const fromIsEvmErc20 = isChainOfKind(from.chain, 'evm') && from.id !== undefined
+    const toIsEvmErc20 = isChainOfKind(to.chain, 'evm') && to.id !== undefined
+    const cowSwapPathReachable =
+      fromIsEvmErc20 && toIsEvmErc20 && from.chain === to.chain && isOneOf(from.chain, cowSwapSupportedChains)
+    if (cowSwapPathReachable) {
+      throw new SwapError(
+        SwapErrorCode.InvalidConfig,
+        `recipient "${normalizedRecipient}" is not a valid EVM address. Expected a 0x-prefixed 40-character hex string.`
+      )
+    }
+  }
 
   // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
   // up front so they don't propagate into every provider call and fail with

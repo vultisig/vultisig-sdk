@@ -7,6 +7,7 @@ import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/g
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { SwapErrorCode } from '../SwapError'
 import { findSwapQuote } from './findSwapQuote'
 
 vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
@@ -90,5 +91,31 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getOneInchSwapQuote).not.toHaveBeenCalled()
     expect(getKyberSwapQuote).not.toHaveBeenCalled()
     expect(getLifiSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it.each([51, 100, 200])(
+    'rejects slippage above the 50% ceiling (%p) before calling any provider',
+    async oversized => {
+      await expect(
+        findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, slippageTolerance: oversized })
+      ).rejects.toMatchObject({
+        code: SwapErrorCode.InvalidConfig,
+        message: expect.stringContaining('slippageTolerance'),
+      })
+
+      expect(getOneInchSwapQuote).not.toHaveBeenCalled()
+      expect(getKyberSwapQuote).not.toHaveBeenCalled()
+      expect(getLifiSwapQuote).not.toHaveBeenCalled()
+      expect(getSwapKitQuote).not.toHaveBeenCalled()
+    }
+  )
+
+  it('accepts slippage exactly at the 50% ceiling', async () => {
+    // Expect all providers called (they all reject in beforeEach, so the quote itself fails — but slippage validation passes).
+    await expect(
+      findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, slippageTolerance: 50 })
+    ).rejects.toBeDefined()
+
+    expect(getOneInchSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: 50 }))
   })
 })
