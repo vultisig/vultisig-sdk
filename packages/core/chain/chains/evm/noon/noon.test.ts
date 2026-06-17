@@ -102,7 +102,24 @@ describe('Noon USDC vault transaction planning', () => {
 })
 
 describe('Noon API parsing', () => {
-  it('reads 7d net APY for the configured loan address', async () => {
+  it('reads 7d net APY for the configured loan address from the current API shape', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: {
+              '7d': { net: { apy_pct: '11.5512' } },
+            },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(11.5512)
+  })
+
+  it('keeps reading 7d net APY from the legacy API shape', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         vaults: [
@@ -124,7 +141,9 @@ describe('Noon API parsing', () => {
           vaults: [
             {
               loan_address: noonUsdcVaultConfig.loanAddress,
-              '7d': { net: { apy_pct: '11.5512' } },
+              ir: {
+                '7d': { net: { apy_pct: '11.5512' } },
+              },
             },
           ],
         })

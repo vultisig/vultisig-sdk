@@ -145,6 +145,21 @@ const getNumber = (value: unknown, path: string): number => {
   return result
 }
 
+const getNoonVaultSevenDayNetApy = (vault: Record<string, unknown>) => {
+  if (vault.ir !== undefined) {
+    const ir = getObject(vault.ir, 'ir')
+    const sevenDay = getObject(ir['7d'], 'ir.7d')
+    const net = getObject(sevenDay.net, 'ir.7d.net')
+
+    return getNumber(net.apy_pct, 'ir.7d.net.apy_pct')
+  }
+
+  const sevenDay = getObject(vault['7d'], '7d')
+  const net = getObject(sevenDay.net, '7d.net')
+
+  return getNumber(net.apy_pct, '7d.net.apy_pct')
+}
+
 const assertAtLeast = (value: bigint, minimum: bigint, label: string) => {
   if (value < minimum) {
     throw new Error(`${label} must be at least ${minimum.toString()}`)
@@ -435,9 +450,7 @@ export const fetchNoonUsdcVaultApy = async (fetchImpl?: FetchLike): Promise<numb
     throw new Error(`Noon API did not include loan ${noonUsdcVaultConfig.loanAddress}`)
   }
 
-  const sevenDay = getObject(getObject(getObject(target, 'vault')['7d'], '7d').net, '7d.net')
-
-  return getNumber(sevenDay.apy_pct, '7d.net.apy_pct')
+  return getNoonVaultSevenDayNetApy(getObject(target, 'vault'))
 }
 
 export const fetchNoonUsdcVaultTvl = async (fetchImpl?: FetchLike): Promise<{ tvl: number; tvlInUsd: number }> => {
