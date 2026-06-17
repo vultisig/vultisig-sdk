@@ -14,6 +14,11 @@
     "dist"
   ],
   "exports": {
+    "./chains/cosmos/qbtc/QBTCClaimHelper": {
+      "types": "./dist/chains/cosmos/qbtc/QBTCClaimHelper.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/QBTCClaimHelper.js",
+      "default": "./dist/chains/cosmos/qbtc/QBTCClaimHelper.js"
+    },
     "./chains/cosmos/qbtc/QBTCHelper": {
       "types": "./dist/chains/cosmos/qbtc/QBTCHelper.d.ts",
       "import": "./dist/chains/cosmos/qbtc/QBTCHelper.js",
