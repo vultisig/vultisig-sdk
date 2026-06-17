@@ -14,10 +14,12 @@
     "**/tasks/**",
     "**/CHANGELOG.md",
     "packages/mpc-native/ios/**",
-    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts"
+    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts",
+    "packages/lib/**/*.js"
   ],
   "_ignoreReasons": {
-    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts": "React Native intentionally carries an SDK override mirror of the core Lifi quote implementation so Rollup can swap the transport-specific module at bundle time."
+    "**/packages/sdk/src/platforms/react-native/overrides/getLifiSwapQuote.ts": "React Native intentionally carries an SDK override mirror of the core Lifi quote implementation so Rollup can swap the transport-specific module at bundle time.",
+    "packages/lib/**/*.js": "Generated WASM JavaScript wrappers (vs_wasm.js, vs_schnorr_wasm.js) are not handwritten code and inherently contain duplicated patterns."
   },
   "minLines": 45,
   "minTokens": 120,

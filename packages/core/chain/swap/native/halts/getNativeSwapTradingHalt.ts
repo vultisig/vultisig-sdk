@@ -38,7 +38,13 @@ const getInboundAddresses = async (deps: NativeSwapTradingHaltDeps): Promise<Inb
     return deps.fetchInboundAddresses()
   }
 
-  inboundCache = cached(inboundCache, getThorchainInboundAddress)
+  inboundCache = cached(inboundCache, () => {
+    const promise = getThorchainInboundAddress()
+    promise.catch(() => {
+      inboundCache = undefined
+    })
+    return promise
+  })
   return inboundCache.value
 }
 
@@ -89,6 +95,8 @@ export const getNativeSwapTradingHalt = async (
         reasons.push(`${info.chain} chain trading paused`)
         haltedChains.add(info.chain)
       }
+
+      // Intentionally ignore chain_lp_actions_paused; LP action pauses do not block swaps.
     }
 
     if (reasons.length === 0) {

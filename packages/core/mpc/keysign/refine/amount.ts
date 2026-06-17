@@ -17,7 +17,7 @@ type RefineKeysignAmountInput = {
   balance: bigint
 }
 
-export const refineKeysignAmount = (input: RefineKeysignAmountInput) => {
+export const refineKeysignAmount = async (input: RefineKeysignAmountInput) => {
   if (!input.keysignPayload.toAmount || input.keysignPayload.toAmount === '0') {
     return input.keysignPayload
   }
@@ -31,7 +31,7 @@ export const refineKeysignAmount = (input: RefineKeysignAmountInput) => {
     return input.keysignPayload
   }
 
-  const fee = getFeeAmount(input)
+  const fee = await getFeeAmount(input)
 
   const refinedAmount = minBigInt(BigInt(input.keysignPayload.toAmount), input.balance - fee)
 

@@ -7,6 +7,7 @@
  * Tests the TYPE contract so future SwapAffiliateConfig changes are caught.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
@@ -19,6 +20,10 @@ import { findSwapQuote, type SwapAffiliateConfig } from './findSwapQuote'
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
+  getCowSwapQuote: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote', () => ({
@@ -132,6 +137,7 @@ const evmPair = {
 describe('SwapAffiliateConfig propagation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
   })

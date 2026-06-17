@@ -21,7 +21,7 @@
  * Consumers handle retries, rate-limiting, and error classification.
  */
 
-import type { UtxoChainName } from './tx'
+import { getUtxoChainSpec, type UtxoChainName } from './tx'
 
 export type UtxoApiKind = 'electrs' | 'blockchair'
 
@@ -47,6 +47,8 @@ export type PlainUtxo = {
   value: bigint
 }
 
+const blockchairUtxoPageSize = 1_000
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init)
   if (!res.ok) {
@@ -62,6 +64,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
  */
 export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
   const kind = opts.apiUrlKind ?? 'electrs'
+  const dustLimit = getUtxoChainSpec(opts.chain).dustLimit
 
   if (kind === 'electrs') {
     type ElectrsUtxo = {
@@ -71,23 +74,57 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
       status?: { confirmed: boolean; block_height?: number }
     }
     const utxos = await fetchJson<ElectrsUtxo[]>(`${opts.apiUrl}/address/${opts.address}/utxo`)
-    return utxos.map(u => ({ hash: u.txid, index: u.vout, value: BigInt(u.value) }))
+    return utxos
+      .filter(u => u.status?.confirmed !== false && BigInt(u.value) > dustLimit)
+      .map(u => ({ hash: u.txid, index: u.vout, value: BigInt(u.value) }))
   }
 
   // blockchair — `apiUrl` is already chain-scoped per the contract at the top
   // of this file (`${rootApiUrl}/blockchair/{chain}`). Appending the slug
   // again would produce e.g. `/blockchair/bitcoin/bitcoin/...` and 404.
-  type BlockchairResp = {
-    data: Record<string, { utxo: Array<{ transaction_hash: string; index: number; value: number }> }>
+  type BlockchairUtxo = {
+    block_id: number
+    transaction_hash: string
+    index: number
+    value: number
+    is_spendable?: boolean
   }
-  const resp = await fetchJson<BlockchairResp>(`${opts.apiUrl}/dashboards/address/${opts.address}?limit=100`)
-  const entry = resp.data[opts.address]
-  if (!entry?.utxo) return []
-  return entry.utxo.map(u => ({
-    hash: u.transaction_hash,
-    index: u.index,
-    value: BigInt(u.value),
-  }))
+  type BlockchairResp = {
+    data: Record<string, { address?: { unspent_output_count?: number }; utxo: BlockchairUtxo[] }>
+  }
+  const blockchairUtxos: BlockchairUtxo[] = []
+  let expectedUtxoCount: number | undefined
+
+  for (let offset = 0; ; offset += blockchairUtxoPageSize) {
+    const resp = await fetchJson<BlockchairResp>(
+      `${opts.apiUrl}/dashboards/address/${opts.address}?limit=${blockchairUtxoPageSize}&offset=${offset}`
+    )
+    const entry = resp.data[opts.address]
+    const pageUtxos = entry?.utxo ?? []
+    blockchairUtxos.push(...pageUtxos)
+
+    expectedUtxoCount ??= entry?.address?.unspent_output_count
+    const hasAllReportedUtxos = expectedUtxoCount !== undefined && blockchairUtxos.length >= expectedUtxoCount
+    const hasNoMorePages = expectedUtxoCount === undefined && pageUtxos.length < blockchairUtxoPageSize
+
+    if (expectedUtxoCount !== undefined && pageUtxos.length === 0 && blockchairUtxos.length < expectedUtxoCount) {
+      throw new Error(
+        `Blockchair returned ${blockchairUtxos.length} UTXOs for ${opts.chain}:${opts.address}, expected ${expectedUtxoCount}`
+      )
+    }
+
+    if (hasAllReportedUtxos || pageUtxos.length === 0 || hasNoMorePages) {
+      break
+    }
+  }
+
+  return blockchairUtxos
+    .filter(({ block_id, is_spendable, value }) => block_id > 0 && is_spendable !== false && BigInt(value) > dustLimit)
+    .map(u => ({
+      hash: u.transaction_hash,
+      index: u.index,
+      value: BigInt(u.value),
+    }))
 }
 
 export type GetUtxoBalanceOptions = UtxoApiOptions & {

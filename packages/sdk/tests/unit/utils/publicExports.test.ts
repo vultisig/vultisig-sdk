@@ -16,6 +16,14 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
+    expect(sdk.noonUsdcVaultConfig).toBeDefined()
+    expect(typeof sdk.encodeNoonDeposit).toBe('function')
+    expect(typeof sdk.getNoonDepositTxPlan).toBe('function')
+    expect(typeof sdk.readNoonVaultState).toBe('function')
+    expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
+  })
+
   it('exports Chain enum and VaultBase class (VaultBase carries the prep-only primitives)', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.VaultBase).toBe('function')
