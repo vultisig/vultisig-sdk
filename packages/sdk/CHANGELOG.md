@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 2.4.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
 ## 2.4.1
 
 ### Patch Changes
