@@ -277,6 +277,7 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Swap Transactions (Production)', 
       console.log(`   Output: ${prepareResult.quote.estimatedOutput} ETH`)
     }, 60000)
 
+    // jscpd:ignore-start
     it('should prepare ERC-20 swap with autoApprove=false (manual approval)', async () => {
       console.log('🔄 Preparing USDC → ETH swap with autoApprove=false...')
 
@@ -348,6 +349,7 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Swap Transactions (Production)', 
       console.log(`   Approval mode: manual (via keysignPayload.erc20ApprovePayload)`)
       console.log(`   Requires approval: ${quote.requiresApproval}`)
     }, 60000)
+    // jscpd:ignore-end
 
     it('should prepare ERC-20 swap with autoApprove=true (automatic approval)', async () => {
       console.log('🔄 Preparing USDC → ETH swap with autoApprove=true...')

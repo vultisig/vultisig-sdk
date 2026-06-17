@@ -29,6 +29,10 @@ vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
   getNativeSwapQuote: vi.fn(),
 }))
 
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn().mockResolvedValue(null),
+}))
+
 // Keep the proactive THORChain minimum hermetic — no live inbound_addresses /
 // pool fetches in unit tests. `null` = "no proactive signal" (#604).
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({

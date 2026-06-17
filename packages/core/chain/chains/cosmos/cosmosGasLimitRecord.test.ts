@@ -11,7 +11,17 @@ describe('cosmosGasLimitRecord', () => {
 
   it('returns higher staking gas limits and scales bulk reward claim messages', () => {
     expect(getCosmosStakingGasLimit({ chain: Chain.Terra })).toBe(500_000n)
-    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic })).toBe(2_000_000n)
+    // Terra (not TerraClassic) scales normally: 500k + ((3-1)*500k)/4 = 750k
+    expect(getCosmosStakingGasLimit({ chain: Chain.Terra, msgCount: 3 })).toBe(750_000n)
+    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic })).toBe(3_000_000n)
+  })
+
+  it('TerraClassic: msgCount scaling capped at base regardless of count (fee-floor constraint)', () => {
+    // Columbus-5 fee floor: 100 LUNC = 100_000_000 uluna. At msgCount>=2 the
+    // scaled gasWanted * gasPrice exceeds 100 LUNC, causing node rejection.
+    // Single-msg policy: always return base=3M for TerraClassic.
+    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic, msgCount: 1 })).toBe(3_000_000n)
+    expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic, msgCount: 2 })).toBe(3_000_000n)
     expect(getCosmosStakingGasLimit({ chain: Chain.TerraClassic, msgCount: 3 })).toBe(3_000_000n)
   })
 

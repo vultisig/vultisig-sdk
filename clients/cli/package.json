@@ -89,8 +89,8 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@types/inquirer": "^9.0.9",
-    "@types/node": "^25.9.2",
+    "@types/inquirer": "^9.0.10",
+    "@types/node": "^25.9.3",
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.1",

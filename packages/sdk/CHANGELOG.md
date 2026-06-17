@@ -1,5 +1,29 @@
 # @vultisig/sdk
 
+## 2.3.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
+- [#763](https://github.com/vultisig/vultisig-sdk/pull/763) [`e5b07fb`](https://github.com/vultisig/vultisig-sdk/commit/e5b07fbfc09f55af64025950078050388e7b080d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate THORChain custom Cosmos payload fees from SignAmino input fees.
+
+## 2.3.5
+
+### Patch Changes
+
+- [#749](https://github.com/vultisig/vultisig-sdk/pull/749) [`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - cosmos/gas: bump TerraClassic staking gas limit from 2M to 3M and cap msgCount scaling
+
+  `getCosmosStakingGasLimit` now returns 3M for `Chain.TerraClassic` regardless of `msgCount`. The previous 2M base caused consistent out-of-gas failures (`ValuePerByte` meter in the classic-terra treasury/tax post-handler adds ~200-800 gas beyond the standard SDK estimate). The msgCount scaling is disabled for TerraClassic: at `msgCount >= 2` the scaled gasWanted would exceed the 100 LUNC fee floor, causing node rejection. Columbus-5 callers must split multi-validator reward claims into separate transactions.
+
+## 2.3.4
+
+### Patch Changes
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#710](https://github.com/vultisig/vultisig-sdk/pull/710) [`a54ac61`](https://github.com/vultisig/vultisig-sdk/commit/a54ac616f5aca39edd2515666ee895cfab0de242) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Default React Native Cosmos send fees to the chain fee denom when callers omit an explicit fee denom.
+
 ## 2.3.3
 
 ### Patch Changes
