@@ -606,6 +606,11 @@
       "import": "./dist/keysign/utxo/getKeysignUtxoInfo.js",
       "default": "./dist/keysign/utxo/getKeysignUtxoInfo.js"
     },
+    "./keysign/vultStaking/build": {
+      "types": "./dist/keysign/vultStaking/build.d.ts",
+      "import": "./dist/keysign/vultStaking/build.js",
+      "default": "./dist/keysign/vultStaking/build.js"
+    },
     "./keysignComplete": {
       "types": "./dist/keysignComplete.d.ts",
       "import": "./dist/keysignComplete.js",

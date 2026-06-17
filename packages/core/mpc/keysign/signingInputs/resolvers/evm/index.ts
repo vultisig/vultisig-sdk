@@ -49,6 +49,19 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
 
+  // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
+  // is a generic contract call (e.g. staking depositFor, whose token amount lives
+  // in the calldata) rather than a plain ERC-20 transfer: send the calldata to
+  // `toAddress` instead of building a transfer to `coin.contractAddress`.
+  // The `toAmount === '0'` guard keeps this from ever catching a real token
+  // transfer (those always carry a non-zero amount), even one with a `0x` memo.
+  const isGenericContractCall =
+    !swapPayload &&
+    !coin.isNativeToken &&
+    keysignPayload.toAmount === '0' &&
+    !!keysignPayload.memo &&
+    keysignPayload.memo.startsWith('0x')
+
   const getToAddress = () => {
     if (swapPayload) {
       return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
@@ -58,7 +71,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
       })
     }
 
-    if (coin.isNativeToken) {
+    if (coin.isNativeToken || isGenericContractCall) {
       return keysignPayload.toAddress
     }
 
@@ -133,6 +146,15 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
         transfer: TW.Ethereum.Proto.Transaction.Transfer.create({
           amount,
           data: keysignPayload.memo ? memoToTxData(shouldBePresent(keysignPayload.memo)) : undefined,
+        }),
+      }
+    }
+
+    if (isGenericContractCall) {
+      return {
+        contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({
+          amount,
+          data: toEvmTxData(shouldBePresent(keysignPayload.memo)),
         }),
       }
     }
