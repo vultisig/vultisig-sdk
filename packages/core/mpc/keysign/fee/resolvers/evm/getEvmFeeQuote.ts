@@ -6,6 +6,7 @@ import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxP
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
+import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIsGenericContractCall'
 import { getKeysignAmount } from '@vultisig/core-mpc/keysign/utils/getKeysignAmount'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -87,6 +88,16 @@ export const getEvmFeeQuote = async ({
 
     if (!receiver) {
       return null
+    }
+
+    // Generic contract call (e.g. staking depositFor): estimate against the real
+    // calldata sent to `toAddress`, not a synthetic ERC-20 transfer to coin.id.
+    if (getIsGenericContractCall(keysignPayload)) {
+      return {
+        to: receiver as `0x${string}`,
+        value: 0n,
+        data: (data ?? '0x') as `0x${string}`,
+      }
     }
 
     if (coin.id) {

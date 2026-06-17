@@ -17,6 +17,7 @@ import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainS
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
 import { toTwAddress } from '../../../tw/toTwAddress'
+import { getIsGenericContractCall } from '../../../utils/getIsGenericContractCall'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
 import { getErc20ApproveSigningInput } from './erc20'
@@ -52,15 +53,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
   // is a generic contract call (e.g. staking depositFor, whose token amount lives
   // in the calldata) rather than a plain ERC-20 transfer: send the calldata to
-  // `toAddress` instead of building a transfer to `coin.contractAddress`.
-  // The `toAmount === '0'` guard keeps this from ever catching a real token
-  // transfer (those always carry a non-zero amount), even one with a `0x` memo.
-  const isGenericContractCall =
-    !swapPayload &&
-    !coin.isNativeToken &&
-    keysignPayload.toAmount === '0' &&
-    !!keysignPayload.memo &&
-    keysignPayload.memo.startsWith('0x')
+  // `toAddress` instead of building a transfer to `coin.contractAddress`. Shared
+  // with the fee-quote and Blockaid resolvers so they target the same call.
+  const isGenericContractCall = getIsGenericContractCall(keysignPayload)
 
   const getToAddress = () => {
     if (swapPayload) {

@@ -2,11 +2,9 @@ import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { getErc20Allowance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Allowance'
-import { toEvmTwAmount } from '@vultisig/core-chain/chains/evm/tx/tw/toEvmTwAmount'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { Coin } from '@vultisig/core-chain/coin/Coin'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
-import { toTwAddress } from '@vultisig/core-mpc/keysign/tw/toTwAddress'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
@@ -14,6 +12,7 @@ import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import { Address, encodeFunctionData, parseAbi } from 'viem'
 
 /**
  * VULT staking (sVULT) is an EVM ERC20-wrapper on Ethereum mainnet. Every action
@@ -28,7 +27,30 @@ import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
  *
  * Unstake / claim / cancel need no approval and act on sVULT directly, so they
  * use the native fee coin + `memo` shape (like Circle withdraw).
+ *
+ * Calldata is encoded with viem against the schema below (compile-time-checked
+ * function names + args), verified against the deployed sVULT ABI on Ethereum
+ * mainnet (0x11113d7311FB8584a6e82BB126aA11D92e5fB39B).
  */
+const sVultAbi = parseAbi([
+  'function depositFor(address account, uint256 value)',
+  'function requestUnstake(uint256 amount)',
+  'function claim(uint256 requestId, address receiver)',
+  'function cancelUnstake(uint256 requestId)',
+])
+
+export const encodeVultDepositFor = (account: Address, value: bigint): `0x${string}` =>
+  encodeFunctionData({ abi: sVultAbi, functionName: 'depositFor', args: [account, value] })
+
+export const encodeVultRequestUnstake = (amount: bigint): `0x${string}` =>
+  encodeFunctionData({ abi: sVultAbi, functionName: 'requestUnstake', args: [amount] })
+
+export const encodeVultClaim = (requestId: bigint, receiver: Address): `0x${string}` =>
+  encodeFunctionData({ abi: sVultAbi, functionName: 'claim', args: [requestId, receiver] })
+
+export const encodeVultCancelUnstake = (requestId: bigint): `0x${string}` =>
+  encodeFunctionData({ abi: sVultAbi, functionName: 'cancelUnstake', args: [requestId] })
+
 export type BuildVultStakingKeysignPayloadInput = {
   vaultAddress: string
   vaultId: string
@@ -36,48 +58,6 @@ export type BuildVultStakingKeysignPayloadInput = {
   publicKey: PublicKey
   libType: KeysignLibType
   walletCore: WalletCore
-}
-
-const encodeDepositFor = ({
-  account,
-  value,
-  walletCore,
-}: {
-  account: string
-  value: bigint
-  walletCore: WalletCore
-}): string => {
-  const fn = walletCore.EthereumAbiFunction.createWithString('depositFor')
-  fn.addParamAddress(toTwAddress({ address: account, walletCore, chain: Chain.Ethereum }), false)
-  fn.addParamUInt256(toEvmTwAmount(value), false)
-  return `0x${Buffer.from(walletCore.EthereumAbi.encode(fn)).toString('hex')}`
-}
-
-const encodeRequestUnstake = ({ amount, walletCore }: { amount: bigint; walletCore: WalletCore }): string => {
-  const fn = walletCore.EthereumAbiFunction.createWithString('requestUnstake')
-  fn.addParamUInt256(toEvmTwAmount(amount), false)
-  return `0x${Buffer.from(walletCore.EthereumAbi.encode(fn)).toString('hex')}`
-}
-
-const encodeClaim = ({
-  requestId,
-  receiver,
-  walletCore,
-}: {
-  requestId: bigint
-  receiver: string
-  walletCore: WalletCore
-}): string => {
-  const fn = walletCore.EthereumAbiFunction.createWithString('claim')
-  fn.addParamUInt256(toEvmTwAmount(requestId), false)
-  fn.addParamAddress(toTwAddress({ address: receiver, walletCore, chain: Chain.Ethereum }), false)
-  return `0x${Buffer.from(walletCore.EthereumAbi.encode(fn)).toString('hex')}`
-}
-
-const encodeCancelUnstake = ({ requestId, walletCore }: { requestId: bigint; walletCore: WalletCore }): string => {
-  const fn = walletCore.EthereumAbiFunction.createWithString('cancelUnstake')
-  fn.addParamUInt256(toEvmTwAmount(requestId), false)
-  return `0x${Buffer.from(walletCore.EthereumAbi.encode(fn)).toString('hex')}`
 }
 
 /** Raw call to sVULT signed via the native fee coin + `memo` (no token transfer). */
@@ -133,6 +113,10 @@ export const buildVultStakeKeysignPayload = async ({
   stakingContractAddress: string
   amount: bigint
 }) => {
+  if (underlyingToken.chain !== Chain.Ethereum) {
+    throw new Error(`VULT staking is only supported on Ethereum, got ${underlyingToken.chain}`)
+  }
+
   const { vaultAddress, vaultId, localPartyId, publicKey, libType, walletCore } = input
 
   const tokenId = shouldBePresent(underlyingToken.id, 'VULT token id')
@@ -145,14 +129,14 @@ export const buildVultStakeKeysignPayload = async ({
     }),
     toAddress: stakingContractAddress,
     toAmount: '0',
-    memo: encodeDepositFor({ account: vaultAddress, value: amount, walletCore }),
+    memo: encodeVultDepositFor(vaultAddress as Address, amount),
     vaultLocalPartyId: localPartyId,
     vaultPublicKeyEcdsa: vaultId,
     libType,
   })
 
   const allowance = await getErc20Allowance({
-    chain: underlyingToken.chain as EvmChain,
+    chain: EvmChain.Ethereum,
     id: tokenId,
     address: vaultAddress,
     spender: stakingContractAddress,
@@ -185,7 +169,7 @@ export const buildVultUnstakeKeysignPayload = ({
   buildNativeContractCallPayload({
     input,
     toAddress: stakingContractAddress,
-    memo: encodeRequestUnstake({ amount, walletCore: input.walletCore }),
+    memo: encodeVultRequestUnstake(amount),
   })
 
 /** `sVULT.claim(requestId, vault)` — returns the underlying VULT once matured. */
@@ -200,11 +184,7 @@ export const buildVultClaimKeysignPayload = ({
   buildNativeContractCallPayload({
     input,
     toAddress: stakingContractAddress,
-    memo: encodeClaim({
-      requestId,
-      receiver: input.vaultAddress,
-      walletCore: input.walletCore,
-    }),
+    memo: encodeVultClaim(requestId, input.vaultAddress as Address),
   })
 
 /** `sVULT.cancelUnstake(requestId)` — cancels a pending request and restores sVULT. */
@@ -219,5 +199,5 @@ export const buildVultCancelUnstakeKeysignPayload = ({
   buildNativeContractCallPayload({
     input,
     toAddress: stakingContractAddress,
-    memo: encodeCancelUnstake({ requestId, walletCore: input.walletCore }),
+    memo: encodeVultCancelUnstake(requestId),
   })

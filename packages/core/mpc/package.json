@@ -576,6 +576,11 @@
       "import": "./dist/keysign/tw/toTwAddress.js",
       "default": "./dist/keysign/tw/toTwAddress.js"
     },
+    "./keysign/utils/getIsGenericContractCall": {
+      "types": "./dist/keysign/utils/getIsGenericContractCall.d.ts",
+      "import": "./dist/keysign/utils/getIsGenericContractCall.js",
+      "default": "./dist/keysign/utils/getIsGenericContractCall.js"
+    },
     "./keysign/utils/getJoinKeysignUrl": {
       "types": "./dist/keysign/utils/getJoinKeysignUrl.d.ts",
       "import": "./dist/keysign/utils/getJoinKeysignUrl.js",
