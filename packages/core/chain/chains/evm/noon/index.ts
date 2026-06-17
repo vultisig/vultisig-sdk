@@ -136,6 +136,9 @@ const getObject = (value: unknown, name: string): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 const getNumber = (value: unknown, path: string): number => {
   const result = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
   if (!Number.isFinite(result)) {
@@ -143,6 +146,24 @@ const getNumber = (value: unknown, path: string): number => {
   }
 
   return result
+}
+
+const getNoonVaultSevenDayNetApy = (vault: Record<string, unknown>) => {
+  // Guard on the new shape being a proper object (not just present): during a
+  // partial-migration window Noon can return `ir: { '7d': null }`, and a bare
+  // `!== undefined` check would enter this branch and crash in getObject
+  // instead of falling back to the legacy `vault['7d']` path below.
+  if (isObjectRecord(vault.ir) && isObjectRecord(vault.ir['7d'])) {
+    const sevenDay = getObject(vault.ir['7d'], 'ir.7d')
+    const net = getObject(sevenDay.net, 'ir.7d.net')
+
+    return getNumber(net.apy_pct, 'ir.7d.net.apy_pct')
+  }
+
+  const sevenDay = getObject(vault['7d'], '7d')
+  const net = getObject(sevenDay.net, '7d.net')
+
+  return getNumber(net.apy_pct, '7d.net.apy_pct')
 }
 
 const assertAtLeast = (value: bigint, minimum: bigint, label: string) => {
@@ -435,9 +456,7 @@ export const fetchNoonUsdcVaultApy = async (fetchImpl?: FetchLike): Promise<numb
     throw new Error(`Noon API did not include loan ${noonUsdcVaultConfig.loanAddress}`)
   }
 
-  const sevenDay = getObject(getObject(getObject(target, 'vault')['7d'], '7d').net, '7d.net')
-
-  return getNumber(sevenDay.apy_pct, '7d.net.apy_pct')
+  return getNoonVaultSevenDayNetApy(getObject(target, 'vault'))
 }
 
 export const fetchNoonUsdcVaultTvl = async (fetchImpl?: FetchLike): Promise<{ tvl: number; tvlInUsd: number }> => {
