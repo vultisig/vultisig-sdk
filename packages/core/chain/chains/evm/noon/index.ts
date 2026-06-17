@@ -136,6 +136,9 @@ const getObject = (value: unknown, name: string): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 const getNumber = (value: unknown, path: string): number => {
   const result = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
   if (!Number.isFinite(result)) {
@@ -146,9 +149,8 @@ const getNumber = (value: unknown, path: string): number => {
 }
 
 const getNoonVaultSevenDayNetApy = (vault: Record<string, unknown>) => {
-  if (vault.ir !== undefined) {
-    const ir = getObject(vault.ir, 'ir')
-    const sevenDay = getObject(ir['7d'], 'ir.7d')
+  if (isObjectRecord(vault.ir) && vault.ir['7d'] !== undefined) {
+    const sevenDay = getObject(vault.ir['7d'], 'ir.7d')
     const net = getObject(sevenDay.net, 'ir.7d.net')
 
     return getNumber(net.apy_pct, 'ir.7d.net.apy_pct')
