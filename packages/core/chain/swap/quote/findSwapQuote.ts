@@ -24,11 +24,16 @@ import {
 import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import { getNativeSwapTradingHalt } from '@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt'
 import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
-import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  NativeSwapChain,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
@@ -117,6 +122,39 @@ const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
 
 const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
   providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
+
+const formatTradingHaltedMessage = (reason: string) =>
+  `This swap route is temporarily unavailable — ${reason}. Please try again later.`
+
+const getNativeTradingHaltError = async ({
+  from,
+  to,
+  swapChain,
+}: {
+  from: AccountCoin
+  to: AccountCoin
+  swapChain: NativeSwapChain
+}): Promise<SwapError | null> => {
+  const tradingHalt = await getNativeSwapTradingHalt({ from, to, swapChain })
+
+  return tradingHalt
+    ? new SwapError(SwapErrorCode.TradingHalted, formatTradingHaltedMessage(tradingHalt.reasons.join('; ')))
+    : null
+}
+
+const assertNativeTradingOpen = async (input: {
+  from: AccountCoin
+  to: AccountCoin
+  swapChain: NativeSwapChain
+}): Promise<void> => {
+  const tradingHaltError = await getNativeTradingHaltError(input)
+  if (tradingHaltError) {
+    throw tradingHaltError
+  }
+}
+
+const asTradingHaltedSwapError = (reason: unknown): SwapError | null =>
+  reason instanceof SwapError && reason.code === SwapErrorCode.TradingHalted ? reason : null
 
 /**
  * Tuning point for issue #605's banded routing rule. 100 bps = 1%.
@@ -240,6 +278,8 @@ export const findSwapQuote = async ({
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
       fetch: async (): Promise<SwapQuote> => {
+        await assertNativeTradingOpen({ from, to, swapChain })
+
         const fromDecimals = from.decimals
         const amountNumber = bigIntToNumber(amount, fromDecimals)
         const native = await getNativeSwapQuote({
@@ -429,6 +469,8 @@ export const findSwapQuote = async ({
   const thorIsSoleRoute =
     generalFetchers.length === 0 && matchingSwapChains.length === 1 && matchingSwapChains[0] === Chain.THORChain
   if (thorIsSoleRoute) {
+    await assertNativeTradingOpen({ from, to, swapChain: Chain.THORChain })
+
     const nativeMin = await computeNativeMin()
     if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
       throw belowNativeMinimumError(nativeMin, from)
@@ -505,6 +547,7 @@ export const findSwapQuote = async ({
 
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
   const haltedProviders = new Set<SwapQuoteProviderName>()
+  let proactiveTradingHalt: SwapError | null = null
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -513,6 +556,8 @@ export const findSwapQuote = async ({
     }
 
     const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
+
+    proactiveTradingHalt ??= asTradingHaltedSwapError(result.reason)
 
     // SwapKit raises this only after confirming the pair is structurally
     // supported, so it is unambiguously an amount problem (#4418). Reuse the
@@ -549,6 +594,10 @@ export const findSwapQuote = async ({
     )
   }
 
+  if (proactiveTradingHalt) {
+    throw proactiveTradingHalt
+  }
+
   // Trading-halt takes precedence over the speculative computed minimum and the
   // generic fallback: when a native protocol reports a halt, NO amount can route,
   // so telling the user to "increase the amount" would be actively misleading. A
@@ -557,7 +606,7 @@ export const findSwapQuote = async ({
   if (haltedProviders.size > 0) {
     throw new SwapError(
       SwapErrorCode.TradingHalted,
-      `This swap route is temporarily unavailable — trading is halted on ${[...haltedProviders].join(', ')}. Please try again later.`
+      formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
     )
   }
 

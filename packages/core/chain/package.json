@@ -1507,6 +1507,11 @@
       "import": "./dist/swap/native/asset/toNativeSwapAsset.js",
       "default": "./dist/swap/native/asset/toNativeSwapAsset.js"
     },
+    "./swap/native/halts/getNativeSwapTradingHalt": {
+      "types": "./dist/swap/native/halts/getNativeSwapTradingHalt.d.ts",
+      "import": "./dist/swap/native/halts/getNativeSwapTradingHalt.js",
+      "default": "./dist/swap/native/halts/getNativeSwapTradingHalt.js"
+    },
     "./swap/native/limitSwapMemo": {
       "types": "./dist/swap/native/limitSwapMemo.d.ts",
       "import": "./dist/swap/native/limitSwapMemo.js",
