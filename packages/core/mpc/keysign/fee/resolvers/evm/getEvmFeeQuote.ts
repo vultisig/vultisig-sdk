@@ -90,34 +90,28 @@ export const getEvmFeeQuote = async ({
       return null
     }
 
-    // Generic contract call (e.g. staking depositFor): estimate against the real
-    // calldata sent to `toAddress`, not a synthetic ERC-20 transfer to coin.id.
-    if (getIsGenericContractCall(keysignPayload)) {
+    // Native send, or a generic contract call (e.g. staking depositFor): estimate
+    // against `memo` calldata sent to `toAddress`. For a generic call `amount` is
+    // 0 (zero toAmount), so this also covers its zero value — and crucially avoids
+    // estimating a synthetic ERC-20 transfer to coin.id.
+    if (getIsGenericContractCall(keysignPayload) || !coin.id) {
       return {
         to: receiver as `0x${string}`,
-        value: 0n,
-        data: (data ?? '0x') as `0x${string}`,
+        value: amount,
+        data,
       }
     }
 
-    if (coin.id) {
-      const transferData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [receiver as `0x${string}`, amount],
-      })
-
-      return {
-        to: coin.id as `0x${string}`,
-        value: 0n,
-        data: transferData,
-      }
-    }
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [receiver as `0x${string}`, amount],
+    })
 
     return {
-      to: receiver as `0x${string}`,
-      value: amount,
-      data,
+      to: coin.id as `0x${string}`,
+      value: 0n,
+      data: transferData,
     }
   }
 

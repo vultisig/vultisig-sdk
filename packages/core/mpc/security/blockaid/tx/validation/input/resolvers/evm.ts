@@ -51,17 +51,7 @@ export const getEvmBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
   const amount = BigInt(payload.toAmount)
   const receiver = payload.toAddress as `0x${string}`
 
-  // Generic contract call (e.g. staking depositFor): scan the real calldata sent
-  // to `toAddress`, not a synthetic ERC-20 transfer to coin.id.
-  if (getIsGenericContractCall(payload)) {
-    return toEvmBlockaidTxScanInput({
-      to: receiver,
-      value: `0x${bigIntToHex(amount)}`,
-      data: payload.memo || '0x',
-    })
-  }
-
-  if (!coin.id) {
+  if (getIsGenericContractCall(payload) || !coin.id) {
     return toEvmBlockaidTxScanInput({
       to: receiver,
       value: `0x${bigIntToHex(amount)}`,
