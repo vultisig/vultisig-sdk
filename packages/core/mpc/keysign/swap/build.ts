@@ -48,6 +48,12 @@ export type BuildSwapKeysignPayloadInput = {
   toPublicKey: PublicKey
   libType: KeysignLibType
   walletCore: WalletCore
+  /**
+   * Optional explicit gas limit (units) for EVM swaps. When set it replaces the
+   * aggregator's estimate on `ethereumSpecific.gasLimit`; the gas price is still
+   * computed normally. Ignored for non-EVM chains and when omitted.
+   */
+  gasLimitOverride?: bigint
 }
 
 type TransferSwapTx = Extract<GeneralSwapTx, { transfer: unknown }>['transfer']
@@ -108,6 +114,7 @@ export const buildSwapKeysignPayload = async ({
   toPublicKey,
   libType,
   walletCore,
+  gasLimitOverride,
 }: BuildSwapKeysignPayloadInput) => {
   const transferTx = matchRecordUnion<SwapQuoteResult, TransferSwapTx | undefined>(swapQuote.quote, {
     native: () => undefined,
@@ -327,6 +334,15 @@ export const buildSwapKeysignPayload = async ({
   })
 
   const { chain } = fromCoin
+
+  // Apply an explicit user gas limit (EVM only). The chain-specific resolver
+  // has already estimated the gas; here we overwrite just the limit with the
+  // caller's value, leaving the computed gas price intact. The 1inch write-back
+  // below re-reads `ethereumSpecific.gasLimit`, so it picks up the override too.
+  if (gasLimitOverride !== undefined && gasLimitOverride > 0n && isChainOfKind(chain, 'evm')) {
+    getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'ethereumSpecific').gasLimit =
+      gasLimitOverride.toString()
+  }
 
   if (
     isChainOfKind(chain, 'evm') &&
