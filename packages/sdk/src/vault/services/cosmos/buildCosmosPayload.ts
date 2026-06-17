@@ -68,12 +68,17 @@ async function buildCosmosBlockchainSpecific(
   if (chainKind === 'vaultBased') {
     // THORChain or MayaChain
     if (chain === 'THORChain') {
+      const feeAmount = fee?.amount?.[0]?.amount
+      if (fee && feeAmount == null) {
+        throw new Error('THORChain fee.amount[0].amount is required when fee is provided')
+      }
+
       return {
         case: 'thorchainSpecific',
         value: create(THORChainSpecificSchema, {
           accountNumber: BigInt(accountNumber),
           sequence: BigInt(sequence),
-          fee: BigInt(fee?.amount[0]?.amount ?? 0),
+          fee: BigInt(feeAmount ?? 0),
         }),
       }
     } else {
