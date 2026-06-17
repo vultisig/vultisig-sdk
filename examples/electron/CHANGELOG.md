@@ -1,5 +1,13 @@
 # @vultisig/example-electron
 
+## 0.1.86
+
+### Patch Changes
+
+- Updated dependencies [[`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c)]:
+  - @vultisig/sdk@2.4.1
+  - @vultisig/examples-shared@0.1.71
+
 ## 0.1.85
 
 ### Patch Changes
