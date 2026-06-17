@@ -73,9 +73,11 @@ describe('buildCosmosPayload', () => {
         const thor = payload.blockchainSpecific?.value as {
           accountNumber: bigint
           sequence: bigint
+          fee: bigint
         }
         expect(thor.accountNumber).toBe(0n)
         expect(thor.sequence).toBe(0n)
+        expect(thor.fee).toBe(2_000_000n)
       })
 
       it('uses mayaSpecific for MayaChain', async () => {
