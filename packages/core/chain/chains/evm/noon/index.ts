@@ -149,7 +149,11 @@ const getNumber = (value: unknown, path: string): number => {
 }
 
 const getNoonVaultSevenDayNetApy = (vault: Record<string, unknown>) => {
-  if (isObjectRecord(vault.ir) && vault.ir['7d'] !== undefined) {
+  // Guard on the new shape being a proper object (not just present): during a
+  // partial-migration window Noon can return `ir: { '7d': null }`, and a bare
+  // `!== undefined` check would enter this branch and crash in getObject
+  // instead of falling back to the legacy `vault['7d']` path below.
+  if (isObjectRecord(vault.ir) && isObjectRecord(vault.ir['7d'])) {
     const sevenDay = getObject(vault.ir['7d'], 'ir.7d')
     const net = getObject(sevenDay.net, 'ir.7d.net')
 

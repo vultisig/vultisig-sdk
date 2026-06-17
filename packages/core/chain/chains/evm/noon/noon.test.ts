@@ -166,6 +166,22 @@ describe('Noon API parsing', () => {
     await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(9.75)
   })
 
+  it('falls back to legacy APY data when ir["7d"] is present but null (partial-migration window)', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: { '7d': null },
+            '7d': { net: { apy_pct: '8.0' } },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(8.0)
+  })
+
   it('combines APY and Accountable TVL metrics', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes('back.noon.capital')) {
