@@ -277,6 +277,48 @@ const assertValidSlippageTolerance = (slippageTolerance: number | undefined): vo
 // Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
 const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
 
+// Validate a custom swap recipient is a properly-formatted EVM address before it
+// reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —
+// a plausible-but-wrong address (right hex length, wrong wallet) would produce a
+// valid order that sends buy tokens to the wrong wallet with no on-chain recovery,
+// so throw early with a clear error. Only enforce the EVM format when the pair can
+// actually reach CowSwap (same-chain EVM ERC-20 on a supported chain); for native
+// THOR/Maya pairs the node validates the destination downstream, so a malformed
+// non-EVM address fails there and the EVM check is skipped. Extracted from
+// findSwapQuote to keep that function's cognitive complexity within the gate.
+const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
+  if (recipient === undefined || isEvmAddress(recipient)) return
+  const cowSwapPathReachable =
+    isChainOfKind(from.chain, 'evm') &&
+    from.id !== undefined &&
+    isChainOfKind(to.chain, 'evm') &&
+    to.id !== undefined &&
+    from.chain === to.chain &&
+    isOneOf(from.chain, cowSwapSupportedChains)
+  if (cowSwapPathReachable) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `recipient "${recipient}" is not a valid EVM address. Expected a 0x-prefixed 40-character hex string.`
+    )
+  }
+}
+
+// Convert the percent slippage tolerance (e.g. 0.5 = 0.5%) into each aggregator's
+// native unit. `undefined` leaves every provider on its own default (no behaviour
+// change). Extracted from findSwapQuote to keep its cognitive complexity in budget.
+type ProviderSlippage = {
+  oneInchPercent: number | undefined
+  swapKitPercent: number | undefined
+  lifiFraction: number | undefined
+  kyberBps: number | undefined
+}
+const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => ({
+  oneInchPercent: slippageTolerance,
+  swapKitPercent: slippageTolerance,
+  lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
+  kyberBps: slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined,
+})
+
 export const findSwapQuote = async ({
   from,
   to,
@@ -318,43 +360,24 @@ export const findSwapQuote = async ({
   const normalizedRecipient = recipient?.trim() || undefined
   const hasCustomRecipient = normalizedRecipient !== undefined
 
-  // Validate the custom recipient is a properly formatted EVM address before it
-  // reaches CowSwap. CowSwap calls `.toLowerCase()` on the receiver but does zero
-  // format validation - a plausible-but-wrong address (right hex length, wrong
-  // wallet) would produce a valid order that sends buy tokens to the wrong wallet
-  // with no on-chain recovery. Throw early so the user sees a clear error instead
-  // of a confusing "No swap route found" or, worse, a misrouted fill.
-  // The CowSwap path is always EVM (same-chain ERC-20 gate on cowSwapSupportedChains),
-  // so this check is always correct for that path. For native THOR/Maya the node
-  // validates the destination downstream; a malformed non-EVM address would fail
-  // there, so we skip the EVM check for cross-chain pairs.
-  if (hasCustomRecipient && !isEvmAddress(normalizedRecipient)) {
-    // Only enforce EVM format when the pair can reach CowSwap (same-chain EVM ERC-20).
-    // For native-only pairs (e.g. BTC→ETH through THOR) the recipient is chain-validated
-    // downstream by the native node; skip the EVM guard there.
-    const fromIsEvmErc20 = isChainOfKind(from.chain, 'evm') && from.id !== undefined
-    const toIsEvmErc20 = isChainOfKind(to.chain, 'evm') && to.id !== undefined
-    const cowSwapPathReachable =
-      fromIsEvmErc20 && toIsEvmErc20 && from.chain === to.chain && isOneOf(from.chain, cowSwapSupportedChains)
-    if (cowSwapPathReachable) {
-      throw new SwapError(
-        SwapErrorCode.InvalidConfig,
-        `recipient "${normalizedRecipient}" is not a valid EVM address. Expected a 0x-prefixed 40-character hex string.`
-      )
-    }
-  }
+  // Validate a custom recipient up front (see assertValidCustomRecipient) so a
+  // malformed address can't reach CowSwap and misroute the fill. No-op when the
+  // recipient is undefined.
+  assertValidCustomRecipient(normalizedRecipient, from, to)
 
   // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
   // up front so they don't propagate into every provider call and fail with
   // non-actionable downstream errors.
   assertValidSlippageTolerance(slippageTolerance)
 
-  // Convert it to each aggregator's native unit; `undefined` leaves each
-  // provider on its own default (no behavior change).
-  const oneInchSlippagePercent = slippageTolerance
-  const swapKitSlippagePercent = slippageTolerance
-  const lifiSlippageFraction = slippageTolerance !== undefined ? slippageTolerance / 100 : undefined
-  const kyberSlippageBps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
+  // Convert the slippage tolerance to each aggregator's native unit (see
+  // toProviderSlippage); `undefined` leaves each provider on its own default.
+  const {
+    oneInchPercent: oneInchSlippagePercent,
+    swapKitPercent: swapKitSlippagePercent,
+    lifiFraction: lifiSlippageFraction,
+    kyberBps: kyberSlippageBps,
+  } = toProviderSlippage(slippageTolerance)
 
   const involvedChains = [from.chain, to.chain]
 
