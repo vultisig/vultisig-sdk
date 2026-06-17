@@ -1,5 +1,40 @@
 # @vultisig/mcp
 
+## 0.1.18
+
+### Patch Changes
+
+- [#750](https://github.com/vultisig/vultisig-sdk/pull/750) [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - security: bump transitive deps to fix 5 high-severity advisories
+
+  - form-data: 4.0.5 -> 4.0.6 (CRLF injection, GHSA-hmw2-7cc7-3qxx)
+  - protobufjs: 7.5.8 -> 7.6.4, 8.3.0 -> 8.6.3 (DoS via unbounded Any expansion, GHSA-wcpc-wj8m-hjx6)
+  - tmp: 0.2.6 -> 0.2.7 (path traversal via type confusion, GHSA-7c78-jf6q-g5cm)
+  - vite: 8.0.10 -> 8.0.16 (server.fs.deny bypass on Windows, GHSA-fx2h-pf6j-xcff)
+  - ws: 7.5.10 -> 7.5.11, 8.17.1/8.20.x -> 8.21.0 (memory exhaustion DoS, GHSA-96hv-2xvq-fx4p)
+
+  all bumped via yarn resolutions; no direct dep changes.
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11), [`c78c10d`](https://github.com/vultisig/vultisig-sdk/commit/c78c10d2b43f9ddd13b2c912a71f7d902f2694cc), [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019)]:
+  - @vultisig/sdk@2.3.3
+
+## 0.1.17
+
+### Patch Changes
+
+- Updated dependencies [[`dc75595`](https://github.com/vultisig/vultisig-sdk/commit/dc75595e83360f5bda84b2d91cae177bc7c8c966)]:
+  - @vultisig/sdk@2.0.0
+  - @vultisig/client-shared@0.2.15
+
+## 0.1.16
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/client-shared@0.2.14
+  - @vultisig/sdk@1.8.10
+
 ## 0.1.15
 
 ### Patch Changes

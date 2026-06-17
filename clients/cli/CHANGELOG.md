@@ -1,5 +1,104 @@
 # @vultisig/cli
 
+## 2.3.3
+
+### Patch Changes
+
+- [#750](https://github.com/vultisig/vultisig-sdk/pull/750) [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - security: bump transitive deps to fix 5 high-severity advisories
+
+  - form-data: 4.0.5 -> 4.0.6 (CRLF injection, GHSA-hmw2-7cc7-3qxx)
+  - protobufjs: 7.5.8 -> 7.6.4, 8.3.0 -> 8.6.3 (DoS via unbounded Any expansion, GHSA-wcpc-wj8m-hjx6)
+  - tmp: 0.2.6 -> 0.2.7 (path traversal via type confusion, GHSA-7c78-jf6q-g5cm)
+  - vite: 8.0.10 -> 8.0.16 (server.fs.deny bypass on Windows, GHSA-fx2h-pf6j-xcff)
+  - ws: 7.5.10 -> 7.5.11, 8.17.1/8.20.x -> 8.21.0 (memory exhaustion DoS, GHSA-96hv-2xvq-fx4p)
+
+  all bumped via yarn resolutions; no direct dep changes.
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11), [`c78c10d`](https://github.com/vultisig/vultisig-sdk/commit/c78c10d2b43f9ddd13b2c912a71f7d902f2694cc), [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019)]:
+  - @vultisig/core-chain@2.16.3
+  - @vultisig/sdk@2.3.3
+
+## 2.3.1
+
+### Patch Changes
+
+- [#701](https://github.com/vultisig/vultisig-sdk/pull/701) [`1bcb195`](https://github.com/vultisig/vultisig-sdk/commit/1bcb195013b9730bf6ed0e2c42209d2285a357e8) Thanks [@neavra](https://github.com/neavra)! - Fix EIP-712 domain hashing for domains that omit standard fields. The agent executor's `sign_typed_data` hardcoded the `EIP712Domain` type to all four standard fields while skipping absent values during data encoding, producing non-canonical hashes for domains without `verifyingContract` (e.g. Polymarket's `ClobAuthDomain`) — CLOB rejected every auto-submitted order with `401 Invalid L1 Request headers`. The domain type is now derived from the fields actually present, matching viem/ethers canonical hashing (verified live against the Polymarket CLOB: L1 auth now accepted and L2 API credentials derived).
+
+- Updated dependencies [[`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c)]:
+  - @vultisig/core-chain@2.16.1
+  - @vultisig/sdk@2.3.1
+
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/core-chain@2.16.0
+  - @vultisig/sdk@2.3.0
+  - @vultisig/rujira@36.0.0
+
+## 2.2.0
+
+### Patch Changes
+
+- Updated dependencies [[`391e42d`](https://github.com/vultisig/vultisig-sdk/commit/391e42d020ea96407eb122de762234c9443392fc)]:
+  - @vultisig/sdk@2.2.0
+  - @vultisig/rujira@35.0.0
+
+## 2.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`3030c7a`](https://github.com/vultisig/vultisig-sdk/commit/3030c7a718947396de5d6b6de1b044640368aab5)]:
+  - @vultisig/sdk@2.1.0
+  - @vultisig/rujira@34.0.0
+
+## 2.0.0
+
+### Major Changes
+
+- [#682](https://github.com/vultisig/vultisig-sdk/pull/682) [`341245e`](https://github.com/vultisig/vultisig-sdk/commit/341245e2d6d49348e38d61bc42805c35ac8d3052) Thanks [@neavra](https://github.com/neavra)! - Gate signing in `agent ask` mode behind explicit confirmation (security fix, **breaking**).
+
+  Previously `vsig agent ask` auto-signed and broadcast any transaction envelope the
+  backend returned, gated only by whether a password was present. Because the backend
+  routes read-only swap intents (e.g. "list swap routes from USDC to ETH") to the
+  fund-moving `execute_swap` tool, a query could broadcast a real on-chain swap.
+
+  `runPasswordGatedTool` now calls `ui.requestConfirmation` before any `sign_tx` /
+  `sign_typed_data` (the single chokepoint for both the tx_ready path and client-side
+  dispatch, covering both legs of a multi-leg swap). In ask mode this defaults to
+  **deny**: signing/broadcast now requires the new `agent ask --yes` flag. Without it,
+  the proposed transaction is reported (`CONFIRMATION_REQUIRED`) and nothing is signed.
+  Interactive (TUI) and pipe (`--via-agent`) modes already prompt/defer for confirmation.
+
+  **BREAKING — migration for unattended pipelines:** any automation that relied on
+  `agent ask` auto-signing must now pass `--yes`. A denied signing still exits **0**
+  (a misrouted read-only prompt remains a successful query); detect it via the new
+  top-level `confirmation_required: true` field in `--output json` mode, the
+  `confirmation-required:` line in text mode, or `tool_calls[].code ===
+"CONFIRMATION_REQUIRED"`. Do not infer "broadcast happened" from exit code alone —
+  check the `transactions` array. With `--yes`, each authorization is logged to stderr
+  (`[confirm] auto-approved (--yes): <summary>`).
+
+### Patch Changes
+
+- Updated dependencies [[`dc75595`](https://github.com/vultisig/vultisig-sdk/commit/dc75595e83360f5bda84b2d91cae177bc7c8c966)]:
+  - @vultisig/sdk@2.0.0
+  - @vultisig/rujira@33.0.0
+  - @vultisig/client-shared@0.2.15
+
+## 1.8.10
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/client-shared@0.2.14
+  - @vultisig/core-chain@2.14.1
+  - @vultisig/rujira@32.0.1
+  - @vultisig/sdk@1.8.10
+
 ## 1.8.1
 
 ### Patch Changes

@@ -31,7 +31,7 @@ jobs:
           cache: "yarn"
 
       - run: corepack enable
-      - run: corepack prepare yarn@4.13.0 --activate
+      - run: corepack prepare yarn@4.16.0 --activate
       - run: yarn install --immutable
 
       - name: Check for changesets
@@ -46,7 +46,7 @@ jobs:
 
       - name: Create/Update Version PR
         if: steps.changesets-check.outputs.exists == 'true'
-        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
         with:
           version: yarn changeset:version
           title: "chore: version packages"

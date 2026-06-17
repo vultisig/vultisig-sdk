@@ -23,7 +23,7 @@ import { getErc20ApproveSigningInput } from './erc20'
 
 const memoToTxData = (memo: string) => (memo.startsWith('0x') ? toEvmTxData(memo) : Buffer.from(memo, 'utf8'))
 
-export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({ keysignPayload, walletCore }) => {
+export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'evm'>(keysignPayload)
   const coin = assertField(keysignPayload, 'coin')
 
@@ -35,7 +35,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = ({ keysignPaylo
       walletCore,
     })
 
-    const restOfSigningInputs = getEvmSigningInputs({
+    const restOfSigningInputs = await getEvmSigningInputs({
       keysignPayload: incrementKeysignPayloadNonce(create(KeysignPayloadSchema, restOfKeysignPayload)),
       walletCore,
     })

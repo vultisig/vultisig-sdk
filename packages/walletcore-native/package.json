@@ -18,7 +18,7 @@
     "expo": ">=56.0.8"
   },
   "devDependencies": {
-    "expo": ">=56.0.8"
+    "expo": ">=56.0.9"
   },
   "publishConfig": {
     "access": "public"

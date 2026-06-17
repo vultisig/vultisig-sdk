@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.12.0",
+  "version": "2.16.6",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,8 @@
   "type": "module",
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "fixtures"
   ],
   "exports": {
     "./amount/fromChainAmount": {
@@ -223,6 +224,11 @@
       "types": "./dist/chains/cosmos/gas.d.ts",
       "import": "./dist/chains/cosmos/gas.js",
       "default": "./dist/chains/cosmos/gas.js"
+    },
+    "./chains/cosmos/getCosmosRpcUrl": {
+      "types": "./dist/chains/cosmos/getCosmosRpcUrl.d.ts",
+      "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
+      "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
     },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
@@ -439,6 +445,21 @@
       "import": "./dist/chains/cosmos/utils/parseCosmosSerialized.js",
       "default": "./dist/chains/cosmos/utils/parseCosmosSerialized.js"
     },
+    "./chains/customRpc/customRpcOverrides": {
+      "types": "./dist/chains/customRpc/customRpcOverrides.d.ts",
+      "import": "./dist/chains/customRpc/customRpcOverrides.js",
+      "default": "./dist/chains/customRpc/customRpcOverrides.js"
+    },
+    "./chains/customRpc/customRpcSupportedChains": {
+      "types": "./dist/chains/customRpc/customRpcSupportedChains.d.ts",
+      "import": "./dist/chains/customRpc/customRpcSupportedChains.js",
+      "default": "./dist/chains/customRpc/customRpcSupportedChains.js"
+    },
+    "./chains/customRpc/rpcHealthProbe": {
+      "types": "./dist/chains/customRpc/rpcHealthProbe.d.ts",
+      "import": "./dist/chains/customRpc/rpcHealthProbe.js",
+      "default": "./dist/chains/customRpc/rpcHealthProbe.js"
+    },
     "./chains/evm/chainInfo": {
       "types": "./dist/chains/evm/chainInfo.d.ts",
       "import": "./dist/chains/evm/chainInfo.js",
@@ -508,6 +529,11 @@
       "types": "./dist/chains/evm/erc721/getErc721Balance.d.ts",
       "import": "./dist/chains/evm/erc721/getErc721Balance.js",
       "default": "./dist/chains/evm/erc721/getErc721Balance.js"
+    },
+    "./chains/evm/noon": {
+      "types": "./dist/chains/evm/noon/index.d.ts",
+      "import": "./dist/chains/evm/noon/index.js",
+      "default": "./dist/chains/evm/noon/index.js"
     },
     "./chains/evm/tx/fee": {
       "types": "./dist/chains/evm/tx/fee/index.d.ts",
@@ -749,6 +775,11 @@
       "import": "./dist/chains/utxo/fee/byteFee.js",
       "default": "./dist/chains/utxo/fee/byteFee.js"
     },
+    "./chains/utxo/fee/zip317": {
+      "types": "./dist/chains/utxo/fee/zip317.d.ts",
+      "import": "./dist/chains/utxo/fee/zip317.js",
+      "default": "./dist/chains/utxo/fee/zip317.js"
+    },
     "./chains/utxo/minUtxo": {
       "types": "./dist/chains/utxo/minUtxo.d.ts",
       "import": "./dist/chains/utxo/minUtxo.js",
@@ -783,6 +814,11 @@
       "types": "./dist/chains/utxo/tx/UtxoScriptType.d.ts",
       "import": "./dist/chains/utxo/tx/UtxoScriptType.js",
       "default": "./dist/chains/utxo/tx/UtxoScriptType.js"
+    },
+    "./chains/utxo/zcashBranchId": {
+      "types": "./dist/chains/utxo/zcashBranchId.d.ts",
+      "import": "./dist/chains/utxo/zcashBranchId.js",
+      "default": "./dist/chains/utxo/zcashBranchId.js"
     },
     "./coin/AccountCoin": {
       "types": "./dist/coin/AccountCoin.d.ts",
@@ -1074,6 +1110,7 @@
       "import": "./dist/coin/utils/sortCoinsByBalance.js",
       "default": "./dist/coin/utils/sortCoinsByBalance.js"
     },
+    "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
     "./package.json": "./package.json",
     "./publicKey/address/bittensor": {
       "types": "./dist/publicKey/address/bittensor.d.ts",
@@ -1209,6 +1246,11 @@
       "types": "./dist/security/blockaid/tx/simulation/resolvers/solana.d.ts",
       "import": "./dist/security/blockaid/tx/simulation/resolvers/solana.js",
       "default": "./dist/security/blockaid/tx/simulation/resolvers/solana.js"
+    },
+    "./security/blockaid/tx/simulation/resolvers/sui": {
+      "types": "./dist/security/blockaid/tx/simulation/resolvers/sui.d.ts",
+      "import": "./dist/security/blockaid/tx/simulation/resolvers/sui.js",
+      "default": "./dist/security/blockaid/tx/simulation/resolvers/sui.js"
     },
     "./security/blockaid/tx/validation": {
       "types": "./dist/security/blockaid/tx/validation/index.d.ts",
@@ -1464,6 +1506,16 @@
       "types": "./dist/swap/native/asset/toNativeSwapAsset.d.ts",
       "import": "./dist/swap/native/asset/toNativeSwapAsset.js",
       "default": "./dist/swap/native/asset/toNativeSwapAsset.js"
+    },
+    "./swap/native/halts/getNativeSwapTradingHalt": {
+      "types": "./dist/swap/native/halts/getNativeSwapTradingHalt.d.ts",
+      "import": "./dist/swap/native/halts/getNativeSwapTradingHalt.js",
+      "default": "./dist/swap/native/halts/getNativeSwapTradingHalt.js"
+    },
+    "./swap/native/limitSwapMemo": {
+      "types": "./dist/swap/native/limitSwapMemo.d.ts",
+      "import": "./dist/swap/native/limitSwapMemo.js",
+      "default": "./dist/swap/native/limitSwapMemo.js"
     },
     "./swap/native/minimum/getNativeSwapMinAmountIn": {
       "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
@@ -1826,17 +1878,17 @@
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",
-    "@bufbuild/protobuf": "^2.11.0",
-    "@cosmjs/amino": "^0.38.1",
+    "@bufbuild/protobuf": "^2.12.0",
+    "@cosmjs/amino": "^0.39.0",
     "@cosmjs/encoding": "^0.39.0",
-    "@cosmjs/proto-signing": "^0.38.1",
+    "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@lifi/sdk": "^3.16.2",
+    "@lifi/sdk": "^4.0.0",
     "@mysten/sui": "^2.17.0",
     "@noble/hashes": "^1.8.0",
-    "@polkadot/api": "^16.5.4",
-    "@polkadot/util": "^14.0.1",
-    "@polkadot/util-crypto": "^14.0.1",
+    "@polkadot/api": "^16.5.6",
+    "@polkadot/util": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
@@ -1849,10 +1901,10 @@
     "bs58": "^6.0.0",
     "bs58check": "^4.0.0",
     "cbor-x": "^1.6.4",
-    "date-fns": "^4.1.0",
+    "date-fns": "^4.4.0",
     "ethers": "^6.16.0",
     "tiny-secp256k1": "^2.2.4",
-    "viem": "^2.51.0",
-    "xrpl": "^4.6.0"
+    "viem": "^2.52.2",
+    "xrpl": "^5.0.0"
   }
 }

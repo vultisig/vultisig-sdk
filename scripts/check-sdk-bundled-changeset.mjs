@@ -26,7 +26,11 @@ function git(args) {
 function getChangedFiles() {
   const baseRef = process.env.GITHUB_BASE_REF
   if (baseRef) {
-    git(['fetch', '--no-tags', '--depth=1', 'origin', baseRef])
+    // No --depth=1 here: a shallow fetch grafts the base tip parentless, so
+    // any PR not based on the exact current tip fails `A...B` with
+    // "no merge base" (bites every open PR whenever the base advances).
+    // The CI checkout is already fetch-depth: 0, so a full fetch is cheap.
+    git(['fetch', '--no-tags', 'origin', baseRef])
     return git(['diff', '--name-only', `origin/${baseRef}...HEAD`])
       .split('\n')
       .filter(Boolean)

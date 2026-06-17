@@ -1,7 +1,7 @@
 import { Resolver } from '@vultisig/lib-utils/types/Resolver'
 
 import { BlockaidSimulationSupportedChain, BlockaidSimulationSupportedChainKind } from '../../simulationChains'
-import { BlockaidEVMSimulation, BlockaidSolanaSimulation } from './api/core'
+import { BlockaidEVMSimulation, BlockaidSolanaSimulation, BlockaidSuiSimulation } from './api/core'
 
 export type BlockaidTxSimulationInput<T extends BlockaidSimulationSupportedChain = BlockaidSimulationSupportedChain> = {
   chain: T
@@ -11,6 +11,7 @@ export type BlockaidTxSimulationInput<T extends BlockaidSimulationSupportedChain
 type BlockaidSimulationByKind = {
   evm: BlockaidEVMSimulation
   solana: BlockaidSolanaSimulation
+  sui: BlockaidSuiSimulation
 }
 
 export type BlockaidSimulationForChainKind<K extends BlockaidSimulationSupportedChainKind> = BlockaidSimulationByKind[K]

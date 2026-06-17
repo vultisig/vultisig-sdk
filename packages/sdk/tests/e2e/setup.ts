@@ -26,7 +26,7 @@ vi.mock('@lifi/sdk', () => ({
   },
   getQuote: vi.fn(),
   getRoutes: vi.fn(),
-  createConfig: vi.fn(() => ({})),
+  createClient: vi.fn(() => ({ config: {}, providers: [] })),
   EVM: vi.fn(),
 }))
 
@@ -65,6 +65,7 @@ if (typeof globalThis.crypto === 'undefined') {
  * Node.js 18's fetch() doesn't support file:// URLs ("not implemented... yet...")
  * This polyfill intercepts fetch calls for .wasm files and loads them from the filesystem
  */
+// jscpd:ignore-start
 const wasmFetchHandler = async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response | null> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
@@ -113,6 +114,7 @@ const wrappedFetch = async function (input: RequestInfo | URL, init?: RequestIni
 
 // Install the wrapper
 globalThis.fetch = wrappedFetch as any
+// jscpd:ignore-end
 
 /**
  * Configure crypto and WASM for E2E tests

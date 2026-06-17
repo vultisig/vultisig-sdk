@@ -7,10 +7,11 @@
 
 import { create } from '@bufbuild/protobuf'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
-import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
-import { cosmosGasRecord } from '@vultisig/core-chain/chains/cosmos/gas'
+import { cosmosGasRecord, getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
+import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import {
@@ -56,19 +57,28 @@ export type BuildSignDirectPayloadInput = SignDirectInput & {
  */
 async function buildCosmosBlockchainSpecific(
   chain: CosmosChain,
+  coin: AccountCoin,
   accountNumber: string,
-  sequence: string
+  sequence: string,
+  fee?: CosmosFeeInput,
+  skipChainSpecificFetch?: boolean
 ): Promise<KeysignPayload['blockchainSpecific']> {
   const chainKind = getCosmosChainKind(chain)
 
   if (chainKind === 'vaultBased') {
     // THORChain or MayaChain
     if (chain === 'THORChain') {
+      const feeAmount = fee?.amount?.[0]?.amount
+      if (fee && feeAmount == null) {
+        throw new Error('THORChain fee.amount[0].amount is required when fee is provided')
+      }
+
       return {
         case: 'thorchainSpecific',
         value: create(THORChainSpecificSchema, {
           accountNumber: BigInt(accountNumber),
           sequence: BigInt(sequence),
+          fee: BigInt(feeAmount ?? 0),
         }),
       }
     } else {
@@ -88,7 +98,9 @@ async function buildCosmosBlockchainSpecific(
     value: create(CosmosSpecificSchema, {
       accountNumber: BigInt(accountNumber),
       sequence: BigInt(sequence),
-      gas: cosmosGasRecord[chain as keyof typeof cosmosGasRecord],
+      gas: skipChainSpecificFetch
+        ? cosmosGasRecord[chain as IbcEnabledCosmosChain]
+        : await getCosmosFeeAmount(coin as AccountCoin<IbcEnabledCosmosChain>),
     }),
   }
 }
@@ -162,7 +174,14 @@ export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadI
   const signData = buildSignAminoData(msgs, fee)
 
   // Build blockchain-specific data
-  const blockchainSpecific = await buildCosmosBlockchainSpecific(chain, accountNumber, sequence)
+  const blockchainSpecific = await buildCosmosBlockchainSpecific(
+    chain,
+    coin,
+    accountNumber,
+    sequence,
+    fee,
+    skipChainSpecificFetch
+  )
 
   // Create the payload
   return create(KeysignPayloadSchema, {
@@ -218,7 +237,14 @@ export async function buildSignDirectKeysignPayload(input: BuildSignDirectPayloa
   const signData = buildSignDirectData(bodyBytes, authInfoBytes, chainId, accountNumber)
 
   // Build blockchain-specific data
-  const blockchainSpecific = await buildCosmosBlockchainSpecific(chain, accountNumber, sequence)
+  const blockchainSpecific = await buildCosmosBlockchainSpecific(
+    chain,
+    coin,
+    accountNumber,
+    sequence,
+    undefined,
+    skipChainSpecificFetch
+  )
 
   // Create the payload
   return create(KeysignPayloadSchema, {

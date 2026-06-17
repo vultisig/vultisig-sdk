@@ -6,14 +6,14 @@ import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { getCompiledTxsForBlockaidInput } from '../../../utils/getCompiledTxsForBlockaidInput'
 import { BlockaidTxValidationInputResolver } from '../resolver'
 
-export const getUtxoBlockaidTxValidationInput: BlockaidTxValidationInputResolver<UtxoChain.Bitcoin> = ({
+export const getUtxoBlockaidTxValidationInput: BlockaidTxValidationInputResolver<UtxoChain.Bitcoin> = async ({
   payload,
   walletCore,
   chain,
 }) => {
   const { address } = getKeysignCoin(payload)
 
-  const compiledTxs = getCompiledTxsForBlockaidInput({
+  const compiledTxs = await getCompiledTxsForBlockaidInput({
     payload,
     walletCore,
   })

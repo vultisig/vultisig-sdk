@@ -1,5 +1,42 @@
 # @vultisig/rujira
 
+## 36.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/sdk@2.3.0
+
+## 35.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`391e42d`](https://github.com/vultisig/vultisig-sdk/commit/391e42d020ea96407eb122de762234c9443392fc)]:
+  - @vultisig/sdk@2.2.0
+
+## 34.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`3030c7a`](https://github.com/vultisig/vultisig-sdk/commit/3030c7a718947396de5d6b6de1b044640368aab5)]:
+  - @vultisig/sdk@2.1.0
+
+## 33.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`dc75595`](https://github.com/vultisig/vultisig-sdk/commit/dc75595e83360f5bda84b2d91cae177bc7c8c966)]:
+  - @vultisig/sdk@2.0.0
+
+## 32.0.1
+
+### Patch Changes
+
+- [#683](https://github.com/vultisig/vultisig-sdk/pull/683) [`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Update SDK package dependencies and Yarn tooling.
+
+- Updated dependencies [[`4561129`](https://github.com/vultisig/vultisig-sdk/commit/45611297a55da72d3c56b1a2ffe6522da1b64d7b)]:
+  - @vultisig/sdk@1.8.10
+
 ## 32.0.0
 
 ### Patch Changes

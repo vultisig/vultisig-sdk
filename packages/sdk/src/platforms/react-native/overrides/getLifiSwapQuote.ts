@@ -1,16 +1,22 @@
 // RN override for `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote`.
 //
-// `@lifi/sdk`'s barrel statically evaluates `@wallet-standard/app`, which
-// declares `class AppReadyEvent extends Event` at module top-level. Hermes
-// ships without the `Event` / `EventTarget` DOM globals; even with the
-// `event-target-polyfill` installed in the RN entry, it only takes effect
-// *after* the entry's polyfill import runs. Since `@lifi/sdk` is an
-// external module in the RN bundle, metro would resolve it and evaluate
-// its module body *before* the bundle body — racing against the polyfill.
+// Historically `@lifi/sdk`'s v3 barrel statically evaluated
+// `@wallet-standard/app` (`class AppReadyEvent extends Event` at module
+// top-level), which Hermes chokes on without the `Event`/`EventTarget` DOM
+// globals. This override defers the heavy LI.FI action surface (`getQuote`)
+// behind an `await import('@lifi/sdk')` inside the async body so it only
+// evaluates once a swap quote is actually requested, after the RN entry's
+// polyfills are in place.
 //
-// This override reaches `@lifi/sdk` via `await import()` inside the async
-// body so the module never evaluates unless a swap quote is actually
-// requested, by which point the polyfills are fully in place.
+// NOTE (v4 migration): the v4 barrel is lighter and no longer ships the
+// `@wallet-standard/app`/`Event` top-level path. The `await import()` here
+// is kept as belt-and-suspenders, but it is NOT the sole deferral point:
+// `config.ts` (shared by core + RN, no RN override) value-imports
+// `createClient` from `@lifi/sdk`, so the barrel is part of the static graph
+// regardless. That was already true in v3 (config.ts value-imported
+// `createConfig`) and the RN build shipped working, so v4 is risk-neutral.
+// The client is built inside `setupLifi()`; we just fetch it via
+// `getLifiClient()` and thread it into `getQuote(client, params)`.
 //
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
@@ -21,7 +27,12 @@ import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
-import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
+import {
+  getLifiClient,
+  LifiAffiliateConfig,
+  lifiConfig,
+  setupLifi,
+} from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -70,19 +81,18 @@ const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): 
 // RN-specific bootstrap. Mirrors the `ensureLifiConfigured` pattern from
 // core's `getLifiSwapQuote.ts`. Runs `setupLifi()` exactly once via the
 // `memoize` wrapper; subsequent quote calls hit the cached return and skip
-// the work entirely. setupLifi's lazy branch then calls `createConfig`
-// exactly once via its own `configured` latch, so the `@lifi/sdk` default
-// `preloadChains: true` HTTP fetch fires once at first-quote time, not
-// per-quote. (NeOMakinG #618 r2 blocker.)
+// the work entirely. setupLifi's lazy branch then calls `createClient`
+// exactly once via its own `configured` latch, building the v4 SDK client
+// at first-quote time, not per-quote. (NeOMakinG #618 r2 blocker.)
 //
 // Consumer-bootstrap path stays safe: an explicit
 // `setupLifi({integratorName, apiUrl})` called from a consumer app's boot
-// path overwrites `lifiConfig` and re-runs `createConfig` once at that
+// path overwrites `lifiConfig` and re-runs `createClient` once at that
 // point. The memoize'd `ensureLifiConfiguredInRN` then no-ops on quotes
 // because `configured = true` is already set inside `setupLifi`.
 //
-// Using `setupLifi()` (not raw `createConfig`) keeps config.ts as the
-// single source of truth for integrator/apiUrl.
+// Using `setupLifi()` (not raw `createClient`) keeps config.ts as the
+// single source of truth for integrator/apiUrl + the active SDK client.
 const ensureLifiConfiguredInRN = memoize(() => {
   setupLifi()
 })
@@ -104,6 +114,11 @@ export const getLifiSwapQuote = async ({
 
   const { getQuote } = await import('@lifi/sdk')
 
+  // v4: actions take the SDK client as their first arg. The client is created
+  // inside `setupLifi()` (run via `ensureLifiConfiguredInRN()` above), so
+  // `getLifiClient()` is guaranteed initialised by the time we reach here.
+  const lifiClient = getLifiClient()
+
   const [fromChain, toChain] = [transfer.from, transfer.to].map(({ chain }) => lifiSwapChainId[chain])
 
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
@@ -116,7 +131,7 @@ export const getLifiSwapQuote = async ({
   // default; consumer's value if they ran `setupLifi(bootstrap)` at boot).
   const integrator = lifiAffiliateConfig?.integratorName ?? lifiConfig.integratorName
 
-  const quote = await getQuote({
+  const quote = await getQuote(lifiClient, {
     fromChain,
     toChain,
     fromToken,
