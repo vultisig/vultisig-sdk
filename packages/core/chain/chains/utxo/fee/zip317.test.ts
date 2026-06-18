@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getZcashConventionalFee } from './zip317'
+import { getZcashConventionalFee, getZcashOpReturnOutputSize, getZcashTransparentOutputSizes } from './zip317'
 
 const p2pkhOutput = 34n
 
@@ -42,5 +42,30 @@ describe('getZcashConventionalFee', () => {
         outputSizes: [p2pkhOutput, p2pkhOutput, 92n],
       })
     ).toBe(25_000n)
+  })
+})
+
+describe('getZcashOpReturnOutputSize', () => {
+  it('sizes a short memo with a single-byte push (9 + 2 + len)', () => {
+    expect(getZcashOpReturnOutputSize('m'.repeat(40))).toBe(51n)
+  })
+
+  it('adds a byte of push overhead once the memo exceeds 75 bytes', () => {
+    expect(getZcashOpReturnOutputSize('m'.repeat(75))).toBe(86n)
+    expect(getZcashOpReturnOutputSize('m'.repeat(76))).toBe(88n)
+  })
+})
+
+describe('getZcashTransparentOutputSizes', () => {
+  it('returns recipient only when there is no change and no memo', () => {
+    expect(getZcashTransparentOutputSizes({ change: 0n, memo: undefined })).toEqual([34n])
+  })
+
+  it('adds a change output only when change is positive', () => {
+    expect(getZcashTransparentOutputSizes({ change: 1n, memo: undefined })).toEqual([34n, 34n])
+  })
+
+  it('appends the OP_RETURN size for a memo send', () => {
+    expect(getZcashTransparentOutputSizes({ change: 1n, memo: 'm'.repeat(40) })).toEqual([34n, 34n, 51n])
   })
 })
