@@ -31,6 +31,7 @@ import { serializeTransaction } from 'viem'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCardanoTxTtl } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxTtl'
 
 import { getPreSigningHashes } from '../preSigningHashes'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
@@ -369,6 +370,7 @@ describe('compileTx golden vectors', () => {
 
     expect(hex(compiledOutput.txId)).toBe(hex(hashes[0]))
     expect(hex(compiledOutput.encoded)).toBe(EXPECTED_CARDANO_SIGNED_CBOR)
+    expect(getCardanoTxTtl(compiledOutput.encoded)).toBe(500_000n)
   })
 
   it('attaches CIP-20 label-674 metadata when memo is present', () => {

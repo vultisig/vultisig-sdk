@@ -110,6 +110,11 @@
       "import": "./dist/chains/cardano/cip30/cardanoTxBodyHash.js",
       "default": "./dist/chains/cardano/cip30/cardanoTxBodyHash.js"
     },
+    "./chains/cardano/cip30/cardanoTxTtl": {
+      "types": "./dist/chains/cardano/cip30/cardanoTxTtl.d.ts",
+      "import": "./dist/chains/cardano/cip30/cardanoTxTtl.js",
+      "default": "./dist/chains/cardano/cip30/cardanoTxTtl.js"
+    },
     "./chains/cardano/cip30/cborEncoder": {
       "types": "./dist/chains/cardano/cip30/cborEncoder.d.ts",
       "import": "./dist/chains/cardano/cip30/cborEncoder.js",
