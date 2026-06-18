@@ -26,6 +26,8 @@ type GetKyberSwapTxInput = Record<TransferDirection, AccountCoin<KyberSwapEnable
   enableGasEstimation: boolean
   affiliateBps?: number
   kyberConfig?: KyberSwapBaseAffiliateConfig
+  /** Slippage tolerance in basis points (e.g. 100 = 1%). Defaults to `kyberSwapSlippageTolerance`. */
+  slippageTolerance?: number
 }
 
 type KyberSwapBuildResponse = {
@@ -73,12 +75,13 @@ export const getKyberSwapTx = async ({
   enableGasEstimation,
   affiliateBps,
   kyberConfig = kyberSwapAffiliateConfig,
+  slippageTolerance = kyberSwapSlippageTolerance,
 }: GetKyberSwapTxInput): Promise<GeneralSwapQuote> => {
   const buildPayload = {
     routeSummary,
     sender: from.address,
     recipient: from.address,
-    slippageTolerance: kyberSwapSlippageTolerance,
+    slippageTolerance,
     deadline: Math.round(convertDuration(Date.now() + convertDuration(kyberSwapTxLifespan, 'min', 'ms'), 'ms', 's')),
     enableGasEstimation,
     ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),

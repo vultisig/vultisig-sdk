@@ -38,25 +38,41 @@ export const getPublicKey = ({ chain, walletCore, hexChainCode, publicKeys, chai
 
   const publicKeyType = getTwPublicKeyType({ walletCore, chain })
 
-  const derivedPublicKey =
+  // Derive via ECDSA BIP32 path (shared by the ecdsa branch and the
+  // 32-byte-chainPublicKey fallback below).
+  const deriveEcdsaPublicKey = (): string => {
+    const path = walletCore.CoinTypeExt.derivationPath(coinType)
+    if (!path) {
+      throw new Error(`WalletCore returned empty derivation path (chain=${chain}, coinType=${coinType})`)
+    }
+    return derivePublicKey({ hexRootPubKey: publicKeys.ecdsa, hexChainCode, path })
+  }
+
+  let derivedPublicKey =
     chainPublicKey ??
     match(keysignType, {
-      ecdsa: () => {
-        const path = walletCore.CoinTypeExt.derivationPath(coinType)
-        if (!path) {
-          throw new Error(`WalletCore returned empty derivation path (chain=${chain}, coinType=${coinType})`)
-        }
-        return derivePublicKey({
-          hexRootPubKey: publicKeys.ecdsa,
-          hexChainCode,
-          path,
-        })
-      },
+      ecdsa: deriveEcdsaPublicKey,
       eddsa: () => publicKeys.eddsa,
       mldsa: () => {
         throw new Error('MLDSA public key is not derived via ECDSA/EdDSA paths')
       },
     })
+
+  // Some vault backup formats (older KeyImport vaults) store the raw 32-byte
+  // X coordinate for secp256k1 chains instead of the standard 33-byte
+  // compressed form. WalletCore's createWithData rejects 32-byte ECDSA keys
+  // ("Invalid length: Expected 33 but received 32"). Detect this case and
+  // fall back to BIP32 derivation from the root ECDSA key, which always
+  // produces a 33-byte compressed key. EdDSA keys are legitimately 32 bytes
+  // so guard by keysignType.
+  if (
+    chainPublicKey !== undefined &&
+    keysignType === 'ecdsa' &&
+    Buffer.from(derivedPublicKey, 'hex').length === 32 &&
+    publicKeys.ecdsa
+  ) {
+    derivedPublicKey = deriveEcdsaPublicKey()
+  }
 
   const publicKeyData =
     chain === Chain.Cardano
