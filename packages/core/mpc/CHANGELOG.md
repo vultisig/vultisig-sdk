@@ -1,5 +1,13 @@
 # @vultisig/core-mpc
 
+## 1.7.3
+
+### Patch Changes
+
+- [#730](https://github.com/vultisig/vultisig-sdk/pull/730) [`a3859ab`](https://github.com/vultisig/vultisig-sdk/commit/a3859ab400ba02e05da73e23d57e3d261863d922) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Calculate Cardano send fees from WalletCore transaction body bytes instead of using a flat default.
+
+- [#729](https://github.com/vultisig/vultisig-sdk/pull/729) [`2092472`](https://github.com/vultisig/vultisig-sdk/commit/209247266141f4fb8f299e87a257aa00c1a1f2e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add buffered EVM swap gas limits so failed gas estimation no longer falls back to the raw calldata floor.
+
 ## 1.7.2
 
 ### Patch Changes
