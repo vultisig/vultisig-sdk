@@ -1,4 +1,7 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
+import { getCardanoTxTtl } from '@vultisig/core-chain/chains/cardano/cip30/cardanoTxTtl'
+import { getCardanoCurrentSlot } from '@vultisig/core-chain/chains/cardano/client/currentSlot'
+import { cardanoBroadcastTtlSafetyMargin } from '@vultisig/core-chain/chains/cardano/config'
 import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 
@@ -13,8 +16,22 @@ import { selectEncodedBytes } from './utxo'
  */
 const alreadyCommittedCode = 3117
 
+const assertCardanoTtlFreshForBroadcast = async (encodedBytes: Uint8Array) => {
+  const ttl = getCardanoTxTtl(encodedBytes)
+  const currentSlot = await getCardanoCurrentSlot()
+  const minimumFreshTtl = currentSlot + BigInt(cardanoBroadcastTtlSafetyMargin)
+
+  if (ttl <= minimumFreshTtl) {
+    throw new Error(
+      `Cardano transaction TTL is expired or too close to expiry; rebuild the transaction and retry (ttl=${ttl}, currentSlot=${currentSlot}, safetyMargin=${cardanoBroadcastTtlSafetyMargin} slots)`
+    )
+  }
+}
+
 export const broadcastCardanoTx: BroadcastTxResolver<OtherChain.Cardano> = async ({ chain, tx }) => {
   const encodedBytes = selectEncodedBytes(chain, tx)
+  await assertCardanoTtlFreshForBroadcast(encodedBytes)
+
   const cborHex = Buffer.from(encodedBytes).toString('hex')
 
   const { txHash, errorMessage, rpcErrorCode } = await submitCardanoCbor(cborHex)
