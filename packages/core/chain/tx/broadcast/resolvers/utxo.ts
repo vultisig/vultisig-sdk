@@ -41,7 +41,7 @@ export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({ cha
 
   const error = 'context' in response ? response.context.error : extractErrorMsg(response)
 
-  if (isInError(error, 'BadInputsUTxO', 'timed out', 'txn-mempool-conflict', 'already known')) {
+  if (isInError(error, 'BadInputsUTxO', 'txn-mempool-conflict', 'already known')) {
     return null
   }
 
