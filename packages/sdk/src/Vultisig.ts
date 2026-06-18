@@ -5,6 +5,7 @@ import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
 import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
+import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 import { getSwapExplorerUrl, type SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
@@ -53,7 +54,7 @@ import {
   VaultCreationStep,
   VaultData,
 } from './types'
-import type { SiteScanResult } from './types/security'
+import type { AddressScanResult, SiteScanResult } from './types/security'
 import type {
   CoinPricesParams,
   CoinPricesResult,
@@ -1385,5 +1386,15 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   static async scanSite(url: string): Promise<SiteScanResult> {
     const result = await scanSiteWithBlockaid(url)
     return { isMalicious: result === 'malicious', url }
+  }
+
+  /**
+   * Scan an EVM address for reputation via Blockaid.
+   * @param address - The EVM address to scan (0x-prefixed)
+   * @param chain - The chain name (e.g. 'ethereum', 'polygon')
+   * @returns Scan result with verdict and detector features
+   */
+  static async scanAddress(address: string, chain: string): Promise<AddressScanResult> {
+    return scanAddressWithBlockaid(address, chain)
   }
 }

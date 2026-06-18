@@ -28,3 +28,11 @@ export type SiteScanResult = {
   /** The URL that was scanned */
   url: string
 }
+
+/** EVM address reputation scan result from Blockaid */
+export type AddressScanResult = {
+  /** Reputation verdict from Blockaid */
+  resultType: 'Benign' | 'Warning' | 'Malicious'
+  /** Detector features explaining the verdict */
+  features: string[]
+}
