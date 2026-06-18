@@ -170,6 +170,7 @@ export class FastVault extends VaultBase {
         signingOptions?.signal
       )
 
+      // jscpd:ignore-start
       // Emit signing complete event
       this.emit('transactionSigned', {
         signature,
@@ -222,6 +223,7 @@ export class FastVault extends VaultBase {
 
     // Parse vault file to get keyShares
     const container = vaultContainerFromString(this.vaultData.vultFileContent.trim())
+    // jscpd:ignore-end
 
     // Check if vault is encrypted - use container as source of truth since it reflects
     // what's actually stored. Some imported fast vaults may have isEncrypted=false.

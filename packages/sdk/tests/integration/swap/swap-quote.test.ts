@@ -98,6 +98,7 @@ describe('Integration: Swap Quote', () => {
   /**
    * Helper function to create a test vault
    */
+  // jscpd:ignore-start
   async function createTestVault(name: string): Promise<FastVault> {
     const now = Date.now()
     const mockVaultData: CoreVault = {
@@ -155,6 +156,7 @@ describe('Integration: Swap Quote', () => {
 
     return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
   }
+  // jscpd:ignore-end
 
   describe('Chain Support Queries', () => {
     it('should report supported swap chains', () => {

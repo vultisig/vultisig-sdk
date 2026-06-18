@@ -4,14 +4,19 @@ import { _resetLifiConfigForTest, lifiConfig, setupLifi } from '../config'
 
 // Capture every getQuote(...) invocation so we can assert the `integrator`
 // field is the consumer-supplied override (Station's `station`), NOT the
-// SDK-default vultisig-0. createConfig is a no-op spy because the @lifi/sdk
-// global runs once and persists across tests inside the same worker.
+// SDK-default vultisig-0. createClient is a spy returning a dummy client —
+// in @lifi/sdk v4 actions take the client as their first arg (the v3 global
+// mutable singleton is gone), so getQuote is called as getQuote(client, params).
 const getQuoteSpy = vi.fn()
-const createConfigSpy = vi.fn()
+const createClientSpy = vi.fn()
+const mockLifiClient = { config: {}, providers: [] }
 
 vi.mock('@lifi/sdk', () => ({
   ChainId: {},
-  createConfig: (...args: unknown[]) => createConfigSpy(...args),
+  createClient: (...args: unknown[]) => {
+    createClientSpy(...args)
+    return mockLifiClient
+  },
   getQuote: (...args: unknown[]) => getQuoteSpy(...args),
 }))
 
@@ -63,7 +68,7 @@ const baseInput = {
 describe('getLifiSwapQuote — integrator override', () => {
   beforeEach(() => {
     getQuoteSpy.mockReset()
-    createConfigSpy.mockReset()
+    createClientSpy.mockReset()
     _resetLifiConfigForTest()
     // Stable bridge-less EVM EVM happy-path response — enough to satisfy the
     // function's post-quote unwrap. The test only inspects getQuote's args.
@@ -91,7 +96,8 @@ describe('getLifiSwapQuote — integrator override', () => {
     const { getLifiSwapQuote } = await import('./getLifiSwapQuote')
     await getLifiSwapQuote(baseInput as never)
     expect(getQuoteSpy).toHaveBeenCalledTimes(1)
-    expect(getQuoteSpy.mock.calls[0]![0].integrator).toBe('vultisig-0')
+    // v4: getQuote(client, params) — params (with the integrator tag) is arg[1].
+    expect(getQuoteSpy.mock.calls[0]![1].integrator).toBe('vultisig-0')
   })
 
   it('uses consumer-supplied integratorName when LifiAffiliateConfig provided', async () => {
@@ -100,7 +106,7 @@ describe('getLifiSwapQuote — integrator override', () => {
       ...baseInput,
       lifiAffiliateConfig: { integratorName: 'station' },
     } as never)
-    expect(getQuoteSpy.mock.calls[0]![0].integrator).toBe('station')
+    expect(getQuoteSpy.mock.calls[0]![1].integrator).toBe('station')
   })
 
   it('per-call override does NOT mutate the global lifiConfig', async () => {
@@ -112,9 +118,9 @@ describe('getLifiSwapQuote — integrator override', () => {
     expect(lifiConfig.integratorName).toBe('vultisig-0')
   })
 
-  it('setupLifi({integratorName, apiUrl}) calls createConfig with both fields', () => {
+  it('setupLifi({integratorName, apiUrl}) calls createClient with both fields', () => {
     setupLifi({ integratorName: 'station', apiUrl: 'https://api.vultisig.com/lifi/' })
-    expect(createConfigSpy).toHaveBeenCalledWith({
+    expect(createClientSpy).toHaveBeenCalledWith({
       integrator: 'station',
       apiUrl: 'https://api.vultisig.com/lifi/',
     })
@@ -122,32 +128,32 @@ describe('getLifiSwapQuote — integrator override', () => {
     expect(lifiConfig.apiUrl).toBe('https://api.vultisig.com/lifi/')
   })
 
-  it('setupLifi() with no config calls createConfig with just the default integrator (no apiUrl)', () => {
+  it('setupLifi() with no config calls createClient with just the default integrator (no apiUrl)', () => {
     setupLifi()
-    expect(createConfigSpy).toHaveBeenCalledWith({ integrator: 'vultisig-0' })
+    expect(createClientSpy).toHaveBeenCalledWith({ integrator: 'vultisig-0' })
   })
 
   it('lazy setupLifi() AFTER consumer setupLifi(config) is a no-op (consumer wins)', () => {
     // The lazy path (called by ensureLifiConfigured before each getQuote)
     // must not undo a consumer bootstrap. Once a consumer explicitly
     // configured Station, a subsequent lazy default call should NOT
-    // re-issue createConfig with vultisig-0.
+    // re-issue createClient with vultisig-0.
     setupLifi({ integratorName: 'station', apiUrl: 'https://api.vultisig.com/lifi/' })
     setupLifi() // lazy fallback
-    expect(createConfigSpy).toHaveBeenCalledTimes(1)
+    expect(createClientSpy).toHaveBeenCalledTimes(1)
     expect(lifiConfig.integratorName).toBe('station')
   })
 
-  it('consumer setupLifi(config) AFTER lazy default re-runs createConfig (footgun fix)', () => {
+  it('consumer setupLifi(config) AFTER lazy default re-runs createClient (footgun fix)', () => {
     // Ehsan-saradar #618: previously the lazy default would latch
     // configured=true with vultisig-0, and a later consumer bootstrap
     // would silently no-op — Station's apiUrl proxy gets lost. The fix:
-    // the consumer-bootstrap branch always runs createConfig regardless
+    // the consumer-bootstrap branch always runs createClient regardless
     // of latch state.
     setupLifi() // lazy path runs first (e.g. a swap quote fires early)
     setupLifi({ integratorName: 'station', apiUrl: 'https://api.vultisig.com/lifi/' })
-    expect(createConfigSpy).toHaveBeenCalledTimes(2)
-    expect(createConfigSpy).toHaveBeenLastCalledWith({
+    expect(createClientSpy).toHaveBeenCalledTimes(2)
+    expect(createClientSpy).toHaveBeenLastCalledWith({
       integrator: 'station',
       apiUrl: 'https://api.vultisig.com/lifi/',
     })
@@ -155,14 +161,14 @@ describe('getLifiSwapQuote — integrator override', () => {
     expect(lifiConfig.apiUrl).toBe('https://api.vultisig.com/lifi/')
   })
 
-  it('consumer setupLifi(config) repeated calls re-run createConfig with each new config', () => {
+  it('consumer setupLifi(config) repeated calls re-run createClient with each new config', () => {
     // Mirrors the production reality where a misuse (two consumers in the
-    // same process) results in the second-caller's createConfig taking
+    // same process) results in the second-caller's createClient taking
     // effect on the LI.FI SDK. Document the semantics so a future
     // multi-tenant setup doesn't surprise anyone.
     setupLifi({ integratorName: 'station' })
     setupLifi({ integratorName: 'someone-else' })
-    expect(createConfigSpy).toHaveBeenCalledTimes(2)
+    expect(createClientSpy).toHaveBeenCalledTimes(2)
     expect(lifiConfig.integratorName).toBe('someone-else')
   })
 })

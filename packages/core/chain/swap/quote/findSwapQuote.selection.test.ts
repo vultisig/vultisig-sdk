@@ -7,6 +7,7 @@ import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/a
 import { getSwapKitQuote } from '@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote'
 import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import { getNativeSwapTradingHalt } from '@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt'
 import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
@@ -38,6 +39,10 @@ vi.mock('@vultisig/core-chain/swap/general/swapkit/api/getSwapKitQuote', () => (
 
 vi.mock('@vultisig/core-chain/swap/native/api/getNativeSwapQuote', () => ({
   getNativeSwapQuote: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt', () => ({
+  getNativeSwapTradingHalt: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () => ({
@@ -100,7 +105,9 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getLifiSwapQuote).mockReset()
     vi.mocked(getSwapKitQuote).mockReset()
     vi.mocked(getNativeSwapQuote).mockReset()
+    vi.mocked(getNativeSwapTradingHalt).mockReset()
     vi.mocked(getNativeSwapMinAmountIn).mockReset()
+    vi.mocked(getNativeSwapTradingHalt).mockResolvedValue(null)
     // Default: no proactive minimum signal unless a test opts in.
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(null)
   })
@@ -495,6 +502,22 @@ describe('findSwapQuote parallel selection', () => {
     expect(getNativeSwapQuote).not.toHaveBeenCalled()
   })
 
+  it('surfaces a sole-route THORChain halt before the computed minimum (#696)', async () => {
+    vi.mocked(getNativeSwapTradingHalt).mockResolvedValue({
+      swapChain: Chain.THORChain,
+      haltedChains: ['BTC'],
+      reasons: ['BTC chain trading paused'],
+    })
+    vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1_000_000n, '0.05'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('should not be called'))
+
+    await expect(findSwapQuote({ ...nativeOnlyCoins, amount: 1n })).rejects.toThrow(
+      'This swap route is temporarily unavailable — BTC chain trading paused. Please try again later.'
+    )
+    expect(getNativeSwapMinAmountIn).not.toHaveBeenCalled()
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
   it('does not block an above-minimum native-only swap', async () => {
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(minResult(1n, '0.0001'))
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) =>
@@ -538,6 +561,51 @@ describe('findSwapQuote parallel selection', () => {
     expect(getNativeSwapQuote).toHaveBeenCalled()
     expect('native' in quote.quote).toBe(true)
   })
+
+  it('preflights a THORChain inbound halt before requesting a native quote (#696)', async () => {
+    vi.mocked(getNativeSwapTradingHalt).mockResolvedValue({
+      swapChain: Chain.THORChain,
+      haltedChains: ['BTC'],
+      reasons: ['BTC chain trading paused'],
+    })
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('should not be called'))
+
+    await expect(findSwapQuote({ ...nativeOnlyCoins, amount: 1_000_000n })).rejects.toThrow(
+      'This swap route is temporarily unavailable — BTC chain trading paused. Please try again later.'
+    )
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it('does not let a halted THORChain native route hide a successful aggregator route (#696)', async () => {
+    vi.mocked(getNativeSwapTradingHalt).mockImplementation(async ({ swapChain }) =>
+      swapChain === Chain.THORChain
+        ? {
+            swapChain,
+            haltedChains: ['ETH'],
+            reasons: ['ETH chain trading paused'],
+          }
+        : null
+    )
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('150', 'kyber'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
+      if (swapChain === Chain.THORChain) {
+        throw new Error('THORChain quote should have been preflight-blocked')
+      }
+      throw new Error('maya fail')
+    })
+
+    const quote = await findSwapQuote({ ...evmSameChainCoins, amount: 1n })
+
+    expect('general' in quote.quote).toBe(true)
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected aggregator quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
+    expect(vi.mocked(getNativeSwapQuote).mock.calls.some(([input]) => input.swapChain === Chain.THORChain)).toBe(false)
+  })
 })
 
 describe('findSwapQuote banded provider preference (issue #605)', () => {
@@ -549,7 +617,9 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     vi.mocked(getLifiSwapQuote).mockReset()
     vi.mocked(getSwapKitQuote).mockReset()
     vi.mocked(getNativeSwapQuote).mockReset()
+    vi.mocked(getNativeSwapTradingHalt).mockReset()
     vi.mocked(getNativeSwapMinAmountIn).mockReset()
+    vi.mocked(getNativeSwapTradingHalt).mockResolvedValue(null)
     // Default: no proactive minimum signal unless a test opts in.
     vi.mocked(getNativeSwapMinAmountIn).mockResolvedValue(null)
   })

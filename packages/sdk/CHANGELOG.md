@@ -1,5 +1,160 @@
 # @vultisig/sdk
 
+## 2.4.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
+## 2.4.1
+
+### Patch Changes
+
+- [#766](https://github.com/vultisig/vultisig-sdk/pull/766) [`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(zcash): add trailing slash to branch-id RPC URL
+
+  The live ZIP-243 branch-id fetch POSTs to a bare `${rootApiUrl}/zcash`, which the
+  proxy now 301-redirects to `/zcash/`. Following a 301 downgrades POST→GET, so the
+  request lands as `GET /zcash/` → HTTP 405, breaking all Zcash signing on the
+  "Sign Transaction" screen. Add the trailing slash so the POST hits the working
+  endpoint directly (live-verified 200 with consensus.nextblock).
+
+## 2.4.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an external recipient for native + CowSwap swaps
+
+  `findSwapQuote` now accepts an optional `recipient` address. When set, the
+  swapped output is routed to that address via the native THORChain/MayaChain
+  memo `destination` and the CowSwap order `receiver`. Aggregators that would pay
+  the swap initiator (1inch, KyberSwap, LiFi, SwapKit) are skipped for
+  custom-recipient swaps so funds are never silently misrouted. When `recipient`
+  is omitted, routing and payout are unchanged.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131);
+  external recipient for the remaining aggregators is a follow-up.
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an explicit gas limit override for EVM swaps
+
+  `buildSwapKeysignPayload` now accepts an optional `gasLimitOverride` (units).
+  When set on an EVM swap it replaces the aggregator's estimated
+  `ethereumSpecific.gasLimit` (and the mirrored 1inch `tx.gas`), while the gas
+  price is still computed normally. Ignored for non-EVM chains and when omitted —
+  no behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support a custom slippage tolerance in findSwapQuote
+
+  `findSwapQuote` now accepts an optional `slippageTolerance` (in percent, e.g.
+  `0.5` = 0.5%). It is forwarded to the general aggregators that accept a slippage
+  override, each converted to that provider's native unit: 1inch and SwapKit
+  (percent), KyberSwap (basis points), and LiFi (fraction). CowSwap (RFQ limit
+  order) and the native THORChain/MayaChain protocols use their own protection
+  and ignore it. When omitted, every provider keeps its existing default — no
+  behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): validate recipient and slippage overrides in findSwapQuote
+
+  `findSwapQuote` now trims the optional `recipient` and treats empty/whitespace
+  strings as no recipient, so a blank value no longer gates off initiator-paying
+  aggregators or gets forwarded as a native `destination` / CowSwap `receiver`.
+  It also rejects an invalid `slippageTolerance` (negative, `NaN`, or non-finite)
+  up front with a `SwapError` instead of letting the bad value propagate into
+  every provider call.
+
+## 2.3.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
+- [#763](https://github.com/vultisig/vultisig-sdk/pull/763) [`e5b07fb`](https://github.com/vultisig/vultisig-sdk/commit/e5b07fbfc09f55af64025950078050388e7b080d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate THORChain custom Cosmos payload fees from SignAmino input fees.
+
+## 2.3.5
+
+### Patch Changes
+
+- [#749](https://github.com/vultisig/vultisig-sdk/pull/749) [`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - cosmos/gas: bump TerraClassic staking gas limit from 2M to 3M and cap msgCount scaling
+
+  `getCosmosStakingGasLimit` now returns 3M for `Chain.TerraClassic` regardless of `msgCount`. The previous 2M base caused consistent out-of-gas failures (`ValuePerByte` meter in the classic-terra treasury/tax post-handler adds ~200-800 gas beyond the standard SDK estimate). The msgCount scaling is disabled for TerraClassic: at `msgCount >= 2` the scaled gasWanted would exceed the 100 LUNC fee floor, causing node rejection. Columbus-5 callers must split multi-validator reward claims into separate transactions.
+
+## 2.3.4
+
+### Patch Changes
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#710](https://github.com/vultisig/vultisig-sdk/pull/710) [`a54ac61`](https://github.com/vultisig/vultisig-sdk/commit/a54ac616f5aca39edd2515666ee895cfab0de242) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Default React Native Cosmos send fees to the chain fee denom when callers omit an explicit fee denom.
+
+## 2.3.3
+
+### Patch Changes
+
+- [#748](https://github.com/vultisig/vultisig-sdk/pull/748) [`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add canonical Circle USDC on Base (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) to the known-token registry. It was the only major-EVM canonical USDC missing, so swaps to Base USDC resolved via the coingecko source and the app flagged the canonical stablecoin as "unverified token". Now it resolves as a known token (verified).
+
+- [#740](https://github.com/vultisig/vultisig-sdk/pull/740) [`c78c10d`](https://github.com/vultisig/vultisig-sdk/commit/c78c10d2b43f9ddd13b2c912a71f7d902f2694cc) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): migrate @lifi/sdk v3 -> v4
+
+  @lifi/sdk v4 dropped the global mutable `createConfig` singleton in favour of
+  an explicit client object that every action (`getQuote`, ...) takes as its
+  first argument. Migrated `setupLifi` to build a v4 `createClient` and exposed
+  it via `getLifiClient()`; `getLifiSwapQuote` (core + RN override) now calls
+  `getQuote(client, params)`. Swap-quote behaviour, the per-call integrator tag,
+  and the affiliate-fee surface are unchanged. v4 also dropped its
+  `@solana/web3.js` transitive dep, so the now-dead `@lifi/sdk/@solana/web3.js`
+  yarn resolution was removed.
+
+- [#750](https://github.com/vultisig/vultisig-sdk/pull/750) [`0f6adc3`](https://github.com/vultisig/vultisig-sdk/commit/0f6adc3c73d06eb6da3758987dfaafb29d599019) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - security: bump transitive deps to fix 5 high-severity advisories
+
+  - form-data: 4.0.5 -> 4.0.6 (CRLF injection, GHSA-hmw2-7cc7-3qxx)
+  - protobufjs: 7.5.8 -> 7.6.4, 8.3.0 -> 8.6.3 (DoS via unbounded Any expansion, GHSA-wcpc-wj8m-hjx6)
+  - tmp: 0.2.6 -> 0.2.7 (path traversal via type confusion, GHSA-7c78-jf6q-g5cm)
+  - vite: 8.0.10 -> 8.0.16 (server.fs.deny bypass on Windows, GHSA-fx2h-pf6j-xcff)
+  - ws: 7.5.10 -> 7.5.11, 8.17.1/8.20.x -> 8.21.0 (memory exhaustion DoS, GHSA-96hv-2xvq-fx4p)
+
+  all bumped via yarn resolutions; no direct dep changes.
+
+## 2.3.2
+
+### Patch Changes
+
+- [#718](https://github.com/vultisig/vultisig-sdk/pull/718) [`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3) Thanks [@realpaaao](https://github.com/realpaaao)! - Replace the dead Hyperliquid block explorer liquidscan.io with hypurrscan.io.
+
+- [#735](https://github.com/vultisig/vultisig-sdk/pull/735) [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): use polkachu for the Kujira LCD + RPC endpoints
+
+  `kujira-rest.publicnode.com` and `kujira-rpc.publicnode.com` both now return
+  HTTP 403 "unsupported platform" for our clients, breaking Kujira balance reads
+  and tx broadcasts. Point `cosmosRpcUrl` and `tendermintRpcUrl` for Kujira at
+  polkachu (the same provider Noble uses, and the one `getCosmosAccountInfo`
+  already falls back to). Live-verified 200 with the real ukuji balance.
+
+- [#734](https://github.com/vultisig/vultisig-sdk/pull/734) [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reject a memo on Sui keysigns instead of silently dropping it. Sui has no native memo field (a transaction is a Programmable Transaction Block), so the Sui signing-input resolver now throws when `keysignPayload.memo` is set, surfacing the unsupported request to callers.
+
+## 2.3.1
+
+### Patch Changes
+
+- [#702](https://github.com/vultisig/vultisig-sdk/pull/702) [`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix TON jetton balances showing a stranger's holdings. Jetton wallet lookups
+  queried the proxy with `owner_id` + `jetton_master_id`, which toncenter v3
+  ignores (it filters on `owner_address` + `jetton_address`). The proxy then
+  returned an unfiltered global list and the code took the first entry — a random
+  wallet — so an address with no USDT reported ~200M USDT. Restore the correct
+  params and filter the response by both owner and jetton master instead of
+  trusting the first entry. This also keeps jetton transfers from resolving the
+  wrong source wallet.
+
+## 2.3.0
+
+### Minor Changes
+
+- [#724](https://github.com/vultisig/vultisig-sdk/pull/724) [`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(custom-rpc): app-wide per-chain custom RPC endpoint overrides
+
+  Add an in-memory override registry that the EVM and Cosmos URL resolvers consult, so a host app can point a supported chain at its own node. v1 covers the EVM chains and the IBC-enabled Cosmos chains; the override maps to the EVM RPC URL for EVM chains and to the LCD/REST endpoint for Cosmos (balance fallback, account info, fee). Includes `customRpcSupportedChains` as a single source of truth and an `rpcHealthProbe` (EVM `eth_chainId` identity check, Cosmos `node_info` liveness). Default behaviour is byte-identical when no override is set.
+
 ## 2.2.3
 
 ### Patch Changes
