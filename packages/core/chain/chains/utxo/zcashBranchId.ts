@@ -3,7 +3,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 const cacheTtlMs = 60 * 60 * 1000
 const rpcTimeoutMs = 10_000
-const zcashRpcUrl = `${rootApiUrl}/zcash`
+const zcashRpcUrl = `${rootApiUrl}/zcash/`
 
 type ZcashBlockchainInfoResponse = {
   result?: {
