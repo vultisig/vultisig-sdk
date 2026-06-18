@@ -18,6 +18,11 @@ import { encodeFunctionData, erc20Abi } from 'viem'
 import { publicActionsL2 } from 'viem/zksync'
 
 const baseFeeMultiplier = (value: bigint) => (value * 15n) / 10n
+const dataTxGasLimitBufferNumerator = 3n
+const dataTxGasLimitBufferDenominator = 2n
+
+const addDataTxGasLimitBuffer = (value: bigint) =>
+  (value * dataTxGasLimitBufferNumerator + dataTxGasLimitBufferDenominator - 1n) / dataTxGasLimitBufferDenominator
 
 type EvmFeeQuote = {
   gasLimit: bigint
@@ -44,15 +49,23 @@ export const getEvmFeeQuote = async ({
   const amount = getKeysignAmount(keysignPayload)
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
+  const swapPayload = getKeysignSwapPayload(keysignPayload)
+  // Native swaps use chain-specific router builders instead of EVM calldata estimation here.
+  const shouldBufferDataTxGasLimit = Boolean(
+    (data || (swapPayload && 'general' in swapPayload)) && chain !== EvmChain.Mantle
+  )
 
-  const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
-    bigIntMax(...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined))
+  const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
+    const gasLimit = bigIntMax(
+      ...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
+    )
+
+    return shouldBufferDataTxGasLimit ? addDataTxGasLimitBuffer(gasLimit) : gasLimit
+  }
 
   const getBaseFee = async () => baseFeeMultiplier(await getEvmBaseFee(chain))
 
   const getEstimateGasParams = async () => {
-    const swapPayload = getKeysignSwapPayload(keysignPayload)
-
     if (swapPayload) {
       return matchRecordUnion<
         KeysignSwapPayload,
