@@ -2,7 +2,12 @@ import { ChainId, getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { LifiAffiliateConfig, lifiConfig, setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
+import {
+  getLifiClient,
+  LifiAffiliateConfig,
+  lifiConfig,
+  setupLifi,
+} from '@vultisig/core-chain/swap/general/lifi/config'
 import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap/general/lifi/LifiSwapEnabledChains'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
@@ -20,6 +25,9 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { 
   /** Consumer-supplied LI.FI integrator override. When omitted, falls back
    * to the global `lifiConfig.integratorName` (vultisig-0 by default). */
   lifiAffiliateConfig?: LifiAffiliateConfig
+  /** Slippage tolerance as a fraction (e.g. 0.01 = 1%). When omitted, falls
+   * back to the stable/non-stable pair default. */
+  slippage?: number
 }
 
 // Stable-pair detection: tickers that commonly trade within a tight peg.
@@ -148,6 +156,7 @@ export const getLifiSwapQuote = async ({
   amount,
   affiliateBps,
   lifiAffiliateConfig,
+  slippage: slippageOverride,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
   ensureLifiConfigured()
@@ -157,9 +166,9 @@ export const getLifiSwapQuote = async ({
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
-  const slippage = isStablePair(transfer.from, transfer.to)
-    ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE
-    : DEFAULT_LIFI_SLIPPAGE_TOLERANCE
+  const slippage =
+    slippageOverride ??
+    (isStablePair(transfer.from, transfer.to) ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE : DEFAULT_LIFI_SLIPPAGE_TOLERANCE)
 
   // Defensive: log when affiliate + slippage combined cost crosses the
   // 3% ceiling. Today affiliateBps is typically 0 and slippage is 1%,
@@ -180,7 +189,10 @@ export const getLifiSwapQuote = async ({
   // resolves to (vultisig-0 unless the consumer's setupLifi() ran first).
   const integrator = lifiAffiliateConfig?.integratorName ?? lifiConfig.integratorName
 
-  const quote = await getQuote({
+  // v4: actions take the SDK client as their first argument (the v3 global
+  // mutable singleton is gone). `ensureLifiConfigured()` above guarantees the
+  // client is initialised before this call.
+  const quote = await getQuote(getLifiClient(), {
     fromChain,
     toChain,
     fromToken,

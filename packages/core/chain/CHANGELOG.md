@@ -1,5 +1,154 @@
 # @vultisig/core-chain
 
+## 2.17.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
+## 2.17.1
+
+### Patch Changes
+
+- [#766](https://github.com/vultisig/vultisig-sdk/pull/766) [`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(zcash): add trailing slash to branch-id RPC URL
+
+  The live ZIP-243 branch-id fetch POSTs to a bare `${rootApiUrl}/zcash`, which the
+  proxy now 301-redirects to `/zcash/`. Following a 301 downgrades POST→GET, so the
+  request lands as `GET /zcash/` → HTTP 405, breaking all Zcash signing on the
+  "Sign Transaction" screen. Add the trailing slash so the POST hits the working
+  endpoint directly (live-verified 200 with consensus.nextblock).
+
+## 2.17.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an external recipient for native + CowSwap swaps
+
+  `findSwapQuote` now accepts an optional `recipient` address. When set, the
+  swapped output is routed to that address via the native THORChain/MayaChain
+  memo `destination` and the CowSwap order `receiver`. Aggregators that would pay
+  the swap initiator (1inch, KyberSwap, LiFi, SwapKit) are skipped for
+  custom-recipient swaps so funds are never silently misrouted. When `recipient`
+  is omitted, routing and payout are unchanged.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131);
+  external recipient for the remaining aggregators is a follow-up.
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support a custom slippage tolerance in findSwapQuote
+
+  `findSwapQuote` now accepts an optional `slippageTolerance` (in percent, e.g.
+  `0.5` = 0.5%). It is forwarded to the general aggregators that accept a slippage
+  override, each converted to that provider's native unit: 1inch and SwapKit
+  (percent), KyberSwap (basis points), and LiFi (fraction). CowSwap (RFQ limit
+  order) and the native THORChain/MayaChain protocols use their own protection
+  and ignore it. When omitted, every provider keeps its existing default — no
+  behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): validate recipient and slippage overrides in findSwapQuote
+
+  `findSwapQuote` now trims the optional `recipient` and treats empty/whitespace
+  strings as no recipient, so a blank value no longer gates off initiator-paying
+  aggregators or gets forwarded as a native `destination` / CowSwap `receiver`.
+  It also rejects an invalid `slippageTolerance` (negative, `NaN`, or non-finite)
+  up front with a `SwapError` instead of letting the bad value propagate into
+  every provider call.
+
+## 2.16.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
+## 2.16.5
+
+### Patch Changes
+
+- [#749](https://github.com/vultisig/vultisig-sdk/pull/749) [`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - cosmos/gas: bump TerraClassic staking gas limit from 2M to 3M and cap msgCount scaling
+
+  `getCosmosStakingGasLimit` now returns 3M for `Chain.TerraClassic` regardless of `msgCount`. The previous 2M base caused consistent out-of-gas failures (`ValuePerByte` meter in the classic-terra treasury/tax post-handler adds ~200-800 gas beyond the standard SDK estimate). The msgCount scaling is disabled for TerraClassic: at `msgCount >= 2` the scaled gasWanted would exceed the 100 LUNC fee floor, causing node rejection. Columbus-5 callers must split multi-validator reward claims into separate transactions.
+
+## 2.16.4
+
+### Patch Changes
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(pubkey): fall back to bip32 derivation when chainPublicKey is 32 bytes on ecdsa chains
+
+  Older KeyImport vault backups sometimes store the raw 32-byte X coordinate
+  for secp256k1 chains instead of the standard 33-byte compressed form.
+  WalletCore's createWithData rejects these with "Invalid length: Expected 33
+  but received 32", breaking execute_swap / show_receive_request for affected
+  users (~7 events/day in prod).
+
+  The fix detects the 32-byte case at runtime for ecdsa chains and falls back
+  to BIP32 derivation from the root ECDSA key, which always produces a valid
+  33-byte compressed pubkey.
+
+- [#758](https://github.com/vultisig/vultisig-sdk/pull/758) [`10a058b`](https://github.com/vultisig/vultisig-sdk/commit/10a058bf1a2a2c1ed9ba4ec9c4a29830ec6f1aae) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Use a distinct provider for Kujira's LCD fallback so primary (polkachu) and fallback (rest.cosmos.directory) are independent - restoring real redundancy if polkachu degrades.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: await assertFetchResponse in queryOneInch to prevent "Already read" body error
+
+  assertFetchResponse is an async function that reads the response body. Without
+  await, the body read started in the background while response.json() was called
+  concurrently - resulting in a "Already read" TypeError on non-2xx EVM discovery
+  responses. Fixes dashboard_sdk_discovery_failure events for Ethereum/BSC/Arbitrum.
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#756](https://github.com/vultisig/vultisig-sdk/pull/756) [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): bump TerraClassic staking gas limit from 2M to 3M
+
+  The 2M limit was consistently failing with "out of gas in location:
+  ValuePerByte" on TerraClassic MsgDelegate / MsgUndelegate / claim-rewards
+  txs (gasUsed: 2000201-2000774). The ValuePerByte meter in the classic-terra
+  treasury/tax post-handler adds ~200-800 gas on top of the base delegate
+  cost, which the standard SDK estimate doesn't account for. 3M fits safely
+  within the 100 LUNC fee floor (3M \* 28.325 uluna/gas ≈ 84.97 LUNC < 100
+  LUNC).
+
+## 2.16.3
+
+### Patch Changes
+
+- [#748](https://github.com/vultisig/vultisig-sdk/pull/748) [`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add canonical Circle USDC on Base (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`) to the known-token registry. It was the only major-EVM canonical USDC missing, so swaps to Base USDC resolved via the coingecko source and the app flagged the canonical stablecoin as "unverified token". Now it resolves as a known token (verified).
+
+## 2.16.2
+
+### Patch Changes
+
+- [#718](https://github.com/vultisig/vultisig-sdk/pull/718) [`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3) Thanks [@realpaaao](https://github.com/realpaaao)! - Replace the dead Hyperliquid block explorer liquidscan.io with hypurrscan.io.
+
+- [#735](https://github.com/vultisig/vultisig-sdk/pull/735) [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): use polkachu for the Kujira LCD + RPC endpoints
+
+  `kujira-rest.publicnode.com` and `kujira-rpc.publicnode.com` both now return
+  HTTP 403 "unsupported platform" for our clients, breaking Kujira balance reads
+  and tx broadcasts. Point `cosmosRpcUrl` and `tendermintRpcUrl` for Kujira at
+  polkachu (the same provider Noble uses, and the one `getCosmosAccountInfo`
+  already falls back to). Live-verified 200 with the real ukuji balance.
+
+## 2.16.1
+
+### Patch Changes
+
+- [#702](https://github.com/vultisig/vultisig-sdk/pull/702) [`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix TON jetton balances showing a stranger's holdings. Jetton wallet lookups
+  queried the proxy with `owner_id` + `jetton_master_id`, which toncenter v3
+  ignores (it filters on `owner_address` + `jetton_address`). The proxy then
+  returned an unfiltered global list and the code took the first entry — a random
+  wallet — so an address with no USDT reported ~200M USDT. Restore the correct
+  params and filter the response by both owner and jetton master instead of
+  trusting the first entry. This also keeps jetton transfers from resolving the
+  wrong source wallet.
+
+## 2.16.0
+
+### Minor Changes
+
+- [#724](https://github.com/vultisig/vultisig-sdk/pull/724) [`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(custom-rpc): app-wide per-chain custom RPC endpoint overrides
+
+  Add an in-memory override registry that the EVM and Cosmos URL resolvers consult, so a host app can point a supported chain at its own node. v1 covers the EVM chains and the IBC-enabled Cosmos chains; the override maps to the EVM RPC URL for EVM chains and to the LCD/REST endpoint for Cosmos (balance fallback, account info, fee). Includes `customRpcSupportedChains` as a single source of truth and an `rpcHealthProbe` (EVM `eth_chainId` identity check, Cosmos `node_info` liveness). Default behaviour is byte-identical when no override is set.
+
 ## 2.15.3
 
 ### Patch Changes

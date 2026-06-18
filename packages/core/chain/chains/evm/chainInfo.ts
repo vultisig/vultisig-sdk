@@ -1,4 +1,5 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { rootApiUrl } from '@vultisig/core-config'
 import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
@@ -21,7 +22,7 @@ import {
 } from 'viem/chains'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
-export const hyperliquidBlockExplorerUrl = 'https://liquidscan.io'
+export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io'
 const hyperliquidNativeCoin = chainFeeCoin[EvmChain.Hyperliquid]
 
 export const hyperliquid = defineChain({
@@ -38,7 +39,7 @@ export const hyperliquid = defineChain({
     public: { http: [hyperliquidRpcUrl] },
   },
   blockExplorers: {
-    default: { name: 'LiquidScan', url: hyperliquidBlockExplorerUrl },
+    default: { name: 'Hypurrscan', url: hyperliquidBlockExplorerUrl },
   },
 })
 
@@ -87,6 +88,13 @@ export const evmChainInfo = recordMap(evmDefaultChainInfo, (chain, chainKey) => 
     },
   }
 })
+
+/**
+ * Resolves the RPC URL for an EVM chain, honoring an app-wide custom RPC
+ * override when one is set and falling back to the default endpoint otherwise.
+ * Byte-identical to the default when no override is configured.
+ */
+export const getEvmRpcUrl = (chain: EvmChain): string => getCustomRpcOverride(chain) ?? evmChainRpcUrls[chain]
 
 export const getEvmChainId = (chain: EvmChain): string => {
   return evmChainId[chain]

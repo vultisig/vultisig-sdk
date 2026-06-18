@@ -60,6 +60,7 @@ async function buildCosmosBlockchainSpecific(
   coin: AccountCoin,
   accountNumber: string,
   sequence: string,
+  fee?: CosmosFeeInput,
   skipChainSpecificFetch?: boolean
 ): Promise<KeysignPayload['blockchainSpecific']> {
   const chainKind = getCosmosChainKind(chain)
@@ -67,11 +68,17 @@ async function buildCosmosBlockchainSpecific(
   if (chainKind === 'vaultBased') {
     // THORChain or MayaChain
     if (chain === 'THORChain') {
+      const feeAmount = fee?.amount?.[0]?.amount
+      if (fee && feeAmount == null) {
+        throw new Error('THORChain fee.amount[0].amount is required when fee is provided')
+      }
+
       return {
         case: 'thorchainSpecific',
         value: create(THORChainSpecificSchema, {
           accountNumber: BigInt(accountNumber),
           sequence: BigInt(sequence),
+          fee: BigInt(feeAmount ?? 0),
         }),
       }
     } else {
@@ -172,6 +179,7 @@ export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadI
     coin,
     accountNumber,
     sequence,
+    fee,
     skipChainSpecificFetch
   )
 
@@ -234,6 +242,7 @@ export async function buildSignDirectKeysignPayload(input: BuildSignDirectPayloa
     coin,
     accountNumber,
     sequence,
+    undefined,
     skipChainSpecificFetch
   )
 

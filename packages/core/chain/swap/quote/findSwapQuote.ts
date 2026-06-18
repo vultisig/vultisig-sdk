@@ -24,11 +24,16 @@ import {
 import { SwapKitAmountBelowMinimumError } from '@vultisig/core-chain/swap/general/swapkit/SwapKitErrors'
 import { NativeSwapAffiliateConfig } from '@vultisig/core-chain/swap/native/api/affiliate'
 import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
+import { getNativeSwapTradingHalt } from '@vultisig/core-chain/swap/native/halts/getNativeSwapTradingHalt'
 import {
   getNativeSwapMinAmountIn,
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
-import { nativeSwapChains, nativeSwapEnabledChainsRecord } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  NativeSwapChain,
+  nativeSwapChains,
+  nativeSwapEnabledChainsRecord,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
@@ -58,6 +63,23 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
   affiliateConfig?: SwapAffiliateConfig
+  /**
+   * Optional external recipient for the swapped output. When omitted the swap
+   * pays out to the user's own derived address (existing behavior). When set,
+   * only providers that route the output to an explicit address are used —
+   * native THORChain/MayaChain (memo destination) and CowSwap (order
+   * `receiver`); aggregators that would silently pay the initiator are skipped
+   * so funds are never sent to the wrong address.
+   */
+  recipient?: string
+  /**
+   * Optional slippage tolerance, expressed in PERCENT (e.g. `0.5` = 0.5%,
+   * `3` = 3%). When omitted each provider keeps its own default. Applied to the
+   * general aggregators that accept a slippage override (1inch, KyberSwap, LiFi,
+   * SwapKit); CowSwap (RFQ limit order) and the native THORChain/MayaChain
+   * protocols use their own protection mechanisms and ignore this value.
+   */
+  slippageTolerance?: number
 }
 
 type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
@@ -117,6 +139,39 @@ const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
 
 const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
   providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
+
+const formatTradingHaltedMessage = (reason: string) =>
+  `This swap route is temporarily unavailable — ${reason}. Please try again later.`
+
+const getNativeTradingHaltError = async ({
+  from,
+  to,
+  swapChain,
+}: {
+  from: AccountCoin
+  to: AccountCoin
+  swapChain: NativeSwapChain
+}): Promise<SwapError | null> => {
+  const tradingHalt = await getNativeSwapTradingHalt({ from, to, swapChain })
+
+  return tradingHalt
+    ? new SwapError(SwapErrorCode.TradingHalted, formatTradingHaltedMessage(tradingHalt.reasons.join('; ')))
+    : null
+}
+
+const assertNativeTradingOpen = async (input: {
+  from: AccountCoin
+  to: AccountCoin
+  swapChain: NativeSwapChain
+}): Promise<void> => {
+  const tradingHaltError = await getNativeTradingHaltError(input)
+  if (tradingHaltError) {
+    throw tradingHaltError
+  }
+}
+
+const asTradingHaltedSwapError = (reason: unknown): SwapError | null =>
+  reason instanceof SwapError && reason.code === SwapErrorCode.TradingHalted ? reason : null
 
 /**
  * Tuning point for issue #605's banded routing rule. 100 bps = 1%.
@@ -201,6 +256,69 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
   return selected?.quote ?? null
 }
 
+// `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
+// front so they don't propagate into every provider call and fail with
+// non-actionable downstream errors. Cap at 50%: above that every provider
+// effectively accepts any output including near-zero, which is economically
+// indefensible and guards against decimal-unit typos (e.g. 100 instead of 1.00).
+const SLIPPAGE_TOLERANCE_MAX_PERCENT = 50
+const assertValidSlippageTolerance = (slippageTolerance: number | undefined): void => {
+  if (
+    slippageTolerance !== undefined &&
+    (!Number.isFinite(slippageTolerance) || slippageTolerance < 0 || slippageTolerance > SLIPPAGE_TOLERANCE_MAX_PERCENT)
+  ) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `slippageTolerance must be a finite, non-negative percent value no greater than ${SLIPPAGE_TOLERANCE_MAX_PERCENT}. Received "${slippageTolerance}".`
+    )
+  }
+}
+
+// Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
+
+// Validate a custom swap recipient is a properly-formatted EVM address before it
+// reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —
+// a plausible-but-wrong address (right hex length, wrong wallet) would produce a
+// valid order that sends buy tokens to the wrong wallet with no on-chain recovery,
+// so throw early with a clear error. Only enforce the EVM format when the pair can
+// actually reach CowSwap (same-chain EVM ERC-20 on a supported chain); for native
+// THOR/Maya pairs the node validates the destination downstream, so a malformed
+// non-EVM address fails there and the EVM check is skipped. Extracted from
+// findSwapQuote to keep that function's cognitive complexity within the gate.
+const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
+  if (recipient === undefined || isEvmAddress(recipient)) return
+  const cowSwapPathReachable =
+    isChainOfKind(from.chain, 'evm') &&
+    from.id !== undefined &&
+    isChainOfKind(to.chain, 'evm') &&
+    to.id !== undefined &&
+    from.chain === to.chain &&
+    isOneOf(from.chain, cowSwapSupportedChains)
+  if (cowSwapPathReachable) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `recipient "${recipient}" is not a valid EVM address. Expected a 0x-prefixed 40-character hex string.`
+    )
+  }
+}
+
+// Convert the percent slippage tolerance (e.g. 0.5 = 0.5%) into each aggregator's
+// native unit. `undefined` leaves every provider on its own default (no behaviour
+// change). Extracted from findSwapQuote to keep its cognitive complexity in budget.
+type ProviderSlippage = {
+  oneInchPercent: number | undefined
+  swapKitPercent: number | undefined
+  lifiFraction: number | undefined
+  kyberBps: number | undefined
+}
+const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => ({
+  oneInchPercent: slippageTolerance,
+  swapKitPercent: slippageTolerance,
+  lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
+  kyberBps: slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined,
+})
+
 export const findSwapQuote = async ({
   from,
   to,
@@ -208,6 +326,8 @@ export const findSwapQuote = async ({
   referral,
   vultDiscountTier,
   affiliateConfig,
+  recipient,
+  slippageTolerance,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -230,6 +350,35 @@ export const findSwapQuote = async ({
 
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
+  // When the caller requests an external recipient, restrict routing to the
+  // providers that send the swapped output to an explicit address (native +
+  // CowSwap). Aggregators that pay the initiator would silently misroute funds,
+  // so they are not offered for custom-recipient swaps until they thread the
+  // receiver through (tracked in vultisig/vultisig-windows#4131).
+  // Trim and treat empty/whitespace strings as no recipient, so route gating
+  // and recipient forwarding only react to a genuine custom address.
+  const normalizedRecipient = recipient?.trim() || undefined
+  const hasCustomRecipient = normalizedRecipient !== undefined
+
+  // Validate a custom recipient up front (see assertValidCustomRecipient) so a
+  // malformed address can't reach CowSwap and misroute the fill. No-op when the
+  // recipient is undefined.
+  assertValidCustomRecipient(normalizedRecipient, from, to)
+
+  // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
+  // up front so they don't propagate into every provider call and fail with
+  // non-actionable downstream errors.
+  assertValidSlippageTolerance(slippageTolerance)
+
+  // Convert the slippage tolerance to each aggregator's native unit (see
+  // toProviderSlippage); `undefined` leaves each provider on its own default.
+  const {
+    oneInchPercent: oneInchSlippagePercent,
+    swapKitPercent: swapKitSlippagePercent,
+    lifiFraction: lifiSlippageFraction,
+    kyberBps: kyberSlippageBps,
+  } = toProviderSlippage(slippageTolerance)
+
   const involvedChains = [from.chain, to.chain]
 
   const matchingSwapChains = nativeSwapChains.filter(swapChain =>
@@ -240,11 +389,13 @@ export const findSwapQuote = async ({
     matchingSwapChains.map(swapChain => ({
       providerName: swapChain === Chain.THORChain ? 'THORChain' : 'MayaChain',
       fetch: async (): Promise<SwapQuote> => {
+        await assertNativeTradingOpen({ from, to, swapChain })
+
         const fromDecimals = from.decimals
         const amountNumber = bigIntToNumber(amount, fromDecimals)
         const native = await getNativeSwapQuote({
           swapChain,
-          destination: to.address,
+          destination: normalizedRecipient ?? to.address,
           from,
           to,
           amount: amountNumber,
@@ -274,6 +425,12 @@ export const findSwapQuote = async ({
     // by solvers against ERC-20 balances. The consumer signs the order's
     // EIP-712 digest and submits it via `submitCowSwapOrder` — see
     // `cowswap_order` handling in `buildSwapKeysignPayload`.
+    //
+    // Because of that ERC-20 gate, a native-ETH (`from.id === undefined`) pair
+    // never reaches this fetcher, so the `receiver` guard below is unreachable
+    // for native-token swaps. A custom recipient on such a pair is therefore
+    // only ever honoured through the native THORChain/MayaChain `destination`
+    // path above — not here.
     if (
       fromChain === toChain &&
       isOneOf(fromChain, cowSwapSupportedChains) &&
@@ -291,7 +448,7 @@ export const findSwapQuote = async ({
             buyToken,
             sellAmount: chainAmount,
             from: from.address,
-            receiver: from.address,
+            receiver: normalizedRecipient ?? from.address,
             chainConfig: cowChainConfig,
             affiliateBps,
           })
@@ -302,6 +459,7 @@ export const findSwapQuote = async ({
     }
 
     if (
+      !hasCustomRecipient &&
       isOneOf(fromChain, kyberSwapEnabledChains) &&
       isOneOf(toChain, kyberSwapEnabledChains) &&
       fromChain === toChain
@@ -321,6 +479,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             kyberConfig: affiliateConfig?.kyber,
+            slippageTolerance: kyberSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -328,7 +487,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
+    if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
         fetch: async (): Promise<SwapQuote> => {
@@ -339,6 +498,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
+            slippage: oneInchSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -346,7 +506,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
         fetch: async (): Promise<SwapQuote> => {
@@ -362,6 +522,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             lifiAffiliateConfig: affiliateConfig?.lifi,
+            slippage: lifiSlippageFraction,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -369,7 +530,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
         fetch: async (): Promise<SwapQuote> => {
@@ -384,6 +545,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            slippage: swapKitSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -429,6 +591,8 @@ export const findSwapQuote = async ({
   const thorIsSoleRoute =
     generalFetchers.length === 0 && matchingSwapChains.length === 1 && matchingSwapChains[0] === Chain.THORChain
   if (thorIsSoleRoute) {
+    await assertNativeTradingOpen({ from, to, swapChain: Chain.THORChain })
+
     const nativeMin = await computeNativeMin()
     if (nativeMin && amount < nativeMin.minAmountInBaseUnits) {
       throw belowNativeMinimumError(nativeMin, from)
@@ -505,6 +669,7 @@ export const findSwapQuote = async ({
 
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
   const haltedProviders = new Set<SwapQuoteProviderName>()
+  let proactiveTradingHalt: SwapError | null = null
 
   for (let i = 0; i < settled.length; i++) {
     const result = settled[i]
@@ -513,6 +678,8 @@ export const findSwapQuote = async ({
     }
 
     const msg: string = result.reason instanceof Error ? result.reason.message : String(result.reason)
+
+    proactiveTradingHalt ??= asTradingHaltedSwapError(result.reason)
 
     // SwapKit raises this only after confirming the pair is structurally
     // supported, so it is unambiguously an amount problem (#4418). Reuse the
@@ -549,6 +716,10 @@ export const findSwapQuote = async ({
     )
   }
 
+  if (proactiveTradingHalt) {
+    throw proactiveTradingHalt
+  }
+
   // Trading-halt takes precedence over the speculative computed minimum and the
   // generic fallback: when a native protocol reports a halt, NO amount can route,
   // so telling the user to "increase the amount" would be actively misleading. A
@@ -557,7 +728,7 @@ export const findSwapQuote = async ({
   if (haltedProviders.size > 0) {
     throw new SwapError(
       SwapErrorCode.TradingHalted,
-      `This swap route is temporarily unavailable — trading is halted on ${[...haltedProviders].join(', ')}. Please try again later.`
+      formatTradingHaltedMessage(`trading is halted on ${[...haltedProviders].join(', ')}`)
     )
   }
 

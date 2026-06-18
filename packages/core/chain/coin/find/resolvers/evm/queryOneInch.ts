@@ -28,7 +28,7 @@ export const queryOneInch = async <T>(urlParams: string): Promise<T> => {
   }
 
   if (!response.ok) {
-    assertFetchResponse(response)
+    await assertFetchResponse(response)
   }
 
   return response.json()

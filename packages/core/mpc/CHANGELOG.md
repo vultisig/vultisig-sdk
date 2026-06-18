@@ -1,5 +1,89 @@
 # @vultisig/core-mpc
 
+## 1.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62)]:
+  - @vultisig/core-chain@2.17.2
+
+## 1.7.1
+
+### Patch Changes
+
+- Updated dependencies [[`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c)]:
+  - @vultisig/core-chain@2.17.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an explicit gas limit override for EVM swaps
+
+  `buildSwapKeysignPayload` now accepts an optional `gasLimitOverride` (units).
+  When set on an EVM swap it replaces the aggregator's estimated
+  `ethereumSpecific.gasLimit` (and the mirrored 1inch `tx.gas`), while the gas
+  price is still computed normally. Ignored for non-EVM chains and when omitted —
+  no behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- Updated dependencies [[`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d), [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af), [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0)]:
+  - @vultisig/core-chain@2.17.0
+
+## 1.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd)]:
+  - @vultisig/core-chain@2.16.6
+
+## 1.6.9
+
+### Patch Changes
+
+- Updated dependencies [[`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f)]:
+  - @vultisig/core-chain@2.16.5
+
+## 1.6.8
+
+### Patch Changes
+
+- Updated dependencies [[`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90), [`10a058b`](https://github.com/vultisig/vultisig-sdk/commit/10a058bf1a2a2c1ed9ba4ec9c4a29830ec6f1aae), [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90), [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712), [`78eb626`](https://github.com/vultisig/vultisig-sdk/commit/78eb6263a0ac33f59c97fd7be81610185d0a7a90)]:
+  - @vultisig/core-chain@2.16.4
+
+## 1.6.7
+
+### Patch Changes
+
+- Updated dependencies [[`b544eea`](https://github.com/vultisig/vultisig-sdk/commit/b544eea2bd6f30aef59d6465d89784c763b13c11)]:
+  - @vultisig/core-chain@2.16.3
+
+## 1.6.6
+
+### Patch Changes
+
+- [#734](https://github.com/vultisig/vultisig-sdk/pull/734) [`2208729`](https://github.com/vultisig/vultisig-sdk/commit/22087291dd2714fd3ebd086e2db80dbb3d2b41a3) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Reject a memo on Sui keysigns instead of silently dropping it. Sui has no native memo field (a transaction is a Programmable Transaction Block), so the Sui signing-input resolver now throws when `keysignPayload.memo` is set, surfacing the unsupported request to callers.
+
+- Updated dependencies [[`c67da04`](https://github.com/vultisig/vultisig-sdk/commit/c67da049ce35988e82771a1e981b0d84040310e3), [`9d11951`](https://github.com/vultisig/vultisig-sdk/commit/9d1195121a99b05ac0d0bd6e359933aaf18dad34)]:
+  - @vultisig/core-chain@2.16.2
+
+## 1.6.5
+
+### Patch Changes
+
+- Updated dependencies [[`cb2e8f0`](https://github.com/vultisig/vultisig-sdk/commit/cb2e8f00861daff26ac8b04a34e22be9b243235c)]:
+  - @vultisig/core-chain@2.16.1
+
+## 1.6.4
+
+### Patch Changes
+
+- Updated dependencies [[`fcfd1f9`](https://github.com/vultisig/vultisig-sdk/commit/fcfd1f90550d8f62821167ea349b3e8ee2bf9d24)]:
+  - @vultisig/core-chain@2.16.0
+
 ## 1.6.3
 
 ### Patch Changes
