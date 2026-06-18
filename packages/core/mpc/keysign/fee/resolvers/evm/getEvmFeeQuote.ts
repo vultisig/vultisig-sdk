@@ -50,6 +50,7 @@ export const getEvmFeeQuote = async ({
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
   const swapPayload = getKeysignSwapPayload(keysignPayload)
+  // Native swaps use chain-specific router builders instead of EVM calldata estimation here.
   const shouldBufferDataTxGasLimit = Boolean(
     (data || (swapPayload && 'general' in swapPayload)) && chain !== EvmChain.Mantle
   )
