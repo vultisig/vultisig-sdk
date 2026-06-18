@@ -21,6 +21,8 @@ type Input = {
   amount: bigint
   affiliateBps?: number
   oneInchConfig?: OneInchAffiliateConfig
+  /** Slippage tolerance in percent (e.g. 0.5 = 0.5%). Defaults to 0.5. */
+  slippage?: number
 }
 
 const getBaseUrl = (chainId: number) => `${rootApiUrl}/1inch/swap/v6.0/${chainId}/swap`
@@ -32,6 +34,7 @@ export const getOneInchSwapQuote = async ({
   amount,
   affiliateBps,
   oneInchConfig = oneInchAffiliateConfig,
+  slippage = 0.5,
 }: Input): Promise<GeneralSwapQuote> => {
   const chain = account.chain as EvmChain
   const chainId = hexToNumber(getEvmChainId(chain))
@@ -41,7 +44,7 @@ export const getOneInchSwapQuote = async ({
     dst: isFeeCoin({ id: toCoinId, chain: account.chain }) ? evmNativeCoinAddress : toCoinId,
     amount: amount.toString(),
     from: account.address,
-    slippage: 0.5,
+    slippage,
     disableEstimate: true,
     includeGas: true,
     ...(affiliateBps
