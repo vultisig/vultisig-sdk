@@ -54,6 +54,15 @@ describe('getZcashOpReturnOutputSize', () => {
     expect(getZcashOpReturnOutputSize('m'.repeat(75))).toBe(86n)
     expect(getZcashOpReturnOutputSize('m'.repeat(76))).toBe(88n)
   })
+
+  it('handles CompactSize and PUSHDATA boundaries for long memos', () => {
+    // 250-byte memo: script length 253 crosses the CompactSize 1->3 byte threshold.
+    expect(getZcashOpReturnOutputSize('m'.repeat(249))).toBe(261n)
+    expect(getZcashOpReturnOutputSize('m'.repeat(250))).toBe(264n)
+    // 256-byte memo: push opcode crosses PUSHDATA1 -> PUSHDATA2.
+    expect(getZcashOpReturnOutputSize('m'.repeat(255))).toBe(269n)
+    expect(getZcashOpReturnOutputSize('m'.repeat(256))).toBe(271n)
+  })
 })
 
 describe('getZcashTransparentOutputSizes', () => {

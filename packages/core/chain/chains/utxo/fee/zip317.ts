@@ -54,15 +54,23 @@ export const getZcashConventionalFee = ({ inputCount, outputSizes }: GetZcashCon
 
 /**
  * Serialized tx_out size of an OP_RETURN output carrying `memo`:
- * 8 value + 1 scriptLen + 1 OP_RETURN + push opcode(s) + data.
+ * 8 value + scriptLen CompactSize + script (OP_RETURN + push opcode(s) + data).
  * WalletCore's planner sizes this output as a flat ~34 bytes regardless of
  * memo length, so longer memos make its plan undercount ZIP-317 actions.
+ * Models the push-opcode (direct / PUSHDATA1 / PUSHDATA2 / PUSHDATA4) and the
+ * script-length CompactSize so long memos are not undercharged.
  */
 export const getZcashOpReturnOutputSize = (memo: string): bigint => {
   const dataSize = BigInt(new TextEncoder().encode(memo).length)
-  const pushOverhead = dataSize <= 75n ? 2n : 3n
 
-  return 9n + pushOverhead + dataSize
+  // OP_RETURN (1 byte) + push opcode bytes for `dataSize`.
+  const pushOverhead = dataSize <= 75n ? 2n : dataSize <= 0xffn ? 3n : dataSize <= 0xffffn ? 4n : 6n
+  const scriptSize = pushOverhead + dataSize
+
+  // CompactSize encoding of the script length prefix.
+  const scriptLengthSize = scriptSize < 0xfdn ? 1n : scriptSize <= 0xffffn ? 3n : scriptSize <= 0xffffffffn ? 5n : 9n
+
+  return 8n + scriptLengthSize + scriptSize
 }
 
 type GetZcashTransparentOutputSizesInput = {
