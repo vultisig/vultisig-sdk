@@ -10,6 +10,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 
 import { getCardanoSigningInputs } from '../../signingInputs/resolvers/cardano'
 import { buildCip20AuxData, patchTxBodyWithAuxHash } from '../../../tx/compile/cardano/buildCip20AuxData'
+import { buildSignedCardanoTx } from '../../../tx/compile/cardano/buildSignedCardanoTx'
 import { CardanoChainSpecific } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
@@ -71,14 +72,16 @@ const buildPayload = ({
   })
 }
 
-const calculateWalletCoreBodyFee = async ({
+const calculateFinalSignedTxFee = async ({
   keysignPayload,
   walletCore,
   chainSpecific,
+  publicKey,
 }: {
   keysignPayload: KeysignPayload
   walletCore: WalletCore
   chainSpecific: CardanoChainSpecific
+  publicKey: PublicKey
 }) => {
   const [signingInput] = await getCardanoSigningInputs({
     keysignPayload: {
@@ -95,14 +98,25 @@ const calculateWalletCoreBodyFee = async ({
     walletCore.TransactionCompiler.preImageHashes(walletCore.CoinType.cardano, txInputData)
   )
 
+  const publicKeyBytes = new Uint8Array(publicKey.data()).slice(0, 32)
+  const signature = new Uint8Array(64)
+
   if (!keysignPayload.memo) {
-    return CARDANO_A_PARAM * BigInt(preOutput.data.length) + CARDANO_B_PARAM
+    const signedTx = buildSignedCardanoTx({ txBodyCbor: preOutput.data, publicKey: publicKeyBytes, signature })
+
+    return CARDANO_A_PARAM * BigInt(signedTx.length) + CARDANO_B_PARAM
   }
 
   const { auxDataCbor, auxDataHash } = buildCip20AuxData(keysignPayload.memo)
   const patchedTxBodyCbor = patchTxBodyWithAuxHash(preOutput.data, auxDataHash)
+  const signedTx = buildSignedCardanoTx({
+    txBodyCbor: patchedTxBodyCbor,
+    publicKey: publicKeyBytes,
+    signature,
+    auxDataCbor,
+  })
 
-  return CARDANO_A_PARAM * BigInt(patchedTxBodyCbor.length + auxDataCbor.length) + CARDANO_B_PARAM
+  return CARDANO_A_PARAM * BigInt(signedTx.length) + CARDANO_B_PARAM
 }
 
 describe('getCardanoChainSpecific', () => {
@@ -127,17 +141,19 @@ describe('getCardanoChainSpecific', () => {
     const manyInputSpecific = await getCardanoChainSpecific({ keysignPayload: manyInputPayload, walletCore })
 
     expect(oneInputSpecific.byteFee).toBe(
-      await calculateWalletCoreBodyFee({
+      await calculateFinalSignedTxFee({
         keysignPayload: oneInputPayload,
         walletCore,
         chainSpecific: oneInputSpecific,
+        publicKey,
       })
     )
     expect(manyInputSpecific.byteFee).toBe(
-      await calculateWalletCoreBodyFee({
+      await calculateFinalSignedTxFee({
         keysignPayload: manyInputPayload,
         walletCore,
         chainSpecific: manyInputSpecific,
+        publicKey,
       })
     )
     expect(manyInputSpecific.byteFee).toBeGreaterThan(oneInputSpecific.byteFee)
@@ -151,7 +167,12 @@ describe('getCardanoChainSpecific', () => {
     const memoSpecific = await getCardanoChainSpecific({ keysignPayload: memoPayload, walletCore })
 
     expect(memoSpecific.byteFee).toBe(
-      await calculateWalletCoreBodyFee({ keysignPayload: memoPayload, walletCore, chainSpecific: memoSpecific })
+      await calculateFinalSignedTxFee({
+        keysignPayload: memoPayload,
+        walletCore,
+        chainSpecific: memoSpecific,
+        publicKey,
+      })
     )
     expect(memoSpecific.byteFee).toBeGreaterThan(noMemoSpecific.byteFee)
   })

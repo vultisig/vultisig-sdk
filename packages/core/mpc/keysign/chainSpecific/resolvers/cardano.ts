@@ -18,6 +18,9 @@ import { GetChainSpecificResolver } from '../resolver'
 const CARDANO_A_PARAM = 44n
 const CARDANO_B_PARAM = 155_381n
 const CARDANO_FEE_ESTIMATION_LIMIT = 5
+// Final Vultisig Cardano txs are [body, one vkey witness set, is_valid, aux|null].
+const CARDANO_VKEY_WITNESS_SET_SIZE = 104
+const CARDANO_SIGNED_TX_ENVELOPE_SIZE = 1 + CARDANO_VKEY_WITNESS_SET_SIZE + 1
 
 type EstimateCardanoByteFeeInput = {
   keysignPayload: KeysignPayload
@@ -28,13 +31,13 @@ type EstimateCardanoByteFeeInput = {
 
 const getCardanoPricedSize = ({ txBodyCbor, memo }: { txBodyCbor: Uint8Array; memo?: string }) => {
   if (!memo) {
-    return txBodyCbor.length
+    return txBodyCbor.length + CARDANO_SIGNED_TX_ENVELOPE_SIZE + 1
   }
 
   const { auxDataCbor, auxDataHash } = buildCip20AuxData(memo)
   const patchedTxBodyCbor = patchTxBodyWithAuxHash(txBodyCbor, auxDataHash)
 
-  return patchedTxBodyCbor.length + auxDataCbor.length
+  return patchedTxBodyCbor.length + CARDANO_SIGNED_TX_ENVELOPE_SIZE + auxDataCbor.length
 }
 
 const estimateCardanoByteFee = async ({
