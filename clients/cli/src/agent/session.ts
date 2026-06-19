@@ -316,9 +316,10 @@ export class AgentSession {
     // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
     // Whether a balance_summary card was rendered from the SSE data part this
-    // turn. When true, the message-content fallback is skipped so a card isn't
-    // rendered twice (it won't be — the model is told not to echo — but this
-    // makes the invariant explicit).
+    // turn. When true, the message-content fallback still runs to STRIP any
+    // leftover echoed JSON from the displayed text, but does not render a second
+    // card (guards against a misbehaving backend emitting both the typed part
+    // and a verbatim echo).
     let balanceCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
