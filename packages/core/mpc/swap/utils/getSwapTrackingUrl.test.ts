@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSwapTrackingUrl } from './getSwapTrackingUrl'
 
 const EVM_HASH = '0xabc123'
+const SOLANA_HASH = '5fP9xSwrQJdWadkC2y5qQbeG29dE1qnv1yNxBmtPb7Xz'
 // Real-shape UTXO hash -- bare 64-char hex, no `0x` prefix.
 // Represents the human-readable txid form (byte-reversed double-SHA256
 // for BTC/BCH/DOGE/LTC/ZEC), which is the format track.swapkit.dev expects.
@@ -27,7 +28,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: EVM_HASH,
         sourceChain: Chain.Ethereum,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=1`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=1&hash=${EVM_HASH}`)
     })
 
     it('uses the correct numeric chainId for Polygon', () => {
@@ -36,7 +37,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: EVM_HASH,
         sourceChain: Chain.Polygon,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=137`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=137&hash=${EVM_HASH}`)
     })
 
     it('uses slug chainId for Bitcoin AND passes UTXO hash through (no 0x prefix to strip)', () => {
@@ -45,16 +46,16 @@ describe('getSwapTrackingUrl', () => {
         txHash: UTXO_HASH,
         sourceChain: Chain.Bitcoin,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${UTXO_HASH}&chainId=bitcoin`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${UTXO_HASH}&chainId=bitcoin&hash=${UTXO_HASH}`)
     })
 
     it('uses slug chainId for Solana', () => {
       const url = getSwapTrackingUrl({
         swapPayload: { general: { provider: 'swapkit' } as any },
-        txHash: EVM_HASH,
+        txHash: SOLANA_HASH,
         sourceChain: Chain.Solana,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=abc123&chainId=solana`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${SOLANA_HASH}&chainId=solana&hash=${SOLANA_HASH}`)
     })
 
     // Remaining mapped chains -- lock each chainId entry so map drift is caught immediately
@@ -78,7 +79,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: hash,
         sourceChain: chain as Chain,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${expectedHash}&chainId=${expectedChainId}`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${expectedHash}&chainId=${expectedChainId}&hash=${hash}`)
     })
 
     it('XRP uses forward byte-order hash (distinct from UTXO chains, no reversal needed)', () => {
@@ -88,7 +89,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: XRP_HASH,
         sourceChain: Chain.Ripple,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${XRP_HASH}&chainId=ripple`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${XRP_HASH}&chainId=ripple&hash=${XRP_HASH}`)
     })
 
     it('TON hex hash passes through (encodeURIComponent is no-op for hex)', () => {
@@ -99,7 +100,7 @@ describe('getSwapTrackingUrl', () => {
         txHash: TON_HASH,
         sourceChain: Chain.Ton,
       })
-      expect(url).toBe(`https://track.swapkit.dev/?tx=${TON_HASH}&chainId=ton`)
+      expect(url).toBe(`https://track.swapkit.dev/?tx=${TON_HASH}&chainId=ton&hash=${TON_HASH}`)
     })
 
     it('TON hash with 0x prefix throws (would silently corrupt hex hash)', () => {
