@@ -59,5 +59,9 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "homepage": "https://github.com/vultisig/vultisig-sdk/tree/main/clients/mcp#readme",
+  "bugs": {
+    "url": "https://github.com/vultisig/vultisig-sdk/issues"
   }
 }
