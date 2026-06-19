@@ -113,6 +113,10 @@ describe('getPolkadotSigningInputs', () => {
     const encodedHex = hex(compiledOutput.encoded)
 
     expect(encodedHex.slice(CALL_INDICES_OFFSET * 2, (CALL_INDICES_OFFSET + 2) * 2)).toBe('0a03')
-    expect([...encodedHex.matchAll(/0a03/g)].map(match => match.index / 2)).toEqual([CALL_INDICES_OFFSET])
+    const callIndexOffsets = [...encodedHex.matchAll(/0a03/g)]
+      .map(({ index }) => index)
+      .filter((index): index is number => index !== undefined)
+      .map(index => index / 2)
+    expect(callIndexOffsets).toEqual([CALL_INDICES_OFFSET])
   })
 })
