@@ -442,13 +442,18 @@ export class AgentSession {
 
     // Legacy-path fallback: if the backend ignored supported_surfaces (older
     // build) and the model echoed a balance_summary card_payload verbatim into
-    // the message content, pretty-render it instead of dumping raw JSON. Skip
-    // when the SSE card already fired this turn.
-    if (!balanceCardRendered && displayText) {
+    // the message content, pretty-render it instead of dumping raw JSON. We run
+    // the extractor even when the SSE card already fired this turn — a
+    // misbehaving backend could emit BOTH the typed part and an echoed blob, so
+    // we always STRIP the leftover JSON from the displayed text; we only render
+    // the card if one wasn't already rendered (no double-render).
+    if (displayText) {
       const extracted = extractBalanceSummaryFromText(displayText)
       if (extracted) {
-        balanceCardRendered = true
-        ui.onBalanceSummary?.(extracted.card)
+        if (!balanceCardRendered) {
+          balanceCardRendered = true
+          ui.onBalanceSummary?.(extracted.card)
+        }
         displayText = extracted.remainingText
       }
     }

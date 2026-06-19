@@ -47,6 +47,12 @@ describe('parseBalanceSummaryEnvelope', () => {
     expect(card!.staleSecs).toBe(120)
   })
 
+  it('does not orphan staleSecs when stale is unset', () => {
+    const card = parseBalanceSummaryEnvelope({ ...VALID_ENVELOPE, stale_secs: 120 })
+    expect(card!.stale).toBeUndefined()
+    expect(card!.staleSecs).toBeUndefined()
+  })
+
   it('rejects a non-balance_summary surface', () => {
     expect(parseBalanceSummaryEnvelope({ surface: 'yield_opportunities', accounts: [] })).toBeNull()
   })

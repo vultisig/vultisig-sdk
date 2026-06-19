@@ -83,8 +83,12 @@ export function parseBalanceSummaryEnvelope(value: unknown): BalanceSummaryCard 
   const accounts = o.accounts.map(parseAccount).filter((a): a is BalanceSummaryAccount => a !== null)
   if (accounts.length === 0) return null
   const card: BalanceSummaryCard = { surface: 'balance_summary', accounts }
-  if (o.stale === true) card.stale = true
-  if (typeof o.stale_secs === 'number') card.staleSecs = o.stale_secs
+  // staleSecs is only meaningful (and only rendered) alongside stale, so keep
+  // it gated on the stale flag rather than letting it orphan when stale is unset.
+  if (o.stale === true) {
+    card.stale = true
+    if (typeof o.stale_secs === 'number') card.staleSecs = o.stale_secs
+  }
   return card
 }
 
