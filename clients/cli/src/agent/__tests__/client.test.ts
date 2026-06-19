@@ -22,12 +22,46 @@ function makeChunkedStream(chunks: string[]): ReadableStream<Uint8Array> {
   })
 }
 
-function mockFetchSSE(chunks: string[]): typeof fetch {
+function mockFetchSSE(chunks: string[], headers?: Record<string, string>): typeof fetch {
   return vi.fn(
     async () =>
       new Response(makeChunkedStream(chunks), {
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
+        headers: { 'Content-Type': 'text/event-stream', ...headers },
+      })
+  ) as typeof fetch
+}
+
+/**
+ * Stream that yields `chunks` then errors the body mid-flight to simulate a
+ * dropped SSE connection. If `onBeforeError` is provided it runs right before
+ * the body errors (used to flip an AbortController so the read loop sees a
+ * user-cancel rather than a transport drop).
+ */
+function makeDroppingStream(chunks: string[], onBeforeError?: () => void): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  let i = 0
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (i < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[i++]))
+      } else {
+        onBeforeError?.()
+        controller.error(new Error('ECONNRESET: socket hang up'))
+      }
+    },
+  })
+}
+
+function mockFetchDropping(
+  chunks: string[],
+  opts?: { headers?: Record<string, string>; onBeforeError?: () => void }
+): typeof fetch {
+  return vi.fn(
+    async () =>
+      new Response(makeDroppingStream(chunks, opts?.onBeforeError), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', ...opts?.headers },
       })
   ) as typeof fetch
 }
@@ -274,6 +308,56 @@ describe('AgentClient.sendMessageStream', () => {
 
     expect(onError).toHaveBeenCalledWith('boom', AgentErrorCode.UNKNOWN_ERROR)
   })
+
+  it('marks finished + captures X-Server-Now on a clean stream', async () => {
+    globalThis.fetch = mockFetchSSE(
+      [
+        'data: {"type":"text-delta","id":"t","delta":"hi"}\n\n',
+        'data: {"type":"data-message","data":{"message":{"id":"m","conversation_id":"c1","role":"assistant","content":"hi","content_type":"text","created_at":"2026-04-17T00:00:00Z"}}}\n\n',
+        'data: {"type":"finish"}\n\n',
+      ],
+      { 'X-Server-Now': '1718870400000' }
+    )
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.finished).toBe(true)
+    expect(result.disconnected).toBe(false)
+    expect(result.serverNow).toBe('1718870400000')
+    expect(result.message?.content).toBe('hi')
+  })
+
+  // Disconnect-recovery contract: a transport drop mid-turn must NOT throw and
+  // must NOT mark the turn finished — it flags `disconnected` so the caller can
+  // recover via /messages/since. The X-Server-Now header (captured before the
+  // first chunk) survives to anchor that recovery poll.
+  it('flags disconnected (no throw, not finished) when the stream drops mid-turn', async () => {
+    globalThis.fetch = mockFetchDropping(['data: {"type":"text-delta","id":"t","delta":"partial ans"}\n\n'], {
+      headers: { 'X-Server-Now': '1718870400000' },
+    })
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.disconnected).toBe(true)
+    expect(result.finished).toBe(false)
+    expect(result.message).toBeNull() // the answer never arrived on the wire
+    expect(result.fullText).toBe('partial ans') // only the partial delta showed
+    expect(result.serverNow).toBe('1718870400000')
+  })
+
+  // A deliberate Ctrl+C (AbortController.abort()) is NOT a dropped connection:
+  // re-throw so the caller shows "[cancelled]" instead of silently recovering.
+  it('re-throws (does not recover) when the read fails after a user abort', async () => {
+    const ac = new AbortController()
+    globalThis.fetch = mockFetchDropping(['data: {"type":"text-delta","id":"t","delta":"x"}\n\n'], {
+      onBeforeError: () => ac.abort(),
+    })
+
+    const client = new AgentClient('http://example.com')
+    await expect(client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {}, ac.signal)).rejects.toThrow()
+  })
 })
 
 describe('AgentClient — honest tool success (fund-safety #B)', () => {
@@ -301,7 +385,14 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
   }
 
   it('reports ok=false when the tool output is {"status":"error"}', async () => {
-    expect(await lastDoneOk({ output: { status: 'error', error: 'execute_send (EVM): invalid address' } })).toBe(false)
+    expect(
+      await lastDoneOk({
+        output: {
+          status: 'error',
+          error: 'execute_send (EVM): invalid address',
+        },
+      })
+    ).toBe(false)
   })
 
   it('reports ok=false when the tool output has an {"error"} field', async () => {

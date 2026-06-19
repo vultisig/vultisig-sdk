@@ -17,10 +17,17 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
-import { AgentClient } from './client'
+import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
-import type { AgentConfig, ConversationMessage, MessageContext, RecentAction, UICallbacks } from './types'
+import type {
+  AgentConfig,
+  ConversationMessage,
+  MessageContext,
+  RecentAction,
+  TxReadyPayload,
+  UICallbacks,
+} from './types'
 
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
 // reached via tx_ready synthesis (not a registry tool name) but uses the
@@ -50,6 +57,12 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
+// Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
+// On a dropped SSE stream the session polls /messages/since this many times,
+// this far apart, for the assistant message the detached backend persisted.
+const RECOVERY_POLL_INTERVAL_MS = 2000
+const RECOVERY_MAX_POLLS = 90
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -63,6 +76,10 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Disconnect-recovery poll cadence — instance fields so tests can drive the
+  // poll loop without real 2s waits.
+  private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
+  private recoveryMaxPolls = RECOVERY_MAX_POLLS
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -378,6 +395,18 @@ export class AgentSession {
       await Promise.all(pendingDispatches)
     }
 
+    // Mid-turn disconnect recovery: the SSE stream dropped before the backend
+    // delivered the final assistant message. The backend keeps processing on a
+    // detached context and persists the answer (+ any tx_ready card), so poll
+    // /messages/since to recover what the dropped stream missed. Bounded so a
+    // backend that never persists can't hang the turn. `onTxReady` reuses the
+    // same callback the live stream uses, so a recovered tx_ready flows through
+    // the identical confirm/sign gate below.
+    if (streamResult.disconnected && !streamResult.message) {
+      ui.onReconnecting?.()
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady)
+    }
+
     // Final message event wins over streamed deltas (which may be partial).
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
@@ -424,6 +453,89 @@ export class AgentSession {
     }
 
     ui.onDone()
+  }
+
+  /**
+   * Recover a turn whose SSE stream dropped before delivering the final
+   * assistant message. Polls /messages/since (server-clock anchored via
+   * X-Server-Now) until the persisted assistant message lands or the bounded
+   * budget is exhausted. On success it patches `streamResult.message` so the
+   * normal downstream flow surfaces the answer, and replays any persisted
+   * `data-tx_ready` part through `onTxReady` so a recovered signable card hits
+   * the same confirm/sign gate as a live one.
+   */
+  private async recoverDisconnectedTurn(
+    streamResult: SSEStreamResult,
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+  ): Promise<void> {
+    if (!this.conversationId) return
+
+    // Prefer the server clock (X-Server-Now, epoch ms); fall back to a slightly
+    // back-dated local clock so a missing header can't skew the anchor past the
+    // just-persisted message.
+    const since = serverNowToIso(streamResult.serverNow) ?? new Date(Date.now() - 2000).toISOString()
+    let cursor: string | undefined
+
+    for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
+      let resp
+      try {
+        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+      } catch (err: any) {
+        if (this.config.verbose) {
+          process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+        await this.recoverySleep()
+        continue
+      }
+
+      // Advance the opaque cursor so subsequent polls never re-scan or skip ties.
+      if (resp.cursor) cursor = resp.cursor
+
+      // The detached backend writes the assistant message last; take the newest
+      // assistant row that actually carries content or a recovered card.
+      const assistant = [...resp.messages]
+        .reverse()
+        .find(m => m.role === 'assistant' && (!!m.content || hasTxReadyPart(m.parts)))
+      if (assistant) {
+        if (this.config.verbose) {
+          process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
+        }
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady)
+        return
+      }
+
+      await this.recoverySleep()
+    }
+
+    if (this.config.verbose) {
+      process.stderr.write(`[session] recovery exhausted after ${this.recoveryMaxPolls} polls; turn answer lost\n`)
+    }
+  }
+
+  /** Sleep between recovery polls. Separate method so tests can stub it out. */
+  private recoverySleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.recoveryPollIntervalMs))
+  }
+
+  /**
+   * Fold a recovered assistant message back into the live stream result: the
+   * authoritative message wins over any partial deltas, and any persisted
+   * `data-tx_ready` part is replayed through the live tx_ready callback so the
+   * card flows through the same confirm/sign gate.
+   */
+  private applyRecoveredMessage(
+    msg: ConversationMessage,
+    streamResult: SSEStreamResult,
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+  ): void {
+    streamResult.message = msg
+    for (const part of msg.parts ?? []) {
+      if (part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
+        const tx = part.data as TxReadyPayload
+        streamResult.transactions.push(tx)
+        onTxReady?.(tx)
+      }
+    }
   }
 
   /**
@@ -496,7 +608,10 @@ export class AgentSession {
         const failure: RecentAction = {
           tool: toolName,
           success: false,
-          data: { error: 'Password not provided', code: AgentErrorCode.PASSWORD_REQUIRED },
+          data: {
+            error: 'Password not provided',
+            code: AgentErrorCode.PASSWORD_REQUIRED,
+          },
         }
         ui.onToolCall(toolCallId, toolName, input)
         ui.onToolResult(
@@ -633,6 +748,24 @@ export function stripLeakedToolCallTags(text: string): string {
     .replace(/<\/?minimax:tool_call>/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/**
+ * Convert an X-Server-Now header (epoch milliseconds as a string) into an
+ * RFC3339 timestamp for the /messages/since bootstrap anchor. Returns null
+ * when the header is absent or unparseable so the caller can fall back to a
+ * local-clock anchor.
+ */
+export function serverNowToIso(serverNow: string | null): string | null {
+  if (!serverNow) return null
+  const ms = Number(serverNow)
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return new Date(ms).toISOString()
+}
+
+/** True if any message part is a persisted `data-tx_ready` signable card. */
+function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
+  return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
 }
 
 // ============================================================================
