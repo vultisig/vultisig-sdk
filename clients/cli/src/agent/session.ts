@@ -473,7 +473,19 @@ export class AgentSession {
     // Prefer the server clock (X-Server-Now, epoch ms); fall back to a slightly
     // back-dated local clock so a missing header can't skew the anchor past the
     // just-persisted message.
-    const since = serverNowToIso(streamResult.serverNow) ?? new Date(Date.now() - 2000).toISOString()
+    //
+    // Fund-safety: the local-clock fallback is only trustworthy enough to
+    // recover the *text* answer. Under clock skew between rapid consecutive
+    // turns, a back-dated local anchor can reach back far enough that
+    // /messages/since returns a PRIOR turn's assistant row; replaying that
+    // row's `data-tx_ready` would route an already-superseded transaction into
+    // the sign gate (and auto-broadcast it under --yes). So signable cards are
+    // replayed only when the anchor came from the server clock — which reliably
+    // excludes earlier turns. A stale recovered *text* answer is at worst a
+    // cosmetic glitch; a stale recovered *transaction* is not.
+    const serverAnchor = serverNowToIso(streamResult.serverNow)
+    const since = serverAnchor ?? new Date(Date.now() - 2000).toISOString()
+    const replaySignableCards = serverAnchor !== null
     let cursor: string | undefined
 
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
@@ -500,7 +512,7 @@ export class AgentSession {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady)
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards)
         return
       }
 
@@ -522,13 +534,20 @@ export class AgentSession {
    * authoritative message wins over any partial deltas, and any persisted
    * `data-tx_ready` part is replayed through the live tx_ready callback so the
    * card flows through the same confirm/sign gate.
+   *
+   * `replaySignableCards` gates the tx_ready replay: it is false when the
+   * recovery anchor was the local-clock fallback (no X-Server-Now), where a
+   * recovered card cannot be proven to belong to the current turn. See
+   * recoverDisconnectedTurn — a stale tx_ready must never reach the signer.
    */
   private applyRecoveredMessage(
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    replaySignableCards: boolean
   ): void {
     streamResult.message = msg
+    if (!replaySignableCards) return
     for (const part of msg.parts ?? []) {
       if (part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
         const tx = part.data as TxReadyPayload

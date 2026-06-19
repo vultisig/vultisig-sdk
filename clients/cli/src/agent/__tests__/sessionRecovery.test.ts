@@ -153,6 +153,42 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
     expect(streamResult.message).toBeNull() // no worse than today — turn just ends
   })
 
+  it('without a server-clock anchor (no X-Server-Now), recovers the text answer but NOT a signable card', async () => {
+    // Fund-safety: a local-clock fallback anchor can, under clock skew between
+    // rapid turns, reach back to a PRIOR turn's row. Recovering stale text is
+    // cosmetic; replaying a stale tx_ready into the sign gate is not — so the
+    // card must be dropped when the anchor isn't server-derived.
+    const streamResult = makeStreamResult({
+      disconnected: true,
+      serverNow: null, // no X-Server-Now → local-clock fallback anchor
+    })
+    const txReadyData = { chain: 'Ethereum', action: 'send', send_tx: { to: '0xabc', value: '1' } }
+    const messagesSince = vi.fn(async () => ({
+      messages: [
+        recoveredAssistant({
+          parts: [
+            { type: 'text', text: 'Here is your balance: 1.5 ETH' },
+            { type: 'data-tx_ready', id: 'tx1', data: txReadyData },
+          ],
+        }),
+      ],
+      cursor: 'c',
+    }))
+    const onTxReady = vi.fn()
+
+    await (AgentSession.prototype as any).recoverDisconnectedTurn.call(
+      makeRecoveryThis(messagesSince),
+      streamResult,
+      onTxReady
+    )
+
+    // The text answer is recovered…
+    expect(streamResult.message?.content).toBe('Here is your balance: 1.5 ETH')
+    // …but the signable card is NOT replayed (no sign gate, no transactions).
+    expect(onTxReady).not.toHaveBeenCalled()
+    expect(streamResult.transactions).toHaveLength(0)
+  })
+
   it('survives a transient poll error and recovers on a later attempt', async () => {
     const streamResult = makeStreamResult({
       disconnected: true,
