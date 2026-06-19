@@ -1,10 +1,16 @@
 import { Buffer } from 'buffer'
 import { UtxoChain } from '@vultisig/core-chain/Chain'
+import {
+  ceilDiv,
+  getZcashConventionalFee,
+  getZcashTransparentOutputSizes,
+} from '@vultisig/core-chain/chains/utxo/fee/zip317'
 import { minUtxo } from '@vultisig/core-chain/chains/utxo/minUtxo'
 import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
 import { getZcashBranchIdHex } from '@vultisig/core-chain/chains/utxo/zcashBranchId'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { bigIntMax } from '@vultisig/lib-utils/bigint/bigIntMax'
 import { match } from '@vultisig/lib-utils/match'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { getRecordUnionValue } from '@vultisig/lib-utils/record/union/getRecordUnionValue'
@@ -98,15 +104,92 @@ export const getUtxoSigningInputs: SigningInputsResolver<'utxo'> = async ({ keys
     input.outputOpReturn = encoder.encode(keysignPayload.memo)
   }
 
-  const inputData = TW.Bitcoin.Proto.SigningInput.encode(input).finish()
+  const planInput = (signingInput: TW.Bitcoin.Proto.SigningInput) =>
+    TW.Bitcoin.Proto.TransactionPlan.decode(
+      walletCore.AnySigner.plan(TW.Bitcoin.Proto.SigningInput.encode(signingInput).finish(), coinType)
+    )
 
-  const plan = walletCore.AnySigner.plan(inputData, coinType)
-
-  input.plan = TW.Bitcoin.Proto.TransactionPlan.decode(plan)
+  input.plan =
+    chain === UtxoChain.Zcash
+      ? planZcashConventionalFee({
+          input,
+          memo: keysignPayload.memo,
+          planInput,
+        })
+      : planInput(input)
 
   if (chain === UtxoChain.Zcash) {
     input.plan.branchId = Buffer.from(shouldBePresent(zcashBranchIdHex, 'Zcash branch id'), 'hex')
   }
 
   return [input]
+}
+
+/** Max non-ZIP-317 re-plans before we give up raising the Zcash fee. */
+const maxZcashFeeBumps = 5
+
+type PlanZcashConventionalFeeInput = {
+  input: TW.Bitcoin.Proto.SigningInput
+  memo: string | undefined
+  planInput: (signingInput: TW.Bitcoin.Proto.SigningInput) => TW.Bitcoin.Proto.TransactionPlan
+}
+
+/**
+ * Produce a Zcash plan whose fee meets the ZIP-317 conventional fee.
+ *
+ * WalletCore's `zip_0317` planner sizes an OP_RETURN output as a flat ~34
+ * bytes and ignores `byteFee`, so memo sends plan exactly one logical action
+ * short (e.g. 15,000 zats where the network requires 20,000) with no way to
+ * raise the fee in that mode. When the `zip_0317` plan underpays the
+ * byte-accurate conventional fee, we re-plan with `zip_0317` off — where
+ * WalletCore honours `byteFee` — and bump `byteFee` until the fee clears.
+ * Plain (no-memo) sends already meet the fee and keep the `zip_0317` plan.
+ *
+ * An empty plan (no selected UTXOs) is returned untouched: it means the
+ * coin selection produced nothing yet (insufficient funds, or before
+ * `refineKeysignUtxo` flips `sendMaxAmount`), and that flow owns the outcome.
+ */
+const planZcashConventionalFee = ({
+  input,
+  memo,
+  planInput,
+}: PlanZcashConventionalFeeInput): TW.Bitcoin.Proto.TransactionPlan => {
+  const conventionalFee = (plan: TW.Bitcoin.Proto.TransactionPlan): bigint =>
+    getZcashConventionalFee({
+      inputCount: plan.utxos.length,
+      outputSizes: getZcashTransparentOutputSizes({
+        change: BigInt(plan.change.toString()),
+        memo,
+      }),
+    })
+
+  // An empty plan has no shape to charge for; leave the fee flow to the caller.
+  const meetsConventionalFee = (plan: TW.Bitcoin.Proto.TransactionPlan): boolean =>
+    plan.utxos.length === 0 || BigInt(plan.fee.toString()) >= conventionalFee(plan)
+
+  const zipPlan = planInput(input)
+  if (meetsConventionalFee(zipPlan)) {
+    return zipPlan
+  }
+
+  input.zip_0317 = false
+  let byteFee = 1n
+  let plan = zipPlan
+  for (let bump = 0; bump < maxZcashFeeBumps; bump++) {
+    input.byteFee = Long.fromString(byteFee.toString())
+    plan = planInput(input)
+    if (meetsConventionalFee(plan)) {
+      return plan
+    }
+
+    // byteFee mode scales fee linearly with vsize; derive the byteFee that
+    // clears the conventional fee for this plan's (byteFee-independent) vsize.
+    const fee = BigInt(plan.fee.toString())
+    const plannerVsize = fee > 0n ? fee / byteFee : 1n
+    byteFee = bigIntMax(ceilDiv({ value: conventionalFee(plan), divisor: plannerVsize }), byteFee + 1n)
+  }
+
+  throw new Error(
+    `Failed to meet the Zcash minimum network fee (ZIP-317): planned ${plan.fee.toString()} zats, required ${conventionalFee(plan)}`
+  )
 }
