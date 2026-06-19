@@ -6,6 +6,7 @@ import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxP
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
+import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIsGenericContractCall'
 import { getKeysignAmount } from '@vultisig/core-mpc/keysign/utils/getKeysignAmount'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -102,24 +103,28 @@ export const getEvmFeeQuote = async ({
       return null
     }
 
-    if (coin.id) {
-      const transferData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [receiver as `0x${string}`, amount],
-      })
-
+    // Native send, or a generic contract call (e.g. staking depositFor): estimate
+    // against `memo` calldata sent to `toAddress`. For a generic call `amount` is
+    // 0 (zero toAmount), so this also covers its zero value — and crucially avoids
+    // estimating a synthetic ERC-20 transfer to coin.id.
+    if (getIsGenericContractCall(keysignPayload) || !coin.id) {
       return {
-        to: coin.id as `0x${string}`,
-        value: 0n,
-        data: transferData,
+        to: receiver as `0x${string}`,
+        value: amount,
+        data,
       }
     }
 
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [receiver as `0x${string}`, amount],
+    })
+
     return {
-      to: receiver as `0x${string}`,
-      value: amount,
-      data,
+      to: coin.id as `0x${string}`,
+      value: 0n,
+      data: transferData,
     }
   }
 
