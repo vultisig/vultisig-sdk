@@ -441,22 +441,8 @@ export class AgentSession {
 
     let displayText = stripLeakedToolCallTags(responseText)
 
-    // Legacy-path fallback: if the backend ignored supported_surfaces (older
-    // build) and the model echoed a balance_summary card_payload verbatim into
-    // the message content, pretty-render it instead of dumping raw JSON. We run
-    // the extractor even when the SSE card already fired this turn — a
-    // misbehaving backend could emit BOTH the typed part and an echoed blob, so
-    // we always STRIP the leftover JSON from the displayed text; we only render
-    // the card if one wasn't already rendered (no double-render).
     if (displayText) {
-      const extracted = extractBalanceSummaryFromText(displayText)
-      if (extracted) {
-        if (!balanceCardRendered) {
-          balanceCardRendered = true
-          ui.onBalanceSummary?.(extracted.card)
-        }
-        displayText = extracted.remainingText
-      }
+      displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
     }
 
     if (displayText) {
@@ -617,6 +603,25 @@ export class AgentSession {
         onTxReady?.(tx)
       }
     }
+  }
+
+  /**
+   * Legacy-path fallback for echoed balance_summary cards. If the backend
+   * ignored supported_surfaces (older build) and the model echoed a
+   * card_payload verbatim into the message content, pretty-render it instead
+   * of dumping raw JSON. The extractor runs even when the SSE card already
+   * fired this turn — a misbehaving backend could emit BOTH the typed part and
+   * an echoed blob, so we always STRIP the leftover JSON from the displayed
+   * text; we only render the card when one wasn't already rendered (no
+   * double-render). Returns the text to display with any JSON blob stripped.
+   */
+  private renderEchoedBalanceCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractBalanceSummaryFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onBalanceSummary?.(extracted.card)
+    }
+    return extracted.remainingText
   }
 
   /**

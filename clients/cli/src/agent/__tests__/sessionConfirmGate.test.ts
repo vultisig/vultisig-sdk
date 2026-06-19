@@ -172,6 +172,7 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'hello', ui, 0)
     return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction }
