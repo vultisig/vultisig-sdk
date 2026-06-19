@@ -14,6 +14,7 @@ import * as readline from 'node:readline'
 import chalk from 'chalk'
 
 import type { AgentErrorCode } from './agentErrors'
+import { type BalanceSummaryCard, renderBalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
 import type { ConversationMessage, Suggestion, UICallbacks } from './types'
 
@@ -196,6 +197,14 @@ export class ChatTUI {
           console.log(`${chalk.gray(ts)} ${chalk.cyan.bold('Agent')}: ${renderMarkdown(content)}`)
         }
         this.currentStreamText = ''
+      },
+
+      onBalanceSummary: (card: BalanceSummaryCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        console.log(renderBalanceSummaryCard(card))
       },
 
       onSuggestions: (suggestions: Suggestion[]) => {

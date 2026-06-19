@@ -17,6 +17,11 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  parseBalanceSummaryEnvelope,
+} from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
@@ -279,6 +284,12 @@ export class AgentSession {
     const request: any = {
       public_key: this.publicKey,
       context: this.cachedContext ? { ...this.cachedContext } : {},
+      // Advertise the card surfaces the CLI can render. Without this the backend
+      // takes the legacy path and instructs the model to echo card_payload JSON
+      // verbatim into message content (raw JSON in the terminal). With it, the
+      // backend emits a typed data-balance_summary SSE part and the model
+      // narrates. See cards.ts / backend types.go SupportedSurfaces.
+      supported_surfaces: [...CLI_SUPPORTED_SURFACES],
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
@@ -304,6 +315,11 @@ export class AgentSession {
 
     // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
+    // Whether a balance_summary card was rendered from the SSE data part this
+    // turn. When true, the message-content fallback is skipped so a card isn't
+    // rendered twice (it won't be — the model is told not to echo — but this
+    // makes the invariant explicit).
+    let balanceCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -348,6 +364,13 @@ export class AgentSession {
           if (this.config.password) {
             this.executor.setPassword(this.config.password)
           }
+        }
+      },
+      onBalanceSummary: (raw: unknown) => {
+        const card = parseBalanceSummaryEnvelope(raw)
+        if (card) {
+          balanceCardRendered = true
+          ui.onBalanceSummary?.(card)
         }
       },
       onMessage: (_msg: any) => {
@@ -415,7 +438,21 @@ export class AgentSession {
     // Final message event wins over streamed deltas (which may be partial).
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
-    const displayText = stripLeakedToolCallTags(responseText)
+    let displayText = stripLeakedToolCallTags(responseText)
+
+    // Legacy-path fallback: if the backend ignored supported_surfaces (older
+    // build) and the model echoed a balance_summary card_payload verbatim into
+    // the message content, pretty-render it instead of dumping raw JSON. Skip
+    // when the SSE card already fired this turn.
+    if (!balanceCardRendered && displayText) {
+      const extracted = extractBalanceSummaryFromText(displayText)
+      if (extracted) {
+        balanceCardRendered = true
+        ui.onBalanceSummary?.(extracted.card)
+        displayText = extracted.remainingText
+      }
+    }
+
     if (displayText) {
       ui.onAssistantMessage(displayText)
     }

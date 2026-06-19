@@ -12,6 +12,7 @@
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
 import type { AgentErrorCode } from './agentErrors'
+import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
 import type { Suggestion, UICallbacks } from './types'
 
@@ -30,6 +31,8 @@ export type AskResult = {
     chain: string
     explorerUrl?: string
   }>
+  /** Server-built balance_summary cards rendered this turn. */
+  cards: BalanceSummaryCard[]
 }
 
 export class AskInterface {
@@ -39,6 +42,7 @@ export class AskInterface {
   private responseParts: string[] = []
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
+  private cards: BalanceSummaryCard[] = []
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
@@ -84,6 +88,10 @@ export class AskInterface {
         if (content) {
           this.responseParts.push(content)
         }
+      },
+
+      onBalanceSummary: (card: BalanceSummaryCard) => {
+        this.cards.push(card)
       },
 
       onSuggestions: (_suggestions: Suggestion[]) => {
@@ -133,6 +141,7 @@ export class AskInterface {
     this.responseParts = []
     this.toolCalls = []
     this.transactions = []
+    this.cards = []
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
@@ -142,6 +151,7 @@ export class AskInterface {
       response: this.responseParts[this.responseParts.length - 1] || '',
       toolCalls: this.toolCalls,
       transactions: this.transactions,
+      cards: this.cards,
     }
   }
 }

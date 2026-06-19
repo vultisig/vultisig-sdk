@@ -299,6 +299,30 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
+  // cat4-cli-supported-surfaces: the backend emits data-balance_summary when
+  // the client advertised "balance_summary" in supported_surfaces. Previously
+  // this v1 part routed to the 'ignore' bucket (client.ts:421) and the card was
+  // silently dropped; now it surfaces via onBalanceSummary.
+  it('routes data-balance_summary to onBalanceSummary with the envelope payload', async () => {
+    const onBalanceSummary = vi.fn()
+
+    const envelope = {
+      surface: 'balance_summary',
+      accounts: [{ chainId: 'Ethereum', address: '0xabc', tokens: [{ symbol: 'ETH', amountDecimal: '1.0' }] }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-balance_summary', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'balance' }, { onBalanceSummary })
+
+    expect(onBalanceSummary).toHaveBeenCalledTimes(1)
+    expect(onBalanceSummary).toHaveBeenCalledWith(envelope)
+  })
+
   it('handles v1 error events via errorText', async () => {
     const onError = vi.fn()
     globalThis.fetch = mockFetchSSE(['data: {"type":"error","errorText":"boom"}\n\n'])
