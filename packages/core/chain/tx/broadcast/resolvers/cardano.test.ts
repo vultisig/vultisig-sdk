@@ -71,4 +71,42 @@ describe('broadcastCardanoTx', () => {
     expect(mocks.getCardanoCurrentSlot).not.toHaveBeenCalled()
     expect(mocks.submitCardanoCbor).not.toHaveBeenCalled()
   })
+
+  it('routes timeout responses through verifyBroadcastByHash before swallowing', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'request timed out' })
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
+      chain,
+      tx,
+      error: expect.objectContaining({
+        message: 'Failed to broadcast transaction: request timed out',
+      }),
+    })
+  })
+
+  it('propagates timeout responses when hash verification cannot find the transaction', async () => {
+    const tx = txWithTtl(1_000)
+    const verifyError = new Error('verified missing tx')
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'request timed out' })
+    mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
+
+    await expect(broadcastCardanoTx({ chain, tx })).rejects.toBe(verifyError)
+  })
+
+  it('continues swallowing duplicate Cardano broadcast errors without hash verification', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'txn-mempool-conflict' })
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
 })

@@ -45,6 +45,8 @@ function getChangedFiles() {
 function isBundledSourceFile(file) {
   if (!bundledSourcePrefixes.some(prefix => file.startsWith(prefix))) return false
   if (ignoredSuffixes.some(suffix => file.endsWith(suffix))) return false
+  // Test files are not bundled into the SDK - they don't affect published artifacts
+  if (/\.(test|spec)\.(c|m)?(t|j)sx?$/.test(file)) return false
   return /\.(c|m)?(t|j)sx?$/.test(file) || file.endsWith('.json')
 }
 

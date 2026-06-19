@@ -44,7 +44,7 @@ export const broadcastCardanoTx: BroadcastTxResolver<OtherChain.Cardano> = async
 
   const error = errorMessage ?? 'unknown broadcast failure'
 
-  if (isInError(error, 'BadInputsUTxO', 'timed out', 'txn-mempool-conflict', 'already known')) {
+  if (isInError(error, 'BadInputsUTxO', 'txn-mempool-conflict', 'already known')) {
     return null
   }
 
