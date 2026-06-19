@@ -85,7 +85,11 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
 const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
   [Chain.Cosmos]: 'https://cosmos-api.polkachu.com',
   [Chain.Osmosis]: 'https://osmosis-api.polkachu.com',
-  [Chain.Kujira]: 'https://kujira-api.polkachu.com',
+  // rest.cosmos.directory/kujira proxies across multiple independent providers
+  // (confirmed live 2026-06-16 via node_info + auth endpoint returning valid cosmos SDK JSON).
+  // Distinct from the polkachu primary in cosmosRpcUrl.ts so a polkachu degradation
+  // does not take out both legs simultaneously (the failure mode flagged in #735).
+  [Chain.Kujira]: 'https://rest.cosmos.directory/kujira',
   [Chain.Terra]: 'https://terra-api.polkachu.com',
   [Chain.TerraClassic]: 'https://lcd.terra-classic.hexxagon.io',
   [Chain.THORChain]: 'https://thorchain-api.polkachu.com',

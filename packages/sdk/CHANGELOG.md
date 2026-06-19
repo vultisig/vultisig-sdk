@@ -1,5 +1,104 @@
 # @vultisig/sdk
 
+## 2.4.3
+
+### Patch Changes
+
+- [#730](https://github.com/vultisig/vultisig-sdk/pull/730) [`a3859ab`](https://github.com/vultisig/vultisig-sdk/commit/a3859ab400ba02e05da73e23d57e3d261863d922) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Calculate Cardano send fees from WalletCore transaction body bytes instead of using a flat default.
+
+- [#729](https://github.com/vultisig/vultisig-sdk/pull/729) [`2092472`](https://github.com/vultisig/vultisig-sdk/commit/209247266141f4fb8f299e87a257aa00c1a1f2e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add buffered EVM swap gas limits so failed gas estimation no longer falls back to the raw calldata floor.
+
+## 2.4.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
+## 2.4.1
+
+### Patch Changes
+
+- [#766](https://github.com/vultisig/vultisig-sdk/pull/766) [`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(zcash): add trailing slash to branch-id RPC URL
+
+  The live ZIP-243 branch-id fetch POSTs to a bare `${rootApiUrl}/zcash`, which the
+  proxy now 301-redirects to `/zcash/`. Following a 301 downgrades POST→GET, so the
+  request lands as `GET /zcash/` → HTTP 405, breaking all Zcash signing on the
+  "Sign Transaction" screen. Add the trailing slash so the POST hits the working
+  endpoint directly (live-verified 200 with consensus.nextblock).
+
+## 2.4.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an external recipient for native + CowSwap swaps
+
+  `findSwapQuote` now accepts an optional `recipient` address. When set, the
+  swapped output is routed to that address via the native THORChain/MayaChain
+  memo `destination` and the CowSwap order `receiver`. Aggregators that would pay
+  the swap initiator (1inch, KyberSwap, LiFi, SwapKit) are skipped for
+  custom-recipient swaps so funds are never silently misrouted. When `recipient`
+  is omitted, routing and payout are unchanged.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131);
+  external recipient for the remaining aggregators is a follow-up.
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an explicit gas limit override for EVM swaps
+
+  `buildSwapKeysignPayload` now accepts an optional `gasLimitOverride` (units).
+  When set on an EVM swap it replaces the aggregator's estimated
+  `ethereumSpecific.gasLimit` (and the mirrored 1inch `tx.gas`), while the gas
+  price is still computed normally. Ignored for non-EVM chains and when omitted —
+  no behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support a custom slippage tolerance in findSwapQuote
+
+  `findSwapQuote` now accepts an optional `slippageTolerance` (in percent, e.g.
+  `0.5` = 0.5%). It is forwarded to the general aggregators that accept a slippage
+  override, each converted to that provider's native unit: 1inch and SwapKit
+  (percent), KyberSwap (basis points), and LiFi (fraction). CowSwap (RFQ limit
+  order) and the native THORChain/MayaChain protocols use their own protection
+  and ignore it. When omitted, every provider keeps its existing default — no
+  behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): validate recipient and slippage overrides in findSwapQuote
+
+  `findSwapQuote` now trims the optional `recipient` and treats empty/whitespace
+  strings as no recipient, so a blank value no longer gates off initiator-paying
+  aggregators or gets forwarded as a native `destination` / CowSwap `receiver`.
+  It also rejects an invalid `slippageTolerance` (negative, `NaN`, or non-finite)
+  up front with a `SwapError` instead of letting the bad value propagate into
+  every provider call.
+
+## 2.3.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
+- [#763](https://github.com/vultisig/vultisig-sdk/pull/763) [`e5b07fb`](https://github.com/vultisig/vultisig-sdk/commit/e5b07fbfc09f55af64025950078050388e7b080d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate THORChain custom Cosmos payload fees from SignAmino input fees.
+
+## 2.3.5
+
+### Patch Changes
+
+- [#749](https://github.com/vultisig/vultisig-sdk/pull/749) [`343a921`](https://github.com/vultisig/vultisig-sdk/commit/343a9211d7f5af74753124146a72ebec343e5f2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - cosmos/gas: bump TerraClassic staking gas limit from 2M to 3M and cap msgCount scaling
+
+  `getCosmosStakingGasLimit` now returns 3M for `Chain.TerraClassic` regardless of `msgCount`. The previous 2M base caused consistent out-of-gas failures (`ValuePerByte` meter in the classic-terra treasury/tax post-handler adds ~200-800 gas beyond the standard SDK estimate). The msgCount scaling is disabled for TerraClassic: at `msgCount >= 2` the scaled gasWanted would exceed the 100 LUNC fee floor, causing node rejection. Columbus-5 callers must split multi-validator reward claims into separate transactions.
+
+## 2.3.4
+
+### Patch Changes
+
+- [#738](https://github.com/vultisig/vultisig-sdk/pull/738) [`a335ca8`](https://github.com/vultisig/vultisig-sdk/commit/a335ca80e13da83c4ed5c2922f5ae845a4aea712) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Noon sUSN Delta Neutral USDC yield vault helpers for Ethereum, including ERC-7540 calldata builders, USDC approval planning, on-chain read helpers, and Noon/Accountable APY plus TVL API clients exposed through the SDK boundary.
+
+- [#710](https://github.com/vultisig/vultisig-sdk/pull/710) [`a54ac61`](https://github.com/vultisig/vultisig-sdk/commit/a54ac616f5aca39edd2515666ee895cfab0de242) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Default React Native Cosmos send fees to the chain fee denom when callers omit an explicit fee denom.
+
 ## 2.3.3
 
 ### Patch Changes

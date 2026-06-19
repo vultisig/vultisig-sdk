@@ -73,9 +73,35 @@ describe('buildCosmosPayload', () => {
         const thor = payload.blockchainSpecific?.value as {
           accountNumber: bigint
           sequence: bigint
+          fee: bigint
         }
         expect(thor.accountNumber).toBe(0n)
         expect(thor.sequence).toBe(0n)
+        expect(thor.fee).toBe(2_000_000n)
+      })
+
+      it('throws when THORChain fee is provided without an amount', async () => {
+        await expect(
+          buildSignAminoKeysignPayload({
+            chain: Chain.THORChain,
+            coin: {
+              chain: Chain.THORChain,
+              address: 'thor1test',
+              decimals: 8,
+              ticker: 'RUNE',
+            },
+            msgs: [{ type: 'types/MsgDeposit', value: '{}' }],
+            fee: {
+              amount: [],
+              gas: '400000',
+            },
+            vaultId: 'vault-ecdsa',
+            localPartyId: 'device-1',
+            publicKey: fakePublicKey,
+            libType,
+            skipChainSpecificFetch: true,
+          })
+        ).rejects.toThrow('THORChain fee.amount[0].amount is required when fee is provided')
       })
 
       it('uses mayaSpecific for MayaChain', async () => {

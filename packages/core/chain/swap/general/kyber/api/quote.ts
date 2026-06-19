@@ -13,6 +13,8 @@ type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
   kyberConfig?: KyberSwapBaseAffiliateConfig
+  /** Slippage tolerance in basis points (e.g. 100 = 1%). Defaults to `kyberSwapSlippageTolerance`. */
+  slippageTolerance?: number
 }
 
 export const getKyberSwapQuote = async ({
@@ -21,6 +23,7 @@ export const getKyberSwapQuote = async ({
   amount,
   affiliateBps,
   kyberConfig,
+  slippageTolerance,
 }: Input): Promise<GeneralSwapQuote> => {
   const { routeSummary, routerAddress } = await getKyberSwapRoute({
     from,
@@ -28,6 +31,7 @@ export const getKyberSwapQuote = async ({
     amount,
     affiliateBps,
     kyberConfig,
+    slippageTolerance,
   })
 
   const tx = await attempt(
@@ -40,6 +44,7 @@ export const getKyberSwapQuote = async ({
       enableGasEstimation: true,
       affiliateBps,
       kyberConfig,
+      slippageTolerance,
     })
   )
 
@@ -55,6 +60,7 @@ export const getKyberSwapQuote = async ({
         enableGasEstimation: false,
         affiliateBps,
         kyberConfig,
+        slippageTolerance,
       })
     }
 

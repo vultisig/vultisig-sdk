@@ -17,6 +17,7 @@
  * ```
  */
 
+// jscpd:ignore-start
 import { webcrypto } from 'crypto'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
@@ -65,6 +66,7 @@ const wasmFetchPolyfill = async (input: RequestInfo | URL, init?: RequestInit): 
 
 // Install polyfill FIRST (before any imports that might trigger WASM init)
 globalThis.fetch = wasmFetchPolyfill as any
+// jscpd:ignore-end
 
 // Now safe to import modules that may trigger WASM initialization
 import { initWasm as initWalletCore } from '@trustwallet/wallet-core'

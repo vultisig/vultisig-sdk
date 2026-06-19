@@ -18,6 +18,8 @@ type Input = Record<TransferDirection, AccountCoin<KyberSwapEnabledChain>> & {
   amount: bigint
   affiliateBps?: number
   kyberConfig?: KyberSwapBaseAffiliateConfig
+  /** Slippage tolerance in basis points (e.g. 100 = 1%). Defaults to `kyberSwapSlippageTolerance`. */
+  slippageTolerance?: number
 }
 
 type KyberSwapRoute = {
@@ -47,6 +49,7 @@ export const getKyberSwapRoute = async ({
   amount,
   affiliateBps,
   kyberConfig = kyberSwapAffiliateConfig,
+  slippageTolerance = kyberSwapSlippageTolerance,
 }: Input): Promise<KyberSwapRoute> => {
   const [tokenIn, tokenOut] = [from, to].map(({ id }) => id || evmNativeCoinAddress)
 
@@ -56,7 +59,7 @@ export const getKyberSwapRoute = async ({
     amountIn: amount.toString(),
     saveGas: true,
     gasInclude: true,
-    slippageTolerance: kyberSwapSlippageTolerance,
+    slippageTolerance,
     ...getKyberSwapAffiliateParams(affiliateBps, kyberConfig),
   }
 
