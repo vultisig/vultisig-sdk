@@ -1,5 +1,14 @@
 # @vultisig/sdk
 
+## 2.4.6
+
+### Patch Changes
+
+- [#782](https://github.com/vultisig/vultisig-sdk/pull/782) [`9f9b0ec`](https://github.com/vultisig/vultisig-sdk/commit/9f9b0ecc66efbd003ed869a0ea7a2c29f85edef5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(qbtc): set QBTC Cosmos SDK chain ID to `qbtc` (was `qbtc-testnet`)
+
+  The SignDoc built by `QBTCHelper` now uses `qbtc` as the chain ID so signed
+  transactions match the live QBTC chain. Patch-bumps `@vultisig/sdk` to rebundle.
+
 ## 2.4.5
 
 ### Patch Changes
