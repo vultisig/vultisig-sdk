@@ -22,7 +22,7 @@ const msgVoteTypeURL = '/cosmos.gov.v1beta1.MsgVote'
 
 /** QBTC fee denom and chain ID (Cosmos SDK). */
 const denom = 'qbtc'
-const chainID = 'qbtc-testnet'
+const chainID = 'qbtc'
 
 type QBTCKeysignInput = {
   keysignPayload: KeysignPayload
