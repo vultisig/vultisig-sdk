@@ -52,7 +52,13 @@
       "default": "./dist/index.rn-preamble.js"
     },
     "./electron": {
-      "types": "./dist/index.node.d.ts",
+      "types": "./dist/index.electron-main.d.ts",
+      "import": "./dist/index.electron-main.cjs",
+      "require": "./dist/index.electron-main.cjs",
+      "default": "./dist/index.electron-main.cjs"
+    },
+    "./electron/main": {
+      "types": "./dist/index.electron-main.d.ts",
       "import": "./dist/index.electron-main.cjs",
       "require": "./dist/index.electron-main.cjs",
       "default": "./dist/index.electron-main.cjs"
