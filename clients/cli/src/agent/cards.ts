@@ -42,8 +42,32 @@ export type BalanceSummaryCard = {
   staleSecs?: number
 }
 
+/**
+ * Strip terminal control bytes (C0 0x00–0x1F, DEL 0x7F, C1 0x80–0x9F) from a
+ * value before it can reach the TTY. Card string fields flow from
+ * attacker-influenced sources — token `symbol`/`chainId` come from on-chain
+ * metadata (a scam token can pick any symbol), and on the legacy-echo fallback
+ * path `JSON.parse` decodes an escape into a real ESC byte. Every ANSI/OSC
+ * escape sequence requires one of these introducer bytes, so removing the range
+ * neutralizes cursor-move / OSC 8 hyperlink-spoof / OSC 52 clipboard-write
+ * injection into the balances table while leaving all printable text (incl.
+ * Unicode) intact. Done at the parse boundary so both the typed-SSE and
+ * legacy-echo render paths defend in depth rather than trusting the backend
+ * sanitizer (balance_summary_sanitize.go) — the fallback exists precisely for
+ * backends that don't sanitize.
+ */
+function stripControlChars(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const code = ch.codePointAt(0) ?? 0
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) continue
+    out += ch
+  }
+  return out
+}
+
 function asString(v: unknown): string {
-  return typeof v === 'string' ? v : ''
+  return typeof v === 'string' ? stripControlChars(v) : ''
 }
 
 function parseToken(v: unknown): BalanceSummaryToken | null {
@@ -126,6 +150,12 @@ export function extractBalanceSummaryFromText(
   content: string
 ): { card: BalanceSummaryCard; remainingText: string } | null {
   if (!content || !content.includes('balance_summary')) return null
+
+  // Backstop against adversarial input: matchBrace is O(n) per `{`, so a crafted
+  // blob of deeply nested braces makes the scan O(n²). A real echoed card is
+  // small (a few KB); a single assistant message this large is pathological, so
+  // bail and let the raw text print rather than pin the CPU.
+  if (content.length > 200_000) return null
 
   // Scan every `{`-delimited object; the envelope may sit inside a code fence
   // or be wrapped in prose. Take the first one that parses as a balance card.

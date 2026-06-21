@@ -75,6 +75,36 @@ describe('parseBalanceSummaryEnvelope', () => {
     expect(card!.accounts).toHaveLength(1)
     expect(card!.accounts[0].chainId).toBe('Ethereum')
   })
+
+  it('strips terminal control/ANSI bytes from attacker-controlled fields', () => {
+    // Token symbol/chain come from on-chain metadata (a scam token can pick any
+    // symbol); on the legacy-echo path JSON.parse decodes an escape into a real
+    // ESC byte. Neither must inject escape sequences into the table (OSC 8
+    // hyperlink spoofing, OSC 52 clipboard writes, cursor moves). Build the
+    // control bytes programmatically so no literal control char lives in source.
+    const ESC = String.fromCharCode(0x1b)
+    const BEL = String.fromCharCode(0x07)
+    const C1_CSI = String.fromCharCode(0x9b) // single-byte C1 CSI introducer
+    const card = parseBalanceSummaryEnvelope({
+      surface: 'balance_summary',
+      accounts: [
+        {
+          chainId: `Eth${ESC}[31mereum`,
+          address: '0xabc',
+          tokens: [{ symbol: `EV${ESC}]8;;http://evil${BEL}IL`, amountDecimal: `1\r\n0${C1_CSI}`, amountUsd: '$10' }],
+        },
+      ],
+    })!
+    // Parser strips the control bytes at the boundary, leaving only inert
+    // printable text; the renderer only ever prints these parsed fields, so the
+    // ESC/BEL/C1 introducers can no longer form an escape sequence on the TTY.
+    expect(card.accounts[0].chainId).toBe('Eth[31mereum')
+    expect(card.accounts[0].tokens[0].symbol).toBe('EV]8;;http://evilIL')
+    expect(card.accounts[0].tokens[0].amountDecimal).toBe('10')
+    // renderBalanceSummaryCard must not throw on the coerced card. (Its output
+    // still carries chalk's own SGR styling — expected, distinct from injection.)
+    expect(() => renderBalanceSummaryCard(card)).not.toThrow()
+  })
 })
 
 describe('renderBalanceSummaryCard', () => {
@@ -139,5 +169,12 @@ describe('extractBalanceSummaryFromText (legacy verbatim-echo fallback)', () => 
   it('ignores a non-card JSON object that mentions balance_summary', () => {
     const text = 'The {"foo":"balance_summary mention"} is not a card.'
     expect(extractBalanceSummaryFromText(text)).toBeNull()
+  })
+
+  it('bails on pathological oversized content instead of scanning O(n²)', () => {
+    // A crafted message of deeply nested braces would make matchBrace O(n²);
+    // content past the backstop returns null (raw text prints) rather than hang.
+    const huge = 'balance_summary ' + '{'.repeat(150_000) + '}'.repeat(150_000)
+    expect(extractBalanceSummaryFromText(huge)).toBeNull()
   })
 })

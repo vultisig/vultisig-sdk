@@ -205,3 +205,91 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
     expect(h.ui.onDone).toHaveBeenCalledOnce()
   })
 })
+
+// Balance-card rendering through processMessageLoop. Exercises the typed SSE
+// path, the legacy verbatim-echo fallback, and the both-paths-fire case the
+// `balanceCardRendered` guard / renderEchoedBalanceCard helper exists for.
+describe('processMessageLoop — balance_summary card rendering', () => {
+  const ENVELOPE = {
+    surface: 'balance_summary',
+    accounts: [
+      { chainId: 'Ethereum', address: '0xabc', tokens: [{ symbol: 'ETH', amountDecimal: '1.0', amountUsd: '$3,000' }] },
+    ],
+  }
+
+  function makeCardHarness(opts: { fireSse: boolean; content: string }) {
+    const streamRequests: any[] = []
+    const client = {
+      sendMessageStream: vi.fn(async (_conv: string, request: any, callbacks: any) => {
+        streamRequests.push(request)
+        if (opts.fireSse) callbacks.onBalanceSummary(ENVELOPE)
+        return { message: { content: opts.content }, fullText: '', transactions: [] }
+      }),
+    }
+    const ui = {
+      onTextDelta: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onAssistantMessage: vi.fn(),
+      onBalanceSummary: vi.fn(),
+      onSuggestions: vi.fn(),
+      onTxStatus: vi.fn(),
+      onError: vi.fn(),
+      onDone: vi.fn(),
+      requestPassword: vi.fn(async () => 'pw'),
+      requestConfirmation: vi.fn(async () => true),
+    }
+    const fakeThis: any = {
+      conversationId: 'conv-1',
+      publicKey: 'pk-test',
+      cachedContext: { addresses: {} },
+      config: { password: 'pw', askMode: true, verbose: false },
+      pendingToolResults: [],
+      abortController: null,
+      client,
+      executor: { storeServerTransaction: vi.fn(() => false), setPassword: vi.fn() },
+      processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+      dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+    }
+    const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'balances?', ui, 0)
+    return { run, ui, streamRequests }
+  }
+
+  it('advertises supported_surfaces on every request', async () => {
+    const h = makeCardHarness({ fireSse: true, content: 'Your ETH balance is 1.0.' })
+    await h.run()
+    expect(h.streamRequests[0].supported_surfaces).toContain('balance_summary')
+  })
+
+  it('typed SSE path: renders the card once and shows the narration prose', async () => {
+    const h = makeCardHarness({ fireSse: true, content: 'You hold 1 ETH (~$3,000).' })
+    await h.run()
+    expect(h.ui.onBalanceSummary).toHaveBeenCalledOnce()
+    expect(h.ui.onAssistantMessage).toHaveBeenCalledWith('You hold 1 ETH (~$3,000).')
+  })
+
+  it('both paths fire: card renders once (SSE) and the echoed JSON is stripped from the text', async () => {
+    // Misbehaving/transitional backend: emits the typed SSE part AND lets the
+    // model echo the envelope JSON into message content. The card must render
+    // exactly once and the raw JSON must never reach onAssistantMessage.
+    const content = `Here you go: ${JSON.stringify(ENVELOPE)} all set.`
+    const h = makeCardHarness({ fireSse: true, content })
+    await h.run()
+    expect(h.ui.onBalanceSummary).toHaveBeenCalledOnce()
+    const shown = h.ui.onAssistantMessage.mock.calls[0]?.[0] ?? ''
+    expect(shown).not.toContain('"surface"')
+    expect(shown).toContain('Here you go:')
+    expect(shown).toContain('all set.')
+  })
+
+  it('legacy-only fallback: echoed JSON with no SSE part still renders the card and strips the JSON', async () => {
+    const content = JSON.stringify(ENVELOPE)
+    const h = makeCardHarness({ fireSse: false, content })
+    await h.run()
+    expect(h.ui.onBalanceSummary).toHaveBeenCalledOnce()
+    // The message was nothing but the envelope → no empty assistant message.
+    expect(h.ui.onAssistantMessage).not.toHaveBeenCalled()
+  })
+})
