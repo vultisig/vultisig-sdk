@@ -1,5 +1,18 @@
 # @vultisig/sdk
 
+## 2.4.7
+
+### Patch Changes
+
+- [#785](https://github.com/vultisig/vultisig-sdk/pull/785) [`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): rebrand native token Toncoin (TON) → Gram (GRAM)
+
+  The Open Network renamed its native token TON → GRAM (effective 2026-06-15).
+  Update the display fields of `chainFeeCoin[Chain.Ton]`: `ticker` `TON` → `GRAM`
+  and `logo` `ton` → `gram`. This is a cosmetic token rebrand only — the chain
+  identity (`Chain.Ton`), `priceProviderId` (`the-open-network`), and `decimals`
+  are unchanged, and there is no swap/migration. Patch-bumps `@vultisig/sdk` to
+  rebundle.
+
 ## 2.4.6
 
 ### Patch Changes
