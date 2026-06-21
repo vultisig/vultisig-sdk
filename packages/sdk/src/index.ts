@@ -333,7 +333,13 @@ export type {
 // PUBLIC API - Security Scanning
 // ============================================================================
 
-export type { AddressScanResult, RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './types'
+export type {
+  AddressScanResult,
+  RiskLevel,
+  SiteScanResult,
+  TransactionSimulationResult,
+  TransactionValidationResult,
+} from './types'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants

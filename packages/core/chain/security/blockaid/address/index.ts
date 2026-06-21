@@ -8,13 +8,11 @@ type BlockaidAddressScanResponse = {
   features?: string[]
 }
 
-export const scanAddressWithBlockaid = async (
-  address: string,
-  chain: string,
-): Promise<BlockaidAddressScanResult> => {
-  const { result_type, features } = await queryBlockaid<BlockaidAddressScanResponse>(
-    '/evm/address/scan',
-    { address, chain, metadata: { domain: productRootDomain } },
-  )
+export const scanAddressWithBlockaid = async (address: string, chain: string): Promise<BlockaidAddressScanResult> => {
+  const { result_type, features } = await queryBlockaid<BlockaidAddressScanResponse>('/evm/address/scan', {
+    address,
+    chain,
+    metadata: { domain: productRootDomain },
+  })
   return { resultType: result_type, features: features ?? [] }
 }

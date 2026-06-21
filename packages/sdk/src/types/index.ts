@@ -666,7 +666,13 @@ export type {
 } from './tokens'
 
 // Security scanning types
-export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './security'
+export type {
+  AddressScanResult,
+  RiskLevel,
+  SiteScanResult,
+  TransactionSimulationResult,
+  TransactionValidationResult,
+} from './security'
 
 // Cosmos message type constants
 export type { CosmosMsgType as CosmosMsgTypeValue } from './cosmos-msg'
