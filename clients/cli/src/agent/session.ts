@@ -504,7 +504,21 @@ export class AgentSession {
       if (resp.cursor) cursor = resp.cursor
 
       // The detached backend writes the assistant message last; take the newest
-      // assistant row that actually carries content or a recovered card.
+      // assistant row that actually carries content or a recovered card. Newest
+      // (not oldest) is deliberate: a single turn can persist several assistant
+      // rows (clarifier / fast-path ack, then the final answer), and we want the
+      // final one — oldest-after-anchor would surface an early clarifier instead.
+      //
+      // Fund-safety cross-repo invariant: this "newest qualifying row" is only
+      // safe to route to the sign gate because no concurrent writer persists an
+      // *executable* tx_ready (full txArgs/send_tx/swap_tx) into a live
+      // conversation during the recovery window. The single concurrent writer
+      // today — the scheduler — persists an inert `{ proposal_id }` sidecar that
+      // `storeServerTransaction` rejects (no tx envelope → returns false → never
+      // signed). If a future background path ever persists an executable
+      // tx_ready into a shared conversation, this selection + the server-anchor
+      // gate would route it straight to the signer (auto-broadcast under --yes);
+      // such a writer must scope its conversation or this must filter by turn.
       const assistant = [...resp.messages]
         .reverse()
         .find(m => m.role === 'assistant' && (!!m.content || hasTxReadyPart(m.parts)))
