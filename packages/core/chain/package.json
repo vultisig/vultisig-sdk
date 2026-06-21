@@ -1182,6 +1182,16 @@
       "import": "./dist/scripts/printKnownTokens.js",
       "default": "./dist/scripts/printKnownTokens.js"
     },
+    "./security/blockaid/address": {
+      "types": "./dist/security/blockaid/address/index.d.ts",
+      "import": "./dist/security/blockaid/address/index.js",
+      "default": "./dist/security/blockaid/address/index.js"
+    },
+    "./security/blockaid/address/core": {
+      "types": "./dist/security/blockaid/address/core.d.ts",
+      "import": "./dist/security/blockaid/address/core.js",
+      "default": "./dist/security/blockaid/address/core.js"
+    },
     "./security/blockaid/config": {
       "types": "./dist/security/blockaid/config.d.ts",
       "import": "./dist/security/blockaid/config.js",
