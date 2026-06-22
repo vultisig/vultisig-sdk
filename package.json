@@ -171,7 +171,7 @@
     "eslint-plugin-unused-imports": "^4.4.1",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
-    "jscpd": "^5.0.9",
+    "jscpd": "^5.0.11",
     "knip": "^6.16.1",
     "lint-staged": "^17.0.7",
     "markdown-link-check": "^3.14.2",

@@ -9279,44 +9279,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cpd-darwin-arm64@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-darwin-arm64@npm:5.0.9"
+"cpd-darwin-arm64@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-darwin-arm64@npm:5.0.11"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"cpd-darwin-x64@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-darwin-x64@npm:5.0.9"
+"cpd-darwin-x64@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-darwin-x64@npm:5.0.11"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"cpd-linux-arm64-gnu@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-linux-arm64-gnu@npm:5.0.9"
+"cpd-linux-arm64-gnu@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-linux-arm64-gnu@npm:5.0.11"
   conditions: os=linux & cpu=arm64 & libc=glibc
   languageName: node
   linkType: hard
 
-"cpd-linux-x64-gnu@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-linux-x64-gnu@npm:5.0.9"
+"cpd-linux-x64-gnu@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-linux-x64-gnu@npm:5.0.11"
   conditions: os=linux & cpu=x64 & libc=glibc
   languageName: node
   linkType: hard
 
-"cpd-linux-x64-musl@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-linux-x64-musl@npm:5.0.9"
+"cpd-linux-x64-musl@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-linux-x64-musl@npm:5.0.11"
   conditions: os=linux & cpu=x64 & libc=musl
   languageName: node
   linkType: hard
 
-"cpd-windows-x64-msvc@npm:5.0.9":
-  version: 5.0.9
-  resolution: "cpd-windows-x64-msvc@npm:5.0.9"
+"cpd-windows-x64-msvc@npm:5.0.11":
+  version: 5.0.11
+  resolution: "cpd-windows-x64-msvc@npm:5.0.11"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
@@ -13327,16 +13327,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jscpd@npm:^5.0.9":
-  version: 5.0.9
-  resolution: "jscpd@npm:5.0.9"
+"jscpd@npm:^5.0.11":
+  version: 5.0.11
+  resolution: "jscpd@npm:5.0.11"
   dependencies:
-    cpd-darwin-arm64: "npm:5.0.9"
-    cpd-darwin-x64: "npm:5.0.9"
-    cpd-linux-arm64-gnu: "npm:5.0.9"
-    cpd-linux-x64-gnu: "npm:5.0.9"
-    cpd-linux-x64-musl: "npm:5.0.9"
-    cpd-windows-x64-msvc: "npm:5.0.9"
+    cpd-darwin-arm64: "npm:5.0.11"
+    cpd-darwin-x64: "npm:5.0.11"
+    cpd-linux-arm64-gnu: "npm:5.0.11"
+    cpd-linux-x64-gnu: "npm:5.0.11"
+    cpd-linux-x64-musl: "npm:5.0.11"
+    cpd-windows-x64-msvc: "npm:5.0.11"
   dependenciesMeta:
     cpd-darwin-arm64:
       optional: true
@@ -13351,9 +13351,8 @@ __metadata:
     cpd-windows-x64-msvc:
       optional: true
   bin:
-    cpd: run-jscpd.js
     jscpd: run-jscpd.js
-  checksum: 10c0/e79ecc987f423fa26ac7a1b7fb21382e58777f61b0b77ec2b0889bc11494eab68924b1e04c778692796abe5a7946ab503290e817c6f1c993f75ad6a42309d108
+  checksum: 10c0/99b111b917568c9eda982db2fa71a4c7f49df5498c6e1ec9b9d46fbafa0636f68908f42dcd4ee3c5c333c95796545cdb173586938ff3ad8fcac55f0d3ba081cc
   languageName: node
   linkType: hard
 
@@ -19746,7 +19745,7 @@ __metadata:
     eslint-plugin-unused-imports: "npm:^4.4.1"
     globals: "npm:^17.6.0"
     husky: "npm:^9.1.7"
-    jscpd: "npm:^5.0.9"
+    jscpd: "npm:^5.0.11"
     knip: "npm:^6.16.1"
     lint-staged: "npm:^17.0.7"
     markdown-link-check: "npm:^3.14.2"
