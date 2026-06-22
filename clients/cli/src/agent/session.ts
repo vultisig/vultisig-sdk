@@ -86,6 +86,11 @@ export class AgentSession {
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
+    // Registry-based client-side tool identification: tell the client which
+    // tools the CLI executes locally so a `tool-input-available` frame is
+    // dispatched on toolName membership (mirroring the app's toolUIRegistry),
+    // not on a `clientExecuted` wire flag the backend no longer sends.
+    this.client.setClientSideToolNames(new Set(Object.keys(CLIENT_SIDE_TOOL_DISPATCH)))
     if (config.profile) {
       this.client.setProfile(config.profile)
     }

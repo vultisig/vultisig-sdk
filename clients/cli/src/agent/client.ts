@@ -31,7 +31,12 @@ type StreamCallbacks = {
   // true on a clean result, undefined when the stream carries no output
   // (older backends) so the consumer can fall back to its prior default.
   onToolProgress?: (tool: string, status: 'running' | 'done', label?: string, ok?: boolean) => void
-  // Fired for `tool-input-available` with `clientExecuted: true`.
+  // Fired for `tool-input-available` whose `toolName` is in the client's
+  // client-side tool registry (see `AgentClient.setClientSideToolNames`).
+  // Identification is registry-based — mirroring the app's `toolUIRegistry` —
+  // because the backend deliberately no longer sends a `clientExecuted`
+  // discriminator flag ("clients identify client-side tools via their own
+  // tool registries; the server must not add discriminator flags").
   // Client runs the tool and ships the result via recent_actions.
   // Sync-only: callers must dispatch async work themselves (push to a
   // promise queue) — keeps `void`'d call at the SSE boundary safe from
@@ -134,6 +139,14 @@ export class AgentClient {
   private authToken: string | null = null
   private profile: string = ''
   verbose = false
+  // Names of tools this client executes locally (client-side tools). The
+  // backend's V1ToolInputAvailable frame carries NO discriminator flag —
+  // "clients identify client-side tools via their own tool registries; the
+  // server must not add discriminator flags". So the client mirrors the
+  // app's `toolUIRegistry`: a `tool-input-available` frame triggers local
+  // dispatch iff its `toolName` is in this set. Empty by default (no
+  // client-side dispatch) until the session injects the registry.
+  private clientSideToolNames: Set<string> = new Set()
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
@@ -141,6 +154,13 @@ export class AgentClient {
 
   setAuthToken(token: string): void {
     this.authToken = token
+  }
+
+  /** Inject the set of tool names this client executes locally. Identification
+   *  of client-side tools is registry-based (mirroring the app's
+   *  `toolUIRegistry`), not a wire flag — see `maybeEmitClientSideToolCall`. */
+  setClientSideToolNames(names: Set<string>): void {
+    this.clientSideToolNames = names
   }
 
   /** Set the billing-profile slug sent as X-Vultisig-Abe-Profile on every
@@ -474,11 +494,17 @@ export class AgentClient {
     callId: string | null,
     toolName?: string
   ): void {
+    // Registry-based identification (mirrors the app's toolUIRegistry): a
+    // `tool-input-available` frame is dispatched locally iff its toolName is
+    // in this client's client-side tool registry. The backend sends no
+    // `clientExecuted` discriminator (it was removed) — keying on a wire flag
+    // here is what left these tools dead, so we key on the registry instead.
+    // Non-registry tools (server-side / MCP) fall through untouched.
     if (
       v1Type !== 'tool-input-available' ||
-      parsed.clientExecuted !== true ||
       !callId ||
       !toolName ||
+      !this.clientSideToolNames.has(toolName) ||
       !callbacks.onClientSideToolCall
     ) {
       return
