@@ -15,6 +15,7 @@ import type {
   GetConversationResponse,
   ListConversationsRequest,
   ListConversationsResponse,
+  MessagesSinceResponse,
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
@@ -237,6 +238,28 @@ export class AgentClient {
     return this.post<SendMessageResponse>(`/agent/conversations/${conversationId}/messages`, req)
   }
 
+  /**
+   * Reconnect-and-replay: fetch messages persisted to the conversation after
+   * the supplied anchor. Used to recover a turn whose SSE stream dropped
+   * mid-flight (the backend keeps processing on a detached context and
+   * persists the assistant answer + any tx_ready card).
+   *
+   * First poll passes `{ since: <RFC3339> }` (bootstrap, anchored to the
+   * server clock from X-Server-Now); subsequent polls round-trip the opaque
+   * `{ cursor }` returned in the previous response so no tied row is skipped.
+   * See agent-backend messages_since.go (issue #209 / PR #219).
+   */
+  async messagesSince(
+    conversationId: string,
+    anchor: { since?: string; cursor?: string }
+  ): Promise<MessagesSinceResponse> {
+    const qs = new URLSearchParams()
+    // cursor wins on tie (matches the backend's parseMessagesSinceAnchor).
+    if (anchor.cursor) qs.set('cursor', anchor.cursor)
+    else if (anchor.since) qs.set('since', anchor.since)
+    return this.get<MessagesSinceResponse>(`/agent/conversations/${conversationId}/messages/since?${qs.toString()}`)
+  }
+
   // ============================================================================
   // Messages - SSE Streaming mode
   // ============================================================================
@@ -273,6 +296,13 @@ export class AgentClient {
       suggestions: [],
       transactions: [],
       message: null,
+      finished: false,
+      disconnected: false,
+      // A-C2 contract: the backend stamps server-side wall-clock (epoch ms) on
+      // the SSE response headers before the first chunk, so the recovery poll
+      // anchors /messages/since to the server clock instead of Date.now()
+      // (eliminates NTP-skew-induced poll swallowing). See message.go.
+      serverNow: res.headers.get('X-Server-Now'),
     }
 
     // Per-stream map: v1 tool-output-available frames omit toolName (see
@@ -337,6 +367,19 @@ export class AgentClient {
           break
         }
       }
+    } catch (err) {
+      // A user-initiated cancel (Ctrl+C → AbortController.abort()) is a
+      // deliberate stop, not a dropped connection — re-throw so the caller
+      // surfaces "[cancelled]" and does NOT try to recover the turn.
+      if (signal?.aborted) {
+        throw err
+      }
+      // Any other read failure is a mid-turn transport drop. The backend keeps
+      // processing on a detached context and persists the answer (+ tx_ready),
+      // so flag the partial result and let the caller poll /messages/since to
+      // recover what we missed instead of losing the turn outright.
+      result.disconnected = true
+      if (this.verbose) process.stderr.write(`[SSE] stream dropped mid-turn: ${sseErrorToMessage(err)}\n`)
     } finally {
       reader.releaseLock()
     }
@@ -401,7 +444,8 @@ export class AgentClient {
           break
         }
         case 'done':
-          // Stream complete
+          // Terminal finish frame — the turn completed cleanly, no recovery needed.
+          result.finished = true
           break
       }
     } catch (e) {
@@ -513,6 +557,23 @@ export class AgentClient {
   // Private helpers
   // ============================================================================
 
+  private async get<T>(path: string): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'GET',
+      headers: {
+        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+        ...this.profileHeader(),
+      },
+    })
+
+    if (!res.ok) {
+      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
+    }
+
+    return (await res.json()) as T
+  }
+
   private async post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'POST',
@@ -555,4 +616,15 @@ export type SSEStreamResult = {
   suggestions: Suggestion[]
   transactions: TxReadyPayload[]
   message: ConversationMessage | null
+  /** True once the terminal finish/done frame was seen — the turn completed
+   *  cleanly and no /messages/since recovery is required. */
+  finished: boolean
+  /** True when the SSE read loop ended on a transport error mid-turn (a
+   *  dropped connection, not a user abort). Signals the caller to recover the
+   *  persisted answer via /messages/since. */
+  disconnected: boolean
+  /** X-Server-Now (epoch millis as a string) captured from the SSE response
+   *  headers — the server-clock bootstrap anchor for the recovery poll.
+   *  null when the header is absent (older backend). */
+  serverNow: string | null
 }

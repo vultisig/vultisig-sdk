@@ -55,7 +55,11 @@ export class PipeInterface {
         type: 'history',
         messages: history
           .filter(m => m.content_type !== 'action_result')
-          .map(m => ({ role: m.role, content: m.content, created_at: m.created_at })),
+          .map(m => ({
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          })),
       })
     }
 
@@ -176,6 +180,10 @@ export class PipeInterface {
         this.emit({ type: 'error', message, code })
       },
 
+      onReconnecting: () => {
+        this.emit({ type: 'reconnecting' })
+      },
+
       onDone: () => {
         this.emit({ type: 'done' })
       },
@@ -185,7 +193,11 @@ export class PipeInterface {
         return new Promise(resolve => {
           this.pendingPasswordResolve = resolve
           // Signal that password is needed
-          this.emit({ type: 'error', message: 'PASSWORD_REQUIRED', code: AgentErrorCode.PASSWORD_REQUIRED })
+          this.emit({
+            type: 'error',
+            message: 'PASSWORD_REQUIRED',
+            code: AgentErrorCode.PASSWORD_REQUIRED,
+          })
         })
       },
 

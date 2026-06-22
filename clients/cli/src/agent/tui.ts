@@ -225,6 +225,14 @@ export class ChatTUI {
         console.log(`  ${chalk.red('Error')}: ${message}${suffix}`)
       },
 
+      onReconnecting: () => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        console.log(chalk.gray('  Connection dropped — recovering response…'))
+      },
+
       onDone: () => {
         if (this.isStreaming) {
           // Flush any remaining streamed text
