@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.7.4",
+  "version": "1.8.2",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -576,6 +576,11 @@
       "import": "./dist/keysign/tw/toTwAddress.js",
       "default": "./dist/keysign/tw/toTwAddress.js"
     },
+    "./keysign/utils/getIsGenericContractCall": {
+      "types": "./dist/keysign/utils/getIsGenericContractCall.d.ts",
+      "import": "./dist/keysign/utils/getIsGenericContractCall.js",
+      "default": "./dist/keysign/utils/getIsGenericContractCall.js"
+    },
     "./keysign/utils/getJoinKeysignUrl": {
       "types": "./dist/keysign/utils/getJoinKeysignUrl.d.ts",
       "import": "./dist/keysign/utils/getJoinKeysignUrl.js",
@@ -605,6 +610,11 @@
       "types": "./dist/keysign/utxo/getKeysignUtxoInfo.d.ts",
       "import": "./dist/keysign/utxo/getKeysignUtxoInfo.js",
       "default": "./dist/keysign/utxo/getKeysignUtxoInfo.js"
+    },
+    "./keysign/vultStaking/build": {
+      "types": "./dist/keysign/vultStaking/build.d.ts",
+      "import": "./dist/keysign/vultStaking/build.js",
+      "default": "./dist/keysign/vultStaking/build.js"
     },
     "./keysignComplete": {
       "types": "./dist/keysignComplete.d.ts",
@@ -1004,7 +1014,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.6.13",
-    "@vultisig/core-chain": "2.17.3",
+    "@vultisig/core-chain": "2.17.5",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

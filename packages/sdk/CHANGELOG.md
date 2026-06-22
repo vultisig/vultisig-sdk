@@ -1,5 +1,51 @@
 # @vultisig/sdk
 
+## 2.4.7
+
+### Patch Changes
+
+- [#785](https://github.com/vultisig/vultisig-sdk/pull/785) [`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): rebrand native token Toncoin (TON) → Gram (GRAM)
+
+  The Open Network renamed its native token TON → GRAM (effective 2026-06-15).
+  Update the display fields of `chainFeeCoin[Chain.Ton]`: `ticker` `TON` → `GRAM`
+  and `logo` `ton` → `gram`. This is a cosmetic token rebrand only — the chain
+  identity (`Chain.Ton`), `priceProviderId` (`the-open-network`), and `decimals`
+  are unchanged, and there is no swap/migration. Patch-bumps `@vultisig/sdk` to
+  rebundle.
+
+## 2.4.6
+
+### Patch Changes
+
+- [#782](https://github.com/vultisig/vultisig-sdk/pull/782) [`9f9b0ec`](https://github.com/vultisig/vultisig-sdk/commit/9f9b0ecc66efbd003ed869a0ea7a2c29f85edef5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(qbtc): set QBTC Cosmos SDK chain ID to `qbtc` (was `qbtc-testnet`)
+
+  The SignDoc built by `QBTCHelper` now uses `qbtc` as the chain ID so signed
+  transactions match the live QBTC chain. Patch-bumps `@vultisig/sdk` to rebundle.
+
+## 2.4.5
+
+### Patch Changes
+
+- [#775](https://github.com/vultisig/vultisig-sdk/pull/775) [`fb6837b`](https://github.com/vultisig/vultisig-sdk/commit/fb6837b263c3c870f1a79e9c6011f27a1cc58f5d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add the original transaction hash to SwapKit tracking URLs so tracker links prefill correctly.
+
+- [#767](https://github.com/vultisig/vultisig-sdk/pull/767) [`ad14563`](https://github.com/vultisig/vultisig-sdk/commit/ad14563fb14358ff3efa96ed32e2304b8fc8d0ae) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(keysign): VULT staking (sVULT) keysign builders + generic EVM contract-call routing
+
+  Adds `keysign/vultStaking/build` (depositFor with an optional VULT→sVULT approval
+  prepended, requestUnstake, claim, cancelUnstake) for native VULT staking on
+  Ethereum.
+
+  Stake reuses the swap-with-approval flow: the payload coin is the VULT token so
+  the EVM signing-input resolver can attach an `erc20ApprovePayload`, and the
+  `depositFor` calldata is emitted as a generic contract call. The routing
+  decision (token coin + zero `toAmount` + `0x` memo + no swap) is extracted into a
+  shared `getIsGenericContractCall` predicate now consumed by the signing-input,
+  fee-quote, and Blockaid simulation/validation resolvers so they all target the
+  same on-chain call (fixes gas being estimated against — and Blockaid scanning —
+  a synthetic ERC-20 transfer instead of the real `depositFor`). Patch-bumps
+  `@vultisig/sdk` to rebundle.
+
+- [#773](https://github.com/vultisig/vultisig-sdk/pull/773) [`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Raise Zcash memo-send fees to the ZIP-317 conventional fee at plan time. WalletCore's `zip_0317` planner flat-sizes OP_RETURN and ignores `byteFee`, so memo sends planned one logical action short and were rejected by the network; the signing-input resolver now re-plans with `zip_0317` off and bumps `byteFee` until the fee clears.
+
 ## 2.4.4
 
 ### Patch Changes

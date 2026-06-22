@@ -1,5 +1,24 @@
 # @vultisig/core-chain
 
+## 2.17.5
+
+### Patch Changes
+
+- [#785](https://github.com/vultisig/vultisig-sdk/pull/785) [`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): rebrand native token Toncoin (TON) → Gram (GRAM)
+
+  The Open Network renamed its native token TON → GRAM (effective 2026-06-15).
+  Update the display fields of `chainFeeCoin[Chain.Ton]`: `ticker` `TON` → `GRAM`
+  and `logo` `ton` → `gram`. This is a cosmetic token rebrand only — the chain
+  identity (`Chain.Ton`), `priceProviderId` (`the-open-network`), and `decimals`
+  are unchanged, and there is no swap/migration. Patch-bumps `@vultisig/sdk` to
+  rebundle.
+
+## 2.17.4
+
+### Patch Changes
+
+- [#773](https://github.com/vultisig/vultisig-sdk/pull/773) [`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Raise Zcash memo-send fees to the ZIP-317 conventional fee at plan time. WalletCore's `zip_0317` planner flat-sizes OP_RETURN and ignores `byteFee`, so memo sends planned one logical action short and were rejected by the network; the signing-input resolver now re-plans with `zip_0317` off and bumps `byteFee` until the fee clears.
+
 ## 2.17.3
 
 ### Patch Changes

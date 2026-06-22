@@ -6860,7 +6860,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.17.3, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:2.17.5, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -6913,7 +6913,7 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.13"
-    "@vultisig/core-chain": "npm:2.17.3"
+    "@vultisig/core-chain": "npm:2.17.5"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7024,6 +7024,7 @@ __metadata:
   dependencies:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
+    tldts: "npm:^6.1.0"
     viem: "npm:^2.52.2"
   languageName: unknown
   linkType: soft
@@ -7095,7 +7096,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=2.4.4"
+    "@vultisig/sdk": ">=2.4.7"
   languageName: unknown
   linkType: soft
 
@@ -18768,6 +18769,24 @@ __metadata:
   version: 3.1.0
   resolution: "tinyrainbow@npm:3.1.0"
   checksum: 10c0/f11cf387a26c5c9255bec141a90ac511b26172981b10c3e50053bc6700ea7d2336edcc4a3a21dbb8412fe7c013477d2ba4d7e4877800f3f8107be5105aad6511
+  languageName: node
+  linkType: hard
+
+"tldts-core@npm:^6.1.86":
+  version: 6.1.86
+  resolution: "tldts-core@npm:6.1.86"
+  checksum: 10c0/8133c29375f3f99f88fce5f4d62f6ecb9532b106f31e5423b27c1eb1b6e711bd41875184a456819ceaed5c8b94f43911b1ad57e25c6eb86e1fc201228ff7e2af
+  languageName: node
+  linkType: hard
+
+"tldts@npm:^6.1.0":
+  version: 6.1.86
+  resolution: "tldts@npm:6.1.86"
+  dependencies:
+    tldts-core: "npm:^6.1.86"
+  bin:
+    tldts: bin/cli.js
+  checksum: 10c0/27ae7526d9d78cb97b2de3f4d102e0b4321d1ccff0648a7bb0e039ed54acbce86bacdcd9cd3c14310e519b457854e7bafbef1f529f58a1e217a737ced63f0940
   languageName: node
   linkType: hard
 
