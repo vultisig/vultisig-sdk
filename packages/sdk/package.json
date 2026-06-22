@@ -241,7 +241,7 @@
     "@vitest/coverage-v8": "4.1.8",
     "concurrently": "^10.0.3",
     "dotenv": "^17.4.2",
-    "electron": "^42.4.0",
+    "electron": "^42.4.1",
     "fake-indexeddb": "^6.2.5",
     "node-localstorage": "^3.0.5",
     "rollup": "^4.62.0",
