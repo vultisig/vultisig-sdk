@@ -677,6 +677,7 @@
   "dependencies": {
     "buffer": "^6.0.3",
     "long": "^5.3.2",
+    "tldts": "^6.1.0",
     "viem": "^2.52.2"
   }
 }
