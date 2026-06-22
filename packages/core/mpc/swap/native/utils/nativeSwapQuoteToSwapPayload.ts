@@ -2,6 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { nativeSwapPayloadCase, nativeSwapStreamingInterval } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
@@ -18,6 +19,35 @@ type Input = {
   fromCoin: AccountCoin & { hexPublicKey: string }
   toCoin: AccountCoin & { hexPublicKey: string }
   amount: bigint
+}
+
+const BASIS_POINTS_DENOMINATOR = 10_000n
+
+const assertValidSlippageToleranceBps = (slippageToleranceBps: number): void => {
+  if (
+    !Number.isSafeInteger(slippageToleranceBps) ||
+    slippageToleranceBps < 0 ||
+    slippageToleranceBps > Number(BASIS_POINTS_DENOMINATOR)
+  ) {
+    throw new Error(
+      `slippageToleranceBps must be an integer between 0 and ${BASIS_POINTS_DENOMINATOR}. Received "${slippageToleranceBps}".`
+    )
+  }
+}
+
+export const getNativeSwapToAmountLimit = ({
+  expectedAmountOut,
+  slippageToleranceBps = DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS,
+}: {
+  expectedAmountOut: string
+  slippageToleranceBps?: number
+}): string => {
+  assertValidSlippageToleranceBps(slippageToleranceBps)
+
+  const expected = BigInt(expectedAmountOut)
+  const tolerance = BigInt(slippageToleranceBps)
+
+  return ((expected * (BASIS_POINTS_DENOMINATOR - tolerance)) / BASIS_POINTS_DENOMINATOR).toString()
 }
 
 export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }: Input): CommKeysignSwapPayload => {
@@ -46,7 +76,10 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       expirationTime: BigInt(Math.round(convertDuration(addMinutes(Date.now(), 15).getTime(), 'ms', 's'))),
       streamingInterval,
       streamingQuantity,
-      toAmountLimit: '0',
+      toAmountLimit: getNativeSwapToAmountLimit({
+        expectedAmountOut: quote.expected_amount_out,
+        slippageToleranceBps: quote.liquidity_tolerance_bps,
+      }),
       isAffiliate,
       fee: quote.fees.total,
     }),
