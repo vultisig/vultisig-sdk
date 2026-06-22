@@ -17,11 +17,7 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
-import {
-  CLI_SUPPORTED_SURFACES,
-  extractBalanceSummaryFromText,
-  parseBalanceSummaryEnvelope,
-} from './cards'
+import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
