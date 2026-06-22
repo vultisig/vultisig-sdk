@@ -18445,74 +18445,74 @@ __metadata:
   languageName: node
   linkType: hard
 
-"syncpack-darwin-arm64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-darwin-arm64@npm:15.3.1"
+"syncpack-darwin-arm64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-darwin-arm64@npm:15.3.2"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"syncpack-darwin-x64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-darwin-x64@npm:15.3.1"
+"syncpack-darwin-x64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-darwin-x64@npm:15.3.2"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"syncpack-linux-arm64-musl@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-linux-arm64-musl@npm:15.3.1"
+"syncpack-linux-arm64-musl@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-linux-arm64-musl@npm:15.3.2"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"syncpack-linux-arm64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-linux-arm64@npm:15.3.1"
+"syncpack-linux-arm64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-linux-arm64@npm:15.3.2"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"syncpack-linux-x64-musl@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-linux-x64-musl@npm:15.3.1"
+"syncpack-linux-x64-musl@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-linux-x64-musl@npm:15.3.2"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"syncpack-linux-x64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-linux-x64@npm:15.3.1"
+"syncpack-linux-x64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-linux-x64@npm:15.3.2"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"syncpack-windows-arm64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-windows-arm64@npm:15.3.1"
+"syncpack-windows-arm64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-windows-arm64@npm:15.3.2"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"syncpack-windows-x64@npm:15.3.1":
-  version: 15.3.1
-  resolution: "syncpack-windows-x64@npm:15.3.1"
+"syncpack-windows-x64@npm:15.3.2":
+  version: 15.3.2
+  resolution: "syncpack-windows-x64@npm:15.3.2"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"syncpack@npm:^15.3.1":
-  version: 15.3.1
-  resolution: "syncpack@npm:15.3.1"
+"syncpack@npm:^15.3.2":
+  version: 15.3.2
+  resolution: "syncpack@npm:15.3.2"
   dependencies:
-    syncpack-darwin-arm64: "npm:15.3.1"
-    syncpack-darwin-x64: "npm:15.3.1"
-    syncpack-linux-arm64: "npm:15.3.1"
-    syncpack-linux-arm64-musl: "npm:15.3.1"
-    syncpack-linux-x64: "npm:15.3.1"
-    syncpack-linux-x64-musl: "npm:15.3.1"
-    syncpack-windows-arm64: "npm:15.3.1"
-    syncpack-windows-x64: "npm:15.3.1"
+    syncpack-darwin-arm64: "npm:15.3.2"
+    syncpack-darwin-x64: "npm:15.3.2"
+    syncpack-linux-arm64: "npm:15.3.2"
+    syncpack-linux-arm64-musl: "npm:15.3.2"
+    syncpack-linux-x64: "npm:15.3.2"
+    syncpack-linux-x64-musl: "npm:15.3.2"
+    syncpack-windows-arm64: "npm:15.3.2"
+    syncpack-windows-x64: "npm:15.3.2"
   dependenciesMeta:
     syncpack-darwin-arm64:
       optional: true
@@ -18532,7 +18532,7 @@ __metadata:
       optional: true
   bin:
     syncpack: index.cjs
-  checksum: 10c0/8ea302d885d8bd42e54446ea029808c14f14e34416d33b4bfbdc1b91fd54a6d55fabe2f0247a174a63b099cb9abed8eb6e9326f33261be2c1a78e4b83a5b3377
+  checksum: 10c0/8ae5c28965c8afb85299188ce27bc691e3ecc91c83343cc9fbaa583454e912126f95ca9d741a51e3e93212480020e3ba75e3feafcaff438289eb29fadb0a1f35
   languageName: node
   linkType: hard
 
@@ -19706,7 +19706,7 @@ __metadata:
     rollup-plugin-copy: "npm:^3.5.0"
     rollup-plugin-dts: "npm:^6.4.1"
     secretlint: "npm:^13.0.2"
-    syncpack: "npm:^15.3.1"
+    syncpack: "npm:^15.3.2"
     tsx: "npm:^4.22.4"
     typedoc: "npm:^0.28.19"
     typescript: "npm:^6.0.3"
