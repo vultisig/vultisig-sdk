@@ -92,6 +92,7 @@ type SwapQuoteFetcher = {
 type RankedSwapQuote = {
   quote: SwapQuote
   outputAmount: bigint
+  sourceGasUnits?: bigint
   providerName: SwapQuoteProviderName
 }
 
@@ -174,10 +175,10 @@ const asTradingHaltedSwapError = (reason: unknown): SwapError | null =>
   reason instanceof SwapError && reason.code === SwapErrorCode.TradingHalted ? reason : null
 
 /**
- * Tuning point for issue #605's banded routing rule. 100 bps = 1%.
+ * Tuning point for issue #605's banded routing rule. 50 bps = 0.5%.
  * Adjust this when product wants a wider or narrower provider-preference band.
  */
-const SWAP_QUOTE_PREFERENCE_BAND_BPS = 100n
+const SWAP_QUOTE_PREFERENCE_BAND_BPS = 50n
 const BPS_DENOMINATOR = 10_000n
 
 const isWithinPreferenceBand = (outputAmount: bigint, bestOutputAmount: bigint): boolean =>
@@ -194,25 +195,76 @@ function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number)
   return value / 10n ** BigInt(fromDecimals - toDecimals)
 }
 
+const subtractClamped = (amount: bigint, fee: bigint): bigint => (fee >= amount ? 0n : amount - fee)
+
+const isSameCoinKey = (fee: { chain: Chain; id?: string }, coin: AccountCoin): boolean =>
+  fee.chain === coin.chain && fee.id === coin.id
+
+const getGeneralDestinationSideFeeAmount = ({
+  quote,
+  to,
+  affiliateBps,
+}: {
+  quote: SwapQuote
+  to: AccountCoin
+  affiliateBps: number
+}): bigint => {
+  if (!('general' in quote.quote)) {
+    return 0n
+  }
+
+  const { general } = quote.quote
+  const { tx } = general
+  const explicitFee = 'evm' in tx ? tx.evm.affiliateFee : 'solana' in tx ? tx.solana.swapFee : undefined
+
+  if (general.provider !== 'kyber' && explicitFee && isSameCoinKey(explicitFee, to)) {
+    return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
+  }
+
+  if (general.provider === '1inch' && affiliateBps > 0) {
+    return (BigInt(general.dstAmount) * BigInt(affiliateBps)) / BPS_DENOMINATOR
+  }
+
+  return 0n
+}
+
 /**
- * Comparable destination amount in the destination token's smallest units (same
- * scale as `general.dstAmount`).
+ * Comparable destination amount in the destination token's smallest units.
  *
  * Native swap APIs report `expected_amount_out` in chain-specific precision
  * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
- * Without re-basing, THORChain (8-decimal canonical) and Kyber (token decimals)
- * are not comparable as raw bigints.
- *
- * TODO(#353 follow-up): subtract route-specific gas / outbound fees for true net
- * output; today this ranks gross destination amount after decimal alignment only.
+ * Native THOR/Maya and CowSwap amounts are already net. Aggregator quotes are
+ * adjusted when the SDK has destination-token fee evidence; Kyber is excluded
+ * because its SDK `dstAmount` is already the post-fee build amount.
  */
-function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
+function getComparableOutputAmount(q: SwapQuote, to: AccountCoin, affiliateBps: number): bigint {
   if ('native' in q.quote) {
     const nativePrecision = getNativeSwapDecimals(to)
     const raw = BigInt(q.quote.native.expected_amount_out)
     return rebaseDecimals(raw, nativePrecision, to.decimals)
   }
-  return BigInt(q.quote.general.dstAmount)
+  const grossOutput = BigInt(q.quote.general.dstAmount)
+  return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to, affiliateBps }))
+}
+
+const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: AccountCoin): bigint | undefined => {
+  if (from.chain !== to.chain || !isChainOfKind(from.chain, 'evm') || !isChainOfKind(to.chain, 'evm')) {
+    return undefined
+  }
+
+  if (!('general' in q.quote)) {
+    return undefined
+  }
+
+  const { tx } = q.quote.general
+  if ('evm' in tx) {
+    return tx.evm.gasLimit
+  }
+  if ('cowswap_order' in tx) {
+    return 0n
+  }
+
+  return undefined
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
@@ -236,6 +288,7 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
 
   let selected: RankedSwapQuote | null = null
   let selectedPreferenceRank = Number.POSITIVE_INFINITY
+  let selectedGasUnits: bigint | undefined
 
   for (const candidate of candidates) {
     if (!isWithinPreferenceBand(candidate.outputAmount, bestOutputAmount)) {
@@ -243,13 +296,35 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     }
 
     const candidatePreferenceRank = getProviderPreferenceRank(candidate.providerName)
+    const hasComparableGas =
+      selected !== null &&
+      candidate.sourceGasUnits !== undefined &&
+      selectedGasUnits !== undefined &&
+      candidate.sourceGasUnits !== selectedGasUnits
+
+    if (selected === null) {
+      selected = candidate
+      selectedPreferenceRank = candidatePreferenceRank
+      selectedGasUnits = candidate.sourceGasUnits
+      continue
+    }
+
+    if (hasComparableGas) {
+      if (candidate.sourceGasUnits! < selectedGasUnits!) {
+        selected = candidate
+        selectedPreferenceRank = candidatePreferenceRank
+        selectedGasUnits = candidate.sourceGasUnits
+      }
+      continue
+    }
+
     if (
-      selected === null ||
       candidatePreferenceRank < selectedPreferenceRank ||
       (candidatePreferenceRank === selectedPreferenceRank && candidate.outputAmount > selected.outputAmount)
     ) {
       selected = candidate
       selectedPreferenceRank = candidatePreferenceRank
+      selectedGasUnits = candidate.sourceGasUnits
     }
   }
 
@@ -604,7 +679,8 @@ export const findSwapQuote = async ({
       const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
-        outputAmount: getComparableOutputAmount(quote, to),
+        outputAmount: getComparableOutputAmount(quote, to, affiliateBps),
+        sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
         providerName: fetcher.providerName,
       }
     })

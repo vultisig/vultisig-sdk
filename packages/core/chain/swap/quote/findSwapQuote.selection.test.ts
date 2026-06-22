@@ -66,17 +66,21 @@ const evmSameChainCoins = {
   },
 } as const
 
-function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi'): GeneralSwapQuote {
+function minimalGeneralQuote(
+  dstAmount: string,
+  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi',
+  tx: GeneralSwapQuote['tx'] = {
+    evm: {
+      from: '0xsender',
+      to: '0xrouter',
+      data: '0x',
+      value: '0',
+    },
+  }
+): GeneralSwapQuote {
   const base = {
     dstAmount,
-    tx: {
-      evm: {
-        from: '0xsender',
-        to: '0xrouter',
-        data: '0x',
-        value: '0',
-      },
-    },
+    tx,
   }
   return { ...base, provider }
 }
@@ -608,7 +612,7 @@ describe('findSwapQuote parallel selection', () => {
   })
 })
 
-describe('findSwapQuote banded provider preference (issue #605)', () => {
+describe('findSwapQuote net-output provider selection (issues #605/#804)', () => {
   beforeEach(() => {
     vi.mocked(getCowSwapQuote).mockReset()
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
@@ -629,7 +633,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
   // value = raw / 10^(8 - 6) = raw / 100. So to make THOR comparable-output ≈ X
   // (in 6 decimals), set native expected_amount_out = X * 100.
 
-  it('same-chain ERC20 route picks SwapKit over THORChain when SwapKit is more than 1% better', async () => {
+  it('same-chain ERC20 route picks SwapKit over THORChain when SwapKit is more than 50 bps better', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
@@ -662,7 +666,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     // under the old rule, THORChain won even when SwapKit was 10% better.
     // SwapKit: gross output 1_100_000 (10% higher than THORChain).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1100000', 'swapkit'))
-    // THORChain native: comparable 1_000_000. SwapKit is outside the 1% band, so rate wins.
+    // THORChain native: comparable 1_000_000. SwapKit is outside the 50 bps band, so rate wins.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         return minimalNativeQuote(swapChain, '100000000')
@@ -780,7 +784,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     expect(quote.quote.native.expected_amount_out).toBe('120000000')
   })
 
-  it('near-tie: MayaChain wins when SwapKit is within the 1% band', async () => {
+  it('near-tie: MayaChain wins when SwapKit is within the 50 bps band', async () => {
     // Use Arbitrum ↔ Arbitrum: Maya supports Arbitrum (per nativeSwapEnabledChainsRecord),
     // SwapKit supports Arbitrum as well. THORChain does NOT support Arbitrum.
     const arbCoins = {
@@ -803,7 +807,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    // SwapKit better by 0.5%, within the 1% band.
+    // SwapKit better by 0.5%, within the 50 bps band.
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'swapkit'))
     // Maya native: 8-dec canonical → 1_000_000 comparable.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
@@ -824,7 +828,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     expect(quote.quote.native.swapChain).toBe(Chain.MayaChain)
   })
 
-  it('near-tie: SwapKit beats LiFi when within the 1% band', async () => {
+  it('near-tie: SwapKit beats LiFi when within the 50 bps band', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
@@ -841,6 +845,115 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
       throw new Error('Expected general quote')
     }
     expect(quote.quote.general.provider).toBe('swapkit')
+  })
+
+  it('outside 50 bps band: LiFi beats preferred SwapKit on net output', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1006000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('li.fi')
+  })
+
+  it('subtracts 1inch affiliate fee before comparing provider output', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
+    // Gross is higher, but the default 50 bps affiliate fee makes net output 999_975.
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', '1inch'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('does not double-subtract Kyber affiliate fee because Kyber dstAmount is already net', async () => {
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'kyber', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xdst',
+            decimals: 6,
+            amount: 5025n,
+          },
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('994000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('uses same-chain EVM source gas as an in-band tie-break', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'kyber', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 250_000n,
+        },
+      })
+    )
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 100_000n,
+        },
+      })
+    )
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+      vultDiscountTier: 'ultimate',
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('1inch')
   })
 })
 
