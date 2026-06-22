@@ -188,9 +188,8 @@ export async function estimateUtxoFee(opts: EstimateUtxoFeeOptions): Promise<num
   const resp = await fetchJson<BlockchairStats>(`${opts.apiUrl}/stats`)
   const base = resp.data.suggested_transaction_fee_per_byte_sat ?? 1
   if (opts.chain === 'Dogecoin') {
-    // Blockchair reports ~500,000 sats/byte for DOGE — 10x too high for our
-    // use (matches the iOS impl's /10 workaround).
-    return Math.max(1, Math.floor(base / 10))
+    // Blockchair reports an inflated DOGE rate; 25% matches the app clients.
+    return Math.max(1, Math.floor(base / 4))
   }
   // Electrs baseline + 25% buffer to match app behaviour.
   return Math.max(1, Math.ceil((base * 125) / 100))
