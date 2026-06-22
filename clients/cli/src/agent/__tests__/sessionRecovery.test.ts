@@ -162,7 +162,11 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
       disconnected: true,
       serverNow: null, // no X-Server-Now → local-clock fallback anchor
     })
-    const txReadyData = { chain: 'Ethereum', action: 'send', send_tx: { to: '0xabc', value: '1' } }
+    const txReadyData = {
+      chain: 'Ethereum',
+      action: 'send',
+      send_tx: { to: '0xabc', value: '1' },
+    }
     const messagesSince = vi.fn(async () => ({
       messages: [
         recoveredAssistant({
@@ -290,6 +294,7 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'whats my balance', ui, 0)
     return { run, ui, client, executor }
@@ -353,6 +358,7 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
     }
 
     await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'hi', ui, 0)

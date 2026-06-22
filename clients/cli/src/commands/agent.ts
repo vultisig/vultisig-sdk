@@ -18,6 +18,7 @@ import Table from 'cli-table3'
 import type { AgentConfig } from '../agent'
 import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
 import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
+import { renderBalanceSummaryCard } from '../agent/cards'
 import type { CommandContext } from '../core'
 import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
 
@@ -158,6 +159,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         response: result.response,
         tool_calls: result.toolCalls,
         transactions: result.transactions,
+        ...(result.cards.length > 0 ? { cards: result.cards } : {}),
         ...(confirmationRequired ? { confirmation_required: true } : {}),
         ...(proposed ? { proposed } : {}),
       })
@@ -169,6 +171,11 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         if (proposed) {
           process.stdout.write(`proposed:${proposed}\n`)
         }
+      }
+
+      // Balance cards (rendered as a table instead of raw JSON)
+      for (const card of result.cards) {
+        process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
       }
 
       // Response text

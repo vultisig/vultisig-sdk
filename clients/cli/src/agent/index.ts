@@ -11,6 +11,13 @@ export { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode, norma
 export type { AskResult } from './ask'
 export { AskInterface } from './ask'
 export { authenticateVault } from './auth'
+export type { BalanceSummaryAccount, BalanceSummaryCard, BalanceSummaryToken } from './cards'
+export {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  parseBalanceSummaryEnvelope,
+  renderBalanceSummaryCard,
+} from './cards'
 export { AgentClient } from './client'
 export { buildMessageContext, buildMinimalContext } from './context'
 export { AgentExecutor } from './executor'

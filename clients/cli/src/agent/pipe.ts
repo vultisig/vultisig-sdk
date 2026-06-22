@@ -10,6 +10,7 @@
 import * as readline from 'node:readline'
 
 import { AgentErrorCode, normalizeAgentError } from './agentErrors'
+import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
 import type { PipeInputCommand, PipeOutputEvent, Suggestion, UICallbacks } from './types'
 
@@ -160,6 +161,10 @@ export class PipeInterface {
 
       onAssistantMessage: (content: string) => {
         this.emit({ type: 'assistant', content })
+      },
+
+      onBalanceSummary: (card: BalanceSummaryCard) => {
+        this.emit({ type: 'balance_summary', card })
       },
 
       onSuggestions: (suggestions: Suggestion[]) => {

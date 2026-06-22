@@ -7,6 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
+import type { BalanceSummaryCard } from './cards'
 
 // ============================================================================
 // Configuration
@@ -209,6 +210,14 @@ export type SendMessageRequest = {
   selected_suggestion_id?: string
   /** Signals that the caller is an AI agent; backend adjusts prompt accordingly */
   via_agent?: boolean
+  /**
+   * Data-part surface keys the CLI can render. When "balance_summary" is
+   * present the backend emits a `data-balance_summary` SSE part and strips
+   * `card_payload` from the model-visible tool result, so the model narrates
+   * instead of echoing raw card JSON into message content (the legacy
+   * verbatim-echo path). See backend types.go SupportedSurfaces.
+   */
+  supported_surfaces?: string[]
 }
 
 export type ToolDefinition = {
@@ -381,6 +390,7 @@ export type PipeOutputEvent =
       explorer_url?: string
     }
   | { type: 'assistant'; content: string }
+  | { type: 'balance_summary'; card: BalanceSummaryCard }
   | { type: 'suggestions'; suggestions: Suggestion[] }
   // Emitted when the SSE stream dropped mid-turn and the CLI is polling
   // /messages/since to recover the answer — lets an agent consumer
@@ -410,6 +420,9 @@ export type UICallbacks = {
     code?: AgentErrorCode
   ) => void
   onAssistantMessage: (content: string) => void
+  /** Render a server-built balance_summary card (data-balance_summary SSE part,
+   *  or the legacy verbatim-echo fallback parsed from message content). */
+  onBalanceSummary?: (card: BalanceSummaryCard) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void

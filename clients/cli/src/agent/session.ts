@@ -17,6 +17,7 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor } from './executor'
@@ -279,6 +280,12 @@ export class AgentSession {
     const request: any = {
       public_key: this.publicKey,
       context: this.cachedContext ? { ...this.cachedContext } : {},
+      // Advertise the card surfaces the CLI can render. Without this the backend
+      // takes the legacy path and instructs the model to echo card_payload JSON
+      // verbatim into message content (raw JSON in the terminal). With it, the
+      // backend emits a typed data-balance_summary SSE part and the model
+      // narrates. See cards.ts / backend types.go SupportedSurfaces.
+      supported_surfaces: [...CLI_SUPPORTED_SURFACES],
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
@@ -304,6 +311,12 @@ export class AgentSession {
 
     // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
+    // Whether a balance_summary card was rendered from the SSE data part this
+    // turn. When true, the message-content fallback still runs to STRIP any
+    // leftover echoed JSON from the displayed text, but does not render a second
+    // card (guards against a misbehaving backend emitting both the typed part
+    // and a verbatim echo).
+    let balanceCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -348,6 +361,13 @@ export class AgentSession {
           if (this.config.password) {
             this.executor.setPassword(this.config.password)
           }
+        }
+      },
+      onBalanceSummary: (raw: unknown) => {
+        const card = parseBalanceSummaryEnvelope(raw)
+        if (card) {
+          balanceCardRendered = true
+          ui.onBalanceSummary?.(card)
         }
       },
       onMessage: (_msg: any) => {
@@ -415,7 +435,12 @@ export class AgentSession {
     // Final message event wins over streamed deltas (which may be partial).
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
-    const displayText = stripLeakedToolCallTags(responseText)
+    let displayText = stripLeakedToolCallTags(responseText)
+
+    if (displayText) {
+      displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
+    }
+
     if (displayText) {
       ui.onAssistantMessage(displayText)
     }
@@ -574,6 +599,25 @@ export class AgentSession {
         onTxReady?.(tx)
       }
     }
+  }
+
+  /**
+   * Legacy-path fallback for echoed balance_summary cards. If the backend
+   * ignored supported_surfaces (older build) and the model echoed a
+   * card_payload verbatim into the message content, pretty-render it instead
+   * of dumping raw JSON. The extractor runs even when the SSE card already
+   * fired this turn — a misbehaving backend could emit BOTH the typed part and
+   * an echoed blob, so we always STRIP the leftover JSON from the displayed
+   * text; we only render the card when one wasn't already rendered (no
+   * double-render). Returns the text to display with any JSON blob stripped.
+   */
+  private renderEchoedBalanceCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractBalanceSummaryFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onBalanceSummary?.(extracted.card)
+    }
+    return extracted.remainingText
   }
 
   /**

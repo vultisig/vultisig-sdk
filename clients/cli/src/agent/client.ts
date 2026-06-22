@@ -45,6 +45,11 @@ type StreamCallbacks = {
   onTitle?: (title: string) => void
   onSuggestions?: (suggestions: Suggestion[]) => void
   onTxReady?: (tx: TxReadyPayload) => void
+  // Fired for the `data-balance_summary` SSE part the backend emits when the
+  // client advertised "balance_summary" in supported_surfaces. Carries the raw
+  // card envelope; the consumer validates + renders it. Replaces the legacy
+  // verbatim-echo path where the card arrived as raw JSON in message content.
+  onBalanceSummary?: (card: unknown) => void
   onMessage?: (msg: ConversationMessage) => void
   onError?: (error: string, code: AgentErrorCode) => void
 }
@@ -433,6 +438,13 @@ export class AgentClient {
             callbacks.onTxReady?.(txReady)
           }
           break
+        case 'balance_summary': {
+          // v1 custom-data part: envelope under `.data`. Legacy event-header
+          // form would carry it inline, so accept both shapes.
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onBalanceSummary?.(card)
+          break
+        }
         case 'message': {
           const msg = v1Data?.message ?? parsed.message ?? parsed
           result.message = msg
@@ -542,6 +554,8 @@ export class AgentClient {
         return 'suggestions'
       case 'data-tx_ready':
         return 'tx_ready'
+      case 'data-balance_summary':
+        return 'balance_summary'
       case 'data-message':
         return 'message'
       case 'error':
