@@ -1,5 +1,31 @@
 # @vultisig/cli
 
+## 2.5.0
+
+### Minor Changes
+
+- [#781](https://github.com/vultisig/vultisig-sdk/pull/781) [`d0743b5`](https://github.com/vultisig/vultisig-sdk/commit/d0743b5ef2d5275966c0d8a34bcb6c1329bdef44) Thanks [@neavra](https://github.com/neavra)! - Advertise `supported_surfaces: ["balance_summary"]` to the agent backend and
+  render the `data-balance_summary` card as a terminal table instead of triggering
+  the backend's legacy "echo card_payload JSON verbatim" path. Adds a defensive
+  fallback that pretty-renders a balance card envelope if it ever arrives embedded
+  in message content (older backend). Cards surface in the TUI (table), pipe mode
+  (`balance_summary` NDJSON event), and `agent ask` (`cards` field / rendered
+  table). Card string fields (token symbol, chain, address, amounts) are stripped
+  of terminal control bytes at the parse boundary so attacker-influenced on-chain
+  metadata or a legacy-echoed payload can't inject ANSI/OSC escape sequences into
+  the rendered balances table.
+
+### Patch Changes
+
+- [#779](https://github.com/vultisig/vultisig-sdk/pull/779) [`3cb521d`](https://github.com/vultisig/vultisig-sdk/commit/3cb521d190ab67a24199249f4494f02bf31cbcb1) Thanks [@neavra](https://github.com/neavra)! - Fix CLI client-side tool dispatch. The CLI gated dispatch on a `clientExecuted` wire flag the backend no longer emits, so `sign_typed_data`, `vault_coin`, `vault_chain`, and `address_book` silently stopped dispatching and degraded to display-only progress. Dispatch now keys on the existing client-side-tool registry (mirroring the app's `toolUIRegistry`), restoring those flows.
+
+- [#780](https://github.com/vultisig/vultisig-sdk/pull/780) [`cbd8f13`](https://github.com/vultisig/vultisig-sdk/commit/cbd8f13112405a56f7b5d27c3562c2f161909ac9) Thanks [@neavra](https://github.com/neavra)! - Recover the assistant answer (and any tx_ready signable card) when an agent SSE stream drops mid-turn. The backend keeps processing on a detached context and persists the message, so on a transport disconnect the CLI now polls `/messages/since` (server-clock anchored via `X-Server-Now`, opaque-cursor round-trip, bounded retries) to recover what the dropped stream missed instead of losing the turn. A recovered tx_ready flows through the same confirm/sign gate as a live one. Pipe mode emits a `reconnecting` event so agent consumers can distinguish "still working" from "failed"; a deliberate Ctrl+C abort is unaffected.
+
+- Updated dependencies [[`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37), [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21), [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607), [`dfd1cf3`](https://github.com/vultisig/vultisig-sdk/commit/dfd1cf3fdf9b650a2e70e8a72f751ef6e465bbbe)]:
+  - @vultisig/sdk@2.5.0
+  - @vultisig/core-chain@2.17.6
+  - @vultisig/rujira@38.0.0
+
 ## 2.4.0
 
 ### Patch Changes
