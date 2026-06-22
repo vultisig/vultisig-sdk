@@ -284,6 +284,9 @@ import path from 'node:path'
 const require = createRequire(import.meta.url)
 const entry = require.resolve('@vultisig/sdk')
 const pkgDir = path.resolve(path.dirname(entry), '..')
+const electronMainEntry = require.resolve('@vultisig/sdk/electron/main')
+const electronMain = require('@vultisig/sdk/electron/main')
+const electronMainImport = await import('@vultisig/sdk/electron/main')
 
 assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
 assert.ok(root.Chain !== undefined, 'root exports Chain')
@@ -294,11 +297,25 @@ assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vulti
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
+assert.equal(
+  path.basename(electronMainEntry),
+  'index.electron-main.cjs',
+  '@vultisig/sdk/electron/main resolves the Electron main process bundle'
+)
+assert.equal(typeof electronMain.Vultisig, 'function', '@vultisig/sdk/electron/main exports Vultisig')
+assert.equal(typeof electronMainImport.Vultisig, 'function', 'ESM import resolves @vultisig/sdk/electron/main')
+assert.equal(
+  typeof electronMainImport.ElectronMainCrypto,
+  'function',
+  'ESM import exposes Electron-specific exports'
+)
 
 const rnJs = path.join(pkgDir, 'dist/index.react-native.js')
 assert.ok(existsSync(rnJs), 'react-native bundle file exists on disk')
 const rnDts = path.join(pkgDir, 'dist/index.react-native.d.ts')
 assert.ok(existsSync(rnDts), 'react-native types exist on disk')
+const electronMainDts = path.join(pkgDir, 'dist/index.electron-main.d.ts')
+assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
 `
   )
 
@@ -321,10 +338,13 @@ assert.ok(existsSync(rnDts), 'react-native types exist on disk')
       path.join(consumer, 'types-smoke.ts'),
       `import type { Chain } from '@vultisig/sdk'
 import type { Vultisig } from '@vultisig/sdk/node'
+import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
 export type X = Chain
 export type Y = Vultisig
+export type Z = ElectronMainVultisig
+export type ElectronCrypto = ElectronMainCrypto
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {

@@ -41,6 +41,17 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // Electron main process platform types. This entry exposes Electron-specific
+  // storage, crypto, and polyfill implementations in addition to the public SDK
+  // surface.
+  {
+    input: 'src/platforms/electron-main/index.ts',
+    output: {
+      file: 'dist/index.electron-main.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
   // React Native platform types — RN-specific exports (e.g. keysign) that
   // aren't reachable from src/index.ts because that entry stays platform
   // agnostic. Consumers resolving under the "react-native" export condition
