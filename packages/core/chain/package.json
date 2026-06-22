@@ -1899,7 +1899,7 @@
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
     "@lifi/sdk": "^4.0.0",
-    "@mysten/sui": "^2.17.0",
+    "@mysten/sui": "^2.19.0",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
