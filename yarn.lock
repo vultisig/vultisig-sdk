@@ -6086,13 +6086,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/chrome@npm:^0.1.43":
-  version: 0.1.43
-  resolution: "@types/chrome@npm:0.1.43"
+"@types/chrome@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@types/chrome@npm:0.2.0"
   dependencies:
     "@types/filesystem": "npm:*"
     "@types/har-format": "npm:*"
-  checksum: 10c0/ee9bf6c81b8621f87582ad02e4193a18e94775d6e13bf9012c925101fdc014baba1edf81b0fe220b006d69088b1ac6eb64ac37386c6948ccea4f7dcff5ed5aa2
+  checksum: 10c0/20b5c1903dfc528f4c36b45ac4481c760a1bb058eb4a84d27d7d00bf09bc6849bea6b1cee0cdf7ecef34aaed23f05e4c6a4382988ab392b81c63713a70dd2d54
   languageName: node
   linkType: hard
 
@@ -7130,7 +7130,7 @@ __metadata:
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
     "@trustwallet/wallet-core": "npm:^4.6.13"
-    "@types/chrome": "npm:^0.1.43"
+    "@types/chrome": "npm:^0.2.0"
     "@types/events": "npm:^3"
     "@types/node": "npm:^25.9.3"
     "@types/path-browserify": "npm:^1"
