@@ -55,6 +55,24 @@ export type { NormalizeArgs, NormalizedTx } from './tx'
 export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
 
 // ============================================================================
+// PUBLIC API - Canonical Contract / Token Registry (knownContracts)
+// ============================================================================
+
+export {
+  canonicalEvmContracts,
+  canonicalSolanaAddresses,
+  canonicalTronContracts,
+  isCanonicalEvmContract,
+  isCanonicalEvmContractEllipsized,
+  isCanonicalSolanaAddress,
+  isCanonicalSolanaAddressEllipsized,
+  isCanonicalTronContract,
+  isEvmAddressFormat,
+  isKnownContract,
+  knownContracts,
+} from './utils/knownContracts'
+
+// ============================================================================
 // PUBLIC API - Station Migration Primitives
 // ============================================================================
 
@@ -363,23 +381,47 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AmountUnits,
+  AssetRef,
+  ChainFamily,
   Coin,
   CoinKey,
   CoinMetadata,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+  FieldDiff,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
   KnownCoin,
   KnownCoinMetadata,
+  PolicyAssetRef,
+  PolicyEnvelope,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
   VaultIdentity,
+  Verdict,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  chainAliasMap,
   chainFeeCoin,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  decodeCosmosTx,
+  decodeEvmTx,
+  decodeFromToolResult,
   deriveAddressFromKeys,
+  evaluatePolicy,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
@@ -390,8 +432,13 @@ export {
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  Invariant,
+  isZeroAmount,
   knownTokens,
   knownTokensIndex,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
   prepareContractCallTxFromKeys,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
@@ -399,6 +446,9 @@ export {
   prepareSwapTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
   searchToken,
   VerifierClient,
 } from './tools'

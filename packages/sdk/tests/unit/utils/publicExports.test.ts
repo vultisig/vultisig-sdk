@@ -16,6 +16,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxNormalizeError).toBe('function')
   })
 
+  it('exports the knownContracts canonical registry + lookup helpers', () => {
+    expect(typeof sdk.isKnownContract).toBe('function')
+    expect(typeof sdk.isCanonicalEvmContract).toBe('function')
+    expect(typeof sdk.isCanonicalSolanaAddress).toBe('function')
+    expect(typeof sdk.isCanonicalTronContract).toBe('function')
+    expect(sdk.canonicalEvmContracts instanceof Set).toBe(true)
+    expect(typeof sdk.knownContracts.isKnownContract).toBe('function')
+  })
+
   it('exports findSwapQuote, abiEncode, evmCheckAllowance (already consumed by mcp-ts)', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')
