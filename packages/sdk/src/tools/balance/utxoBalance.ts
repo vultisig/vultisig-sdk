@@ -74,6 +74,29 @@ const isSupportedUtxoChain = (chain: UtxoChain): chain is UtxoBalanceChain =>
   (supportedUtxoBalanceChains as readonly UtxoChain[]).includes(chain)
 
 /**
+ * Extract the native `balance` integer from a Blockchair dashboard body as a
+ * precise string, straight off the raw JSON text.
+ *
+ * `JSON.parse` (and `response.json()`) coerce numeric literals to JS `number`,
+ * which silently truncates anything past `Number.MAX_SAFE_INTEGER`
+ * (~9.0e15 base units). For high-supply UTXO chains that is reachable in
+ * practice — a single Dogecoin whale address can hold > 30e9 DOGE = 3e18 base
+ * units, well past the safe-integer ceiling — so feeding `response.json()`'s
+ * already-lossy `number` into `BigInt()` would publish a wrong satoshi figure.
+ * We therefore read the integer off the raw text before any numberification.
+ *
+ * Scoped to the first `"address":{ … "balance":<int> … }` block, which is the
+ * native balance of the (single) requested address in a dashboards/address
+ * response.
+ */
+const extractBalanceSatoshis = (rawBody: string): bigint => {
+  // Match the balance integer that lives inside the `address` object, not the
+  // `balance_usd` float and not any per-utxo value.
+  const match = rawBody.match(/"address"\s*:\s*\{[^}]*?"balance"\s*:\s*(-?\d+)/)
+  return match ? BigInt(match[1]) : 0n
+}
+
+/**
  * Read the native balance of a UTXO-based chain address via the public
  * Blockchair dashboards API. Read-only, no vault/keys required.
  *
@@ -110,9 +133,19 @@ export const getUtxoBalance = async (
     throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
   }
 
-  const json = (await response.json()) as BlockchairDashboardResponse
+  // Read the raw body so we can pull the balance integer at full precision
+  // (see extractBalanceSatoshis); `response.json()` numberifies and would
+  // truncate large UTXO balances past Number.MAX_SAFE_INTEGER.
+  const rawBody = await response.text()
+  let json: BlockchairDashboardResponse
+  try {
+    json = JSON.parse(rawBody) as BlockchairDashboardResponse
+  } catch {
+    throw new Error(`getUtxoBalance: Blockchair returned non-JSON for ${chain} address ${address}.`)
+  }
   const addrData = Object.values(json.data ?? {})[0]
-  const satoshis = BigInt(addrData?.address?.balance ?? 0)
+  // null balance (unseen address) → 0; otherwise extract the exact integer.
+  const satoshis = addrData?.address?.balance == null ? 0n : extractBalanceSatoshis(rawBody)
 
   return {
     chain,

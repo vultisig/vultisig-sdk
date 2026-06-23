@@ -3,14 +3,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../src/tools/balance/utxoBalance'
 
-const blockchairResponse = (balance: number | null) => ({
+const blockchairResponse = (balance: number | null) => {
+  const body = JSON.stringify({
+    data: {
+      '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa': { address: { balance, balance_usd: 0 } },
+    },
+  })
+  return {
+    ok: true,
+    status: 200,
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  }
+}
+
+// Raw-body helper for high-precision cases where the balance integer exceeds
+// Number.MAX_SAFE_INTEGER and must NOT round-trip through a JS number.
+const blockchairRawResponse = (rawBody: string) => ({
   ok: true,
   status: 200,
-  json: async () => ({
-    data: {
-      '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa': { address: { balance } },
-    },
-  }),
+  text: async () => rawBody,
+  json: async () => JSON.parse(rawBody),
 })
 
 afterEach(() => {
@@ -70,6 +83,48 @@ describe('getUtxoBalance', () => {
     expect(result.satoshis).toBe('0')
     expect(result.balance).toBe('0.00000000')
     expect(result.symbol).toBe('DOGE')
+  })
+
+  it('preserves satoshi precision past Number.MAX_SAFE_INTEGER (DOGE whale)', async () => {
+    // 3e18 base units = 30B DOGE. Number.MAX_SAFE_INTEGER is ~9.0e15, so the
+    // last digits would be lost if the balance round-tripped through a JS
+    // number. The +1 on the last digit is the canary: BigInt(3000000000000000001)
+    // off a parsed number would collapse to ...000.
+    const big = '3000000000000000001'
+    const rawBody = JSON.stringify({
+      data: {
+        D7Y55fkjBjuyo8XBhTQH4Pe9X1zJSUg5pZ: {
+          // balance_usd float deliberately present BEFORE we rely on the regex
+          // scoping to the integer `balance` inside the `address` object.
+          address: { type: null, balance: 0, balance_usd: 1.23 },
+        },
+      },
+      // overwrite the placeholder integer with the un-numberifiable one; the
+      // raw text is what the extractor reads.
+    }).replace('"balance":0', `"balance":${big}`)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(blockchairRawResponse(rawBody) as unknown as Response)
+
+    const result = await getUtxoBalance(UtxoChain.Dogecoin, 'D7Y55fkjBjuyo8XBhTQH4Pe9X1zJSUg5pZ')
+    expect(result.satoshis).toBe(big)
+    expect(result.balance).toBe('30000000000.00000001')
+  })
+
+  it('does not pick up balance_usd or per-utxo values', async () => {
+    // balance_usd appears first lexically inside the address object in some
+    // shapes; ensure the extractor still grabs the integer satoshi balance.
+    const rawBody = '{"data":{"a":{"address":{"balance":123456,"balance_usd":999999.99},"utxo":[{"value":777}]}}}'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(blockchairRawResponse(rawBody) as unknown as Response)
+    const result = await getUtxoBalance(UtxoChain.Bitcoin, '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')
+    expect(result.satoshis).toBe('123456')
+  })
+
+  it('throws on a non-JSON 200 body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '<html>rate limited</html>',
+    } as unknown as Response)
+    await expect(getUtxoBalance(UtxoChain.Bitcoin, '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa')).rejects.toThrow(/non-JSON/i)
   })
 
   it('honours a custom blockchairBase override (proxy/mirror)', async () => {
