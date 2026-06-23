@@ -59,16 +59,22 @@ const fetchTronTokenSymbol = async (contractAddress: string): Promise<string> =>
 
 describe.skipIf(!runLiveTronGridRegistryCheck)('knownTokens[Chain.Tron] live symbol integrity', () => {
   const tronTokens = knownTokens[Chain.Tron]
+  const perTokenTimeoutMs = 1_500 + 12_000
+  const liveTimeoutMs = Math.max(60_000, tronTokens.length * perTokenTimeoutMs)
 
-  it('matches on-chain TRC-20 symbol() metadata', async () => {
-    expect(tronTokens.length).toBeGreaterThan(0)
+  it(
+    'matches on-chain TRC-20 symbol() metadata',
+    async () => {
+      expect(tronTokens.length).toBeGreaterThan(0)
 
-    for (const token of tronTokens) {
-      const tokenId = shouldBePresent(token.id)
-      const symbol = await fetchTronTokenSymbol(tokenId)
+      for (const token of tronTokens) {
+        const tokenId = shouldBePresent(token.id)
+        const symbol = await fetchTronTokenSymbol(tokenId)
 
-      expect(symbol, `${tokenId} symbol()`).toBe(token.ticker)
-      await wait(400)
-    }
-  }, 60_000)
+        expect(symbol, `${tokenId} symbol()`).toBe(token.ticker)
+        await wait(400)
+      }
+    },
+    liveTimeoutMs
+  )
 })
