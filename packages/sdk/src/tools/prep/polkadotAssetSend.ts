@@ -31,12 +31,66 @@ const METHOD_TRANSFER_KEEP_ALIVE = 2
 
 const U32_MAX = 0xffffffff
 
+/**
+ * SS58 address-prefix for Polkadot relay chain + Asset Hub. Substrate chains
+ * (Bittensor prefix=42 → `5xxx`, Kusama prefix=2 → `H/J`, Acala prefix=10 →
+ * `2xxx`, etc.) all share the same 32-byte AccountId under different SS58
+ * prefixes. Operating on one as if it were Polkadot would route to a Polkadot
+ * account derived from those bytes, not the source chain. Pin to 0 so
+ * `decodeAddress` rejects any non-Polkadot SS58. Mirrors mcp-ts
+ * `POLKADOT_SS58_PREFIX` in `src/lib/polkadot.ts`.
+ */
+const POLKADOT_SS58_PREFIX = 0
+
+const EVM_HEX_RE = /^0x[0-9a-fA-F]+$/
+
+/**
+ * Decode a Polkadot SS58 address to its 32-byte AccountId, prefix-pinned to
+ * Polkadot (prefix 0). Mirrors mcp-ts `assertPolkadotAddress`:
+ *
+ *  1. Reject EVM/hex (`0x…`) up front. `decodeAddress('0x<32-byte-hex>', false, 0)`
+ *     SUCCEEDS in polkadot.js (the hex path skips the SS58 prefix/checksum check
+ *     entirely) and returns a 32-byte payload — so the prefix pin alone does NOT
+ *     catch a 32-byte EVM-hex paste. This explicit reject is load-bearing.
+ *  2. Prefix-pin the SS58 decode to 0 so any non-Polkadot substrate address
+ *     (Kusama/Bittensor/Acala — same 32-byte AccountId, different prefix) throws
+ *     on the prefix/checksum check instead of being silently re-routed to the
+ *     same-bytes Polkadot account.
+ *  3. Belt-and-suspenders: reject any payload that isn't exactly 32 bytes.
+ */
+const decodePolkadotAccountId = (addr: string, role: 'sender' | 'destination'): Uint8Array => {
+  if (EVM_HEX_RE.test(addr)) {
+    throw new Error(
+      `Invalid ${role} Polkadot address ${addr}: looks like an EVM/hex address. ` +
+        `Polkadot uses SS58 encoding (prefix=${POLKADOT_SS58_PREFIX}), not 0x-prefixed hex. ` +
+        `Provide a valid Polkadot SS58 address (starts with '1').`
+    )
+  }
+  let decoded: Uint8Array
+  try {
+    decoded = decodeAddress(addr, false, POLKADOT_SS58_PREFIX)
+  } catch (error) {
+    throw new Error(
+      `Invalid ${role} Polkadot address ${addr}: not a valid Polkadot SS58 address ` +
+        `(prefix=${POLKADOT_SS58_PREFIX}). Bittensor (prefix=42, starts with '5'), Kusama ` +
+        `(prefix=2), Acala (prefix=10), and other-substrate addresses share the same ` +
+        `32-byte AccountId — operating on one as Polkadot would route to a Polkadot account ` +
+        `derived from those bytes, not the source chain. ` +
+        `(${error instanceof Error ? error.message : String(error)})`
+    )
+  }
+  if (decoded.length !== 32) {
+    throw new Error(`Invalid ${role} Polkadot address ${addr}: expected a 32-byte AccountId.`)
+  }
+  return decoded
+}
+
 export type PreparePolkadotAssetSendParams = {
   /** Asset Hub asset id (u32). USDT=1984, USDC=1337. */
   assetId: number
-  /** Sender Polkadot SS58 address (prefix 0). Echoed back; not encoded into the call body. */
+  /** Sender Polkadot SS58 address (prefix 0). Validated as SS58; echoed back, not encoded into the call body. */
   from: string
-  /** Destination Polkadot SS58 address. Decoded to its 32-byte AccountId and SCALE-encoded into the call. */
+  /** Destination Polkadot SS58 address (prefix 0). Prefix-pinned decode to its 32-byte AccountId, then SCALE-encoded into the call. EVM-hex and wrong-chain SS58 are rejected. */
   to: string
   /** Amount in token base units (e.g. 1 USDT/USDC = 1_000_000 at 6 decimals). */
   amount: bigint
@@ -93,8 +147,8 @@ export type PreparePolkadotAssetSendResult = {
  * ```ts
  * const tx = preparePolkadotAssetSend({
  *   assetId: 1984, // USDT
- *   from: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp',
- *   to: '12gpf8 FaqdC1S2gQ...',
+ *   from: '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5',
+ *   to: '14E5nqKAp3oAJcmzgZhUD2RcptBeUBScxKHgJKU4HPNcKVf3',
  *   amount: 1_000_000n, // 1 USDT (6 decimals)
  * })
  * // tx.callHex -> '0x3202d1051d00...'
@@ -113,20 +167,18 @@ export const preparePolkadotAssetSend = (params: PreparePolkadotAssetSendParams)
     throw new Error('Sender address (from) is required')
   }
 
-  // Decode the destination SS58 address to its 32-byte AccountId. decodeAddress
-  // validates the SS58 checksum and rejects malformed addresses, so this also
-  // serves as recipient validation.
-  let toAccountId: Uint8Array
-  try {
-    toAccountId = decodeAddress(to)
-  } catch (error) {
-    throw new Error(
-      `Invalid destination Polkadot address ${to}: ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-  if (toAccountId.length !== 32) {
-    throw new Error(`Invalid destination Polkadot address ${to}: expected a 32-byte AccountId.`)
-  }
+  // Validate `from` as a Polkadot SS58 address for parity with mcp-ts
+  // (`assertPolkadotAddress(from, 'sender')`). `from` is echoed back, not
+  // encoded into the signed call body, so it can't misroute funds — but
+  // validating it keeps the two implementations in lockstep and rejects an
+  // obviously-wrong sender (EVM-hex / wrong-chain SS58) early.
+  decodePolkadotAccountId(from, 'sender')
+
+  // Decode the destination SS58 address to its 32-byte AccountId, prefix-pinned
+  // to Polkadot (prefix 0) with an explicit EVM-hex reject. This is the
+  // wrong-chain-paste guard: a Kusama/Bittensor SS58 or a 32-byte EVM-hex `to`
+  // is rejected here instead of being silently SCALE-encoded as the recipient.
+  const toAccountId = decodePolkadotAccountId(to, 'destination')
 
   const knownAsset = POLKADOT_ASSET_HUB_KNOWN_ASSETS[assetId]
   const decimals = params.decimals ?? knownAsset?.decimals
