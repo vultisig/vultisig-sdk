@@ -164,6 +164,44 @@ const SALT_DOMAIN = {
 const SALT_TYPES = { Mail: [{ name: 'contents', type: 'string' }] }
 const SALT_MESSAGE = { contents: 'hello salt' }
 
+// Nested struct + array-of-struct (the canonical EIP-712 Mail example) — the
+// removed hand-rolled encoder had its own recursive struct / array path; this
+// pins viem's handling of `Person[]` and a nested `Person` member vs ethers.
+const NESTED_DOMAIN = {
+  name: 'Ether Mail',
+  version: '1',
+  chainId: 1,
+  verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
+}
+const NESTED_TYPES = {
+  Person: [
+    { name: 'name', type: 'string' },
+    { name: 'wallets', type: 'address[]' },
+  ],
+  Mail: [
+    { name: 'from', type: 'Person' },
+    { name: 'to', type: 'Person[]' },
+    { name: 'contents', type: 'string' },
+  ],
+}
+const NESTED_MESSAGE = {
+  from: {
+    name: 'Cow',
+    wallets: ['0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826', '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF'],
+  },
+  to: [
+    {
+      name: 'Bob',
+      wallets: [
+        '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
+        '0xB0BdaBea57B0BDABeA57b0bdABEA57b0BDabEa57',
+        '0xB0B0b0b0b0b0B000000000000000000000000000',
+      ],
+    },
+  ],
+  contents: 'Hello, Bob!',
+}
+
 describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
   it('flat ERC-2612 permit matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
@@ -176,6 +214,25 @@ describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
     })
 
     expect(recent.success).toBe(true)
+    expectCanonicalHash(recent.data?.hash, PERMIT_DOMAIN, PERMIT_TYPES, 'Permit', PERMIT_MESSAGE)
+  })
+
+  it('string chainId hashes identically to the numeric form (matches ethers/on-chain)', async () => {
+    // The JSON wire occasionally double-stringifies chainId. viem hashes a
+    // string chainId to a DIFFERENT digest than the numeric form, but ethers
+    // (the app encoder + on-chain DOMAIN_SEPARATOR) coerces both to the same
+    // value. The executor must coerce so its digest matches the contract's.
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-permit-strchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: String(PERMIT_DOMAIN.chainId) },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    // Pin against the NUMERIC-chainId canonical hash (viem == ethers).
     expectCanonicalHash(recent.data?.hash, PERMIT_DOMAIN, PERMIT_TYPES, 'Permit', PERMIT_MESSAGE)
   })
 
@@ -267,6 +324,20 @@ describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
 
     expect(recent.success).toBe(true)
     expectCanonicalHash(recent.data?.hash, SALT_DOMAIN, SALT_TYPES, 'Mail', SALT_MESSAGE)
+  })
+
+  it('nested struct + array-of-struct (Ether Mail) matches both reference encoders', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-712-nested', {
+      domain: NESTED_DOMAIN,
+      types: NESTED_TYPES,
+      primaryType: 'Mail',
+      message: NESTED_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    expectCanonicalHash(recent.data?.hash, NESTED_DOMAIN, NESTED_TYPES, 'Mail', NESTED_MESSAGE)
   })
 
   it('caller-supplied explicit types.EIP712Domain is stripped and matches canonical hash', async () => {

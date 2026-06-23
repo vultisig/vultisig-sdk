@@ -2058,12 +2058,39 @@ function computeEIP712Hash(
   // payload shapes hash identically.
   const messageTypes = { ...types }
   delete messageTypes.EIP712Domain
+
+  // Normalize a string `chainId` to a number. The agent backend serialises
+  // chainId as a JS number, but the JSON wire occasionally double-stringifies
+  // primitives (`domain.chainId` is typed `number | string` upstream).
+  // Crucially, viem hashes a string `chainId` ("137") to a DIFFERENT digest
+  // than the numeric form (137) — whereas ethers `TypedDataEncoder.hash` (the
+  // app's encoder, and what the on-chain DOMAIN_SEPARATOR matches) coerces
+  // both to the same value. Coerce here so our digest agrees with theirs.
+  const normalizedDomain = domain.chainId !== undefined ? { ...domain, chainId: coerceChainId(domain.chainId) } : domain
+
   return hashTypedData({
-    domain,
+    domain: normalizedDomain,
     types: messageTypes,
     primaryType,
     message,
   } as Parameters<typeof hashTypedData>[0])
+}
+
+/**
+ * Coerce an EIP-712 `domain.chainId` (which may arrive as a number or a
+ * decimal/hex string over the JSON wire) to a number. Mirrors the app's
+ * `coerceChainId` in vultiagent-app/src/services/eip712Signing.ts. Throws on
+ * an empty/unparseable value rather than letting viem hash a wrong digest.
+ */
+function coerceChainId(raw: unknown): number | bigint {
+  if (typeof raw === 'number' || typeof raw === 'bigint') return raw
+  const s = String(raw).trim()
+  if (s === '') {
+    throw new Error('EIP-712 domain.chainId is empty')
+  }
+  if (/^[0-9]+$/.test(s)) return Number(s)
+  if (/^0x[0-9a-fA-F]+$/.test(s)) return Number(s)
+  throw new Error(`EIP-712 domain.chainId not parseable: ${String(raw)}`)
 }
 
 /**
