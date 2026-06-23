@@ -108,6 +108,21 @@ describe('buildSplTransfer (pure-crypto unsigned SPL transfer)', () => {
       )
     })
 
+    it('rejects amounts above the u64 maximum (silent-wrap trap)', () => {
+      const u64max = (1n << 64n) - 1n
+      // u64max itself is fine and round-trips through the encoded instruction.
+      const ok = buildSplTransfer({ mint: USDC_MINT, from: FROM, to: TO, amount: u64max, decimals: 6 })
+      expect(Buffer.from(ok.instruction.data, 'base64').readBigUInt64LE(1)).toBe(u64max)
+      // u64max + 1 would wrap to 0 in the encoded u64; u64max + 1000 to 999.
+      // Both must throw rather than silently mis-encode.
+      expect(() => buildSplTransfer({ mint: USDC_MINT, from: FROM, to: TO, amount: u64max + 1n, decimals: 6 })).toThrow(
+        /u64 maximum/
+      )
+      expect(() =>
+        buildSplTransfer({ mint: USDC_MINT, from: FROM, to: TO, amount: u64max + 1000n, decimals: 6 })
+      ).toThrow(/u64 maximum/)
+    })
+
     it('rejects out-of-range decimals', () => {
       expect(() => buildSplTransfer({ mint: USDC_MINT, from: FROM, to: TO, amount: 1n, decimals: 256 })).toThrow(
         /decimals/

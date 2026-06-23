@@ -4,7 +4,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token'
-import { type AccountMeta,PublicKey } from '@solana/web3.js'
+import { type AccountMeta, PublicKey } from '@solana/web3.js'
 
 /**
  * Result of {@link buildSplTransfer}: a fully-derived, *unsigned* SPL token
@@ -74,13 +74,16 @@ export type BuildSplTransferParams = {
   isToken2022?: boolean
 }
 
+/** SPL token amounts are encoded as a little-endian u64 in the instruction data. */
+const U64_MAX = (1n << 64n) - 1n
+
 const isValidSolanaPubkey = (addr: string): boolean => {
   try {
     // PublicKey throws on non-base58 / wrong-length input; on-curve check is
     // intentionally NOT applied (ATAs are off-curve PDAs, owners are on-curve —
     // a plain 32-byte base58 string is the right bar here, mirroring the
     // mcp-ts isValidSolanaAddress guard).
-     
+
     new PublicKey(addr)
     return true
   } catch {
@@ -103,7 +106,9 @@ const isValidSolanaPubkey = (addr: string): boolean => {
  *  - `from`/`to`/`mint` must each be valid 32-byte base58 pubkeys.
  *  - `to !== mint` — sending to the mint account itself credits an ATA owned by
  *    the mint authority (funds lost), so it is rejected explicitly.
- *  - `amount > 0`.
+ *  - `amount > 0` and `amount <= u64 max` (the on-chain instruction encodes a
+ *    little-endian u64, which the SPL layout wraps silently — guarding here
+ *    keeps the returned `amount` and the signing bytes in agreement).
  *
  * @example
  * ```ts
@@ -142,6 +147,19 @@ export const buildSplTransfer = (params: BuildSplTransferParams): SplTransferRes
   }
   if (amount <= 0n) {
     throw new Error('buildSplTransfer: amount must be greater than zero')
+  }
+  // Fund-safety: SPL `transferChecked` writes `amount` as a little-endian u64.
+  // `@solana/spl-token` wraps (mod 2^64) silently instead of throwing, so
+  // `amount = U64_MAX + 1` would report a huge `amount` string but encode `0`
+  // bytes (and `U64_MAX + 1000` would encode `999`) — the returned result and
+  // the signing-ready instruction data would disagree. Reject above u64 here so
+  // the instruction we hand the on-device signer always matches the reported
+  // amount.
+  if (amount > U64_MAX) {
+    throw new Error(
+      `buildSplTransfer: amount ${amount} exceeds the u64 maximum (${U64_MAX}); ` +
+        'SPL token amounts must fit in a 64-bit unsigned integer.'
+    )
   }
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) {
     throw new Error(`buildSplTransfer: decimals must be an integer in [0, 255], got ${decimals}`)
