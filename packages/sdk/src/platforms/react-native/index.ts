@@ -211,6 +211,15 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// DeFi protocol primitives (build UNSIGNED calldata only). viem-backed and
+// RN-safe — `buildArkisSupplyTx` / `parseArkisTokenAmount` are pure (viem
+// `encodeFunctionData`), and `resolveArkisPoolKind`'s read-only `eth_call`
+// rides the same externalized core-chain EVM client as the evm tools above.
+// The generic entry (src/index.ts) exposes this via the `defi` namespace; the
+// RN allow-list omitted it so RN consumers (Station, Windows ext) couldn't
+// build an unsigned Arkis supply tx and had to drag the Arkis SDK.
+export { type Defi, defi } from '../../tools/defi'
+
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted
