@@ -393,6 +393,7 @@ export type {
   CoinKey,
   CoinMetadata,
   DecodeFromToolResultInput,
+  Defi,
   Envelope,
   EnvelopeKind,
   FieldDiff,
@@ -420,7 +421,6 @@ export type {
   VaultIdentity,
   Verdict,
 } from './tools'
-export { type Defi, defi } from './tools'
 export {
   abiDecode,
   abiEncode,
