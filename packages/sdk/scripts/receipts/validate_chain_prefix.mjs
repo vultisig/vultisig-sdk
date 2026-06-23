@@ -40,6 +40,16 @@ const ethOnEth = validate.chainPrefix(
 console.log('  eth address on ethereum:')
 console.log('   ', JSON.stringify(ethOnEth))
 
+console.log('\n=== valoper field-aware routing (cosmos staking, ported from Go cosmosValopers) ===')
+const COSMOS_DELEGATOR = 'cosmos1qnk2n4nlkpw9xfqntladh74er2xa62wgas5zg'
+const COSMOS_VALOPER = 'cosmosvaloper1clpqr4nrk4khgkxj78fcwwh6dl3uw4epsluffn'
+const delegatorAsValidator = validate.chainPrefix(COSMOS_DELEGATOR, 'cosmos', 'validator')
+const valoperAsValidator = validate.chainPrefix(COSMOS_VALOPER, 'cosmos', 'validator')
+console.log('  cosmos1… delegator on a validator_address field (must be blocked):')
+console.log('   ', JSON.stringify(delegatorAsValidator))
+console.log('  cosmosvaloper1… operator on a validator_address field (must pass):')
+console.log('   ', JSON.stringify(valoperAsValidator))
+
 console.log('\n=== assertions ===')
 const checks = [
   ['osmo->cosmos', address.classify('osmo1z0qrq605sjgcqpylfl4aa6s90x738j7m58wyat') === 'cosmos'],
@@ -48,6 +58,12 @@ const checks = [
   ['btc->btc', address.classify('bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq') === 'btc'],
   ['osmo-as-eth is mismatch', osmoOnEth.valid === false && osmoOnEth.reason === 'mismatch'],
   ['eth-on-eth is match', ethOnEth.valid === true && ethOnEth.reason === 'match'],
+  // valoper fund-safety: a cosmos1… delegator must NOT pass as a validator, a
+  // cosmosvaloper1… operator MUST pass. Account role keeps account semantics.
+  ['cosmos1 delegator blocked on validator field', delegatorAsValidator.valid === false && delegatorAsValidator.reason === 'mismatch'],
+  ['cosmosvaloper1 operator passes on validator field', valoperAsValidator.valid === true && valoperAsValidator.reason === 'match'],
+  ['valoper rejected under account role', address.isValidFor(COSMOS_VALOPER, 'cosmos') === false],
+  ['valoper string not misread as solana', address.classify(COSMOS_VALOPER) !== 'solana'],
 ]
 let ok = true
 for (const [name, pass] of checks) {

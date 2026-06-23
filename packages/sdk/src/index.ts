@@ -56,7 +56,7 @@ export {
   isSolanaAddress,
   supportedChainTags,
 } from './utils/addressFormat'
-export type { AddressFamily, ChainPrefixResult } from './utils/addressValidation'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
 export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
 

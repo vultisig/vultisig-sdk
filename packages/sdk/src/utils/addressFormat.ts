@@ -96,6 +96,7 @@ const reSolanaBase58Alphabet = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
  * Ported from chain_prefix_extractor.go knownBech32HRPs.
  */
 const knownBech32HRPs = [
+  // Account HRPs — verbatim from Go knownBech32HRPs.
   'cosmos1',
   'osmo1',
   'thor1',
@@ -116,6 +117,25 @@ const knownBech32HRPs = [
   'cre1',
   'stars1',
   'juno1',
+  // Validator-operator (valoper) HRPs — Go carries these so a valoper bech32
+  // string that happens to base58-decode to 32 bytes is never misread as a
+  // Solana key. Ported 1:1 from Go knownBech32HRPs (chain_prefix_extractor.go).
+  'cosmosvaloper1',
+  'osmovaloper1',
+  'kujivaloper1',
+  'dydxvaloper1',
+  'akashvaloper1',
+  'stridevaloper1',
+  'terravaloper1',
+  'seivaloper1',
+  'kavavaloper1',
+  'persistencevaloper1',
+  'axelarvaloper1',
+  'secretvaloper1',
+  'starsvaloper1',
+  'junovaloper1',
+  // qbtc is SDK-local (Go's base list lacks it); the qbtc account HRP is part
+  // of chainHRPMap below so we keep it here too for the Solana-decode guard.
   'qbtc1',
 ]
 
@@ -164,6 +184,41 @@ const cosmosHRPByChain: Record<string, string> = {
   stargaze: 'stars',
   juno: 'juno',
   qbtc: 'qbtc',
+}
+
+/**
+ * Cosmos validator-operator (valoper) HRP table: canonical chain tag ->
+ * valoper bech32 HRP. Ported 1:1 from Go `cosmosValopers`
+ * (chain_prefix_extractor.go).
+ *
+ * Staking builds carry the validator address under `validator_address`,
+ * `validator_src_address`, `validator_dst_address` — those fields use the
+ * valoper prefix (`<chain>valoper1…`), NOT the account prefix (`<chain>1…`).
+ * Validating a validator field against the ACCOUNT rule is a fund-safety
+ * regression: it silently passes a `cosmos1…` delegator address where a
+ * validator operator is required, and wrongly rejects a valid
+ * `cosmosvaloper1…` operator address.
+ *
+ * Chains with no public staking validators (thorchain, mayachain, noble,
+ * injective, celestia, crescent, qbtc) are intentionally omitted to match Go
+ * and avoid false-block risk on non-standard/permissioned staking surfaces.
+ */
+const cosmosValoperByChain: Record<string, string> = {
+  cosmos: 'cosmosvaloper',
+  osmosis: 'osmovaloper',
+  kujira: 'kujivaloper',
+  dydx: 'dydxvaloper',
+  akash: 'akashvaloper',
+  stride: 'stridevaloper',
+  terra: 'terravaloper',
+  terraclassic: 'terravaloper',
+  sei: 'seivaloper',
+  kava: 'kavavaloper',
+  persistence: 'persistencevaloper',
+  axelar: 'axelarvaloper',
+  secret: 'secretvaloper',
+  stargaze: 'starsvaloper',
+  juno: 'junovaloper',
 }
 
 /** All cosmos HRP bodies (deduped) for family classification. */
@@ -336,16 +391,44 @@ export function classifyAddress(address: string): AddressFamily {
 }
 
 /**
+ * Address role within a tool call. Mirrors the Go validator's field-aware
+ * routing (chain_prefix_extractor.go):
+ *  - `account`   — a normal account/recipient address (default). Validated
+ *    against the chain's account HRP (`<chain>1…`).
+ *  - `validator` — a validator-operator address (staking `validator_address`,
+ *    `validator_src_address`, `validator_dst_address`). On cosmos chains with a
+ *    valoper HRP, validated against the valoper rule (`<chain>valoper1…`).
+ */
+export type AddressRole = 'account' | 'validator'
+
+/**
  * isAddressValidForChain returns true when `address` is a valid FORMAT for
  * `chain` (HRP / prefix / regex match), false on a format/prefix mismatch, and
  * `undefined` when `chain` has no FORMAT rule in the table (caller cannot
  * decide — same semantics as the backend's `!ok` skip on chainHRPMap).
+ *
+ * When `role === 'validator'` and the (cosmos) chain defines a valoper HRP, the
+ * address is validated against the valoper rule (`<chain>valoper1…`) instead of
+ * the account rule. This ports the Go `cosmosValopers` / `validatorAddressFields`
+ * switch: a staking validator field must carry a `cosmosvaloper1…` operator
+ * address, NOT a `cosmos1…` delegator address. Chains without a valoper entry
+ * fall back to the account rules (matches Go's `effectiveRules = rules` default).
  */
-export function isAddressValidForChain(address: string, chain: string): boolean | undefined {
+export function isAddressValidForChain(
+  address: string,
+  chain: string,
+  role: AddressRole = 'account'
+): boolean | undefined {
   const tag = canonicalChainTag(chain)
   const rules = chainFormatRules[tag]
   if (!rules) return undefined
   const addr = address.trim()
+  if (role === 'validator') {
+    const valoperHRP = cosmosValoperByChain[tag]
+    if (valoperHRP) {
+      return cosmosHRPRegex(valoperHRP).test(addr)
+    }
+  }
   return rules.some(rule => rule(addr))
 }
 

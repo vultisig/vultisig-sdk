@@ -15,6 +15,9 @@ const ADDR = {
   sui: '0x0000000000000000000000000000000000000000000000000000000000000002',
   tron: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
   xrp: 'rDsbeomae4FXwgQTJp9Rs64Qg9vDiTCdBv',
+  // Cosmos delegator (account) vs validator-operator (valoper) addresses.
+  cosmosValoper: 'cosmosvaloper1clpqr4nrk4khgkxj78fcwwh6dl3uw4epsluffn',
+  osmoValoper: 'osmovaloper1clpqr4nrk4khgkxj78fcwwh6dl3uw4epsluffn',
 }
 
 describe('classifyAddress', () => {
@@ -53,6 +56,12 @@ describe('isSolanaAddress', () => {
   it('rejects an EVM address', () => {
     expect(isSolanaAddress(ADDR.eth)).toBe(false)
   })
+  it('rejects valoper bech32 strings via the known-HRP guard (Go parity)', () => {
+    // cosmosvaloper1 / osmovaloper1 are now in knownBech32HRPs (matches Go),
+    // so a valoper string is never misclassified as a Solana key.
+    expect(isSolanaAddress(ADDR.cosmosValoper)).toBe(false)
+    expect(isSolanaAddress(ADDR.osmoValoper)).toBe(false)
+  })
 })
 
 describe('isAddressValidForChain', () => {
@@ -73,6 +82,40 @@ describe('isAddressValidForChain', () => {
   })
   it('returns undefined for a chain with no FORMAT rule', () => {
     expect(isAddressValidForChain(ADDR.eth, 'madeupchain')).toBeUndefined()
+  })
+
+  // Valoper field-aware routing (ported from Go cosmosValopers). A validator
+  // operator address must carry the <chain>valoper1… HRP, not the account HRP.
+  describe("role: 'validator' (cosmos valoper HRP)", () => {
+    it('accepts a cosmosvaloper1 address as a validator field on cosmos', () => {
+      expect(isAddressValidForChain(ADDR.cosmosValoper, 'cosmos', 'validator')).toBe(true)
+    })
+    it('rejects a cosmos1 delegator address on a validator field (fund-safety)', () => {
+      // The whole point of cosmosValopers: a cosmos1… delegator must NOT pass
+      // where a cosmosvaloper1… operator is required.
+      expect(isAddressValidForChain(ADDR.cosmos, 'cosmos', 'validator')).toBe(false)
+    })
+    it('rejects a valoper address on the account role (account rule, not valoper)', () => {
+      expect(isAddressValidForChain(ADDR.cosmosValoper, 'cosmos', 'account')).toBe(false)
+      expect(isAddressValidForChain(ADDR.cosmosValoper, 'cosmos')).toBe(false)
+    })
+    it('routes per-chain valoper HRP (osmovaloper on osmosis, alias-aware)', () => {
+      expect(isAddressValidForChain(ADDR.osmoValoper, 'osmosis', 'validator')).toBe(true)
+      expect(isAddressValidForChain(ADDR.osmoValoper, 'osmo', 'validator')).toBe(true)
+      // wrong-chain valoper HRP is a mismatch
+      expect(isAddressValidForChain(ADDR.cosmosValoper, 'osmosis', 'validator')).toBe(false)
+    })
+    it('terraclassic shares the terravaloper HRP with terra (Go parity)', () => {
+      const terraValoper = 'terravaloper1clpqr4nrk4khgkxj78fcwwh6dl3uw4epsluffn'
+      expect(isAddressValidForChain(terraValoper, 'terra', 'validator')).toBe(true)
+      expect(isAddressValidForChain(terraValoper, 'terraclassic', 'validator')).toBe(true)
+    })
+    it('falls back to account rules for chains with no valoper entry (thorchain)', () => {
+      // thorchain is intentionally omitted from cosmosValopers — validator role
+      // falls back to the account HRP rather than over-blocking.
+      const thorAddr = 'thor1clpqr4nrk4khgkxj78fcwwh6dl3uw4epsluffn'
+      expect(isAddressValidForChain(thorAddr, 'thorchain', 'validator')).toBe(true)
+    })
   })
 })
 
@@ -100,6 +143,16 @@ describe('validate.chainPrefix', () => {
   })
   it('checkChainPrefix is the same function as validate.chainPrefix', () => {
     expect(checkChainPrefix(ADDR.osmo, 'ethereum')).toEqual(validate.chainPrefix(ADDR.osmo, 'ethereum'))
+  })
+  it('validator role flags a cosmos1 delegator passed as a validator address', () => {
+    const r = validate.chainPrefix(ADDR.cosmos, 'cosmos', 'validator')
+    expect(r.valid).toBe(false)
+    expect(r.reason).toBe('mismatch')
+  })
+  it('validator role passes a cosmosvaloper1 operator address', () => {
+    const r = validate.chainPrefix(ADDR.cosmosValoper, 'cosmos', 'validator')
+    expect(r.valid).toBe(true)
+    expect(r.reason).toBe('match')
   })
 })
 

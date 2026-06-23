@@ -16,7 +16,7 @@
  * No network, no signing.
  */
 
-import { canonicalChainTag, classifyAddress, isAddressValidForChain } from './addressFormat'
+import { type AddressRole, canonicalChainTag, classifyAddress, isAddressValidForChain } from './addressFormat'
 
 /** Result of a chain-prefix check. */
 export type ChainPrefixResult = {
@@ -52,11 +52,17 @@ export type ChainPrefixResult = {
  * chain is absent from the HRP map) so this never over-blocks a legitimate
  * address on a chain the SDK doesn't yet have a format rule for.
  *
+ * When `role === 'validator'` the address is checked against the chain's
+ * valoper HRP (cosmos staking validator fields), mirroring the Go validator's
+ * field-aware routing. Defaults to `'account'`.
+ *
  * @example
  * checkChainPrefix('osmo1...', 'ethereum').valid // false (HRP mismatch)
  * checkChainPrefix('0xabc...40hex', 'ethereum').valid // true
+ * checkChainPrefix('cosmos1...', 'cosmos', 'validator').valid // false (needs cosmosvaloper1)
+ * checkChainPrefix('cosmosvaloper1...', 'cosmos', 'validator').valid // true
  */
-export function checkChainPrefix(address: string, chain: string): ChainPrefixResult {
+export function checkChainPrefix(address: string, chain: string, role: AddressRole = 'account'): ChainPrefixResult {
   const addr = (address ?? '').trim()
   const canonicalChain = canonicalChainTag(chain ?? '')
   const detectedFamily = classifyAddress(addr)
@@ -72,7 +78,7 @@ export function checkChainPrefix(address: string, chain: string): ChainPrefixRes
     }
   }
 
-  const formatValid = isAddressValidForChain(addr, chain)
+  const formatValid = isAddressValidForChain(addr, chain, role)
   if (formatValid === undefined) {
     // No FORMAT rule for this chain — cannot decide, fail open.
     return {
