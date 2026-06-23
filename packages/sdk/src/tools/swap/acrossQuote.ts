@@ -1,5 +1,7 @@
 import { getAddress, isAddress } from 'viem'
 
+import { assertSafeDestination } from '../../utils/dangerousAddresses'
+
 /**
  * Across bridge quote (read-only).
  *
@@ -254,6 +256,11 @@ export async function acrossQuote(params: AcrossQuoteParams): Promise<AcrossQuot
   })
   if (params.to) {
     const recipient = requireChecksummedAddress('to', String(params.to).trim())
+    // Fund-safety: reject known burn/dead recipients before forwarding to Across
+    // (ported from the mcp-ts `across.ts` source contract — the SDK port had
+    // silently dropped this guard). Read-only quote today, but the guard must
+    // be in place before any build/sign step is layered on the recipient.
+    assertSafeDestination(destinationChain, recipient)
     search.set('recipient', recipient)
   }
 

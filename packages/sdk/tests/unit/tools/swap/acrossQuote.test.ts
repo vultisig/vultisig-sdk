@@ -103,6 +103,27 @@ describe('acrossQuote', () => {
     expect(calledUrl).toContain('recipient=0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045')
   })
 
+  // Canonical lowercase burn addresses — viem's `isAddress` accepts all-lowercase
+  // as a valid (non-checksummed) address, so these pass address validation and
+  // MUST be caught by the burn-guard before being forwarded to Across.
+  it.each([
+    ['0x0000000000000000000000000000000000000000'],
+    ['0x000000000000000000000000000000000000dead'],
+    ['0xdead000000000000000042069420694206942069'],
+  ])('rejects a burn-address recipient (%s) before any network call', async burnRecipient => {
+    await expect(
+      acrossQuote({
+        sourceChain: 'Ethereum',
+        destinationChain: 'Base',
+        inputToken: ETH_USDC,
+        outputToken: BASE_USDC,
+        amount: '1000000',
+        to: burnRecipient,
+      })
+    ).rejects.toThrow(/Refusing to build transaction/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('rejects a non-Ethereum origin (current factory slice)', async () => {
     await expect(
       acrossQuote({

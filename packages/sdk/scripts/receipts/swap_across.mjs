@@ -56,6 +56,25 @@ const main = async () => {
   console.log(`quote_id:                ${quote.quoteId ?? 'n/a'}`)
   console.log('')
   console.log('OK — live quote fetched, SpokePools verified, no broadcast.')
+
+  // Fund-safety guard: a burn/dead recipient must be rejected BEFORE any
+  // network call (ported from the mcp-ts `across.ts` source contract).
+  console.log('')
+  console.log('burn-guard check (recipient = 0xdead…942069):')
+  try {
+    await acrossQuote({ ...route, to: '0xdead000000000000000042069420694206942069' })
+    console.error('BURN GUARD FAILED: a burn recipient was NOT rejected')
+    process.exit(1)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (!/Refusing to build transaction/.test(msg)) {
+      console.error('BURN GUARD FAILED: unexpected error', msg)
+      process.exit(1)
+    }
+    console.log(`  rejected as expected → ${msg}`)
+  }
+  console.log('')
+  console.log('OK — burn-address recipient rejected pre-flight.')
 }
 
 main().catch(err => {
