@@ -163,12 +163,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * DeFi protocol primitives. Builds UNSIGNED calldata only (e.g.
-   * `sdk.defi.arkis.buildArkisSupplyTx(...)`) — never signs or broadcasts. The
-   * surface is multi-consumer: any affiliate/fee param is injectable and
-   * defaults to neutral/off, with no consumer identity hardcoded.
+   * DeFi protocol primitives (`sdk.defi.*`).
+   *
+   * Pure unsigned-calldata builders — nothing here signs or broadcasts; the wallet/MPC layer signs the returned tx.
    */
-  public get defi(): Defi {
+  get defi(): Defi {
     return defi
   }
 

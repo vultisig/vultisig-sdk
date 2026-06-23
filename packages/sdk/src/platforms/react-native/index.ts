@@ -211,14 +211,24 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
-// DeFi protocol primitives (build UNSIGNED calldata only). viem-backed and
-// RN-safe — `buildArkisSupplyTx` / `parseArkisTokenAmount` are pure (viem
-// `encodeFunctionData`), and `resolveArkisPoolKind`'s read-only `eth_call`
-// rides the same externalized core-chain EVM client as the evm tools above.
-// The generic entry (src/index.ts) exposes this via the `defi` namespace; the
-// RN allow-list omitted it so RN consumers (Station, Windows ext) couldn't
-// build an unsigned Arkis supply tx and had to drag the Arkis SDK.
-export { type Defi, defi } from '../../tools/defi'
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (arkis + balancer + pendle + 3jane).
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  Defi,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
