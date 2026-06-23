@@ -8,6 +8,20 @@ export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4By
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope)
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
+
 // Swap
 export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
 export {
