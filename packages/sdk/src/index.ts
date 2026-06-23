@@ -352,6 +352,9 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   Coin,
   CoinKey,
   CoinMetadata,
@@ -367,6 +370,8 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  acrossQuote,
+  acrossSupportedChains,
   chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,

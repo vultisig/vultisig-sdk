@@ -9,8 +9,17 @@ export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMe
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
 // Swap
-export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
+export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
+  FindSwapQuoteParams,
+  NativeSwapMinAmountIn,
+  SwapQuote,
+} from './swap'
 export {
+  acrossQuote,
+  acrossSupportedChains,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
