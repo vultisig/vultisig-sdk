@@ -234,6 +234,92 @@ function validateTimeoutHeight(s: string): string | null {
   return null
 }
 
+/**
+ * Resolve (sourceChannel, destChain) from the supported registry given the
+ * caller's (already-normalised) fromChain + optional rawSourceChannel/rawToChainId.
+ * Throws an actionable error on any unresolvable / mismatched / unknown route.
+ * Pure lookup against IBC_CHANNEL_DEST — no fund fields are mutated here.
+ */
+function resolveRoute(
+  fromChain: string,
+  rawSourceChannel: string,
+  rawToChainId: string
+): { sourceChannel: string; destChain: string } {
+  if (rawSourceChannel && rawToChainId) {
+    const resolvedDest = IBC_CHANNEL_DEST[`${fromChain}/${rawSourceChannel}` as ChannelKey]
+    if (!resolvedDest) {
+      throw new Error(
+        `unknown channel ${rawSourceChannel} on ${fromChain}: supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none)'}`
+      )
+    }
+    if (resolvedDest !== rawToChainId) {
+      throw new Error(
+        `channel ${rawSourceChannel} on ${fromChain} routes to ${resolvedDest}, NOT ${rawToChainId}. ` +
+          `Pass toChainId=${rawToChainId} alone, or omit toChainId and use sourceChannel=${rawSourceChannel} for a transfer to ${resolvedDest}.`
+      )
+    }
+    return { sourceChannel: rawSourceChannel, destChain: resolvedDest }
+  }
+
+  if (rawToChainId) {
+    const resolved = resolveSourceChannelByDestChain(fromChain, rawToChainId)
+    if (!resolved) {
+      const supported = supportedIbcDestinationsFrom(fromChain)
+      throw new Error(
+        supported.length > 0
+          ? `no supported IBC channel from ${fromChain} to ${rawToChainId}. Supported destinations from ${fromChain}: ${supported.join(', ')}.`
+          : `no supported IBC routes from ${fromChain}. Pick a source chain among: phoenix-1, columbus-5, cosmoshub-4, osmosis-1.`
+      )
+    }
+    return { sourceChannel: resolved, destChain: rawToChainId }
+  }
+
+  if (rawSourceChannel) {
+    const resolvedDest = IBC_CHANNEL_DEST[`${fromChain}/${rawSourceChannel}` as ChannelKey]
+    if (!resolvedDest) {
+      throw new Error(
+        `unknown channel ${rawSourceChannel} on ${fromChain}: supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none)'}. ` +
+          `Tip: pass toChainId=<destination chain ID> and omit sourceChannel.`
+      )
+    }
+    return { sourceChannel: rawSourceChannel, destChain: resolvedDest }
+  }
+
+  throw new Error(
+    `prepareIbcTransfer requires either sourceChannel OR toChainId. ` +
+      `Preferred: pass toChainId=<destination chain ID> and let the builder resolve the channel. ` +
+      `Supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none — pick a different source chain)'}.`
+  )
+}
+
+/**
+ * Resolve the IBC timeout_timestamp (Unix nanoseconds string). Caller-supplied
+ * values are sanity-checked (integer, >= year-2020 in ns, strictly in the
+ * future relative to nowMs); when omitted, defaults to now + 10 minutes in ns.
+ * No network read — pure arithmetic. Throws on a malformed/past timestamp.
+ */
+function resolveTimeoutTimestamp(raw: string | undefined, nowMs: number): string {
+  const timeoutTimestampStr = raw?.trim() ?? ''
+  if (!timeoutTimestampStr) {
+    return String(BigInt(nowMs + 10 * 60 * 1000) * 1_000_000n)
+  }
+  if (!/^\d+$/.test(timeoutTimestampStr)) {
+    throw new Error(`invalid timeoutTimestamp "${timeoutTimestampStr}": must be a positive integer (Unix nanoseconds)`)
+  }
+  const tsNs = BigInt(timeoutTimestampStr)
+  if (tsNs < MIN_TIMEOUT_NS) {
+    throw new Error(
+      `timeoutTimestamp "${timeoutTimestampStr}" appears to be in seconds or milliseconds, not nanoseconds: value must be >= ${MIN_TIMEOUT_NS.toString()} (year 2020 in ns)`
+    )
+  }
+  if (tsNs <= BigInt(nowMs) * 1_000_000n) {
+    throw new Error(
+      `timeoutTimestamp "${timeoutTimestampStr}" is already in the past: provide a future nanosecond timestamp`
+    )
+  }
+  return timeoutTimestampStr
+}
+
 // ── public surface ────────────────────────────────────────────────────────────
 
 export const IBC_MSG_TRANSFER_TYPE_URL = '/ibc.applications.transfer.v1.MsgTransfer'
@@ -351,55 +437,7 @@ export function prepareIbcTransfer(params: PrepareIbcTransferParams): PrepareIbc
   }
 
   // Resolve (sourceChannel, destChain) from one of the supported branches.
-  let sourceChannel: string
-  let destChain: string
-
-  if (rawSourceChannel && rawToChainId) {
-    const channelKey: ChannelKey = `${fromChain}/${rawSourceChannel}`
-    const resolvedDest = IBC_CHANNEL_DEST[channelKey]
-    if (!resolvedDest) {
-      throw new Error(
-        `unknown channel ${rawSourceChannel} on ${fromChain}: supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none)'}`
-      )
-    }
-    if (resolvedDest !== rawToChainId) {
-      throw new Error(
-        `channel ${rawSourceChannel} on ${fromChain} routes to ${resolvedDest}, NOT ${rawToChainId}. ` +
-          `Pass toChainId=${rawToChainId} alone, or omit toChainId and use sourceChannel=${rawSourceChannel} for a transfer to ${resolvedDest}.`
-      )
-    }
-    sourceChannel = rawSourceChannel
-    destChain = resolvedDest
-  } else if (rawToChainId) {
-    const resolved = resolveSourceChannelByDestChain(fromChain, rawToChainId)
-    if (!resolved) {
-      const supported = supportedIbcDestinationsFrom(fromChain)
-      throw new Error(
-        supported.length > 0
-          ? `no supported IBC channel from ${fromChain} to ${rawToChainId}. Supported destinations from ${fromChain}: ${supported.join(', ')}.`
-          : `no supported IBC routes from ${fromChain}. Pick a source chain among: phoenix-1, columbus-5, cosmoshub-4, osmosis-1.`
-      )
-    }
-    sourceChannel = resolved
-    destChain = rawToChainId
-  } else if (rawSourceChannel) {
-    const channelKey: ChannelKey = `${fromChain}/${rawSourceChannel}`
-    const resolvedDest = IBC_CHANNEL_DEST[channelKey]
-    if (!resolvedDest) {
-      throw new Error(
-        `unknown channel ${rawSourceChannel} on ${fromChain}: supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none)'}. ` +
-          `Tip: pass toChainId=<destination chain ID> and omit sourceChannel.`
-      )
-    }
-    sourceChannel = rawSourceChannel
-    destChain = resolvedDest
-  } else {
-    throw new Error(
-      `prepareIbcTransfer requires either sourceChannel OR toChainId. ` +
-        `Preferred: pass toChainId=<destination chain ID> and let the builder resolve the channel. ` +
-        `Supported destinations from ${fromChain}: ${supportedIbcDestinationsFrom(fromChain).join(', ') || '(none — pick a different source chain)'}.`
-    )
-  }
+  const { sourceChannel, destChain } = resolveRoute(fromChain, rawSourceChannel, rawToChainId)
 
   // Validate amount (positive integer string).
   if (!/^\d+$/.test(params.amount)) {
@@ -448,27 +486,7 @@ export function prepareIbcTransfer(params: PrepareIbcTransferParams): PrepareIbc
 
   // Resolve timeout_timestamp (caller-supplied, else now + 10 min in ns).
   const nowMs = params.nowMs ?? Date.now()
-  let timeoutTimestampStr = params.timeoutTimestamp?.trim() ?? ''
-  if (timeoutTimestampStr) {
-    if (!/^\d+$/.test(timeoutTimestampStr)) {
-      throw new Error(
-        `invalid timeoutTimestamp "${timeoutTimestampStr}": must be a positive integer (Unix nanoseconds)`
-      )
-    }
-    const tsNs = BigInt(timeoutTimestampStr)
-    if (tsNs < MIN_TIMEOUT_NS) {
-      throw new Error(
-        `timeoutTimestamp "${timeoutTimestampStr}" appears to be in seconds or milliseconds, not nanoseconds: value must be >= ${MIN_TIMEOUT_NS.toString()} (year 2020 in ns)`
-      )
-    }
-    if (tsNs <= BigInt(nowMs) * 1_000_000n) {
-      throw new Error(
-        `timeoutTimestamp "${timeoutTimestampStr}" is already in the past: provide a future nanosecond timestamp`
-      )
-    }
-  } else {
-    timeoutTimestampStr = String(BigInt(nowMs + 10 * 60 * 1000) * 1_000_000n)
-  }
+  const timeoutTimestampStr = resolveTimeoutTimestamp(params.timeoutTimestamp, nowMs)
 
   const [revStr, heightStr] = timeoutHeightStr.split('/')
 
