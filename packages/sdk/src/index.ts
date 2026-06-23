@@ -362,6 +362,7 @@ export type {
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
+  UtxoFeeRate,
   VaultIdentity,
 } from './tools'
 export {
@@ -381,6 +382,7 @@ export {
   getTxStatus,
   knownTokens,
   knownTokensIndex,
+  MAYACHAIN_NODE_URL,
   prepareContractCallTxFromKeys,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
@@ -389,6 +391,8 @@ export {
   resolve4ByteSelector,
   resolveEns,
   searchToken,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
   VerifierClient,
 } from './tools'
 

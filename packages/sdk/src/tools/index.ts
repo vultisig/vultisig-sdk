@@ -4,6 +4,10 @@ export { deriveAddressFromKeys } from './address'
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
+// Gas / fee primitives
+export type { UtxoFeeRate } from './gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
+
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
