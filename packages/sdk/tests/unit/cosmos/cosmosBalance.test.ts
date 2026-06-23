@@ -150,6 +150,42 @@ describe('getCosmosBalance', () => {
     expect(call).toBeGreaterThanOrEqual(2)
   })
 
+  it('rejects a cross-chain mis-paired address (osmo1 → Cosmos) before any LCD read', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch)
+    await expect(getCosmosBalance(Chain.Cosmos, 'osmo1abc')).rejects.toThrow(
+      /bech32 prefix "osmo" but .* expects "cosmos"/
+    )
+    // Guard fails BEFORE the network read — no LCD query issued on a mis-pair.
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed (no-separator) address before any LCD read', async () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch)
+    await expect(getCosmosBalance(Chain.Osmosis, 'notanaddress')).rejects.toThrow(/bech32 prefix "\(none\)"/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('accepts a correctly-paired address (osmo1 → Osmosis)', async () => {
+    mockBank([{ denom: 'uosmo', amount: '1000000' }])
+    const res = await getCosmosBalance(Chain.Osmosis, 'osmo1validlooking')
+    expect(res.nativeFormatted).toBe('1')
+  })
+
+  it('resolves restored TerraClassic legacy fiat denoms to symbol + decimals', async () => {
+    mockBank([
+      { denom: 'uluna', amount: '1000000' },
+      { denom: 'usdr', amount: '2000000' },
+      { denom: 'ujpy', amount: '3000000' },
+    ])
+    const res = await getCosmosBalance(Chain.TerraClassic, 'terra1abc')
+    const sdtc = res.balances.find(b => b.denom === 'usdr')
+    const jptc = res.balances.find(b => b.denom === 'ujpy')
+    expect(sdtc).toMatchObject({ symbol: 'SDTC', formatted: '2', decimals: 6 })
+    expect(jptc).toMatchObject({ symbol: 'JPTC', formatted: '3', decimals: 6 })
+  })
+
   it('exposes the supported-chain guard + chain list', () => {
     expect(isCosmosBalanceChain(Chain.Osmosis)).toBe(true)
     expect(isCosmosBalanceChain(Chain.THORChain)).toBe(false)

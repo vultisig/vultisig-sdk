@@ -38,6 +38,17 @@ type CosmosChainConfig = {
    * (`POLKACHU_LCD_FALLBACKS`). `null` disables fallback for that chain.
    */
   polkachuChainKey: string | null
+  /**
+   * Bech32 human-readable prefix (HRP) for this chain's addresses (e.g.
+   * `osmo`, `cosmos`, `terra`). Used by the offline mis-pair guard in
+   * `getCosmosBalance` to fail loud when an address is routed to the wrong
+   * chain, rather than silently querying a foreign LCD and returning a
+   * confidently-wrong (often empty) balance. Mirrors mcp-ts's `bech32Prefix`.
+   * Note: Terra v2 + TerraClassic share the `terra` HRP, so this guard can
+   * only catch CROSS-HRP mis-pairs (e.g. `osmo1...` → Chain.Cosmos); the
+   * Terra↔TerraClassic same-HRP case is documented as a caller contract.
+   */
+  bech32Prefix: string
 }
 
 // Endpoints mirror the mcp-ts cosmos-balance config (verified live there).
@@ -51,6 +62,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://cosmos-rest.publicnode.com',
     polkachuChainKey: 'cosmoshub-4',
+    bech32Prefix: 'cosmos',
   },
   [CosmosChain.Osmosis]: {
     denom: 'uosmo',
@@ -58,6 +70,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://osmosis-rest.publicnode.com',
     polkachuChainKey: 'osmosis-1',
+    bech32Prefix: 'osmo',
   },
   [CosmosChain.Kujira]: {
     denom: 'ukuji',
@@ -65,6 +78,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://rest.cosmos.directory/kujira',
     polkachuChainKey: 'kaiyo-1',
+    bech32Prefix: 'kujira',
   },
   [CosmosChain.Terra]: {
     denom: 'uluna',
@@ -72,6 +86,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://terra-lcd.publicnode.com',
     polkachuChainKey: 'phoenix-1',
+    bech32Prefix: 'terra',
   },
   [CosmosChain.TerraClassic]: {
     denom: 'uluna',
@@ -79,6 +94,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://terra-classic-lcd.publicnode.com',
     polkachuChainKey: 'columbus-5',
+    bech32Prefix: 'terra',
   },
   [CosmosChain.Noble]: {
     denom: 'uusdc',
@@ -86,6 +102,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://noble-api.polkachu.com',
     polkachuChainKey: 'noble-1',
+    bech32Prefix: 'noble',
   },
   [CosmosChain.Dydx]: {
     denom: 'adydx',
@@ -93,6 +110,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 18,
     restUrl: 'https://dydx-rest.publicnode.com',
     polkachuChainKey: 'dydx-mainnet-1',
+    bech32Prefix: 'dydx',
   },
   [CosmosChain.Akash]: {
     denom: 'uakt',
@@ -100,6 +118,7 @@ const COSMOS_CONFIG: Record<CosmosBalanceChain, CosmosChainConfig | undefined> =
     decimals: 6,
     restUrl: 'https://akash-rest.publicnode.com',
     polkachuChainKey: 'akashnet-2',
+    bech32Prefix: 'akash',
   },
   // Rujira-enriched chains — not modeled by the vanilla bank-denom path.
   [CosmosChain.THORChain]: undefined,
@@ -159,9 +178,25 @@ const IBC_SAFE_DECIMALS: Record<string, number> = {
 // of vultisig-windows knownTokens/cosmos.ts; lets common holdings render with
 // proper symbol + decimals even without the on-chain denom_trace round-trip.
 const KNOWN_DENOMS: Record<string, { symbol: string; decimals: number }> = {
-  // TerraClassic legacy native denoms.
+  // TerraClassic legacy native denoms (full mcp-ts parity — the SDK port had
+  // dropped all but uusd/ukrw, silently regressing every other Terra-fiat
+  // legacy denom to a raw `denom`-as-symbol passthrough).
   uusd: { symbol: 'USTC', decimals: 6 },
   ukrw: { symbol: 'KRTC', decimals: 6 },
+  usdr: { symbol: 'SDTC', decimals: 6 },
+  ueur: { symbol: 'EUTC', decimals: 6 },
+  ucny: { symbol: 'CNTC', decimals: 6 },
+  ujpy: { symbol: 'JPTC', decimals: 6 },
+  ugbp: { symbol: 'GBTC', decimals: 6 },
+  uinr: { symbol: 'INTC', decimals: 6 },
+  ucad: { symbol: 'CATC', decimals: 6 },
+  uchf: { symbol: 'CHTC', decimals: 6 },
+  uaud: { symbol: 'AUTC', decimals: 6 },
+  usgd: { symbol: 'SGTC', decimals: 6 },
+  uthb: { symbol: 'THTC', decimals: 6 },
+  unok: { symbol: 'NOTC', decimals: 6 },
+  udkk: { symbol: 'DATC', decimals: 6 },
+  uidr: { symbol: 'IDTC', decimals: 6 },
   // Osmosis-1 IBC denom hashes (chain-registry verified).
   'ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2': { symbol: 'ATOM', decimals: 6 },
   'ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4': { symbol: 'USDC', decimals: 6 },
@@ -250,6 +285,18 @@ function formatBalance(raw: string, decimals: number): string {
 }
 
 const isUnresolvedHashDenom = (denom: string): boolean => denom.startsWith('ibc/') || denom.startsWith('factory/')
+
+/**
+ * Extract the bech32 HRP (everything before the first `1` separator) from a
+ * cosmos address. Pure-offline, no decode/checksum — we only need the prefix
+ * to detect a cross-chain mis-pair. Returns `''` for malformed input.
+ *
+ * @example bech32Hrp('osmo1abc') === 'osmo'
+ */
+function bech32Hrp(address: string): string {
+  const sep = address.lastIndexOf('1')
+  return sep <= 0 ? '' : address.slice(0, sep)
+}
 
 /** Short, readable symbol for an unresolved ibc/ or factory/ denom. */
 function unresolvedSymbol(denom: string): string {
@@ -348,6 +395,21 @@ export async function getCosmosBalance(chain: CosmosBalanceChain, address: strin
       `getCosmosBalance: unsupported chain ${chain}. Supported: ${Object.keys(COSMOS_CONFIG)
         .filter(c => COSMOS_CONFIG[c as CosmosBalanceChain])
         .join(', ')}`
+    )
+  }
+
+  // Offline cross-chain mis-pair guard. The caller passes `chain` and
+  // `address` independently, so a wrong pairing (e.g. an `osmo1...` address
+  // routed to Chain.Cosmos) would silently query a FOREIGN LCD and return a
+  // confidently-wrong (usually empty) balance with no signal. Fail loud on an
+  // HRP mismatch BEFORE issuing the read. Note: Terra v2 + TerraClassic share
+  // the `terra` HRP and cannot be distinguished offline — that same-HRP case
+  // is a documented caller contract (mcp-ts disambiguates it via a live
+  // chain_id LCD probe; the SDK leaves that to the caller's Chain enum).
+  const hrp = bech32Hrp(address)
+  if (hrp !== config.bech32Prefix) {
+    throw new Error(
+      `getCosmosBalance: address "${address}" has bech32 prefix "${hrp || '(none)'}" but ${chain} expects "${config.bech32Prefix}". Mis-routed address — confirm the chain matches the address.`
     )
   }
 
