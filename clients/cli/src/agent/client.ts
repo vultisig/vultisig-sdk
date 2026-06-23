@@ -30,8 +30,8 @@ const DEFAULT_HTTP_TIMEOUT_MS = 30_000
 
 /** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
  *  to the default. Non-positive / non-numeric values are ignored so a typo
- *  can't disable the timeout. */
-function resolveHttpTimeoutMs(): number {
+ *  can't disable the timeout. Exported for direct unit testing of the contract. */
+export function resolveHttpTimeoutMs(): number {
   const raw = process.env.VULTISIG_HTTP_TIMEOUT_MS
   if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
   const n = Number(raw)
@@ -328,7 +328,14 @@ export class AgentClient {
     // (Ctrl+C) is combined in so cancellation still aborts the whole request.
     const connectController = new AbortController()
     let connectTimedOut = false
+    // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
+    // (in the finally) already prevents the callback from running after that — JS
+    // is single-threaded and the finally drains as a microtask before the next
+    // timers phase — but the guard makes a late/queued firing a definitive no-op,
+    // so the connect deadline can never abort the live SSE body read.
+    let settled = false
     const connectTimer = setTimeout(() => {
+      if (settled) return
       connectTimedOut = true
       connectController.abort()
     }, this.timeoutMs)
@@ -359,6 +366,7 @@ export class AgentClient {
     } finally {
       // Headers received (or fetch failed) — stop bounding; the body read below
       // runs against `signal` only, so SSE streaming is not time-limited.
+      settled = true
       clearTimeout(connectTimer)
     }
 

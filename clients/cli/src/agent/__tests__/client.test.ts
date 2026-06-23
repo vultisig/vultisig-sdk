@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
-import { AgentClient } from '../client'
+import { AgentClient, resolveHttpTimeoutMs } from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -521,8 +521,10 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
   })
 
   // Cancellation must survive the combined-signal path: a caller Ctrl+C aborts
-  // the connect, and it must surface as a deliberate cancel (the original abort),
-  // NOT be mislabeled as a timeout.
+  // the connect, and it must surface as a deliberate cancel (the original abort
+  // reason), NOT be mislabeled as a timeout. Asserting the positive AbortError
+  // identity (not merely "no timeout text") guards against a regression that
+  // swallowed the abort into some unrelated error.
   it('still aborts sendMessageStream on a caller signal, preserving cancel semantics', async () => {
     globalThis.fetch = mockHangingFetch()
     const ac = new AbortController()
@@ -530,9 +532,71 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     const client = new AgentClient('http://example.com', 60_000)
     const p = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {}, ac.signal)
     ac.abort()
-    await expect(p).rejects.toThrow()
-    await p.catch((e: unknown) => {
-      expect(String((e as Error).message)).not.toMatch(/timed out/)
-    })
+    const err = await p.then(
+      () => {
+        throw new Error('expected rejection')
+      },
+      (e: unknown) => e
+    )
+    expect(err).toBeInstanceOf(DOMException)
+    expect((err as DOMException).name).toBe('AbortError')
+    expect(String((err as Error).message)).not.toMatch(/timed out/)
   })
+
+  // The connect deadline must bound ONLY the initial connect, never the
+  // long-lived SSE body. With a tiny timeout but a body whose terminal frame
+  // arrives well after that deadline, the stream must still complete cleanly
+  // (finished, not disconnected) — proving the connect timer is cleared once
+  // headers arrive and can't abort the live read.
+  it('does not abort the SSE body when it streams past the connect timeout', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"text-delta","id":"t","delta":"slow"}\n\n'))
+        // Emit the terminal frame after a delay far exceeding the 15ms connect
+        // deadline; a body-level timeout would abort here and flag disconnected.
+        await new Promise(r => setTimeout(r, 120))
+        controller.enqueue(encoder.encode('data: {"type":"finish"}\n\n'))
+        controller.close()
+      },
+    })
+    globalThis.fetch = vi.fn(
+      async () => new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    ) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 15)
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.finished).toBe(true)
+    expect(result.disconnected).toBe(false)
+    expect(result.fullText).toBe('slow')
+  })
+})
+
+describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
+  const original = process.env.VULTISIG_HTTP_TIMEOUT_MS
+  afterEach(() => {
+    if (original === undefined) delete process.env.VULTISIG_HTTP_TIMEOUT_MS
+    else process.env.VULTISIG_HTTP_TIMEOUT_MS = original
+  })
+
+  it('defaults to 30000 when the env var is unset', () => {
+    delete process.env.VULTISIG_HTTP_TIMEOUT_MS
+    expect(resolveHttpTimeoutMs()).toBe(30_000)
+  })
+
+  it('honors a valid positive override', () => {
+    process.env.VULTISIG_HTTP_TIMEOUT_MS = '5000'
+    expect(resolveHttpTimeoutMs()).toBe(5000)
+  })
+
+  // "A typo can't disable the timeout": junk / non-positive values fall back to
+  // the default rather than producing 0/NaN (which would neuter the bound).
+  it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])(
+    'falls back to the default for invalid value %j',
+    val => {
+      process.env.VULTISIG_HTTP_TIMEOUT_MS = val
+      expect(resolveHttpTimeoutMs()).toBe(30_000)
+    }
+  )
 })
