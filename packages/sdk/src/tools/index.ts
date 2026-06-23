@@ -17,6 +17,9 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// DeFi protocol primitives (build UNSIGNED calldata only)
+export { type Defi, defi } from './defi'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 

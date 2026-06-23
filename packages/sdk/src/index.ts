@@ -364,6 +364,7 @@ export type {
   TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
+export { type Defi, defi } from './tools'
 export {
   abiDecode,
   abiEncode,
