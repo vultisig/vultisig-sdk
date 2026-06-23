@@ -361,6 +361,8 @@ export type {
   KnownCoinMetadata,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  SolBalance,
+  SplTokenBalance,
   TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
@@ -377,6 +379,8 @@ export {
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getPublicKey,
+  getSolBalance,
+  getSplTokenBalance,
   getTokenMetadata,
   getTxStatus,
   knownTokens,
