@@ -115,13 +115,17 @@ export const compareCosts = async (params: CompareCostsParams = {}): Promise<Com
     results.push({ chain, gasPriceGwei, nativeUsd, estTxCostNative, estTxCostUsd })
   })
 
-  // Rank cheapest-first. Prefer USD when known on both sides, else native cost.
-  results.sort((a, b) => {
-    if (a.estTxCostUsd !== null && b.estTxCostUsd !== null) {
-      return a.estTxCostUsd - b.estTxCostUsd
-    }
-    return a.estTxCostNative - b.estTxCostNative
-  })
+  // Rank cheapest-first on a SINGLE, consistent basis. USD is comparable across
+  // chains (different native tokens), native cost is NOT (1e-4 ETH ≠ 1e-4 MATIC),
+  // so we only USD-rank when EVERY surviving result is priced. A per-pair mix
+  // (USD when both have it, native otherwise) is non-transitive and can crown a
+  // USD-expensive chain as "cheapest" just because its native-token unit cost is
+  // numerically small — so we never mix bases. With a partial price map we fall
+  // back to native ordering wholesale (the documented gwei-only best-effort).
+  const allPriced = results.length > 0 && results.every(r => r.estTxCostUsd !== null)
+  results.sort((a, b) =>
+    allPriced ? (a.estTxCostUsd as number) - (b.estTxCostUsd as number) : a.estTxCostNative - b.estTxCostNative
+  )
 
   const cheapest =
     results.length > 0
