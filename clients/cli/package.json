@@ -94,6 +94,7 @@
     "@types/tabtab": "^3.0.4",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.1",
+    "ethers": "^6.17.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
