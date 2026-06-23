@@ -42,6 +42,16 @@ export type BuildArkisSupplyParams = {
   /** Token decimals — required when `amount` is provided. */
   decimals?: number
   /**
+   * Optional ERC-4626 underlying-asset guard. When provided (e.g. the `asset`
+   * returned by `resolveArkisPoolKind`), the builder enforces
+   * `tokenAddress === expectedAsset` on the `erc4626_vault` path and throws on a
+   * mismatch. This prevents approving + depositing the wrong ERC-20 into a
+   * vault (an allowance-leak / griefing footgun). Ignored on the `agreement`
+   * path. Default off — the builder stays pure; callers that have resolved the
+   * asset should pass it through.
+   */
+  expectedAsset?: string
+  /**
    * Optional affiliate / referrer tag. Arkis supply has NO on-chain affiliate
    * slot, so this is a metadata passthrough only (echoed on the result for the
    * calling consumer). It is INJECTABLE and defaults to undefined (neutral/off)
@@ -100,6 +110,16 @@ export const buildArkisSupplyTx = (params: BuildArkisSupplyParams): BuildArkisSu
   const from = requireAddress('from', params.from)
   const poolAddress = requireAddress('pool_address', params.poolAddress)
   const tokenAddress = requireAddress('token_address', params.tokenAddress)
+
+  // ERC-4626 underlying-asset guard: if the caller resolved the vault's
+  // `asset()` and passed it through, refuse to approve/deposit a mismatched
+  // token (would leak an allowance to the wrong ERC-20 and revert on deposit).
+  if (params.poolKind === 'erc4626_vault' && params.expectedAsset !== undefined) {
+    const expectedAsset = requireAddress('expected_asset', params.expectedAsset)
+    if (expectedAsset !== tokenAddress) {
+      throw new Error(`token_address ${tokenAddress} does not match the Arkis ERC-4626 vault asset() ${expectedAsset}`)
+    }
+  }
 
   let rawAmount: bigint
   if (params.amountRaw !== undefined) {

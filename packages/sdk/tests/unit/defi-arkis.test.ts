@@ -85,6 +85,44 @@ describe('buildArkisSupplyTx — Agreement path', () => {
 })
 
 describe('buildArkisSupplyTx — ERC-4626 path', () => {
+  it('enforces expectedAsset === tokenAddress when the caller resolved the vault asset', () => {
+    // matching asset → builds fine
+    const ok = buildArkisSupplyTx({
+      poolKind: 'erc4626_vault',
+      poolAddress: ERC4626_POOL,
+      tokenAddress: USDC,
+      from: SENDER,
+      amountRaw: 1_500_000_000n,
+      expectedAsset: getAddress(USDC),
+    })
+    expect(ok.transactions).toHaveLength(2)
+
+    // mismatched asset (different ERC-20) → must throw, never approve the wrong token
+    const OTHER_TOKEN = '0x3333333333333333333333333333333333333333'
+    expect(() =>
+      buildArkisSupplyTx({
+        poolKind: 'erc4626_vault',
+        poolAddress: ERC4626_POOL,
+        tokenAddress: USDC,
+        from: SENDER,
+        amountRaw: 1_500_000_000n,
+        expectedAsset: OTHER_TOKEN,
+      })
+    ).toThrow(/does not match the Arkis ERC-4626 vault asset/)
+
+    // expectedAsset is ignored on the agreement path (no asset() concept)
+    expect(() =>
+      buildArkisSupplyTx({
+        poolKind: 'agreement',
+        poolAddress: POOL,
+        tokenAddress: USDC,
+        from: SENDER,
+        amountRaw: 1n,
+        expectedAsset: OTHER_TOKEN,
+      })
+    ).not.toThrow()
+  })
+
   it('builds approve + deposit(uint256,address) with receiver fixed to self', () => {
     const built = buildArkisSupplyTx({
       poolKind: 'erc4626_vault',
