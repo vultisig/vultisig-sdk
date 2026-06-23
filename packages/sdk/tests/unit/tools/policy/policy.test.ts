@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  chainAliasMap,
+  chainsMatch,
   checkInvariants,
   claimInterpretations,
   type Envelope,
@@ -233,5 +235,62 @@ describe('amount helpers', () => {
     const ladder = claimInterpretations('1', '', 0)
     expect(ladder).toContain(1n) // atomic
     expect(ladder).toContain(1000000000000000000n) // 18-dp rung
+  })
+})
+
+// The decoder (#848) is contracted to emit a SYMBOLIC chain ("base"), NOT the
+// on-wire numeric EIP-155 id ("8453"). These tests pin that contract from the
+// policy side: a symbolic↔symbolic compare PASSes, and a numeric id that slipped
+// through un-resolved is correctly NOT matched (fail-safe BLOCK, never a silent
+// pass) — so any decoder regression that leaks a numeric chain id is caught here
+// instead of producing a spurious cross-surface verdict.
+describe('chainsMatch — symbolic-chain contract with the decoder', () => {
+  it('matches a symbolic claim against a symbolic envelope (base ⇔ base)', () => {
+    expect(chainsMatch('base', 'base')).toBe(true)
+    const claim: IntentClaim = { chain: 'base', recipient: '0xAAA' }
+    const verdict = evaluatePolicy(claim, usdc('0xAAA', 1_000_000n)) // envelope chainId 'base'
+    expect(verdict.result).toBe(ResultKind.Pass)
+  })
+
+  it('does NOT match a symbolic claim against an un-resolved numeric chain id (8453)', () => {
+    // chainAliasMap has no numeric keys, so "base" canonicalises to "base" and
+    // "8453" stays "8453" → no match. This is the fail-safe: if #848 ever leaks a
+    // raw numeric id, the policy BLOCKs rather than silently passing it.
+    expect(chainsMatch('base', '8453')).toBe(false)
+    expect(chainsMatch('ethereum', '1')).toBe(false)
+    const claim: IntentClaim = { chain: 'base', recipient: '0xAAA' }
+    const verdict = evaluatePolicy(claim, { ...usdc('0xAAA', 1_000_000n), chainId: '8453' })
+    expect(verdict.result).toBe(ResultKind.Block)
+    expect(verdict.reason).toContain('chain mismatch')
+  })
+
+  it('is symmetric and self-reflexive across the alias set', () => {
+    expect(chainsMatch('eth', 'ethereum')).toBe(true)
+    expect(chainsMatch('ethereum', 'eth')).toBe(true) // symmetry
+    expect(chainsMatch('cosmos', 'cosmoshub-4')).toBe(true)
+    expect(chainsMatch('lunc', 'columbus-5')).toBe(true)
+    expect(chainsMatch('terraclassic', 'columbus-5')).toBe(true) // two aliases → same canon
+    expect(chainsMatch('ethereum', 'base')).toBe(false)
+    expect(chainsMatch('cosmoshub-4', 'osmosis-1')).toBe(false)
+  })
+
+  it('mirrors the Go chainAliasMap 1:1 (no cross-surface drift)', () => {
+    // Pinned verbatim from internal/safety/policy.go @ b6956d75c. A diff here
+    // means the SDK and Go verdicts can disagree on a chain alias — a P0-class
+    // cross-surface divergence — so this must be updated in lockstep with Go.
+    expect(chainAliasMap).toEqual({
+      eth: 'ethereum',
+      bnb: 'bsc',
+      bsc: 'bsc',
+      avax: 'avalanche',
+      cosmos: 'cosmoshub-4',
+      terra: 'phoenix-1',
+      terraclassic: 'columbus-5',
+      lunc: 'columbus-5',
+      osmosis: 'osmosis-1',
+      noble: 'noble-1',
+      dydx: 'dydx-mainnet-1',
+      akash: 'akashnet-2',
+    })
   })
 })
