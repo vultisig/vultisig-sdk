@@ -1,6 +1,17 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
+export {
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  type PolkadotAssetBalance,
+  type PolkadotNativeBalance,
+} from './balance'
+
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
