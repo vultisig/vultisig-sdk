@@ -17,6 +17,7 @@
 
 import { encodeFunctionData, getAddress, isAddress } from 'viem'
 
+import { assertSafeEvmDestination } from '../../utils/dangerousAddresses'
 import { type CctpChainConfig, cctpSupportedChains, getCctpChain } from './cctp'
 
 /** USDC has 6 decimals across all CCTP-supported chains. */
@@ -24,17 +25,6 @@ const USDC_DECIMALS = 6
 
 /** uint256 max — defense-in-depth overflow clamp. */
 const MAX_UINT256 = (1n << 256n) - 1n
-
-/**
- * EVM burn/sink addresses that would render bridged USDC permanently
- * unspendable if used as the CCTP mintRecipient. CCTP's TokenMessenger
- * does NOT reject these on-chain, and viem's `isAddress` happily accepts
- * them, so we guard here. Lower-cased for case-insensitive comparison.
- */
-const EVM_BURN_ADDRESSES = new Set<string>([
-  '0x0000000000000000000000000000000000000000',
-  '0x000000000000000000000000000000000000dead',
-])
 
 const erc20ApproveAbi = [
   {
@@ -261,14 +251,12 @@ export const buildCctpBridge = (params: BuildCctpBridgeParams): CctpBridgeResult
   }
   const recipient = getAddress(recipientStr)
 
-  // Fund-safety: the mintRecipient is BURNED on the source chain and
-  // minted to this address on the destination. A burn/zero recipient
-  // mints USDC to a permanently unspendable address (irrecoverable).
-  if (EVM_BURN_ADDRESSES.has(recipient.toLowerCase())) {
-    throw new Error(
-      `refusing to bridge to burn address ${recipient}: bridged USDC would be minted to a permanently unspendable address`
-    )
-  }
+  // Fund-safety: the mintRecipient is BURNED on the source chain and minted to
+  // this address on the destination. A burn/zero recipient mints USDC to a
+  // permanently unspendable address (irrecoverable). Uses the canonical shared
+  // EVM burn-list (all 3 addresses incl. `0xdead…942069`) so the set can't
+  // drift per call-site again.
+  assertSafeEvmDestination(recipient)
 
   const approveData = encodeFunctionData({
     abi: erc20ApproveAbi,

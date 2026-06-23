@@ -10,6 +10,7 @@ import {
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../src/tools/bridge'
+import { assertSafeEvmDestination, EVM_DANGEROUS_ADDRESSES, isEvmBurnAddress } from '../../src/utils/dangerousAddresses'
 
 // Reference ABIs for decoding/asserting the encoded selectors + args.
 const tokenMessengerAbi = [
@@ -126,7 +127,8 @@ describe('buildCctpBridge', () => {
     ).toThrow(/not supported by CCTP/)
   })
 
-  it('refuses a burn-address mintRecipient (fund-safety)', () => {
+  it('refuses a burn-address mintRecipient (fund-safety) — all 3 canonical variants', () => {
+    // dead (case-insensitive checksum)
     expect(() =>
       buildCctpBridge({
         sourceChain: 'Base',
@@ -134,7 +136,29 @@ describe('buildCctpBridge', () => {
         amount: '1',
         to: '0x000000000000000000000000000000000000dEaD',
       })
-    ).toThrow(/burn address/)
+    ).toThrow(/dead address/)
+
+    // zero
+    expect(() =>
+      buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '1',
+        to: '0x0000000000000000000000000000000000000000',
+      })
+    ).toThrow(/zero address/)
+
+    // dead variant — the post-#415 `0xdead…942069` address the inlined
+    // 2-address Set dropped (audit P1). Bridging to it minted USDC to a
+    // permanently unspendable account.
+    expect(() =>
+      buildCctpBridge({
+        sourceChain: 'Base',
+        destinationChain: 'Arbitrum',
+        amount: '1',
+        to: '0xdead000000000000000042069420694206942069',
+      })
+    ).toThrow(/dead address variant/)
   })
 
   it('covers every CCTP-supported chain as a source', () => {
@@ -176,5 +200,30 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+})
+
+describe('shared EVM dangerous-address guard', () => {
+  const REAL_EOA = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+
+  it('lists all 3 canonical EVM burn addresses (incl. the dropped dead variant)', () => {
+    const keys = Object.keys(EVM_DANGEROUS_ADDRESSES)
+    expect(keys).toContain('0x0000000000000000000000000000000000000000')
+    expect(keys).toContain('0x000000000000000000000000000000000000dead')
+    expect(keys).toContain('0xdead000000000000000042069420694206942069')
+    expect(keys.length).toBe(3)
+  })
+
+  it('flags burn addresses case-insensitively and passes real EOAs', () => {
+    expect(isEvmBurnAddress('0x000000000000000000000000000000000000dEaD')).toBe(true)
+    expect(isEvmBurnAddress('0xDEAD000000000000000042069420694206942069')).toBe(true)
+    expect(isEvmBurnAddress('0x0000000000000000000000000000000000000000')).toBe(true)
+    expect(isEvmBurnAddress(REAL_EOA)).toBe(false)
+  })
+
+  it('shape-gates: a non-EVM-shaped string is not vetted as a burn address', () => {
+    // 39 hex chars — not a valid EVM address shape, must not match.
+    expect(isEvmBurnAddress('0x00000000000000000000000000000000000dead')).toBe(false)
+    expect(() => assertSafeEvmDestination(REAL_EOA)).not.toThrow()
   })
 })
