@@ -183,6 +183,15 @@ export type JupiterSwapParams = {
   slippageBps?: number
   /** Override the Jupiter API base URL (default {@link JUPITER_API_BASE_URL}). */
   apiBaseUrl?: string
+  /**
+   * Override the affiliate-fee-account resolver (default
+   * {@link resolveJupiterFeeAccount}). Production callers MUST NOT pass this —
+   * it exists purely as a test seam so the affiliate-ON path (omit-BOTH vs
+   * include-BOTH platformFeeBps+feeAccount symmetry) can be exercised while the
+   * canonical ATA map stays empty. A returned `null` keeps the affiliate fee
+   * OFF (both fields omitted); a non-null ATA wires BOTH fields together.
+   */
+  resolveFeeAccount?: (outputMint: string) => string | null
 }
 
 /**
@@ -211,6 +220,7 @@ export const buildJupiterSwapTx = async ({
   amountBaseUnits,
   slippageBps = JUPITER_DEFAULT_SLIPPAGE_BPS,
   apiBaseUrl = JUPITER_API_BASE_URL,
+  resolveFeeAccount = resolveJupiterFeeAccount,
 }: JupiterSwapParams): Promise<JupiterSwapResult> => {
   if (amountBaseUnits <= 0n) {
     throw new Error('Jupiter swap amount must be greater than zero')
@@ -229,7 +239,7 @@ export const buildJupiterSwapTx = async ({
   // ATA is configured for the output mint we SKIP the affiliate fee on this
   // swap (omit BOTH platformFeeBps AND feeAccount) — passing one without the
   // other would have Jupiter quote a route the user cannot execute.
-  const feeAccount = resolveJupiterFeeAccount(outputMint)
+  const feeAccount = resolveFeeAccount(outputMint)
 
   // Step 1: Get a quote. Pass platformFeeBps ONLY when we have a valid
   // feeAccount for the output mint.

@@ -131,4 +131,110 @@ describe('buildJupiterSwapTx', () => {
       buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
     ).rejects.toThrow(/Jupiter API error \(400\): Could not find any route/)
   })
+
+  it('propagates a JSON error body on a non-ok /swap response (build-time route failure)', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        return new Response(JSON.stringify(fakeQuote), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      // /swap returns non-ok -> fetchJupiter must surface it as an API error, not a missing-tx error
+      return new Response(JSON.stringify({ error: 'Slippage tolerance exceeded' }), { status: 422 })
+    })
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
+    ).rejects.toThrow(/Jupiter API error \(422\): Slippage tolerance exceeded/)
+  })
+
+  it('errors on a 200 /swap response carrying an embedded error and never returns a partial tx', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        return new Response(JSON.stringify(fakeQuote), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      // 200 OK but body carries an error AND no swapTransaction -> must throw, not silently succeed
+      return new Response(JSON.stringify({ error: 'No route found at build time' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
+    ).rejects.toThrow(/Jupiter swap error: No route found at build time/)
+  })
+
+  it('strips trailing slashes from a custom apiBaseUrl (no double-slash path)', async () => {
+    await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 1n,
+      apiBaseUrl: 'https://proxy.example.com/jup///',
+    })
+    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
+    expect(quoteUrl.startsWith('https://proxy.example.com/jup/swap/v1/quote?')).toBe(true)
+    expect(quoteUrl).not.toContain('jup//swap')
+  })
+})
+
+// Affiliate-ON invariant: when a treasury ATA DOES resolve for the output mint,
+// BOTH platformFeeBps (on /quote) AND feeAccount (on /swap) MUST be sent
+// together. Omitting one without the other is the fund-unsafe failure mode
+// (Jupiter quotes a route whose fee transfer has nowhere to land -> the user's
+// broadcast reverts with SPL Token 0x17 InvalidAccountData). The empty ATA map
+// means the production OFF path is the only one exercised above; these cases
+// drive the resolver test-seam to lock the symmetric ON path so a future
+// regression that moves one `if (feeAccount)` guard but not the other is caught.
+describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
+  const FAKE_ATA = 'CRz7ucCE6ZFhN297AC56ihUBbdDuZNzN3D7MVw2cYPna'
+  let fetchSpy: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = url.includes('/quote') ? fakeQuote : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('sends BOTH platformFeeBps AND feeAccount together when an ATA resolves', async () => {
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+      resolveFeeAccount: () => FAKE_ATA,
+    })
+
+    expect(res.affiliateFeeApplied).toBe(true)
+
+    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
+    expect(quoteUrl).toContain(`platformFeeBps=${JUPITER_PLATFORM_FEE_BPS}`)
+
+    const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
+    const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
+    expect(swapBody.feeAccount).toBe(FAKE_ATA)
+  })
+
+  it('keeps the affiliate fee OFF (both fields omitted) when the resolver returns null', async () => {
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+      resolveFeeAccount: () => null,
+    })
+
+    expect(res.affiliateFeeApplied).toBe(false)
+
+    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
+    expect(quoteUrl).not.toContain('platformFeeBps')
+
+    const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
+    const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
+    expect(swapBody).not.toHaveProperty('feeAccount')
+  })
 })
