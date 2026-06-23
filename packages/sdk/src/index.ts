@@ -357,11 +357,14 @@ export type {
   CoinMetadata,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  GetUtxoBalanceOptions,
   KnownCoin,
   KnownCoinMetadata,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
+  UtxoBalance,
+  UtxoBalanceChain,
   VaultIdentity,
 } from './tools'
 export {
@@ -373,12 +376,14 @@ export {
   evmCheckAllowance,
   evmTxInfo,
   findSwapQuote,
+  formatUtxoBalance,
   getCoinBalance,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  getUtxoBalance,
   knownTokens,
   knownTokensIndex,
   prepareContractCallTxFromKeys,
@@ -389,6 +394,7 @@ export {
   resolve4ByteSelector,
   resolveEns,
   searchToken,
+  supportedUtxoBalanceChains,
   VerifierClient,
 } from './tools'
 
