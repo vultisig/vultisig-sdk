@@ -24,6 +24,27 @@ describe('isNullAddress', () => {
     expect(isNullAddress(SOL_INCINERATOR)).toBe(true)
   })
 
+  // Go parity: null_recipient_test.go TestIsNullAddress.
+  // The Go check lowercases the WHOLE string before the 0x-prefix test, so an
+  // uppercase 0X prefix on the zero address must still flag (mixed-case repro).
+  it('flags an uppercase 0X-prefixed EVM zero address (Go lowercases prefix)', () => {
+    expect(isNullAddress('0X0000000000000000000000000000000000000000')).toBe(true)
+  })
+
+  // Go parity: the Solana System Program is exactly 32 base58 ones — a 31-char
+  // (too short) or 33-char (too long) all-ones string must NOT flag.
+  it('does NOT flag near-miss Solana all-ones strings (wrong length)', () => {
+    expect(isNullAddress('1'.repeat(31))).toBe(false)
+    expect(isNullAddress('1'.repeat(33))).toBe(false)
+  })
+
+  // Go parity (CodeRabbit #1175): a valid-length 40-hex address ending in "dead"
+  // that is NOT the canonical 0x...000dEaD burn must NOT flag. Exercises the
+  // canonical-equality path, not the length check. 36 ones + "dead" = 40 hex.
+  it('does NOT flag a non-canonical 40-hex address ending in dead', () => {
+    expect(isNullAddress('0x111111111111111111111111111111111111dead')).toBe(false)
+  })
+
   it('tolerates surrounding whitespace', () => {
     expect(isNullAddress(`  ${EVM_ZERO}  `)).toBe(true)
   })
@@ -65,6 +86,29 @@ describe('isMalformedEvmAddress', () => {
 
   it('does NOT flag a 0x token with non-hex chars (not an EVM attempt)', () => {
     expect(isMalformedEvmAddress('0xZZZZ')).toBe(false)
+  })
+
+  // Go parity: malformed_evm_recipient_test.go TestIsMalformedEVMAddress.
+  // A bare "0x" with no hex digits must NOT flag — reEVMPrefix requires >= 1 hex
+  // (a fail-open here would let "0x" silently pass as a non-malformed recipient).
+  it('does NOT flag a bare 0x with no hex digits', () => {
+    expect(isMalformedEvmAddress('0x')).toBe(false)
+  })
+
+  // Go parity: every too-short / too-long length variant in the Go table flags.
+  it('flags every too-short and too-long 0x hex length (Go length table)', () => {
+    expect(isMalformedEvmAddress('0x1')).toBe(true) // 0x + 1 hex
+    expect(isMalformedEvmAddress('0x123')).toBe(true) // 0x + 3 hex
+    expect(isMalformedEvmAddress(`0x${'a'.repeat(39)}`)).toBe(true) // 0x + 39 hex (one short)
+    expect(isMalformedEvmAddress(`0x${'a'.repeat(41)}`)).toBe(true) // 0x + 41 hex (one long)
+    expect(isMalformedEvmAddress(`0x${'a'.repeat(42)}`)).toBe(true) // 0x + 42 hex
+  })
+
+  // Go parity: an uppercase 0X prefix does NOT match reEVMPrefix (anchored to
+  // lowercase 0x), so it is treated as a different family — NOT malformed-EVM.
+  // Both Go and the SDK apply the prefix regex to the un-lowercased string.
+  it('does NOT flag an uppercase 0X-prefixed token (not an 0x EVM attempt)', () => {
+    expect(isMalformedEvmAddress('0X123')).toBe(false)
   })
 })
 
