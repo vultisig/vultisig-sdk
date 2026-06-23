@@ -4,6 +4,10 @@ export { deriveAddressFromKeys } from './address'
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
+// Canonical bytes oracle (calldata -> chain-agnostic Envelope)
+export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
+export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
+
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
@@ -30,7 +34,6 @@ export {
   chainsMatch,
   checkInvariants,
   claimInterpretations,
-  type Envelope,
   evaluatePolicy,
   type FieldDiff,
   type IntentClaim,
@@ -42,6 +45,7 @@ export {
   PLAUSIBLE_TOKEN_DECIMALS,
   policy,
   type AssetRef as PolicyAssetRef,
+  type Envelope as PolicyEnvelope,
   ResultKind,
   sanitizeAmount,
   scaleDecimalClaimToAtomic,
