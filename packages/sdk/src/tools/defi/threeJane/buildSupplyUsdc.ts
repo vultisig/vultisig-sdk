@@ -17,9 +17,9 @@ export const THREE_JANE_ADDRESSES = {
   /** Senior tranche, liquid ERC-4626 share. */
   usd3: '0x056B269Eb1f75477a8666ae8C7fE01b64dD55eCc',
   /** Staked junior tranche, cooldown-gated exits. */
-  susd3: '0xf689555121e529ff0463e191f9bd9d1e496164a7',
+  susd3: '0xf689555121e529Ff0463e191F9Bd9d1E496164a7',
   /** Canonical Ethereum mainnet USDC. */
-  usdc: '0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  usdc: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
 } as const
 
 const ETHEREUM_CHAIN_ID = 1

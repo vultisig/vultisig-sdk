@@ -1,4 +1,4 @@
-import { decodeFunctionData, erc20Abi, getAddress } from 'viem'
+import { decodeFunctionData, erc20Abi, getAddress, isAddress } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { buildThreeJaneSupplyUsdc, parseUsdcAmount, THREE_JANE_ADDRESSES } from '@/tools/defi/threeJane'
@@ -98,6 +98,28 @@ describe('buildThreeJaneSupplyUsdc', () => {
     expect(() => buildThreeJaneSupplyUsdc({ from: FROM, amount: '1000', receiver: 'nope' })).toThrow(
       /invalid "receiver"/
     )
+  })
+
+  it('pins every protocol address in valid EIP-55 checksum form', () => {
+    // These constants are exported and consumed directly by downstream callers.
+    // strict:true guarantees the mixed-case bytes are a real EIP-55 checksum, so
+    // a future typo in any of these fund-critical hex digits trips the test
+    // instead of silently shipping a wrong recipient.
+    for (const [key, addr] of Object.entries(THREE_JANE_ADDRESSES)) {
+      expect(isAddress(addr, { strict: true }), `${key} (${addr}) must be EIP-55 checksummed`).toBe(true)
+      expect(getAddress(addr), `${key} must already equal its checksum`).toBe(addr)
+    }
+  })
+
+  it('approve spender and deposit target both resolve to the pinned Helper', () => {
+    const res = buildThreeJaneSupplyUsdc({ from: FROM, amount: '1000' })
+    const [approve, deposit] = res.transactions
+    const approveDecoded = decodeFunctionData({ abi: erc20Abi, data: approve.data })
+    // The address USDC is approved to MUST equal the address the deposit is sent
+    // to — otherwise the allowance is granted to a contract that never spends it
+    // (funds stuck) or, worse, a different contract than the user is told.
+    expect(getAddress(approveDecoded.args[0] as string)).toBe(getAddress(deposit.to))
+    expect(getAddress(deposit.to)).toBe(getAddress(THREE_JANE_ADDRESSES.helper))
   })
 
   it('does not hardcode any affiliate / station recipient', () => {
