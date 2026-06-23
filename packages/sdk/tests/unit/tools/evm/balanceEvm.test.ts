@@ -11,6 +11,7 @@ import { getEvmBalances } from '@/tools/evm/balanceEvm'
 
 const HOLDER = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' as const
 const USDC = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const
+const DAI = '0x6B175474E89094C44Da98b954EedeAC495271d0F' as const
 
 describe('getEvmBalances', () => {
   beforeEach(() => {
@@ -59,5 +60,43 @@ describe('getEvmBalances', () => {
 
     expect(native.symbol).toBe('BNB')
     expect(native.decimals).toBe(18)
+  })
+
+  it('keeps per-token decimals straight across mixed-decimal ERC-20s', async () => {
+    // Adversarial: two tokens with different decimals (6 vs 18) resolved
+    // concurrently must each format against their OWN decimals, never the
+    // native's nor each other's. Order of the result must match input order.
+    mockGetBalance.mockResolvedValueOnce(0n)
+    mockReadContract
+      .mockResolvedValueOnce(1_500_000n) // USDC balanceOf
+      .mockResolvedValueOnce(6) // USDC decimals
+      .mockResolvedValueOnce('USDC') // USDC symbol
+      .mockResolvedValueOnce(1_500_000_000_000_000_000n) // DAI balanceOf
+      .mockResolvedValueOnce(18) // DAI decimals
+      .mockResolvedValueOnce('DAI') // DAI symbol
+
+    const [, usdc, dai] = await getEvmBalances('Ethereum', { address: HOLDER, tokens: [USDC, DAI] })
+
+    // 1.50 USDC with a trailing zero stripped (parity with viem formatUnits).
+    expect(usdc).toEqual({ contractAddress: USDC, symbol: 'USDC', decimals: 6, raw: 1_500_000n, balance: '1.5' })
+    expect(dai).toEqual({
+      contractAddress: DAI,
+      symbol: 'DAI',
+      decimals: 18,
+      raw: 1_500_000_000_000_000_000n,
+      balance: '1.5',
+    })
+  })
+
+  it('propagates RPC failure (fail-closed, never a silent zero balance)', async () => {
+    // A non-standard / non-contract address whose decimals() reverts must
+    // reject the whole read, not fall back to a fabricated 0 balance.
+    mockGetBalance.mockResolvedValueOnce(0n)
+    mockReadContract
+      .mockResolvedValueOnce(123n) // balanceOf ok
+      .mockRejectedValueOnce(new Error('execution reverted')) // decimals reverts
+      .mockResolvedValueOnce('???')
+
+    await expect(getEvmBalances('Ethereum', { address: HOLDER, tokens: [USDC] })).rejects.toThrow('execution reverted')
   })
 })
