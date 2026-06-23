@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock the fs module to avoid touching real filesystem
 vi.mock('node:fs/promises')
@@ -64,6 +64,55 @@ describe('config-store', () => {
       await saveConfig(config)
       expect(mockFs.mkdir).toHaveBeenCalledWith(CONFIG_DIR, { recursive: true })
       expect(mockFs.writeFile).toHaveBeenCalledWith(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+    })
+  })
+
+  describe('VULTISIG_CONFIG_DIR override', () => {
+    const ENV_KEY = 'VULTISIG_CONFIG_DIR'
+    let savedEnv: string | undefined
+
+    beforeEach(() => {
+      savedEnv = process.env[ENV_KEY]
+    })
+
+    afterEach(() => {
+      if (savedEnv === undefined) delete process.env[ENV_KEY]
+      else process.env[ENV_KEY] = savedEnv
+    })
+
+    it('resolves config path under the overridden dir, not $HOME/.vultisig', () => {
+      const overrideDir = path.join(os.tmpdir(), 'vultisig-config-override')
+      process.env[ENV_KEY] = overrideDir
+
+      const resolved = getConfigPath()
+      expect(resolved).toBe(path.join(overrideDir, 'config.json'))
+      expect(resolved.startsWith(overrideDir)).toBe(true)
+      expect(resolved).not.toBe(CONFIG_PATH)
+    })
+
+    it('save/load round-trip uses the overridden dir', async () => {
+      const overrideDir = path.join(os.tmpdir(), 'vultisig-config-override')
+      const overridePath = path.join(overrideDir, 'config.json')
+      process.env[ENV_KEY] = overrideDir
+
+      const config = makeConfig([makeVault()])
+      await saveConfig(config)
+      expect(mockFs.mkdir).toHaveBeenCalledWith(overrideDir, { recursive: true })
+      expect(mockFs.writeFile).toHaveBeenCalledWith(overridePath, JSON.stringify(config, null, 2), 'utf-8')
+
+      mockFs.readFile.mockResolvedValue(JSON.stringify(config))
+      const loaded = await loadConfig()
+      expect(mockFs.readFile).toHaveBeenCalledWith(overridePath, 'utf-8')
+      expect(loaded).toEqual(config)
+    })
+
+    it('co-locates the registry with credentials (same parent dir)', () => {
+      const overrideDir = path.join(os.tmpdir(), 'vultisig-config-override')
+      process.env[ENV_KEY] = overrideDir
+
+      // credential-store resolves credentials.enc the same way (env var || $HOME/.vultisig)
+      const credentialsPath = path.join(process.env[ENV_KEY] || path.join(os.homedir(), '.vultisig'), 'credentials.enc')
+      expect(path.dirname(getConfigPath())).toBe(path.dirname(credentialsPath))
     })
   })
 })
