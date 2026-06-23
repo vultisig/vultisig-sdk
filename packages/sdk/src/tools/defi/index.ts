@@ -4,14 +4,15 @@
 // reads protocol state) and NEVER signs or broadcasts. The consumer gates
 // signing. Any affiliate/fee param is INJECTABLE by the consumer (default
 // neutral/off) — the SDK is multi-consumer and never hardcodes a referral.
-//
-// First protocol: Pendle (PT buy/sell/redeem) — see ./pendle.
 
 import { pendle } from './pendle'
+import * as threeJane from './threeJane'
 
 export * from './pendle'
+export * as threeJane from './threeJane'
 
 /** The aggregated sdk.defi namespace. */
 export const defi = {
   pendle,
+  threeJane,
 } as const
