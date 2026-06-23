@@ -176,12 +176,34 @@ export async function pendleConvert(args: PendleConvertArgs): Promise<PendleConv
   return queryUrl<PendleConvertResponse>(url)
 }
 
+const MAX_UINT256 = (1n << 256n) - 1n
+
 // Minimal ERC20 approve(spender, amount) calldata. selector 0x095ea7b3 +
 // 32-byte spender (left-padded) + 32-byte amount. Avoids pulling in an ABI
 // encoder — the only contract call this module hand-encodes (the Router call
 // itself comes pre-encoded from Convert).
+//
+// Fund-safety: this hand-builds signable calldata, so it MUST refuse anything
+// it can't faithfully encode into the fixed 4+32+32 byte layout — silently
+// emitting a 65-byte word or a `-1` amount would hand the signer calldata that
+// does NOT match the reported value. We therefore:
+//  - require `spender` to be a syntactic 0x-prefixed 20-byte address (the only
+//    caller passes the fixed Router V4, but the helper is exported), and
+//  - require `amount` to be a plain decimal string in [0, 2^256-1] (no hex/
+//    octal injection via BigInt's `0x`/`0o` parsing, no negatives, no overflow).
 export function encodeErc20Approve(spender: string, amount: string): string {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(spender)) {
+    throw new Error(`encodeErc20Approve: invalid spender address ${spender}`)
+  }
+  // Decimal-only: blocks BigInt('0x..')/('0o..') injection + whitespace/sign tricks.
+  if (!/^\d+$/.test(amount)) {
+    throw new Error(`encodeErc20Approve: amount must be a non-negative base-10 integer, got ${amount}`)
+  }
+  const value = BigInt(amount)
+  if (value > MAX_UINT256) {
+    throw new Error(`encodeErc20Approve: amount ${amount} exceeds uint256 max`)
+  }
   const addr = spender.toLowerCase().replace(/^0x/, '').padStart(64, '0')
-  const amt = BigInt(amount).toString(16).padStart(64, '0')
+  const amt = value.toString(16).padStart(64, '0')
   return '0x095ea7b3' + addr + amt
 }

@@ -227,7 +227,21 @@ async function buildPendleConvertTx(opts: BuildConvertOpts): Promise<PendlePtBui
       `pendle: unexpected router ${route.tx.to} (expected Pendle Router V4 ${PENDLE_ROUTER_V4}); refusing to build.`
     )
   }
-  const value = route.tx.value && route.tx.value !== '0' ? route.tx.value : '0'
+  // The router calldata is forwarded UNSIGNED to the consumer's signer verbatim.
+  // It must be a syntactic 0x-hex byte string (even length) — refuse to hand the
+  // signer anything that isn't valid calldata.
+  if (!/^0x([0-9a-fA-F]{2})*$/.test(route.tx.data) || route.tx.data.length < 10) {
+    throw new PendleBuildError('pendle: Convert returned malformed router calldata; refusing to build.')
+  }
+  // tx.value: absent/'0' for ERC20 input, decimal wei for native input. Bound it
+  // to a non-negative uint256 so a malformed value never reaches the signer.
+  const rawValue = route.tx.value
+  if (rawValue && rawValue !== '0') {
+    if (!/^\d+$/.test(rawValue) || BigInt(rawValue) > (1n << 256n) - 1n) {
+      throw new PendleBuildError(`pendle: Convert returned an invalid tx.value ${rawValue}; refusing to build.`)
+    }
+  }
+  const value = rawValue && rawValue !== '0' ? rawValue : '0'
 
   const mkTx = (tx: { to: string; value: string; data: string; gasLimit: string }): PendleUnsignedTx => ({
     chain,
@@ -241,6 +255,15 @@ async function buildPendleConvertTx(opts: BuildConvertOpts): Promise<PendlePtBui
 
   const approvalReq = res.requiredApprovals?.[0]
   const out = route.outputs?.[0]
+  // The approve leg spends the user's token, so the token (approve `to`) must be
+  // a syntactic 20-byte address. encodeErc20Approve additionally bounds the
+  // amount; a malformed/compromised Convert response fails closed here rather
+  // than producing an approve tx against garbage calldata.
+  if (approvalReq && !/^0x[0-9a-fA-F]{40}$/.test(approvalReq.token)) {
+    throw new PendleBuildError(
+      `pendle: Convert returned an invalid approval token address ${approvalReq.token}; refusing to build.`
+    )
+  }
   const approval = approvalReq
     ? mkTx({
         to: approvalReq.token,

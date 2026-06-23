@@ -26,10 +26,13 @@ import {
 } from '@/tools/defi/pendle'
 
 // Ethereum (chainId 1) sample market + Convert fixtures.
-const MARKET = '0xMarket0000000000000000000000000000000001'
-const PT = '0xPT00000000000000000000000000000000000002'
-const UNDERLYING = '0xUSDC0000000000000000000000000000000000a0'
-const FROM = '0xWallet00000000000000000000000000000000ff'
+// NOTE: these must be syntactically valid 20-byte 0x addresses — the builders
+// fail-closed on a non-hex approval token / router, so placeholders like
+// "0xMarket…" would (correctly) be rejected.
+const MARKET = '0x1111111111111111111111111111111111110001'
+const PT = '0x2222222222222222222222222222222222220002'
+const UNDERLYING = '0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a000a0'
+const FROM = '0xff00ff00ff00ff00ff00ff00ff00ff00ff0000ff'
 
 const activeMarketsFixture = {
   markets: [
@@ -161,6 +164,53 @@ describe('buildBuyPt (UNSIGNED)', () => {
     await expect(
       buildBuyPt({ chain: 'Ethereum', market: MARKET, pt: PT, underlying: UNDERLYING, amount: '1', from: FROM })
     ).rejects.toThrow(/unexpected router/)
+  })
+
+  it('refuses malformed router calldata (non-hex / too short)', async () => {
+    queryUrlMock.mockImplementation(async (url: string) => {
+      if (url.includes('/markets/active')) return activeMarketsFixture
+      return { routes: [{ tx: { to: PENDLE_ROUTER_V4, data: '0xzz' } }] }
+    })
+    await expect(
+      buildBuyPt({ chain: 'Ethereum', market: MARKET, pt: PT, underlying: UNDERLYING, amount: '1', from: FROM })
+    ).rejects.toThrow(/malformed router calldata/)
+  })
+
+  it('refuses a non-numeric / hex-injected tx.value on native input', async () => {
+    queryUrlMock.mockImplementation(async (url: string) => {
+      if (url.includes('/markets/active')) return activeMarketsFixture
+      return { routes: [{ tx: { to: PENDLE_ROUTER_V4, data: '0xdeadbeef', value: '0xff' } }] }
+    })
+    await expect(
+      buildBuyPt({ chain: 'Ethereum', market: MARKET, pt: PT, underlying: UNDERLYING, amount: '1', from: FROM })
+    ).rejects.toThrow(/invalid tx\.value/)
+  })
+
+  it('refuses an invalid approval token address from Convert', async () => {
+    queryUrlMock.mockImplementation(async (url: string) => {
+      if (url.includes('/markets/active')) return activeMarketsFixture
+      return {
+        requiredApprovals: [{ token: '0xNOTANADDRESS', amount: '1000000' }],
+        routes: [{ tx: { to: PENDLE_ROUTER_V4, data: '0xdeadbeef' } }],
+      }
+    })
+    await expect(
+      buildBuyPt({ chain: 'Ethereum', market: MARKET, pt: PT, underlying: UNDERLYING, amount: '1', from: FROM })
+    ).rejects.toThrow(/invalid approval token/)
+  })
+
+  it('refuses an out-of-bounds / non-decimal approval amount (no silent wrap)', async () => {
+    const overflow = ((1n << 256n) + 5n).toString()
+    queryUrlMock.mockImplementation(async (url: string) => {
+      if (url.includes('/markets/active')) return activeMarketsFixture
+      return {
+        requiredApprovals: [{ token: UNDERLYING, amount: overflow }],
+        routes: [{ tx: { to: PENDLE_ROUTER_V4, data: '0xdeadbeef' } }],
+      }
+    })
+    await expect(
+      buildBuyPt({ chain: 'Ethereum', market: MARKET, pt: PT, underlying: UNDERLYING, amount: '1', from: FROM })
+    ).rejects.toThrow(/exceeds uint256 max/)
   })
 
   it('rejects a market/token mismatch', async () => {
