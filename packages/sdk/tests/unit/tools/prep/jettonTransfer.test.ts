@@ -9,7 +9,7 @@
  * structure is well-formed and deterministic — and crucially that NO signing
  * or broadcasting happens (finalize is a separate, caller-driven step).
  */
-import { Address, Cell } from '@ton/core'
+import { Address, Cell, loadMessageRelaxed } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
 import { buildV4R2Wallet } from '@/chains/ton/walletV4R2'
@@ -88,6 +88,67 @@ describe('prepareJettonTransferTxFromKeys', () => {
     expect(slice.loadUintBig(64)).toBe(0n) // query_id
     expect(slice.loadCoins()).toBe(amount) // jetton amount (base units)
     expect(slice.loadAddress().toString()).toBe(Address.parse(RECIPIENT).toString()) // destination
+  })
+
+  it('routes to the sender jetton wallet, refunds excess to the sender, and forwards a notification ton', () => {
+    // Fund-safety regression: lock down the three "wrong-recipient" surfaces a
+    // TEP-74 transfer can silently corrupt —
+    //   1. inner internal-message destination MUST be the sender's *jetton
+    //      wallet* (the contract holding tokens), NOT the recipient or master,
+    //   2. body response_destination MUST be the sender's TON wallet (excess
+    //      TON refund), NOT the recipient (else excess gas is donated away),
+    //   3. forward_ton_amount MUST be > 0 so a transfer_notification fires.
+    const tx = prepareJettonTransferTxFromKeys(identity, {
+      receiver: RECIPIENT,
+      jettonWalletAddress: JETTON_WALLET,
+      amount: 1_000_000n,
+      seqno: 5,
+      validUntil: 1_700_000_000,
+    })
+
+    const cells = Cell.fromBoc(Buffer.from(tx.unsignedBocHex, 'hex'))
+    const innerMsg = cells[0]!.refs[0]!
+
+    // Parse the relaxed internal message with @ton/core's own decoder (mirror of
+    // the storeMessageRelaxed used by the builder) and assert the destination.
+    const relaxed = loadMessageRelaxed(innerMsg.beginParse())
+    const innerDest = relaxed.info.type === 'internal' ? relaxed.info.dest : undefined
+    expect(innerDest?.toString()).toBe(Address.parse(JETTON_WALLET).toString())
+
+    // Body cell: op | query_id | amount | destination | response_destination ...
+    const body = relaxed.body.beginParse()
+    body.loadUint(32) // op
+    body.loadUintBig(64) // query_id
+    body.loadCoins() // amount
+    body.loadAddress() // destination (recipient)
+    const responseDest = body.loadAddress()
+    const senderWallet = buildV4R2Wallet({
+      publicKeyEd25519: Uint8Array.from({ length: 32 }, () => 0x01),
+    })
+    expect(responseDest.toString()).toBe(senderWallet.address.toString())
+    expect(responseDest.toString()).not.toBe(Address.parse(RECIPIENT).toString())
+
+    body.loadBit() // custom_payload (Maybe) = absent
+    expect(body.loadCoins()).toBeGreaterThan(0n) // forward_ton_amount triggers notification
+  })
+
+  it('rejects a non-TON recipient address (wrong-chain fail-closed)', () => {
+    // An attacker/LLM pasting an EVM/cosmos/btc address must NOT produce a
+    // malformed cell — Address.parse throws, the build fails closed.
+    for (const bad of [
+      '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
+      'cosmos1abcdefghijklmnopqrstuvwxyz0123456789',
+      'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+    ]) {
+      expect(() =>
+        prepareJettonTransferTxFromKeys(identity, {
+          receiver: bad,
+          jettonWalletAddress: JETTON_WALLET,
+          amount: 1n,
+          seqno: 0,
+        })
+      ).toThrow()
+    }
   })
 
   it('exposes a finalize closure but never signs/broadcasts on its own', () => {
