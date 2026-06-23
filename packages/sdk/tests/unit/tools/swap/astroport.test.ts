@@ -12,6 +12,13 @@ import {
 const VAULT = 'terra1dcegyrekltswvyy0xy69ydgxn9x8x32zdtapd8' // 20-byte account
 const ASTRO_CW20 = 'terra1nsuqsk6kh58ulczatwev87ttq2z6r3pusulg9r24mfj2fvtzd4uq3exn26' // 32-byte CW20 contract
 const RECIPIENT = 'terra1zdpgj8am5nqqvht927k3etljyl6a52kwqup0je'
+// Validator operator / consensus keys on phoenix-1. These are NOT spendable
+// accounts — funds routed to them (or swap proceeds pinned to them) are
+// unrecoverable. mcp-ts guards these via assertNotValidatorHrp(); the SDK port
+// relies on the exact `decoded.prefix === 'terra'` check rejecting the distinct
+// `terravaloper` / `terravalcons` HRPs. Pin that equivalence so it can't drift.
+const VALOPER = 'terravaloper1qv9pzxqlyckngw6zf9g9whn9d3eh4qvghu0hpp'
+const VALCONS = 'terravalcons1qv9pzxqlyckngw6zf9g9whn9d3eh4qvgr0utdq'
 
 const base: BuildAstroportSwapParams = {
   fromAddress: VAULT,
@@ -130,6 +137,34 @@ describe('assembleAstroportSwap validation', () => {
     expect(() =>
       assembleAstroportSwap({ ...base, fromAddress: 'cosmos1dcegyrekltswvyy0xy69ydgxn9x8x32zt08p08' }, '500000')
     ).toThrow(/expected terra prefix/)
+  })
+
+  it('rejects a validator operator / consensus sender (valoper / valcons HRP)', () => {
+    // Fund-safety equivalence with mcp-ts assertNotValidatorHrp(): the exact
+    // `terra`-prefix check must reject the distinct validator HRPs. A valoper /
+    // valcons sender is not a spendable account.
+    expect(() => assembleAstroportSwap({ ...base, fromAddress: VALOPER }, '500000')).toThrow(/expected terra prefix/)
+    expect(() => assembleAstroportSwap({ ...base, fromAddress: VALCONS }, '500000')).toThrow(/expected terra prefix/)
+  })
+
+  it('rejects a validator operator / consensus explicit recipient (proceed-redirect guard)', () => {
+    // The explicit-recipient path runs the same validateTerraAddress guard, so
+    // swap proceeds can never be pinned to a valoper/valcons (or any non-terra)
+    // address even when an explicit recipient is supplied.
+    expect(() => assembleAstroportSwap({ ...base, recipientAddress: VALOPER }, '500000')).toThrow(
+      /expected terra prefix/
+    )
+    expect(() =>
+      assembleAstroportSwap({ ...base, recipientAddress: 'cosmos1dcegyrekltswvyy0xy69ydgxn9x8x32zt08p08' }, '500000')
+    ).toThrow(/expected terra prefix/)
+  })
+
+  it('rejects a malformed quote amount (no signed payload built from garbage)', () => {
+    // The quote feeds minimum_receive on the signed envelope. A non-integer
+    // quote must fail closed rather than silently produce a degenerate floor.
+    expect(() => assembleAstroportSwap(base, '12.5')).toThrow(/invalid quoteAmount/)
+    expect(() => assembleAstroportSwap(base, '')).toThrow(/invalid quoteAmount/)
+    expect(() => assembleAstroportSwap(base, 'abc')).toThrow(/invalid quoteAmount/)
   })
 
   it('rejects a zero / non-integer offer amount', () => {
