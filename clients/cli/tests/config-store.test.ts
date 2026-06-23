@@ -13,6 +13,7 @@ const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json')
 // Import after mocking
 import type { VaultEntry, VsigConfig } from '../src/core/config-store'
 import { getConfigPath, loadConfig, saveConfig } from '../src/core/config-store'
+import { getCredentialsPath } from '../src/core/credential-store'
 
 const mockFs = vi.mocked(fs)
 
@@ -106,13 +107,24 @@ describe('config-store', () => {
       expect(loaded).toEqual(config)
     })
 
+    it('reads the overridden path when the registry is missing', async () => {
+      const overrideDir = path.join(os.tmpdir(), 'vultisig-config-override')
+      const overridePath = path.join(overrideDir, 'config.json')
+      process.env[ENV_KEY] = overrideDir
+
+      mockFs.readFile.mockRejectedValue(new Error('ENOENT'))
+      const loaded = await loadConfig()
+      expect(mockFs.readFile).toHaveBeenCalledWith(overridePath, 'utf-8')
+      expect(loaded).toEqual({ vaults: [] })
+    })
+
     it('co-locates the registry with credentials (same parent dir)', () => {
       const overrideDir = path.join(os.tmpdir(), 'vultisig-config-override')
       process.env[ENV_KEY] = overrideDir
 
-      // credential-store resolves credentials.enc the same way (env var || $HOME/.vultisig)
-      const credentialsPath = path.join(process.env[ENV_KEY] || path.join(os.homedir(), '.vultisig'), 'credentials.enc')
-      expect(path.dirname(getConfigPath())).toBe(path.dirname(credentialsPath))
+      // Assert against credential-store's real resolver so the two stores stay
+      // coupled by the test, not by a hand-copied path expression.
+      expect(path.dirname(getConfigPath())).toBe(path.dirname(getCredentialsPath()))
     })
   })
 })

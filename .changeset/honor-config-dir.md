@@ -7,3 +7,6 @@ registry path (`config.json`) was hardcoded to `~/.vultisig` at module load and 
 env var, while `credential-store` honored it — so in Docker/CI with a custom config dir the
 credentials and the vault registry diverged and a loaded wallet became invisible. The config
 dir is now resolved at call time, matching `credential-store`, so both co-locate.
+
+Also exports `getCredentialsPath` from `credential-store` so consumers (and tests) can
+assert the registry and credentials resolve to the same directory.
