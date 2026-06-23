@@ -22,6 +22,13 @@ export { VerifierClient } from './verifier'
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+  type CosmosStakingMsgEnvelope,
+  type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -31,7 +38,10 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  type RedelegateParams,
+  type UndelegateParams,
   type VaultIdentity,
+  type WithdrawRewardsParams,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)

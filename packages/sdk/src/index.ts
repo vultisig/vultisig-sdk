@@ -364,10 +364,22 @@ export type {
   TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   chainFeeCoin,
+  cosmosStaking,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
