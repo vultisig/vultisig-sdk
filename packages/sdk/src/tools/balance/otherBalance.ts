@@ -27,10 +27,20 @@ function assertTronAddress(addr: string): void {
 
 export type XrpBalance = {
   address: string
-  balanceDrops: number
+  // Raw drops as the authoritative string. XRP supply (~1e17 drops) is well past
+  // 2^53, so a `number` here would silently round large balances (e.g. a >9M-XRP
+  // account) — keep it a string and parse with BigInt.
+  balanceDrops: string
   balanceXrp: string
   note?: string
   asOf: string
+}
+
+// 1 XRP = 1e6 drops. Format via BigInt so a >2^53-drop balance never rounds.
+function formatXrp(drops: bigint): string {
+  const whole = drops / 1_000_000n
+  const frac = drops % 1_000_000n
+  return `${whole}.${frac.toString().padStart(6, '0')}`
 }
 
 /**
@@ -53,7 +63,7 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
   if (response.result?.error === 'actNotFound') {
     return {
       address,
-      balanceDrops: 0,
+      balanceDrops: '0',
       balanceXrp: '0.000000',
       note: 'Account not found on XRP Ledger. It may be unfunded (requires 10 XRP minimum reserve).',
       asOf: new Date().toISOString(),
@@ -69,11 +79,19 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
     throw new Error('XRPL returned no account_data and no error — upstream response was malformed.')
   }
 
-  const drops = Number(response.result.account_data.Balance)
+  const rawDrops = response.result.account_data.Balance
+  // The XRPL wire format delivers Balance as a decimal string; parse with BigInt
+  // so a large balance keeps full precision (Number() would round past 2^53).
+  let drops: bigint
+  try {
+    drops = BigInt(rawDrops)
+  } catch {
+    throw new Error(`XRPL returned a non-integer Balance ("${rawDrops}") — malformed upstream response.`)
+  }
   return {
     address,
-    balanceDrops: drops,
-    balanceXrp: (drops / 1_000_000).toFixed(6),
+    balanceDrops: drops.toString(),
+    balanceXrp: formatXrp(drops),
     asOf: new Date().toISOString(),
   }
 }

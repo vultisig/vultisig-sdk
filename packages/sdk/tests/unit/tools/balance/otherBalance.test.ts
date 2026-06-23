@@ -63,14 +63,36 @@ describe('getXrpBalance', () => {
       result: { account_data: { Balance: '25000000' } },
     })
     const r = await getXrpBalance('rXYZ')
-    expect(r.balanceDrops).toBe(25_000_000)
+    expect(r.balanceDrops).toBe('25000000')
     expect(r.balanceXrp).toBe('25.000000')
+  })
+
+  it('keeps full precision for a >2^53-drop balance (no Number() rounding)', async () => {
+    // 90,000,000,000.123456 XRP = 90000000000123456 drops > 2^53 (9.007e15).
+    // A Number() round-trip would corrupt this to ...3460 — assert it does not.
+    const raw = '90000000000123456'
+    mockFetchJson.mockResolvedValueOnce({
+      result: { account_data: { Balance: raw } },
+    })
+    const r = await getXrpBalance('rXYZ')
+    expect(r.balanceDrops).toBe(raw)
+    expect(r.balanceXrp).toBe('90000000000.123456')
+    // Guard: the lossy path would have produced these.
+    expect(r.balanceDrops).not.toBe(String(Number(raw)))
+  })
+
+  it('rejects a non-integer Balance instead of silently NaN-ing', async () => {
+    mockFetchJson.mockResolvedValueOnce({
+      result: { account_data: { Balance: 'not-a-number' } },
+    })
+    await expect(getXrpBalance('rXYZ')).rejects.toThrow(/non-integer Balance/)
   })
 
   it('treats actNotFound as unfunded zero, not an error', async () => {
     mockFetchJson.mockResolvedValueOnce({ result: { error: 'actNotFound' } })
     const r = await getXrpBalance('rXYZ')
-    expect(r.balanceDrops).toBe(0)
+    expect(r.balanceDrops).toBe('0')
+    expect(r.balanceXrp).toBe('0.000000')
     expect(r.note).toMatch(/unfunded/i)
   })
 
