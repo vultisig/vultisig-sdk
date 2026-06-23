@@ -22,6 +22,9 @@ export { VerifierClient } from './verifier'
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildCw20TransferMsg,
+  type BuildCw20TransferMsgParams,
+  type BuildCw20TransferMsgResult,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,

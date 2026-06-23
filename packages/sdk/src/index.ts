@@ -352,6 +352,8 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  BuildCw20TransferMsgParams,
+  BuildCw20TransferMsgResult,
   Coin,
   CoinKey,
   CoinMetadata,
@@ -367,6 +369,7 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  buildCw20TransferMsg,
   chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
