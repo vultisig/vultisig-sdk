@@ -41,6 +41,20 @@ export { ValidationHelpers } from './utils/validation'
 
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from './utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from './utils/convertAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // ============================================================================
