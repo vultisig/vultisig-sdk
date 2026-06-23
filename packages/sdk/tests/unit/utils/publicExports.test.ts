@@ -10,6 +10,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
 
+  it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
+    expect(typeof sdk.normalizeTx).toBe('function')
+    expect(typeof sdk.splitMultiTx).toBe('function')
+    expect(typeof sdk.TxNormalizeError).toBe('function')
+  })
+
   it('exports findSwapQuote, abiEncode, evmCheckAllowance (already consumed by mcp-ts)', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')

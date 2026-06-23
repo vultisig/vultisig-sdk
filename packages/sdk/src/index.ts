@@ -44,6 +44,17 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // ============================================================================
+// PUBLIC API - Tx Shape Normalization (pure, vault-free)
+// ============================================================================
+
+// Canonicalize a build_* tool result into a signing-ready tx envelope and split
+// multi-tx build results (approve+swap, generic transactions[]) into ordered
+// legs. Ports the normalize/split half of the agent-backend's
+// enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
+export type { NormalizeArgs, NormalizedTx } from './tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+
+// ============================================================================
 // PUBLIC API - Station Migration Primitives
 // ============================================================================
 
