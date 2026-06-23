@@ -211,6 +211,19 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// DeFi protocol integrations (sdk.defi.* — builds UNSIGNED calldata only).
+// Pure viem encoding, no MPC/native deps, so it is RN-safe as a static
+// re-export (mirrors the generic entry). Without this the React Native
+// allow-list omitted the defi namespace and RN consumers (vultiagent-app)
+// could not reach the 3Jane supply builder.
+export { defi } from '../../tools/defi'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
+
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted
