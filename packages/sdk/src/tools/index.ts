@@ -4,6 +4,18 @@ export { deriveAddressFromKeys } from './address'
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
+// DEX on-chain quotes (read-only)
+export type {
+  BalancerPoolState,
+  BalancerQuote,
+  BalancerQuoteParams,
+  BalancerSwapKind,
+  UniswapV2Quote,
+  UniswapV2QuoteParams,
+  UniV2Deployment,
+} from './dex'
+export { balancerQuote, getAmountOut, supportedUniV2Chains, UNI_V2_DEPLOYMENTS, uniswapV2Quote } from './dex'
+
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'

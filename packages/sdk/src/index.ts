@@ -352,6 +352,10 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  BalancerPoolState,
+  BalancerQuote,
+  BalancerQuoteParams,
+  BalancerSwapKind,
   Coin,
   CoinKey,
   CoinMetadata,
@@ -362,17 +366,22 @@ export type {
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
+  UniswapV2Quote,
+  UniswapV2QuoteParams,
+  UniV2Deployment,
   VaultIdentity,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  balancerQuote,
   chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
   findSwapQuote,
+  getAmountOut,
   getCoinBalance,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
@@ -389,6 +398,9 @@ export {
   resolve4ByteSelector,
   resolveEns,
   searchToken,
+  supportedUniV2Chains,
+  UNI_V2_DEPLOYMENTS,
+  uniswapV2Quote,
   VerifierClient,
 } from './tools'
 
