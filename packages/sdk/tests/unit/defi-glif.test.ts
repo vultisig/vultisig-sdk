@@ -93,6 +93,33 @@ describe('sdk.defi.glif — buildGlifRedeemSticnt', () => {
   })
 })
 
+describe('sdk.defi.glif — canonical Base addresses (literal pin, #228 inert-guard guard)', () => {
+  // The other suites assert `encoded == GLIF_ICN_BASE_ADDRESSES.*`, which stays
+  // green even if the constant itself is corrupted (the expectation moves with
+  // the symbol). Pin the LITERAL canonical Base addresses so a fat-fingered
+  // pool/token constant — the single most fund-critical value here — fails CI.
+  // Verified on-chain (Base 8453): pool.asset() == ICNT, pool.symbol() == stICNT.
+  it('pins ICNT token + stICNT pool to their on-chain-verified Base addresses', () => {
+    expect(GLIF_ICN_BASE_ADDRESSES.icnt).toBe(getAddress('0xE0Cd4cAcDdcBF4f36e845407CE53E87717b6601d'))
+    expect(GLIF_ICN_BASE_ADDRESSES.pool).toBe(getAddress('0xAeD7C2eD7Bb84396AfCB55fF72c8F8E87FFb68f3'))
+  })
+
+  it('stake encodes the LITERAL pool as approve-spender + deposit-target (not just the symbol)', () => {
+    const res = buildGlifStakeIcnt({ from: FROM, amount: ONE })
+    const approve = decodeFunctionData({ abi: erc20Abi, data: res.transactions[0].data })
+    // approve target == literal ICNT token; spender == literal pool
+    expect(getAddress(res.transactions[0].to)).toBe(getAddress('0xE0Cd4cAcDdcBF4f36e845407CE53E87717b6601d'))
+    expect(getAddress(approve.args[0] as string)).toBe(getAddress('0xAeD7C2eD7Bb84396AfCB55fF72c8F8E87FFb68f3'))
+    // deposit target == literal pool
+    expect(getAddress(res.transactions[1].to)).toBe(getAddress('0xAeD7C2eD7Bb84396AfCB55fF72c8F8E87FFb68f3'))
+  })
+
+  it('redeem encodes the LITERAL pool as the target (not just the symbol)', () => {
+    const res = buildGlifRedeemSticnt({ from: FROM, amount: ONE })
+    expect(getAddress(res.transactions[0].to)).toBe(getAddress('0xAeD7C2eD7Bb84396AfCB55fF72c8F8E87FFb68f3'))
+  })
+})
+
 describe('sdk.defi.glif — fund-safety invariants (encoding == reported)', () => {
   // The crypto-in-SDK hotspot: the bytes handed to the signer MUST equal the
   // amount/owner/receiver the result object reports. No silent re-encode.

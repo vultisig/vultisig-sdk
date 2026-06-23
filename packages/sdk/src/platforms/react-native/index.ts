@@ -254,6 +254,20 @@ export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchTo
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// DeFi protocol primitives (sdk.defi.*). Pure-crypto UNSIGNED calldata builders
+// (viem encodeFunctionData only — viem is an externalized RN peer dep, same as
+// the EVM tools above). The generic entry (src/index.ts) exports these; the RN
+// allow-list omitted them so RN consumers (vultiagent-app) couldn't build GLIF
+// stake/redeem calldata and had to re-encode the ABIs.
+export type {
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  GlifUnsignedTx,
+} from '../../defi'
+export * as defi from '../../defi'
+
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
