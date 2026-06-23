@@ -1530,6 +1530,10 @@ export class AgentExecutor {
         return {
           signatures,
           pm_order_ref: input.pm_order_ref,
+          // pm_batch_ref rides along so the backend's batch auto-submit can
+          // dispatch submit_deposit_wallet_batch — without it, Polymarket
+          // BATCH approvals sign but never auto-submit.
+          pm_batch_ref: input.pm_batch_ref,
           auto_submit: !!(input.__pm_auto_submit || input.auto_submit),
         }
       }

@@ -514,6 +514,32 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect((data.signatures as unknown[]).length).toBe(2)
   })
 
+  it('echoes pm_batch_ref (+ __pm_auto_submit_batch) for Polymarket BATCH auto-submit', async () => {
+    // BATCH approvals carry a bare pm_batch_ref (no __ prefix) plus the
+    // __pm_auto_submit_batch flag. agent-backend reads ar.Data["pm_batch_ref"]
+    // to dispatch submit_deposit_wallet_batch; if the echo loop drops it,
+    // BATCH approvals sign but never auto-submit.
+    const batchInput = {
+      payloads: [
+        { id: 'order', primaryType: 'Order', domain: {}, types: {}, message: {}, chain: 'Polygon' },
+        { id: 'auth', primaryType: 'ClobAuth', domain: {}, types: {}, message: {}, chain: 'Ethereum' },
+      ],
+      pm_batch_ref: 'batch-ref-789',
+      __pm_auto_submit_batch: true,
+    }
+    const results = await dispatch(batchInput, {
+      signatures: [{ id: 'order', signature: '0xorder' }],
+      pm_batch_ref: 'batch-ref-789',
+      auto_submit: true,
+    })
+
+    const data = results[0].data!
+    // bare pm_batch_ref survives the echo loop...
+    expect(data.pm_batch_ref).toBe('batch-ref-789')
+    // ...and the __-prefixed batch flag rides through on the __ branch.
+    expect(data.__pm_auto_submit_batch).toBe(true)
+  })
+
   it('does NOT echo non-marker input keys (payloads stay out of the result)', async () => {
     const results = await dispatch(POLYMARKET_SIGN_INPUT, { signatures: [] })
     const data = results[0].data!

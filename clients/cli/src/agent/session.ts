@@ -762,11 +762,14 @@ export class AgentSession {
       recent = { tool: toolName, success: false, data: { error: message } }
     }
 
-    // Echo protocol markers (__*, pm_order_ref) back so server-side
-    // handlers like autoSubmitPolymarketOrder can find them.
+    // Echo protocol markers (__*, pm_order_ref, pm_batch_ref) back so
+    // server-side handlers like autoSubmitPolymarketOrder and the batch
+    // auto-submit (submit_deposit_wallet_batch) can find them. pm_batch_ref
+    // has no __ prefix and isn't the order ref, so it must be named here or
+    // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
     for (const key of Object.keys(input)) {
-      if (key.startsWith('__') || key === 'pm_order_ref') {
+      if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
     }

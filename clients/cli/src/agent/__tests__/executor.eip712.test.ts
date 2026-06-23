@@ -222,6 +222,49 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     }
   })
 
+  it('payloads[] mode (Polymarket BATCH) returns pm_batch_ref so the backend can auto-submit the batch', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-batch', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_batch_ref: 'batch-ref-789',
+        __pm_auto_submit_batch: true,
+      })
+      // Skip the 5s inter-MPC-session sleep between the two payloads.
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // Without pm_batch_ref in the return, agent-backend's batch auto-submit
+      // (submit_deposit_wallet_batch) never fires — BATCH approvals sign but
+      // never auto-submit. The __pm_auto_submit_batch flag rides through the
+      // session echo loop (it's __-prefixed), not this return's auto_submit
+      // (which stays order-scoped via __pm_auto_submit, intentionally untouched).
+      expect(recent.data?.pm_batch_ref).toBe('batch-ref-789')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('5-field domain with salt (bytes32) matches canonical hash', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
