@@ -213,16 +213,28 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (balancer + 3jane).
+// the full defi namespace (balancer + glif + pendle + 3jane).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
   BuildBalancerV3SwapCalldataParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   Defi,
+  GlifUnsignedTx,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
@@ -272,20 +284,6 @@ export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchTo
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
-
-// DeFi protocol primitives (sdk.defi.*). Pure-crypto UNSIGNED calldata builders
-// (viem encodeFunctionData only — viem is an externalized RN peer dep, same as
-// the EVM tools above). The generic entry (src/index.ts) exports these; the RN
-// allow-list omitted them so RN consumers (vultiagent-app) couldn't build GLIF
-// stake/redeem calldata and had to re-encode the ABIs.
-export type {
-  BuildGlifRedeemParams,
-  BuildGlifRedeemResult,
-  BuildGlifStakeParams,
-  BuildGlifStakeResult,
-  GlifUnsignedTx,
-} from '../../defi'
-export * as defi from '../../defi'
 
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'

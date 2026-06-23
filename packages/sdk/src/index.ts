@@ -384,6 +384,10 @@ export type {
   AmountUnits,
   AssetRef,
   BuildBuyPtParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   BuildRedeemParams,
   BuildSellPtParams,
   BuildThreeJaneSupplyUsdcParams,
@@ -398,6 +402,7 @@ export type {
   FieldDiff,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  GlifUnsignedTx,
   IntentClaim,
   InvariantInput,
   InvariantViolation,
@@ -427,6 +432,8 @@ export {
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
   buildBuyPt,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
   buildRedeem,
   buildSellPt,
   chainAliasMap,
@@ -450,6 +457,9 @@ export {
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
   Invariant,
   isPendleChain,
   isZeroAmount,
@@ -478,22 +488,6 @@ export {
   stripChainPrefix,
   VerifierClient,
 } from './tools'
-
-// ============================================================================
-// PUBLIC API - DeFi protocol primitives (sdk.defi.*)
-// ============================================================================
-
-// Each protocol under `sdk.defi.<protocol>` BUILDS UNSIGNED calldata / msgs
-// ONLY (never signs, never broadcasts). Part of the sdk.defi.* DeFi
-// consolidation porting the mcp-ts build_* tools into the multi-consumer SDK.
-export type {
-  BuildGlifRedeemParams,
-  BuildGlifRedeemResult,
-  BuildGlifStakeParams,
-  BuildGlifStakeResult,
-  GlifUnsignedTx,
-} from './defi'
-export * as defi from './defi'
 
 // ============================================================================
 // PUBLIC API - Push Notifications
