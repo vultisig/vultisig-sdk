@@ -25,6 +25,24 @@ describe('estimateCosmosSwapFeeLabel', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.Osmosis)).toBe('~0.000875 OSMO')
   })
 
+  // Kujira's chainFeeCoin ticker is NOT a literal in chainFeeCoin — it is spread
+  // from `kujiraCoinsMigratedToThorChainMetadata.kuji` (the THOR-merge metadata).
+  // This is the highest-value guard for the PR's premise (derive ticker+decimals
+  // from canonical chainFeeCoin): a kujira-merge refactor that drops/renames the
+  // KUJI ticker would silently break this label, and only this assertion catches it.
+  it('resolves KUJI ticker via the kujira-merge canonical metadata', () => {
+    // 350_000 * 0.0034 / 1e6 = 0.00119 KUJI
+    expect(estimateCosmosSwapFeeLabel(Chain.Kujira)).toBe('~0.00119 KUJI')
+  })
+
+  // Terra (phoenix-1) shares the base "LUNA" word with TerraClassic's "LUNC";
+  // assert it picks the right canonical ticker + its own gas price (0.015), not
+  // TerraClassic's (28.325). Guards against a chain/ticker mix-up.
+  it('uses LUNA ticker + phoenix-1 gas price for Terra (not LUNC/columbus-5)', () => {
+    // 350_000 * 0.015 / 1e6 = 0.00525 LUNA
+    expect(estimateCosmosSwapFeeLabel(Chain.Terra)).toBe('~0.00525 LUNA')
+  })
+
   it('returns "" for flat-fee cosmos chains (THORChain has no gas market)', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.THORChain)).toBe('')
     expect(estimateCosmosSwapFeeLabel(Chain.MayaChain)).toBe('')
@@ -39,6 +57,13 @@ describe('estimateCosmosSwapFeeLabel', () => {
   it('honours a gasLimit override', () => {
     // 700_000 * 0.025 / 1e6 = 0.0175 ATOM
     expect(estimateCosmosSwapFeeLabel(Chain.Cosmos, { gasLimit: 700_000n })).toBe('~0.0175 ATOM')
+  })
+
+  // Safe-default: a non-positive gas-limit override must yield '' (no negative /
+  // zero fee leaks into the card), since `fee <= 0` is filtered.
+  it('returns "" for non-positive gasLimit overrides (no negative/zero fee leak)', () => {
+    expect(estimateCosmosSwapFeeLabel(Chain.Cosmos, { gasLimit: 0n })).toBe('')
+    expect(estimateCosmosSwapFeeLabel(Chain.Cosmos, { gasLimit: -350_000n })).toBe('')
   })
 
   it('lists exactly the gas-market chains as label-eligible', () => {
