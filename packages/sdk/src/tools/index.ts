@@ -2,7 +2,17 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
+export type { EvmBalance, GetEvmBalancesParams } from './evm'
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  getEvmBalances,
+  resolve4ByteSelector,
+  resolveEns,
+} from './evm'
 
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
