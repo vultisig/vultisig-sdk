@@ -29,7 +29,18 @@ const PALLET_ASSETS = 50
  */
 const METHOD_TRANSFER_KEEP_ALIVE = 2
 
-const U32_MAX = 0xffffffff
+/**
+ * Asset Hub asset-id ceiling. `pallet_assets` asset ids are a u32, but they are
+ * SCALE-encoded as `Compact<u32>`. A value >= 2^30 falls into compact
+ * big-integer mode (leading 2 bits = 0b11), which the on-device signer
+ * (`assertAssetTransferCallHex`) explicitly REFUSES TO SIGN ("AssetIds > 2^30
+ * are not supported"). Pinning the builder to < 2^30 keeps the SDK in lockstep
+ * with the signer's accepted compact range, so a callHex this builder produces
+ * can never be one the signer rejects. Real Asset Hub asset ids are small
+ * sequential integers (USDT=1984, USDC=1337), so this ceiling is well clear of
+ * any legitimate asset.
+ */
+const ASSET_ID_MAX = 0x3fffffff // 2^30 - 1, the largest non-big-integer compact
 
 /**
  * SS58 address-prefix for Polkadot relay chain + Asset Hub. Substrate chains
@@ -157,8 +168,11 @@ export type PreparePolkadotAssetSendResult = {
 export const preparePolkadotAssetSend = (params: PreparePolkadotAssetSendParams): PreparePolkadotAssetSendResult => {
   const { assetId, from, to, amount } = params
 
-  if (!Number.isInteger(assetId) || assetId <= 0 || assetId > U32_MAX) {
-    throw new Error(`Invalid Polkadot asset id ${assetId}: must be a positive integer u32 (max ${U32_MAX}).`)
+  if (!Number.isInteger(assetId) || assetId <= 0 || assetId > ASSET_ID_MAX) {
+    throw new Error(
+      `Invalid Polkadot asset id ${assetId}: must be a positive integer <= ${ASSET_ID_MAX} (2^30-1). ` +
+        `Asset ids >= 2^30 SCALE-encode in compact big-integer mode, which the on-device signer refuses to sign.`
+    )
   }
   if (amount <= 0n) {
     throw new Error('Amount must be greater than zero')

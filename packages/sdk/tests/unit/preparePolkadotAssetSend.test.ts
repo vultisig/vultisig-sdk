@@ -117,6 +117,20 @@ describe('preparePolkadotAssetSend', () => {
     )
   })
 
+  it('rejects asset ids in compact big-integer mode (>= 2^30) the signer would refuse', () => {
+    // 2^30 - 1 is the largest non-big-integer compact and is accepted.
+    const ok = preparePolkadotAssetSend({ assetId: 0x3fffffff, from: BOB, to: ALICE, amount: 1n })
+    expect(ok.assetId).toBe(0x3fffffff)
+    // The compact(assetId) leading byte must NOT be big-integer mode (low 2 bits 0b11).
+    const okBytes = Buffer.from(ok.callHex.replace(/^0x/, ''), 'hex')
+    expect(okBytes[2]! & 0x03).not.toBe(0x03)
+    // 2^30 tips into compact big-integer mode -> assertAssetTransferCallHex refuses it,
+    // so the builder must reject it up front rather than emit an un-signable callHex.
+    expect(() => preparePolkadotAssetSend({ assetId: 0x4000_0000, from: BOB, to: ALICE, amount: 1n })).toThrow(
+      /Invalid Polkadot asset id/
+    )
+  })
+
   it('rejects a malformed destination address (bad SS58 checksum)', () => {
     expect(() => preparePolkadotAssetSend({ assetId: 1984, from: BOB, to: 'not-an-address', amount: 1n })).toThrow(
       /Invalid destination Polkadot address/
