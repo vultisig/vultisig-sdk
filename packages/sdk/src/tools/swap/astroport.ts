@@ -155,7 +155,12 @@ function validateTerraAddress(value: string, fieldName: string): string {
     throw new Error(`invalid ${fieldName}: expected 20- or 32-byte payload, got ${payload.length}`)
   }
 
-  return trimmed
+  // Canonicalize to lowercase. bech32.decode confirmed case-uniformity above, so
+  // this is a safe canonical fold. CosmWasm `addr_validate` rejects an uppercase
+  // `TERRA1...` (or `to`) with "address not normalized" at execute time; folding
+  // here keeps the built `fromAddress` / inner `to` execute-ready, matching the
+  // CW20 contract-address normalization in classifyAstroportAsset.
+  return trimmed.toLowerCase()
 }
 
 /**

@@ -20,6 +20,13 @@ const RECIPIENT = 'terra1zdpgj8am5nqqvht927k3etljyl6a52kwqup0je'
 const VALOPER = 'terravaloper1qv9pzxqlyckngw6zf9g9whn9d3eh4qvghu0hpp'
 const VALCONS = 'terravalcons1qv9pzxqlyckngw6zf9g9whn9d3eh4qvgr0utdq'
 
+// Pin the canonical Astroport router as a LITERAL so a corrupted ASTROPORT_ROUTER
+// constant (funds → wrong/attacker contract) fails this assertion. Asserting only
+// against the imported symbol mutates both sides of the equality and stays green.
+// Verified on phoenix-1: contract_info.label = "Astroport Router", and matches
+// astroport-changelog terra-2/phoenix-1/core_phoenix.json `router_address`.
+const ASTROPORT_ROUTER_LITERAL = 'terra18plp90j0zd596zt3zdsf0w9vvk5ukwlwzwkksxv9mdu8rscat9sqndk5qz'
+
 const base: BuildAstroportSwapParams = {
   fromAddress: VAULT,
   offerAssetDenom: 'uluna',
@@ -82,6 +89,9 @@ describe('assembleAstroportSwap (native offer)', () => {
     expect(result.chain).toBe('Terra')
     expect(result.chainId).toBe('phoenix-1')
     expect(result.contractAddress).toBe(ASTROPORT_ROUTER)
+    // Pin the literal too — a corrupted ASTROPORT_ROUTER constant would still
+    // satisfy the symbol-equality above (both sides mutate together).
+    expect(result.contractAddress).toBe(ASTROPORT_ROUTER_LITERAL)
     expect(result.funds).toEqual([{ denom: 'uluna', amount: '1000000' }])
     expect(result.gas).toBe(600_000)
   })
@@ -116,6 +126,7 @@ describe('assembleAstroportSwap (CW20 offer)', () => {
     expect(result.funds).toEqual([])
     const msg = JSON.parse(result.executeMsg)
     expect(msg.send.contract).toBe(ASTROPORT_ROUTER)
+    expect(msg.send.contract).toBe(ASTROPORT_ROUTER_LITERAL)
     expect(msg.send.amount).toBe('1000000')
     const inner = JSON.parse(Buffer.from(msg.send.msg, 'base64').toString('utf8'))
     expect(inner.execute_swap_operations.minimum_receive).toBe('495000')
@@ -128,6 +139,23 @@ describe('assembleAstroportSwap (explicit recipient)', () => {
     expect(result.recipientMode).toBe('third_party')
     expect(result.toAddress).toBe(RECIPIENT)
     expect(JSON.parse(result.executeMsg).execute_swap_operations.to).toBe(RECIPIENT)
+  })
+})
+
+describe('assembleAstroportSwap (address normalization)', () => {
+  it('canonicalizes an uppercase explicit recipient to lowercase in the inner `to`', () => {
+    // bech32 accepts an all-uppercase address (same payload) but CosmWasm
+    // `addr_validate` rejects a non-normalized `to` at execute time. Fold to
+    // lowercase so the built envelope is execute-ready, matching the CW20
+    // contract-address normalization.
+    const result = assembleAstroportSwap({ ...base, recipientAddress: RECIPIENT.toUpperCase() }, '500000')
+    expect(result.toAddress).toBe(RECIPIENT)
+    expect(JSON.parse(result.executeMsg).execute_swap_operations.to).toBe(RECIPIENT)
+  })
+
+  it('canonicalizes an uppercase fromAddress to lowercase', () => {
+    const result = assembleAstroportSwap({ ...base, fromAddress: VAULT.toUpperCase() }, '500000')
+    expect(result.fromAddress).toBe(VAULT)
   })
 })
 
