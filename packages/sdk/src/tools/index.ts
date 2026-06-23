@@ -9,12 +9,27 @@ export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMe
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
 // Swap
-export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
+export type {
+  FindSwapQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
+  NativeSwapMinAmountIn,
+  SwapQuote,
+} from './swap'
 export {
+  buildJupiterSwapTx,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  resolveJupiterFeeAccount,
+  SOL_NATIVE_MINT,
 } from './swap'
 
 // Verifier client
