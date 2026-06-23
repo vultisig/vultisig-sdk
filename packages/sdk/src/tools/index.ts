@@ -17,6 +17,28 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// Bridge — Circle CCTP unsigned bridge/claim calldata builders
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from './bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from './bridge'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 
