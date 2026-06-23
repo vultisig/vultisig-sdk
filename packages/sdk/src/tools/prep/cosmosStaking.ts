@@ -128,15 +128,52 @@ function validateDenom(value: string, fieldName = 'denom'): string {
 }
 
 /**
+ * The address ROLE a field expects, derived from the cosmos-sdk bech32 HRP
+ * suffix convention (`...valoper` = operator, `...valcons` = consensus, else
+ * account). Lets us enforce a deterministic role guard even when the caller
+ * does NOT pass an explicit `expectedPrefix` — the optional-prefix happy path.
+ */
+type AddressRole = 'account' | 'validator'
+
+/**
+ * Classify a decoded bech32 HRP. Mirrors mcp-ts `validatorRoleForHrp`
+ * (src/lib/cosmos-address-guard.ts). An HRP ending in `valoper`/`valcons` is a
+ * validator key, NOT a spendable account.
+ */
+function hrpIsValidatorRole(hrp: string): boolean {
+  const lower = hrp.toLowerCase()
+  return lower.endsWith('valoper') || lower.endsWith('valcons')
+}
+
+/**
  * Validate a bech32 cosmos address with an optional expected human-readable
  * prefix (hrp). Rejects malformed bech32 and prefix mismatches, and checks the
  * decoded payload is a 20- or 32-byte account/operator key (rejects IBC channel
- * ids and other non-account word-lengths). Ported from mcp-ts `validateBech32`.
+ * ids and other non-account word-lengths). Ported from mcp-ts `validateBech32`
+ * + `assertNotValidatorHrp` (src/lib/cosmos-address-guard.ts).
+ *
+ * FUND-SAFETY ROLE GUARD (always on, prefix-independent): cosmos-sdk derives
+ * account / validator-operator / validator-consensus addresses from the SAME
+ * chain HRP by appending a `valoper`/`valcons` role suffix. mcp-ts
+ * `build_cosmos_*` ALWAYS calls `validateBech32` with a concrete account/valoper
+ * prefix AND runs `assertNotValidatorHrp` on every account-role field, so a
+ * `...valoper1...`/`...valcons1...` handed in where the delegator belongs is
+ * rejected before any bytes are emitted. This SDK port made `expectedPrefix`
+ * optional (the documented "hrp validated upstream" happy path) — without a
+ * role guard, a valoper/valcons string passed as `delegatorAddress` would sail
+ * straight into a signing-ready `MsgDelegate`. The chain treats the delegator
+ * as the fee/signer account, so a valoper-as-delegator either signs against a
+ * key the user doesn't control or builds a tx the signer can't authorize. We
+ * re-add the guard HRP-suffix-wise so it holds on every chain with or without
+ * an explicit prefix, byte-for-byte matching mcp-ts's fund-safety contract.
  *
  * @param expectedPrefix when provided (e.g. "osmo" / "osmovaloper"), the address
  *   hrp must match exactly. Omit to accept any valid cosmos bech32 hrp.
+ * @param expectedRole the role this field MUST be. `'account'` rejects any
+ *   `valoper`/`valcons` HRP (delegator fields); `'validator'` rejects a plain
+ *   account HRP handed in where an operator address is required.
  */
-function validateBech32(value: string, fieldName: string, expectedPrefix?: string): string {
+function validateBech32(value: string, fieldName: string, expectedPrefix?: string, expectedRole?: AddressRole): string {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   if (!trimmed) {
     throw new Error(`invalid ${fieldName}: must be a non-empty string`)
@@ -147,6 +184,25 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     throw new Error(`invalid ${fieldName}: malformed bech32 (${msg})`, { cause: error })
+  }
+  // Role guard runs BEFORE the optional exact-prefix check so the explicit,
+  // fund-safety-flavored message wins over a generic prefix mismatch.
+  if (expectedRole !== undefined) {
+    const isValidator = hrpIsValidatorRole(decoded.prefix)
+    if (expectedRole === 'account' && isValidator) {
+      throw new Error(
+        `invalid ${fieldName}: "${decoded.prefix}1..." is a validator key, not a spendable account. ` +
+          `The delegator/account field must be a plain account address ` +
+          `("${decoded.prefix.toLowerCase().replace(/(valoper|valcons)$/, '')}1..."); ` +
+          `the validator goes in the validator address field. Funds/fees on a validator key are not recoverable.`
+      )
+    }
+    if (expectedRole === 'validator' && !isValidator) {
+      throw new Error(
+        `invalid ${fieldName}: "${decoded.prefix}1..." is a plain account address, not a validator operator address ` +
+          `(expected a "...valoper1..." key).`
+      )
+    }
   }
   if (typeof expectedPrefix === 'string' && decoded.prefix !== expectedPrefix) {
     throw new Error(`invalid ${fieldName}: expected ${expectedPrefix} prefix, got ${decoded.prefix}`)
@@ -236,8 +292,8 @@ function toEnvelope(typeUrl: string, value: Uint8Array): CosmosStakingMsgEnvelop
  * does not sign or broadcast.
  */
 export function buildDelegateMsg(params: DelegateParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix)
-  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix)
+  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
+  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
   const amount = validateBaseUnitAmount(params.amount, 'amount')
   const denom = validateDenom(params.denom, 'denom')
   const value = concat(
@@ -253,8 +309,8 @@ export function buildDelegateMsg(params: DelegateParams): CosmosStakingMsgEnvelo
  * Identical wire layout to MsgDelegate; only the typeUrl differs.
  */
 export function buildUndelegateMsg(params: UndelegateParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix)
-  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix)
+  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
+  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
   const amount = validateBaseUnitAmount(params.amount, 'amount')
   const denom = validateDenom(params.denom, 'denom')
   const value = concat(
@@ -270,9 +326,9 @@ export function buildUndelegateMsg(params: UndelegateParams): CosmosStakingMsgEn
  * Moves `amount` instantly from src validator to dst validator (no unbonding).
  */
 export function buildRedelegateMsg(params: RedelegateParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix)
-  const src = validateBech32(params.validatorSrcAddress, 'validatorSrcAddress', params.validatorPrefix)
-  const dst = validateBech32(params.validatorDstAddress, 'validatorDstAddress', params.validatorPrefix)
+  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
+  const src = validateBech32(params.validatorSrcAddress, 'validatorSrcAddress', params.validatorPrefix, 'validator')
+  const dst = validateBech32(params.validatorDstAddress, 'validatorDstAddress', params.validatorPrefix, 'validator')
   if (src === dst) {
     throw new Error('invalid redelegate: validatorSrcAddress and validatorDstAddress must differ')
   }
@@ -293,8 +349,8 @@ export function buildRedelegateMsg(params: RedelegateParams): CosmosStakingMsgEn
  * call once per validator and bundle the envelopes into one `TxBody.messages[]`.
  */
 export function buildWithdrawRewardsMsg(params: WithdrawRewardsParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix)
-  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix)
+  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
+  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
   const value = concat(field(1, 2, encodeString(delegator)), field(2, 2, encodeString(validator)))
   return toEnvelope(CosmosMsgType.MsgWithdrawDelegatorRewardUrl, value)
 }

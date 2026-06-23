@@ -206,5 +206,90 @@ describe('cosmosStaking pure msg builders', () => {
         })
       ).toThrow(/expected cosmos prefix/)
     })
+
+    // -----------------------------------------------------------------------
+    // Role guard (always on, prefix-independent) — ports mcp-ts
+    // assertNotValidatorHrp into the SDK's optional-prefix happy path. A
+    // valoper/valcons handed in as the delegator/account field must be
+    // rejected BEFORE any signing-ready bytes are emitted, even when NO
+    // accountPrefix is supplied. Regression: the original SDK port dropped
+    // this guard, so a valoper-as-delegator built a valid MsgDelegate.
+    // -----------------------------------------------------------------------
+    it('rejects a validator OPERATOR address handed in as the delegator (no prefix passed)', () => {
+      expect(() =>
+        buildDelegateMsg({
+          delegatorAddress: OSMO_VAL, // valoper in the account slot
+          validatorAddress: OSMO_VAL,
+          amount: '5000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/validator key, not a spendable account/)
+    })
+
+    it('rejects a valoper delegator on undelegate too (no prefix passed)', () => {
+      expect(() =>
+        buildUndelegateMsg({
+          delegatorAddress: OSMO_VAL,
+          validatorAddress: OSMO_VAL,
+          amount: '5000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/validator key, not a spendable account/)
+    })
+
+    it('rejects a valoper delegator on redelegate (no prefix passed)', () => {
+      expect(() =>
+        buildRedelegateMsg({
+          delegatorAddress: OSMO_VAL,
+          validatorSrcAddress: OSMO_VAL,
+          validatorDstAddress: OSMO_VAL_2,
+          amount: '1000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/validator key, not a spendable account/)
+    })
+
+    it('rejects a valoper delegator on withdraw rewards (no prefix passed)', () => {
+      expect(() =>
+        buildWithdrawRewardsMsg({
+          delegatorAddress: OSMO_VAL,
+          validatorAddress: OSMO_VAL,
+        })
+      ).toThrow(/validator key, not a spendable account/)
+    })
+
+    it('rejects a plain ACCOUNT address handed in where a validator is required (no prefix passed)', () => {
+      expect(() =>
+        buildDelegateMsg({
+          delegatorAddress: OSMO_DEL,
+          validatorAddress: OSMO_DEL, // account in the validator slot
+          amount: '5000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/not a validator operator address/)
+    })
+
+    it('rejects an account address as the redelegate src/dst validator (no prefix passed)', () => {
+      expect(() =>
+        buildRedelegateMsg({
+          delegatorAddress: OSMO_DEL,
+          validatorSrcAddress: OSMO_DEL,
+          validatorDstAddress: OSMO_VAL_2,
+          amount: '1000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/not a validator operator address/)
+    })
+
+    it('still accepts the correct account+valoper roles with NO prefixes (happy path unbroken)', () => {
+      expect(() =>
+        buildDelegateMsg({
+          delegatorAddress: OSMO_DEL,
+          validatorAddress: OSMO_VAL,
+          amount: '5000000',
+          denom: 'uosmo',
+        })
+      ).not.toThrow()
+    })
   })
 })
