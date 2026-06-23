@@ -140,6 +140,28 @@ describe('getTrc20TokenBalance', () => {
     expect(r.decimals).toBe(6)
     expect(r.symbol).toBe('USDT')
   })
+
+  it('ABI-encodes the owner as a base58check-decoded 32-byte word (not a string replace)', async () => {
+    let balanceParam: string | undefined
+    mockFetchJson.mockImplementation(async (_url: string, body: { function_selector?: string; parameter?: string }) => {
+      if (body?.function_selector === 'balanceOf(address)') balanceParam = body.parameter
+      return { constant_result: ['0000000000000000000000000000000000000000000000000000000000000000'] }
+    })
+    await getTrc20TokenBalance(TRON_ADDR, TRON_ADDR)
+    // Must be a clean 64-char hex word. The old `addr.replace(/^T/, '41')` path
+    // leaves base58 chars (e.g. the 'R' in TR7N…) and is not valid hex.
+    expect(balanceParam).toMatch(/^[0-9a-f]{64}$/)
+    // TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t -> 20-byte EVM-form address.
+    expect(balanceParam).toBe('000000000000000000000000a614f803b6fd780986a42c78ec9c7f77e6ded13c')
+  })
+
+  it('fails closed (throws) when balanceOf returns no constant_result — never a false zero', async () => {
+    mockFetchJson.mockImplementation(async (_url: string, body: { function_selector?: string }) => {
+      if (body?.function_selector === 'balanceOf(address)') return { result: { code: 'OTHER_ERROR' } }
+      return { constant_result: ['0000000000000000000000000000000000000000000000000000000000000006'] }
+    })
+    await expect(getTrc20TokenBalance(TRON_ADDR, TRON_ADDR)).rejects.toThrow(/no constant_result/i)
+  })
 })
 
 describe('getTonBalance', () => {

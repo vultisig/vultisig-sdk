@@ -7,6 +7,8 @@
  * Each chain is not wired through the EVM `getEvmClient` rail, so these talk to
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
+import bs58 from 'bs58'
+
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
 
 // Tron base58check address: T-prefix + 33 base58 chars = 34 total. Format-only
@@ -21,6 +23,29 @@ function assertTronAddress(addr: string): void {
         'Denoms, bech32 addresses, and 0x EVM addresses are not valid here.'
     )
   }
+}
+
+/**
+ * ABI-encode a Tron base58check address as a 32-byte EVM word for a
+ * triggersmartcontract `parameter`.
+ *
+ * A Tron `T…` address base58check-decodes to 21 bytes: a 0x41 prefix + the
+ * 20-byte EVM-style address (the trailing 4 bytes are the checksum). The
+ * `balanceOf(address)` ABI arg is that 20-byte address left-padded to 32 bytes.
+ *
+ * NOT a string substitution: `addr.replace(/^T/, '41')` leaves base58 characters
+ * (G, U, Z, …) in the string, so the node rejects it as non-hex and returns an
+ * error body with no `constant_result` — which the caller would then read as a
+ * balance of 0. Every funded TRC-20 holder would report empty. Decode for real.
+ */
+function tronAddressToAbiParam(addr: string): string {
+  const decoded = bs58.decode(addr)
+  // 21-byte payload (0x41 + 20-byte address) + 4-byte checksum = 25 bytes.
+  if (decoded.length !== 25 || decoded[0] !== 0x41) {
+    throw new Error(`'${addr}' did not base58check-decode to a 21-byte Tron address payload.`)
+  }
+  const addr20 = Buffer.from(decoded.subarray(1, 21)).toString('hex')
+  return addr20.padStart(64, '0')
 }
 
 // ── XRP ─────────────────────────────────────────────────────────────────────
@@ -180,15 +205,33 @@ export async function getTrc20TokenBalance(address: string, contractAddress: str
     })
 
   const [balResp, decResp, symResp] = await Promise.all([
-    // ABI-encode the owner address: drop the 0x41 Tron prefix, left-pad to 32 bytes.
-    trigger('balanceOf(address)', '0'.repeat(24) + address.replace(/^T/, '41')),
+    // ABI-encode the owner address: base58check-decode to its 20-byte form,
+    // left-pad to 32 bytes. (A string replace leaves base58 chars and the node
+    // rejects the call → no constant_result → a false zero balance.)
+    trigger('balanceOf(address)', tronAddressToAbiParam(address)),
     trigger('decimals()', ''),
     trigger('symbol()', ''),
   ])
 
-  const hexBalance = balResp.constant_result?.[0] ?? '0'
+  // Fail closed: a reverted / malformed triggersmartcontract call returns an
+  // HTTP-200 body with no `constant_result`. Reading that as 0 would report a
+  // funded holder as empty (fund-visibility bug), so surface it as an error.
+  const hexBalance = balResp.constant_result?.[0]
+  if (hexBalance == null) {
+    throw new Error(
+      `Tron balanceOf read returned no constant_result for ${contractAddress} — ` +
+        'malformed or reverted upstream response; refusing to report a false zero balance.'
+    )
+  }
   const balance = BigInt('0x' + (hexBalance || '0')).toString()
-  const decimals = parseInt(decResp.constant_result?.[0] ?? '0', 16)
+  const decRaw = decResp.constant_result?.[0]
+  if (decRaw == null) {
+    throw new Error(
+      `Tron decimals() read returned no constant_result for ${contractAddress} — ` +
+        'malformed or reverted upstream response; refusing to apply a default scale.'
+    )
+  }
+  const decimals = parseInt(decRaw, 16)
 
   let symbol = 'UNKNOWN'
   try {
