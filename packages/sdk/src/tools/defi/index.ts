@@ -8,14 +8,17 @@
  */
 
 import * as balancer from './balancer'
+import { pendle } from './pendle'
 import * as threeJane from './threeJane'
 
 export * from './balancer'
+export * from './pendle'
 export * as threeJane from './threeJane'
 
 /** Grouped namespace object, exposed as `sdk.defi`. */
 export const defi = {
   balancer,
+  pendle,
   threeJane,
 } as const
 
