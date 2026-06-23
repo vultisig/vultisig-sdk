@@ -392,6 +392,9 @@ export {
   VerifierClient,
 } from './tools'
 
+// DeFi protocol message builders — sdk.defi.<protocol> (unsigned msgs / calldata only)
+export { defi } from './tools'
+
 // ============================================================================
 // PUBLIC API - Push Notifications
 // ============================================================================

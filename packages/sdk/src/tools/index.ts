@@ -17,6 +17,9 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// DeFi protocol message builders (sdk.defi.*) — unsigned Cosmos msgs / calldata only
+export * as defi from './defi'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 
