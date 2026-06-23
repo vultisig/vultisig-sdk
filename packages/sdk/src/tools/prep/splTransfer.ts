@@ -70,6 +70,14 @@ export type BuildSplTransferParams = {
    * Set `true` when the mint is a Token-2022 mint. Defaults to `false` (legacy
    * Token Program). The ATA derivation and instruction program id both depend
    * on this, so it MUST match the actual mint's owner program.
+   *
+   * ⚠️ Fund-safety: this is a caller-supplied flag, not auto-detected (the
+   * builder does no RPC). If you pass `false` for a Token-2022 mint, the
+   * derived ATAs and program id are WRONG (a Token-2022 transfer routed through
+   * the legacy program targets a different, likely-uninitialized account →
+   * failed tx or, worse, a credit to an unintended account). Resolve this from
+   * the mint account's owner program on-chain before calling — do not leave it
+   * at the default for an unknown mint.
    */
   isToken2022?: boolean
 }

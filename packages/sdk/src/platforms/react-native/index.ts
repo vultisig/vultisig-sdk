@@ -164,9 +164,11 @@ export type {
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
+  BuildSplTransferParams,
   GetMaxSendAmountFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  SplTransferResult,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -198,6 +200,16 @@ export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
 export async function prepareSwapTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/swap')
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
+
+// Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
+// `globalThis.Buffer` at module-init. Deferring the import inside the async
+// body keeps it out of the eager RN bundle graph (same rationale as the
+// getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
+// is synchronous; this wrapper just defers module evaluation.
+export async function buildSplTransfer(...args: unknown[]) {
+  const mod = await import('../../tools/prep/splTransfer')
+  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
 }
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
