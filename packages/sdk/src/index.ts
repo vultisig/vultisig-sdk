@@ -44,6 +44,35 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // ============================================================================
+// PUBLIC API - Tx Shape Normalization (pure, vault-free)
+// ============================================================================
+
+// Canonicalize a build_* tool result into a signing-ready tx envelope and split
+// multi-tx build results (approve+swap, generic transactions[]) into ordered
+// legs. Ports the normalize/split half of the agent-backend's
+// enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
+export type { NormalizeArgs, NormalizedTx } from './tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+
+// ============================================================================
+// PUBLIC API - Canonical Contract / Token Registry (knownContracts)
+// ============================================================================
+
+export {
+  canonicalEvmContracts,
+  canonicalSolanaAddresses,
+  canonicalTronContracts,
+  isCanonicalEvmContract,
+  isCanonicalEvmContractEllipsized,
+  isCanonicalSolanaAddress,
+  isCanonicalSolanaAddressEllipsized,
+  isCanonicalTronContract,
+  isEvmAddressFormat,
+  isKnownContract,
+  knownContracts,
+} from './utils/knownContracts'
+
+// ============================================================================
 // PUBLIC API - Station Migration Primitives
 // ============================================================================
 
@@ -352,14 +381,24 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AmountUnits,
+  AssetRef,
   BuildBuyPtParams,
   BuildRedeemParams,
   BuildSellPtParams,
+  ChainFamily,
   Coin,
   CoinKey,
   CoinMetadata,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
+  FieldDiff,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
   KnownCoin,
   KnownCoinMetadata,
   PendleActiveMarket,
@@ -369,20 +408,34 @@ export type {
   PendleMarketSummary,
   PendlePtBuildResult,
   PendleUnsignedTx,
+  PolicyAssetRef,
+  PolicyEnvelope,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
   VaultIdentity,
+  Verdict,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
   buildBuyPt,
   buildRedeem,
   buildSellPt,
+  chainAliasMap,
   chainFeeCoin,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  decodeCosmosTx,
+  decodeEvmTx,
+  decodeFromToolResult,
   defi,
   deriveAddressFromKeys,
+  evaluatePolicy,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
@@ -393,15 +446,20 @@ export {
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  Invariant,
   isPendleChain,
+  isZeroAmount,
   knownTokens,
   knownTokensIndex,
+  parseAmountBig,
   pendle,
   PENDLE_ROUTER_V4,
   PENDLE_SUPPORTED_CHAINS,
   PendleBuildError,
   pendleMarket,
   pendleMarkets,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
   prepareContractCallTxFromKeys,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
@@ -409,6 +467,9 @@ export {
   prepareSwapTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
   searchToken,
   stripChainPrefix,
   VerifierClient,
