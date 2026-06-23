@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 2.5.0
+
+### Patch Changes
+
+- [#774](https://github.com/vultisig/vultisig-sdk/pull/774) [`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add scanAddress method for Blockaid EVM address reputation scanning
+
+- [#790](https://github.com/vultisig/vultisig-sdk/pull/790) [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Dogecoin Blockchair fee estimation with the app clients by using 25% of the reported baseline.
+
+- [#788](https://github.com/vultisig/vultisig-sdk/pull/788) [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Make `getUrlBaseDomain` resolve the registrable (eTLD+1) domain using the Public Suffix List instead of taking the last two hostname labels. Sites under multi-label public suffixes (`*.vercel.app`, `*.github.io`, `*.pages.dev`, `*.web.app`, `*.co.uk`, …) now resolve to distinct domains, so a connection authorized for one site is no longer treated as authorized for an unrelated sibling under the same suffix.
+
+- [#783](https://github.com/vultisig/vultisig-sdk/pull/783) [`dfd1cf3`](https://github.com/vultisig/vultisig-sdk/commit/dfd1cf3fdf9b650a2e70e8a72f751ef6e465bbbe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the documented `@vultisig/sdk/electron/main` subpath in the published SDK package.
+
 ## 2.4.7
 
 ### Patch Changes
