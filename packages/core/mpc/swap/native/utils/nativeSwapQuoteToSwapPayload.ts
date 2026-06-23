@@ -2,6 +2,7 @@ import { create } from '@bufbuild/protobuf'
 import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
 import { nativeSwapPayloadCase, nativeSwapStreamingInterval } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
@@ -22,6 +23,40 @@ const assertQuoteNotExpired = (expirySeconds: number): void => {
   if (expirySeconds <= Math.floor(Date.now() / 1000)) {
     throw new Error('Native swap quote is expired; refresh the quote before signing')
   }
+}
+
+const BASIS_POINTS_DENOMINATOR = 10_000n
+
+const assertValidSlippageToleranceBps = (slippageToleranceBps: number): void => {
+  if (
+    !Number.isSafeInteger(slippageToleranceBps) ||
+    slippageToleranceBps < 0 ||
+    slippageToleranceBps > Number(BASIS_POINTS_DENOMINATOR)
+  ) {
+    throw new Error(
+      `slippageToleranceBps must be an integer between 0 and ${BASIS_POINTS_DENOMINATOR}. Received "${slippageToleranceBps}".`
+    )
+  }
+}
+
+export const getNativeSwapToAmountLimit = ({
+  expectedAmountOut,
+  slippageToleranceBps = DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS,
+}: {
+  expectedAmountOut: string
+  slippageToleranceBps?: number
+}): string => {
+  assertValidSlippageToleranceBps(slippageToleranceBps)
+
+  const expected = BigInt(expectedAmountOut)
+  const tolerance = BigInt(slippageToleranceBps)
+  const limit = (expected * (BASIS_POINTS_DENOMINATOR - tolerance)) / BASIS_POINTS_DENOMINATOR
+
+  if (expected > 0n && tolerance < BASIS_POINTS_DENOMINATOR && limit === 0n) {
+    return '1'
+  }
+
+  return limit.toString()
 }
 
 export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }: Input): CommKeysignSwapPayload => {
@@ -52,7 +87,10 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       expirationTime: BigInt(quote.expiry),
       streamingInterval,
       streamingQuantity,
-      toAmountLimit: '0',
+      toAmountLimit: getNativeSwapToAmountLimit({
+        expectedAmountOut: quote.expected_amount_out,
+        slippageToleranceBps: quote.liquidity_tolerance_bps,
+      }),
       isAffiliate,
       fee: quote.fees.total,
     }),
