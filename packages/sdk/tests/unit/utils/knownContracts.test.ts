@@ -55,6 +55,25 @@ describe('knownContracts — EVM', () => {
     expect(isCanonicalEvmContractEllipsized('0xdead…beef')).toBe(false)
     expect(isCanonicalEvmContractEllipsized(USDC_ETH)).toBe(false) // full form is not ellipsized
   })
+
+  // Fail-closed guard: an unbounded head/tail would let a 1-2 char fragment
+  // ("0x…48", "0xa…48") collapse onto a canonical entry by prefix+suffix and
+  // wrongly report a known contract, widening the bypass below what the Go
+  // `reTrunc` {3,8} bound enforces. These must stay false.
+  it('rejects too-short ellipsized fragments (Go {3,8} head/tail bound)', () => {
+    expect(isCanonicalEvmContractEllipsized('0x…48')).toBe(false) // head 2 chars
+    expect(isCanonicalEvmContractEllipsized('0x…8')).toBe(false) // head 2 + tail 1
+    expect(isCanonicalEvmContractEllipsized('0xA0b8…48')).toBe(false) // tail 2 chars
+    expect(isCanonicalEvmContractEllipsized('0xA0b8...8')).toBe(false) // tail 1, ascii
+    expect(isKnownContract('0x…48')).toBe(false)
+    expect(isKnownContract('0xa…48')).toBe(false)
+  })
+
+  // …and a too-LONG head/tail (>8) must also miss, matching the Go upper bound.
+  it('rejects over-long ellipsized fragments (>8 head/tail)', () => {
+    expect(isCanonicalEvmContractEllipsized('0xa0b86991c…eb48')).toBe(false) // head 11 chars
+    expect(isCanonicalEvmContractEllipsized('0xa0b8…ce3606eb48')).toBe(false) // tail 12 chars
+  })
 })
 
 describe('knownContracts — Solana', () => {
@@ -68,6 +87,14 @@ describe('knownContracts — Solana', () => {
   it('matches an ellipsized Solana rendering', () => {
     expect(isCanonicalSolanaAddressEllipsized('EPjFWd...Dt1v')).toBe(true)
     expect(isCanonicalSolanaAddressEllipsized('Zzzzzz...Dt1v')).toBe(false)
+  })
+
+  // Same fail-closed guard as EVM: a 1-2 char head/tail must not collapse onto
+  // a canonical mint by prefix+suffix (matches Go reTrunc {3,8}).
+  it('rejects too-short ellipsized Solana fragments', () => {
+    expect(isCanonicalSolanaAddressEllipsized('E…v')).toBe(false) // head + tail 1 char
+    expect(isCanonicalSolanaAddressEllipsized('EP…1v')).toBe(false) // head 2 chars
+    expect(isKnownContract('E…v')).toBe(false)
   })
 })
 

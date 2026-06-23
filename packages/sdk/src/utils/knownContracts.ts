@@ -204,8 +204,18 @@ export const canonicalTronContracts: ReadonlySet<string> = new Set([
 // ----------------------------------------------------------------------------
 
 // Ellipsized display rendering: a head, an ellipsis (… or ...), and a tail.
-// Mirrors the agent-backend reTrunc semantics. Captures head + tail.
-const ELLIPSIZED_RE = /^([A-Za-z0-9]+)(?:\.{3}|…)([A-Za-z0-9]+)$/
+// Mirrors the agent-backend `reTrunc` semantics (extract.go):
+//   ([0-9A-Za-z]{3,8})(?:…|\.\.\.)([0-9A-Za-z]{3,8})
+// The {3,8} head/tail bound is load-bearing, NOT cosmetic: this matcher feeds
+// the `isKnownContract` bypass predicate (return true ⇒ treated as a known
+// public contract ⇒ skips fabrication grounding). An unbounded `+` head/tail
+// fails OPEN — a 1-2 char head like "0x…48" or "E…v" collapses onto a canonical
+// entry by prefix+suffix and is wrongly reported as a known contract, weakening
+// the allowlist below what Go enforces. Go rejects those (head < 3 chars); we
+// must too. We additionally anchor (^…$) because these helpers receive a single
+// candidate string, not a full response to scan — anchoring only TIGHTENS vs
+// Go's substring `FindStringSubmatch`, so it never widens the bypass.
+const ELLIPSIZED_RE = /^([A-Za-z0-9]{3,8})(?:\.{3}|…)([A-Za-z0-9]{3,8})$/
 
 /**
  * Returns true when `addr` is a well-formed EVM address (0x + exactly 40 hex
