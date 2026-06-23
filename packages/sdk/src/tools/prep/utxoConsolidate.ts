@@ -66,6 +66,12 @@ export type PrepareUtxoConsolidateTxFromKeysParams = {
 // Segwit-baseline virtual-size estimate matching the mcp-ts / Go side:
 // 10 bytes tx overhead + 68 bytes per input + 34 bytes for the single output.
 // Real signed-tx vsize for P2WPKH / P2SH-P2WPKH inputs lands close to this.
+//
+// NOTE: this is an ESTIMATE only. The payload is built with
+// `sendMaxAmount: true` (see below), so the on-device signer's
+// WalletCore `AnySigner.plan` recomputes the real fee from its own
+// signed-tx size model and ignores `toAmount`. The returned `fee` /
+// `outputAmount` are advisory display values, NOT the signed values.
 const TX_OVERHEAD_VBYTES = 10n
 const PER_INPUT_VBYTES = 68n
 const SINGLE_OUTPUT_VBYTES = 34n
@@ -82,9 +88,26 @@ export type PrepareUtxoConsolidateResult = {
   inputCount: number
   /** Sum of all input values (satoshis). */
   totalInput: bigint
-  /** Estimated fee (satoshis). */
+  /**
+   * ESTIMATED fee (satoshis) from the `10 + 68/input + 34` vbyte model.
+   *
+   * Because the payload is `sendMaxAmount: true`, the on-device signer
+   * (WalletCore `AnySigner.plan`) recomputes the actual fee from its own
+   * signed-tx size model. This value is therefore ADVISORY — safe for a
+   * "≈ fee" UI preview, but it is NOT the fee of the broadcast tx and may
+   * differ by a few sats per input. Never treat it as authoritative.
+   */
   fee: bigint
-  /** Consolidated output value back to self (totalInput - fee, satoshis). */
+  /**
+   * ESTIMATED consolidated output value back to self (`totalInput - fee`,
+   * satoshis).
+   *
+   * Same caveat as {@link fee}: under `sendMaxAmount: true` the signer
+   * sweeps `Σinputs − ITS OWN fee`, so the actually-signed output can
+   * diverge slightly from this estimate. The send-max-to-self structure
+   * guarantees funds can never misroute (output address === input
+   * address), only the exact displayed amount may drift. Advisory only.
+   */
   outputAmount: bigint
 }
 
@@ -103,6 +126,15 @@ export type PrepareUtxoConsolidateResult = {
  *
  * `walletCore` is optional; when omitted, falls back to the SDK's
  * globally-configured `getWalletCore()`.
+ *
+ * IMPORTANT — returned `fee` / `outputAmount` are ESTIMATES. Because the
+ * payload is `sendMaxAmount: true`, the on-device signer recomputes the
+ * fee/output from its own size model and ignores the `toAmount` written
+ * here. Use the returned values for a "≈" preview only; the broadcast tx
+ * is authoritative. This contrasts with the mcp-ts `build_utxo_consolidate`
+ * envelope, which emits an explicit `inputs[]` + `output_amount` PSBT the
+ * app builds deterministically. Send-max-to-self (output === input address)
+ * means funds can never misroute — only the displayed amount may drift.
  *
  * @example
  * ```ts
@@ -178,6 +210,9 @@ export const prepareUtxoConsolidateTxFromKeys = async (
     coin: toCommCoin({ ...coin, hexPublicKey }),
     // Consolidation is a send-to-self: the single output goes back to the same address.
     toAddress: coin.address,
+    // toAmount is the ESTIMATED output. Under `sendMaxAmount: true` the
+    // signer ignores it and sweeps `Σinputs − ITS OWN fee`; we still set it
+    // so any non-max consumer / display layer has a sane value to show.
     toAmount: outputAmount.toString(),
     vaultLocalPartyId: identity.localPartyId,
     vaultPublicKeyEcdsa: identity.ecdsaPublicKey,

@@ -153,6 +153,31 @@ describe('prepareUtxoConsolidateTxFromKeys', () => {
     ).rejects.toThrow(/Invalid UTXO value/)
   })
 
+  it('marks the payload send-max (signer is authoritative; returned fee/output are estimates)', async () => {
+    // Contract guard for the documented P2: the payload carries
+    // `sendMaxAmount: true`, so the on-device WalletCore planner recomputes
+    // the real fee/output and ignores `toAmount`. The returned `fee` /
+    // `outputAmount` are the SDK's `10 + 68/input + 34` vbyte ESTIMATE only.
+    const result = await prepareUtxoConsolidateTxFromKeys(baseIdentity, {
+      coin: btcCoin,
+      utxos: sampleUtxos,
+      byteFee: 12n,
+    })
+
+    // Estimate is internally consistent: totalInput - estimatedFee === estimatedOutput.
+    expect(result.totalInput - result.fee).toBe(result.outputAmount)
+
+    const spec = result.keysignPayload.blockchainSpecific
+    expect(spec.case).toBe('utxoSpecific')
+    if (spec.case === 'utxoSpecific') {
+      // send-max is what makes the signer authoritative over the estimate.
+      expect(spec.value.sendMaxAmount).toBe(true)
+    }
+    // toAmount mirrors the estimate (advisory display value), even though
+    // the send-max signer will ignore it at signing time.
+    expect(result.keysignPayload.toAmount).toBe(result.outputAmount.toString())
+  })
+
   it('exposes the supported consolidate chain set', () => {
     expect(CONSOLIDATE_CHAINS).toContain(Chain.Bitcoin)
     expect(CONSOLIDATE_CHAINS).toContain(Chain.Dash)
