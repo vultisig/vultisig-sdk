@@ -8,6 +8,17 @@ export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4By
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
+
 // Swap
 export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
 export {
