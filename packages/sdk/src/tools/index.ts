@@ -5,8 +5,17 @@ export { deriveAddressFromKeys } from './address'
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
 // Token utilities
-export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  KnownCoin,
+  KnownCoinMetadata,
+  ResolveContractResult,
+  TokenMetadataResolver,
+  TokenStandard,
+} from './token'
+export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
 
 // Swap
 export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'

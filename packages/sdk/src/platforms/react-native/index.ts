@@ -247,9 +247,18 @@ export type {
   CoinMetadata,
   KnownCoin,
   KnownCoinMetadata,
+  ResolveContractResult,
   TokenMetadataResolver,
+  TokenStandard,
 } from '../../tools/token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  resolveContract,
+  searchToken,
+} from '../../tools/token'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
