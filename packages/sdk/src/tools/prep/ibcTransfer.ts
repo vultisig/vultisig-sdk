@@ -144,6 +144,8 @@ const VULTISIG_NAME_TO_CHAIN_ID: Record<string, string> = {
   Akash: 'akashnet-2',
   Noble: 'noble-1',
   Dydx: 'dydx-mainnet-1',
+  MayaChain: 'mayachain-mainnet-v1',
+  THORChain: 'thorchain-1',
   Stride: 'stride-1',
 }
 

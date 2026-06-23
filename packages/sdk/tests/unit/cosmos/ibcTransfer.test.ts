@@ -9,7 +9,12 @@
 import { bech32 } from '@scure/base'
 import { describe, expect, it } from 'vitest'
 
-import { IBC_MSG_TRANSFER_TYPE_URL, prepareIbcTransfer, supportedIbcDestinationsFrom } from '@/tools/prep/ibcTransfer'
+import {
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '@/tools/prep/ibcTransfer'
 
 /** Build a valid bech32 address for `hrp` from a fixed 20-byte payload. */
 function addr(hrp: string, fill = 7): string {
@@ -73,6 +78,27 @@ describe('prepareIbcTransfer', () => {
     expect(r.fromChain).toBe('osmosis-1')
     expect(r.destChain).toBe('cosmoshub-4')
     expect(r.sourceChannel).toBe('channel-0')
+  })
+
+  it('normaliseIbcChainId maps every Vultisig canonical name to its IBC chain-ID (mcp-ts parity)', () => {
+    // Mirror of mcp-ts build_ibc_transfer VULTISIG_NAME_TO_CHAIN_ID. THORChain /
+    // MayaChain have no IBC_CHANNEL_DEST route, but the alias must still resolve
+    // so callers get a "no route" error against the canonical chain-ID rather
+    // than a misleading "unknown chain THORChain".
+    expect(normaliseIbcChainId('Cosmos')).toBe('cosmoshub-4')
+    expect(normaliseIbcChainId('Osmosis')).toBe('osmosis-1')
+    expect(normaliseIbcChainId('Terra')).toBe('phoenix-1')
+    expect(normaliseIbcChainId('TerraClassic')).toBe('columbus-5')
+    expect(normaliseIbcChainId('Kujira')).toBe('kaiyo-1')
+    expect(normaliseIbcChainId('Akash')).toBe('akashnet-2')
+    expect(normaliseIbcChainId('Noble')).toBe('noble-1')
+    expect(normaliseIbcChainId('Dydx')).toBe('dydx-mainnet-1')
+    expect(normaliseIbcChainId('MayaChain')).toBe('mayachain-mainnet-v1')
+    expect(normaliseIbcChainId('THORChain')).toBe('thorchain-1')
+    expect(normaliseIbcChainId('Stride')).toBe('stride-1')
+    // unknown / already-an-ID inputs pass through untouched
+    expect(normaliseIbcChainId('cosmoshub-4')).toBe('cosmoshub-4')
+    expect(normaliseIbcChainId('not-a-chain')).toBe('not-a-chain')
   })
 
   it('resolves destination from sourceChannel alone', () => {
