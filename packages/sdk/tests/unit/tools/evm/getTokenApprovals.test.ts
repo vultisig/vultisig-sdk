@@ -99,4 +99,25 @@ describe('getTokenApprovals', () => {
     expect(result.approvals[0].allowance).toBe(1_000_000n)
     expect(result.approvals[0].isUnlimited).toBe(false)
   })
+
+  // Pin the exact `unlimited` boundary. The threshold (2^128) is the
+  // security-relevant constant a wallet leans on to surface "unlimited" risk —
+  // a regression flipping >= to > or swapping 2^128 for 2^256 must fail here.
+  it.each([
+    { label: '2^128 - 1 (just below)', allowance: 2n ** 128n - 1n, expected: false },
+    { label: '2^128 (boundary, inclusive)', allowance: 2n ** 128n, expected: true },
+    { label: '2^128 + 1 (just above)', allowance: 2n ** 128n + 1n, expected: true },
+    { label: 'MaxUint256 (2^256 - 1)', allowance: 2n ** 256n - 1n, expected: true },
+  ])('flags isUnlimited=$expected at $label', async ({ allowance, expected }) => {
+    mockRequest.mockResolvedValueOnce([log(USDC, SPENDER_A)])
+    mockReadContract.mockImplementation(async ({ functionName }: { functionName: string }) =>
+      functionName === 'allowance' ? allowance : 'USDC'
+    )
+
+    const result = await getTokenApprovals('Ethereum', { owner: OWNER })
+
+    expect(result.totalCount).toBe(1)
+    expect(result.approvals[0].allowance).toBe(allowance)
+    expect(result.approvals[0].isUnlimited).toBe(expected)
+  })
 })
