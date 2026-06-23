@@ -8,12 +8,15 @@
  */
 
 import * as balancer from './balancer'
+import * as threeJane from './threeJane'
 
 export * from './balancer'
+export * as threeJane from './threeJane'
 
 /** Grouped namespace object, exposed as `sdk.defi`. */
 export const defi = {
   balancer,
+  threeJane,
 } as const
 
 export type Defi = typeof defi

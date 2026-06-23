@@ -212,17 +212,19 @@ export {
 } from '../../tools/evm'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
-// Pure builders that wrap @balancer/sdk (viem + balancer-maths, both RN-safe;
-// viem is externalized as a peer dep above, balancer-maths is pure JS and
-// inlined). Statically re-exported so RN consumers can build Balancer v3 swap
-// calldata without the generic-entry-only allow-list omitting them.
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (balancer + 3jane).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
   BuildBalancerV3SwapCalldataParams,
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
   Defi,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
 
