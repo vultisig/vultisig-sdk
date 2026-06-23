@@ -17,6 +17,34 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// DeFi protocol primitives (sdk.defi.*) — build UNSIGNED txs/calldata only
+export type {
+  BuildBuyPtParams,
+  BuildRedeemParams,
+  BuildSellPtParams,
+  PendleActiveMarket,
+  PendleChain,
+  PendleMarketParams,
+  PendleMarketsParams,
+  PendleMarketSummary,
+  PendlePtBuildResult,
+  PendleUnsignedTx,
+} from './defi'
+export {
+  buildBuyPt,
+  buildRedeem,
+  buildSellPt,
+  defi,
+  isPendleChain,
+  pendle,
+  PENDLE_ROUTER_V4,
+  PENDLE_SUPPORTED_CHAINS,
+  PendleBuildError,
+  pendleMarket,
+  pendleMarkets,
+  stripChainPrefix,
+} from './defi'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 
