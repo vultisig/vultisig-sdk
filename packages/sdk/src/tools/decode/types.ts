@@ -33,7 +33,7 @@ export type AssetRef = {
 }
 
 /** Kind of effect inferred from the decoded calldata / message. */
-export type EnvelopeKind = 'transfer' | 'approve' | 'delegate' | 'contractCall' | 'unknown'
+export type EnvelopeKind = 'transfer' | 'approve' | 'delegate' | 'undelegate' | 'contractCall' | 'unknown'
 
 /**
  * Decoded, chain-agnostic representation of a pending transaction.
@@ -44,8 +44,10 @@ export type EnvelopeKind = 'transfer' | 'approve' | 'delegate' | 'contractCall' 
 export type Envelope = {
   /**
    * Canonical chain identifier.
-   * EVM: numeric EIP-155 chain id as a string ("1", "8453"), or the caller's
-   * chain hint when the tx is legacy (carries no chain id on the wire).
+   * EVM: for typed (EIP-1559/2930) txs the on-wire numeric EIP-155 id is
+   * resolved to the symbolic chain name ("base", "ethereum") so the policy
+   * layer can match it (numeric string fallback for chains not in the map);
+   * for legacy (type-0) txs the caller's chain hint stands.
    * Cosmos: the chain-id hint passed in ("cosmoshub-4"), since proto3 tx bytes
    * do not embed the chain id.
    */

@@ -3,6 +3,30 @@ import { type Address, decodeFunctionData, getAddress, type Hex, parseAbi, parse
 import type { Envelope } from './types'
 
 /**
+ * EIP-155 numeric chain id (decimal string) -> the symbolic chain id the
+ * policy layer compares against (matches recipes' `evm.AllEVMChainConfigs`
+ * `cfg.ID`, mirrored from the Go reference `evmChainIDToSymbol`).
+ *
+ * Without this, a typed tx to Base would surface `chain: "8453"` and the
+ * downstream policy `chainsMatch("base", "8453")` would return false → a
+ * spurious BLOCK on every legitimate typed-EVM transaction. We resolve the
+ * on-wire numeric id back to the symbol so the safety layer can match it.
+ */
+const EVM_CHAIN_ID_TO_SYMBOL: Record<string, string> = {
+  '1': 'ethereum',
+  '10': 'optimism',
+  '25': 'cronos',
+  '56': 'bsc',
+  '137': 'polygon',
+  '324': 'zksync',
+  '5000': 'mantle',
+  '8453': 'base',
+  '42161': 'arbitrum',
+  '43114': 'avalanche',
+  '81457': 'blast',
+}
+
+/**
  * Minimal ERC-20 / multicall ABI for the function selectors the safety
  * surfaces actually need to see through. We decode `transfer`/`approve` to lift
  * the true recipient + amount out of the calldata (where `tx.to` is the token
@@ -113,8 +137,20 @@ export function decodeEvmTx(bytes: Uint8Array, chainHint: string): Envelope {
     }
   }
 
-  // Typed txs (EIP-1559/2930) carry the chain id on the wire; legacy do not.
-  const chain = typeof tx.chainId === 'number' && tx.chainId > 0 ? String(tx.chainId) : chainHint
+  // Typed txs (EIP-1559/2930) carry an authoritative chain id on the wire, so
+  // we resolve it to the symbolic chain name (8453 -> "base") for the policy to
+  // match against the user's claimed chain. Legacy txs (type-0) — even EIP-155
+  // ones where viem exposes a `chainId` — are NOT authoritative on the wire in
+  // the same way, so the caller's `chainHint` stands. This mirrors the Go
+  // reference `populateFromEVMTx`, which only overrides chain for DynamicFeeTx
+  // /AccessListTx and runs the numeric id through `evmChainIDToSymbol` (falling
+  // back to the raw numeric string only when the id is not in the map).
+  const isTyped = tx.type === 'eip1559' || tx.type === 'eip2930'
+  let chain = chainHint
+  if (isTyped && typeof tx.chainId === 'number' && tx.chainId > 0) {
+    const numeric = String(tx.chainId)
+    chain = EVM_CHAIN_ID_TO_SYMBOL[numeric] ?? numeric
+  }
 
   const env: Envelope = {
     chain,

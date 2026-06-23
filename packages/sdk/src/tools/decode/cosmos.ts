@@ -89,7 +89,7 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
       }
       case '/cosmos.staking.v1beta1.MsgUndelegate': {
         const msg = MsgUndelegate.decode(any.value)
-        env.kind = 'delegate'
+        env.kind = 'undelegate'
         env.recipient = msg.validatorAddress
         if (msg.amount) {
           env.amount = msg.amount.amount

@@ -1,5 +1,5 @@
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
-import { MsgDelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
+import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
 import { type Address, encodeFunctionData, getAddress, type Hex, parseAbi, serializeTransaction } from 'viem'
@@ -20,18 +20,32 @@ import { decodeFromToolResult } from '@/tools/decode'
 const USDC = getAddress('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 const RECIPIENT = getAddress('0x70997970C51812dc3A010C7d01b50e0d17dc79C8')
 
-/** Build an unsigned EIP-1559 tx carrying `data` to `to`. */
-function buildEvmTx(to: Address, data: Hex, value = 0n): Hex {
+/** Build an unsigned EIP-1559 (typed) tx carrying `data` to `to`. */
+function buildEvmTx(to: Address, data: Hex, value = 0n, chainId = 1): Hex {
   return serializeTransaction({
     to,
     value,
     data,
-    chainId: 1,
+    chainId,
     nonce: 0,
     gas: 60_000n,
     maxFeePerGas: 30_000_000_000n,
     maxPriorityFeePerGas: 1_000_000_000n,
     type: 'eip1559',
+  })
+}
+
+/** Build an unsigned legacy (type-0) EIP-155 tx carrying `data` to `to`. */
+function buildLegacyEvmTx(to: Address, data: Hex, value = 0n, chainId = 1): Hex {
+  return serializeTransaction({
+    to,
+    value,
+    data,
+    chainId,
+    nonce: 0,
+    gas: 60_000n,
+    gasPrice: 30_000_000_000n,
+    type: 'legacy',
   })
 }
 
@@ -65,8 +79,9 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.asset.contract).toBe(USDC)
     expect(env.amount).toBe('1000000')
     expect(env.asset.symbol).toBe('USDC')
-    // Typed tx carries the chain id on the wire.
-    expect(env.chain).toBe('1')
+    // Typed tx carries the chain id on the wire — resolved to the symbolic
+    // chain name (1 -> "ethereum") so the policy layer can match it.
+    expect(env.chain).toBe('ethereum')
   })
 
   it('round-trips the recipient: decode(encode(recipient)) === recipient', () => {
@@ -222,6 +237,79 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
       payload: Buffer.from('not a real tx').toString('base64'),
     })
     expect(env.decoded).toBe(false)
+  })
+})
+
+describe('decodeFromToolResult — EVM chain resolution (audit: numeric chain id -> symbol)', () => {
+  const data = encodeFunctionData({
+    abi: parseAbi(['function transfer(address to, uint256 value)']),
+    functionName: 'transfer',
+    args: [RECIPIENT, 1n],
+  })
+
+  it('resolves a typed Base tx (8453) to the symbolic "base", not the numeric id', () => {
+    // Regression for the spurious-BLOCK bug: env.chain="8453" would fail
+    // chainsMatch("base","8453") downstream → BLOCK every legitimate typed tx.
+    const env = decodeFromToolResult({ family: 'evm', chain: 'base', payload: buildEvmTx(USDC, data, 0n, 8453) })
+    expect(env.decoded).toBe(true)
+    expect(env.chain).toBe('base')
+  })
+
+  it('resolves a typed Arbitrum tx (42161) to "arbitrum"', () => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'arbitrum', payload: buildEvmTx(USDC, data, 0n, 42161) })
+    expect(env.chain).toBe('arbitrum')
+  })
+
+  it('typed tx chain id is authoritative: overrides a mismatched caller hint', () => {
+    // Wrong-chain detection: caller claims optimism, bytes say base → the
+    // bytes win so the policy can catch the mismatch.
+    const env = decodeFromToolResult({ family: 'evm', chain: 'optimism', payload: buildEvmTx(USDC, data, 0n, 8453) })
+    expect(env.chain).toBe('base')
+  })
+
+  it('falls back to the numeric id for a typed tx on an unmapped chain', () => {
+    const env = decodeFromToolResult({
+      family: 'evm',
+      chain: 'somechain',
+      payload: buildEvmTx(USDC, data, 0n, 1313161554),
+    })
+    expect(env.chain).toBe('1313161554')
+  })
+
+  it('legacy (type-0) tx keeps the caller chain hint — chain id not overridden', () => {
+    // Go only overrides chain for typed (DynamicFee/AccessList) txs; legacy
+    // EIP-155 txs keep the symbolic hint (the wire id is not authoritative the
+    // same way). Force-setting "1" here would clobber a valid "ethereum" hint.
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload: buildLegacyEvmTx(USDC, data, 0n, 1) })
+    expect(env.decoded).toBe(true)
+    expect(env.chain).toBe('ethereum')
+  })
+
+  it('legacy tx hint stands even when its EIP-155 chain id differs from the hint', () => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'base', payload: buildLegacyEvmTx(USDC, data, 0n, 8453) })
+    expect(env.chain).toBe('base')
+  })
+})
+
+describe('decodeFromToolResult — cosmos undelegate kind (audit)', () => {
+  const FROM = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
+
+  it('labels MsgUndelegate as "undelegate", not "delegate"', () => {
+    const any = Any.fromPartial({
+      typeUrl: '/cosmos.staking.v1beta1.MsgUndelegate',
+      value: MsgUndelegate.encode(
+        MsgUndelegate.fromPartial({
+          delegatorAddress: FROM,
+          validatorAddress: 'cosmosvaloper1abc',
+          amount: { denom: 'uatom', amount: '500000' },
+        })
+      ).finish(),
+    })
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload: buildCosmosTx([any]) })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('undelegate')
+    expect(env.recipient).toBe('cosmosvaloper1abc')
+    expect(env.amount).toBe('500000')
   })
 })
 

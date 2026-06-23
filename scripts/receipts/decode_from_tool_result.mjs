@@ -35,7 +35,7 @@ const evmUnsignedTx = serializeTransaction({
   to: USDC,
   value: 0n,
   data: evmCalldata,
-  chainId: 1,
+  chainId: 8453, // Base — typed tx carries the chain id on the wire
   nonce: 0,
   gas: 60_000n,
   maxFeePerGas: 30_000_000_000n,
@@ -46,7 +46,7 @@ const evmUnsignedTx = serializeTransaction({
 const evmEnv = decodeFromToolResult({
   toolName: 'build_erc20_tx',
   family: 'evm',
-  chain: 'ethereum',
+  chain: 'base',
   payload: evmUnsignedTx,
   args: { token: 'USDC' },
 })
@@ -59,7 +59,10 @@ ok(evmEnv.recipient === EVM_RECIPIENT, `evm recipient round-trips (${evmEnv.reci
 ok(evmEnv.recipient !== USDC, 'evm recipient is the calldata `to`, NOT the token contract')
 ok(evmEnv.asset.contract === USDC, 'evm asset.contract is the token contract')
 ok(evmEnv.amount === '1000000', `evm amount = 1000000 atomic (${evmEnv.amount})`)
-ok(evmEnv.chain === '1', `evm chain id lifted from typed tx (${evmEnv.chain})`)
+ok(
+  evmEnv.chain === 'base',
+  `evm typed-tx chain id (8453) resolved to the symbolic name (${evmEnv.chain})`,
+)
 
 // ── 2) Cosmos: real MsgSend proto3 tx bytes ──
 const COSMOS_FROM = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
