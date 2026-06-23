@@ -84,6 +84,18 @@ describe('isAddressValidForChain', () => {
     expect(isAddressValidForChain(ADDR.eth, 'madeupchain')).toBeUndefined()
   })
 
+  // Length-floor enforcement on the cosmos HRP rule (`<hrp>1[0-9a-z]{25,70}`).
+  // A right-HRP-but-too-short string must be rejected — otherwise loosening the
+  // {25,70} floor (e.g. to {1,70}) would silently pass truncated/garbage
+  // addresses for every cosmos chain. Mirrors the Go cosmosHRP regex floor.
+  it('rejects a too-short cosmos-prefixed string (HRP matches, body below floor)', () => {
+    expect(isAddressValidForChain('cosmos1abc', 'cosmos')).toBe(false)
+    expect(isAddressValidForChain('osmo1abc', 'osmosis')).toBe(false)
+  })
+  it('rejects a too-short valoper string under the validator role', () => {
+    expect(isAddressValidForChain('cosmosvaloper1abc', 'cosmos', 'validator')).toBe(false)
+  })
+
   // Valoper field-aware routing (ported from Go cosmosValopers). A validator
   // operator address must carry the <chain>valoper1… HRP, not the account HRP.
   describe("role: 'validator' (cosmos valoper HRP)", () => {
