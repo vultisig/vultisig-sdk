@@ -278,4 +278,54 @@ describe('sdk.defi.osmosis — fund-safety validation', () => {
       })
     ).toThrow(/must be less than/)
   })
+
+  // ---- uint64 / int64 silent-wrap guards (the encoder truncates mod 2^64) ----
+
+  const U64_MAX = (1n << 64n) - 1n
+
+  it('rejects a poolId above uint64 max (would wrap to a different pool)', () => {
+    expect(() =>
+      osmosis.buildJoinPool({
+        sender: SENDER,
+        poolId: (U64_MAX + 1n).toString(), // 2^64 -> wraps to 0 on the wire
+        shareOutAmount: '1',
+        tokenInMaxs: [{ denom: UOSMO, amount: '1' }],
+      })
+    ).toThrow(/uint64 max/)
+  })
+
+  it('accepts poolId at exactly uint64 max (boundary)', () => {
+    const msg = osmosis.buildJoinPool({
+      sender: SENDER,
+      poolId: U64_MAX.toString(),
+      shareOutAmount: '1',
+      tokenInMaxs: [{ denom: UOSMO, amount: '1' }],
+    })
+    expect(readFields(msg.value).get(2)![0].value).toBe(U64_MAX)
+  })
+
+  it('rejects a lockId above uint64 max (superfluid)', () => {
+    expect(() => osmosis.buildSuperfluidUndelegate({ sender: SENDER, lockId: (U64_MAX + 1n).toString() })).toThrow(
+      /uint64 max/
+    )
+  })
+
+  it('rejects a positionId above uint64 max (collect)', () => {
+    expect(() =>
+      osmosis.buildCollectSpreadRewards({ sender: SENDER, positionIds: [(U64_MAX + 1n).toString()] })
+    ).toThrow(/uint64 max/)
+  })
+
+  it('rejects a tick beyond the int64 domain (would wrap on the wire)', () => {
+    const I64_MAX = (1n << 63n) - 1n
+    expect(() =>
+      osmosis.buildCreatePosition({
+        sender: SENDER,
+        poolId: '1',
+        lowerTick: '0',
+        upperTick: (I64_MAX + 1n).toString(),
+        tokensProvided: [{ denom: UOSMO, amount: '1' }],
+      })
+    ).toThrow(/int64 range/)
+  })
 })

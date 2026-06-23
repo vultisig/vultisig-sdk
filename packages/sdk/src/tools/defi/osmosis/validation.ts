@@ -83,6 +83,29 @@ export function validatePositiveInt(value: string, field: string): string {
   return trimmed
 }
 
+// proto3 fixed-width integer domains. uint64 fields (poolId, lockId,
+// positionId, position_ids) MUST fit in 0..2^64-1, and int64 ticks in
+// -2^63..2^63-1 — otherwise the wire encoder truncates modulo 2^64 and silently
+// signs a DIFFERENT value than the user asked for. We bound here (and again at
+// the encode choke point in proto.ts) so the rejection is loud + early.
+const U64_MAX = (1n << 64n) - 1n
+const I64_MIN = -(1n << 63n)
+const I64_MAX = (1n << 63n) - 1n
+
+/**
+ * Validate a positive `uint64` id string (poolId / lockId / positionId): a
+ * positive integer that fits the proto3 uint64 domain (1..2^64-1). Rejects
+ * values above 2^64-1 that the wire encoder would otherwise wrap to a different,
+ * attacker-chosen id.
+ */
+export function validateUint64Id(value: string, field: string): string {
+  const trimmed = validatePositiveInt(value, field)
+  if (BigInt(trimmed) > U64_MAX) {
+    throw new Error(`invalid ${field}: exceeds uint64 max (2^64-1); got "${trimmed}"`)
+  }
+  return trimmed
+}
+
 /** Validate a non-negative integer base-unit string (>= 0, e.g. a slippage min of "0"). */
 export function validateNonNegativeInt(value: string, field: string): string {
   const trimmed = (value ?? '').trim()
@@ -92,11 +115,19 @@ export function validateNonNegativeInt(value: string, field: string): string {
   return trimmed
 }
 
-/** Validate a signed integer (ticks can be negative, e.g. -887200). */
+/**
+ * Validate a signed `int64` integer (ticks can be negative, e.g. -887200), and
+ * bound it to the proto3 int64 domain so an out-of-range tick can't wrap on the
+ * wire to a different value than the user supplied.
+ */
 export function validateSignedInt(value: string, field: string): string {
   const trimmed = (value ?? '').trim()
   if (!/^-?[0-9]+$/.test(trimmed)) {
     throw new Error(`invalid ${field}: must be a signed integer string (got "${trimmed}")`)
+  }
+  const v = BigInt(trimmed)
+  if (v < I64_MIN || v > I64_MAX) {
+    throw new Error(`invalid ${field}: out of int64 range (-2^63..2^63-1); got "${trimmed}"`)
   }
   return trimmed
 }

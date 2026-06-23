@@ -37,6 +37,28 @@ const WIRE_LEN = 2
 
 const tag = (fieldNumber: number, wireType: number): number => (fieldNumber << 3) | wireType
 
+// proto3 fixed-width integer domains. The underlying `BinaryWriter.uint64()` /
+// `.int64()` truncate modulo 2^64 without complaint, so an out-of-range bigint
+// would silently encode a DIFFERENT value than the caller handed in (e.g. a
+// poolId of 2^64 encodes as 0 → wrong pool). These bounds are the last line of
+// defense at the encode choke point: the encoded bytes can never disagree with
+// the input value.
+const U64_MAX = (1n << 64n) - 1n
+const I64_MIN = -(1n << 63n)
+const I64_MAX = (1n << 63n) - 1n
+
+function assertU64(v: bigint, fieldNumber: number): void {
+  if (v < 0n || v > U64_MAX) {
+    throw new Error(`uint64 field #${fieldNumber} out of range (got ${v}); must be 0..2^64-1`)
+  }
+}
+
+function assertI64(v: bigint, fieldNumber: number): void {
+  if (v < I64_MIN || v > I64_MAX) {
+    throw new Error(`int64 field #${fieldNumber} out of range (got ${v}); must be -2^63..2^63-1`)
+  }
+}
+
 /** Append a repeated `cosmos.base.v1beta1.Coin` field (length-delimited each). */
 function writeCoins(w: BinaryWriter, fieldNumber: number, coins: CoinInput[]): void {
   for (const c of coins) {
@@ -63,6 +85,7 @@ function writeString(w: BinaryWriter, fieldNumber: number, value: string): void 
 /** Append a `uint64` field (skips 0 — proto3 default). */
 function writeUint64(w: BinaryWriter, fieldNumber: number, value: string | bigint): void {
   const v = typeof value === 'bigint' ? value : BigInt(value)
+  assertU64(v, fieldNumber)
   if (v === 0n) return
   w.uint32(tag(fieldNumber, WIRE_VARINT)).uint64(v)
 }
@@ -75,6 +98,7 @@ function writeUint64(w: BinaryWriter, fieldNumber: number, value: string | bigin
  */
 function writeInt64(w: BinaryWriter, fieldNumber: number, value: string | bigint): void {
   const v = typeof value === 'bigint' ? value : BigInt(value)
+  assertI64(v, fieldNumber)
   if (v === 0n) return
   w.uint32(tag(fieldNumber, WIRE_VARINT)).int64(v)
 }
@@ -85,7 +109,9 @@ function writePackedUint64(w: BinaryWriter, fieldNumber: number, values: (string
   w.uint32(tag(fieldNumber, WIRE_LEN))
   const fork = w.fork()
   for (const value of values) {
-    fork.uint64(typeof value === 'bigint' ? value : BigInt(value))
+    const v = typeof value === 'bigint' ? value : BigInt(value)
+    assertU64(v, fieldNumber)
+    fork.uint64(v)
   }
   w.ldelim()
 }

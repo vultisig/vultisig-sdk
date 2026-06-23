@@ -36,6 +36,7 @@ import {
   validatePositiveDecimal,
   validatePositiveInt,
   validateSignedInt,
+  validateUint64Id,
 } from './validation'
 
 export { toAny } from './proto'
@@ -58,7 +59,7 @@ export type JoinPoolParams = {
 /** Build an unsigned `MsgJoinPool` (multi-asset GAMM join). */
 export function buildJoinPool(params: JoinPoolParams): EncodedMsg {
   const sender = validateOsmoAddress(params.sender, 'sender')
-  const poolId = validatePositiveInt(params.poolId, 'poolId')
+  const poolId = validateUint64Id(params.poolId, 'poolId')
   const shareOutAmount = validatePositiveInt(params.shareOutAmount, 'shareOutAmount')
   const tokenInMaxs = validateCoins(params.tokenInMaxs, 'tokenInMaxs')
   return encodeMsgJoinPool({ sender, poolId, shareOutAmount, tokenInMaxs })
@@ -76,7 +77,7 @@ export type ExitPoolParams = {
 /** Build an unsigned `MsgExitPool` (GAMM exit → underlying tokens). */
 export function buildExitPool(params: ExitPoolParams): EncodedMsg {
   const sender = validateOsmoAddress(params.sender, 'sender')
-  const poolId = validatePositiveInt(params.poolId, 'poolId')
+  const poolId = validateUint64Id(params.poolId, 'poolId')
   const shareInAmount = validatePositiveInt(params.shareInAmount, 'shareInAmount')
   const tokenOutMins = validateCoins(params.tokenOutMins, 'tokenOutMins', { allowZero: true })
   return encodeMsgExitPool({ sender, poolId, shareInAmount, tokenOutMins })
@@ -99,7 +100,7 @@ export function buildSwapExactAmountIn(params: SwapExactAmountInParams): Encoded
     throw new Error('routes must be a non-empty array of {poolId, tokenOutDenom}')
   }
   const routes = params.routes.map((r, i) => ({
-    poolId: validatePositiveInt(r.poolId, `routes[${i}].poolId`),
+    poolId: validateUint64Id(r.poolId, `routes[${i}].poolId`),
     tokenOutDenom: ((): string => {
       const d = (r.tokenOutDenom ?? '').trim()
       if (!d) throw new Error(`routes[${i}].tokenOutDenom must be a non-empty denom`)
@@ -133,7 +134,7 @@ export type CreatePositionParams = {
 /** Build an unsigned `MsgCreatePosition` (open a CL position over a tick range). */
 export function buildCreatePosition(params: CreatePositionParams): EncodedMsg {
   const sender = validateOsmoAddress(params.sender, 'sender')
-  const poolId = validatePositiveInt(params.poolId, 'poolId')
+  const poolId = validateUint64Id(params.poolId, 'poolId')
   const lowerTick = validateSignedInt(params.lowerTick, 'lowerTick')
   const upperTick = validateSignedInt(params.upperTick, 'upperTick')
   if (BigInt(lowerTick) >= BigInt(upperTick)) {
@@ -163,7 +164,7 @@ export type WithdrawPositionParams = {
 /** Build an unsigned `MsgWithdrawPosition` (close / reduce a CL position). */
 export function buildWithdrawPosition(params: WithdrawPositionParams): EncodedMsg {
   const sender = validateOsmoAddress(params.sender, 'sender')
-  const positionId = validatePositiveInt(params.positionId, 'positionId')
+  const positionId = validateUint64Id(params.positionId, 'positionId')
   const liquidityAmount = validatePositiveDecimal(params.liquidityAmount, 'liquidityAmount')
   return encodeMsgWithdrawPosition({ positionId, sender, liquidityAmount })
 }
@@ -178,7 +179,7 @@ function normalizePositionIds(positionIds: string[]): string[] {
   if (!Array.isArray(positionIds) || positionIds.length === 0) {
     throw new Error('positionIds must be a non-empty array of position ID strings')
   }
-  const validated = positionIds.map((id, i) => validatePositiveInt(id, `positionIds[${i}]`))
+  const validated = positionIds.map((id, i) => validateUint64Id(id, `positionIds[${i}]`))
   // Dedupe + numeric sort for determinism.
   return Array.from(new Set(validated)).sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1))
 }
@@ -212,7 +213,7 @@ export type SuperfluidDelegateParams = {
 /** Build an unsigned `MsgSuperfluidDelegate` (superfluid-stake a bonded LP lock). */
 export function buildSuperfluidDelegate(params: SuperfluidDelegateParams): EncodedMsg {
   const sender = validateBech32(params.sender, 'sender', OSMOSIS_BECH32_PREFIX)
-  const lockId = validatePositiveInt(params.lockId, 'lockId')
+  const lockId = validateUint64Id(params.lockId, 'lockId')
   const valAddr = validateOsmoValidator(params.valAddr, 'valAddr')
   return encodeMsgSuperfluidDelegate({ sender, lockId, valAddr })
 }
@@ -225,6 +226,6 @@ export type SuperfluidUndelegateParams = {
 /** Build an unsigned `MsgSuperfluidUndelegate` (remove superfluid delegation). */
 export function buildSuperfluidUndelegate(params: SuperfluidUndelegateParams): EncodedMsg {
   const sender = validateBech32(params.sender, 'sender', OSMOSIS_BECH32_PREFIX)
-  const lockId = validatePositiveInt(params.lockId, 'lockId')
+  const lockId = validateUint64Id(params.lockId, 'lockId')
   return encodeMsgSuperfluidUndelegate({ sender, lockId })
 }
