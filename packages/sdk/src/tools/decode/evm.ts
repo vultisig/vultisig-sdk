@@ -40,18 +40,36 @@ const DECODE_ABI = parseAbi([
   'function multicall(bytes[] data)',
 ])
 
-/**
- * Decode the inner calls of an ERC-20 / router batch, returning the first
- * recognised transfer (the dominant value-moving call). Recurses one level into
- * `multicall(bytes[])`. Returns null when nothing recognised.
- */
-function decodeErc20Like(data: Hex): {
+type Erc20Decode = {
   kind: Envelope['kind']
   recipient: string
   amount: string
   spender: string
   contractIsToken: boolean
-} | null {
+}
+
+/** Returned when a batch carries >1 value-moving inner call — the Envelope
+ * cannot represent more than one recipient/amount, so the caller must fail
+ * closed rather than surface only the first (which would let the rest of the
+ * batch — e.g. a hidden drain — ride through as a clean pass). Mirrors the
+ * Cosmos multi-message fail-closed. */
+const MULTI_VALUE_MOVING = Symbol('multiValueMoving')
+type Erc20DecodeResult = Erc20Decode | null | typeof MULTI_VALUE_MOVING
+
+/** A value-moving call has a recipient (transfer/transferFrom) or a spender
+ * (approve grants spend authority); a recognised-but-empty result (an inner
+ * multicall that resolved to a bare contractCall) is NOT value-moving. */
+function isValueMoving(d: Erc20Decode): boolean {
+  return d.recipient !== '' || d.spender !== ''
+}
+
+/**
+ * Decode the inner calls of an ERC-20 / router batch, returning the single
+ * recognised value-moving call. Recurses one level into `multicall(bytes[])`.
+ * Returns null when nothing recognised, or {@link MULTI_VALUE_MOVING} when the
+ * batch carries more than one value-moving call (fail closed).
+ */
+function decodeErc20Like(data: Hex): Erc20DecodeResult {
   if (data.length < 10) return null // need at least a 4-byte selector
   let decoded: { functionName: string; args: readonly unknown[] }
   try {
@@ -96,10 +114,20 @@ function decodeErc20Like(data: Hex): {
     }
     case 'multicall': {
       const [calls] = decoded.args as [readonly Hex[]]
+      let found: Erc20Decode | null = null
       for (const call of calls) {
         const inner = decodeErc20Like(call)
-        if (inner) return inner
+        if (inner === MULTI_VALUE_MOVING) return MULTI_VALUE_MOVING
+        if (!inner) continue
+        if (isValueMoving(inner)) {
+          // More than one value-moving inner call: the Envelope can carry only
+          // one recipient/amount, so surfacing the first would hide the rest
+          // (e.g. a second transfer that drains funds). Fail closed.
+          if (found && isValueMoving(found)) return MULTI_VALUE_MOVING
+          found = inner
+        }
       }
+      if (found) return found
       return { kind: 'contractCall', recipient: '', amount: '', spender: '', contractIsToken: false }
     }
     default:
@@ -173,6 +201,24 @@ export function decodeEvmTx(bytes: Uint8Array, chainHint: string): Envelope {
 
   // There is calldata — dispatch on the 4-byte selector via the decode ABI.
   const inner = decodeErc20Like(data)
+  if (inner === MULTI_VALUE_MOVING) {
+    // A batch (multicall) with >1 value-moving call: the Envelope can carry
+    // only one recipient/amount, so we must NOT surface just the first — that
+    // would hide the rest of the batch (e.g. a second transfer that drains
+    // funds) as a clean pass. Fail closed, mirroring the Cosmos multi-message
+    // guard, so downstream policy can't validate a partial view.
+    return {
+      chain,
+      family: 'evm',
+      kind: 'unknown',
+      recipient: '',
+      asset: { symbol: '', contract: '', decimals: 0 },
+      amount: '',
+      spender: '',
+      decoded: false,
+      decodeError: 'evm: multi-call batch with >1 value-moving call not supported by envelope decode',
+    }
+  }
   if (!inner) {
     // Unrecognised contract call: tx.to (the contract) is the right comparison
     // target; recipient stays the contract address.

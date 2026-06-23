@@ -240,6 +240,65 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
   })
 })
 
+describe('decodeFromToolResult — EVM multicall batch (fail-closed on >1 value-moving call)', () => {
+  const transferAbi = parseAbi(['function transfer(address to, uint256 value)'])
+  const approveAbi = parseAbi(['function approve(address spender, uint256 value)'])
+  const ATTACKER = getAddress('0x000000000000000000000000000000000000dEaD')
+  const encTransfer = (to: Address, value: bigint) =>
+    encodeFunctionData({ abi: transferAbi, functionName: 'transfer', args: [to, value] })
+  const encMulticall = (inner: Hex[]) =>
+    encodeFunctionData({
+      abi: parseAbi(['function multicall(bytes[] data)']),
+      functionName: 'multicall',
+      args: [inner],
+    })
+
+  it('surfaces the single value-moving call in a multicall (the rest are non-value-moving)', () => {
+    // multicall wrapping ONE transfer — safe to surface.
+    const env = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, encMulticall([encTransfer(RECIPIENT, 1_000_000n)])),
+    })
+    expect(env.decoded).toBe(true)
+    expect(env.kind).toBe('transfer')
+    expect(env.recipient).toBe(RECIPIENT)
+    expect(env.amount).toBe('1000000')
+  })
+
+  it('FAILS CLOSED on a multicall hiding a second transfer (drain) behind a benign first', () => {
+    // The exploit: multicall([transfer(decoy, 1), transfer(attacker, 1e12)]).
+    // Surfacing only the first transfer would report a clean 1-wei send to the
+    // decoy while the real drain to the attacker rides through invisibly →
+    // downstream policy (fail-open on dropped fields) would PASS it.
+    const env = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, encMulticall([encTransfer(RECIPIENT, 1n), encTransfer(ATTACKER, 1_000_000_000_000n)])),
+    })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('multi-call')
+    // The drain recipient/amount must NOT be surfaced as a clean Envelope.
+    expect(env.recipient).toBe('')
+    expect(env.amount).toBe('')
+  })
+
+  it('FAILS CLOSED on a multicall mixing approve + transfer (both value-moving)', () => {
+    const approve = encodeFunctionData({
+      abi: approveAbi,
+      functionName: 'approve',
+      args: [ATTACKER, 2n ** 256n - 1n],
+    })
+    const env = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, encMulticall([approve, encTransfer(ATTACKER, 1_000_000_000_000n)])),
+    })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('multi-call')
+  })
+})
+
 describe('decodeFromToolResult — EVM chain resolution (audit: numeric chain id -> symbol)', () => {
   const data = encodeFunctionData({
     abi: parseAbi(['function transfer(address to, uint256 value)']),
