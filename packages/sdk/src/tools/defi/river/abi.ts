@@ -105,9 +105,11 @@ export const RIVER_BORROWER_OPS_ABI = [
 export const RIVER_PERIPHERY_ABI = [
   {
     type: 'function',
+    // deployed selector 0x11c61ad3 — verified on ETH+Base impl bytecode
     name: 'openTrove',
     stateMutability: 'payable',
     inputs: [
+      { type: 'address', name: 'account' },
       { type: 'address', name: 'troveManager' },
       { type: 'uint256', name: 'maxFeePercentage' },
       { type: 'uint256', name: 'collAmount' },

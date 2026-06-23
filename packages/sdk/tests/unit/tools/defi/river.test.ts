@@ -9,6 +9,7 @@ import {
   buildRiverOpenTrove,
 } from '../../../../src/tools/defi/river/river'
 
+const ACCOUNT = '0x4444444444444444444444444444444444444444' as const
 const TROVE_MANAGER = '0x1111111111111111111111111111111111111111' as const
 const UPPER_HINT = '0x2222222222222222222222222222222222222222' as const
 const LOWER_HINT = '0x3333333333333333333333333333333333333333' as const
@@ -42,6 +43,7 @@ describe('sdk.defi.river', () => {
     it('encodes openTrove with the injected fee tolerance and hints, no RPC', async () => {
       const { tx, meta } = await buildRiverOpenTrove({
         chain: 'Arbitrum',
+        from: ACCOUNT,
         troveManager: TROVE_MANAGER,
         collateralAmount: 1_000_000_000_000_000_000n, // 1 WETH
         debtAmount: 2_000_000_000_000_000_000_000n, // 2000 satUSD
@@ -56,13 +58,15 @@ describe('sdk.defi.river', () => {
 
       const decoded = decodeFunctionData({ abi: RIVER_PERIPHERY_ABI, data: tx.data })
       expect(decoded.functionName).toBe('openTrove')
-      expect(decoded.args[0]).toBe(TROVE_MANAGER)
+      // 7-arg layout: account, troveManager, maxFeePercentage, collAmount, debtAmount, upperHint, lowerHint
+      expect(decoded.args[0]).toBe(ACCOUNT)
+      expect(decoded.args[1]).toBe(TROVE_MANAGER)
       // maxFeePercentage WAD: 250 bps = 2.5% = 0.025e18
-      expect(decoded.args[1]).toBe(25_000_000_000_000_000n)
-      expect(decoded.args[2]).toBe(1_000_000_000_000_000_000n)
-      expect(decoded.args[3]).toBe(2_000_000_000_000_000_000_000n)
-      expect(decoded.args[4]).toBe(UPPER_HINT)
-      expect(decoded.args[5]).toBe(LOWER_HINT)
+      expect(decoded.args[2]).toBe(25_000_000_000_000_000n)
+      expect(decoded.args[3]).toBe(1_000_000_000_000_000_000n)
+      expect(decoded.args[4]).toBe(2_000_000_000_000_000_000_000n)
+      expect(decoded.args[5]).toBe(UPPER_HINT)
+      expect(decoded.args[6]).toBe(LOWER_HINT)
 
       expect(meta.maxFeeBps).toBe(250)
       expect(meta.affiliateTag).toBe('consumer-xyz')
@@ -74,6 +78,7 @@ describe('sdk.defi.river', () => {
     it('defaults to neutral fee tolerance (500 bps / 5%) and no affiliate tag', async () => {
       const { meta } = await buildRiverOpenTrove({
         chain: 'Ethereum',
+        from: ACCOUNT,
         troveManager: TROVE_MANAGER,
         collateralAmount: 5n,
         debtAmount: 10n,
@@ -88,6 +93,7 @@ describe('sdk.defi.river', () => {
     it('carries collateral as tx.value when collateralIsNative is set (offline native open)', async () => {
       const { tx, meta } = await buildRiverOpenTrove({
         chain: 'Ethereum',
+        from: ACCOUNT,
         troveManager: TROVE_MANAGER,
         collateralAmount: 1_000_000_000_000_000_000n,
         debtAmount: 2_000_000_000_000_000_000_000n,
@@ -98,7 +104,7 @@ describe('sdk.defi.river', () => {
       // value MUST equal the encoded collAmount for a native open, else it reverts.
       expect(tx.value).toBe('1000000000000000000')
       const decoded = decodeFunctionData({ abi: RIVER_PERIPHERY_ABI, data: tx.data })
-      expect(decoded.args[2]).toBe(1_000_000_000_000_000_000n)
+      expect(decoded.args[3]).toBe(1_000_000_000_000_000_000n) // collAmount is now args[3] (after account, troveManager, maxFee)
       expect(meta.nativeCollateral).toBe(true)
       expect(meta.collateralApprovalRequired).toBe(false)
       expect(meta.collateralApprovalSpender).toBeNull()
@@ -107,6 +113,7 @@ describe('sdk.defi.river', () => {
     it('defaults offline opens to ERC-20 (value 0, approval required) when nativeness undeclared', async () => {
       const { tx, meta } = await buildRiverOpenTrove({
         chain: 'Ethereum',
+        from: ACCOUNT,
         troveManager: TROVE_MANAGER,
         collateralAmount: 5n,
         debtAmount: 10n,
@@ -122,6 +129,7 @@ describe('sdk.defi.river', () => {
       await expect(
         buildRiverOpenTrove({
           chain: 'Ethereum',
+          from: ACCOUNT,
           troveManager: TROVE_MANAGER,
           collateralAmount: 0n,
           debtAmount: 10n,
@@ -132,6 +140,7 @@ describe('sdk.defi.river', () => {
       await expect(
         buildRiverOpenTrove({
           chain: 'Ethereum',
+          from: ACCOUNT,
           troveManager: TROVE_MANAGER,
           collateralAmount: 5n,
           debtAmount: 0n,
@@ -145,6 +154,7 @@ describe('sdk.defi.river', () => {
       await expect(
         buildRiverOpenTrove({
           chain: 'Ethereum',
+          from: ACCOUNT,
           troveManager: TROVE_MANAGER,
           collateralAmount: 5n,
           debtAmount: 10n,

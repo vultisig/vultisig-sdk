@@ -192,6 +192,12 @@ export function buildRiverDelegateApproval(
 
 export type BuildRiverOpenTroveParams = {
   chain: RiverChain
+  /**
+   * The trove owner's address — passed as the leading `account` arg to the
+   * deployed SatoshiPeriphery (selector 0x11c61ad3). The periphery acts as a
+   * delegate; it needs to know whose trove to open.
+   */
+  from: `0x${string}`
   /** Exact River trove-manager address for the market. */
   troveManager: `0x${string}`
   /** Collateral amount in base units (e.g. wei for WETH). */
@@ -247,7 +253,7 @@ export type RiverOpenTroveMeta = {
 export async function buildRiverOpenTrove(
   params: BuildRiverOpenTroveParams
 ): Promise<RiverTxBuild<RiverOpenTroveMeta>> {
-  const { chain, troveManager, collateralAmount, debtAmount } = params
+  const { chain, from, troveManager, collateralAmount, debtAmount } = params
   const config = RIVER_CHAIN_CONFIG[chain]
 
   const maxFeeBps = BigInt(params.affiliate?.maxFeeBps ?? Number(RIVER_DEFAULT_MAX_FEE_BPS))
@@ -290,7 +296,8 @@ export async function buildRiverOpenTrove(
   const data = encodeFunctionData({
     abi: RIVER_PERIPHERY_ABI,
     functionName: 'openTrove',
-    args: [troveManager, maxFeeWad, collateralAmount, debtAmount, upperHint, lowerHint],
+    // 7-arg openTrove: leading `account` is the trove owner (delegate-router model)
+    args: [getAddress(from), troveManager, maxFeeWad, collateralAmount, debtAmount, upperHint, lowerHint],
   })
 
   // Native-ness drives `tx.value`. On the on-chain path the resolved collateral
