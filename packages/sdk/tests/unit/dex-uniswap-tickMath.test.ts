@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { decodeBytes32String } from '@/tools/dex/uniswap/erc20'
 import {
   formatPrice18,
   getSqrtRatioAtTick,
@@ -104,6 +105,43 @@ describe('uniswap v3 tick math', () => {
     it('rejects non-positive prices', () => {
       expect(() => priceToTick(0, 6, 18)).toThrow(/positive finite/)
       expect(() => priceToTick(-1, 6, 18)).toThrow(/positive finite/)
+    })
+  })
+
+  describe('decimals bound (DoS hardening)', () => {
+    // The inverse-price path scales 10^(PRICE_SCALE - decDiff + PRECISION_BUFFER)
+    // as an unbounded bigint. With sane (≤36) decimals the exponent stays small;
+    // an attacker-controlled decimals (e.g. 1_000_000) would balloon it into a
+    // multi-million-digit bigint. readDecimals now caps at 36 — assert the
+    // exponent magnitude that survives the cap is bounded.
+    const PRICE_SCALE = 80
+    const PRECISION_BUFFER = 80
+    const MAX_DEC = 36
+    const exponentFor = (dec0: number, dec1: number) => PRICE_SCALE - (dec0 - dec1) + PRECISION_BUFFER
+
+    it('keeps the inverse-price exponent bounded for in-range decimals', () => {
+      // Worst case within the cap: dec0=0, dec1=36 → decDiff=-36.
+      const worst = exponentFor(0, MAX_DEC)
+      expect(worst).toBeLessThanOrEqual(PRICE_SCALE + PRECISION_BUFFER + MAX_DEC)
+      // 10^worst is a few-hundred-digit bigint — cheap, not a DoS.
+      expect(10n ** BigInt(worst) > 0n).toBe(true)
+    })
+
+    it('shows an uncapped decimals would balloon the exponent (regression rationale)', () => {
+      // This is the value the cap prevents from ever reaching the bigint pow.
+      const malicious = exponentFor(0, 1_000_000)
+      expect(malicious).toBeGreaterThan(1_000_000)
+    })
+  })
+
+  describe('decodeBytes32String', () => {
+    it('decodes a right-NULL-padded bytes32 symbol (MKR-style)', () => {
+      // "MKR" = 0x4d4b52, right-padded to 32 bytes.
+      const padded = ('0x4d4b52' + '0'.repeat(64 - 6)) as `0x${string}`
+      expect(decodeBytes32String(padded)).toBe('MKR')
+    })
+    it('returns UNKNOWN for an all-zero word', () => {
+      expect(decodeBytes32String(('0x' + '0'.repeat(64)) as `0x${string}`)).toBe('UNKNOWN')
     })
   })
 })

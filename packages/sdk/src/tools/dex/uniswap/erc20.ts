@@ -37,12 +37,30 @@ export async function readSymbol(chain: EvmChain, token: `0x${string}`): Promise
   }
 }
 
+/**
+ * Max ERC-20 decimals we accept. `decimals()` is a uint8 on-chain (≤255), but
+ * downstream fixed-point math scales 10^(PRICE_SCALE ± decDiff) as an
+ * arbitrary-precision bigint — unlike the Go reference which caps at big.Float's
+ * fixed 256-bit precision. An attacker-controlled token (reachable via a real
+ * factory pool or a direct poolAddress) returning an absurd `decimals()` would
+ * otherwise blow that 10^N up to a multi-million-digit bigint = memory/CPU DoS.
+ * 36 is the upper bound the tick-math tool schema already enforces and is well
+ * past any real token (max observed ~24).
+ */
+const MAX_ERC20_DECIMALS = 36
+
 export async function readDecimals(chain: EvmChain, token: `0x${string}`): Promise<number> {
   const data = await evmCall(chain, { to: token, data: SEL_DECIMALS })
   if (!data || data === '0x') {
     throw new Error(`failed to read decimals for ${token}: empty response`)
   }
-  return Number(BigInt(data))
+  const decimals = BigInt(data)
+  if (decimals > BigInt(MAX_ERC20_DECIMALS)) {
+    throw new Error(
+      `token ${token} reported implausible decimals ${decimals} (> ${MAX_ERC20_DECIMALS}); refusing to compute prices.`
+    )
+  }
+  return Number(decimals)
 }
 
 export function decodeAddress(data: `0x${string}`): `0x${string}` {
