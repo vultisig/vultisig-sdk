@@ -16,7 +16,7 @@
  * chain-id/REST-URL table to drift. Address validation uses `@cosmjs/encoding`
  * (already a core-chain dependency) rather than a hand-rolled bech32 decoder.
  */
-import { fromBech32 } from '@cosmjs/encoding'
+import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
@@ -415,7 +415,12 @@ export async function prepareCosmosVote(params: PrepareCosmosVoteParams): Promis
   if (decoded.data.length !== 20 && decoded.data.length !== 32) {
     throw new Error(`invalid voter address: expected 20- or 32-byte payload, got ${decoded.data.length}`)
   }
-  const voter = rawVoter.trim()
+  // Normalize (re-encode) to canonical lowercase bech32 so an ALL-UPPERCASE
+  // address (which `fromBech32` validates fine) ships in the envelope as the
+  // canonical form the app's signAndBroadcast path + chain expect. Mirrors
+  // mcp-ts `normalizeBech32Address`. Re-encodes from the already-decoded
+  // prefix/data — no second decode.
+  const voter = toBech32(decoded.prefix, decoded.data)
 
   if (!/^\d+$/.test(proposalId) || Number(proposalId) <= 0) {
     throw new Error(`invalid proposalId "${proposalId}": must be a positive integer string`)

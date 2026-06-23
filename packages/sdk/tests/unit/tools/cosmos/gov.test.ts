@@ -225,4 +225,46 @@ describe('prepareCosmosVote', () => {
     })
     expect(env.metadata).toBe('voting yes per validator note')
   })
+
+  it('normalizes (re-encodes) an ALL-UPPERCASE voter to canonical lowercase in the envelope AND the auth URL', async () => {
+    // `fromBech32` validates an all-uppercase bech32 fine, so without the
+    // re-encode the raw uppercase string would (a) ship in the envelope the
+    // chain rejects and (b) 404 the auth lookup → spurious sequence=0. The
+    // envelope.voter + auth-lookup URL must both carry the lowercase form.
+    let authUrl = ''
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      authUrl = String(input)
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ account: { account_number: '42', sequence: '9' } }),
+      } as Response
+    }) as unknown as typeof fetch
+
+    const env = await prepareCosmosVote({
+      chain: 'Cosmos',
+      voter: COSMOS_ADDR.toUpperCase(),
+      proposalId: '1',
+      option: 'yes',
+      fetchImpl,
+    })
+
+    expect(env.voter).toBe(COSMOS_ADDR)
+    expect(env.voter).not.toBe(COSMOS_ADDR.toUpperCase())
+    expect(authUrl).toContain(COSMOS_ADDR)
+    expect(authUrl).not.toContain(COSMOS_ADDR.toUpperCase())
+    expect(env.sequence).toBe('9')
+  })
+
+  it('trims surrounding whitespace and normalizes the voter', async () => {
+    const fetchImpl = mockFetch([authRoute('1', '0')])
+    const env = await prepareCosmosVote({
+      chain: 'Cosmos',
+      voter: `  ${COSMOS_ADDR}  `,
+      proposalId: '1',
+      option: 'yes',
+      fetchImpl,
+    })
+    expect(env.voter).toBe(COSMOS_ADDR)
+  })
 })
