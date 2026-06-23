@@ -20,6 +20,34 @@ export {
 // Verifier client
 export { VerifierClient } from './verifier'
 
+// Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
+export {
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  type AmountUnits,
+  chainAliasMap,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  type Envelope,
+  evaluatePolicy,
+  type FieldDiff,
+  type IntentClaim,
+  Invariant,
+  type InvariantInput,
+  type InvariantViolation,
+  isZeroAmount,
+  parseAmountBig,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  type AssetRef as PolicyAssetRef,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
+  type Verdict,
+} from './policy'
+
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
   getMaxSendAmountFromKeys,
