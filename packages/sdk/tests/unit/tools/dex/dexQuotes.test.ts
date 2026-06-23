@@ -146,4 +146,13 @@ describe('balancer quote (canonical @balancer-labs/balancer-maths Vault)', () =>
     )
     expect(() => balancerQuote({ poolState, tokenIn: USDC, tokenOut: WETH, amountRaw: 0n })).toThrow(/positive/)
   })
+
+  it('fails closed when a token is not a member of the supplied poolState', () => {
+    // The poolState is the trust boundary — a token not in poolState.tokens must
+    // be rejected before the canonical math runs, so a stale/attacker poolState
+    // can't produce a plausible-but-fake quote.
+    const FOREIGN = '0x1111111111111111111111111111111111111111'
+    expect(() => balancerQuote({ poolState, tokenIn: FOREIGN, tokenOut: WETH, amountRaw: 1n })).toThrow(/not a member/)
+    expect(() => balancerQuote({ poolState, tokenIn: USDC, tokenOut: FOREIGN, amountRaw: 1n })).toThrow(/not a member/)
+  })
 })

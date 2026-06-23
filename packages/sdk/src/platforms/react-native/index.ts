@@ -251,6 +251,22 @@ export type {
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
 
+// On-chain DEX quote primitives (read-only — no calldata, no signing).
+// RN-safe: uniswapV2Quote/getAmountOut are pure viem (peer dep) + bigint math;
+// balancerQuote is pure @balancer-labs/balancer-maths (zero-dep, no node
+// builtins). The RN allow-list omitted these so RN consumers had to re-port
+// the constant-product / Balancer math.
+export type {
+  BalancerPoolState,
+  BalancerQuote,
+  BalancerQuoteParams,
+  BalancerSwapKind,
+  UniswapV2Quote,
+  UniswapV2QuoteParams,
+  UniV2Deployment,
+} from '../../tools/dex'
+export { balancerQuote, getAmountOut, supportedUniV2Chains, UNI_V2_DEPLOYMENTS, uniswapV2Quote } from '../../tools/dex'
+
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 

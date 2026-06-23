@@ -1,16 +1,20 @@
 /**
- * On-chain Balancer pool quote via canonical pool math.
+ * Balancer pool quote via canonical pool math.
  *
  * Uses `@balancer-labs/balancer-maths` (zero-dep, RN-safe, the same math the
  * Balancer SOR + on-chain Vault use) rather than hand-rolling the weighted /
- * stable invariant. We only supply the on-chain pool state (balances, weights,
- * swap fee, scaling factors) and let the canonical `Vault.swap()` compute the
- * exact amount out.
+ * stable invariant. The canonical `Vault.swap()` computes the exact amount out.
  *
- * Read-only: pure math over a pool state the caller has read from chain. Does
- * NOT build calldata, does NOT sign, does NOT broadcast.
+ * IMPORTANT — trust boundary: unlike `uniswapV2Quote` (which reads factory →
+ * pair → reserves on-chain itself), this helper does NOT read chain state. It
+ * is pure math over a `poolState` the CALLER must have read from chain. The
+ * quote is only as trustworthy as the supplied state; a stale or attacker-
+ * chosen `poolState` yields a stale/fake quote even though the math lib is
+ * canonical. The caller owns pinning poolState to a chain/Vault/block.
+ *
+ * Read-only: pure math. Does NOT build calldata, sign, or broadcast.
  */
-import { type PoolState, SwapKind,Vault } from '@balancer-labs/balancer-maths'
+import { type PoolState, SwapKind, Vault } from '@balancer-labs/balancer-maths'
 import { getAddress, isAddress } from 'viem'
 
 export type BalancerSwapKind = 'EXACT_IN' | 'EXACT_OUT'
@@ -67,6 +71,19 @@ export function balancerQuote(params: BalancerQuoteParams): BalancerQuote {
   const tokenOut = getAddress(tokenOutRaw)
   if (tokenIn === tokenOut) throw new Error('tokenIn and tokenOut must be different.')
   if (params.amountRaw <= 0n) throw new Error('amountRaw must be positive.')
+
+  // Fail closed before computing: the caller-supplied poolState is the trust
+  // boundary here (unlike uniswapV2Quote, this helper does no on-chain read of
+  // its own — see the JSDoc above). Prove tokenIn/tokenOut are actually members
+  // of the pool's token set, normalising case, so a malformed/stale/attacker
+  // poolState that omits either token can't yield a plausible-but-fake quote.
+  const poolTokens = (params.poolState.tokens ?? []).map(t => getAddress(t.trim()))
+  if (!poolTokens.includes(tokenIn)) {
+    throw new Error(`tokenIn ${tokenIn} is not a member of pool ${params.poolState.poolAddress}.`)
+  }
+  if (!poolTokens.includes(tokenOut)) {
+    throw new Error(`tokenOut ${tokenOut} is not a member of pool ${params.poolState.poolAddress}.`)
+  }
 
   const swapKind = params.swapKind ?? 'EXACT_IN'
   const kind = swapKind === 'EXACT_OUT' ? SwapKind.GivenOut : SwapKind.GivenIn
