@@ -352,9 +352,14 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AssetRef,
+  ChainFamily,
   Coin,
   CoinKey,
   CoinMetadata,
+  DecodeFromToolResultInput,
+  Envelope,
+  EnvelopeKind,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
   KnownCoin,
@@ -368,6 +373,9 @@ export {
   abiDecode,
   abiEncode,
   chainFeeCoin,
+  decodeCosmosTx,
+  decodeEvmTx,
+  decodeFromToolResult,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,

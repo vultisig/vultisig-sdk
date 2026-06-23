@@ -201,6 +201,7 @@
     "bs58check": "^4.0.0",
     "buffer": "^6.0.3",
     "cbor-x": "^1.6.4",
+    "cosmjs-types": "^0.11.0",
     "crypto-browserify": "^3.12.1",
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
