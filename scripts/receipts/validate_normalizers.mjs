@@ -22,6 +22,7 @@ import {
   computeEvmFee,
   decimalsFor,
   feeMatches,
+  isValidTokenSymbolFormat,
   normalizeTokenSymbol,
   scaleHumanToRaw,
   scaleRawToHuman,
@@ -59,5 +60,14 @@ line('claim 0.01 (fabricated)?', feeMatches('0.01', gasLimit, maxFeePerGas))
 // 5) Token-symbol format + normalization.
 const sym = normalizeTokenSymbol('ruji/rune')
 line('normalize ruji/rune', `${sym.symbol}  parts=[${sym.parts.join(', ')}]`)
+
+// 6) Symbol SHAPE now mirrors Go symbolCandidateRe (3-10 chars, upper-only
+//    base/pair). 2-char tickers (OP/ZK) and digit-led tickers are rejected,
+//    exactly like the backend extractor — lowercase still normalizes (case-
+//    insensitive via upper-casing before the shape test).
+line('USDC valid?', isValidTokenSymbolFormat('USDC'))
+line('usdc.e valid (lowercase)?', isValidTokenSymbolFormat('usdc.e'))
+line('OP rejected (2-char, was bug)?', !isValidTokenSymbolFormat('OP'))
+line('1INCH rejected (digit-led)?', !isValidTokenSymbolFormat('1INCH'))
 
 console.log('\n=== OK — all normalizers produced real results, no signing/broadcast ===')

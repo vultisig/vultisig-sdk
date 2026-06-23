@@ -126,6 +126,40 @@ describe('token-symbol FORMAT validation', () => {
     }
   })
 
+  // Drift fix: mirror the Go `symbolCandidateRe` shape EXACTLY —
+  // `[A-Z][A-Z0-9]{2,9}` base/pair (3-10 chars, uppercase-only, letter-led).
+  // The previous SDK regex was `[A-Za-z][A-Za-z0-9]{1,9}` which accepted
+  // 2-char + lowercase tickers the backend extractor rejects.
+  it('rejects 2-char tickers (min length 3, matching Go)', () => {
+    // Go `[A-Z][A-Z0-9]{2,9}` requires >= 3 chars, so OP / ZK never match
+    // symbolCandidateRe upstream — the SDK must agree.
+    for (const s of ['OP', 'ZK', 'op', 'zk', 'A1']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(false)
+    }
+  })
+
+  it('stays case-insensitive via pre-upper (lowercase + mixed still valid)', () => {
+    for (const s of ['eth', 'usdc.e', 'ruji/rune', 'Eth/Usdc']) {
+      expect(isValidTokenSymbolFormat(s)).toBe(true)
+    }
+  })
+
+  it('accepts 3-char and 10-char bounds, rejects 11-char overflow', () => {
+    expect(isValidTokenSymbolFormat('BTC')).toBe(true) // 3
+    expect(isValidTokenSymbolFormat('ABCDEFGHIJ')).toBe(true) // 10
+    expect(isValidTokenSymbolFormat('ABCDEFGHIJK')).toBe(false) // 11
+  })
+
+  it('rejects a 2-char leg inside a slash-pair', () => {
+    // Each leg must independently satisfy the 3-char minimum.
+    expect(isValidTokenSymbolFormat('RUNE/OP')).toBe(false)
+    expect(isValidTokenSymbolFormat('OP/RUNE')).toBe(false)
+  })
+
+  it('throws when normalizing a now-too-short ticker', () => {
+    expect(() => normalizeTokenSymbol('op')).toThrow(ValidateNormalizerError)
+  })
+
   it('normalizes to uppercase and splits pairs', () => {
     expect(normalizeTokenSymbol('usdc.e')).toEqual({ symbol: 'USDC.E', parts: ['USDC.E'] })
     expect(normalizeTokenSymbol('ruji/rune')).toEqual({ symbol: 'RUJI/RUNE', parts: ['RUJI', 'RUNE'] })

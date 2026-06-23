@@ -275,19 +275,34 @@ export const feeMatches = (
 // Token-symbol FORMAT validation (ported from token_symbol.go shape rules)
 // ============================================================================
 
-// Canonical on-chain ticker shape: 2-10 chars, starts with a letter, letters +
-// digits, optional ".suffix" (e.g. USDC.e) or "/pair" (e.g. RUJI/RUNE). This is
-// the pure FORMAT predicate — it does NOT decide whether the symbol is real /
-// grounded (that is the agent layer's job against tool results).
-const SYMBOL_SHAPE = /^[A-Za-z][A-Za-z0-9]{1,9}(?:\.[A-Za-z]{1,4})?(?:\/[A-Za-z][A-Za-z0-9]{1,9}(?:\.[A-Za-z]{1,4})?)?$/
+// Canonical on-chain ticker shape: 3-10 chars, starts with a LETTER, then
+// letters + digits, optional ".suffix" (e.g. USDC.e) or "/pair" (e.g.
+// RUJI/RUNE). This is the pure FORMAT predicate — it does NOT decide whether
+// the symbol is real / grounded (that is the agent layer's job against tool
+// results).
+//
+// Mirrors the Go `symbolCandidateRe` shape EXACTLY (anchored here, \b-bounded
+// there): `[A-Z][A-Z0-9]{2,9}` base/pair — uppercase-only, min length 3 — with
+// the same `[a-zA-Z]{1,4}` dotted suffix. The Go matcher never lowercases the
+// candidate before matching (it only ToUppers for the allowlist compare), so a
+// lowercase or 2-char input does NOT match upstream; we reproduce that by
+// upper-casing in the callers below before testing, which keeps the SDK's
+// case-insensitive ergonomics (usdc.e -> USDC.E) while rejecting the same 2-char
+// tickers (OP, ZK) the backend rejects. Previously this was `[A-Za-z][...]{1,9}`
+// which accepted 2-char + lowercase tickers the Go side drops — drift fixed.
+const SYMBOL_SHAPE = /^[A-Z][A-Z0-9]{2,9}(?:\.[a-zA-Z]{1,4})?(?:\/[A-Z][A-Z0-9]{2,9}(?:\.[a-zA-Z]{1,4})?)?$/
 
 /**
  * Returns true if `symbol` matches the canonical token-ticker FORMAT (length,
  * charset, optional dotted-suffix or slash-pair). Pure shape check — does not
  * assert the token exists. Mirrors the Go `symbolCandidateRe` shape, anchored.
+ *
+ * Input is upper-cased before the shape test so the case-insensitive SDK
+ * ergonomics hold while the underlying pattern stays uppercase-only (matching
+ * the Go regex, which only ever sees uppercase candidates in practice).
  */
 export const isValidTokenSymbolFormat = (symbol: string): boolean =>
-  typeof symbol === 'string' && SYMBOL_SHAPE.test(symbol.trim())
+  typeof symbol === 'string' && SYMBOL_SHAPE.test(symbol.trim().toUpperCase())
 
 /**
  * Normalize a token symbol to its canonical uppercase form after validating
