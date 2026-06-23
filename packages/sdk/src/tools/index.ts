@@ -20,6 +20,15 @@ export {
 // Verifier client
 export { VerifierClient } from './verifier'
 
+// DeFi protocol integrations (sdk.defi.* — builds UNSIGNED calldata only)
+export { defi } from './defi'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from './defi/threeJane'
+
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
   getMaxSendAmountFromKeys,

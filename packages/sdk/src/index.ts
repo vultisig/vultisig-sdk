@@ -352,6 +352,8 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
   Coin,
   CoinKey,
   CoinMetadata,
@@ -361,6 +363,8 @@ export type {
   KnownCoinMetadata,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
   TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
@@ -368,6 +372,7 @@ export {
   abiDecode,
   abiEncode,
   chainFeeCoin,
+  defi,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
