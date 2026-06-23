@@ -211,6 +211,21 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders that wrap @balancer/sdk (viem + balancer-maths, both RN-safe;
+// viem is externalized as a peer dep above, balancer-maths is pure JS and
+// inlined). Statically re-exported so RN consumers can build Balancer v3 swap
+// calldata without the generic-entry-only allow-list omitting them.
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  Defi,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted
