@@ -448,3 +448,91 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
     expect(await lastDoneOk({ output: '{"tx_hash":"0xabc","status":"pending"}' })).toBe(true)
   })
 })
+
+/**
+ * Mimics fetch's abort contract: never resolves, but rejects with the signal's
+ * abort reason once the (timeout/caller) signal fires — so a stalled backend is
+ * indistinguishable from a half-open socket. Without the timeout work this hangs
+ * forever (the vitest test would time out / go red); with it the call rejects
+ * within `timeoutMs`.
+ */
+function mockHangingFetch(): typeof fetch {
+  return vi.fn(
+    (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        if (!signal) return // no signal → genuinely hangs (the bug we're fixing)
+        if (signal.aborted) {
+          reject(signal.reason)
+          return
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+  ) as typeof fetch
+}
+
+describe('AgentClient — request timeouts (headless-hang guard)', () => {
+  const originalFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  const authReq = { public_key: 'pk', chain_code_hex: 'cc', message: 'm', signature: 's' }
+
+  it('healthCheck resolves false when the request hangs past the timeout', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.healthCheck()).resolves.toBe(false)
+  })
+
+  it('rejects a unary POST with a clear timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects a unary DELETE with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.deleteConversation('c1', 'pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects authenticate with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.authenticate(authReq)).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects a unary GET (messagesSince) with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.messagesSince('c1', { since: '2026-01-01T00:00:00Z' })).rejects.toThrow(
+      /request timed out after 20ms/
+    )
+  })
+
+  it('rejects sendMessageStream with a timeout error when the connect hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})).rejects.toThrow(
+      /request timed out after 20ms/
+    )
+  })
+
+  // Cancellation must survive the combined-signal path: a caller Ctrl+C aborts
+  // the connect, and it must surface as a deliberate cancel (the original abort),
+  // NOT be mislabeled as a timeout.
+  it('still aborts sendMessageStream on a caller signal, preserving cancel semantics', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const ac = new AbortController()
+    // Large timeout so the caller abort — not the deadline — wins the race.
+    const client = new AgentClient('http://example.com', 60_000)
+    const p = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {}, ac.signal)
+    ac.abort()
+    await expect(p).rejects.toThrow()
+    await p.catch((e: unknown) => {
+      expect(String((e as Error).message)).not.toMatch(/timed out/)
+    })
+  })
+})
