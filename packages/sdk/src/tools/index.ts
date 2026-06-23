@@ -22,6 +22,8 @@ export { VerifierClient } from './verifier'
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildSplTransfer,
+  type BuildSplTransferParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -31,6 +33,7 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  type SplTransferResult,
   type VaultIdentity,
 } from './prep'
 

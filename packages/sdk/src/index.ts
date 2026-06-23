@@ -364,9 +364,11 @@ export type {
   TokenMetadataResolver,
   VaultIdentity,
 } from './tools'
+export type { BuildSplTransferParams, SplTransferResult } from './tools'
 export {
   abiDecode,
   abiEncode,
+  buildSplTransfer,
   chainFeeCoin,
   deriveAddressFromKeys,
   evmCall,
