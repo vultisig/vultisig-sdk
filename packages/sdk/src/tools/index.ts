@@ -4,6 +4,10 @@ export { deriveAddressFromKeys } from './address'
 // EVM utilities
 export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
 
+// Balance reads (pure decode + decimal-scale, no signing/broadcast)
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
+
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
