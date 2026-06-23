@@ -592,11 +592,8 @@ describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
 
   // "A typo can't disable the timeout": junk / non-positive values fall back to
   // the default rather than producing 0/NaN (which would neuter the bound).
-  it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])(
-    'falls back to the default for invalid value %j',
-    val => {
-      process.env.VULTISIG_HTTP_TIMEOUT_MS = val
-      expect(resolveHttpTimeoutMs()).toBe(30_000)
-    }
-  )
+  it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])('falls back to the default for invalid value %j', val => {
+    process.env.VULTISIG_HTTP_TIMEOUT_MS = val
+    expect(resolveHttpTimeoutMs()).toBe(30_000)
+  })
 })

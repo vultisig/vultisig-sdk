@@ -339,9 +339,7 @@ export class AgentClient {
       connectTimedOut = true
       connectController.abort()
     }, this.timeoutMs)
-    const combinedSignal = signal
-      ? AbortSignal.any([signal, connectController.signal])
-      : connectController.signal
+    const combinedSignal = signal ? AbortSignal.any([signal, connectController.signal]) : connectController.signal
 
     let res: Response
     try {
