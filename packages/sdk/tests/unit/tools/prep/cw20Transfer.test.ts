@@ -48,15 +48,33 @@ describe('buildCw20TransferMsg', () => {
     expect(value.msg.transfer.recipient).not.toBe(OSMO_CONTRACT)
   })
 
-  it('canonicalizes leading zeros in the amount', () => {
-    const { amount } = buildCw20TransferMsg({
+  it('preserves the trimmed amount byte-for-byte (no leading-zero strip) for mcp-ts parity', () => {
+    // Byte-parity with mcp-ts's shared validateBaseUnitAmount, which returns the
+    // trimmed string unchanged. The amount is embedded verbatim into the signed
+    // execute_msg JSON, so stripping leading zeros here would produce a different
+    // signed wire payload than the mcp-ts source for the same input.
+    const result = buildCw20TransferMsg({
       bech32Prefix: 'osmo',
       contract: OSMO_CONTRACT,
       recipient: OSMO_RECIPIENT,
       amount: '0001000',
       sender: OSMO_SENDER,
     })
-    expect(amount).toBe('1000')
+    expect(result.amount).toBe('0001000')
+    // The verbatim amount also flows into the signed execute_msg + amino value.
+    expect(result.executeMsg).toBe(JSON.stringify({ transfer: { recipient: OSMO_RECIPIENT, amount: '0001000' } }))
+    expect(JSON.parse(result.msg.value).msg.transfer.amount).toBe('0001000')
+  })
+
+  it('trims surrounding whitespace but keeps the inner digits verbatim', () => {
+    const { amount } = buildCw20TransferMsg({
+      bech32Prefix: 'osmo',
+      contract: OSMO_CONTRACT,
+      recipient: OSMO_RECIPIENT,
+      amount: '  010  ',
+      sender: OSMO_SENDER,
+    })
+    expect(amount).toBe('010')
   })
 
   it('rejects a zero amount', () => {

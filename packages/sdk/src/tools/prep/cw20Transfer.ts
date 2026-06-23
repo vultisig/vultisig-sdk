@@ -133,11 +133,15 @@ const validateBaseUnitAmount = (value: string): string => {
   if (!/^\d+$/.test(trimmed)) {
     throw new Error(`invalid amount: expected a positive integer base-unit string, got "${value}"`)
   }
-  if (trimmed === '0' || /^0+$/.test(trimmed)) {
+  if (BigInt(trimmed) <= 0n) {
     throw new Error('invalid amount: must be greater than zero')
   }
-  // Strip leading zeros to a canonical form (CW-20 amounts are decimal strings).
-  return trimmed.replace(/^0+/, '')
+  // Return the trimmed string UNCHANGED for byte-parity with mcp-ts's shared
+  // `validateBaseUnitAmount` (src/lib/validateBaseUnitAmount.ts). The amount is
+  // embedded verbatim into the signed `execute_msg` JSON, so stripping leading
+  // zeros here ("01000"->"1000") would produce a different signed wire payload
+  // than the mcp-ts source for the same input — keep it identical.
+  return trimmed
 }
 
 /**
