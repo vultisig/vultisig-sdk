@@ -45,6 +45,8 @@ export type UniswapV2Quote = {
   factory: `0x${string}`
   router02: `0x${string}`
   pairAddress: `0x${string}`
+  pairToken0: `0x${string}`
+  pairToken1: `0x${string}`
   tokenIn: `0x${string}`
   tokenInSymbol: string
   tokenInDecimals: number
@@ -126,7 +128,7 @@ export async function uniswapV2Quote(params: UniswapV2QuoteParams): Promise<Unis
     throw new Error(`Uniswap V2 pair not found for ${tokenIn}/${tokenOut} on ${chain}.`)
   }
 
-  const [pairToken0Raw, , reservesRaw, inDecimals, outDecimals, inSymbol, outSymbol] = await Promise.all([
+  const [pairToken0Raw, pairToken1Raw, reservesRaw, inDecimals, outDecimals, inSymbol, outSymbol] = await Promise.all([
     evmCall(chain, { to: pairAddress, data: SEL.token0 as `0x${string}` }),
     evmCall(chain, { to: pairAddress, data: SEL.token1 as `0x${string}` }),
     evmCall(chain, { to: pairAddress, data: SEL.getReserves as `0x${string}` }),
@@ -137,6 +139,16 @@ export async function uniswapV2Quote(params: UniswapV2QuoteParams): Promise<Unis
   ])
 
   const pairToken0 = decodeAddress(pairToken0Raw)
+  const pairToken1 = decodeAddress(pairToken1Raw)
+  // Defense-in-depth: confirm the resolved pair actually holds {tokenIn, tokenOut}
+  // before mapping reserves. getPair() is supposed to guarantee membership, but a
+  // misbehaving/malicious factory or a bad RPC could return a pair for a different
+  // token set — in which case `inIsToken0 = pairToken0 === tokenIn` would silently
+  // map the WRONG reserves and emit a bogus quote. Parity with mcp-ts v2-quote.ts.
+  if (!((pairToken0 === tokenIn && pairToken1 === tokenOut) || (pairToken0 === tokenOut && pairToken1 === tokenIn))) {
+    throw new Error(`pair ${pairAddress} token mismatch: token0=${pairToken0}, token1=${pairToken1}.`)
+  }
+
   const amountInRaw = parseUnits(params.amountIn.trim(), inDecimals)
   const { reserve0, reserve1, blockTimestampLast } = decodeReserves(reservesRaw)
   // token0 is the lexicographically smaller address; map reserves to in/out.
@@ -154,6 +166,8 @@ export async function uniswapV2Quote(params: UniswapV2QuoteParams): Promise<Unis
     factory: deployment.factory,
     router02: deployment.router02,
     pairAddress,
+    pairToken0,
+    pairToken1,
     tokenIn,
     tokenInSymbol: inSymbol,
     tokenInDecimals: inDecimals,

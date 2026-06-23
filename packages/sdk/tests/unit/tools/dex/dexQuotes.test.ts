@@ -1,7 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type BalancerPoolState,balancerQuote } from '@/tools/dex/balancerQuote'
-import { getAmountOut } from '@/tools/dex/uniswapV2Quote'
+import { type BalancerPoolState, balancerQuote } from '@/tools/dex/balancerQuote'
+import { getAmountOut, uniswapV2Quote } from '@/tools/dex/uniswapV2Quote'
+
+// Mock the EVM read layer so we can drive uniswapV2Quote's factory/pair/reserve
+// reads deterministically and exercise the pair-identity guard + reserve mapping
+// without hitting an RPC.
+vi.mock('@/tools/evm', () => ({
+  evmCall: vi.fn(),
+}))
+
+import { evmCall } from '@/tools/evm'
 
 describe('uniswap-v2 getAmountOut', () => {
   it('applies the canonical 0.3% fee constant-product formula', () => {
@@ -25,6 +34,73 @@ describe('uniswap-v2 getAmountOut', () => {
     expect(() => getAmountOut(0n, 1n, 1n)).toThrow(/positive/)
     expect(() => getAmountOut(1n, 0n, 1n)).toThrow(/liquidity/)
     expect(() => getAmountOut(1n, 1n, 0n)).toThrow(/liquidity/)
+  })
+})
+
+describe('uniswapV2Quote reserve mapping + pair-identity guard', () => {
+  const ETH = 'Ethereum' as unknown as Parameters<typeof uniswapV2Quote>[0]['chain']
+  // token0 is the lexicographically smaller address by V2 convention.
+  const T0 = '0x1111111111111111111111111111111111111111' // < T1
+  const T1 = '0x2222222222222222222222222222222222222222'
+  const OTHER = '0x3333333333333333333333333333333333333333'
+  const PAIR = '0x000000000000000000000000000000000000beef'
+
+  const word = (hex: string) => ('0x' + hex.replace(/^0x/, '').padStart(64, '0')) as `0x${string}`
+  const addrWord = (addr: string) => word(addr.slice(2).toLowerCase())
+  const uint = (n: bigint) => n.toString(16)
+
+  afterEach(() => vi.mocked(evmCall).mockReset())
+
+  // selector -> response router shared by the happy-path + guard tests.
+  function installMock(opts: { token0: string; token1: string }) {
+    vi.mocked(evmCall).mockImplementation(async (_chain, call) => {
+      const data = (call.data ?? '0x') as string
+      const sel = data.slice(0, 10)
+      if (sel === '0xe6a43905') return addrWord(PAIR) // getPair -> pair address
+      if (sel === '0x0dfe1681') return addrWord(opts.token0) // token0()
+      if (sel === '0xd21220a7') return addrWord(opts.token1) // token1()
+      if (sel === '0x0902f1ac') {
+        // getReserves(): reserve0=1000e18, reserve1=2000e18, ts=0
+        return ('0x' +
+          uint(1000n * 10n ** 18n).padStart(64, '0') +
+          uint(2000n * 10n ** 18n).padStart(64, '0') +
+          ''.padStart(64, '0')) as `0x${string}`
+      }
+      if (sel === '0x313ce567') return word('12') // decimals() = 18
+      if (sel === '0x95d89b41') {
+        // symbol() returns abi-encoded string "TKN"
+        return ('0x' +
+          ''.padStart(64, '0').replace(/0$/, '') +
+          '0000000000000000000000000000000000000000000000000000000000000020' +
+          '0000000000000000000000000000000000000000000000000000000000000003' +
+          '544b4e0000000000000000000000000000000000000000000000000000000000') as `0x${string}`
+      }
+      return '0x' as `0x${string}`
+    })
+  }
+
+  it('maps reserves correctly when tokenIn is token0', async () => {
+    installMock({ token0: T0, token1: T1 })
+    const q = await uniswapV2Quote({ chain: ETH, tokenIn: T0, tokenOut: T1, amountIn: '1' })
+    // tokenIn == token0 -> reserveIn = reserve0 (1000e18), reserveOut = reserve1 (2000e18)
+    expect(q.reserveInRaw).toBe((1000n * 10n ** 18n).toString())
+    expect(q.reserveOutRaw).toBe((2000n * 10n ** 18n).toString())
+  })
+
+  it('maps reserves correctly when tokenIn is token1 (swapped direction)', async () => {
+    installMock({ token0: T0, token1: T1 })
+    const q = await uniswapV2Quote({ chain: ETH, tokenIn: T1, tokenOut: T0, amountIn: '1' })
+    // tokenIn == token1 -> reserveIn = reserve1 (2000e18), reserveOut = reserve0 (1000e18)
+    expect(q.reserveInRaw).toBe((2000n * 10n ** 18n).toString())
+    expect(q.reserveOutRaw).toBe((1000n * 10n ** 18n).toString())
+  })
+
+  it('rejects a factory-returned pair that does not hold {tokenIn, tokenOut}', async () => {
+    // Malicious/buggy factory: getPair returns a pair whose token1 is an unrelated token.
+    installMock({ token0: T0, token1: OTHER })
+    await expect(uniswapV2Quote({ chain: ETH, tokenIn: T0, tokenOut: T1, amountIn: '1' })).rejects.toThrow(
+      /token mismatch/
+    )
   })
 })
 
