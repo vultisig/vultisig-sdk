@@ -1,18 +1,25 @@
-// sdk.defi.* — DeFi protocol primitives that BUILD UNSIGNED txs/calldata only.
-//
-// Every surface here is pure crypto: it constructs unsigned transactions (or
-// reads protocol state) and NEVER signs or broadcasts. The consumer gates
-// signing. Any affiliate/fee param is INJECTABLE by the consumer (default
-// neutral/off) — the SDK is multi-consumer and never hardcodes a referral.
+/**
+ * `sdk.defi.*` — DeFi protocol primitives that build UNSIGNED calldata / msgs.
+ *
+ * Every helper here is a pure builder: it constructs an unsigned transaction the
+ * wallet/MPC layer can later sign. Nothing in this surface signs or broadcasts.
+ * Affiliate/fee/referral params are always INJECTABLE by the consumer and default
+ * to neutral/off — the SDK is multi-consumer and never hardcodes a brand.
+ */
 
+import * as balancer from './balancer'
 import { pendle } from './pendle'
 import * as threeJane from './threeJane'
 
+export * from './balancer'
 export * from './pendle'
 export * as threeJane from './threeJane'
 
-/** The aggregated sdk.defi namespace. */
+/** Grouped namespace object, exposed as `sdk.defi`. */
 export const defi = {
+  balancer,
   pendle,
   threeJane,
 } as const
+
+export type Defi = typeof defi

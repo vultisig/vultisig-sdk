@@ -21,11 +21,17 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
-// DeFi protocol primitives (sdk.defi.*) — build UNSIGNED txs/calldata only
+// DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
 export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
   BuildBuyPtParams,
   BuildRedeemParams,
   BuildSellPtParams,
+  Defi,
   PendleActiveMarket,
   PendleChain,
   PendleMarketParams,
@@ -35,6 +41,7 @@ export type {
   PendleUnsignedTx,
 } from './defi'
 export {
+  buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildRedeem,
   buildSellPt,

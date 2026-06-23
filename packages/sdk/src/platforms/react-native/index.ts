@@ -211,12 +211,18 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
-// DeFi protocol integrations (sdk.defi.* — builds UNSIGNED calldata only).
-// Pure viem encoding, no MPC/native deps, so it is RN-safe as a static
-// re-export (mirrors the generic entry). Without this the React Native
-// allow-list omitted the defi namespace and RN consumers (vultiagent-app)
-// could not reach the 3Jane supply builder.
-export { defi } from '../../tools/defi'
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (balancer + 3jane).
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  Defi,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
