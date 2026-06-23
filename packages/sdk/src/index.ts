@@ -361,7 +361,9 @@ export type {
   KnownCoinMetadata,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareTrc20TransferFromKeysParams,
   TokenMetadataResolver,
+  UnsignedTrc20Transfer,
   VaultIdentity,
 } from './tools'
 export {
@@ -386,6 +388,7 @@ export {
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
+  prepareTrc20TransferFromKeys,
   resolve4ByteSelector,
   resolveEns,
   searchToken,

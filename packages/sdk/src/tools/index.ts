@@ -31,6 +31,10 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareTrc20TransferFromKeys,
+  type PrepareTrc20TransferFromKeysParams,
+  TRC20_TRANSFER_SELECTOR,
+  type UnsignedTrc20Transfer,
   type VaultIdentity,
 } from './prep'
 
