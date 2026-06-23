@@ -171,4 +171,83 @@ describe('splitMultiTx', () => {
   it('throws on a malformed JSON string', () => {
     expect(() => splitMultiTx('{broken')).toThrow(TxNormalizeError)
   })
+
+  // --- adversarial invariants (lock Go-parity against future refactors) ---
+
+  it('Pattern 1 (approve+swap) wins over Pattern 2 (transactions[]) when both present', () => {
+    // Mirrors Go splitMultiTx: needs_approval/approval_tx/swap_tx is checked
+    // BEFORE the transactions[] array. If both shapes co-exist on a payload,
+    // the approval-first split must win — never fall through to the generic
+    // array path (which would wrap the WRONG legs under tx and drop the
+    // approval-before-swap ordering).
+    const buildResult = {
+      needs_approval: true,
+      approval_tx: { to: '0xtoken', data: '0x095ea7b3' },
+      swap_tx: { to: '0xrouter', data: '0xfeed' },
+      transactions: [{ to: '0xWRONG_A' }, { to: '0xWRONG_B' }, { to: '0xWRONG_C' }],
+      chain: 'Ethereum',
+    }
+    const legs = splitMultiTx(buildResult)
+    expect(legs).toHaveLength(2)
+    expect(legs[0]['tx']).toEqual({ to: '0xtoken', data: '0x095ea7b3' })
+    expect(legs[1]['swap_tx']).toEqual({ to: '0xrouter', data: '0xfeed' })
+  })
+
+  it('does NOT split on a non-boolean needs_approval (string "true" / number 1)', () => {
+    // Go unmarshals needs_approval into a strict bool; a JSON string "true" or
+    // number 1 fails that unmarshal-and-check, so Pattern 1 never fires. The TS
+    // port must match (strict === true), otherwise a stringly-typed flag would
+    // spuriously fabricate an approval leg.
+    for (const flag of ['true', 1, 'yes'] as const) {
+      const legs = splitMultiTx({
+        needs_approval: flag,
+        approval_tx: { to: '0xtoken' },
+        swap_tx: { to: '0xrouter', data: '0xfeed' },
+        chain: 'Ethereum',
+      })
+      expect(legs).toHaveLength(1)
+      // single passthrough leg keeps its nested swap_tx (normalizeTx no-op)
+      expect(legs[0]['swap_tx']).toEqual({ to: '0xrouter', data: '0xfeed' })
+      expect(legs[0]['tx']).toBeUndefined()
+    }
+  })
+
+  it('preserves order and drops no leg for a 3+ element transactions[] array', () => {
+    // No leg dropped, no reorder — index parity 0,1,2 with parent metadata on
+    // every leg (the contract sequenceTxReady relies on for approval-before-X).
+    const buildResult = {
+      transactions: [
+        { to: '0xa', step: 0 },
+        { to: '0xb', step: 1 },
+        { to: '0xc', step: 2 },
+      ],
+      chain: 'Base',
+      chain_id: '8453',
+      provider: 'morpho',
+    }
+    const legs = splitMultiTx(buildResult)
+    expect(legs).toHaveLength(3)
+    expect(legs.map(l => (l['tx'] as Record<string, unknown>)['step'])).toEqual([0, 1, 2])
+    for (const leg of legs) {
+      expect(leg.chain).toBe('Base')
+      expect(leg.chain_id).toBe('8453')
+      expect(leg.provider).toBe('morpho')
+    }
+  })
+
+  it('does not copy non-metadata keys (e.g. needs_approval) onto split legs', () => {
+    // wrapSingleTx copies ONLY the fixed LEG_METADATA_KEYS list — control flags
+    // like needs_approval / approval_tx must NOT leak onto the wrapped legs, or
+    // a re-split downstream would mis-trigger.
+    const legs = splitMultiTx({
+      needs_approval: true,
+      approval_tx: { to: '0xtoken' },
+      swap_tx: { to: '0xrouter' },
+      chain: 'Ethereum',
+    })
+    for (const leg of legs) {
+      expect(leg['needs_approval']).toBeUndefined()
+      expect(leg['approval_tx']).toBeUndefined()
+    }
+  })
 })
