@@ -88,5 +88,59 @@ describe('sdk.defi.glif — buildGlifRedeemSticnt', () => {
 
   it('rejects bad amounts', () => {
     expect(() => buildGlifRedeemSticnt({ from: FROM, amount: 0n })).toThrow(/positive/)
+    expect(() => buildGlifRedeemSticnt({ from: FROM, amount: 1n << 256n })).toThrow(/overflows uint256/)
+    expect(() => buildGlifRedeemSticnt({ from: 'nope', amount: ONE })).toThrow(/invalid address/)
+  })
+})
+
+describe('sdk.defi.glif — fund-safety invariants (encoding == reported)', () => {
+  // The crypto-in-SDK hotspot: the bytes handed to the signer MUST equal the
+  // amount/owner/receiver the result object reports. No silent re-encode.
+  it('stake: encoded deposit amount == reported amount, receiver == reported receiver', () => {
+    const amount = 123456789012345678901n // arbitrary non-round 18-decimal value
+    const res = buildGlifStakeIcnt({ from: FROM, amount, currentAllowance: amount })
+    expect(res.amount).toBe(amount)
+    const decoded = decodeFunctionData({ abi: glifPoolWriteAbi, data: res.transactions[0].data })
+    expect(decoded.functionName).toBe('deposit')
+    expect(decoded.args[0]).toBe(amount) // exact uint256, no truncation/wrap
+    expect(getAddress(decoded.args[1] as string)).toBe(res.receiver)
+  })
+
+  it('stake: approve amount == deposit amount (no allowance/deposit drift)', () => {
+    const amount = 7n * ONE + 1n
+    const res = buildGlifStakeIcnt({ from: FROM, amount })
+    const approve = decodeFunctionData({ abi: erc20Abi, data: res.transactions[0].data })
+    const deposit = decodeFunctionData({ abi: glifPoolWriteAbi, data: res.transactions[1].data })
+    expect(approve.functionName).toBe('approve')
+    expect(approve.args[1]).toBe(amount)
+    expect(deposit.args[0]).toBe(amount)
+    // approve spender is pinned to the pool, never caller-injectable
+    expect(getAddress(approve.args[0] as string)).toBe(GLIF_ICN_BASE_ADDRESSES.pool)
+  })
+
+  it('redeem: encoded shares == reported amount, owner pinned to from regardless of receiver', () => {
+    const amount = 98765432109876543210n
+    const res = buildGlifRedeemSticnt({ from: FROM, amount, receiver: RECEIVER })
+    expect(res.amount).toBe(amount)
+    const decoded = decodeFunctionData({ abi: glifPoolWriteAbi, data: res.transactions[0].data })
+    expect(decoded.args[0]).toBe(amount)
+    expect(getAddress(decoded.args[1] as string)).toBe(getAddress(RECEIVER)) // receiver injectable
+    expect(getAddress(decoded.args[2] as string)).toBe(getAddress(FROM)) // owner can NEVER be the injected receiver
+  })
+
+  it('selectors are pinned (deposit/redeem/approve) — wrong-selector regression guard', () => {
+    const stake = buildGlifStakeIcnt({ from: FROM, amount: ONE })
+    expect(stake.transactions[0].data.slice(0, 10)).toBe('0x095ea7b3') // approve(address,uint256)
+    expect(stake.transactions[1].data.slice(0, 10)).toBe('0x6e553f65') // deposit(uint256,address)
+    const redeem = buildGlifRedeemSticnt({ from: FROM, amount: ONE })
+    expect(redeem.transactions[0].data.slice(0, 10)).toBe('0xba087652') // redeem(uint256,address,address)
+  })
+
+  it('targets/value are pinned to Base GLIF contracts with zero native value (no wrong-chain/target)', () => {
+    const stake = buildGlifStakeIcnt({ from: FROM, amount: ONE })
+    expect(stake.chainId).toBe(8453)
+    expect(getAddress(stake.transactions[0].to)).toBe(GLIF_ICN_BASE_ADDRESSES.icnt) // approve target = token
+    expect(getAddress(stake.transactions[1].to)).toBe(GLIF_ICN_BASE_ADDRESSES.pool) // deposit target = pool
+    expect(stake.transactions.every(t => t.value === '0')).toBe(true)
   })
 })
