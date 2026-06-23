@@ -122,6 +122,36 @@ describe('getPrice', () => {
     )
   })
 
+  it('Route 1: rejects a wrong-token response keyed to a different contract', async () => {
+    // Caller asks for USDC; upstream/proxy returns a DIFFERENT contract's entry.
+    // We must NOT hand back that wrong-token price under the USDC label.
+    const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const attacker = '0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+    mockQueryUrl.mockResolvedValueOnce({ [attacker]: simplePrice(99999) })
+
+    await expect(getPrice({ tokenContract: usdc, chain: 'Ethereum' })).rejects.toThrow(/token price lookup failed/)
+  })
+
+  it('Route 1: matches the requested contract case-insensitively (checksum casing)', async () => {
+    // CoinGecko keys by lowercase; caller passes checksum-cased. Must still match.
+    const checksum = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    mockQueryUrl.mockResolvedValueOnce({ [checksum.toLowerCase()]: simplePrice(1.0) })
+    mockQueryUrl.mockResolvedValueOnce({ id: 'usd-coin', symbol: 'usdc', name: 'USD Coin' })
+
+    const quote = await getPrice({ tokenContract: checksum, chain: 'Ethereum' })
+    expect(quote.usd).toBe(1.0)
+  })
+
+  it('Route 2: rejects a Solana response keyed to a different mint', async () => {
+    const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const otherMint = 'So11111111111111111111111111111111111111112'
+    mockQueryUrl.mockResolvedValueOnce({ [otherMint]: simplePrice(160) })
+
+    await expect(getPrice({ tokenContract: usdcMint, chain: 'Solana' })).rejects.toThrow(
+      /solana token price lookup failed/
+    )
+  })
+
   it('throws on EVM contract with no chain', async () => {
     await expect(getPrice({ tokenContract: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' })).rejects.toThrow(
       /chain is required/

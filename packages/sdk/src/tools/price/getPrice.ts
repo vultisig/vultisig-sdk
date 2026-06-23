@@ -90,6 +90,32 @@ type ContractMetadata = {
   name?: string
 }
 
+/**
+ * Pull the price entry for the contract we actually asked for.
+ *
+ * CoinGecko's `/simple/token_price/<platform>?contract_addresses=<addr>` keys
+ * the response by the contract address. We send exactly one address, so the
+ * happy path is a single matching key — but we never blindly take
+ * `Object.values(data)[0]`: a proxy/upstream quirk that returns a DIFFERENT
+ * contract's entry (or merges an unrelated address in) would otherwise hand the
+ * caller a wrong-token price under a correct-looking symbol/contract label. We
+ * match the requested key case-insensitively (EVM addresses are checksum-cased;
+ * Solana mints are base58 and case-sensitive, but a case-insensitive compare is
+ * still safe since base58 has no case collisions for a fixed mint).
+ */
+const priceForRequestedContract = (
+  data: Record<string, CoinGeckoSimplePrice>,
+  requestedContract: string
+): CoinGeckoSimplePrice | undefined => {
+  const wanted = requestedContract.toLowerCase()
+  for (const [key, value] of Object.entries(data)) {
+    if (key.toLowerCase() === wanted) {
+      return value
+    }
+  }
+  return undefined
+}
+
 const fetchJson = async <T>(url: string): Promise<T> => {
   const result = await queryUrl<T>(url)
   if (result === undefined || result === null || typeof result === 'string') {
@@ -155,7 +181,7 @@ export const getPrice = async (query: PriceQuery): Promise<PriceQuote> => {
     const data = await fetchJson<Record<string, CoinGeckoSimplePrice>>(
       `${coinGeckoApiUrl}/simple/token_price/${platform}?contract_addresses=${tokenContract.toLowerCase()}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
     )
-    const priceData = Object.values(data)[0]
+    const priceData = priceForRequestedContract(data, tokenContract)
     if (!priceData || typeof priceData.usd !== 'number') {
       throw new Error(`token price lookup failed for ${tokenContract}`)
     }
@@ -178,7 +204,7 @@ export const getPrice = async (query: PriceQuery): Promise<PriceQuote> => {
     const data = await fetchJson<Record<string, CoinGeckoSimplePrice>>(
       `${coinGeckoApiUrl}/simple/token_price/solana?contract_addresses=${tokenContract}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
     )
-    const priceData = Object.values(data)[0]
+    const priceData = priceForRequestedContract(data, tokenContract)
     if (!priceData || typeof priceData.usd !== 'number') {
       throw new Error(`solana token price lookup failed for ${tokenContract}`)
     }
