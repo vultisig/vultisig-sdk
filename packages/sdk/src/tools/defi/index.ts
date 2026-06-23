@@ -1,9 +1,28 @@
 /**
- * `sdk.defi.*` — DeFi protocol message builders.
+ * `sdk.defi.*` — DeFi protocol primitives that build UNSIGNED calldata / msgs.
  *
- * Each protocol lives under its own namespace (`defi.osmosis`, ...). Builders
- * produce UNSIGNED calldata / Cosmos msgs only — never sign, never broadcast.
- * Part of the sdk.defi.* DeFi consolidation (porting the mcp-ts DeFi tools into
- * a reusable, multi-consumer SDK surface).
+ * Every helper here is a pure builder: it constructs an unsigned transaction the
+ * wallet/MPC layer can later sign. Nothing in this surface signs or broadcasts.
+ * Affiliate/fee/referral params are always INJECTABLE by the consumer and default
+ * to neutral/off — the SDK is multi-consumer and never hardcodes a brand.
  */
+
+import * as balancer from './balancer'
+import * as osmosis from './osmosis'
+import { pendle } from './pendle'
+import * as threeJane from './threeJane'
+
+export * from './balancer'
 export * as osmosis from './osmosis'
+export * from './pendle'
+export * as threeJane from './threeJane'
+
+/** Grouped namespace object, exposed as `sdk.defi`. */
+export const defi = {
+  balancer,
+  osmosis,
+  pendle,
+  threeJane,
+} as const
+
+export type Defi = typeof defi
