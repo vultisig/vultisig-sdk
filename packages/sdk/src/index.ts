@@ -352,6 +352,8 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
   Coin,
   CoinKey,
   CoinMetadata,
@@ -367,7 +369,12 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
   chainFeeCoin,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
   deriveAddressFromKeys,
   evmCall,
   evmCheckAllowance,
@@ -389,6 +396,8 @@ export {
   resolve4ByteSelector,
   resolveEns,
   searchToken,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
   VerifierClient,
 } from './tools'
 

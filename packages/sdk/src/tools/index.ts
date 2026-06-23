@@ -9,12 +9,25 @@ export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMe
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
 // Swap
-export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
+export type {
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
+  FindSwapQuoteParams,
+  NativeSwapMinAmountIn,
+  SwapQuote,
+} from './swap'
 export {
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
 } from './swap'
 
 // Verifier client
