@@ -195,6 +195,36 @@ describe('cosmosStaking pure msg builders', () => {
       ).toThrow(/must differ/)
     })
 
+    it('rejects a CASE-VARIED same-validator redelegate (src/dst guard not bypassable)', () => {
+      // bech32 accepts an all-uppercase encoding that decodes to the SAME
+      // payload. Comparing raw input strings would let the same validator pass
+      // the src!==dst guard via case-only variation; canonicalization closes it.
+      expect(() =>
+        buildRedelegateMsg({
+          delegatorAddress: OSMO_DEL,
+          validatorSrcAddress: OSMO_VAL,
+          validatorDstAddress: OSMO_VAL.toUpperCase(),
+          amount: '1000000',
+          denom: 'uosmo',
+        })
+      ).toThrow(/must differ/)
+    })
+
+    it('canonicalizes an uppercase bech32 address to lowercase in the emitted bytes', () => {
+      // A valid all-uppercase address must not poison the signed proto bytes
+      // with a non-canonical form the chain rejects — it is re-encoded to the
+      // canonical lowercase representation.
+      const env = buildDelegateMsg({
+        delegatorAddress: OSMO_DEL.toUpperCase(),
+        validatorAddress: OSMO_VAL.toUpperCase(),
+        amount: '5000000',
+        denom: 'uosmo',
+      })
+      const f = decode(valueBytes(env.valueBase64))
+      expect(str(f.find(x => x.num === 1)!.bytes)).toBe(OSMO_DEL)
+      expect(str(f.find(x => x.num === 2)!.bytes)).toBe(OSMO_VAL)
+    })
+
     it('enforces the expected hrp when accountPrefix/validatorPrefix are passed', () => {
       expect(() =>
         buildDelegateMsg({

@@ -217,7 +217,16 @@ function validateBech32(value: string, fieldName: string, expectedPrefix?: strin
   if (payload.length !== 20 && payload.length !== 32) {
     throw new Error(`invalid ${fieldName}: expected 20- or 32-byte payload, got ${payload.length}`)
   }
-  return trimmed
+  // Return the CANONICAL (re-encoded) bech32, not the raw caller input. bech32
+  // accepts an all-uppercase encoding (BIP173) that decodes to the SAME payload
+  // but, returned verbatim, would (a) emit a non-canonical uppercase address
+  // into the signed proto bytes that the chain treats as unknown/malformed, and
+  // (b) defeat the redelegate `src === dst` self-check by case-only variation
+  // (an attacker passes the same validator as `OSMOVALOPER1...` for one side).
+  // Re-encoding from the decoded payload normalizes case for every field; it is
+  // a no-op on already-canonical lowercase input, so happy-path bytes are
+  // unchanged.
+  return bech32.encode(decoded.prefix, decoded.words)
 }
 
 // ---------------------------------------------------------------------------
