@@ -21,17 +21,42 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
-// Verifier client
-export { VerifierClient } from './verifier'
+// DeFi protocol primitives (sdk.defi.*) — build UNSIGNED txs/calldata only
+export type {
+  BuildBuyPtParams,
+  BuildRedeemParams,
+  BuildSellPtParams,
+  PendleActiveMarket,
+  PendleChain,
+  PendleMarketParams,
+  PendleMarketsParams,
+  PendleMarketSummary,
+  PendlePtBuildResult,
+  PendleUnsignedTx,
+} from './defi'
+export {
+  buildBuyPt,
+  buildRedeem,
+  buildSellPt,
+  defi,
+  isPendleChain,
+  pendle,
+  PENDLE_ROUTER_V4,
+  PENDLE_SUPPORTED_CHAINS,
+  PendleBuildError,
+  pendleMarket,
+  pendleMarkets,
+  stripChainPrefix,
+} from './defi'
 
-// DeFi protocol integrations (sdk.defi.* — builds UNSIGNED calldata only)
-export { defi } from './defi'
+// Verifier client
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from './defi/threeJane'
+export { VerifierClient } from './verifier'
 
 // Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
 export {
