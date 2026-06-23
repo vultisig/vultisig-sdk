@@ -85,6 +85,62 @@ describe('sdk.defi.river', () => {
       expect(meta.affiliateTag).toBeNull()
     })
 
+    it('carries collateral as tx.value when collateralIsNative is set (offline native open)', async () => {
+      const { tx, meta } = await buildRiverOpenTrove({
+        chain: 'Ethereum',
+        troveManager: TROVE_MANAGER,
+        collateralAmount: 1_000_000_000_000_000_000n,
+        debtAmount: 2_000_000_000_000_000_000_000n,
+        upperHint: UPPER_HINT,
+        lowerHint: LOWER_HINT,
+        collateralIsNative: true,
+      })
+      // value MUST equal the encoded collAmount for a native open, else it reverts.
+      expect(tx.value).toBe('1000000000000000000')
+      const decoded = decodeFunctionData({ abi: RIVER_PERIPHERY_ABI, data: tx.data })
+      expect(decoded.args[2]).toBe(1_000_000_000_000_000_000n)
+      expect(meta.nativeCollateral).toBe(true)
+      expect(meta.collateralApprovalRequired).toBe(false)
+      expect(meta.collateralApprovalSpender).toBeNull()
+    })
+
+    it('defaults offline opens to ERC-20 (value 0, approval required) when nativeness undeclared', async () => {
+      const { tx, meta } = await buildRiverOpenTrove({
+        chain: 'Ethereum',
+        troveManager: TROVE_MANAGER,
+        collateralAmount: 5n,
+        debtAmount: 10n,
+        upperHint: UPPER_HINT,
+        lowerHint: LOWER_HINT,
+      })
+      expect(tx.value).toBe('0')
+      expect(meta.nativeCollateral).toBe(false)
+      expect(meta.collateralApprovalRequired).toBe(true)
+    })
+
+    it('rejects non-positive collateral and debt amounts', async () => {
+      await expect(
+        buildRiverOpenTrove({
+          chain: 'Ethereum',
+          troveManager: TROVE_MANAGER,
+          collateralAmount: 0n,
+          debtAmount: 10n,
+          upperHint: UPPER_HINT,
+          lowerHint: LOWER_HINT,
+        })
+      ).rejects.toThrow(/collateralAmount/)
+      await expect(
+        buildRiverOpenTrove({
+          chain: 'Ethereum',
+          troveManager: TROVE_MANAGER,
+          collateralAmount: 5n,
+          debtAmount: 0n,
+          upperHint: UPPER_HINT,
+          lowerHint: LOWER_HINT,
+        })
+      ).rejects.toThrow(/debtAmount/)
+    })
+
     it('rejects out-of-range fee tolerance', async () => {
       await expect(
         buildRiverOpenTrove({

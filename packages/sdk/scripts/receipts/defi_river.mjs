@@ -69,6 +69,22 @@ log('     lowerHint         =', openDecoded.args[5])
 log('   meta:', JSON.stringify(open.meta, null, 2))
 hr()
 
+// 2b) Open trove — native collateral (offline): collateralIsNative carries value
+const openNative = await buildRiverOpenTrove({
+  chain: CHAIN,
+  troveManager: TROVE_MANAGER,
+  collateralAmount: 1_000_000_000_000_000_000n, // 1 native (ETH)
+  debtAmount: 2_000_000_000_000_000_000_000n,
+  upperHint: UPPER_HINT,
+  lowerHint: LOWER_HINT,
+  collateralIsNative: true,
+})
+log('2b) OPEN TROVE (native collateral, offline)')
+log('   tx.value:', openNative.tx.value, '(== collAmount, delivers the collateral)')
+log('   meta.nativeCollateral:', openNative.meta.nativeCollateral)
+log('   meta.collateralApprovalRequired:', openNative.meta.collateralApprovalRequired)
+hr()
+
 // 3) Close trove
 const close = buildRiverCloseTrove({ chain: CHAIN, troveManager: TROVE_MANAGER })
 const closeDecoded = decodeFunctionData({ abi: RIVER_PERIPHERY_ABI, data: close.tx.data })
@@ -91,5 +107,7 @@ assert(openDecoded.functionName === 'openTrove', 'open encodes openTrove')
 assert(openDecoded.args[1].toString() === '25000000000000000', 'maxFee 250bps = 0.025e18')
 assert(open.meta.affiliateTag === 'demo-consumer', 'affiliate tag injected (not hardcoded)')
 assert(close.tx.data.startsWith('0x'), 'close calldata is hex')
+assert(openNative.tx.value === '1000000000000000000', 'native open carries collateral in value')
+assert(openNative.meta.collateralApprovalRequired === false, 'native open needs no ERC-20 approval')
 
 log('OK — all River builds produced valid UNSIGNED calldata (no broadcast).')

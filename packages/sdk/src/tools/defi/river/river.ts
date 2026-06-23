@@ -3,12 +3,7 @@ import { evmChainInfo } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { encodeFunctionData, getAddress } from 'viem'
 
-import {
-  RIVER_BORROWER_OPS_ABI,
-  RIVER_PERIPHERY_ABI,
-  RIVER_SORTED_TROVES_ABI,
-  RIVER_TROVE_MANAGER_ABI,
-} from './abi'
+import { RIVER_BORROWER_OPS_ABI, RIVER_PERIPHERY_ABI, RIVER_SORTED_TROVES_ABI, RIVER_TROVE_MANAGER_ABI } from './abi'
 import {
   RIVER_CHAIN_CONFIG,
   RIVER_DEFAULT_MAX_FEE_BPS,
@@ -212,6 +207,16 @@ export type BuildRiverOpenTroveParams = {
   lowerHint?: `0x${string}`
   /** Gas-compensation debt added to total debt when computing the NICR hint target. */
   gasCompensation?: bigint
+  /**
+   * Whether this market's collateral is the chain's native asset (e.g. ETH via a
+   * WETH market). Required to get `tx.value` right on the OFFLINE path: when
+   * explicit hints are supplied, the builder does NOT read the collateral token
+   * on-chain, so it cannot infer native-ness and would otherwise default to
+   * `value: '0'` — which makes a native-collateral open revert (it never
+   * delivers the collateral). Pass this (or omit the hints to let it resolve
+   * on-chain). Ignored when the on-chain resolution already determined nativeness.
+   */
+  collateralIsNative?: boolean
   /** Injectable fee/affiliate config. Defaults neutral (5% max-fee tolerance, no tag). */
   affiliate?: RiverAffiliateConfig
 }
@@ -251,13 +256,22 @@ export async function buildRiverOpenTrove(
   }
   const maxFeeWad = toWadFromBps(maxFeeBps)
 
+  if (collateralAmount <= 0n) {
+    throw new Error('buildRiverOpenTrove: collateralAmount must be > 0')
+  }
+  if (debtAmount <= 0n) {
+    throw new Error('buildRiverOpenTrove: debtAmount must be > 0')
+  }
+
   let upperHint = params.upperHint
   let lowerHint = params.lowerHint
   let collateralToken: `0x${string}` | undefined
+  let resolvedOnChain = false
 
   if (!upperHint || !lowerHint) {
     const market = await describeRiverMarket(chain, troveManager)
     collateralToken = market.collateralToken
+    resolvedOnChain = true
     const totalDebt = debtAmount + (params.gasCompensation ?? 0n)
     if (totalDebt === 0n) {
       throw new Error('buildRiverOpenTrove: debtAmount (plus gasCompensation) must be > 0 to place a trove hint')
@@ -279,8 +293,17 @@ export async function buildRiverOpenTrove(
     args: [troveManager, maxFeeWad, collateralAmount, debtAmount, upperHint, lowerHint],
   })
 
-  const nativeCollateral =
-    !!config.wrappedNative && !!collateralToken && config.wrappedNative.toLowerCase() === collateralToken.toLowerCase()
+  // Native-ness drives `tx.value`. On the on-chain path the resolved collateral
+  // token is authoritative. On the OFFLINE path (explicit hints) we cannot read
+  // the token, so honor the caller-declared `collateralIsNative`; it defaults to
+  // false (ERC-20) to preserve the documented offline contract. A native-
+  // collateral consumer MUST set `collateralIsNative: true` so `value` carries
+  // the collateral — otherwise a native open reverts (it never delivers funds).
+  const nativeCollateral = resolvedOnChain
+    ? !!config.wrappedNative &&
+      !!collateralToken &&
+      config.wrappedNative.toLowerCase() === collateralToken.toLowerCase()
+    : (params.collateralIsNative ?? false)
   const value = nativeCollateral ? collateralAmount.toString() : '0'
 
   return {
