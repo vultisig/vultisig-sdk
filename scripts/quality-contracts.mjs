@@ -354,7 +354,16 @@ export type ElectronCrypto = ElectronMainCrypto
   }
 }
 
-function packedCliBinSmoke(workRoot, cliTgzPath, sdkTgzPath, clientSharedTgzPath, rujiraTgzPath, coreChainTgzPath) {
+function packedCliBinSmoke(
+  workRoot,
+  cliTgzPath,
+  sdkTgzPath,
+  clientSharedTgzPath,
+  rujiraTgzPath,
+  coreChainTgzPath,
+  coreConfigTgzPath,
+  libUtilsTgzPath
+) {
   const consumer = path.join(workRoot, 'cli-consumer')
   mkdirSync(consumer, { recursive: true })
 
@@ -362,6 +371,8 @@ function packedCliBinSmoke(workRoot, cliTgzPath, sdkTgzPath, clientSharedTgzPath
     '@vultisig/cli': `file:${cliTgzPath}`,
     '@vultisig/client-shared': `file:${clientSharedTgzPath}`,
     '@vultisig/core-chain': `file:${coreChainTgzPath}`,
+    '@vultisig/core-config': `file:${coreConfigTgzPath}`,
+    '@vultisig/lib-utils': `file:${libUtilsTgzPath}`,
     '@vultisig/rujira': `file:${rujiraTgzPath}`,
     '@vultisig/sdk': `file:${sdkTgzPath}`,
   }
@@ -498,6 +509,10 @@ function main() {
       validatePackedWorkspaceExports(workRoot, workspaceName)
     }
 
+    const { tgzPath: coreConfigTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-config')
+
+    const { tgzPath: libUtilsTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/lib-utils')
+
     const { tgzPath: coreChainTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/core-chain')
 
     const { tgzPath: clientSharedTgzPath } = validatePackedWorkspaceExports(workRoot, '@vultisig/client-shared')
@@ -506,7 +521,16 @@ function main() {
     const cliPackageRoot = extractPackage(workRoot, cliTgzPath, 'cli')
     validateTarballBinFiles(cliPackageRoot, ['vsig', 'vultisig'])
     validatePackedCliRuntimeDependencies(cliPackageRoot)
-    packedCliBinSmoke(workRoot, cliTgzPath, tgzPath, clientSharedTgzPath, rujiraTgzPath, coreChainTgzPath)
+    packedCliBinSmoke(
+      workRoot,
+      cliTgzPath,
+      tgzPath,
+      clientSharedTgzPath,
+      rujiraTgzPath,
+      coreChainTgzPath,
+      coreConfigTgzPath,
+      libUtilsTgzPath
+    )
 
     const mcpTgzPath = packWorkspace(workRoot, '@vultisig/mcp', 'mcp.tgz')
     const mcpPackageRoot = extractPackage(workRoot, mcpTgzPath, 'mcp')

@@ -1,5 +1,11 @@
 # @vultisig/lib-utils
 
+## 0.10.2
+
+### Patch Changes
+
+- [#788](https://github.com/vultisig/vultisig-sdk/pull/788) [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Make `getUrlBaseDomain` resolve the registrable (eTLD+1) domain using the Public Suffix List instead of taking the last two hostname labels. Sites under multi-label public suffixes (`*.vercel.app`, `*.github.io`, `*.pages.dev`, `*.web.app`, `*.co.uk`, …) now resolve to distinct domains, so a connection authorized for one site is no longer treated as authorized for an unrelated sibling under the same suffix.
+
 ## 0.10.1
 
 ### Patch Changes
