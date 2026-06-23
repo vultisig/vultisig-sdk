@@ -17,6 +17,17 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  Defi,
+} from './defi'
+export { buildBalancerV3SwapCalldata, defi } from './defi'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 
