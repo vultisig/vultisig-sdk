@@ -107,6 +107,30 @@ describe('prepareSuiTokenTransferFromKeys', () => {
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
+  // The signing-input resolver selects the token's input coins with a RAW
+  // string equality (`coins.filter(c => c.coinType === coin.id)`), and the coin
+  // objects come back from the RPC in canonical (zero-padded, lowercase-hex)
+  // form. A syntactically valid but non-canonical caller tag must therefore be
+  // normalized BEFORE it becomes `coin.id`, otherwise it matches nothing on
+  // chain and yields an empty / un-signable token payload. The canonical form
+  // is 32-byte zero-padded, lowercase-hex package id.
+  it.each([
+    ['short package id', '0x2::testcoin::TOKEN', `0x${'0'.repeat(63)}2::testcoin::TOKEN`],
+    [
+      'mixed-case hex package id',
+      '0x5D4B302506645c37FF133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN',
+      '0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN',
+    ],
+  ])('normalizes a non-canonical coinType before forwarding (%s)', async (_label, input, canonical) => {
+    await prepareSuiTokenTransferFromKeys(identity, {
+      coinType: input,
+      from: FROM,
+      to: TO,
+      amount: 1n,
+    })
+    expect(mockBuildSendKeysignPayload.mock.calls[0][0].coin.id).toBe(canonical)
+  })
+
   it('rejects a non-Sui (EVM-shaped) recipient before building (mcp-ts#359)', async () => {
     await expect(
       prepareSuiTokenTransferFromKeys(identity, {

@@ -108,13 +108,28 @@ export const prepareSuiTokenTransferFromKeys = async (
     )
   }
 
+  // Canonicalize the struct tag (zero-pad the package id, lowercase the hex)
+  // BEFORE doing anything with it. Two reasons:
+  //  1. Native-SUI rejection: `0x2`, `0x02` and the full `0x000…002` form are
+  //     the SAME on-chain address, so a literal `=== '0x2::sui::SUI'` check is
+  //     bypassable — normalize first so every address-equivalent native form is
+  //     caught.
+  //  2. Coin-object matching: the signing-input resolver selects the token's
+  //     input coins with a RAW string equality `coins.filter(c => c.coinType ===
+  //     coin.id)`, and the coin objects come back from the RPC in canonical
+  //     (zero-padded, lowercase-hex) form. A syntactically valid but
+  //     non-canonical caller tag — short package id `0x02::pkg::TOKEN` or
+  //     mixed-case hex `0x5D4B…::coin::COIN` — would then match NOTHING even
+  //     when the owner holds the token, producing an empty / un-signable token
+  //     payload. We forward the normalized tag as `coin.id` so it matches the
+  //     on-chain coin objects.
+  // `SUI_COIN_TYPE_RE` already guaranteed a well-formed struct tag above, so
+  // `normalizeStructTag` won't throw here.
+  const normalizedCoinType = normalizeStructTag(coinType)
+
   // Native SUI is not a token transfer — refuse so callers can't silently
   // produce a broken token payload while believing they built a native send.
-  // Normalize the package id first: `0x2`, `0x02` and the full `0x000…002` form
-  // are the SAME on-chain address, so a literal `=== '0x2::sui::SUI'` check is
-  // bypassable. `SUI_COIN_TYPE_RE` already guaranteed a well-formed struct tag
-  // above, so `normalizeStructTag` won't throw here.
-  if (normalizeStructTag(coinType) === SUI_NATIVE_COIN_TYPE_NORMALIZED) {
+  if (normalizedCoinType === SUI_NATIVE_COIN_TYPE_NORMALIZED) {
     throw new Error(
       'prepareSuiTokenTransferFromKeys: coinType is native SUI; ' + 'use prepareSendTxFromKeys for native sends.'
     )
@@ -144,7 +159,9 @@ export const prepareSuiTokenTransferFromKeys = async (
 
   const coin: AccountCoin = {
     chain: Chain.Sui,
-    id: coinType,
+    // Normalized so the downstream raw-string coin-object filter matches the
+    // canonical coinType the RPC returns (see normalizedCoinType note above).
+    id: normalizedCoinType,
     address: from,
     decimals,
     ticker,
