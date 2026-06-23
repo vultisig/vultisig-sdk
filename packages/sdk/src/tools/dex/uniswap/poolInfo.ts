@@ -87,6 +87,35 @@ function decodeUint(data: `0x${string}`): bigint {
 }
 
 /**
+ * Verify a supplied poolAddress is the canonical factory pool for a token pair
+ * + fee. Throws if the factory resolves the pair to a different (or zero)
+ * address — i.e. the supplied address is not a genuine Uniswap V3 pool for it.
+ */
+async function assertCanonicalPool(
+  chain: EvmChain,
+  factoryAddr: `0x${string}`,
+  poolAddr: `0x${string}`,
+  tokenA: string,
+  tokenB: string,
+  fee: number
+): Promise<void> {
+  const tA = resolveNativeToken(tokenA, chain)
+  const tB = resolveNativeToken(tokenB, chain)
+  if (!isAddress(tA) || !isAddress(tB)) return
+  const expectRaw = await evmCall(chain, {
+    to: factoryAddr,
+    data: encodeGetPool(getAddress(tA), getAddress(tB), fee),
+  })
+  const expectPool = decodeAddress(expectRaw)
+  if (expectPool === ZERO_ADDRESS || getAddress(expectPool) !== poolAddr) {
+    throw new Error(
+      `poolAddress ${poolAddr} is not the canonical Uniswap V3 pool for ` +
+        `${tA}/${tB} fee ${fee} on ${chain} (factory returned ${expectPool}).`
+    )
+  }
+}
+
+/**
  * Read Uniswap V3 pool state. Either pass `poolAddress` for a known pool, or
  * `(tokenA, tokenB, fee)` to look it up via the factory.
  *
@@ -116,7 +145,13 @@ export async function uniswapV3PoolInfo(params: UniswapV3PoolInfoParams): Promis
       throw new Error(`invalid poolAddress: "${params.poolAddress}".`)
     }
     poolAddr = getAddress(params.poolAddress)
-    // fee() is read and cross-checked below in the parallel batch.
+    // fee() is read and cross-checked against params.fee below in the parallel
+    // batch. When tokenA/tokenB are ALSO supplied, the canonical factory is
+    // queried to prove this address is a genuine Uniswap V3 pool for that pair
+    // (see post-batch verification) — otherwise an arbitrary contract that can
+    // answer token0/token1/slot0/liquidity/fee could return an attacker-chosen
+    // price. With only a bare poolAddress and no pair, the caller is trusting
+    // the address it supplied (read-only quote, no signing).
   } else {
     const fee = params.fee ?? 3000
     if (!params.tokenA || !params.tokenB) {
@@ -177,6 +212,23 @@ export async function uniswapV3PoolInfo(params: UniswapV3PoolInfoParams): Promis
   const token1 = decodeAddress(token1Raw)
   const { sqrtPriceX96, tick } = decodeSlot0(slot0Raw)
   const liquidity = decodeUint(liqRaw)
+
+  // A live (initialized) Uniswap V3 pool always has a non-zero sqrtPriceX96.
+  // A zero here means either an uninitialized pool or a non-pool contract that
+  // answered slot0() with zero-padded data — fail closed rather than fabricate
+  // a '0'/'0' price pair that a caller could mistake for a real quote.
+  if (sqrtPriceX96 === 0n) {
+    throw new Error(`pool ${poolAddr} returned sqrtPriceX96=0 — uninitialized pool or not a Uniswap V3 pool contract.`)
+  }
+
+  // When a poolAddress was supplied alongside a token pair, prove the address
+  // is the canonical factory pool for (token0, token1, fee). Without this an
+  // arbitrary contract masquerading as a pool could return an attacker-chosen
+  // price. Only enforced when the caller gave both tokens — a bare poolAddress
+  // is taken on the caller's own trust (read-only quote, no signing).
+  if (params.poolAddress && params.tokenA && params.tokenB) {
+    await assertCanonicalPool(chain, factoryAddr, poolAddr, params.tokenA, params.tokenB, fee)
+  }
 
   const [dec0, dec1, sym0, sym1] = await Promise.all([
     readDecimals(chain, token0),
