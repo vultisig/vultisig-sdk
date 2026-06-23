@@ -9,12 +9,30 @@ export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMe
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
 // Swap
-export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
+export type {
+  FindSwapQuoteParams,
+  NativeSwapMinAmountIn,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
+  SwapQuote,
+} from './swap'
 export {
+  buildSkipAffiliates,
+  DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  quoteSkipRoute,
+  resolveLuncFloorUsd,
+  runSkipSwap,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  SkipApiError,
+  skipChainIdToChainName,
 } from './swap'
 
 // Verifier client
