@@ -54,42 +54,9 @@ export function checkInvariants(input: InvariantInput): InvariantViolation[] {
   // I2: amount == confirmed. nil envelope amount = "decoder could not parse"
   // (fail open), NOT "sends zero" — only assess when the amount is known.
   if (decoded && (claim.amount ?? '') !== '' && envelope.amount != null) {
-    const envAmount = envelope.amount
-    const claimZero = isZeroAmount(claim.amount ?? '')
-    const envZero = envAmount === 0n
-    const envObserved = envAmount.toString()
-    if (claimZero && envZero) {
-      // both zero → match.
-    } else if (claimZero && !envZero) {
-      v.push({
-        invariant: Invariant.AmountMatchesIntent,
-        reason: `amount mismatch: intent zero ("${claim.amount}"), envelope sends "${envObserved}"`,
-        diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
-      })
-    } else if (!claimZero && envZero) {
-      v.push({
-        invariant: Invariant.AmountMatchesIntent,
-        reason: `amount mismatch: intent "${claim.amount}", envelope sends zero/none`,
-        diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
-      })
-    } else {
-      // Both non-zero → drift check under EVERY available unit interpretation.
-      // A violation fires only when EVERY interpretation drifts > 1%.
-      const decimals = envelope.asset?.decimals ?? 0
-      const interps = claimInterpretations(claim.amount ?? '', claim.amountUnits ?? '', decimals)
-      let drifted = 0
-      for (const c of interps) {
-        if (amountDriftPct(c, envAmount) > AMOUNT_DRIFT_BLOCK_PCT) {
-          drifted++
-        }
-      }
-      if (interps.length > 0 && drifted === interps.length) {
-        v.push({
-          invariant: Invariant.AmountMatchesIntent,
-          reason: `amount drift exceeds ${(AMOUNT_DRIFT_BLOCK_PCT * 100).toFixed(0)}% under all ${interps.length} unit interpretation(s): intent "${claim.amount}", envelope "${envObserved}"`,
-          diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
-        })
-      }
+    const i2 = checkAmountInvariant(claim, envelope.amount, envelope.asset?.decimals ?? 0)
+    if (i2 !== null) {
+      v.push(i2)
     }
   }
 
@@ -138,6 +105,60 @@ export function checkInvariants(input: InvariantInput): InvariantViolation[] {
   }
 
   return v
+}
+
+/**
+ * I2 amount oracle, extracted from {@link checkInvariants} so the parent stays
+ * under the cognitive-complexity gate. Behaviour is byte-identical to the
+ * inlined Go port: the caller has already established a DECODED envelope, a
+ * non-empty claim amount, and a known (non-null) envelope amount. Returns the
+ * single I2 violation, or null when the amount matches.
+ *   - claim zero + envelope zero      → match (null)
+ *   - claim zero + envelope non-zero  → mismatch (envelope sends a positive transfer)
+ *   - claim non-zero + envelope zero  → mismatch (envelope sends zero/none)
+ *   - both non-zero                   → drift check; violates only when EVERY
+ *                                       unit interpretation drifts > 1%
+ */
+function checkAmountInvariant(claim: IntentClaim, envAmount: bigint, decimals: number): InvariantViolation | null {
+  const claimZero = isZeroAmount(claim.amount ?? '')
+  const envZero = envAmount === 0n
+  const envObserved = envAmount.toString()
+
+  if (claimZero && envZero) {
+    return null // both zero → match.
+  }
+  if (claimZero && !envZero) {
+    return {
+      invariant: Invariant.AmountMatchesIntent,
+      reason: `amount mismatch: intent zero ("${claim.amount}"), envelope sends "${envObserved}"`,
+      diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
+    }
+  }
+  if (!claimZero && envZero) {
+    return {
+      invariant: Invariant.AmountMatchesIntent,
+      reason: `amount mismatch: intent "${claim.amount}", envelope sends zero/none`,
+      diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
+    }
+  }
+
+  // Both non-zero → drift check under EVERY available unit interpretation.
+  // A violation fires only when EVERY interpretation drifts > 1%.
+  const interps = claimInterpretations(claim.amount ?? '', claim.amountUnits ?? '', decimals)
+  let drifted = 0
+  for (const c of interps) {
+    if (amountDriftPct(c, envAmount) > AMOUNT_DRIFT_BLOCK_PCT) {
+      drifted++
+    }
+  }
+  if (interps.length > 0 && drifted === interps.length) {
+    return {
+      invariant: Invariant.AmountMatchesIntent,
+      reason: `amount drift exceeds ${(AMOUNT_DRIFT_BLOCK_PCT * 100).toFixed(0)}% under all ${interps.length} unit interpretation(s): intent "${claim.amount}", envelope "${envObserved}"`,
+      diff: [{ field: 'amount', claimed: claim.amount ?? '', observed: envObserved }],
+    }
+  }
+  return null
 }
 
 /**

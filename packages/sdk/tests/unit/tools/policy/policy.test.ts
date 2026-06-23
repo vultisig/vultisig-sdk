@@ -160,6 +160,34 @@ describe('checkInvariants', () => {
     expect(violations.map(v => v.invariant)).toContain(Invariant.NeverExceedBalance)
   })
 
+  it('I2 fires on amount drift > 1% under all interpretations (claim 1 USDC vs envelope 2 USDC)', () => {
+    const violations = checkInvariants({
+      claim: { chain: 'base', recipient: '0xAAA', amount: '1', amountUnits: 'human' },
+      envelope: {
+        decoded: true,
+        chainId: 'base',
+        recipient: '0xAAA',
+        asset: { symbol: 'USDC', decimals: 6 },
+        amount: 2_000_000n,
+      },
+    })
+    expect(violations.map(v => v.invariant)).toEqual([Invariant.AmountMatchesIntent])
+  })
+
+  it('I2 fires when the claim is non-zero but the envelope sends zero', () => {
+    const violations = checkInvariants({
+      claim: { chain: 'base', recipient: '0xAAA', amount: '1', amountUnits: 'human' },
+      envelope: {
+        decoded: true,
+        chainId: 'base',
+        recipient: '0xAAA',
+        asset: { symbol: 'USDC', decimals: 6 },
+        amount: 0n,
+      },
+    })
+    expect(violations.map(v => v.invariant)).toEqual([Invariant.AmountMatchesIntent])
+  })
+
   it('I6 fires when a tool output rewrites a stated recipient', () => {
     const violations = checkInvariants({
       claim: { recipient: '0xAAA' },
