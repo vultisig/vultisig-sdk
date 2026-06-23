@@ -50,16 +50,13 @@ export {
 } from './defi'
 
 // Verifier client
-export { VerifierClient } from './verifier'
-
-// DeFi protocol integrations (sdk.defi.* — builds UNSIGNED calldata only)
-export { defi } from './defi'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from './defi/threeJane'
+export { VerifierClient } from './verifier'
 
 // Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
 export {
