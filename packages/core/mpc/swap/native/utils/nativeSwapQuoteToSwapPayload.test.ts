@@ -59,6 +59,15 @@ describe('nativeSwapQuoteToSwapPayload', () => {
 })
 
 describe('getNativeSwapToAmountLimit', () => {
+  it('keeps a non-zero limit for positive outputs when tolerance is below 100%', () => {
+    expect(
+      getNativeSwapToAmountLimit({
+        expectedAmountOut: '1',
+        slippageToleranceBps: 100,
+      })
+    ).toBe('1')
+  })
+
   it('floors expected output by tolerance basis points', () => {
     expect(
       getNativeSwapToAmountLimit({

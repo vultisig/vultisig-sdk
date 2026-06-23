@@ -46,8 +46,13 @@ export const getNativeSwapToAmountLimit = ({
 
   const expected = BigInt(expectedAmountOut)
   const tolerance = BigInt(slippageToleranceBps)
+  const limit = (expected * (BASIS_POINTS_DENOMINATOR - tolerance)) / BASIS_POINTS_DENOMINATOR
 
-  return ((expected * (BASIS_POINTS_DENOMINATOR - tolerance)) / BASIS_POINTS_DENOMINATOR).toString()
+  if (expected > 0n && tolerance < BASIS_POINTS_DENOMINATOR && limit === 0n) {
+    return '1'
+  }
+
+  return limit.toString()
 }
 
 export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }: Input): CommKeysignSwapPayload => {
