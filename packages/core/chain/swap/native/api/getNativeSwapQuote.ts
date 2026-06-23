@@ -21,6 +21,7 @@ type GetNativeSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   swapChain: NativeSwapChain
   destination: string
   amount: number
+  slippageToleranceBps?: number
   referral?: string
   affiliateBps?: number
   nativeAffiliateConfig?: NativeSwapAffiliateConfig
@@ -33,6 +34,13 @@ type NativeSwapQuoteErrorResponse = {
 type NativeSwapQuoteResponse = Omit<NativeSwapQuote, 'swapChain'>
 
 const THORCHAIN_STREAMING_SWAP_INTERVAL = 1
+export const DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS = 100
+
+const assertValidSlippageToleranceBps = (slippageToleranceBps: number): void => {
+  if (!Number.isSafeInteger(slippageToleranceBps) || slippageToleranceBps < 0 || slippageToleranceBps > 10_000) {
+    throw new Error(`slippageToleranceBps must be an integer between 0 and 10000. Received "${slippageToleranceBps}".`)
+  }
+}
 
 const requestNativeSwapQuote = async ({
   swapChain,
@@ -43,6 +51,7 @@ const requestNativeSwapQuote = async ({
   destination,
   streamingInterval,
   streamingQuantity,
+  slippageToleranceBps,
   affiliateBps,
   referral,
   nativeAffiliateConfig,
@@ -55,6 +64,7 @@ const requestNativeSwapQuote = async ({
   destination: string
   streamingInterval: number
   streamingQuantity?: number
+  slippageToleranceBps: number
   affiliateBps?: number
   referral?: string
   nativeAffiliateConfig?: NativeSwapAffiliateConfig
@@ -65,6 +75,7 @@ const requestNativeSwapQuote = async ({
     amount: chainAmount.toString(),
     destination,
     streaming_interval: String(streamingInterval),
+    liquidity_tolerance_bps: String(slippageToleranceBps),
     ...(streamingQuantity !== undefined ? { streaming_quantity: String(streamingQuantity) } : {}),
     ...(affiliateBps !== undefined
       ? buildAffiliateParams({
@@ -101,10 +112,13 @@ export const getNativeSwapQuote = async ({
   from,
   to,
   amount,
+  slippageToleranceBps = DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS,
   affiliateBps,
   referral,
   nativeAffiliateConfig,
 }: GetNativeSwapQuoteInput): Promise<NativeSwapQuote> => {
+  assertValidSlippageToleranceBps(slippageToleranceBps)
+
   const [fromAsset, toAsset] = [from, to].map(asset => toNativeSwapAsset(asset))
 
   const fromDecimals = getNativeSwapDecimals(from)
@@ -122,6 +136,7 @@ export const getNativeSwapQuote = async ({
       chainAmount,
       destination,
       streamingInterval: nativeSwapStreamingInterval[swapChain],
+      slippageToleranceBps,
       affiliateBps,
       referral,
       nativeAffiliateConfig,
@@ -130,6 +145,7 @@ export const getNativeSwapQuote = async ({
     return {
       ...assertOkQuote(result, from),
       swapChain,
+      liquidity_tolerance_bps: slippageToleranceBps,
     }
   }
 
@@ -141,6 +157,7 @@ export const getNativeSwapQuote = async ({
     chainAmount,
     destination,
     streamingInterval: nativeSwapStreamingInterval[swapChain],
+    slippageToleranceBps,
     affiliateBps,
     referral,
     nativeAffiliateConfig,
@@ -150,7 +167,7 @@ export const getNativeSwapQuote = async ({
 
   const totalBps = rapid.fees.total_bps
   if (totalBps === undefined || totalBps <= THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS) {
-    return { ...rapid, swapChain }
+    return { ...rapid, swapChain, liquidity_tolerance_bps: slippageToleranceBps }
   }
 
   const streamingQuantity =
@@ -169,6 +186,7 @@ export const getNativeSwapQuote = async ({
       destination,
       streamingInterval: THORCHAIN_STREAMING_SWAP_INTERVAL,
       streamingQuantity,
+      slippageToleranceBps,
       affiliateBps,
       referral,
       nativeAffiliateConfig,
@@ -176,16 +194,16 @@ export const getNativeSwapQuote = async ({
     streaming = assertOkQuote(streamingRes, from)
   } catch (error) {
     console.warn('[thorchain] streaming quote failed after elevated rapid slippage; using rapid quote', error)
-    return { ...rapid, swapChain }
+    return { ...rapid, swapChain, liquidity_tolerance_bps: slippageToleranceBps }
   }
 
   try {
     if (BigInt(streaming.expected_amount_out) > BigInt(rapid.expected_amount_out)) {
-      return { ...streaming, swapChain }
+      return { ...streaming, swapChain, liquidity_tolerance_bps: slippageToleranceBps }
     }
   } catch {
-    return { ...rapid, swapChain }
+    return { ...rapid, swapChain, liquidity_tolerance_bps: slippageToleranceBps }
   }
 
-  return { ...rapid, swapChain }
+  return { ...rapid, swapChain, liquidity_tolerance_bps: slippageToleranceBps }
 }

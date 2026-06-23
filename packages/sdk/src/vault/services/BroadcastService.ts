@@ -13,6 +13,7 @@ import type { WasmProvider } from '../../context/SdkContext'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
+import { assertNativeSwapReadyForBroadcast } from './nativeSwapBroadcastGuard'
 
 /**
  * BroadcastService
@@ -61,6 +62,8 @@ export class BroadcastService {
     const { chain, keysignPayload, signature } = params
 
     try {
+      await assertNativeSwapReadyForBroadcast({ chain, keysignPayload })
+
       // Get WalletCore instance via WasmProvider
       const walletCore = await this.wasmProvider.getWalletCore()
 
