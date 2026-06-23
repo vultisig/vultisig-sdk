@@ -1,14 +1,20 @@
 import { solanaRpcUrl } from '@vultisig/core-chain/chains/solana/client'
 
-const LAMPORTS_PER_SOL = 1_000_000_000
+const LAMPORTS_PER_SOL = 1_000_000_000n
 
 /** Native SOL balance for a Solana address. */
 export type SolBalance = {
   /** The queried owner address (base58). */
   address: string
-  /** Raw balance in lamports (1 SOL = 1e9 lamports). */
+  /**
+   * Raw balance in lamports (1 SOL = 1e9 lamports) as a JS number. Convenient,
+   * but lossy above `Number.MAX_SAFE_INTEGER` (~9.007M SOL) - prefer
+   * `lamportsRaw` for exact u64 precision. `sol` is always exact regardless.
+   */
   lamports: number
-  /** Human-readable SOL amount (trailing zeros trimmed). */
+  /** Raw balance in lamports as a base-10 string (lossless u64 precision). */
+  lamportsRaw: string
+  /** Human-readable SOL amount (trailing zeros trimmed; exact across the u64 range). */
   sol: string
   /** ISO-8601 timestamp the balance was read at. */
   asOf: string
@@ -20,11 +26,15 @@ export type SplTokenBalance = {
   address: string
   /** The token mint address (base58). */
   mint: string
-  /** Derived associated token account (empty string when the owner holds no account for the mint). */
+  /**
+   * The owner's token account for this mint (empty string when none exists).
+   * When the owner holds the mint across several token accounts, this is the
+   * largest-balance account; `balance` is the sum across all of them.
+   */
   ata: string
   /** Owning token program (SPL Token vs Token-2022); empty when no account exists. */
   tokenProgram: string
-  /** Raw balance in the token's base units (string to preserve u64 precision). */
+  /** Total raw balance across all of the owner's accounts for this mint, in base units (string for u64 precision). */
   balance: string
   /** Token decimals. */
   decimals: number
@@ -37,7 +47,11 @@ type SolanaRpcResponse<T> = {
   error?: { code: number; message: string }
 }
 
-async function solanaRpc<T>(method: string, params: unknown[]): Promise<T> {
+/** Raw response text + the parsed JSON (the text is kept to recover u64 values losslessly). */
+async function solanaRpcRaw(
+  method: string,
+  params: unknown[]
+): Promise<{ text: string; json: SolanaRpcResponse<unknown> }> {
   const response = await fetch(solanaRpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,16 +62,34 @@ async function solanaRpc<T>(method: string, params: unknown[]): Promise<T> {
     throw new Error(`Solana RPC ${method} failed: HTTP ${response.status}`)
   }
 
-  const json = (await response.json()) as SolanaRpcResponse<T>
+  const text = await response.text()
+  const json = JSON.parse(text) as SolanaRpcResponse<unknown>
   if (json.error) {
     throw new Error(`Solana RPC ${method} error: ${json.error.message}`)
   }
 
-  return json.result
+  return { text, json }
 }
 
-/** Trim trailing zeros (and a dangling decimal point) from a fixed-decimal string. */
-const trimZeros = (s: string): string => s.replace(/0+$/, '').replace(/\.$/, '')
+async function solanaRpc<T>(method: string, params: unknown[]): Promise<T> {
+  const { json } = await solanaRpcRaw(method, params)
+  return json.result as T
+}
+
+/**
+ * Format a u64 lamport amount as a human SOL string using integer-only math
+ * (BigInt), so the result is exact across the full u64 range. Mirrors the Go
+ * `FormatLamports` (whole/frac split, trailing zeros trimmed, no dangling dot).
+ * A naive `lamports / 1e9` float path corrupts precision once lamports exceeds
+ * `Number.MAX_SAFE_INTEGER` (~9.007M SOL), so we never touch floats here.
+ */
+const formatLamports = (lamports: bigint): string => {
+  const whole = lamports / LAMPORTS_PER_SOL
+  const frac = lamports % LAMPORTS_PER_SOL
+  if (frac === 0n) return whole.toString()
+  const fracStr = frac.toString().padStart(9, '0').replace(/0+$/, '')
+  return `${whole.toString()}.${fracStr}`
+}
 
 /**
  * Query the native SOL balance of a Solana address.
@@ -68,14 +100,30 @@ const trimZeros = (s: string): string => s.replace(/0+$/, '').replace(/\.$/, '')
  * ```
  */
 export const getSolBalance = async (address: string): Promise<SolBalance> => {
-  const result = await solanaRpc<{ value: number }>('getBalance', [address])
-  const lamports = result.value
-  const sol = trimZeros((lamports / LAMPORTS_PER_SOL).toFixed(9))
+  const { text, json } = await solanaRpcRaw('getBalance', [address])
+
+  // `getBalance.value` is a JSON *number* (u64). `JSON.parse` already rounds it
+  // once it exceeds 2^53, so recover the exact integer from the raw response
+  // text before any Number coercion can corrupt it.
+  const match = text.match(/"value"\s*:\s*(\d+)/)
+  if (!match) {
+    throw new Error('Solana RPC getBalance: malformed response (no value)')
+  }
+  const lamportsRaw = match[1]
+  const lamportsBig = BigInt(lamportsRaw)
+
+  // Sanity-check the regex against the parsed body in the safe range, so a
+  // surprise response shape (extra leading "value" key) can't silently win.
+  const parsedValue = (json.result as { value?: unknown } | null)?.value
+  if (typeof parsedValue === 'number' && Number.isSafeInteger(parsedValue) && BigInt(parsedValue) !== lamportsBig) {
+    throw new Error('Solana RPC getBalance: ambiguous value in response')
+  }
 
   return {
     address,
-    lamports,
-    sol: sol === '' ? '0' : sol,
+    lamports: Number(lamportsBig),
+    lamportsRaw,
+    sol: formatLamports(lamportsBig),
     asOf: new Date().toISOString(),
   }
 }
@@ -99,10 +147,12 @@ type ParsedTokenAccount = {
 /**
  * Query the SPL token balance for a Solana address + mint.
  *
- * Auto-detects the token program (SPL Token vs Token-2022) and derives the
- * associated token account via `getTokenAccountsByOwner` (jsonParsed). Returns a
- * zero balance with empty `ata`/`tokenProgram` when the owner holds no account
- * for the mint.
+ * Auto-detects the token program (SPL Token vs Token-2022) via
+ * `getTokenAccountsByOwner` (jsonParsed). Returns a zero balance with empty
+ * `ata`/`tokenProgram` when the owner holds no account for the mint. When the
+ * owner holds the mint across multiple token accounts (a canonical ATA plus
+ * auxiliary accounts), the balances are summed (lossless u64) so the result is
+ * the owner's true total rather than a single, RPC-ordering-dependent account.
  *
  * @example
  * ```ts
@@ -127,16 +177,40 @@ export const getSplTokenBalance = async (address: string, mint: string): Promise
     return { address, mint, ata: '', tokenProgram: '', balance: '0', decimals: 0, asOf }
   }
 
-  const acc = accounts[0]
-  const parsed = acc.account.data.parsed.info
+  // The owner can hold the same mint across multiple token accounts (the
+  // canonical ATA plus auxiliary accounts). `getTokenAccountsByOwner` returns
+  // them all, in an unspecified order, so taking accounts[0] both undercounts
+  // the true balance and yields a non-deterministic representative account. Sum
+  // every account (lossless via BigInt) and surface the largest as the
+  // representative `ata`.
+  let total = 0n
+  let decimals = accounts[0].account.data.parsed.info.tokenAmount.decimals
+  let tokenProgram = accounts[0].account.data.program
+  let repPubkey = accounts[0].pubkey
+  let repAmount = -1n
+
+  for (const acc of accounts) {
+    const parsed = acc.account.data.parsed.info
+    // Defensive: the RPC filters by mint, but never trust the balance of an
+    // account that doesn't actually belong to the requested mint.
+    if (parsed.mint !== mint) continue
+    const amount = BigInt(parsed.tokenAmount.amount)
+    total += amount
+    if (amount > repAmount) {
+      repAmount = amount
+      repPubkey = acc.pubkey
+      decimals = parsed.tokenAmount.decimals
+      tokenProgram = acc.account.data.program
+    }
+  }
 
   return {
     address,
     mint,
-    ata: acc.pubkey,
-    tokenProgram: acc.account.data.program,
-    balance: parsed.tokenAmount.amount,
-    decimals: parsed.tokenAmount.decimals,
+    ata: repPubkey,
+    tokenProgram,
+    balance: total.toString(),
+    decimals,
     asOf,
   }
 }
