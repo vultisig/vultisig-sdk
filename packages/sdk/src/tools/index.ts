@@ -17,6 +17,17 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
 } from './swap'
 
+// Gas / fee primitives (cosmos gas-fee label + gas limits)
+export type { CosmosSwapFeeLabelOpts } from './gas'
+export {
+  COSMOS_GAS_PRICE,
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from './gas'
+
 // Verifier client
 export { VerifierClient } from './verifier'
 
