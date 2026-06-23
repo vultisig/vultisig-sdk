@@ -79,6 +79,27 @@ describe('sdk.defi.osmosis — GAMM', () => {
     ])
   })
 
+  it('sorts coins by byte order (not locale) so the emitted Coins passes Cosmos ValidateBasic', () => {
+    // Cosmos `Coins.Validate()` requires denoms in raw BYTE order and rejects an
+    // unsorted set in ValidateBasic. `localeCompare` diverges from byte order
+    // when two denoms differ only by the case of the same letter: locale orders
+    // "factoryA" before "factorya" (case as a tiebreak, uppercase last → "a"
+    // first), but byte-wise 'A' (0x41) < 'a' (0x61) so "factoryA" must come
+    // first on the wire. A locale sort would emit an unsorted Coins.
+    const msg = osmosis.buildJoinPool({
+      sender: SENDER,
+      poolId: '1',
+      shareOutAmount: '1',
+      tokenInMaxs: [
+        { denom: 'factorya', amount: '1' },
+        { denom: 'factoryA', amount: '2' },
+      ],
+    })
+    const f = readFields(msg.value)
+    const denoms = f.get(4)!.map(e => coin(e.value).denom)
+    expect(denoms).toEqual(['factoryA', 'factorya'])
+  })
+
   it('builds MsgExitPool', () => {
     const msg = osmosis.buildExitPool({
       sender: SENDER,

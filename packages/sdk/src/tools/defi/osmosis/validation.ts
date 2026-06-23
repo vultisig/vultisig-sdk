@@ -166,6 +166,10 @@ export function validateCoins(
     }
     return { denom: entry.denom, amount }
   })
-  // Deterministic on-chain ordering: Osmosis sorts coins by denom.
-  return [...coins].sort((a, b) => a.denom.localeCompare(b.denom))
+  // Deterministic on-chain ordering. Cosmos-SDK `Coins.Validate()` requires
+  // denoms sorted by BYTE order (not locale collation) and rejects an unsorted
+  // set in ValidateBasic. `localeCompare` diverges from byte order across the
+  // upper/lower-case boundary (e.g. "ibc/Z…" vs a lowercase denom), which could
+  // emit an unsorted Coins that fails at broadcast — so sort by raw code unit.
+  return [...coins].sort((a, b) => (a.denom < b.denom ? -1 : a.denom > b.denom ? 1 : 0))
 }
