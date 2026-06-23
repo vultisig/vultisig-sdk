@@ -8,6 +8,38 @@ export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4By
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
+// Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from './balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from './balance'
+
 // Swap
 export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
 export {
