@@ -388,6 +388,7 @@ export type {
   KnownCoin,
   KnownCoinMetadata,
   PolicyAssetRef,
+  PolicyEnvelope,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   TokenMetadataResolver,
