@@ -200,6 +200,17 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
 }
 
+// Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
+// RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
+// metadata lookups.
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from '../../tools/gas'
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export {
   abiDecode,

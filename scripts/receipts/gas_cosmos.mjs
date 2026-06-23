@@ -3,8 +3,8 @@
  *
  * Exercises the REAL shipped primitive
  * (`packages/sdk/src/tools/gas/cosmos.ts`) — no copy, no broadcast, no signing.
- * Computes `gas_limit × gas_price` cosmos swap fee labels for sample chains and
- * prints them.
+ * Prints the canonical per-chain cosmos swap fee labels (sourced from the SDK's
+ * own `cosmosGasRecord` sign-time fee, the same value the signer charges).
  *
  *   Run: node --import tsx scripts/receipts/gas_cosmos.mjs
  */
@@ -21,15 +21,11 @@ console.log(`COSMOS_SWAP_GAS_LIMIT (heuristic source-leg): ${COSMOS_SWAP_GAS_LIM
 console.log(`label-eligible chains: ${COSMOS_SWAP_FEE_LABEL_CHAINS.join(', ')}`)
 console.log('')
 
-console.log('-- estimateCosmosSwapFeeLabel (gas_limit x gas_price, ~<amt> <TICKER>) --')
-for (const chain of ['Cosmos', 'Osmosis', 'Kujira', 'Terra', 'TerraClassic']) {
+console.log('-- estimateCosmosSwapFeeLabel (canonical sign-time fee, ~<amt> <TICKER>) --')
+for (const chain of ['Cosmos', 'Osmosis', 'Kujira', 'Terra', 'TerraClassic', 'Noble', 'Akash', 'Dydx']) {
   const label = estimateCosmosSwapFeeLabel(chain)
-  console.log(`  ${chain.padEnd(13)} -> "${label}"  (gasLimit=${getCosmosSwapGasLimit(chain)})`)
+  console.log(`  ${chain.padEnd(13)} -> "${label}"  (swapGasLimit=${getCosmosSwapGasLimit(chain)})`)
 }
-
-console.log('')
-console.log('-- gasLimit override (Cosmos @ 700k) --')
-console.log(`  Cosmos        -> "${estimateCosmosSwapFeeLabel('Cosmos', { gasLimit: 700_000n })}"`)
 
 console.log('')
 console.log('-- flat-fee / non-cosmos chains return "" (no regression) --')
@@ -50,4 +46,4 @@ for (const coin of samples) {
 }
 
 console.log('')
-console.log('OK: computed real cosmos gas-fee labels (no network, no signing, no broadcast)')
+console.log('OK: computed canonical cosmos gas-fee labels (no network, no signing, no broadcast)')
