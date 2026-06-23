@@ -29,15 +29,27 @@ type InboundAddress = {
 /**
  * Per UTXO chain: which inbound source publishes its fee rate and under
  * what chain key. Bitcoin / Litecoin / Dogecoin / Bitcoin-Cash live on
- * THORChain; Dash / Zcash live on MayaChain (not available on THORChain).
+ * THORChain; Dash lives on MayaChain (not available on THORChain).
+ *
+ * Zcash is intentionally OMITTED. Zcash does not use a sat/vB fee model —
+ * it uses ZIP-317 conventional fees (zats per logical action), computed
+ * client-side (see `core-chain/chains/utxo/fee/zip317.ts` +
+ * `getUtxoByteFee`, which hardcodes Zcash to 100 sat/byte to clear the
+ * ZIP-317 floor). MayaChain's published ZEC `gas_rate` is NOT a per-vByte
+ * rate — at the time of writing it reads `127500`, which as a "sat/vB" rate
+ * would build a tx that burns the entire balance in fees. Returning it under
+ * a `feeRateUnit: 'sat/vB'` envelope would be silently, dangerously wrong.
+ * The swap rail (`resolveUtxoFeeRate`) and mcp-ts (no `zec_fee_rate` tool)
+ * omit Zcash for the same reason; callers needing a Zcash fee must use the
+ * ZIP-317 path. `utxoFeeRate('Zcash')` therefore throws "Unsupported".
  */
-const utxoFeeRateSource: Record<UtxoChain, { nodeUrl: string; chainKey: string; isMaya: boolean }> = {
+type FeeRateSource = { nodeUrl: string; chainKey: string; isMaya: boolean }
+const utxoFeeRateSource: Partial<Record<UtxoChain, FeeRateSource>> = {
   Bitcoin: { nodeUrl: THORCHAIN_NODE_URL, chainKey: 'BTC', isMaya: false },
   Litecoin: { nodeUrl: THORCHAIN_NODE_URL, chainKey: 'LTC', isMaya: false },
   Dogecoin: { nodeUrl: THORCHAIN_NODE_URL, chainKey: 'DOGE', isMaya: false },
   'Bitcoin-Cash': { nodeUrl: THORCHAIN_NODE_URL, chainKey: 'BCH', isMaya: false },
   Dash: { nodeUrl: MAYACHAIN_NODE_URL, chainKey: 'DASH', isMaya: true },
-  Zcash: { nodeUrl: MAYACHAIN_NODE_URL, chainKey: 'ZEC', isMaya: true },
 }
 
 async function fetchInboundAddresses(nodeUrl: string, isMaya: boolean): Promise<InboundAddress[]> {
@@ -99,7 +111,12 @@ export type UtxoFeeRate = {
 export const utxoFeeRate = async (chain: UtxoChain): Promise<UtxoFeeRate> => {
   const source = utxoFeeRateSource[chain]
   if (!source) {
-    throw new Error(`Unsupported UTXO chain for fee rate: ${chain}`)
+    throw new Error(
+      `Unsupported UTXO chain for sat/vB fee rate: ${chain}` +
+        (chain === ('Zcash' as UtxoChain)
+          ? ' (Zcash uses ZIP-317 conventional fees, not a sat/vB rate — use the ZIP-317 fee path)'
+          : '')
+    )
   }
   const feeRate = await resolveFeeRate(source.nodeUrl, source.chainKey, source.isMaya)
   return { chain, feeRate, feeRateUnit: 'sat/vB' }

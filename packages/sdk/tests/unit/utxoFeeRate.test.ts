@@ -63,4 +63,15 @@ describe('utxoFeeRate', () => {
     mockInbounds([{ chain: 'ETH', gas_rate: '1', halted: false }])
     await expect(utxoFeeRate(UtxoChain.Bitcoin)).rejects.toThrow(/No fee rate found/)
   })
+
+  it('rejects Zcash — it uses ZIP-317, not sat/vB (never returns the inflated ZEC gas_rate)', async () => {
+    // Maya publishes ZEC gas_rate=127500 (zats / ZIP-317 model, NOT sat/vB).
+    // If Zcash were supported, this would yield feeRate: 127500 sat/vB and
+    // build a tx burning the whole balance in fees. Must reject outright.
+    const fetchMock = mockInbounds([{ chain: 'ZEC', gas_rate: '127500', halted: false }])
+    await expect(utxoFeeRate(UtxoChain.Zcash)).rejects.toThrow(/Unsupported UTXO chain.*Zcash/)
+    await expect(utxoFeeRate(UtxoChain.Zcash)).rejects.toThrow(/ZIP-317/)
+    // and it must not even hit the network for an unsupported chain
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })
