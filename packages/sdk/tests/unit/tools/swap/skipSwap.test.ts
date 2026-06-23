@@ -5,6 +5,7 @@ import {
   quoteSkipRoute,
   resolveLuncFloorUsd,
   runSkipSwap,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
   skipChainIdToChainName,
   type SkipSwapArgs,
 } from '@/tools/swap/skip'
@@ -116,6 +117,24 @@ describe('buildSkipAffiliates', () => {
       'osmosis-1': {
         affiliates: [{ basis_points_fee: '50', address: expect.stringMatching(/^osmo1/) }],
       },
+    })
+  })
+
+  // Fund-skim regression: the fee recipient addresses are the protocol treasury.
+  // Pin the exact bytes so a corrupted/redirected receiver address (an attacker
+  // silently skimming the user's swap output) trips a test rather than shipping.
+  it('routes the affiliate fee to the pinned Vultisig treasury addresses (no redirect)', () => {
+    const STATION_EVM_FEE_RECEIVER = '0x649E1289fD780C2F9A3D27476511283EB0d0076D'
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['osmosis-1']).toBe('osmo18ggw7cvgera63srls32a8fl4gtzmmphfzlfndf')
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['phoenix-1']).toBe('terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h')
+    expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN['columbus-5']).toBe('terra1lvhuqayxe4yrxa2js6lq9frnugflur2l2gwp7h')
+    // Every EVM swap-venue chain must route to the same single treasury receiver.
+    for (const evmChainId of ['1', '42161', '10', '8453', '137', '43114', '56']) {
+      expect(SKIP_AFFILIATE_ADDRESS_BY_CHAIN[evmChainId]).toBe(STATION_EVM_FEE_RECEIVER)
+    }
+    // And the built envelope carries that pinned receiver, not just a shape match.
+    expect(buildSkipAffiliates('1', 50)).toEqual({
+      '1': { affiliates: [{ basis_points_fee: '50', address: STATION_EVM_FEE_RECEIVER }] },
     })
   })
 })
