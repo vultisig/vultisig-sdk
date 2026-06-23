@@ -260,6 +260,11 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
       // session echo loop (it's __-prefixed), not this return's auto_submit
       // (which stays order-scoped via __pm_auto_submit, intentionally untouched).
       expect(recent.data?.pm_batch_ref).toBe('batch-ref-789')
+      // Invariant lock: the order-scoped auto_submit must NOT be flipped by the
+      // batch flag. Input carries __pm_auto_submit_batch but no __pm_auto_submit,
+      // so the return's auto_submit stays false — the batch flag reaches the
+      // backend only via the session echo loop, never this derivation.
+      expect(recent.data?.auto_submit).toBe(false)
     } finally {
       vi.useRealTimers()
     }

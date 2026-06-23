@@ -527,9 +527,12 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
       pm_batch_ref: 'batch-ref-789',
       __pm_auto_submit_batch: true,
     }
+    // Deliberately OMIT pm_batch_ref from the executor result so the only way
+    // it can reach recent.data is the session input-echo loop under test. If
+    // the mock pre-seeded it, this assertion would pass even with the echo
+    // condition reverted (tautology). Mirrors the bare-result pattern below.
     const results = await dispatch(batchInput, {
       signatures: [{ id: 'order', signature: '0xorder' }],
-      pm_batch_ref: 'batch-ref-789',
       auto_submit: true,
     })
 
