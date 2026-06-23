@@ -1,3 +1,4 @@
+import { normalizeStructTag } from '@mysten/sui/utils'
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
@@ -14,6 +15,20 @@ import type { VaultIdentity } from './types'
  * `core/mpc/keysign/signingInputs/resolvers/sui.ts`).
  */
 export const SUI_NATIVE_COIN_TYPE = '0x2::sui::SUI'
+
+/**
+ * Canonical (32-byte zero-padded package id) form of native SUI. Sui treats
+ * `0x2`, `0x02` and the full `0x000…002` package id as the SAME address, so a
+ * naive `=== '0x2::sui::SUI'` literal check is bypassable: a caller passing
+ * `0x000…002::sui::SUI` is on-chain-identical to native SUI yet slips past a
+ * literal guard, gets `coin.id` set, and the signing-input resolver then builds
+ * a token `Pay` whose `inputCoins` filter (`coinType === '0x2::sui::SUI'`) matches
+ * nothing — an empty / un-signable token payload while the caller believes they
+ * built a native send. We normalize the struct tag before comparing so every
+ * address-equivalent native form is rejected. The codebase already treats both
+ * forms as native in the Sui balance path (mcp-ts `other-balance.ts`).
+ */
+const SUI_NATIVE_COIN_TYPE_NORMALIZED = normalizeStructTag(SUI_NATIVE_COIN_TYPE)
 
 /**
  * Sui addresses are a `0x` prefix followed by exactly 64 hex characters.
@@ -94,8 +109,12 @@ export const prepareSuiTokenTransferFromKeys = async (
   }
 
   // Native SUI is not a token transfer — refuse so callers can't silently
-  // produce a PaySui payload while believing they built a token send.
-  if (coinType === SUI_NATIVE_COIN_TYPE) {
+  // produce a broken token payload while believing they built a native send.
+  // Normalize the package id first: `0x2`, `0x02` and the full `0x000…002` form
+  // are the SAME on-chain address, so a literal `=== '0x2::sui::SUI'` check is
+  // bypassable. `SUI_COIN_TYPE_RE` already guaranteed a well-formed struct tag
+  // above, so `normalizeStructTag` won't throw here.
+  if (normalizeStructTag(coinType) === SUI_NATIVE_COIN_TYPE_NORMALIZED) {
     throw new Error(
       'prepareSuiTokenTransferFromKeys: coinType is native SUI; ' + 'use prepareSendTxFromKeys for native sends.'
     )

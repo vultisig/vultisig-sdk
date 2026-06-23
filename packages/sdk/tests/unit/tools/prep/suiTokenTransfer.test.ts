@@ -91,6 +91,22 @@ describe('prepareSuiTokenTransferFromKeys', () => {
     expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
   })
 
+  // Sui treats `0x2`, `0x02` and the full 64-hex `0x000…002` package id as the
+  // SAME address, so a naive literal `=== '0x2::sui::SUI'` check is bypassable.
+  // These address-equivalent native forms must be rejected too — otherwise the
+  // signing-input resolver builds a token `Pay` whose `inputCoins` filter
+  // (`coinType === '0x2::sui::SUI'`) matches nothing → empty / un-signable
+  // payload while the caller believes they built a native send.
+  it.each([
+    ['short-zero-padded', '0x02::sui::SUI'],
+    ['full 64-hex padded', '0x' + '0'.repeat(63) + '2' + '::sui::SUI'],
+  ])('refuses address-equivalent native SUI (%s)', async (_label, coinType) => {
+    await expect(
+      prepareSuiTokenTransferFromKeys(identity, { coinType, from: FROM, to: TO, amount: 1n })
+    ).rejects.toThrow('coinType is native SUI')
+    expect(mockBuildSendKeysignPayload).not.toHaveBeenCalled()
+  })
+
   it('rejects a non-Sui (EVM-shaped) recipient before building (mcp-ts#359)', async () => {
     await expect(
       prepareSuiTokenTransferFromKeys(identity, {

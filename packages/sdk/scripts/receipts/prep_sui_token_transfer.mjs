@@ -136,4 +136,17 @@ try {
   console.log('guard OK — native SUI rejected:', e.message)
 }
 
+// ── Negative path: address-equivalent native SUI (zero-padded package id) ────
+// `0x02` / full `0x000…002` are the SAME on-chain address as `0x2` — the guard
+// must normalize the struct tag, not rely on a literal string match.
+for (const padded of ['0x02::sui::SUI', '0x' + '0'.repeat(63) + '2' + '::sui::SUI']) {
+  try {
+    await prepareSuiTokenTransferFromKeys(identity, { ...params, coinType: padded })
+    console.error(`FAIL: address-equivalent native SUI (${padded}) was NOT rejected`)
+    process.exit(1)
+  } catch (e) {
+    console.log(`guard OK — padded native SUI (${padded}) rejected:`, e.message)
+  }
+}
+
 process.exit(0)
