@@ -209,7 +209,8 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
   const { tx } = general
   const explicitFee = 'evm' in tx ? tx.evm.affiliateFee : 'solana' in tx ? tx.solana.swapFee : undefined
 
-  if (general.provider !== 'kyber' && explicitFee && isSameCoinKey(explicitFee, to)) {
+  const providerAlreadyNet = general.provider === 'kyber' || general.provider === '1inch'
+  if (!providerAlreadyNet && explicitFee && isSameCoinKey(explicitFee, to)) {
     return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
   }
 
@@ -223,8 +224,8 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
  * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
  * Native THOR/Maya, CowSwap, 1inch, and Kyber amounts are already net.
  * Aggregator quotes are adjusted only when the SDK has destination-token fee
- * evidence; Kyber is excluded because its SDK `dstAmount` is already the
- * post-fee build amount.
+ * evidence; 1inch and Kyber are excluded because their SDK `dstAmount` values
+ * are already post-fee build amounts.
  */
 function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {

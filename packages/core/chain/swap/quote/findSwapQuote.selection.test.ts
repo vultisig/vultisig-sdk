@@ -873,7 +873,22 @@ describe('findSwapQuote net-output provider selection (issues #605/#804)', () =>
     // The 1inch API already lowers dstAmount when the affiliate fee is supplied.
     // If we subtracted the default 50 bps again, this would fall back into the
     // preference band and incorrectly pick Kyber.
-    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('1006000', '1inch'))
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1006000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xdst',
+            decimals: 6,
+            amount: 5030n,
+          },
+        },
+      })
+    )
 
     const quote = await findSwapQuote({
       ...evmSameChainCoins,
