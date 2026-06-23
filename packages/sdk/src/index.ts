@@ -393,6 +393,22 @@ export {
 } from './tools'
 
 // ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*)
+// ============================================================================
+
+// Each protocol under `sdk.defi.<protocol>` BUILDS UNSIGNED calldata / msgs
+// ONLY (never signs, never broadcasts). Part of the sdk.defi.* DeFi
+// consolidation porting the mcp-ts build_* tools into the multi-consumer SDK.
+export type {
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  GlifUnsignedTx,
+} from './defi'
+export * as defi from './defi'
+
+// ============================================================================
 // PUBLIC API - Push Notifications
 // ============================================================================
 
