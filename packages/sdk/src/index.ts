@@ -369,6 +369,8 @@ export {
   abiEncode,
   chainFeeCoin,
   deriveAddressFromKeys,
+  // DEX primitives namespace — `dex.uniswap.*` (read-only / pure math)
+  dex,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
