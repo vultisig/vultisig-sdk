@@ -116,6 +116,80 @@ describe('prepareTrc20TransferFromKeys', () => {
     ).toThrow(/greater than zero/)
   })
 
+  // Fund-safety / WYSIWYS: BigInt() is too permissive for a value-bearing
+  // field. A "0x10"/"0b1010"/"+1000"/whitespace amount must be REJECTED, not
+  // silently coerced (which would leak a non-decimal string into tx.amount
+  // while the calldata moves a different/confusing base-unit value).
+  it.each([
+    ['hex', '0x10'],
+    ['binary', '0b1010'],
+    ['octal', '0o17'],
+    ['explicit plus', '+1000'],
+    ['leading/trailing whitespace', ' 1000000 '],
+    ['decimal point', '1.5'],
+    ['scientific', '1e6'],
+    ['underscore separator', '1_000'],
+    ['garbage', 'abc'],
+    ['empty', ''],
+  ])('rejects a non-plain-decimal amount (%s: %j)', (_label, amount) => {
+    expect(() => prepareTrc20TransferFromKeys({ contractAddress: USDT_CONTRACT, from: FROM, to: TO, amount })).toThrow(
+      /plain decimal integer string|greater than zero/
+    )
+  })
+
+  it('echoes the CANONICAL decimal amount (no leading zeros leak)', () => {
+    const tx = prepareTrc20TransferFromKeys({
+      contractAddress: USDT_CONTRACT,
+      from: FROM,
+      to: TO,
+      amount: '0000001000000',
+    })
+    // tx.amount must equal what the calldata actually encodes, normalized.
+    expect(tx.amount).toBe('1000000')
+    expect(tx.parameter).toBe(encodeTrc20TransferParam(TO, '1000000'))
+  })
+
+  it('rejects a malformed feeLimitSun (value-adjacent guard)', () => {
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1',
+        feeLimitSun: '0x10',
+      })
+    ).toThrow(/feeLimitSun must be a plain decimal/)
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1',
+        feeLimitSun: '0',
+      })
+    ).toThrow(/feeLimitSun must be greater than zero/)
+    expect(() =>
+      prepareTrc20TransferFromKeys({
+        contractAddress: USDT_CONTRACT,
+        from: FROM,
+        to: TO,
+        amount: '1',
+        feeLimitSun: '-5',
+      })
+    ).toThrow(/feeLimitSun must be a plain decimal/)
+  })
+
+  it('canonicalizes a valid feeLimitSun', () => {
+    const tx = prepareTrc20TransferFromKeys({
+      contractAddress: USDT_CONTRACT,
+      from: FROM,
+      to: TO,
+      amount: '1',
+      feeLimitSun: '050000000',
+    })
+    expect(tx.feeLimitSun).toBe('50000000')
+  })
+
   it('rejects an invalid (bad-checksum) recipient before encoding (fund-safety)', () => {
     const typo = `${TO.slice(0, -1)}${TO.endsWith('H') ? 'J' : 'H'}`
     expect(() =>

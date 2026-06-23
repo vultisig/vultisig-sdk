@@ -92,13 +92,45 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
   tronBase58ToEvmHex(from)
   // encodeTrc20TransferParam re-validates `to` via tronBase58ToEvmHex.
 
+  // Fund-safety / WYSIWYS: `amount` MUST be a plain non-negative decimal
+  // integer string. `BigInt()` is far too permissive for a value-bearing
+  // field — it happily parses "0x10" (→16), "0b1010" (→10), "0o17" (→15),
+  // "+1000" and whitespace-padded " 1000000 ". Each of those would encode a
+  // DIFFERENT (or confusingly-represented) base-unit amount while the raw,
+  // un-normalized string leaked into `tx.amount`, so a confirm UI bound to
+  // `tx.amount` could display one thing while the calldata moves another.
+  // Reject anything that isn't `^[0-9]+$` and echo the CANONICAL decimal of
+  // exactly what we encoded, so displayed amount === encoded amount always.
+  if (!/^[0-9]+$/.test(amount)) {
+    throw new Error(
+      `prepareTrc20TransferFromKeys: amount must be a plain decimal integer string (base units), got ${JSON.stringify(amount)}`
+    )
+  }
   const amountBig = BigInt(amount)
   if (amountBig <= 0n) {
     throw new Error(`prepareTrc20TransferFromKeys: amount must be greater than zero, got ${amount}`)
   }
+  const canonicalAmount = amountBig.toString()
+
+  // feeLimitSun is the energy/bandwidth cost ceiling in SUN — it bounds how
+  // much TRX the signer may burn on this trigger. It is value-adjacent, so
+  // apply the same plain-decimal + positive guard (reject "0x..", "-1", "" …).
+  let canonicalFeeLimit = DEFAULT_FEE_LIMIT_SUN
+  if (feeLimitSun !== undefined) {
+    if (!/^[0-9]+$/.test(feeLimitSun)) {
+      throw new Error(
+        `prepareTrc20TransferFromKeys: feeLimitSun must be a plain decimal integer string (SUN), got ${JSON.stringify(feeLimitSun)}`
+      )
+    }
+    const feeBig = BigInt(feeLimitSun)
+    if (feeBig <= 0n) {
+      throw new Error(`prepareTrc20TransferFromKeys: feeLimitSun must be greater than zero, got ${feeLimitSun}`)
+    }
+    canonicalFeeLimit = feeBig.toString()
+  }
 
   // ABI-encode transfer(address,uint256): recipient word || amount word.
-  const parameter = encodeTrc20TransferParam(to, amount)
+  const parameter = encodeTrc20TransferParam(to, canonicalAmount)
 
   return {
     chain: 'Tron',
@@ -109,8 +141,10 @@ export const prepareTrc20TransferFromKeys = (params: PrepareTrc20TransferFromKey
     toAddress: to,
     functionSelector: TRC20_TRANSFER_SELECTOR,
     parameter,
-    feeLimitSun: feeLimitSun ?? DEFAULT_FEE_LIMIT_SUN,
-    amount,
+    feeLimitSun: canonicalFeeLimit,
+    // Echo the canonical decimal (not the raw input) so the descriptor's
+    // displayed amount is byte-identical to what the calldata encodes.
+    amount: canonicalAmount,
     ...(memo ? { memo } : {}),
   }
 }
