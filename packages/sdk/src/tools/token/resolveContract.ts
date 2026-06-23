@@ -55,6 +55,19 @@ export type ResolveContractResult = {
 const CW20_CHAINS = [CosmosChain.TerraClassic, CosmosChain.Terra, CosmosChain.Osmosis, CosmosChain.Kujira] as const
 type Cw20Chain = (typeof CW20_CHAINS)[number]
 
+// Expected bech32 HRP per CW20 chain. Used to fail closed on wrong-chain
+// confusion: a `terra1…` address passed with `chain: 'Osmosis'` must reject
+// BEFORE any RPC fires, instead of querying the Osmosis LCD with a Terra
+// address (which would 404 against a different contract namespace, or worse,
+// silently hit a same-shaped address on the wrong chain). Mirrors mcp-ts's
+// `validateBech32Contract(addr, expectedPrefix)` prefix guard.
+const CW20_CHAIN_PREFIX: Record<Cw20Chain, string> = {
+  [CosmosChain.TerraClassic]: 'terra',
+  [CosmosChain.Terra]: 'terra',
+  [CosmosChain.Osmosis]: 'osmo',
+  [CosmosChain.Kujira]: 'kujira',
+}
+
 const isEvmChain = (chain: string): chain is EvmChain => Object.values(EvmChain).includes(chain as EvmChain)
 
 const isCw20Chain = (chain: string): chain is Cw20Chain => (CW20_CHAINS as readonly string[]).includes(chain)
@@ -143,9 +156,18 @@ const resolveCw20 = async (chain: Cw20Chain, contractAddress: string): Promise<R
   const id = contractAddress.trim()
   // bech32 charset + prefix sanity check. We avoid a full bech32 decode (no
   // declared dep) and fail closed: the LCD smart query rejects a malformed id.
-  if (!/^[a-z]+1[02-9ac-hj-np-z]{20,80}$/.test(id)) {
+  const m = /^([a-z]+)1([02-9ac-hj-np-z]{20,80})$/.exec(id)
+  if (!m) {
     throw new Error(
       `invalid contractAddress for ${chain}: expected a bech32 CosmWasm contract address (e.g. terra1..., osmo1...), got "${contractAddress}"`
+    )
+  }
+  // Wrong-chain guard: reject an address whose HRP doesn't match the requested
+  // chain (e.g. a terra1… passed with chain='Osmosis') BEFORE any RPC fires.
+  const expectedPrefix = CW20_CHAIN_PREFIX[chain]
+  if (m[1] !== expectedPrefix) {
+    throw new Error(
+      `invalid contractAddress for ${chain}: address prefix "${m[1]}" does not match expected "${expectedPrefix}" for this chain — are you on the right chain?`
     )
   }
 

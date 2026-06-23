@@ -127,6 +127,25 @@ describe('resolveContract — CW20', () => {
     queryUrl.mockResolvedValue({ data: { name: 'X' } })
     await expect(resolveContract('TerraClassic', TERRA)).rejects.toThrow(/valid CW20 token_info/i)
   })
+
+  it('fails closed on wrong-chain confusion (terra1… addr with Osmosis) — no query fired', async () => {
+    await expect(resolveContract('Osmosis', TERRA)).rejects.toThrow(/does not match expected "osmo"/i)
+    expect(queryUrl).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on a kujira1… addr passed with Terra — no query fired', async () => {
+    const KUJI = 'kujira1acdefghjklmnpqrstuvwxyz23456789acde'
+    await expect(resolveContract('Terra', KUJI)).rejects.toThrow(/does not match expected "terra"/i)
+    expect(queryUrl).not.toHaveBeenCalled()
+  })
+
+  it('accepts a matching-prefix Osmosis address', async () => {
+    const OSMO = 'osmo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    queryUrl.mockResolvedValue({ data: { name: 'O', symbol: 'OSMOX', decimals: 6 } })
+    const res = await resolveContract('Osmosis', OSMO)
+    expect(res.symbol).toBe('OSMOX')
+    expect(res.chain).toBe('Osmosis')
+  })
 })
 
 describe('resolveContract — SPL', () => {
