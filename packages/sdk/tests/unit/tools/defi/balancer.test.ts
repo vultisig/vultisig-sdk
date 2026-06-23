@@ -122,4 +122,56 @@ describe('buildBalancerV3SwapCalldata', () => {
       })
     ).toThrow(/slippageBps must be a non-negative integer/)
   })
+
+  it('rejects an EXACT_IN reference amount below the encoded path output (unsafe min-out floor)', () => {
+    // The encoded path expects 999000 out; a reference of 1 would derive a near-zero
+    // min-out floor that LOOKS valid but offers no sandwich protection.
+    expect(() =>
+      buildBalancerV3SwapCalldata({
+        chainId: 1,
+        swapKind: 'EXACT_IN',
+        paths: [exactInPath],
+        expectedAmountRaw: 1n,
+        slippageBps: 50,
+        recipient: ACCOUNT,
+      })
+    ).toThrow(/EXACT_IN expectedAmountRaw .* must be >= the encoded path output sum/)
+  })
+
+  it('allows an EXACT_IN reference amount >= encoded output (stricter floor is safe)', () => {
+    // A reference above the encoded output yields a STRICTER min-out — the safe
+    // direction — so it must NOT be rejected.
+    const tx = buildBalancerV3SwapCalldata({
+      chainId: 1,
+      swapKind: 'EXACT_IN',
+      paths: [exactInPath],
+      expectedAmountRaw: 1_000_000n, // >= 999000 encoded
+      slippageBps: 50,
+      recipient: ACCOUNT,
+    })
+    // 1000000 - 0.5% = 995000.
+    expect(tx.minAmountOutRaw).toBe(995_000n)
+  })
+
+  it('rejects an EXACT_OUT reference amount above the encoded path input (unsafe max-in cap)', () => {
+    expect(() =>
+      buildBalancerV3SwapCalldata({
+        chainId: 1,
+        swapKind: 'EXACT_OUT',
+        paths: [
+          {
+            pools: [POOL],
+            tokens: [USDC, USDT],
+            inputAmountRaw: 1_001_000n,
+            outputAmountRaw: 1_000_000n,
+            isBuffer: [false],
+          },
+        ],
+        // Reference input far above the encoded 1001000 => inflated max-in cap.
+        expectedAmountRaw: 100_000_000n,
+        slippageBps: 100,
+        recipient: ACCOUNT,
+      })
+    ).toThrow(/EXACT_OUT expectedAmountRaw .* must be <= the encoded path input sum/)
+  })
 })

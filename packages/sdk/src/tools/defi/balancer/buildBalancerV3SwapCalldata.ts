@@ -221,6 +221,38 @@ export const buildBalancerV3SwapCalldata = (params: BuildBalancerV3SwapCalldataP
   }
 
   const swapKind = swapKindInput === 'EXACT_OUT' ? SwapKind.GivenOut : SwapKind.GivenIn
+
+  // FUND-SAFETY: the on-chain slippage floor/cap (minAmountOut / maxAmountIn) is
+  // derived ENTIRELY from `expectedAmountRaw`, a scalar that is DECOUPLED from the
+  // per-path amounts that actually get ABI-encoded into the calldata. If a caller
+  // (transcription bug, human-vs-raw units mismatch, or a compromised quote) hands
+  // an `expectedAmountRaw` that drifts in the UNSAFE direction, the builder would
+  // happily emit calldata whose protection bound looks plausible but is meaningless:
+  //   - EXACT_IN: a reference OUTPUT below the encoded expected output => an
+  //     artificially LOW min-out floor (user can be sandwiched for ~free).
+  //   - EXACT_OUT: a reference INPUT above the encoded expected input => an
+  //     artificially HIGH max-in cap (user can be made to overpay).
+  // The SOR returns the reference amount and the per-path amounts TOGETHER, so in
+  // the honest case they're equal; we only reject the unsafe-direction drift and
+  // leave the safe direction (a stricter-than-quoted bound) alone.
+  if (swapKind === SwapKind.GivenIn) {
+    const encodedOutputSum = paths.reduce((acc, p) => acc + p.outputAmountRaw, 0n)
+    if (expectedAmountRaw < encodedOutputSum) {
+      throw new Error(
+        `EXACT_IN expectedAmountRaw (${expectedAmountRaw}) must be >= the encoded path output sum ` +
+          `(${encodedOutputSum}); a smaller reference silently produces an unsafe min-out floor`
+      )
+    }
+  } else {
+    const encodedInputSum = paths.reduce((acc, p) => acc + p.inputAmountRaw, 0n)
+    if (expectedAmountRaw > encodedInputSum) {
+      throw new Error(
+        `EXACT_OUT expectedAmountRaw (${expectedAmountRaw}) must be <= the encoded path input sum ` +
+          `(${encodedInputSum}); a larger reference silently produces an unsafe max-in cap`
+      )
+    }
+  }
+
   // Validate recipient eagerly even though Balancer v3's BatchRouter settles to
   // msg.sender (no sender/recipient args). We surface it on the result so the
   // wallet/MPC layer knows which account must originate + receive the swap.
