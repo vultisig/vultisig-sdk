@@ -7,8 +7,6 @@ import { nativeSwapPayloadCase, nativeSwapStreamingInterval } from '@vultisig/co
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { parseThorchainSwapMemoStreaming } from '@vultisig/core-chain/swap/native/utils/parseThorchainSwapMemoStreaming'
-import { convertDuration } from '@vultisig/lib-utils/time/convertDuration'
-import { addMinutes } from 'date-fns'
 
 import { CommKeysignSwapPayload } from '../../../keysign/swap/KeysignSwapPayload'
 import { toCommCoin } from '../../../types/utils/commCoin'
@@ -19,6 +17,12 @@ type Input = {
   fromCoin: AccountCoin & { hexPublicKey: string }
   toCoin: AccountCoin & { hexPublicKey: string }
   amount: bigint
+}
+
+const assertQuoteNotExpired = (expirySeconds: number): void => {
+  if (expirySeconds <= Math.floor(Date.now() / 1000)) {
+    throw new Error('Native swap quote is expired; refresh the quote before signing')
+  }
 }
 
 const BASIS_POINTS_DENOMINATOR = 10_000n
@@ -56,6 +60,8 @@ export const getNativeSwapToAmountLimit = ({
 }
 
 export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }: Input): CommKeysignSwapPayload => {
+  assertQuoteNotExpired(quote.expiry)
+
   const isAffiliate = !!quote.fees.affiliate && Number(quote.fees.affiliate) > 0
 
   const { streamingInterval, streamingQuantity } =
@@ -78,7 +84,7 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       routerAddress: quote.router,
       fromAmount: amount.toString(),
       toAmountDecimal: fromChainAmount(quote.expected_amount_out, toDecimals).toFixed(toDecimals),
-      expirationTime: BigInt(Math.round(convertDuration(addMinutes(Date.now(), 15).getTime(), 'ms', 's'))),
+      expirationTime: BigInt(quote.expiry),
       streamingInterval,
       streamingQuantity,
       toAmountLimit: getNativeSwapToAmountLimit({
