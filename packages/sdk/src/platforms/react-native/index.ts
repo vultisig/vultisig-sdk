@@ -167,6 +167,8 @@ export type {
   GetMaxSendAmountFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareTrc20TransferFromKeysParams,
+  UnsignedTrc20Transfer,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -198,6 +200,15 @@ export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
 export async function prepareSwapTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/swap')
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
+
+// TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
+// no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
+// above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
+// the reviewed base58check + ABI encode and would have to re-port it.
+export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/trc20')
+  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
 }
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
