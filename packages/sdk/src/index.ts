@@ -393,6 +393,41 @@ export {
 } from './tools'
 
 // ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
+// ============================================================================
+
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from './tools/defi'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  defi,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
+  riverStatusName,
+} from './tools/defi'
+
+// ============================================================================
 // PUBLIC API - Push Notifications
 // ============================================================================
 
