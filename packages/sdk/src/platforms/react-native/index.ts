@@ -270,11 +270,6 @@ export type {
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
 
-// DeFi protocol message builders (sdk.defi.*) — unsigned Cosmos msgs only.
-// Pure-crypto (cosmjs-types BinaryWriter + bech32, both RN-safe); no signing,
-// no network, no MPC, so a static re-export is correct (no lazy bridge needed).
-export { defi } from '../../tools'
-
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
