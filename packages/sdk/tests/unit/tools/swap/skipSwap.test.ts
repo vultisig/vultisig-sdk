@@ -83,6 +83,18 @@ describe('skipChainIdToChainName', () => {
     expect(skipChainIdToChainName('agoric-3')).toBeUndefined()
     expect(skipChainIdToChainName('celestia')).toBeUndefined()
   })
+
+  // Regression: Skip publishes dYdX mainnet as `dydx-mainnet-1` (the canonical
+  // network id, matching mcp-ts COSMOS_CHAINS). The SDK cosmos chainInfo map
+  // previously used the wrong `dydx-1`, so this lookup returned undefined →
+  // firstUnsupportedCustodyChain wrongly flagged any Skip route custodying on
+  // dYdX as `skip_unsupported_route_chain` (over-rejection). The SDK can derive
+  // a dYdX key, so the route IS recoverable and must NOT be rejected.
+  it('resolves dYdX via its real Skip chain id (dydx-mainnet-1, not dydx-1)', () => {
+    expect(skipChainIdToChainName('dydx-mainnet-1')).toBe('Dydx')
+    // The old wrong id must NOT resolve to a Vultisig-signable chain.
+    expect(skipChainIdToChainName('dydx-1')).toBeUndefined()
+  })
 })
 
 describe('resolveLuncFloorUsd', () => {

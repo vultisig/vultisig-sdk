@@ -40,11 +40,9 @@ if (!out.ok) {
   console.log('\noutcome: NOT-OK (structured envelope, no funds moved)')
   console.log(JSON.stringify(out.envelope, null, 2))
   // A structured envelope is still a valid receipt of the pure-crypto path —
-  // exit 0 so the receipt is reproducible even if Skip rate-limits/reshapes.
-  process.exit(0)
-}
-
-console.log('\noutcome: OK')
+  // even if Skip rate-limits/reshapes. Fall through to the dYdX regression leg.
+} else {
+  console.log('\noutcome: OK')
 console.log('route_description :', out.quote.route_description)
 console.log('amount_in         :', out.quote.amount_in, 'uosmo')
 console.log('expected_amount_out:', out.quote.expected_amount_out, 'uatom')
@@ -66,4 +64,34 @@ for (const [i, m] of out.unsigned_msgs.entries()) {
     console.log(`      to=${m.evm_tx.to} value=${m.evm_tx.value} data=${m.evm_tx.data.slice(0, 18)}...`)
   }
 }
-console.log('\nrelay-safe: this script quotes + builds-unsigned only. No keys, no signing, no broadcast.')
+  console.log('\nrelay-safe: this script quotes + builds-unsigned only. No keys, no signing, no broadcast.')
+}
+
+// ── dYdX custody-chain regression (audit fix) ───────────────────────────────
+// Skip publishes dYdX mainnet as `dydx-mainnet-1`. The SDK cosmos chainInfo map
+// previously mapped CosmosChain.Dydx to the wrong `dydx-1`, so the custody guard
+// (skipChainIdToChainName -> firstUnsupportedCustodyChain) returned undefined for
+// dYdX and WRONGLY rejected any Skip route custodying on dYdX with
+// `skip_unsupported_route_chain`. This leg proves the guard now RECOGNISES dYdX:
+// the route is no longer rejected for an unsupported-custody-chain reason.
+console.log('\n=== dYdX custody-chain regression (audit fix: dydx-1 -> dydx-mainnet-1) ===')
+const dydxArgs = {
+  fromAddress: 'dydx1clpqr4nrk4khgkxj78fcwwh6dl3uw4epw0qdql',
+  toAddress: process.env.SKIP_TO_ADDR ?? 'osmo1clpqr4nrk4khgkxj78fcwwh6dl3uw4epasmvnj',
+  sourceChainId: 'dydx-mainnet-1',
+  sourceAssetDenom: 'adydx',
+  destChainId: 'osmosis-1',
+  destAssetDenom: 'uosmo',
+  amountIn: '1000000000000000000', // 1 DYDX (18-dec)
+}
+console.log('request:', JSON.stringify(dydxArgs, null, 2))
+const dydxOut = await runSkipSwap(dydxArgs)
+const dydxEnvelope = dydxOut.ok ? null : dydxOut.envelope
+const rejectedForCustody = dydxEnvelope?.error === 'skip_unsupported_route_chain'
+console.log('outcome           :', dydxOut.ok ? 'OK' : `NOT-OK (${dydxEnvelope?.error})`)
+console.log('rejected_for_dydx_custody:', rejectedForCustody)
+if (rejectedForCustody) {
+  console.log('!! FIX REGRESSION — dYdX custody still over-rejected; chainInfo constant wrong')
+  process.exit(1)
+}
+console.log('PASS: dYdX is now a recognised custody chain (no skip_unsupported_route_chain).')
