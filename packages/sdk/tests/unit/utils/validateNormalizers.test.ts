@@ -57,6 +57,24 @@ describe('scaleHumanToRaw (inverse round-trip)', () => {
       expect(scaleHumanToRaw(scaleRawToHuman(raw, dec), dec)).toBe(BigInt(raw))
     }
   })
+
+  it('expands scientific notation losslessly when exact', () => {
+    expect(scaleHumanToRaw('1e-6', 6)).toBe(1n)
+    expect(scaleHumanToRaw('1.5e0', 6)).toBe(1_500_000n)
+  })
+
+  // Fund-safety: `parseUnits` silently ROUNDS sub-`decimals` precision
+  // (`'1.9999999' @6 -> 2000000`, `'0.0000000000000000001' @18 -> 0`). A
+  // grounding/validator converter must NOT fabricate that — it must fail
+  // closed so a claimed amount can never be silently rounded up a whole unit
+  // or have a non-zero sub-unit dropped to zero.
+  it('rejects sub-base-unit over-precision instead of rounding (fail-closed)', () => {
+    expect(() => scaleHumanToRaw('1.9999999', 6)).toThrow(ValidateNormalizerError) // would round UP to 2.0
+    expect(() => scaleHumanToRaw('0.1234567890123456789', 18)).toThrow(ValidateNormalizerError) // 19th digit
+    expect(() => scaleHumanToRaw('0.0000000000000000001', 18)).toThrow(ValidateNormalizerError) // dropped to 0
+    expect(() => scaleHumanToRaw('1.234567e0', 6)).not.toThrow() // exactly 6 dp via sci notation is fine
+    expect(() => scaleHumanToRaw('1.2345678e0', 6)).toThrow(ValidateNormalizerError) // 7 dp via sci notation
+  })
 })
 
 describe('amountMatches', () => {

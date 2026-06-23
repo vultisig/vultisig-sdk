@@ -160,21 +160,83 @@ export const scaleRawToHuman = (raw: bigint | string, decimals: number): string 
 
 /**
  * Inverse of {@link scaleRawToHuman}: scale a human decimal amount up to
- * base units (raw integer) at `decimals`. Reuses the SDK's viem-backed
- * `toChainAmount` so scientific notation and over-precision are handled the
- * same way every other SDK signing path handles them.
+ * base units (raw integer) at `decimals`. EXACT — fail-closed on any input
+ * that cannot be represented losslessly at `decimals`.
  *
+ * Expansion goes through the SDK's viem-backed `toChainAmount` (so scientific
+ * notation is handled the same way every other SDK path handles it), but
+ * because `parseUnits` silently ROUNDS sub-`decimals` precision (e.g.
+ * `'1.9999999' @ 6 -> 2000000`, `'0.0000000000000000001' @ 18 -> 0`), a
+ * validator/grounding primitive must NOT accept that coercion: rounding a
+ * claimed amount up by a unit — or dropping a non-zero sub-unit to zero —
+ * fabricates the number a fund decision is made on. We inspect the input's
+ * plain decimal expansion and reject any significant fractional digit past
+ * position `decimals`, which catches both the round-up and drop cases
+ * regardless of notation, at every decimals incl. 18.
+ *
+ * @throws {ValidateNormalizerError} when the input is malformed OR carries
+ *   sub-base-unit precision that cannot be represented exactly at `decimals`.
  * @example scaleHumanToRaw('22.0208030381', 10) // 220208030381n
  */
 export const scaleHumanToRaw = (human: string | number, decimals: number): bigint => {
   pow10(decimals) // validate decimals range
+  let raw: bigint
   try {
-    return toChainAmount(human, decimals)
+    raw = toChainAmount(human, decimals)
   } catch (error) {
     throw new ValidateNormalizerError(
       `Could not scale "${human}" to base units at decimals=${decimals}: ${(error as Error).message}`
     )
   }
+  // Fail-closed on lossy coercion. `parseUnits` silently rounds any fractional
+  // digit beyond `decimals`, so reject inputs that carry sub-base-unit
+  // precision. Inspect the *plain* decimal expansion (scientific notation is
+  // expanded first) and require zero significant digits past position
+  // `decimals` in the fractional part — exact at every decimals incl. 18.
+  const plain = expandToPlainDecimal(human)
+  const dot = plain.indexOf('.')
+  if (dot !== -1) {
+    const fracDigits = plain.slice(dot + 1).replace(/0+$/, '')
+    if (fracDigits.length > decimals) {
+      throw new ValidateNormalizerError(
+        `Amount "${human}" carries sub-base-unit precision that cannot be represented exactly at decimals=${decimals}.`
+      )
+    }
+  }
+  return raw
+}
+
+/**
+ * Expand a decimal string (optionally in scientific notation) to a plain
+ * decimal string WITHOUT float conversion, so digits beyond ~15 s.d. survive.
+ * Used to count sub-base-unit precision exactly. Returns a normalized string
+ * with no exponent. Throws {@link ValidateNormalizerError} on malformed input.
+ */
+const expandToPlainDecimal = (value: string | number): string => {
+  const str = (typeof value === 'number' ? value.toString() : value).trim()
+  if (str === '') throw new ValidateNormalizerError('Empty amount.')
+  if (!/[eE]/.test(str)) {
+    if (!/^-?(\d+(\.\d*)?|\.\d+)$/.test(str)) {
+      throw new ValidateNormalizerError(`Invalid amount "${value}".`)
+    }
+    return str
+  }
+  const m = /^([+-]?)(?:(\d+)\.?(\d*)|\.(\d+))[eE]([+-]?\d+)$/.exec(str)
+  if (!m) throw new ValidateNormalizerError(`Invalid amount "${value}".`)
+  const sign = m[1] === '-' ? '-' : ''
+  const digits = m[4] !== undefined ? m[4] : `${m[2] ?? ''}${m[3] ?? ''}`
+  const fracLen = m[4] !== undefined ? m[4].length : (m[3] ?? '').length
+  const exp = Number(m[5])
+  const shift = exp - fracLen // net power-of-ten applied to the integer `digits`
+  const intDigits = digits.replace(/^0+(?=\d)/, '')
+  if (shift >= 0) {
+    return `${sign}${intDigits}${'0'.repeat(shift)}`
+  }
+  const k = -shift
+  const padded = intDigits.padStart(k + 1, '0')
+  const whole = padded.slice(0, padded.length - k)
+  const frac = padded.slice(padded.length - k)
+  return `${sign}${whole}.${frac}`
 }
 
 const SCALE = 1_000_000_000_000_000_000n // 1e18 fixed-point scale for ratios
