@@ -43,6 +43,23 @@ export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
+// Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
+// Ported from the agent-backend validator — PURE math only, no grounding.
+// Lets mcp-ts / agent-backend ground claimed amounts and fees through the SDK
+// instead of re-implementing base-unit scaling + the token-decimals table.
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from './utils/validateNormalizers'
+
 // ============================================================================
 // PUBLIC API - Station Migration Primitives
 // ============================================================================
