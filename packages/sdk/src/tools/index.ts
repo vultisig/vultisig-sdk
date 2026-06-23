@@ -24,7 +24,11 @@ export { VerifierClient } from './verifier'
 export {
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
