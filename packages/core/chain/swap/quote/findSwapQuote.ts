@@ -200,15 +200,7 @@ const subtractClamped = (amount: bigint, fee: bigint): bigint => (fee >= amount 
 const isSameCoinKey = (fee: { chain: Chain; id?: string }, coin: AccountCoin): boolean =>
   fee.chain === coin.chain && fee.id === coin.id
 
-const getGeneralDestinationSideFeeAmount = ({
-  quote,
-  to,
-  affiliateBps,
-}: {
-  quote: SwapQuote
-  to: AccountCoin
-  affiliateBps: number
-}): bigint => {
+const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; to: AccountCoin }): bigint => {
   if (!('general' in quote.quote)) {
     return 0n
   }
@@ -221,10 +213,6 @@ const getGeneralDestinationSideFeeAmount = ({
     return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
   }
 
-  if (general.provider === '1inch' && affiliateBps > 0) {
-    return (BigInt(general.dstAmount) * BigInt(affiliateBps)) / BPS_DENOMINATOR
-  }
-
   return 0n
 }
 
@@ -233,18 +221,19 @@ const getGeneralDestinationSideFeeAmount = ({
  *
  * Native swap APIs report `expected_amount_out` in chain-specific precision
  * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
- * Native THOR/Maya and CowSwap amounts are already net. Aggregator quotes are
- * adjusted when the SDK has destination-token fee evidence; Kyber is excluded
- * because its SDK `dstAmount` is already the post-fee build amount.
+ * Native THOR/Maya, CowSwap, 1inch, and Kyber amounts are already net.
+ * Aggregator quotes are adjusted only when the SDK has destination-token fee
+ * evidence; Kyber is excluded because its SDK `dstAmount` is already the
+ * post-fee build amount.
  */
-function getComparableOutputAmount(q: SwapQuote, to: AccountCoin, affiliateBps: number): bigint {
+function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {
     const nativePrecision = getNativeSwapDecimals(to)
     const raw = BigInt(q.quote.native.expected_amount_out)
     return rebaseDecimals(raw, nativePrecision, to.decimals)
   }
   const grossOutput = BigInt(q.quote.general.dstAmount)
-  return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to, affiliateBps }))
+  return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to }))
 }
 
 const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: AccountCoin): bigint | undefined => {
@@ -679,7 +668,7 @@ export const findSwapQuote = async ({
       const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
-        outputAmount: getComparableOutputAmount(quote, to, affiliateBps),
+        outputAmount: getComparableOutputAmount(quote, to),
         sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
         providerName: fetcher.providerName,
       }

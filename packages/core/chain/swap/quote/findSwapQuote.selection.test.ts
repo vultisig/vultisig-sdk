@@ -865,13 +865,15 @@ describe('findSwapQuote net-output provider selection (issues #605/#804)', () =>
     expect(quote.quote.general.provider).toBe('li.fi')
   })
 
-  it('subtracts 1inch affiliate fee before comparing provider output', async () => {
+  it('does not double-subtract 1inch affiliate fee because 1inch dstAmount is already net', async () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
     vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
-    // Gross is higher, but the default 50 bps affiliate fee makes net output 999_975.
-    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', '1inch'))
+    // The 1inch API already lowers dstAmount when the affiliate fee is supplied.
+    // If we subtracted the default 50 bps again, this would fall back into the
+    // preference band and incorrectly pick Kyber.
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('1006000', '1inch'))
 
     const quote = await findSwapQuote({
       ...evmSameChainCoins,
@@ -881,7 +883,7 @@ describe('findSwapQuote net-output provider selection (issues #605/#804)', () =>
     if (!('general' in quote.quote)) {
       throw new Error('Expected general quote')
     }
-    expect(quote.quote.general.provider).toBe('kyber')
+    expect(quote.quote.general.provider).toBe('1inch')
   })
 
   it('does not double-subtract Kyber affiliate fee because Kyber dstAmount is already net', async () => {
