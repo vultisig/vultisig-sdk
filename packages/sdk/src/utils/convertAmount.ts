@@ -157,16 +157,56 @@ const parsePositiveNumber = (value: number | string, label: string): number => {
 }
 
 /**
+ * Expand a JS number's string form to a plain fixed-point decimal, never
+ * scientific notation, for ANY magnitude.
+ *
+ * `Number.toString()` emits exponential form below 1e-6 and at/above 1e21,
+ * and — critically — `Number.toFixed()` ALSO emits exponential form at/above
+ * 1e21. A naive `toFixed`-then-`split('.')` therefore corrupts large values:
+ * `(1.5e21).toFixed(0)` is `"1.5e+21"`, which splits into whole `"1"` (off by
+ * 21 orders of magnitude) and leaks the `"5e+21"` exponent into the fraction.
+ * This is the canonical amount-rendering primitive feeding signing-boundary
+ * drift checks, so a silent 10^21 truncation here is fund-relevant.
+ *
+ * Returns a string of the form `[-]<digits>[.<digits>]` with no exponent.
+ */
+const expandToPlainDecimal = (value: number): string => {
+  const raw = value.toString()
+  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(raw)
+  if (!match) return raw // already plain (no exponent)
+
+  const [, sign, intPart, fracPart = '', expStr] = match
+  const exp = Number(expStr)
+  const digits = intPart + fracPart
+  // Position of the decimal point measured from the left of `digits`.
+  const pointPos = intPart.length + exp
+
+  let result: string
+  if (pointPos <= 0) {
+    // 0.00…digits
+    result = `0.${'0'.repeat(-pointPos)}${digits}`
+  } else if (pointPos >= digits.length) {
+    // digits followed by trailing zeros, no fraction
+    result = digits + '0'.repeat(pointPos - digits.length)
+  } else {
+    result = `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
+  }
+  return `${sign}${result}`
+}
+
+/**
  * Format a JS number as a decimal string capped to `decimals` fractional
  * digits with trailing zeros trimmed. Prefers `toString()` (shortest
- * round-trip) and falls back to `toFixed` only to expand scientific notation.
- * Behaviour kept byte-aligned with `fiatToAmount`'s formatter.
+ * round-trip); any scientific-notation form (small OR large magnitude) is
+ * expanded to a plain decimal first so no exponent ever leaks and no large
+ * value is silently truncated. The fractional part is truncated (not rounded)
+ * to `decimals` digits — same direction as the base↔human path.
  */
 const formatDecimalString = (value: number, decimals: number): string => {
   if (!Number.isFinite(value)) {
     throw new AmountConvertError(`Non-finite amount computed: ${value}`)
   }
-  const str = /[eE]/.test(value.toString()) ? value.toFixed(decimals) : value.toString()
+  const str = expandToPlainDecimal(value)
   if (!str.includes('.')) return str
   const [whole, fraction] = str.split('.')
   const trimmed = fraction.slice(0, decimals).replace(/0+$/, '')

@@ -125,4 +125,34 @@ describe('convertAmount — fiat ↔ crypto (price as input)', () => {
     expect(() => fiatToCrypto({ fiatValue: 100, price: -1, decimals: 18 })).toThrow(AmountConvertError)
     expect(() => cryptoToFiat({ amount: 'nope', price: 2000 })).toThrow(AmountConvertError)
   })
+
+  // Regression: large results (>=1e21) take the scientific-notation code path.
+  // Node's Number.toFixed() ALSO emits exponential form at/above 1e21, so the
+  // old toFixed-then-split formatter leaked "1e+21" or truncated 1.5e21 → "1"
+  // (off by 21 orders of magnitude). This is the canonical amount-rendering
+  // primitive at the signing boundary — a silent 10^21 truncation is fund-relevant.
+  it('cryptoToFiat: large values never leak scientific notation', () => {
+    expect(cryptoToFiat({ amount: 1e21, price: 1, fiatDecimals: 2 })).toBe('1000000000000000000000')
+    expect(cryptoToFiat({ amount: 1.5e21, price: 1, fiatDecimals: 0 })).toBe('1500000000000000000000')
+    expect(cryptoToFiat({ amount: 1.5e21, price: 1, fiatDecimals: 2 })).toBe('1500000000000000000000')
+    expect(cryptoToFiat({ amount: 1e30, price: 1, fiatDecimals: 2 })).toBe('1000000000000000000000000000000')
+  })
+
+  it('fiatToCrypto: large results never leak scientific notation', () => {
+    expect(fiatToCrypto({ fiatValue: 1e21, price: 1, decimals: 18 })).toBe('1000000000000000000000')
+    expect(fiatToCrypto({ fiatValue: 1e24, price: 1000, decimals: 18 })).toBe('1000000000000000000000')
+  })
+
+  it('handles small (sub-1e-6) values that toString() renders in sci notation', () => {
+    expect(cryptoToFiat({ amount: 1e-7, price: 1, fiatDecimals: 18 })).toBe('0.0000001')
+    expect(fiatToCrypto({ fiatValue: 1, price: 1e9, decimals: 18 })).toBe('0.000000001')
+    expect(fiatToCrypto({ fiatValue: 1e-10, price: 1, decimals: 18 })).toBe('0.0000000001')
+  })
+
+  it('truncates (does not round) the capped fractional part, consistently across magnitudes', () => {
+    expect(cryptoToFiat({ amount: '0.999', price: 1 })).toBe('0.99')
+    expect(fiatToCrypto({ fiatValue: 1, price: 3, decimals: 8 })).toBe('0.33333333')
+    // sci-path small value also truncates rather than rounding up
+    expect(cryptoToFiat({ amount: 9e-7, price: 1, fiatDecimals: 2 })).toBe('0')
+  })
 })
