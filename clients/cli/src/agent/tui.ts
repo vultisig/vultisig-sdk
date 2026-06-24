@@ -204,6 +204,11 @@ export class ChatTUI {
           process.stdout.write('\n')
           this.isStreaming = false
         }
+        // Clear the buffered stream text: a `data-balance_summary` part can
+        // arrive after some text deltas, and a following onAssistantMessage
+        // whose content equals the buffered partial would otherwise hit the
+        // `content !== this.currentStreamText` guard and be silently dropped.
+        this.currentStreamText = ''
         console.log(renderBalanceSummaryCard(card))
       },
 
