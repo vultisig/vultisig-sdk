@@ -476,6 +476,13 @@ export type {
   Verdict,
 } from './tools'
 export type { BuildSplTransferParams, SplTransferResult } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -488,11 +495,15 @@ export {
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
+  buildDelegateMsg,
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
   buildRedeem,
+  buildRedelegateMsg,
   buildSellPt,
   buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   cctpAttestationApiBase,
   cctpChains,
   cctpSupportedChains,
@@ -505,6 +516,7 @@ export {
   computeAstroportMinReceive,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
+  cosmosStaking,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,
