@@ -211,6 +211,25 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (arkis + balancer + pendle + 3jane).
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  Defi,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
+
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted
