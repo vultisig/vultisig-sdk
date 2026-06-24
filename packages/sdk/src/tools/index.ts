@@ -167,6 +167,8 @@ export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } fro
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildSplTransfer,
+  type BuildSplTransferParams,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
@@ -184,6 +186,7 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   type VaultIdentity,
 } from './prep'
