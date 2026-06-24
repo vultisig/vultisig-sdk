@@ -201,12 +201,14 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
 }
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
+export type { EvmBalance, GetEvmBalancesParams } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  getEvmBalances,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
