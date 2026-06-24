@@ -3,6 +3,11 @@ export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmo
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
+export {
+  prepareSuiTokenTransferFromKeys,
+  type PrepareSuiTokenTransferFromKeysParams,
+  SUI_NATIVE_COIN_TYPE,
+} from './suiTokenTransfer'
 export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
 export {
   prepareThorchainMsgDepositTxFromKeys,
