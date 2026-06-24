@@ -98,6 +98,17 @@ export {
   getXrpBalance,
 } from './balance'
 
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
+
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {
   CosmosVoteEnvelope,
