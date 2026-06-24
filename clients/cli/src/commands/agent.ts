@@ -20,7 +20,7 @@ import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, Pi
 import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
 import { renderBalanceSummaryCard } from '../agent/cards'
 import type { CommandContext } from '../core'
-import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
+import { isJsonOutput, outputErrorJson, outputJson, printResult, setSilentMode } from '../lib/output'
 
 export type AgentCommandOptions = {
   backendUrl?: string
@@ -104,19 +104,29 @@ export type AgentAskOptions = {
  *   <blank line>
  *   <response text>
  *
- * Output format (--json):
- *   {"session_id":"...","response":"...","tool_calls":[...],"transactions":[...]}
+ * Output format (--json): a single v1 envelope on stdout for both success and
+ * error.
+ *   success: {"success":true,"v":1,"data":{"conversation_id":"...","response":"...",...}}
+ *   error:   {"success":false,"v":1,"error":{"message":"...","code":"...","conversation_id":"..."}}
  */
 export async function executeAgentAsk(ctx: CommandContext, message: string, options: AgentAskOptions): Promise<void> {
   // Suppress info/warn/success messages — only our structured output goes to stdout
   setSilentMode(true)
 
   // Redirect console.log to stderr so that SDK internals (MPC signing progress,
-  // balance updates, etc.) don't pollute our structured stdout output.
+  // balance updates, etc.) don't pollute our structured stdout output. The
+  // structured envelope itself is written via outputJson/outputErrorJson, which
+  // go straight to process.stdout and so survive this redirect.
   const originalConsoleLog = console.log
   console.log = (...args: unknown[]) => {
     process.stderr.write(args.map(String).join(' ') + '\n')
   }
+
+  const wantsJson = !!options.json || isJsonOutput()
+  // Captured after ask() so both the success and error paths can attach it; the
+  // catch may run before it's set (auth/init failure), leaving it empty.
+  let conversationId = ''
+  let exitCode = 0
 
   try {
     const vault = await ctx.ensureActiveVault()
@@ -138,74 +148,94 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
 
     await session.initialize(callbacks)
     const result = await ask.ask(message)
+    conversationId = result.sessionId
 
-    // Machine-detectable signal that a signing step was proposed but denied
-    // (no --yes): callers that expect a broadcast must check this instead of
-    // inferring success from exit code 0. Exit stays 0 deliberately — a
-    // misrouted read-only prompt (the #679 scenario) is still a successful
-    // query, just not a broadcast.
-    const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
-    // The same summary the gate showed the user (or would have, in --yes mode).
-    // Surfacing it on stdout lets a script see what `--yes` would authorize
-    // without scraping stderr or the backend narration in `response`.
-    const proposedCall = result.toolCalls.find(
-      tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
-    )
-    const proposed = proposedCall?.data?.proposed as string | undefined
-
-    if (options.json || isJsonOutput()) {
-      outputJson({
-        session_id: result.sessionId,
-        response: result.response,
-        tool_calls: result.toolCalls,
-        transactions: result.transactions,
-        ...(result.cards.length > 0 ? { cards: result.cards } : {}),
-        ...(confirmationRequired ? { confirmation_required: true } : {}),
-        ...(proposed ? { proposed } : {}),
-      })
+    // A backend/stream `error` frame mid-turn resolves the turn normally (the
+    // SSE handler only calls onError), so without this check a headless caller
+    // branching on exit code would see false success. Surface it as the error
+    // envelope on stdout and exit non-zero.
+    if (result.error) {
+      exitCode = 1
+      if (wantsJson) {
+        outputErrorJson({
+          success: false,
+          v: 1,
+          error: { message: result.error.message, code: result.error.code, conversation_id: conversationId },
+        })
+      } else {
+        process.stderr.write(`Error: ${result.error.message} [${result.error.code}]\n`)
+      }
     } else {
-      // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
-      process.stdout.write(`session:${result.sessionId}\n`)
-      if (confirmationRequired) {
-        process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
-        if (proposed) {
-          process.stdout.write(`proposed:${proposed}\n`)
+      // Machine-detectable signal that a signing step was proposed but denied
+      // (no --yes): callers that expect a broadcast must check this instead of
+      // inferring success from exit code 0. Exit stays 0 deliberately — a
+      // misrouted read-only prompt (the #679 scenario) is still a successful
+      // query, just not a broadcast.
+      const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
+      // The same summary the gate showed the user (or would have, in --yes mode).
+      // Surfacing it on stdout lets a script see what `--yes` would authorize
+      // without scraping stderr or the backend narration in `response`.
+      const proposedCall = result.toolCalls.find(
+        tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
+      )
+      const proposed = proposedCall?.data?.proposed as string | undefined
+
+      if (wantsJson) {
+        outputJson({
+          conversation_id: conversationId,
+          session_id: result.sessionId,
+          response: result.response,
+          tool_calls: result.toolCalls,
+          transactions: result.transactions,
+          ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+          ...(confirmationRequired ? { confirmation_required: true } : {}),
+          ...(proposed ? { proposed } : {}),
+        })
+      } else {
+        // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
+        process.stdout.write(`session:${result.sessionId}\n`)
+        if (confirmationRequired) {
+          process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
+          if (proposed) {
+            process.stdout.write(`proposed:${proposed}\n`)
+          }
         }
-      }
 
-      // Balance cards (rendered as a table instead of raw JSON)
-      for (const card of result.cards) {
-        process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
-      }
+        // Balance cards (rendered as a table instead of raw JSON)
+        for (const card of result.cards) {
+          process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
+        }
 
-      // Response text
-      if (result.response) {
-        process.stdout.write(`\n${result.response}\n`)
-      }
+        // Response text
+        if (result.response) {
+          process.stdout.write(`\n${result.response}\n`)
+        }
 
-      // Transaction hashes
-      for (const tx of result.transactions) {
-        process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
-        if (tx.explorerUrl) {
-          process.stdout.write(`explorer:${tx.explorerUrl}\n`)
+        // Transaction hashes
+        for (const tx of result.transactions) {
+          process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
+          if (tx.explorerUrl) {
+            process.stdout.write(`explorer:${tx.explorerUrl}\n`)
+          }
         }
       }
     }
   } catch (err: unknown) {
     const { code, message } = normalizeAgentError(err)
-    if (options.json) {
-      process.stdout.write(JSON.stringify({ error: message, code }) + '\n')
+    exitCode = 1
+    if (wantsJson) {
+      outputErrorJson({ success: false, v: 1, error: { message, code, conversation_id: conversationId } })
     } else {
       process.stderr.write(`Error: ${message} [${code}]\n`)
     }
-    process.exit(1)
   } finally {
     console.log = originalConsoleLog
     setSilentMode(false)
   }
 
-  // Clean exit — don't leave dangling handles
-  process.exit(0)
+  // Clean exit — don't leave dangling handles. Non-zero on a backend/stream
+  // error so headless callers can branch on exit code.
+  process.exit(exitCode)
 }
 
 // ============================================================================

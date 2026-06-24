@@ -20,6 +20,8 @@ export type AskResult = {
   sessionId: string
   response: string
   toolCalls: Array<{
+    /** Backend tool-call id — lets a headless caller correlate this entry to a turn. */
+    id?: string
     action: string
     success: boolean
     data?: Record<string, unknown>
@@ -33,6 +35,13 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  /**
+   * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
+   * failure (which rejects sendMessage and surfaces via the catch), an SSE
+   * error frame resolves the turn normally — so the caller must inspect this
+   * to exit non-zero instead of reporting false success.
+   */
+  error?: { message: string; code: AgentErrorCode }
 }
 
 export class AskInterface {
@@ -43,6 +52,7 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private error: AskResult['error']
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
@@ -68,14 +78,14 @@ export class AskInterface {
       },
 
       onToolResult: (
-        _id: string,
+        id: string,
         action: string,
         success: boolean,
         data?: Record<string, unknown>,
         error?: string,
         code?: AgentErrorCode
       ) => {
-        this.toolCalls.push({ action, success, data, error, code })
+        this.toolCalls.push({ id, action, success, data, error, code })
         if (this.verbose) {
           const status = success ? 'ok' : `error: ${error}${code ? ` [${code}]` : ''}`
           process.stderr.write(`[tool] ${action}: ${status}\n`)
@@ -106,6 +116,12 @@ export class AskInterface {
       },
 
       onError: (message: string, code: AgentErrorCode) => {
+        // Record the first backend/stream error so ask() can surface it to the
+        // caller (non-zero exit + error envelope). Keep the human-readable
+        // stderr breadcrumb for verbose/interactive observers.
+        if (!this.error) {
+          this.error = { message, code }
+        }
         process.stderr.write(`[error] ${message} [${code}]\n`)
       },
 
@@ -142,6 +158,7 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.error = undefined
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
@@ -152,6 +169,7 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
+      error: this.error,
     }
   }
 }
