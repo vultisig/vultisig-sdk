@@ -180,6 +180,8 @@ export {
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
+  prepareJettonTransferTxFromKeys,
+  type PrepareJettonTransferTxFromKeysParams,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
