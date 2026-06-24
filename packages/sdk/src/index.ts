@@ -443,6 +443,7 @@ export {
   decodeFromToolResult,
   defi,
   deriveAddressFromKeys,
+  dex,
   DOT_DECIMALS,
   evaluatePolicy,
   evmCall,
