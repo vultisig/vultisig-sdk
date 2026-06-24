@@ -76,12 +76,21 @@ describe('buildThreeJaneSupplyUsdc', () => {
     expect(depositDecoded.args[2]).toBe(true)
   })
 
-  it('routes shares to an injectable receiver distinct from the funder', () => {
-    const res = buildThreeJaneSupplyUsdc({ from: FROM, amount: '1000', receiver: RECEIVER })
-    expect(getAddress(res.receiver)).toBe(getAddress(RECEIVER))
-    expect(getAddress(res.fromAddress)).toBe(getAddress(FROM))
+  it('fails closed on a receiver distinct from the funder (Helper mints to msg.sender)', () => {
+    // The Helper mints shares to msg.sender; emitting a deposit with a distinct
+    // receiver would revert or route shares to the wrong address while the
+    // funder's USDC is spent. Until on-chain receiver-routing is verified, a
+    // mismatched receiver must throw rather than build unvouched calldata.
+    expect(() => buildThreeJaneSupplyUsdc({ from: FROM, amount: '1000', receiver: RECEIVER })).toThrow(/sender-bound/)
+  })
+
+  it('accepts a receiver explicitly equal to the funder', () => {
+    // Same address in a different (lowercase) casing must still pass: it's the
+    // same 20 bytes, so it's sender-bound, not a distinct recipient.
+    const res = buildThreeJaneSupplyUsdc({ from: FROM, amount: '1000', receiver: FROM.toLowerCase() })
+    expect(getAddress(res.receiver)).toBe(getAddress(FROM))
     const depositDecoded = decodeFunctionData({ abi: helperDepositAbi, data: res.transactions[1].data })
-    expect(getAddress(depositDecoded.args[1] as string)).toBe(getAddress(RECEIVER))
+    expect(getAddress(depositDecoded.args[1] as string)).toBe(getAddress(FROM))
   })
 
   it('defaults receiver to the funder (neutral / self-only)', () => {

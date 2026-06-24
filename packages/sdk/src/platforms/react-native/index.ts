@@ -168,6 +168,7 @@ export type {
   ConsolidateChain,
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  PrepareJettonTransferTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -184,6 +185,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/jettonTransfer')
+  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
 }
 
 export async function prepareSendTxFromKeys(...args: unknown[]) {
@@ -220,6 +226,17 @@ export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/utxoConsolidate')
   return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
 }
+
+// Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
+// RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
+// metadata lookups.
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from '../../tools/gas'
 
 // Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
 // wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
