@@ -229,9 +229,12 @@ export {
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
