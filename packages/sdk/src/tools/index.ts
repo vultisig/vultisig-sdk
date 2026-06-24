@@ -59,6 +59,10 @@ export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '.
 export type { SolBalance, SplTokenBalance } from './balance'
 export { getSolBalance, getSplTokenBalance } from './balance'
 
+// Gas / fee primitives
+export type { UtxoFeeRate } from './gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
+
 // Token utilities
 export type {
   Coin,
