@@ -2,12 +2,14 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export type { EvmBalance, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getEvmBalances,
   getTokenApprovals,
@@ -33,6 +35,10 @@ import * as gas from './gas'
 // Namespace handle so callers can use the documented `sdk.gas.compareCosts(...)`
 // ergonomic alongside the flat named exports.
 export { gas }
+
+// Balance reads (per-chain, vault-free)
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
 
 // Token utilities
 export type {
