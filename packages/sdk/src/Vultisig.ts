@@ -165,8 +165,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * DeFi protocol primitives (`sdk.defi.*`).
    *
-   * Pure unsigned-calldata builders — e.g. `sdk.defi.balancer.buildBalancerV3SwapCalldata(...)`.
-   * Nothing here signs or broadcasts; the wallet/MPC layer signs the returned tx.
+   * Pure unsigned-calldata builders — nothing here signs or broadcasts; the wallet/MPC layer signs the returned tx.
    */
   get defi(): Defi {
     return defi

@@ -213,7 +213,7 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (balancer + 3jane).
+// the full defi namespace (arkis + balancer + pendle + 3jane).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,

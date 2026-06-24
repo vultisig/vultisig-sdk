@@ -7,11 +7,13 @@
  * to neutral/off — the SDK is multi-consumer and never hardcodes a brand.
  */
 
+import * as arkis from './arkis'
 import * as balancer from './balancer'
 import * as osmosis from './osmosis'
 import { pendle } from './pendle'
 import * as threeJane from './threeJane'
 
+export { arkis }
 export * from './balancer'
 export * as osmosis from './osmosis'
 export * from './pendle'
@@ -19,6 +21,7 @@ export * as threeJane from './threeJane'
 
 /** Grouped namespace object, exposed as `sdk.defi`. */
 export const defi = {
+  arkis,
   balancer,
   osmosis,
   pendle,
