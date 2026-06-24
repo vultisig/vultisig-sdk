@@ -31,12 +31,19 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+<<<<<<< HEAD
   it('exports buildJupiterSwapTx + Jupiter affiliate config (Solana swap leg for mcp-ts/backend)', () => {
     expect(typeof sdk.buildJupiterSwapTx).toBe('function')
     expect(typeof sdk.resolveJupiterFeeAccount).toBe('function')
     expect(sdk.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdk.JUPITER_PLATFORM_FEE_BPS).toBe(50)
     expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+=======
+  it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
+    expect(typeof sdk.encodeErc20Approve).toBe('function')
+    expect(typeof sdk.encodeErc20Revoke).toBe('function')
+    expect(sdk.MAX_UINT256).toBe((1n << 256n) - 1n)
+>>>>>>> origin/main
   })
 
   it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {

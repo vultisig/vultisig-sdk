@@ -1,16 +1,33 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
+export * from './defi'
+
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
+export {
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  type PolkadotAssetBalance,
+  type PolkadotNativeBalance,
+} from './balance'
+
 // EVM utilities
 export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
@@ -54,6 +71,49 @@ export type {
   TokenStandard,
 } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+
+// Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from './balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from './balance'
+
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {

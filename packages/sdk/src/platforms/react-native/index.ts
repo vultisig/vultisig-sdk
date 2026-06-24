@@ -283,11 +283,14 @@ export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from '../../
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
@@ -404,6 +407,18 @@ export * as dex from '../../tools/dex'
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
+// over the same proxy `searchToken` already uses, no WASM/native deps.
+export type { PriceBatchResult, PriceQuery, PriceQuote } from '../../tools/price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from '../../tools/price'
+
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
@@ -411,6 +426,64 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
+// Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
+// @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD
+// reads above. The RN allow-list previously omitted these so RN consumers
+// (vultiagent-app, backend) had to re-implement the fetch+parse glue per chain.
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from '../../tools/balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  formatBalance,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance'
+
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
+// dynamic import (NOT a static re-export) because the underlying module imports
+// `@vultisig/core-chain/chains/polkadot/client`, whose top-level
+// `import { ApiPromise, HttpProvider } from '@polkadot/api'` would pull the BN.js
+// double-bundle into the eager RN bundle and crash at module init. Deferring the
+// import to call time matches the proven RN polkadot-resolver pattern in
+// ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
+export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
+export async function balancePolkadot(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+}
+export async function getPolkadotNativeBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+}
+export async function getPolkadotAssetBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+}
+
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
 // statically: the only chain import (`solanaRpcUrl` from
 // `chains/solana/client`) is metro/rollup-overridden to the RN
@@ -453,3 +526,32 @@ export { MemoryStorage } from '../../storage/MemoryStorage'
 
 // Event emitter
 export { UniversalEventEmitter } from '../../events/EventEmitter'
+
+// DeFi — River Omni-CDP (pure viem encodeFunctionData, no RPC, RN-safe)
+// Open trove resolves hints on-chain (EVM RPC), but delegate approval and
+// close trove are fully offline. All builders return unsigned calldata only.
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from '../../tools/defi/river'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  riverStatusName,
+} from '../../tools/defi/river'
