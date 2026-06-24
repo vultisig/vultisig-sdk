@@ -987,7 +987,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@balancer-labs/balancer-maths@npm:0.0.40":
+"@balancer-labs/balancer-maths@npm:0.0.40, @balancer-labs/balancer-maths@npm:^0.0.40":
   version: 0.0.40
   resolution: "@balancer-labs/balancer-maths@npm:0.0.40"
   checksum: 10c0/93825190a2d071651570fb64af7a77c7117f8c741bac847fbac0cfbcd46ea489e68d423be674f3cd680a3304ccf0a3921a4ab01777f3de4f540811f365f2af44
@@ -7211,6 +7211,7 @@ __metadata:
   resolution: "@vultisig/sdk@workspace:packages/sdk"
   dependencies:
     7z-wasm: "npm:^1.2.0"
+    "@balancer-labs/balancer-maths": "npm:^0.0.40"
     "@balancer/sdk": "npm:6.1.1"
     "@bufbuild/protobuf": "npm:^2.12.0"
     "@coral-xyz/anchor": "npm:^0.32.1"
@@ -7248,6 +7249,7 @@ __metadata:
     "@vultisig/lib-schnorr": "workspace:*"
     "@vultisig/mpc-types": "workspace:*"
     axios: "npm:^1.17.0"
+    bech32: "npm:^2.0.0"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"

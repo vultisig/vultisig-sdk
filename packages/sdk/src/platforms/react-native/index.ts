@@ -164,13 +164,16 @@ export type {
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
+  BuildSplTransferParams,
   ConsolidateChain,
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  PrepareJettonTransferTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
+  SplTransferResult,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -182,6 +185,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/jettonTransfer')
+  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
 }
 
 export async function prepareSendTxFromKeys(...args: unknown[]) {
@@ -204,10 +212,31 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
 }
 
+// Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
+// `globalThis.Buffer` at module-init. Deferring the import inside the async
+// body keeps it out of the eager RN bundle graph (same rationale as the
+// getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
+// is synchronous; this wrapper just defers module evaluation.
+export async function buildSplTransfer(...args: unknown[]) {
+  const mod = await import('../../tools/prep/splTransfer')
+  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
+}
+
 export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/utxoConsolidate')
   return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
 }
+
+// Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
+// RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
+// metadata lookups.
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from '../../tools/gas'
 
 // Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
 // wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
@@ -226,12 +255,14 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
+export type { GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  getTokenApprovals,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
@@ -322,13 +353,22 @@ export type {
   CoinMetadata,
   KnownCoin,
   KnownCoinMetadata,
+  ResolveContractResult,
   TokenMetadataResolver,
+  TokenStandard,
 } from '../../tools/token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  resolveContract,
+  searchToken,
+} from '../../tools/token'
 
-// DEX primitives — read-only Uniswap V3 pool-info + pure tick math. No signing,
-// no broadcast. Built on evmCall (already RN-exported) + pure BigInt math, so
-// RN-safe; the hand-curated allow-list previously omitted this namespace.
+// DEX primitives — read-only on-chain quotes + pure math. No signing, no broadcast.
+// RN-safe: uniswapV2Quote/getAmountOut are pure bigint math; balancerQuote is
+// pure @balancer-labs/balancer-maths; uniswap.* are pure tick math + evmCall.
 export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
