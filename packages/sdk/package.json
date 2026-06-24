@@ -199,6 +199,7 @@
     "@vultisig/lib-schnorr": "workspace:*",
     "@vultisig/mpc-types": "workspace:*",
     "axios": "^1.17.0",
+    "bech32": "^2.0.0",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",

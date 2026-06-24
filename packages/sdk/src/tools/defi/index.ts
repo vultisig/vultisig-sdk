@@ -10,6 +10,7 @@
 import * as arkis from './arkis'
 import * as balancer from './balancer'
 import * as glif from './glif'
+import * as osmosis from './osmosis'
 import { pendle } from './pendle'
 import * as threeJane from './threeJane'
 
@@ -17,6 +18,7 @@ export { arkis }
 export * from './balancer'
 export * from './glif'
 export * as glif from './glif'
+export * as osmosis from './osmosis'
 export * from './pendle'
 export * as threeJane from './threeJane'
 
@@ -25,6 +27,7 @@ export const defi = {
   arkis,
   balancer,
   glif,
+  osmosis,
   pendle,
   threeJane,
 } as const
