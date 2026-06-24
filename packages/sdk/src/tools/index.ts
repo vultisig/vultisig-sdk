@@ -1,16 +1,33 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
+export * from './defi'
+
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
+export {
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  type PolkadotAssetBalance,
+  type PolkadotNativeBalance,
+} from './balance'
+
 // EVM utilities
 export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
