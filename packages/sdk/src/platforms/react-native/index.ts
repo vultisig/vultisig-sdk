@@ -331,9 +331,9 @@ export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchTo
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from '../../tools/balance'
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance'
 
-// DEX primitives — read-only Uniswap V3 pool-info + pure tick math. No signing,
-// no broadcast. Built on evmCall (already RN-exported) + pure BigInt math, so
-// RN-safe; the hand-curated allow-list previously omitted this namespace.
+// DEX primitives — read-only on-chain quotes + pure math. No signing, no broadcast.
+// RN-safe: uniswapV2Quote/getAmountOut are pure bigint math; balancerQuote is
+// pure @balancer-labs/balancer-maths; uniswap.* are pure tick math + evmCall.
 export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
