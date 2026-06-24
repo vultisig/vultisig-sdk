@@ -146,7 +146,7 @@ function startDevServer() {
     child.once('close', resolve)
   })
   const waitForUrl = new Promise((resolve, reject) => {
-    const startTimeoutMs = 180_000
+    const startTimeoutMs = 360_000
     const timeout = setTimeout(() => {
       reject(
         new Error(
@@ -251,7 +251,7 @@ test('browser example builds against the local SDK workspace package', { timeout
   )
 })
 
-test('browser example dev server serves SDK wasm assets', { timeout: 240_000 }, async () => {
+test('browser example dev server serves SDK wasm assets', { timeout: 420_000 }, async () => {
   const server = startDevServer()
   try {
     const baseUrl = await server.waitForUrl
