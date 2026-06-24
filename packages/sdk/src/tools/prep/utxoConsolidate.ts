@@ -1,6 +1,7 @@
 import { create } from '@bufbuild/protobuf'
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
+import { utxoChainScriptType } from '@vultisig/core-chain/chains/utxo/tx/UtxoScriptType'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
@@ -63,21 +64,33 @@ export type PrepareUtxoConsolidateTxFromKeysParams = {
   byteFee: bigint
 }
 
-// Segwit-baseline virtual-size estimate matching the mcp-ts / Go side:
-// 10 bytes tx overhead + 68 bytes per input + 34 bytes for the single output.
-// Real signed-tx vsize for P2WPKH / P2SH-P2WPKH inputs lands close to this.
+// Virtual-size estimate, script-type aware to match the actual signer path.
+// 10 bytes tx overhead + per-input bytes + 34 bytes for the single output.
 //
-// NOTE: this is an ESTIMATE only. The payload is built with
+// The per-input size depends on the chain's script type
+// (`utxoChainScriptType`): segwit `wpkh` inputs (BTC / LTC) are ~68 vB, but
+// legacy `pkh` inputs (BCH / DOGE / DASH) are ~148 bytes — using the segwit
+// figure for legacy chains under-counts the real fee by ~2x. Using the right
+// per-input size keeps both the displayed estimate AND the uneconomical
+// pre-check honest across all five supported chains.
+//
+// NOTE: this is still an ESTIMATE only. The payload is built with
 // `sendMaxAmount: true` (see below), so the on-device signer's
 // WalletCore `AnySigner.plan` recomputes the real fee from its own
 // signed-tx size model and ignores `toAmount`. The returned `fee` /
 // `outputAmount` are advisory display values, NOT the signed values.
 const TX_OVERHEAD_VBYTES = 10n
-const PER_INPUT_VBYTES = 68n
+const PER_INPUT_VBYTES = {
+  // P2WPKH: ~68 vB (witness discounted).
+  wpkh: 68n,
+  // P2PKH: ~148 bytes (no witness discount).
+  pkh: 148n,
+} as const
 const SINGLE_OUTPUT_VBYTES = 34n
 
-const estimateConsolidationFee = (inputCount: number, byteFee: bigint): bigint => {
-  const vsize = TX_OVERHEAD_VBYTES + BigInt(inputCount) * PER_INPUT_VBYTES + SINGLE_OUTPUT_VBYTES
+const estimateConsolidationFee = (chain: ConsolidateChain, inputCount: number, byteFee: bigint): bigint => {
+  const perInput = PER_INPUT_VBYTES[utxoChainScriptType[chain]]
+  const vsize = TX_OVERHEAD_VBYTES + BigInt(inputCount) * perInput + SINGLE_OUTPUT_VBYTES
   return vsize * byteFee
 }
 
@@ -89,13 +102,17 @@ export type PrepareUtxoConsolidateResult = {
   /** Sum of all input values (satoshis). */
   totalInput: bigint
   /**
-   * ESTIMATED fee (satoshis) from the `10 + 68/input + 34` vbyte model.
+   * ESTIMATED fee (satoshis) from the `10 + perInput/input + 34` vbyte model.
+   *
+   * The per-input vbyte size is script-type aware (68 vB for segwit `wpkh`
+   * chains, 148 for legacy `pkh` chains), so the estimate tracks the real
+   * signer fee across all supported chains.
    *
    * Because the payload is `sendMaxAmount: true`, the on-device signer
    * (WalletCore `AnySigner.plan`) recomputes the actual fee from its own
    * signed-tx size model. This value is therefore ADVISORY — safe for a
    * "≈ fee" UI preview, but it is NOT the fee of the broadcast tx and may
-   * differ by a few sats per input. Never treat it as authoritative.
+   * differ slightly. Never treat it as authoritative.
    */
   fee: bigint
   /**
@@ -182,7 +199,7 @@ export const prepareUtxoConsolidateTxFromKeys = async (
     totalInput += u.value
   }
 
-  const fee = estimateConsolidationFee(utxos.length, byteFee)
+  const fee = estimateConsolidationFee(coin.chain, utxos.length, byteFee)
 
   if (fee >= totalInput) {
     throw new Error(

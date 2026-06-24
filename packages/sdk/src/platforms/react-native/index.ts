@@ -164,9 +164,13 @@ export type {
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
+  ConsolidateChain,
+  ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -198,6 +202,11 @@ export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
 export async function prepareSwapTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/swap')
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
+
+export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/utxoConsolidate')
+  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
 }
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)

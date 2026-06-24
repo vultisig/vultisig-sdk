@@ -53,8 +53,14 @@ console.log('outputAmount   :', result.outputAmount.toString())
 console.log('toAddress      :', p.toAddress, '(send-to-self === from)')
 console.log('toAmount       :', p.toAmount)
 console.log('hexPublicKey   :', p.coin?.hexPublicKey)
-console.log('sendMaxAmount  :', p.blockchainSpecific.case === 'utxoSpecific' ? p.blockchainSpecific.value.sendMaxAmount : '(n/a)')
-console.log('byteFee(payload):', p.blockchainSpecific.case === 'utxoSpecific' ? p.blockchainSpecific.value.byteFee : '(n/a)')
+console.log(
+  'sendMaxAmount  :',
+  p.blockchainSpecific.case === 'utxoSpecific' ? p.blockchainSpecific.value.sendMaxAmount : '(n/a)'
+)
+console.log(
+  'byteFee(payload):',
+  p.blockchainSpecific.case === 'utxoSpecific' ? p.blockchainSpecific.value.byteFee : '(n/a)'
+)
 console.log('inputs (utxoInfo):')
 for (const u of p.utxoInfo) {
   console.log(`  - ${u.hash.slice(0, 8)}…:${u.index}  ${u.amount.toString()} sats`)

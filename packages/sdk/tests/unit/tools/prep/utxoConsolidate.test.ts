@@ -86,6 +86,21 @@ describe('prepareUtxoConsolidateTxFromKeys', () => {
     }
   })
 
+  it('uses a legacy (pkh) per-input vbyte size for non-segwit chains', async () => {
+    // Dogecoin is a legacy `pkh` chain: per-input is 148 vB, NOT the 68 vB
+    // segwit figure. vsize = 10 + 3*148 + 34 = 488 ; fee = 488 * 12 = 5856.
+    // (Contrast with BTC/segwit above where the same inputs cost 2976.)
+    const dogeCoin = { ...btcCoin, chain: Chain.Dogecoin, address: 'Dself', ticker: 'DOGE' } as any
+    const result = await prepareUtxoConsolidateTxFromKeys(baseIdentity, {
+      coin: dogeCoin,
+      utxos: sampleUtxos,
+      byteFee: 12n,
+    })
+    expect(result.fee).toBe(5_856n)
+    expect(result.outputAmount).toBe(94_144n)
+    expect(result.totalInput - result.fee).toBe(result.outputAmount)
+  })
+
   it('uses the explicit walletCore override and never calls the global getWalletCore', async () => {
     const overrideWalletCore = { __mock: 'override' }
     await prepareUtxoConsolidateTxFromKeys(
