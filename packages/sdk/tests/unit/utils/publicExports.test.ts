@@ -31,6 +31,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {
+    expect(typeof sdk.getSolBalance).toBe('function')
+    expect(typeof sdk.getSplTokenBalance).toBe('function')
+  })
+
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
     expect(sdk.noonUsdcVaultConfig).toBeDefined()
     expect(typeof sdk.encodeNoonDeposit).toBe('function')
