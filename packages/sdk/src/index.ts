@@ -482,6 +482,13 @@ export type {
   XrpBalance,
 } from './tools'
 export type { BuildSplTransferParams, SplTransferResult } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -493,11 +500,15 @@ export {
   ASTROPORT_ROUTER,
   buildAstroportSwap,
   buildBuyPt,
+  buildDelegateMsg,
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
   buildRedeem,
+  buildRedelegateMsg,
   buildSellPt,
   buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   chainAliasMap,
   chainFeeCoin,
   chainsMatch,
@@ -507,6 +518,7 @@ export {
   computeAstroportMinReceive,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
+  cosmosStaking,
   decodeBittensorAddress,
   decodeCosmosTx,
   decodeEvmTx,
