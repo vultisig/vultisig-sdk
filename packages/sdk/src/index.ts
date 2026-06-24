@@ -481,6 +481,8 @@ export type {
   PendleUnsignedTx,
   PolicyAssetRef,
   PolicyEnvelope,
+  PolkadotAssetBalance,
+  PolkadotNativeBalance,
   PrepareJettonTransferTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
@@ -533,6 +535,7 @@ export {
   assembleAstroportSwap,
   assertBittensorAddress,
   ASTROPORT_ROUTER,
+  balancePolkadot,
   buildAstroportSwap,
   buildBuyPt,
   buildCw20TransferMsg,
@@ -566,6 +569,9 @@ export {
   defi,
   deriveAddressFromKeys,
   dex,
+  DOT_DECIMALS,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evmCall,
@@ -573,6 +579,7 @@ export {
   evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  formatDot,
   formatUtxoBalance,
   gas,
   GAS_UNITS,
@@ -583,6 +590,8 @@ export {
   getCosmosSwapGasLimit,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
   getPrice,
   getPricesBatch,
   getPublicKey,
@@ -615,6 +624,7 @@ export {
   isZeroAmount,
   knownTokens,
   knownTokensIndex,
+  MAX_UINT256,
   NATIVE_COINGECKO_IDS,
   parseAmountBig,
   pendle,
@@ -655,6 +665,40 @@ export {
 // service is exposed for callers that already hold a vault and need the richer
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
+// ============================================================================
+
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from './tools/defi'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
+  riverStatusName,
+} from './tools/defi'
 
 // ============================================================================
 // PUBLIC API - Push Notifications
