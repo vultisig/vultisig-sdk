@@ -33,6 +33,10 @@ import * as gas from './gas'
 // ergonomic alongside the flat named exports.
 export { gas }
 
+// Balance reads (per-chain, vault-free)
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
+
 // Balance reads (per-chain RPC)
 export type { SolBalance, SplTokenBalance } from './balance'
 export { getSolBalance, getSplTokenBalance } from './balance'
