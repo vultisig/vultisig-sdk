@@ -2,12 +2,13 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   resolve4ByteSelector,
@@ -37,6 +38,10 @@ export { gas }
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
 
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
+
 // Token utilities
 export type {
   Coin,
@@ -49,6 +54,49 @@ export type {
   TokenStandard,
 } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+
+// Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from './balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from './balance'
+
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {
