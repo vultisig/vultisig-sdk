@@ -2,7 +2,17 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
+export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  getTokenApprovals,
+  resolve4ByteSelector,
+  resolveEns,
+} from './evm'
 
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
