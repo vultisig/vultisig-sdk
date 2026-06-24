@@ -43,6 +43,23 @@ export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
+// Pure address-format validation (vault-free, no network, no signing):
+//   sdk.validate.chainPrefix(address, chain) — HRP/format mismatch check
+//   sdk.address.classify(address)            — chain family of an address
+//   sdk.address.isValidFor(address, chain)   — is the format valid for a chain
+// Canonical port of the Go agent-backend chain-prefix / per-family address
+// FORMAT rules (collapses the Go + abt duplicates).
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from './utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
+export { address, validate } from './utils/addressValidation'
+export { checkChainPrefix } from './utils/chainPrefix'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
@@ -384,6 +401,10 @@ export type {
   AmountUnits,
   AssetRef,
   BuildBuyPtParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   BuildRedeemParams,
   BuildSellPtParams,
   BuildThreeJaneSupplyUsdcParams,
@@ -399,6 +420,7 @@ export type {
   FieldDiff,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  GlifUnsignedTx,
   IntentClaim,
   InvariantInput,
   InvariantViolation,
@@ -428,6 +450,8 @@ export {
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
   buildBuyPt,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
   buildRedeem,
   buildSellPt,
   chainAliasMap,
@@ -440,6 +464,7 @@ export {
   decodeFromToolResult,
   defi,
   deriveAddressFromKeys,
+  dex,
   evaluatePolicy,
   evmCall,
   evmCheckAllowance,
@@ -451,6 +476,9 @@ export {
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
   Invariant,
   isPendleChain,
   isZeroAmount,
