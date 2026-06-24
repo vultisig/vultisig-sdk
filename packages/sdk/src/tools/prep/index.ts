@@ -1,6 +1,18 @@
 export { prepareContractCallTxFromKeys } from './contractCall'
 export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmos'
 export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+  type CosmosStakingMsgEnvelope,
+  type DelegateParams,
+  type RedelegateParams,
+  type UndelegateParams,
+  type WithdrawRewardsParams,
+} from './cosmosStaking'
+export {
   IBC_CHAIN_HRP,
   IBC_CHAIN_REVISION,
   IBC_CHANNEL_DEST,
