@@ -166,11 +166,14 @@ export {
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
+  type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  SUI_NATIVE_COIN_TYPE,
   type VaultIdentity,
 } from './prep'
 
