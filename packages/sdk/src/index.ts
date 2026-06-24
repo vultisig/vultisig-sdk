@@ -361,6 +361,21 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope —
+// read-only / builds-unsigned, never signs or broadcasts).
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './tools/cosmos'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
