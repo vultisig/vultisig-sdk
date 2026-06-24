@@ -1,5 +1,6 @@
 export { prepareContractCallTxFromKeys } from './contractCall'
 export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmos'
+export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
