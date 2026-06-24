@@ -467,6 +467,7 @@ export type {
   VaultIdentity,
   Verdict,
 } from './tools'
+export type { BuildSplTransferParams, SplTransferResult } from './tools'
 export type {
   CosmosStakingMsgEnvelope,
   DelegateParams,
@@ -490,6 +491,7 @@ export {
   buildRedeem,
   buildRedelegateMsg,
   buildSellPt,
+  buildSplTransfer,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
   chainAliasMap,

@@ -160,6 +160,8 @@ export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } fro
 export {
   buildDelegateMsg,
   buildRedelegateMsg,
+  buildSplTransfer,
+  type BuildSplTransferParams,
   buildUndelegateMsg,
   buildWithdrawRewardsMsg,
   CONSOLIDATE_CHAINS,
@@ -183,6 +185,7 @@ export {
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
   type RedelegateParams,
+  type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   type UndelegateParams,
   type VaultIdentity,
