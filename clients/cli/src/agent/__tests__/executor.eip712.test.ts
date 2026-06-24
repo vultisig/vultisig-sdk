@@ -452,6 +452,43 @@ describe('signSingleTypedData — recover-verify gate', () => {
     expect(String((recent.data as Record<string, unknown>).error)).toMatch(/SIGNATURE_RECOVERY_MISMATCH/)
   })
 
+  it('surfaces an actionable, non-retryable vault-context error on recover-verify mismatch', async () => {
+    // Wrong-vault-context path: the vault loaded into the executor reports an
+    // EVM address that the recovered signer can never match (e.g. the wrong
+    // vault/keyshare is loaded). The failure must point at vault context and
+    // read as deterministic, not retryable — per the PR #852 review follow-up.
+    const WRONG_VAULT_ADDRESS = '0x000000000000000000000000000000000000dEaD'
+    const vault = {
+      name: 'mock-vault',
+      id: 'vault-mock-eip712-wrongctx',
+      type: 'fast',
+      chains: [],
+      isEncrypted: false,
+      // address() reports a vault address the real signer can never recover to.
+      address: vi.fn().mockResolvedValue(WRONG_VAULT_ADDRESS),
+      // signBytes signs correctly with TEST_PRIVATE_KEY (→ TEST_ADDRESS).
+      signBytes: vi.fn(async ({ data }: { data: string }) => mockSign(data)),
+    } as unknown as VaultBase
+
+    const executor = new AgentExecutor(vault)
+    const recent = await executor.signTypedData('call-712-wrongctx', {
+      domain: PERMIT_DOMAIN,
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(false)
+    const error = String((recent.data as Record<string, unknown>).error)
+    // Names vault context as the cause, not a generic signing failure.
+    expect(error).toMatch(/vault context/i)
+    // Signals it is deterministic and retrying will not help.
+    expect(error).toMatch(/retrying will not help/i)
+    // Surfaces both addresses so the mismatch is debuggable.
+    expect(error).toContain(WRONG_VAULT_ADDRESS)
+    expect(error).toContain(TEST_ADDRESS)
+  })
+
   it('returns a signature that recovers to the vault EVM address', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
     const recent = await executor.signTypedData('call-712-goodrec', {
