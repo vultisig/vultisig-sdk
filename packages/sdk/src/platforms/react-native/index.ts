@@ -279,12 +279,13 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
-export type { GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   resolve4ByteSelector,
@@ -390,6 +391,11 @@ export {
   searchToken,
 } from '../../tools/token'
 
+// Balance reads (per-chain, vault-free). UTXO reader is a pure fetch helper
+// (only the UtxoChain enum + global fetch), so a static re-export is RN-safe.
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from '../../tools/balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance'
+
 // DEX primitives — read-only on-chain quotes + pure math. No signing, no broadcast.
 // RN-safe: uniswapV2Quote/getAmountOut are pure bigint math; balancerQuote is
 // pure @balancer-labs/balancer-maths; uniswap.* are pure tick math + evmCall.
@@ -405,6 +411,14 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
+// statically: the only chain import (`solanaRpcUrl` from
+// `chains/solana/client`) is metro/rollup-overridden to the RN
+// `solanaClient` shim (type-only + lazy `import('@solana/web3.js')`), so this
+// module never drags the Hermes-hostile web3.js graph at init. The reads
+// themselves use the platform `fetch` against the existing solana RPC proxy.
+export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
+export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
