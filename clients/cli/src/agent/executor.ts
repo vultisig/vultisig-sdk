@@ -1601,14 +1601,14 @@ export class AgentExecutor {
       // vault address the executor expected to sign for (e.g. the wrong vault
       // is loaded into this executor's context). Retrying signs with the same
       // keyshare and fails identically, so the message says so explicitly and
-      // points the caller at the vault context rather than leaving a blank
-      // failure. The SIGNATURE_RECOVERY_MISMATCH prefix stays stable for callers
-      // that key off it.
+      // names the loaded vault (name + id) rather than leaving a blank failure,
+      // so the operator can tell which vault is in context. The
+      // SIGNATURE_RECOVERY_MISMATCH prefix stays stable for callers that key off it.
       throw new Error(
         `SIGNATURE_RECOVERY_MISMATCH: wrong vault context for EIP-712 signing — ` +
-          `signature recovered to ${recoveredAddress}, but the vault loaded into this ` +
-          `executor reports EVM address ${expectedAddress} for ${chain}. The signing ` +
-          `keyshare does not belong to the expected vault address. This is a deterministic ` +
+          `the loaded vault "${this.vault.name}" (id ${this.vault.id}) reports EVM address ` +
+          `${expectedAddress} for ${chain}, but the signature recovered to ${recoveredAddress}. ` +
+          `The signing keyshare does not belong to the expected vault address. This is a deterministic ` +
           `vault-context error, not a transient signing failure — retrying will not help. ` +
           `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
       )

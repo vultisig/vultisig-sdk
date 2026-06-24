@@ -480,8 +480,14 @@ describe('signSingleTypedData — recover-verify gate', () => {
 
     expect(recent.success).toBe(false)
     const error = String((recent.data as Record<string, unknown>).error)
+    // Stable machine-readable prefix that callers key off.
+    expect(error).toMatch(/SIGNATURE_RECOVERY_MISMATCH/)
     // Names vault context as the cause, not a generic signing failure.
     expect(error).toMatch(/vault context/i)
+    // Names the concrete loaded vault (name + id) so the operator can tell
+    // which vault is in context.
+    expect(error).toContain('mock-vault')
+    expect(error).toContain('vault-mock-eip712-wrongctx')
     // Signals it is deterministic and retrying will not help.
     expect(error).toMatch(/retrying will not help/i)
     // Surfaces both addresses so the mismatch is debuggable.
