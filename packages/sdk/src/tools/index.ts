@@ -22,8 +22,17 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 export * as dex from './dex'
 
 // Token utilities
-export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  KnownCoin,
+  KnownCoinMetadata,
+  ResolveContractResult,
+  TokenMetadataResolver,
+  TokenStandard,
+} from './token'
+export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
 
 // Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
 export type {
