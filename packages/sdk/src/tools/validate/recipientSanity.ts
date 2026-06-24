@@ -157,8 +157,9 @@ export function isSelfSend(from: string, recipient: string): boolean {
  * ```
  */
 export function recipientSanity(input: RecipientSanityInput): RecipientSanityResult {
-  const recipient = input.recipient.trim()
-  const from = input.from?.trim() ?? ''
+  // Normalize defensively: callers from untyped JS runtimes may pass null/number.
+  const recipient = String(input.recipient ?? '').trim()
+  const from = String(input.from ?? '').trim()
 
   const nullFlag = isNullAddress(recipient)
   const selfSendFlag = isSelfSend(from, recipient)
