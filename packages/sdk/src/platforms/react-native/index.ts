@@ -211,6 +211,14 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// Gas / fee primitives (read-only — uses global `fetch` + a type-only
+// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
+// these so RN consumers (vultiagent-app) couldn't resolve a current
+// sat/vB rate for a UTXO send / consolidation and had to re-implement
+// the THORChain / MayaChain inbound fetch + halt gating by hand.
+export type { UtxoFeeRate } from '../../tools/gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
+
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
 // generic entry (src/index.ts); the React Native allow-list omitted

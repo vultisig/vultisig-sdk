@@ -1,4 +1,5 @@
-import type { UtxoChain } from '@vultisig/core-chain/Chain'
+import { Chain, type UtxoChain } from '@vultisig/core-chain/Chain'
+import { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
 
 /**
  * UTXO fee-rate primitive (sat/vB) ported from mcp-ts
@@ -14,9 +15,12 @@ import type { UtxoChain } from '@vultisig/core-chain/Chain'
 
 // THORChain / MayaChain node URLs. Exported so sibling primitives
 // (utxo consolidate / split) can reuse the same fee-rate source without
-// duplicating URL strings.
-export const THORCHAIN_NODE_URL = 'https://thornode.thorchain.network'
-export const MAYACHAIN_NODE_URL = 'https://mayanode.mayachain.info'
+// duplicating URL strings. Sourced from core-chain's canonical
+// `cosmosRpcUrl` so this primitive tracks host migrations (e.g. the
+// THORChain REST move to the Liquify gateway) instead of pinning a legacy
+// host that can be decommissioned out from under us.
+export const THORCHAIN_NODE_URL = cosmosRpcUrl[Chain.THORChain]
+export const MAYACHAIN_NODE_URL = cosmosRpcUrl[Chain.MayaChain]
 
 const DEFAULT_TIMEOUT_MS = 15_000
 
@@ -54,14 +58,25 @@ const utxoFeeRateSource: Partial<Record<UtxoChain, FeeRateSource>> = {
 
 async function fetchInboundAddresses(nodeUrl: string, isMaya: boolean): Promise<InboundAddress[]> {
   const path = isMaya ? '/mayachain/inbound_addresses' : '/thorchain/inbound_addresses'
-  const res = await fetch(`${nodeUrl}${path}`, {
-    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-  })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`HTTP ${res.status} ${nodeUrl}${path}: ${body.substring(0, 200)}`)
+  // Hermes-compatible timeout: `AbortSignal.timeout()` is Node 17.3+ and not
+  // available on older RN/Hermes runtimes (this primitive is RN-exported), so
+  // build the same behaviour with AbortController + setTimeout — mirrors
+  // `src/chains/tron/rpc.ts`.
+  const controller = new AbortController()
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`utxoFeeRate timeout after ${DEFAULT_TIMEOUT_MS}ms: ${nodeUrl}${path}`)),
+    DEFAULT_TIMEOUT_MS
+  )
+  try {
+    const res = await fetch(`${nodeUrl}${path}`, { signal: controller.signal })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status} ${nodeUrl}${path}: ${body.substring(0, 200)}`)
+    }
+    return (await res.json()) as InboundAddress[]
+  } finally {
+    clearTimeout(timeoutId)
   }
-  return (await res.json()) as InboundAddress[]
 }
 
 /**
@@ -80,7 +95,12 @@ async function resolveFeeRate(nodeUrl: string, chainKey: string, isMaya: boolean
   if (entry.halted) {
     throw new Error(`chain ${chainKey} is currently halted on the inbound source — cannot compute fee rate`)
   }
-  const rate = parseInt(entry.gas_rate, 10)
+  // Strict integer parse — `parseInt` silently truncates (`'10.5'` -> 10,
+  // `'1e3'` -> 1, `'15px'` -> 15), which for a fee rate means a quietly-wrong
+  // number instead of failing closed. The inbound source publishes integer
+  // sat/(v)byte rates; anything else is a malformed response we should reject.
+  const raw = entry.gas_rate.trim()
+  const rate = /^\d+$/.test(raw) ? Number(raw) : NaN
   if (!Number.isFinite(rate) || rate <= 0) {
     throw new Error(`chain ${chainKey} returned non-positive gas_rate ${entry.gas_rate} — cannot compute fee rate`)
   }

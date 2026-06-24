@@ -34,7 +34,7 @@ describe('utxoFeeRate', () => {
     const fetchMock = mockInbounds([{ chain: 'BTC', gas_rate: '7', halted: false }])
     await utxoFeeRate(UtxoChain.Bitcoin)
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://thornode.thorchain.network/thorchain/inbound_addresses',
+      'https://gateway.liquify.com/chain/thorchain_api/thorchain/inbound_addresses',
       expect.anything()
     )
   })
@@ -62,6 +62,15 @@ describe('utxoFeeRate', () => {
   it('throws when the inbound source omits the chain entry', async () => {
     mockInbounds([{ chain: 'ETH', gas_rate: '1', halted: false }])
     await expect(utxoFeeRate(UtxoChain.Bitcoin)).rejects.toThrow(/No fee rate found/)
+  })
+
+  it('rejects a non-integer gas_rate instead of silently truncating', async () => {
+    // parseInt('10.5') === 10 / parseInt('1e3', 10) === 1 — a fee primitive
+    // must fail closed on malformed input, not emit a quietly-wrong rate.
+    for (const bad of ['10.5', '1e3', '15px', ' ', 'abc']) {
+      mockInbounds([{ chain: 'BTC', gas_rate: bad, halted: false }])
+      await expect(utxoFeeRate(UtxoChain.Bitcoin)).rejects.toThrow(/non-positive/)
+    }
   })
 
   it('rejects Zcash — it uses ZIP-317, not sat/vB (never returns the inflated ZEC gas_rate)', async () => {
