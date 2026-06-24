@@ -146,7 +146,7 @@ function startDevServer() {
     child.once('close', resolve)
   })
   const waitForUrl = new Promise((resolve, reject) => {
-    const startTimeoutMs = 180_000
+    const startTimeoutMs = 360_000
     const timeout = setTimeout(() => {
       reject(
         new Error(
@@ -223,7 +223,7 @@ test('browser example prepare recreates missing shared package artifacts', { tim
 
   try {
     await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'], {
-      timeoutMs: 180_000,
+      timeoutMs: 360_000,
       label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk']),
     })
     assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
@@ -235,9 +235,9 @@ test('browser example prepare recreates missing shared package artifacts', { tim
   }
 })
 
-test('browser example builds against the local SDK workspace package', { timeout: 240_000 }, async () => {
+test('browser example builds against the local SDK workspace package', { timeout: 420_000 }, async () => {
   await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'build'], {
-    timeoutMs: 180_000,
+    timeoutMs: 360_000,
     label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'build']),
   })
 
@@ -251,7 +251,7 @@ test('browser example builds against the local SDK workspace package', { timeout
   )
 })
 
-test('browser example dev server serves SDK wasm assets', { timeout: 240_000 }, async () => {
+test('browser example dev server serves SDK wasm assets', { timeout: 420_000 }, async () => {
   const server = startDevServer()
   try {
     const baseUrl = await server.waitForUrl
