@@ -10,6 +10,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
 
+  it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
+    expect(typeof sdk.normalizeTx).toBe('function')
+    expect(typeof sdk.splitMultiTx).toBe('function')
+    expect(typeof sdk.TxNormalizeError).toBe('function')
+  })
+
+  it('exports the knownContracts canonical registry + lookup helpers', () => {
+    expect(typeof sdk.isKnownContract).toBe('function')
+    expect(typeof sdk.isCanonicalEvmContract).toBe('function')
+    expect(typeof sdk.isCanonicalSolanaAddress).toBe('function')
+    expect(typeof sdk.isCanonicalTronContract).toBe('function')
+    expect(sdk.canonicalEvmContracts instanceof Set).toBe(true)
+    expect(typeof sdk.knownContracts.isKnownContract).toBe('function')
+  })
+
   it('exports findSwapQuote, abiEncode, evmCheckAllowance (already consumed by mcp-ts)', () => {
     expect(typeof sdk.findSwapQuote).toBe('function')
     expect(typeof sdk.abiEncode).toBe('function')
@@ -27,6 +42,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.getNoonDepositTxPlan).toBe('function')
     expect(typeof sdk.readNoonVaultState).toBe('function')
     expect(typeof sdk.fetchNoonUsdcVaultMetrics).toBe('function')
+  })
+
+  it('exports the sdk.defi namespace with the Arkis lender supply builder', () => {
+    expect(sdk.defi).toBeDefined()
+    expect(sdk.defi.arkis).toBeDefined()
+    expect(typeof sdk.defi.arkis.buildArkisSupplyTx).toBe('function')
+    expect(typeof sdk.defi.arkis.parseArkisTokenAmount).toBe('function')
+    expect(typeof sdk.defi.arkis.resolveArkisPoolKind).toBe('function')
+    expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
   it('exports Chain enum and VaultBase class (VaultBase carries the prep-only primitives)', () => {
