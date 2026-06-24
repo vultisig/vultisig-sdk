@@ -20,3 +20,11 @@ export {
   type PrepareThorchainMsgDepositTxFromKeysParams,
 } from './thorchainMsgDeposit'
 export type { VaultIdentity } from './types'
+export {
+  CONSOLIDATE_CHAINS,
+  type ConsolidateChain,
+  type ConsolidateUtxo,
+  type PrepareUtxoConsolidateResult,
+  prepareUtxoConsolidateTxFromKeys,
+  type PrepareUtxoConsolidateTxFromKeysParams,
+} from './utxoConsolidate'
