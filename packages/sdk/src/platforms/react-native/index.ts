@@ -402,6 +402,11 @@ export { deriveAddressFromKeys } from '../../tools/address'
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
+// Cosmos bank-denom balance reader (read-only LCD fetch + denom-decode).
+// RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
