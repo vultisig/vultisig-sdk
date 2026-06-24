@@ -40,6 +40,24 @@ describe('coinGeckoIds map', () => {
     expect(symbolFromCoinGeckoId('ethereum')).toBe('ETH')
     expect(symbolFromCoinGeckoId('not-a-coin')).toBeUndefined()
   })
+
+  it('maps POL/MATIC to the live polygon slug, not the dead matic-network feed', () => {
+    // CoinGecko deprecated `matic-network` (now returns an empty body with no
+    // `usd` field → every POL/MATIC lookup would throw). The live slug after the
+    // MATIC→POL rebrand is `polygon-ecosystem-token`. Pin both tickers to it.
+    expect(NATIVE_COINGECKO_IDS.POL).toBe('polygon-ecosystem-token')
+    expect(NATIVE_COINGECKO_IDS.MATIC).toBe('polygon-ecosystem-token')
+  })
+
+  it('Route 3: prices POL via the live polygon slug', async () => {
+    mockQueryUrl.mockResolvedValueOnce({ 'polygon-ecosystem-token': simplePrice(0.42, -1.9, 3.9e9) })
+
+    const quote = await getPrice({ symbol: 'POL' })
+
+    expect(quote.usd).toBe(0.42)
+    expect(quote.coingeckoId).toBe('polygon-ecosystem-token')
+    expect(mockQueryUrl).toHaveBeenCalledWith(expect.stringContaining('/simple/price?ids=polygon-ecosystem-token'))
+  })
 })
 
 describe('getPrice', () => {

@@ -23,8 +23,12 @@ export const NATIVE_COINGECKO_IDS: Readonly<Record<string, string>> = {
   SOL: 'solana',
   XRP: 'ripple',
   BNB: 'binancecoin',
-  MATIC: 'matic-network',
-  POL: 'matic-network',
+  // Polygon rebranded MATIC → POL. CoinGecko deprecated the `matic-network`
+  // price feed (it now returns an empty `{}` body with no `usd` field, which
+  // would make every POL/MATIC lookup throw); the live slug is
+  // `polygon-ecosystem-token`. Pin both tickers to it.
+  MATIC: 'polygon-ecosystem-token',
+  POL: 'polygon-ecosystem-token',
   AVAX: 'avalanche-2',
   LTC: 'litecoin',
   DOGE: 'dogecoin',

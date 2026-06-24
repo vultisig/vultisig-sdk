@@ -254,6 +254,18 @@ export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchTo
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
+// over the same proxy `searchToken` already uses, no WASM/native deps.
+export type { PriceBatchResult, PriceQuery, PriceQuote } from '../../tools/price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from '../../tools/price'
+
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
