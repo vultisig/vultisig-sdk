@@ -397,6 +397,7 @@ export type {
   CoinKey,
   CoinMetadata,
   DecodeFromToolResultInput,
+  Defi,
   Envelope,
   EnvelopeKind,
   FieldDiff,
