@@ -221,8 +221,8 @@ const cosmosValoperByChain: Record<string, string> = {
   juno: 'junovaloper',
 }
 
-/** All cosmos HRP bodies (deduped) for family classification. */
-const cosmosHRPs = Array.from(new Set(Object.values(cosmosHRPByChain)))
+/** All cosmos HRP bodies (deduped) for family classification — includes both account and valoper HRPs. */
+const cosmosHRPs = Array.from(new Set([...Object.values(cosmosHRPByChain), ...Object.values(cosmosValoperByChain)]))
 
 /** Build the anchored cosmos bech32 regex for a given HRP. */
 function cosmosHRPRegex(hrp: string): RegExp {
