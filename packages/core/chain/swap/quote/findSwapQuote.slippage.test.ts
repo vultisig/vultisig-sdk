@@ -72,6 +72,8 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getLifiSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: 0.01 }))
     // SwapKit wants percent
     expect(getSwapKitQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: 1 }))
+    // Native THOR/Maya quote APIs want basis points
+    expect(getNativeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageToleranceBps: 100 }))
   })
 
   it('leaves each provider on its default when no tolerance is given', async () => {
@@ -81,6 +83,7 @@ describe('findSwapQuote slippage tolerance', () => {
     expect(getKyberSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageTolerance: undefined }))
     expect(getLifiSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
     expect(getSwapKitQuote).toHaveBeenCalledWith(expect.objectContaining({ slippage: undefined }))
+    expect(getNativeSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ slippageToleranceBps: undefined }))
   })
 
   it.each([-1, NaN, Infinity, -Infinity])('rejects invalid slippage %p before calling any provider', async invalid => {
