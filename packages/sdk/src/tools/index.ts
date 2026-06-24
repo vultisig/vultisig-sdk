@@ -44,6 +44,10 @@ import * as gas from './gas'
 // ergonomic alongside the flat named exports.
 export { gas }
 
+// Balance reads (per-chain, vault-free)
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
+
 // Token utilities
 export type {
   Coin,
