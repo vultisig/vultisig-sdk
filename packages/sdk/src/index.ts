@@ -39,6 +39,20 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from './utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from './utils/convertAmount'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
@@ -432,14 +446,24 @@ export type {
   Coin,
   CoinKey,
   CoinMetadata,
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  CosmosBalanceChain,
+  CosmosBalanceEntry,
+  CosmosBalanceResult,
   DecodeFromToolResultInput,
   Defi,
   Envelope,
   EnvelopeKind,
+  EvmGasPrice,
   FieldDiff,
   FindSwapQuoteParams,
+  GasTxType,
   GetMaxSendAmountFromKeysParams,
   GetTokenApprovalsResult,
+  GetUtxoBalanceOptions,
   GlifUnsignedTx,
   IntentClaim,
   InvariantInput,
@@ -465,11 +489,15 @@ export type {
   RecipientSanityInput,
   RecipientSanityResult,
   ResolveContractResult,
+  SolBalance,
+  SplTokenBalance,
   ThreeJaneTranche,
   ThreeJaneTxStep,
   TokenApproval,
   TokenMetadataResolver,
   TokenStandard,
+  UtxoBalance,
+  UtxoBalanceChain,
   VaultIdentity,
   Verdict,
 } from './tools'
@@ -508,13 +536,16 @@ export {
   checkInvariants,
   claimInterpretations,
   classifyAstroportAsset,
+  compareCosts,
   computeAstroportMinReceive,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
+  cosmosBalanceChains,
   cosmosStaking,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,
+  DEFAULT_COMPARE_CHAINS,
   defi,
   deriveAddressFromKeys,
   dex,
@@ -522,20 +553,30 @@ export {
   evaluatePolicy,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  formatUtxoBalance,
+  gas,
+  GAS_UNITS,
+  getChainGasPriceGwei,
   getCoinBalance,
+  getCosmosBalance,
   getCosmosSwapGasLimit,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getPublicKey,
+  getSolBalance,
+  getSplTokenBalance,
   getTokenApprovals,
   getTokenMetadata,
   getTxStatus,
+  getUtxoBalance,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   Invariant,
+  isCosmosBalanceChain,
   isMalformedEvmAddress,
   isNullAddress,
   isPendleChain,
@@ -576,10 +617,17 @@ export {
   searchToken,
   SOL_NATIVE_MINT,
   stripChainPrefix,
+  supportedUtxoBalanceChains,
   TERRA_CHAIN_ID,
   TERRA_LCD,
   VerifierClient,
 } from './tools'
+
+// Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
+// The pure read-only per-chain gas price lives in `evmGasPrice` above; this
+// service is exposed for callers that already hold a vault and need the richer
+// chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
+export { GasEstimationService } from './vault/services/GasEstimationService'
 
 // ============================================================================
 // PUBLIC API - Push Notifications

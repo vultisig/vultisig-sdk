@@ -31,12 +31,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
-  it('exports buildJupiterSwapTx + Jupiter affiliate config (Solana swap leg for mcp-ts/backend)', () => {
+it('exports buildJupiterSwapTx + Jupiter affiliate config (Solana swap leg for mcp-ts/backend)', () => {
     expect(typeof sdk.buildJupiterSwapTx).toBe('function')
     expect(typeof sdk.resolveJupiterFeeAccount).toBe('function')
     expect(sdk.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdk.JUPITER_PLATFORM_FEE_BPS).toBe(50)
     expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+
+it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {
+    expect(typeof sdk.getSolBalance).toBe('function')
+    expect(typeof sdk.getSplTokenBalance).toBe('function')
   })
 
   it('exports Noon USDC yield helpers for Windows and Station consumers', () => {
