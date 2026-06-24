@@ -424,6 +424,20 @@ export async function getPolkadotAssetBalance(...args: unknown[]) {
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from '../../utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
