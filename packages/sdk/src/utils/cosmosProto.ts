@@ -50,7 +50,7 @@ export function encodeString(s: string): Uint8Array {
   return new TextEncoder().encode(s)
 }
 
-/** cosmos.base.v1beta1.Coin { string denom = 1; string amount = 2; } */
+/** cosmos.base.v1beta1.Coin { denom = field 1, amount = field 2 } */
 export function encodeCoin(denom: string, amount: string): Uint8Array {
   return concat(field(1, 2, encodeString(denom)), field(2, 2, encodeString(amount)))
 }
