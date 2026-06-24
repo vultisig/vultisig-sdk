@@ -418,6 +418,8 @@ export type {
   AstroportSwapResult,
   BuildAstroportSwapParams,
   BuildBuyPtParams,
+  BuildCw20TransferMsgParams,
+  BuildCw20TransferMsgResult,
   BuildGlifRedeemParams,
   BuildGlifRedeemResult,
   BuildGlifStakeParams,
@@ -471,6 +473,13 @@ export type {
   Verdict,
 } from './tools'
 export type { BuildSplTransferParams, SplTransferResult } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -482,11 +491,16 @@ export {
   balancePolkadot,
   buildAstroportSwap,
   buildBuyPt,
+  buildCw20TransferMsg,
+  buildDelegateMsg,
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
   buildRedeem,
+  buildRedelegateMsg,
   buildSellPt,
   buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   chainAliasMap,
   chainFeeCoin,
   chainsMatch,
@@ -496,6 +510,7 @@ export {
   computeAstroportMinReceive,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
+  cosmosStaking,
   decodeCosmosTx,
   decodeEvmTx,
   decodeFromToolResult,
