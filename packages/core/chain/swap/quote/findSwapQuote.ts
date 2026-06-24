@@ -307,17 +307,23 @@ const assertValidCustomRecipient = (recipient: string | undefined, from: Account
 // native unit. `undefined` leaves every provider on its own default (no behaviour
 // change). Extracted from findSwapQuote to keep its cognitive complexity in budget.
 type ProviderSlippage = {
+  nativeBps: number | undefined
   oneInchPercent: number | undefined
   swapKitPercent: number | undefined
   lifiFraction: number | undefined
   kyberBps: number | undefined
 }
-const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => ({
-  oneInchPercent: slippageTolerance,
-  swapKitPercent: slippageTolerance,
-  lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
-  kyberBps: slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined,
-})
+const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
+  const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
+
+  return {
+    nativeBps: bps,
+    oneInchPercent: slippageTolerance,
+    swapKitPercent: slippageTolerance,
+    lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
+    kyberBps: bps,
+  }
+}
 
 export const findSwapQuote = async ({
   from,
@@ -377,6 +383,7 @@ export const findSwapQuote = async ({
     swapKitPercent: swapKitSlippagePercent,
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
+    nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
   const involvedChains = [from.chain, to.chain]
@@ -399,6 +406,7 @@ export const findSwapQuote = async ({
           from,
           to,
           amount: amountNumber,
+          slippageToleranceBps: nativeSlippageBps,
           referral,
           affiliateBps,
           nativeAffiliateConfig: affiliateConfig?.native,
