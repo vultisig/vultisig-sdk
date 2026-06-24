@@ -411,6 +411,43 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
+// Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
+// @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD
+// reads above. The RN allow-list previously omitted these so RN consumers
+// (vultiagent-app, backend) had to re-implement the fetch+parse glue per chain.
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from '../../tools/balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  formatBalance,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance'
+
 // Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
 // dynamic import (NOT a static re-export) because the underlying module imports
 // `@vultisig/core-chain/chains/polkadot/client`, whose top-level
