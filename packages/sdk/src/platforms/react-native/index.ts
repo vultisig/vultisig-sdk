@@ -213,16 +213,28 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (arkis + balancer + pendle + 3jane).
+// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
   BalancerV3SwapKind,
   BalancerV3SwapPath,
   BuildBalancerV3SwapCalldataParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   Defi,
+  GlifUnsignedTx,
 } from '../../tools/defi'
 export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
 export type {
   BuildThreeJaneSupplyUsdcParams,
   BuildThreeJaneSupplyUsdcResult,
@@ -259,6 +271,25 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance — read proposals + build unsigned MsgVote envelope.
+// Pure LCD reads + a pure-crypto unsigned-envelope builder (bech32 via
+// @cosmjs/encoding, already externalized for RN; no MPC/WASM). The generic
+// entry (src/index.ts) exports these too; the RN allow-list omitted them so
+// RN consumers (windows/extension, Station) couldn't read gov proposals or
+// build an unsigned vote without re-porting the chain registry.
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from '../../tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from '../../tools/cosmos'
+
 // Token utilities
 export type {
   Coin,
@@ -269,6 +300,11 @@ export type {
   TokenMetadataResolver,
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+
+// DEX primitives — read-only Uniswap V3 pool-info + pure tick math. No signing,
+// no broadcast. Built on evmCall (already RN-exported) + pure BigInt math, so
+// RN-safe; the hand-curated allow-list previously omitted this namespace.
+export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
