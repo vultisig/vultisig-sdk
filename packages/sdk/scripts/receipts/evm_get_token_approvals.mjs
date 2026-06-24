@@ -15,7 +15,7 @@ import { getTokenApprovals } from '../../src/tools/evm/getTokenApprovals.ts'
 const owner = process.argv[2] ?? '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
 const chain = process.argv[3] ?? 'Ethereum'
 
-const fmt = (a) => (a.isUnlimited ? 'unlimited' : a.allowance.toString())
+const fmt = a => (a.isUnlimited ? 'unlimited' : a.allowance.toString())
 
 const main = async () => {
   console.log(`> sdk.evm.getTokenApprovals("${chain}", { owner: "${owner}" })\n`)
@@ -42,7 +42,7 @@ const main = async () => {
   }
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('receipt failed:', err)
   process.exit(1)
 })
