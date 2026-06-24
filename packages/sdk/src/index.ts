@@ -455,6 +455,7 @@ export type {
   PolicyEnvelope,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  ResolveContractResult,
   SkipChainIdsToAffiliates,
   SkipSwapArgs,
   SkipSwapErrorEnvelope,
@@ -465,6 +466,7 @@ export type {
   ThreeJaneTxStep,
   TokenApproval,
   TokenMetadataResolver,
+  TokenStandard,
   VaultIdentity,
   Verdict,
 } from './tools'
@@ -535,6 +537,7 @@ export {
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,
   resolve4ByteSelector,
+  resolveContract,
   resolveEns,
   resolveLuncFloorUsd,
   ResultKind,
