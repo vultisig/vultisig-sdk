@@ -12,7 +12,7 @@ export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './b
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
-// DEX primitives (read-only / pure math — no signing, no broadcast)
+// DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
 
 // Token utilities
