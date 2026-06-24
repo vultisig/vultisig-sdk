@@ -415,6 +415,8 @@ export { CosmosMsgType } from './types'
 export type {
   AmountUnits,
   AssetRef,
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
   BuildBuyPtParams,
   BuildGlifRedeemParams,
   BuildGlifRedeemResult,
@@ -477,7 +479,10 @@ export {
   AMOUNT_DRIFT_BLOCK_PCT,
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
+  assembleAstroportSwap,
   assertBittensorAddress,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
   buildBuyPt,
   buildGlifRedeemSticnt,
   buildGlifStakeIcnt,
@@ -488,6 +493,8 @@ export {
   chainsMatch,
   checkInvariants,
   claimInterpretations,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
   decodeBittensorAddress,
   decodeCosmosTx,
   decodeEvmTx,
@@ -546,6 +553,8 @@ export {
   scaleDecimalClaimToAtomic,
   searchToken,
   stripChainPrefix,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
   VerifierClient,
 } from './tools'
 
