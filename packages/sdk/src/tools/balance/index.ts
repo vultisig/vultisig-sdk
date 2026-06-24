@@ -34,4 +34,6 @@ export { getTaoBalance } from './taoBalance'
 export { assertBittensorAddress, decodeBittensorAddress } from './bittensor'
 
 // Shared base-unit formatting helper
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './cosmos'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './cosmos'
 export { formatBalance } from './rpc'

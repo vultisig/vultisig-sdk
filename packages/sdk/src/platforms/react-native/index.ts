@@ -401,6 +401,10 @@ export { deriveAddressFromKeys } from '../../tools/address'
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
+// Cosmos bank-denom balance reader (read-only LCD fetch + denom-decode).
+// RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
 // Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
 // Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
 // @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD
