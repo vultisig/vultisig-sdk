@@ -171,11 +171,18 @@ export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } fro
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
   buildSplTransfer,
   type BuildSplTransferParams,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
+  cosmosStaking,
+  type CosmosStakingMsgEnvelope,
+  type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -192,9 +199,12 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type RedelegateParams,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
+  type UndelegateParams,
   type VaultIdentity,
+  type WithdrawRewardsParams,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)
