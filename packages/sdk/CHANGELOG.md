@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 2.6.0
+
+### Minor Changes
+
+- [#857](https://github.com/vultisig/vultisig-sdk/pull/857) [`fbc5581`](https://github.com/vultisig/vultisig-sdk/commit/fbc558151bc60c5240f6b6721dfd66a0ddec23c9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.balancer.buildBalancerV3SwapCalldata` — a pure, unsigned Balancer v3 swap calldata builder under the new `sdk.defi.*` surface. It thinly wraps `@balancer/sdk` (viem-only, RN-safe) to encode the v3 BatchRouter `swapExactIn`/`swapExactOut` tx from an off-chain SOR quote, with consumer-injectable `userData` (default `0x`). No signing, no broadcast.
+
+- [#856](https://github.com/vultisig/vultisig-sdk/pull/856) [`ae45d06`](https://github.com/vultisig/vultisig-sdk/commit/ae45d068bc64f5b6d11b6c8a43c0cd5b21e0bb4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.defi.pendle` — UNSIGNED Pendle PT (Principal Token) buy/sell/redeem builders wrapping the Pendle Hosted SDK Convert REST API. Router target is allow-listed to Pendle Router V4, market/PT/underlying are trust-but-verified against the live active-market catalog, and the prerequisite ERC20 approve calldata is hand-encoded with strict bounds. Builds calldata only — never signs, never broadcasts. First protocol under the new `sdk.defi.*` namespace.
+
+- [#853](https://github.com/vultisig/vultisig-sdk/pull/853) [`a6ff6a4`](https://github.com/vultisig/vultisig-sdk/commit/a6ff6a49c2c0672af5c7afc06a7a97ac35e1cb10) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.threeJane` — the first protocol under the new `sdk.defi.*` surface. Builds the unsigned 2-step Ethereum transaction sequence (ERC-20 approve + `Helper.deposit`) to supply USDC into 3Jane and mint the senior `USD3` or staked junior `sUSD3` share. Build-only / pure-crypto: returns unsigned calldata, performs no network IO, never signs or broadcasts. Also exported from the React Native entry point.
+
+- [#858](https://github.com/vultisig/vultisig-sdk/pull/858) [`3043e1b`](https://github.com/vultisig/vultisig-sdk/commit/3043e1be5a869a83fb0946860b9e2d532eedf02f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.arkis` — a lender-side **supply** builder for the Arkis protocol on Ethereum. Builds the unsigned 2-step sequence (ERC-20 `approve` → ERC-4626 / Agreement `deposit`) and returns the decoded transactions. Builds UNSIGNED calldata only — never signs, never broadcasts. Also surfaces `resolveArkisPoolKind` (optional on-chain `asset()` probe) and `parseArkisTokenAmount` (exact string-math base-unit parse), exposed via the new `sdk.defi` getter.
+
 ## 2.5.1
 
 ### Patch Changes

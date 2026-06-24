@@ -200,6 +200,22 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
 }
 
+// Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
+// wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
+// fetch, all RN-safe, so a static re-export is fine (no chain-client deps to
+// externalize). The RN consumer (Station / vultiagent-app) needs this to build
+// the signable Terra swap msg; omitting it would force a re-implementation.
+export type { AstroportSwapResult, BuildAstroportSwapParams } from '../../tools/swap/astroport'
+export {
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
+} from '../../tools/swap/astroport'
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export {
   abiDecode,
@@ -210,6 +226,37 @@ export {
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  Defi,
+  GlifUnsignedTx,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
@@ -240,6 +287,25 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance — read proposals + build unsigned MsgVote envelope.
+// Pure LCD reads + a pure-crypto unsigned-envelope builder (bech32 via
+// @cosmjs/encoding, already externalized for RN; no MPC/WASM). The generic
+// entry (src/index.ts) exports these too; the RN allow-list omitted them so
+// RN consumers (windows/extension, Station) couldn't read gov proposals or
+// build an unsigned vote without re-porting the chain registry.
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from '../../tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from '../../tools/cosmos'
+
 // Token utilities
 export type {
   Coin,
@@ -250,6 +316,11 @@ export type {
   TokenMetadataResolver,
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+
+// DEX primitives — read-only Uniswap V3 pool-info + pure tick math. No signing,
+// no broadcast. Built on evmCall (already RN-exported) + pure BigInt math, so
+// RN-safe; the hand-curated allow-list previously omitted this namespace.
+export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
