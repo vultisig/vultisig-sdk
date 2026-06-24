@@ -460,6 +460,27 @@ export {
   getXrpBalance,
 } from '../../tools/balance'
 
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
+// dynamic import (NOT a static re-export) because the underlying module imports
+// `@vultisig/core-chain/chains/polkadot/client`, whose top-level
+// `import { ApiPromise, HttpProvider } from '@polkadot/api'` would pull the BN.js
+// double-bundle into the eager RN bundle and crash at module init. Deferring the
+// import to call time matches the proven RN polkadot-resolver pattern in
+// ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
+export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
+export async function balancePolkadot(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+}
+export async function getPolkadotNativeBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+}
+export async function getPolkadotAssetBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+}
+
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
 // statically: the only chain import (`solanaRpcUrl` from
 // `chains/solana/client`) is metro/rollup-overridden to the RN
