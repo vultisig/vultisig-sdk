@@ -105,17 +105,34 @@ export const RIVER_BORROWER_OPS_ABI = [
 export const RIVER_PERIPHERY_ABI = [
   {
     type: 'function',
-    // deployed selector 0x11c61ad3 — verified on ETH+Base impl bytecode
+    // canonical deployed selector 0x88ca8da6 — verified on-chain (ETH+Base, 800-tx sweep).
+    // Trove ownership = msg.sender (the signer). The trailing lzSendParam struct is
+    // the LayerZero send config; pass all-zeros for same-chain opens.
     name: 'openTrove',
     stateMutability: 'payable',
     inputs: [
-      { type: 'address', name: 'account' },
       { type: 'address', name: 'troveManager' },
       { type: 'uint256', name: 'maxFeePercentage' },
       { type: 'uint256', name: 'collAmount' },
       { type: 'uint256', name: 'debtAmount' },
       { type: 'address', name: 'upperHint' },
       { type: 'address', name: 'lowerHint' },
+      {
+        type: 'tuple',
+        name: 'lzSendParam',
+        components: [
+          { type: 'uint32', name: 'dstEid' },
+          { type: 'bytes', name: 'options' },
+          {
+            type: 'tuple',
+            name: 'fee',
+            components: [
+              { type: 'uint256', name: 'nativeFee' },
+              { type: 'uint256', name: 'lzTokenFee' },
+            ],
+          },
+        ],
+      },
     ],
     outputs: [],
   },

@@ -555,7 +555,6 @@ export {
   buildRiverCloseTrove,
   buildRiverDelegateApproval,
   buildRiverOpenTrove,
-  defi,
   describeRiverMarket,
   findRiverInsertHints,
   formatRiverPercentWad,
