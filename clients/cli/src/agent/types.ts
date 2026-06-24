@@ -48,6 +48,12 @@ export type AuthTokenRequest = {
 export type AuthTokenResponse = {
   token: string
   expires_at: number
+  // agent-backend /auth/token also returns `access_token` (a duplicate of
+  // `token` under the shape vultiagent-poc's auth layer writes to) and a
+  // `refresh_token`. Modeled as optional so the CLI can capture + persist the
+  // refresh token for a future POST /auth/refresh exchange; see auth.ts.
+  access_token?: string
+  refresh_token?: string
 }
 
 export type CreateConversationRequest = {
