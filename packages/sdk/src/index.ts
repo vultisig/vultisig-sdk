@@ -528,6 +528,7 @@ export {
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   recipientSanity,
