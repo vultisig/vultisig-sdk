@@ -28,9 +28,17 @@ import { CosmosMsgType } from '../../types/cosmos-msg'
  *   - native bank denoms (e.g. `uluna`, `uusd`) are rejected — those are bank
  *     sends, not CW-20 executes; routing them here would build an unsignable /
  *     wrong-path tx.
- *   - `execute_msg` is JSON-STRINGIFIED to match the SDK protobuf field
- *     (`WasmExecuteContractPayload.execute_msg: string`); an object there leaks
- *     an unsignable shape.
+ *   - two distinct wire shapes, do not conflate them:
+ *       • `executeMsg` (returned) is JSON-STRINGIFIED to match the SDK protobuf
+ *         field (`WasmExecuteContractPayload.execute_msg: string`) used by the
+ *         direct/proto wasm-execute path; a non-string there leaks an
+ *         unsignable shape.
+ *       • the inner `value.msg` of the amino `MsgExecuteContract` stays an
+ *         OBJECT — that is the canonical cosmjs/WalletCore amino convention
+ *         (`AminoMsgExecuteContract.value.msg` is an object, not a string). The
+ *         SDK forwards this amino `value` verbatim into WalletCore's
+ *         `rawJsonMessage.value`, so stringifying `value.msg` here would change
+ *         the sign-bytes to a wrong amino shape and get the tx rejected.
  *
  * @example
  * ```ts
