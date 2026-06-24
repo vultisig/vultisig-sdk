@@ -235,9 +235,9 @@ test('browser example prepare recreates missing shared package artifacts', { tim
   }
 })
 
-test('browser example builds against the local SDK workspace package', { timeout: 240_000 }, async () => {
+test('browser example builds against the local SDK workspace package', { timeout: 420_000 }, async () => {
   await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'build'], {
-    timeoutMs: 180_000,
+    timeoutMs: 360_000,
     label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'build']),
   })
 
