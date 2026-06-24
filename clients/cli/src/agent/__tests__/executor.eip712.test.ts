@@ -17,7 +17,7 @@
 //     the vault's EVM address and throws SIGNATURE_RECOVERY_MISMATCH otherwise.
 import type { VaultBase } from '@vultisig/sdk'
 import { TypedDataEncoder } from 'ethers'
-import { hashTypedData } from 'viem'
+import { hashTypedData, recoverAddress } from 'viem'
 import { privateKeyToAddress, sign } from 'viem/accounts'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -505,6 +505,14 @@ describe('signSingleTypedData — recover-verify gate', () => {
     })
 
     expect(recent.success).toBe(true)
+    // Pin the contract directly: the returned signature must recover to the
+    // vault EVM address over the returned digest (matches this test's title and
+    // mirrors the executor's own recover-verify gate).
+    const recovered = await recoverAddress({
+      hash: recent.data?.hash as `0x${string}`,
+      signature: recent.data?.signature as `0x${string}`,
+    })
+    expect(recovered.toLowerCase()).toBe(TEST_ADDRESS.toLowerCase())
     // Low-S invariant on the returned signature.
     const s = BigInt(recent.data?.s as string)
     expect(s <= SECP256K1_N >> 1n).toBe(true)
