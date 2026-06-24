@@ -613,28 +613,21 @@ const fail = (envelope: SkipSwapErrorEnvelope): SkipSwapOutcome => ({
   envelope,
 })
 
-/**
- * Quote + build a Skip swap envelope. Returns a structured outcome so callers
- * can inspect `intermediate_addresses_required` and retry with derived hop
- * addresses. NEVER signs or broadcasts — `unsigned_msgs` carries the unsigned
- * EVM/cosmos tx payloads for the caller's signing layer.
- */
-export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> {
-  const luncFloorUsd = resolveLuncFloorUsd(args.luncNotionalFloorUsd)
+/* ── runSkipSwap helpers (extracted to keep cognitive complexity under sonarjs limit) ── */
 
+function validateSwapInputs(args: SkipSwapArgs): SkipSwapErrorEnvelope | null {
   if (
     args.slippageTolerancePercent !== undefined &&
     (!Number.isFinite(args.slippageTolerancePercent) ||
       args.slippageTolerancePercent < 0 ||
       args.slippageTolerancePercent > MAX_SLIPPAGE_PERCENT)
   ) {
-    return fail({
+    return {
       error: 'invalid_input',
       message: `slippageTolerancePercent must be a finite number in [0, ${MAX_SLIPPAGE_PERCENT}] (got ${args.slippageTolerancePercent})`,
-    })
+    }
   }
 
-  // ── input validation (local, before round-tripping Skip) ──
   try {
     validateAddressShape(args.fromAddress, args.sourceChainId, 'fromAddress')
     validateAddressShape(args.toAddress, args.destChainId, 'toAddress')
@@ -642,41 +635,41 @@ export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> 
       validateAddressShape(addr, chainId, `intermediateAddresses[${chainId}]`)
     }
   } catch (err) {
-    return fail({
-      error: 'invalid_input',
-      message: err instanceof Error ? err.message : String(err),
-    })
+    return { error: 'invalid_input', message: err instanceof Error ? err.message : String(err) }
   }
 
   let amountInBigInt: bigint
   try {
     amountInBigInt = BigInt(args.amountIn)
   } catch (err) {
-    return fail({
+    return {
       error: 'invalid_input',
       message: `amountIn must be a base-units integer string (got "${args.amountIn}"): ${err instanceof Error ? err.message : String(err)}`,
-    })
+    }
   }
   if (amountInBigInt <= 0n) {
-    return fail({
-      error: 'invalid_input',
-      message: `amountIn must be > 0 (got "${args.amountIn}")`,
-    })
+    return { error: 'invalid_input', message: `amountIn must be > 0 (got "${args.amountIn}")` }
   }
+  return null
+}
 
-  // ── quote leg ──
-  let route: SkipRouteResponse
-  try {
-    route = await quoteSkipRoute(args)
-  } catch (err) {
-    if (err instanceof SkipApiError) return fail(err.toEnvelope())
-    throw err
-  }
+type RouteValidationOk = {
+  error: null
+  provided: Record<string, string>
+  chainIdsToAddresses: Record<string, string>
+  effectiveSlippagePercent: number
+  isThinPoolSwapRoute: boolean
+  isUstcSwapRoute: boolean
+}
 
-  // ── multi-signature route rejection (fund-safety) ──
-  if (typeof route.txs_required === 'number' && route.txs_required > 1) {
-    if (args.allowMultiTx !== true) {
-      return fail({
+function validateRouteResponse(
+  route: SkipRouteResponse,
+  args: SkipSwapArgs,
+  luncFloorUsd: number
+): { error: SkipSwapErrorEnvelope } | RouteValidationOk {
+  if (typeof route.txs_required === 'number' && route.txs_required > 1 && args.allowMultiTx !== true) {
+    return {
+      error: {
         error: 'skip_multi_tx_route_rejected',
         message:
           `Skip route requires ${route.txs_required} sequential signatures; only ` +
@@ -686,31 +679,31 @@ export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> 
         txs_required: route.txs_required,
         source_chain_id: args.sourceChainId,
         dest_chain_id: args.destChainId,
-      })
+      },
     }
   }
 
-  // ── unsupported-chain stranding guard (fund-recoverability) ──
   const unsupportedChain = firstUnsupportedCustodyChain(
     args.sourceChainId,
     args.destChainId,
     route.required_chain_addresses
   )
   if (unsupportedChain !== null) {
-    return fail({
-      error: 'skip_unsupported_route_chain',
-      message:
-        `Skip route custodies funds on chain "${unsupportedChain}", which Vultisig ` +
-        `cannot derive a key for. If a hop reverted there the funds would be ` +
-        `unrecoverable, so we only permit routes whose every custody chain is ` +
-        `supported. Try a different source/destination pair.`,
-      chain_id: unsupportedChain,
-      source_chain_id: args.sourceChainId,
-      dest_chain_id: args.destChainId,
-    })
+    return {
+      error: {
+        error: 'skip_unsupported_route_chain',
+        message:
+          `Skip route custodies funds on chain "${unsupportedChain}", which Vultisig ` +
+          `cannot derive a key for. If a hop reverted there the funds would be ` +
+          `unrecoverable, so we only permit routes whose every custody chain is ` +
+          `supported. Try a different source/destination pair.`,
+        chain_id: unsupportedChain,
+        source_chain_id: args.sourceChainId,
+        dest_chain_id: args.destChainId,
+      },
+    }
   }
 
-  // ── LUNC swap-hop budget guard ──
   if (
     isLuncRoute(args.sourceChainId, args.destChainId) &&
     route.does_swap !== false &&
@@ -719,135 +712,377 @@ export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> 
     const swapOpsCount = countSwapOperations(route.operations)
     const hopBudget = luncSwapHopBudget(args.sourceChainId, args.destChainId)
     if (swapOpsCount > hopBudget) {
-      return fail({
-        error: 'lunc_multi_hop_route_rejected',
-        message:
-          `LUNC swap routes are restricted to ${hopBudget} swap-op(s) for this route type to avoid ` +
-          `shallow-pool failure on columbus-5 / osmosis pools. ` +
-          `Skip returned a ${swapOpsCount}-swap-op route; refusing to quote. ` +
-          `Try a different source/destination pair or a smaller amount.`,
-        swap_operations_count: swapOpsCount,
-        hop_budget: hopBudget,
-        total_operations_count: route.operations.length,
-        swap_price_impact_percent: route.swap_price_impact_percent ?? null,
-        source_chain_id: args.sourceChainId,
-        dest_chain_id: args.destChainId,
-      })
+      return {
+        error: {
+          error: 'lunc_multi_hop_route_rejected',
+          message:
+            `LUNC swap routes are restricted to ${hopBudget} swap-op(s) for this route type to avoid ` +
+            `shallow-pool failure on columbus-5 / osmosis pools. ` +
+            `Skip returned a ${swapOpsCount}-swap-op route; refusing to quote. ` +
+            `Try a different source/destination pair or a smaller amount.`,
+          swap_operations_count: swapOpsCount,
+          hop_budget: hopBudget,
+          total_operations_count: route.operations.length,
+          swap_price_impact_percent: route.swap_price_impact_percent ?? null,
+          source_chain_id: args.sourceChainId,
+          dest_chain_id: args.destChainId,
+        },
+      }
     }
   }
 
-  // ── LUNC/USTC notional floor — applies ONLY to swap-routed bridges ──
   const isLuncSwapRoute = isLuncRoute(args.sourceChainId, args.destChainId) && route.does_swap !== false
   const isUstcSwapRoute = isUstcRoute(args) && route.does_swap !== false
   const isThinPoolSwapRoute = isLuncSwapRoute || isUstcSwapRoute
 
   if (isThinPoolSwapRoute) {
     const denomLabel = isUstcSwapRoute ? 'USTC' : 'LUNC'
-    const usdIn = Number(route.usd_amount_in ?? '0')
-    const usdOut = Number(route.usd_amount_out ?? '0')
-    const usdNotional = Math.max(usdIn, usdOut)
+    const usdNotional = Math.max(Number(route.usd_amount_in ?? '0'), Number(route.usd_amount_out ?? '0'))
     if (!Number.isFinite(usdNotional) || usdNotional <= 0) {
-      return fail({
-        error: `${denomLabel.toLowerCase()}_notional_unknown`,
-        message:
-          `${denomLabel} swap route returned a malformed or missing USD notional ` +
-          `(usd_amount_in=${JSON.stringify(route.usd_amount_in)}, ` +
-          `usd_amount_out=${JSON.stringify(route.usd_amount_out)}). Refusing to proceed.`,
-        usd_in: route.usd_amount_in,
-        usd_out: route.usd_amount_out,
-        floor_usd: luncFloorUsd,
-      })
+      return {
+        error: {
+          error: `${denomLabel.toLowerCase()}_notional_unknown`,
+          message:
+            `${denomLabel} swap route returned a malformed or missing USD notional ` +
+            `(usd_amount_in=${JSON.stringify(route.usd_amount_in)}, ` +
+            `usd_amount_out=${JSON.stringify(route.usd_amount_out)}). Refusing to proceed.`,
+          usd_in: route.usd_amount_in,
+          usd_out: route.usd_amount_out,
+          floor_usd: luncFloorUsd,
+        },
+      }
     }
     if (usdNotional < luncFloorUsd) {
-      return fail({
-        error: `${denomLabel.toLowerCase()}_notional_below_floor`,
-        message:
-          `${denomLabel} swap routes require >= $${luncFloorUsd} USD-equivalent ` +
-          `(got $${usdNotional.toFixed(2)}). Pool depth on the columbus-5 bridge path ` +
-          `makes smaller swaps fail at execute time. Size up amountIn, or use a pure ` +
-          `IBC transfer (does_swap=false).`,
-        usd_in: route.usd_amount_in,
-        usd_out: route.usd_amount_out,
-        floor_usd: luncFloorUsd,
-      })
+      return {
+        error: {
+          error: `${denomLabel.toLowerCase()}_notional_below_floor`,
+          message:
+            `${denomLabel} swap routes require >= $${luncFloorUsd} USD-equivalent ` +
+            `(got $${usdNotional.toFixed(2)}). Pool depth on the columbus-5 bridge path ` +
+            `makes smaller swaps fail at execute time. Size up amountIn, or use a pure ` +
+            `IBC transfer (does_swap=false).`,
+          usd_in: route.usd_amount_in,
+          usd_out: route.usd_amount_out,
+          floor_usd: luncFloorUsd,
+        },
+      }
     }
   }
 
-  // ── intermediate-address requirement check ──
   const requiredChains = new Set(route.required_chain_addresses ?? [])
   requiredChains.delete(args.sourceChainId)
   requiredChains.delete(args.destChainId)
-
   const provided = args.intermediateAddresses ?? {}
-
   const allowedKeys = new Set([...(route.required_chain_addresses ?? []), args.sourceChainId, args.destChainId])
+
   const extraKeys = Object.keys(provided).filter(c => !allowedKeys.has(c))
   if (extraKeys.length > 0) {
-    return fail({
-      error: 'intermediate_addresses_not_on_route',
-      message:
-        `intermediateAddresses contains chain ids that are NOT on the route ` +
-        `(extra: ${extraKeys.join(', ')}). Only chains in route.required_chain_addresses ` +
-        `(or source/dest) are accepted.`,
-      extra_chains: extraKeys,
-      allowed_chains: [...allowedKeys],
-    })
+    return {
+      error: {
+        error: 'intermediate_addresses_not_on_route',
+        message:
+          `intermediateAddresses contains chain ids that are NOT on the route ` +
+          `(extra: ${extraKeys.join(', ')}). Only chains in route.required_chain_addresses ` +
+          `(or source/dest) are accepted.`,
+        extra_chains: extraKeys,
+        allowed_chains: [...allowedKeys],
+      },
+    }
   }
 
   const missing = [...requiredChains].filter(c => !provided[c])
   if (missing.length > 0) {
-    return fail({
-      error: 'intermediate_addresses_required',
-      message: `route requires addresses on intermediate chains: ${missing.join(', ')}.`,
-      required_chains: [...requiredChains],
-      missing_chains: missing,
-      quote_preview: {
-        usd_amount_in: route.usd_amount_in,
-        usd_amount_out: route.usd_amount_out,
-        txs_required: route.txs_required,
-        swap_venue: route.swap_venue?.name,
-        estimated_route_duration_seconds: route.estimated_route_duration_seconds,
+    return {
+      error: {
+        error: 'intermediate_addresses_required',
+        message: `route requires addresses on intermediate chains: ${missing.join(', ')}.`,
+        required_chains: [...requiredChains],
+        missing_chains: missing,
+        quote_preview: {
+          usd_amount_in: route.usd_amount_in,
+          usd_amount_out: route.usd_amount_out,
+          txs_required: route.txs_required,
+          swap_venue: route.swap_venue?.name,
+          estimated_route_duration_seconds: route.estimated_route_duration_seconds,
+        },
       },
-    })
+    }
   }
 
   const collidingChains = Object.keys(provided).filter(c => c === args.sourceChainId || c === args.destChainId)
   if (collidingChains.length > 0) {
-    return fail({
-      error: 'invalid_input',
-      message:
-        `intermediateAddresses must not include source/dest chain ids ` +
-        `(collides on: ${collidingChains.join(', ')}). Pass source/dest via ` +
-        `fromAddress/toAddress only.`,
-      colliding_chains: collidingChains,
-    })
+    return {
+      error: {
+        error: 'invalid_input',
+        message:
+          `intermediateAddresses must not include source/dest chain ids ` +
+          `(collides on: ${collidingChains.join(', ')}). Pass source/dest via ` +
+          `fromAddress/toAddress only.`,
+        colliding_chains: collidingChains,
+      },
+    }
   }
+
   const chainIdsToAddresses: Record<string, string> = {
     ...provided,
     [args.sourceChainId]: args.fromAddress,
     [args.destChainId]: args.toAddress,
   }
 
-  // ── adaptive slippage for LUNC routes ──
   let effectiveSlippagePercent = args.slippageTolerancePercent ?? DEFAULT_SLIPPAGE_PERCENT
   if (isLuncRoute(args.sourceChainId, args.destChainId) && route.does_swap !== false) {
     const resolved = resolveLuncSlippage(route.swap_price_impact_percent, args.slippageTolerancePercent)
     if (!resolved.ok) {
-      return fail({
-        error: 'lunc_pool_impact_too_high',
-        message:
-          `LUNC pool too thin for this trade size: Skip quotes ${resolved.impactPercent}% ` +
-          `price impact, above the ${LUNC_MAX_SLIPPAGE_PERCENT}% ceiling we permit for ` +
-          `LUNC routes. Broadcasting would revert on the Osmosis leg and strand the ` +
-          `bridged funds. Try a smaller or larger amount that fits the pool depth.`,
-        swap_price_impact_percent: route.swap_price_impact_percent ?? null,
-        max_slippage_percent: LUNC_MAX_SLIPPAGE_PERCENT,
-        source_chain_id: args.sourceChainId,
-        dest_chain_id: args.destChainId,
-      })
+      return {
+        error: {
+          error: 'lunc_pool_impact_too_high',
+          message:
+            `LUNC pool too thin for this trade size: Skip quotes ${resolved.impactPercent}% ` +
+            `price impact, above the ${LUNC_MAX_SLIPPAGE_PERCENT}% ceiling we permit for ` +
+            `LUNC routes. Broadcasting would revert on the Osmosis leg and strand the ` +
+            `bridged funds. Try a smaller or larger amount that fits the pool depth.`,
+          swap_price_impact_percent: route.swap_price_impact_percent ?? null,
+          max_slippage_percent: LUNC_MAX_SLIPPAGE_PERCENT,
+          source_chain_id: args.sourceChainId,
+          dest_chain_id: args.destChainId,
+        },
+      }
     }
     effectiveSlippagePercent = resolved.slippagePercent
   }
+
+  return { error: null, provided, chainIdsToAddresses, effectiveSlippagePercent, isThinPoolSwapRoute, isUstcSwapRoute }
+}
+
+type MsgsValidationOk = { error: null; isMultiTx: boolean; msgsChainPath: string[] }
+
+function validateMsgsResponse(
+  msgs: SkipMsgsDirectResponse,
+  route: SkipRouteResponse,
+  args: SkipSwapArgs
+): { error: SkipSwapErrorEnvelope } | MsgsValidationOk {
+  if (!Array.isArray(msgs.txs) || msgs.txs.length === 0) {
+    return {
+      error: {
+        error: 'skip_msgs_direct_no_txs',
+        message:
+          (msgs as { message?: string }).message ??
+          'skip /msgs_direct returned 200 with no txs — route may have lapsed between /route and /msgs_direct',
+        skip_message: (msgs as { message?: string }).message ?? null,
+        skip_code: (msgs as { code?: number }).code ?? null,
+      },
+    }
+  }
+  if (!msgs.min_amount_out) {
+    return {
+      error: {
+        error: 'skip_msgs_direct_no_min_amount_out',
+        message: 'skip /msgs_direct returned 200 without min_amount_out — refusing to sign without a slippage floor',
+      },
+    }
+  }
+
+  const routeChainPath = route.chain_ids ?? []
+  const msgsChainPath = msgs.route?.chain_ids ?? []
+  if (routeChainPath.length === 0 || msgsChainPath.length === 0) {
+    return {
+      error: {
+        error: 'skip_route_msgs_chain_path_missing',
+        message:
+          'Skip /route or /msgs_direct returned without a chain_ids path — refusing to sign ' +
+          'because the route-vs-envelope integrity check requires both to declare the chain path.',
+        route_chain_path: routeChainPath,
+        msgs_chain_path: msgsChainPath,
+      },
+    }
+  }
+  if (JSON.stringify(routeChainPath) !== JSON.stringify(msgsChainPath)) {
+    return {
+      error: {
+        error: 'skip_route_msgs_chain_path_mismatch',
+        message:
+          'Skip /route and /msgs_direct returned different chain paths — refusing to sign because ' +
+          'the displayed quote no longer matches the envelope',
+        route_chain_path: routeChainPath,
+        msgs_chain_path: msgsChainPath,
+      },
+    }
+  }
+  if (route.does_swap !== msgs.route?.does_swap) {
+    return {
+      error: {
+        error: 'skip_route_msgs_does_swap_mismatch',
+        message:
+          'Skip /route and /msgs_direct disagree on does_swap — refusing to sign because the floor ' +
+          'decision was made on a route shape that does not match the envelope',
+        route_does_swap: route.does_swap,
+        msgs_route_does_swap: msgs.route?.does_swap,
+      },
+    }
+  }
+
+  const msgsTxsRequired = msgs.route?.txs_required
+  const isMultiTx = (typeof msgsTxsRequired === 'number' && msgsTxsRequired > 1) || msgs.txs.length > 1
+  if (isMultiTx && args.allowMultiTx !== true) {
+    return {
+      error: {
+        error: 'skip_multi_tx_route_rejected',
+        message:
+          `Skip /msgs_direct returned a multi-signature route ` +
+          `(txs_required=${msgsTxsRequired ?? 'unset'}, txs.length=${msgs.txs.length}); ` +
+          `single-signature (auto-forwarding PFM/GMP) is the default. Pass allowMultiTx:true ` +
+          `to opt into multi-step signing (only safe when the vault holds keys for every ` +
+          `route chain — the custody-chain gate enforces this).`,
+        txs_required: msgsTxsRequired ?? null,
+        txs_length: msgs.txs.length,
+        source_chain_id: args.sourceChainId,
+        dest_chain_id: args.destChainId,
+      },
+    }
+  }
+
+  if (!isMultiTx) {
+    const memoInfo = getSourceLegMemoByteLength(msgs.txs)
+    const cap = memoInfo ? COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID[memoInfo.sourceChainId] : undefined
+    if (memoInfo && cap !== undefined && memoInfo.memoBytes > cap) {
+      return {
+        error: {
+          error: 'skip_source_memo_too_long',
+          message:
+            `Skip route's source-leg memo is ${memoInfo.memoBytes} bytes, but ` +
+            `${memoInfo.sourceChainId} enforces a ${cap}-byte limit. Broadcast would fail with ` +
+            `sdk code 12 "memo too long" after signing. This corridor requires a multi-step ` +
+            `route (pass allowMultiTx:true) or a different routing strategy.`,
+          source_chain_id: memoInfo.sourceChainId,
+          memo_bytes: memoInfo.memoBytes,
+          memo_max_bytes: cap,
+        },
+      }
+    }
+  }
+
+  const msgsUnsupportedChain = firstUnsupportedCustodyChain(
+    args.sourceChainId,
+    args.destChainId,
+    msgs.route?.required_chain_addresses
+  )
+  if (msgsUnsupportedChain !== null) {
+    return {
+      error: {
+        error: 'skip_unsupported_route_chain',
+        message:
+          `Skip /msgs_direct route custodies funds on chain "${msgsUnsupportedChain}", which ` +
+          `Vultisig cannot derive a key for. Refusing to sign a route whose funds could come ` +
+          `to rest on an unrecoverable chain.`,
+        chain_id: msgsUnsupportedChain,
+        source_chain_id: args.sourceChainId,
+        dest_chain_id: args.destChainId,
+      },
+    }
+  }
+
+  if (isLuncRoute(args.sourceChainId, args.destChainId) && msgs.route?.does_swap !== false) {
+    if (!Array.isArray(msgs.route?.operations)) {
+      return {
+        error: {
+          error: 'lunc_msgs_direct_operations_missing',
+          message:
+            'Skip /msgs_direct response is missing `route.operations` on a LUNC path — the ' +
+            'hop-budget invariant cannot be verified against the envelope we would sign.',
+          source_chain_id: args.sourceChainId,
+          dest_chain_id: args.destChainId,
+        },
+      }
+    }
+    const msgsSwapOpsCount = countSwapOperations(msgs.route.operations)
+    const hopBudget = luncSwapHopBudget(args.sourceChainId, args.destChainId)
+    if (msgsSwapOpsCount > hopBudget) {
+      return {
+        error: {
+          error: 'lunc_multi_hop_route_rejected',
+          message:
+            `LUNC swap routes are restricted to ${hopBudget} swap-op(s) for this route type. ` +
+            `Skip /msgs_direct returned a ${msgsSwapOpsCount}-swap-op route in the envelope; ` +
+            `refusing to sign.`,
+          swap_operations_count: msgsSwapOpsCount,
+          hop_budget: hopBudget,
+          total_operations_count: (msgs.route.operations as unknown[]).length,
+          swap_price_impact_percent: msgs.route.swap_price_impact_percent ?? null,
+          source_chain_id: args.sourceChainId,
+          dest_chain_id: args.destChainId,
+        },
+      }
+    }
+  }
+
+  return { error: null, isMultiTx, msgsChainPath }
+}
+
+function validateTxEnvelopes(txs: unknown[], msgsChainPath: string[]): SkipSwapErrorEnvelope | null {
+  const canonicalChains = new Set(msgsChainPath)
+  for (let i = 0; i < txs.length; i++) {
+    const txRaw = txs[i]
+    if (txRaw == null || typeof txRaw !== 'object') {
+      return {
+        error: 'skip_msgs_tx_malformed',
+        message: `Skip /msgs_direct tx ${i} is not an object — refusing to sign a malformed envelope.`,
+        tx_index: i,
+      }
+    }
+    const tx = txRaw as { evm_tx?: { chain_id?: unknown } | null; cosmos_tx?: { chain_id?: unknown } | null }
+    const hasEvm = tx.evm_tx !== undefined && tx.evm_tx !== null
+    const hasCosmos = tx.cosmos_tx !== undefined && tx.cosmos_tx !== null
+    if (hasEvm === hasCosmos) {
+      return {
+        error: 'skip_msgs_tx_malformed',
+        message: `Skip /msgs_direct tx ${i} must have exactly one of evm_tx or cosmos_tx (got hasEvm=${hasEvm}, hasCosmos=${hasCosmos}) — refusing to sign a malformed envelope.`,
+        tx_index: i,
+      }
+    }
+    const txChainRaw = hasEvm ? tx.evm_tx?.chain_id : tx.cosmos_tx?.chain_id
+    if (typeof txChainRaw !== 'string' || txChainRaw.length === 0) {
+      return {
+        error: 'skip_msgs_tx_missing_chain_id',
+        message: `Skip /msgs_direct tx ${i} is missing a non-empty chain_id — refusing to sign without an explicit tx chain id.`,
+        tx_index: i,
+      }
+    }
+    if (!canonicalChains.has(txChainRaw)) {
+      return {
+        error: 'skip_msgs_tx_chain_off_path',
+        message: `Skip /msgs_direct tx ${i} declares chain_id=${txChainRaw} which is NOT on the canonical chain path [${msgsChainPath.join(', ')}] — refusing to sign an off-route tx.`,
+        tx_index: i,
+        tx_chain_id: txChainRaw,
+        canonical_chain_path: msgsChainPath,
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Quote + build a Skip swap envelope. Returns a structured outcome so callers
+ * can inspect `intermediate_addresses_required` and retry with derived hop
+ * addresses. NEVER signs or broadcasts — `unsigned_msgs` carries the unsigned
+ * EVM/cosmos tx payloads for the caller's signing layer.
+ */
+export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> {
+  const luncFloorUsd = resolveLuncFloorUsd(args.luncNotionalFloorUsd)
+
+  const inputErr = validateSwapInputs(args)
+  if (inputErr !== null) return fail(inputErr)
+
+  let route: SkipRouteResponse
+  try {
+    route = await quoteSkipRoute(args)
+  } catch (err) {
+    if (err instanceof SkipApiError) return fail(err.toEnvelope())
+    throw err
+  }
+
+  const routeResult = validateRouteResponse(route, args, luncFloorUsd)
+  if (routeResult.error !== null) return fail(routeResult.error)
+  const { provided, chainIdsToAddresses, effectiveSlippagePercent, isThinPoolSwapRoute, isUstcSwapRoute } = routeResult
 
   let msgs: SkipMsgsDirectResponse
   try {
@@ -857,196 +1092,16 @@ export async function runSkipSwap(args: SkipSwapArgs): Promise<SkipSwapOutcome> 
     throw err
   }
 
-  if (!Array.isArray(msgs.txs) || msgs.txs.length === 0) {
-    return fail({
-      error: 'skip_msgs_direct_no_txs',
-      message:
-        (msgs as { message?: string }).message ??
-        'skip /msgs_direct returned 200 with no txs — route may have lapsed between /route and /msgs_direct',
-      skip_message: (msgs as { message?: string }).message ?? null,
-      skip_code: (msgs as { code?: number }).code ?? null,
-    })
-  }
-  if (!msgs.min_amount_out) {
-    return fail({
-      error: 'skip_msgs_direct_no_min_amount_out',
-      message: 'skip /msgs_direct returned 200 without min_amount_out — refusing to sign without a slippage floor',
-    })
-  }
+  const msgsResult = validateMsgsResponse(msgs, route, args)
+  if (msgsResult.error !== null) return fail(msgsResult.error)
+  const { isMultiTx, msgsChainPath } = msgsResult
 
-  const routeChainPath = route.chain_ids ?? []
-  const msgsChainPath = msgs.route?.chain_ids ?? []
-  if (routeChainPath.length === 0 || msgsChainPath.length === 0) {
-    return fail({
-      error: 'skip_route_msgs_chain_path_missing',
-      message:
-        'Skip /route or /msgs_direct returned without a chain_ids path — refusing to sign ' +
-        'because the route-vs-envelope integrity check requires both to declare the chain path.',
-      route_chain_path: routeChainPath,
-      msgs_chain_path: msgsChainPath,
-    })
-  }
-  if (JSON.stringify(routeChainPath) !== JSON.stringify(msgsChainPath)) {
-    return fail({
-      error: 'skip_route_msgs_chain_path_mismatch',
-      message:
-        'Skip /route and /msgs_direct returned different chain paths — refusing to sign because ' +
-        'the displayed quote no longer matches the envelope',
-      route_chain_path: routeChainPath,
-      msgs_chain_path: msgsChainPath,
-    })
-  }
-  if (route.does_swap !== msgs.route?.does_swap) {
-    return fail({
-      error: 'skip_route_msgs_does_swap_mismatch',
-      message:
-        'Skip /route and /msgs_direct disagree on does_swap — refusing to sign because the floor ' +
-        'decision was made on a route shape that does not match the envelope',
-      route_does_swap: route.does_swap,
-      msgs_route_does_swap: msgs.route?.does_swap,
-    })
-  }
-
-  // ── multi-signature route rejection (mirrored on /msgs_direct) ──
-  const msgsTxsRequired = msgs.route?.txs_required
-  const isMultiTx = (typeof msgsTxsRequired === 'number' && msgsTxsRequired > 1) || msgs.txs.length > 1
-  if (isMultiTx && args.allowMultiTx !== true) {
-    return fail({
-      error: 'skip_multi_tx_route_rejected',
-      message:
-        `Skip /msgs_direct returned a multi-signature route ` +
-        `(txs_required=${msgsTxsRequired ?? 'unset'}, txs.length=${msgs.txs.length}); ` +
-        `single-signature (auto-forwarding PFM/GMP) is the default. Pass allowMultiTx:true ` +
-        `to opt into multi-step signing (only safe when the vault holds keys for every ` +
-        `route chain — the custody-chain gate enforces this).`,
-      txs_required: msgsTxsRequired ?? null,
-      txs_length: msgs.txs.length,
-      source_chain_id: args.sourceChainId,
-      dest_chain_id: args.destChainId,
-    })
-  }
-
-  // ── cosmos source-leg memo size preflight ──
-  if (!isMultiTx) {
-    const memoInfo = getSourceLegMemoByteLength(msgs.txs)
-    const cap = memoInfo ? COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID[memoInfo.sourceChainId] : undefined
-    if (memoInfo && cap !== undefined && memoInfo.memoBytes > cap) {
-      return fail({
-        error: 'skip_source_memo_too_long',
-        message:
-          `Skip route's source-leg memo is ${memoInfo.memoBytes} bytes, but ` +
-          `${memoInfo.sourceChainId} enforces a ${cap}-byte limit. Broadcast would fail with ` +
-          `sdk code 12 "memo too long" after signing. This corridor requires a multi-step ` +
-          `route (pass allowMultiTx:true) or a different routing strategy.`,
-        source_chain_id: memoInfo.sourceChainId,
-        memo_bytes: memoInfo.memoBytes,
-        memo_max_bytes: cap,
-      })
-    }
-  }
-
-  // ── unsupported-chain stranding guard (mirrored on /msgs_direct) ──
-  const msgsUnsupportedChain = firstUnsupportedCustodyChain(
-    args.sourceChainId,
-    args.destChainId,
-    msgs.route?.required_chain_addresses
-  )
-  if (msgsUnsupportedChain !== null) {
-    return fail({
-      error: 'skip_unsupported_route_chain',
-      message:
-        `Skip /msgs_direct route custodies funds on chain "${msgsUnsupportedChain}", which ` +
-        `Vultisig cannot derive a key for. Refusing to sign a route whose funds could come ` +
-        `to rest on an unrecoverable chain.`,
-      chain_id: msgsUnsupportedChain,
-      source_chain_id: args.sourceChainId,
-      dest_chain_id: args.destChainId,
-    })
-  }
-
-  // ── LUNC swap-hop budget guard (mirrored on /msgs_direct response) ──
-  if (isLuncRoute(args.sourceChainId, args.destChainId) && msgs.route?.does_swap !== false) {
-    if (!Array.isArray(msgs.route?.operations)) {
-      return fail({
-        error: 'lunc_msgs_direct_operations_missing',
-        message:
-          'Skip /msgs_direct response is missing `route.operations` on a LUNC path — the ' +
-          'hop-budget invariant cannot be verified against the envelope we would sign.',
-        source_chain_id: args.sourceChainId,
-        dest_chain_id: args.destChainId,
-      })
-    }
-    const msgsSwapOpsCount = countSwapOperations(msgs.route.operations)
-    const hopBudget = luncSwapHopBudget(args.sourceChainId, args.destChainId)
-    if (msgsSwapOpsCount > hopBudget) {
-      return fail({
-        error: 'lunc_multi_hop_route_rejected',
-        message:
-          `LUNC swap routes are restricted to ${hopBudget} swap-op(s) for this route type. ` +
-          `Skip /msgs_direct returned a ${msgsSwapOpsCount}-swap-op route in the envelope; ` +
-          `refusing to sign.`,
-        swap_operations_count: msgsSwapOpsCount,
-        hop_budget: hopBudget,
-        total_operations_count: (msgs.route.operations as unknown[]).length,
-        swap_price_impact_percent: msgs.route.swap_price_impact_percent ?? null,
-        source_chain_id: args.sourceChainId,
-        dest_chain_id: args.destChainId,
-      })
-    }
-  }
-
-  // ── per-tx envelope validation against the canonical chain path ──
-  const canonicalChains = new Set(msgsChainPath)
-  for (let i = 0; i < msgs.txs.length; i++) {
-    const txRaw = msgs.txs[i] as unknown
-    if (txRaw == null || typeof txRaw !== 'object') {
-      return fail({
-        error: 'skip_msgs_tx_malformed',
-        message: `Skip /msgs_direct tx ${i} is not an object — refusing to sign a malformed envelope.`,
-        tx_index: i,
-      })
-    }
-    const tx = txRaw as { evm_tx?: { chain_id?: unknown } | null; cosmos_tx?: { chain_id?: unknown } | null }
-    const evmRaw = tx.evm_tx
-    const cosmosRaw = tx.cosmos_tx
-    const hasEvm = evmRaw !== undefined && evmRaw !== null
-    const hasCosmos = cosmosRaw !== undefined && cosmosRaw !== null
-    if (hasEvm === hasCosmos) {
-      return fail({
-        error: 'skip_msgs_tx_malformed',
-        message:
-          `Skip /msgs_direct tx ${i} must have exactly one of evm_tx or cosmos_tx ` +
-          `(got hasEvm=${hasEvm}, hasCosmos=${hasCosmos}) — refusing to sign a malformed envelope.`,
-        tx_index: i,
-      })
-    }
-    const txChainRaw = hasEvm ? evmRaw?.chain_id : cosmosRaw?.chain_id
-    if (typeof txChainRaw !== 'string' || txChainRaw.length === 0) {
-      return fail({
-        error: 'skip_msgs_tx_missing_chain_id',
-        message:
-          `Skip /msgs_direct tx ${i} is missing a non-empty chain_id — refusing to sign ` +
-          `without an explicit tx chain id.`,
-        tx_index: i,
-      })
-    }
-    if (!canonicalChains.has(txChainRaw)) {
-      return fail({
-        error: 'skip_msgs_tx_chain_off_path',
-        message:
-          `Skip /msgs_direct tx ${i} declares chain_id=${txChainRaw} which is NOT on the ` +
-          `canonical chain path [${msgsChainPath.join(', ')}] — refusing to sign an off-route tx.`,
-        tx_index: i,
-        tx_chain_id: txChainRaw,
-        canonical_chain_path: msgsChainPath,
-      })
-    }
-  }
+  const txEnvErr = validateTxEnvelopes(msgs.txs as unknown[], msgsChainPath)
+  if (txEnvErr !== null) return fail(txEnvErr)
 
   const unsignedMsgs = shapeUnsignedMsgs(msgs)
   const slippageBps = Math.round(effectiveSlippagePercent * 100)
 
-  // ── below-minimum notional hint (advisory, not a reject) ──
   const BELOW_MIN_NOTIONAL_THRESHOLD_USD = 1.0
   const usdAmountIn = Number(msgs.route.usd_amount_in ?? '0')
   const belowMinNotionalHint: string | null =
