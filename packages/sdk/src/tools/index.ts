@@ -8,6 +8,9 @@ export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4By
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
+// DEX primitives (read-only / pure math — no signing, no broadcast)
+export * as dex from './dex'
+
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
