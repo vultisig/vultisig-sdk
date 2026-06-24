@@ -13,12 +13,13 @@ export {
 } from './balance'
 
 // EVM utilities
-export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   resolve4ByteSelector,
@@ -47,6 +48,10 @@ export { gas }
 // Balance reads (per-chain, vault-free)
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
+
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
 
 // Token utilities
 export type {

@@ -1,5 +1,8 @@
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './cosmos'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './cosmos'
+export type { SolBalance, SplTokenBalance } from './solana'
+export { getSolBalance, getSplTokenBalance } from './solana'
+
 // Pure-crypto balance reads (decode + SCALE parse + raw RPC). Never signs/broadcasts.
 export {
   balancePolkadot,
