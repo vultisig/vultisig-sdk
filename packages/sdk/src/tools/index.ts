@@ -161,6 +161,8 @@ export {
   buildCw20TransferMsg,
   type BuildCw20TransferMsgParams,
   type BuildCw20TransferMsgResult,
+  buildSplTransfer,
+  type BuildSplTransferParams,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
@@ -178,6 +180,7 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   type VaultIdentity,
 } from './prep'

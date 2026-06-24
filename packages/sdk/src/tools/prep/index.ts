@@ -3,6 +3,7 @@ export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmo
 export { buildCw20TransferMsg, type BuildCw20TransferMsgParams, type BuildCw20TransferMsgResult } from './cw20Transfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
+export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
   prepareSuiTokenTransferFromKeys,
   type PrepareSuiTokenTransferFromKeysParams,
