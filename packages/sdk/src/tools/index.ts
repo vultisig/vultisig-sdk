@@ -15,6 +15,20 @@ export * as dex from './dex'
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope)
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
+
 // Swap
 export type { FindSwapQuoteParams, NativeSwapMinAmountIn, SwapQuote } from './swap'
 export {
@@ -54,9 +68,14 @@ export type {
   BalancerV3SwapPath,
   BuildBalancerV3SwapCalldataParams,
   BuildBuyPtParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   BuildRedeemParams,
   BuildSellPtParams,
   Defi,
+  GlifUnsignedTx,
   PendleActiveMarket,
   PendleChain,
   PendleMarketParams,
@@ -68,9 +87,14 @@ export type {
 export {
   buildBalancerV3SwapCalldata,
   buildBuyPt,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
   buildRedeem,
   buildSellPt,
   defi,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
   isPendleChain,
   pendle,
   PENDLE_ROUTER_V4,
