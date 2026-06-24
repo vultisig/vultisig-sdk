@@ -34,6 +34,8 @@ export type {
   AcrossChain,
   AcrossQuote,
   AcrossQuoteParams,
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
   FindSwapQuoteParams,
   NativeSwapMinAmountIn,
   SwapQuote,
@@ -41,10 +43,17 @@ export type {
 export {
   acrossQuote,
   acrossSupportedChains,
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
 } from './swap'
 
 // DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
