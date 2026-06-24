@@ -289,12 +289,15 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
   getEvmBalances,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
