@@ -324,9 +324,18 @@ export type {
   CoinMetadata,
   KnownCoin,
   KnownCoinMetadata,
+  ResolveContractResult,
   TokenMetadataResolver,
+  TokenStandard,
 } from '../../tools/token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  resolveContract,
+  searchToken,
+} from '../../tools/token'
 
 // Balance reads (per-chain, vault-free). UTXO reader is a pure fetch helper
 // (only the UtxoChain enum + global fetch), so a static re-export is RN-safe.

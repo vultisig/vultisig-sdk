@@ -26,8 +26,17 @@ export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './bal
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
 
 // Token utilities
-export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  KnownCoin,
+  KnownCoinMetadata,
+  ResolveContractResult,
+  TokenMetadataResolver,
+  TokenStandard,
+} from './token'
+export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {
