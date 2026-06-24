@@ -25,7 +25,7 @@ import { bech32 } from '@scure/base'
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 
-import { concat, encodeCoin, encodeString, field, varint } from '@/utils/cosmosProto'
+import { concat, encodeCoin, encodeString, field, varint } from '../../../../utils/cosmosProto'
 
 // ---------------------------------------------------------------------------
 // Hex utils (RN-safe, no Buffer)

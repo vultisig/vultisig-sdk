@@ -36,9 +36,8 @@
 import { bech32 } from 'bech32'
 import { Buffer } from 'buffer'
 
-import { concat, encodeCoin, encodeString, field } from '@/utils/cosmosProto'
-
 import { CosmosMsgType } from '../../types/cosmos-msg'
+import { concat, encodeCoin, encodeString, field } from '../../utils/cosmosProto'
 
 // ---------------------------------------------------------------------------
 // Input validation (pure, no network). Ported from mcp-ts cosmos-staking.ts.
