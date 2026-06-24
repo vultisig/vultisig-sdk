@@ -457,6 +457,7 @@ export type {
   Defi,
   Envelope,
   EnvelopeKind,
+  EvmGasPrice,
   FieldDiff,
   FindSwapQuoteParams,
   GasTxType,
@@ -485,6 +486,8 @@ export type {
   RecipientSanityInput,
   RecipientSanityResult,
   ResolveContractResult,
+  SolBalance,
+  SplTokenBalance,
   ThreeJaneTranche,
   ThreeJaneTxStep,
   TokenApproval,
@@ -547,6 +550,7 @@ export {
   evaluatePolicy,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   findSwapQuote,
   formatUtxoBalance,
@@ -559,6 +563,8 @@ export {
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getPublicKey,
+  getSolBalance,
+  getSplTokenBalance,
   getTokenApprovals,
   getTokenMetadata,
   getTxStatus,
@@ -609,6 +615,12 @@ export {
   utxoFeeRate,
   VerifierClient,
 } from './tools'
+
+// Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
+// The pure read-only per-chain gas price lives in `evmGasPrice` above; this
+// service is exposed for callers that already hold a vault and need the richer
+// chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
+export { GasEstimationService } from './vault/services/GasEstimationService'
 
 // ============================================================================
 // PUBLIC API - Push Notifications
