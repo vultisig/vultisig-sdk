@@ -1,6 +1,9 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
+export * from './defi'
+
 // Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
 export {
   balancePolkadot,
