@@ -8,6 +8,11 @@ export {
   type PreparePolkadotAssetSendResult,
 } from './polkadotAssetSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
+export {
+  prepareSuiTokenTransferFromKeys,
+  type PrepareSuiTokenTransferFromKeysParams,
+  SUI_NATIVE_COIN_TYPE,
+} from './suiTokenTransfer'
 export { prepareSwapTxFromKeys, type PrepareSwapTxFromKeysParams } from './swap'
 export {
   prepareThorchainMsgDepositTxFromKeys,
