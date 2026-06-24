@@ -448,6 +448,7 @@ export {
   DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   defi,
   deriveAddressFromKeys,
+  dex,
   evaluatePolicy,
   evmCall,
   evmCheckAllowance,
