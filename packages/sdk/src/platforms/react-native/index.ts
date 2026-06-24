@@ -523,3 +523,32 @@ export { MemoryStorage } from '../../storage/MemoryStorage'
 
 // Event emitter
 export { UniversalEventEmitter } from '../../events/EventEmitter'
+
+// DeFi — River Omni-CDP (pure viem encodeFunctionData, no RPC, RN-safe)
+// Open trove resolves hints on-chain (EVM RPC), but delegate approval and
+// close trove are fully offline. All builders return unsigned calldata only.
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from '../../tools/defi/river'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  riverStatusName,
+} from '../../tools/defi/river'
