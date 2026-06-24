@@ -526,6 +526,7 @@ export {
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
   recipientSanity,
   resolve4ByteSelector,
   resolveEns,
