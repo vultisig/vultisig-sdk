@@ -211,6 +211,22 @@ export {
   getCosmosSwapGasLimit,
 } from '../../tools/gas'
 
+// Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
+// wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
+// fetch, all RN-safe, so a static re-export is fine (no chain-client deps to
+// externalize). The RN consumer (Station / vultiagent-app) needs this to build
+// the signable Terra swap msg; omitting it would force a re-implementation.
+export type { AstroportSwapResult, BuildAstroportSwapParams } from '../../tools/swap/astroport'
+export {
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
+} from '../../tools/swap/astroport'
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
 export {
   abiDecode,
