@@ -138,6 +138,9 @@ export {
   buildCw20TransferMsg,
   type BuildCw20TransferMsgParams,
   type BuildCw20TransferMsgResult,
+  CONSOLIDATE_CHAINS,
+  type ConsolidateChain,
+  type ConsolidateUtxo,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -147,6 +150,9 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  type PrepareUtxoConsolidateResult,
+  prepareUtxoConsolidateTxFromKeys,
+  type PrepareUtxoConsolidateTxFromKeysParams,
   type VaultIdentity,
 } from './prep'
 
