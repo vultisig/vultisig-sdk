@@ -176,6 +176,8 @@ export {
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
   type PrepareIbcTransferResult,
+  prepareJettonTransferTxFromKeys,
+  type PrepareJettonTransferTxFromKeysParams,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
