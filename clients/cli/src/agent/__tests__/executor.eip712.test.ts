@@ -270,6 +270,53 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     }
   })
 
+  it('single-order payloads[] (no batch) emits no spurious pm_batch_ref key', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-single', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_order_ref: 'order-ref-123',
+        __pm_auto_submit: true,
+        // NB: no pm_batch_ref — this is the single-order flow.
+      })
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // The return literal sets pm_batch_ref: input.pm_batch_ref, which is
+      // undefined for single-order flows. Confirm gomes's concern is moot:
+      // JSON.stringify (how recent_actions ship to the backend) drops the
+      // undefined-valued key entirely, so downstream never sees a spurious
+      // pm_batch_ref that could confuse an existence check.
+      expect(recent.data?.pm_batch_ref).toBeUndefined()
+      const wireData = JSON.parse(JSON.stringify(recent.data))
+      expect('pm_batch_ref' in wireData).toBe(false)
+      // The order ref still rides along untouched.
+      expect(recent.data?.pm_order_ref).toBe('order-ref-123')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('5-field domain with salt (bytes32) matches canonical hash', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
