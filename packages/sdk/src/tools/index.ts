@@ -25,6 +25,14 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
 
+// Gas / fee fan-out
+export type { CompareCostsEntry, CompareCostsParams, CompareCostsResult, CompareCostsSkipped, GasTxType } from './gas'
+export { compareCosts, DEFAULT_COMPARE_CHAINS, GAS_UNITS, getChainGasPriceGwei } from './gas'
+import * as gas from './gas'
+// Namespace handle so callers can use the documented `sdk.gas.compareCosts(...)`
+// ergonomic alongside the flat named exports.
+export { gas }
+
 // Balance reads (per-chain RPC)
 export type { SolBalance, SplTokenBalance } from './balance'
 export { getSolBalance, getSplTokenBalance } from './balance'
