@@ -97,6 +97,19 @@ describe('resolveContract — ERC-20', () => {
     evmCall.mockResolvedValueOnce({ data: undefined }).mockResolvedValueOnce({ data: undefined })
     await expect(resolveContract('Ethereum', USDC)).rejects.toThrow(/valid ERC-20 symbol/i)
   })
+
+  it('rejects a dynamic-string return with a bogus ABI offset (not 0x20)', async () => {
+    // Same length/data words as a valid USDC symbol but a corrupted offset word
+    // (0x40 instead of 0x20). The decoder must NOT trust the framing and decode
+    // it as a plausible-looking symbol — it must reject so we fail closed.
+    const badOffset = '0'.repeat(62) + '40'
+    const lenWord = (4).toString(16).padStart(64, '0')
+    const dataWord = Buffer.from('USDC', 'utf-8').toString('hex').padEnd(64, '0')
+    const bogus = `0x${badOffset}${lenWord}${dataWord}`
+    evmReadContract.mockResolvedValue(6)
+    evmCall.mockResolvedValueOnce({ data: bogus }).mockResolvedValueOnce({ data: bogus })
+    await expect(resolveContract('Ethereum', USDC)).rejects.toThrow(/valid ERC-20 symbol/i)
+  })
 })
 
 describe('resolveContract — CW20', () => {
@@ -125,6 +138,16 @@ describe('resolveContract — CW20', () => {
 
   it('fails closed when token_info is missing required fields', async () => {
     queryUrl.mockResolvedValue({ data: { name: 'X' } })
+    await expect(resolveContract('TerraClassic', TERRA)).rejects.toThrow(/valid CW20 token_info/i)
+  })
+
+  it('fails closed on a fractional decimals — never fabricates a fund-relevant scale', async () => {
+    queryUrl.mockResolvedValue({ data: { name: 'X', symbol: 'XX', decimals: 6.5 } })
+    await expect(resolveContract('TerraClassic', TERRA)).rejects.toThrow(/valid CW20 token_info/i)
+  })
+
+  it('fails closed on an out-of-range (>255) decimals', async () => {
+    queryUrl.mockResolvedValue({ data: { name: 'X', symbol: 'XX', decimals: 300 } })
     await expect(resolveContract('TerraClassic', TERRA)).rejects.toThrow(/valid CW20 token_info/i)
   })
 
@@ -171,6 +194,13 @@ describe('resolveContract — SPL', () => {
       value: { data: { parsed: { type: 'account', info: {} } } },
     })
     await expect(resolveContract('Solana', USDC_MINT)).rejects.toThrow(/not a mint/i)
+  })
+
+  it('fails closed on a fractional / out-of-range mint decimals — never fabricates a scale', async () => {
+    getParsedAccountInfo.mockResolvedValue({
+      value: { data: { parsed: { type: 'mint', info: { decimals: 6.5, supply: '1' } } } },
+    })
+    await expect(resolveContract('Solana', USDC_MINT)).rejects.toThrow(/valid decimals/i)
   })
 
   it('fails closed on a non-base58 / wrong-length mint (no RPC fired)', async () => {

@@ -72,6 +72,16 @@ const isEvmChain = (chain: string): chain is EvmChain => Object.values(EvmChain)
 
 const isCw20Chain = (chain: string): chain is Cw20Chain => (CW20_CHAINS as readonly string[]).includes(chain)
 
+// decimals is the fund-relevant field: downstream builders/balances scale
+// amounts by 10**decimals, so a fractional / negative / absurd value silently
+// corrupts every amount. CW20 (u8 in the CW20 spec) and SPL (u8 mint decimals)
+// are both byte-typed on-chain, so a valid decimals is an integer in [0, 255].
+// ERC-20 keeps its own (stricter, mcp-ts-parity) <=77 cap inline. This guards
+// the CW20/SPL paths, which previously only checked `typeof === 'number'` and
+// would have let a JSON `6.5` / `-1` / `300` (or NaN-free float) through.
+const isValidByteDecimals = (d: unknown): d is number =>
+  typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 255
+
 // ── ERC-20 ──────────────────────────────────────────────────────────────────
 
 const SYMBOL_SELECTOR = '0x95d89b41'
@@ -84,10 +94,15 @@ const NAME_SELECTOR = '0x06fdde03'
  */
 const decodeAbiString = (hex: string): string | null => {
   const raw = hex.startsWith('0x') ? hex.slice(2) : hex
-  // Canonical dynamic string: offset(32) + length(32) + data.
+  // Canonical dynamic string: offset(32) + length(32) + data. The first word is
+  // the byte-offset to the length word; for a single returned `string` it is
+  // always 0x20 (32). Validate it rather than blindly assuming the framing, so a
+  // contract returning a bogus offset / length-lie can't be mis-decoded into a
+  // plausible-looking symbol (these feed the fund-relevant resolver result).
   if (raw.length >= 128) {
+    const offset = parseInt(raw.slice(0, 64), 16)
     const strLen = parseInt(raw.slice(64, 128), 16)
-    if (Number.isFinite(strLen) && 128 + strLen * 2 <= raw.length) {
+    if (offset === 32 && Number.isFinite(strLen) && 128 + strLen * 2 <= raw.length) {
       const strHex = raw.slice(128, 128 + strLen * 2)
       const decoded = Buffer.from(strHex, 'hex').toString('utf-8').replace(/\0+$/, '')
       if (decoded) return decoded
@@ -181,7 +196,7 @@ const resolveCw20 = async (chain: Cw20Chain, contractAddress: string): Promise<R
     throw new Error(`not a recognized CW20 token contract on ${chain}: ${msg}`)
   }
 
-  if (!info?.symbol || typeof info.decimals !== 'number') {
+  if (!info?.symbol || !isValidByteDecimals(info.decimals)) {
     throw new Error(`contract on ${chain} did not return a valid CW20 token_info (not a CW20 contract?)`)
   }
 
@@ -231,8 +246,8 @@ const resolveSpl = async (mintAddress: string): Promise<ResolveContractResult> =
   }
 
   const info = data.parsed.info as ParsedMintInfo
-  if (typeof info?.decimals !== 'number') {
-    throw new Error(`SPL mint account on Solana did not expose decimals`)
+  if (!isValidByteDecimals(info?.decimals)) {
+    throw new Error(`SPL mint account on Solana did not expose valid decimals`)
   }
 
   // SPL mints don't embed symbol/name on-chain (Metaplex token-metadata PDA),
