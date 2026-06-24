@@ -165,9 +165,13 @@ export type {
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
   BuildSplTransferParams,
+  ConsolidateChain,
+  ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
   SplTransferResult,
   VaultIdentity,
 } from '../../tools/prep'
@@ -210,6 +214,11 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
 export async function buildSplTransfer(...args: unknown[]) {
   const mod = await import('../../tools/prep/splTransfer')
   return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
+}
+
+export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/utxoConsolidate')
+  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
 }
 
 // Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned

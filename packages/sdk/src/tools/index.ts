@@ -137,6 +137,9 @@ export {
 export {
   buildSplTransfer,
   type BuildSplTransferParams,
+  CONSOLIDATE_CHAINS,
+  type ConsolidateChain,
+  type ConsolidateUtxo,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -146,6 +149,9 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  type PrepareUtxoConsolidateResult,
+  prepareUtxoConsolidateTxFromKeys,
+  type PrepareUtxoConsolidateTxFromKeysParams,
   type SplTransferResult,
   type VaultIdentity,
 } from './prep'
