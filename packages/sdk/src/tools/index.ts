@@ -157,6 +157,10 @@ export {
   type Verdict,
 } from './policy'
 
+// Validation (pure recipient sanity: null / self-send / malformed-EVM)
+export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult } from './validate'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from './validate'
+
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
   CONSOLIDATE_CHAINS,
