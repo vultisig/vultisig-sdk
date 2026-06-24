@@ -31,6 +31,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
+    expect(typeof sdk.encodeErc20Approve).toBe('function')
+    expect(typeof sdk.encodeErc20Revoke).toBe('function')
+    expect(sdk.MAX_UINT256).toBe((1n << 256n) - 1n)
+  })
+
   it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {
     expect(typeof sdk.getSolBalance).toBe('function')
     expect(typeof sdk.getSplTokenBalance).toBe('function')
