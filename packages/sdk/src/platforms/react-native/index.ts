@@ -245,12 +245,14 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
+export type { GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  getTokenApprovals,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
