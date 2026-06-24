@@ -102,6 +102,15 @@ export {
   TERRA_LCD,
 } from './swap'
 
+// Gas / fee primitives (cosmos gas-fee label + gas limits)
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from './gas'
+
 // DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
 export type {
   BalancerTokenApi,
@@ -184,14 +193,22 @@ export {
   type Verdict,
 } from './policy'
 
+// Validation (pure recipient sanity: null / self-send / malformed-EVM)
+export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult } from './validate'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from './validate'
+
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildSplTransfer,
+  type BuildSplTransferParams,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
+  prepareJettonTransferTxFromKeys,
+  type PrepareJettonTransferTxFromKeysParams,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
@@ -203,6 +220,7 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   type VaultIdentity,
 } from './prep'
