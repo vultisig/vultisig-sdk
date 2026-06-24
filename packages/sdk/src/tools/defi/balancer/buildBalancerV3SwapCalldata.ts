@@ -221,6 +221,28 @@ export const buildBalancerV3SwapCalldata = (params: BuildBalancerV3SwapCalldataP
   if (!/^0x([0-9a-fA-F]{2})*$/.test(userData)) {
     throw new Error('userData must be 0x-prefixed even-length hex')
   }
+  if (swapKindInput !== 'EXACT_IN' && swapKindInput !== 'EXACT_OUT') {
+    throw new Error(`swapKind must be "EXACT_IN" or "EXACT_OUT" (got "${swapKindInput}")`)
+  }
+
+  // Validate that every path shares the same input and output token. Multi-path
+  // Balancer swaps aggregate amounts across parallel routes for a single token
+  // pair. Mixed-pair paths would encode cross-asset amounts into the wrong slots.
+  const firstInputAddr = getAddress(paths[0].tokens[0].address)
+  const firstOutputAddr = getAddress(paths[0].tokens[paths[0].tokens.length - 1].address)
+  for (let i = 1; i < paths.length; i++) {
+    const p = paths[i]
+    if (getAddress(p.tokens[0].address) !== firstInputAddr) {
+      throw new Error(
+        `path[${i}] input token (${p.tokens[0].address}) differs from path[0] input token (${firstInputAddr}); all paths must share the same token pair`
+      )
+    }
+    if (getAddress(p.tokens[p.tokens.length - 1].address) !== firstOutputAddr) {
+      throw new Error(
+        `path[${i}] output token (${p.tokens[p.tokens.length - 1].address}) differs from path[0] output token (${firstOutputAddr}); all paths must share the same token pair`
+      )
+    }
+  }
 
   const swapKind = swapKindInput === 'EXACT_OUT' ? SwapKind.GivenOut : SwapKind.GivenIn
 

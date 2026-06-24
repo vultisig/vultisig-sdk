@@ -151,6 +151,10 @@ export function claimInterpretations(amount: string, units: AmountUnits, decimal
  * when `claimed` is zero to avoid division by zero. Computed from exact bigint
  * magnitudes; the final ratio is a double (matches the Go `amountDriftPct`,
  * which converts through big.Float for the percentage). Mirrors the Go reference.
+ *
+ * Saturates to Infinity (not NaN) when either operand overflows Number.MAX_SAFE_INTEGER,
+ * because Infinity > any threshold always = true (BLOCK), whereas NaN > threshold = false
+ * which would silently bypass policy checks on extreme amounts.
  */
 export function amountDriftPct(claimed: bigint, observed: bigint): number {
   if (claimed === 0n) {
@@ -160,5 +164,10 @@ export function amountDriftPct(claimed: bigint, observed: bigint): number {
   if (diff < 0n) {
     diff = -diff
   }
-  return Number(diff) / Number(claimed < 0n ? -claimed : claimed)
+  const absClaimed = claimed < 0n ? -claimed : claimed
+  // Keep diff-vs-claimed comparison in bigint to avoid NaN from Infinity/Infinity.
+  // Scale diff to a ratio * 1e9 in integer space, then convert once.
+  const SCALE = 1_000_000_000n
+  const ratioBig = (diff * SCALE) / absClaimed
+  return Number(ratioBig) / 1e9
 }
