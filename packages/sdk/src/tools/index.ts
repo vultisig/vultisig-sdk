@@ -70,6 +70,15 @@ export {
   TERRA_LCD,
 } from './swap'
 
+// Gas / fee primitives (cosmos gas-fee label + gas limits)
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from './gas'
+
 // DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
 export type {
   BalancerTokenApi,
@@ -158,11 +167,18 @@ export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } fro
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
   buildSplTransfer,
   type BuildSplTransferParams,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
+  cosmosStaking,
+  type CosmosStakingMsgEnvelope,
+  type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   POLKADOT_ASSET_HUB_KNOWN_ASSETS,
@@ -183,9 +199,12 @@ export {
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type RedelegateParams,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
+  type UndelegateParams,
   type VaultIdentity,
+  type WithdrawRewardsParams,
 } from './prep'
 
 // Atomic chain helpers (re-exported from core for vault-free callers)

@@ -1,5 +1,17 @@
 export { prepareContractCallTxFromKeys } from './contractCall'
 export { prepareSignAminoTxFromKeys, prepareSignDirectTxFromKeys } from './cosmos'
+export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+  type CosmosStakingMsgEnvelope,
+  type DelegateParams,
+  type RedelegateParams,
+  type UndelegateParams,
+  type WithdrawRewardsParams,
+} from './cosmosStaking'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export {

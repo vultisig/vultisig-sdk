@@ -56,11 +56,18 @@ export type BuildThreeJaneSupplyUsdcParams = {
    */
   tranche?: ThreeJaneTranche
   /**
-   * Share recipient. Injectable so multi-consumer callers can route shares to a
-   * vault / smart-account distinct from the funding address. Defaults to `from`
-   * (the only behaviour the on-chain Helper currently honours — it mints to
-   * msg.sender). No affiliate/fee is hardcoded; this is the sole steerable
-   * recipient knob and it defaults to the depositor (neutral / self-only).
+   * Share recipient. SENDER-BOUND: must equal `from`, and defaults to `from`.
+   *
+   * The 3Jane Helper's documented behaviour is to mint shares to msg.sender, so a
+   * `receiver` distinct from the depositor would either revert (funds wasted on
+   * gas) or — if the Helper forwards the arg without a sender check — silently
+   * mint the shares to the injected address while the funder's USDC is consumed
+   * (= fund loss). Until that on-chain receiver-routing is verified against the
+   * live Helper, this builder fails closed: passing a `receiver !== from` throws
+   * rather than emit calldata whose recipient we cannot vouch for. This also
+   * matches the mcp-ts implementation, which hard-wires the recipient to
+   * msg.sender. No affiliate/fee is hardcoded; the recipient is always the
+   * depositor (neutral / self-only).
    */
   receiver?: string
 }
@@ -139,6 +146,16 @@ export function buildThreeJaneSupplyUsdc(params: BuildThreeJaneSupplyUsdcParams)
   const receiverRaw = String(params.receiver ?? senderRaw).trim()
   if (!isAddress(receiverRaw, { strict: false })) throw new Error(`invalid "receiver" address: ${receiverRaw}`)
   const receiver = getAddress(receiverRaw)
+  // Fail closed: the 3Jane Helper mints to msg.sender, so we never emit a deposit
+  // whose share recipient differs from the funder (would revert or, worse, route
+  // shares to the wrong address while the funder's USDC is spent). Re-enable a
+  // distinct receiver only after verifying on-chain receiver-routing on the Helper.
+  if (receiver !== sender) {
+    throw new Error(
+      `3Jane deposits are sender-bound: "receiver" (${receiver}) must equal "from" (${sender}). ` +
+        'The Helper mints shares to msg.sender; a distinct receiver is unsupported until verified on-chain.'
+    )
+  }
 
   const rawAmount = parseUsdcAmount(String(params.amount))
   if (rawAmount <= 0n) throw new Error('amount must be positive')

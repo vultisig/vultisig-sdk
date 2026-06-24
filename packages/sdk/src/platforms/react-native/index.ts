@@ -179,6 +179,24 @@ export type {
   VaultIdentity,
 } from '../../tools/prep'
 
+// Pure cosmos staking msg-envelope builders. These depend only on bech32 +
+// buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
+// statically re-exported rather than lazy-imported. Omitting them here would
+// break the hand-curated RN export list for vultiagent-app consumers.
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from '../../tools/prep/cosmosStaking'
+export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+} from '../../tools/prep/cosmosStaking'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
 // rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
@@ -235,6 +253,17 @@ export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/utxoConsolidate')
   return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
 }
+
+// Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
+// RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
+// metadata lookups.
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from '../../tools/gas'
 
 // Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
 // wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
