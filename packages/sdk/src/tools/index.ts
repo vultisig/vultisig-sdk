@@ -167,6 +167,8 @@ export {
   type GetMaxSendAmountFromKeysParams,
   POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
+  prepareJettonTransferTxFromKeys,
+  type PrepareJettonTransferTxFromKeysParams,
   preparePolkadotAssetSend,
   type PreparePolkadotAssetSendParams,
   type PreparePolkadotAssetSendResult,
