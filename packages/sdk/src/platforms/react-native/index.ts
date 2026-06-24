@@ -164,11 +164,42 @@ export type {
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
+  BuildCw20TransferMsgParams,
+  BuildCw20TransferMsgResult,
+  BuildSplTransferParams,
+  ConsolidateChain,
+  ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  PrepareJettonTransferTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
+  SplTransferResult,
   VaultIdentity,
 } from '../../tools/prep'
+
+// Pure cosmos staking msg-envelope builders. These depend only on bech32 +
+// buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
+// statically re-exported rather than lazy-imported. Omitting them here would
+// break the hand-curated RN export list for vultiagent-app consumers.
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
+} from '../../tools/prep/cosmosStaking'
+export {
+  buildDelegateMsg,
+  buildRedelegateMsg,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  cosmosStaking,
+} from '../../tools/prep/cosmosStaking'
+// Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
+// native crypto, safe as a static re-export on the RN graph).
+export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
@@ -178,6 +209,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/jettonTransfer')
+  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
 }
 
 export async function prepareSendTxFromKeys(...args: unknown[]) {
@@ -200,16 +236,91 @@ export async function prepareSwapTxFromKeys(...args: unknown[]) {
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
 }
 
+// Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
+// `globalThis.Buffer` at module-init. Deferring the import inside the async
+// body keeps it out of the eager RN bundle graph (same rationale as the
+// getSplAccounts / getSplAssociatedAccount overrides). The underlying builder
+// is synchronous; this wrapper just defers module evaluation.
+export async function buildSplTransfer(...args: unknown[]) {
+  const mod = await import('../../tools/prep/splTransfer')
+  return mod.buildSplTransfer(...(args as Parameters<typeof mod.buildSplTransfer>))
+}
+
+export async function prepareUtxoConsolidateTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/utxoConsolidate')
+  return mod.prepareUtxoConsolidateTxFromKeys(...(args as Parameters<typeof mod.prepareUtxoConsolidateTxFromKeys>))
+}
+
+// Cosmos gas-fee primitives (pure crypto: gas limits + canonical fee label).
+// RN-safe — no network, no signing; just `cosmosGasRecord` + `chainFeeCoin`
+// metadata lookups.
+export {
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  estimateCosmosSwapFeeLabel,
+  getCosmosGasLimit,
+  getCosmosSwapGasLimit,
+} from '../../tools/gas'
+
+// Astroport in-chain swap (Terra v2 / phoenix-1) — builds an unsigned
+// wasm_execute envelope. Pure-crypto: only @scure/base (bech32), Buffer and
+// fetch, all RN-safe, so a static re-export is fine (no chain-client deps to
+// externalize). The RN consumer (Station / vultiagent-app) needs this to build
+// the signable Terra swap msg; omitting it would force a re-implementation.
+export type { AstroportSwapResult, BuildAstroportSwapParams } from '../../tools/swap/astroport'
+export {
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
+} from '../../tools/swap/astroport'
+
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
+export type { GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
   evmTxInfo,
+  getTokenApprovals,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+
+// DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
+// Pure builders, RN-safe. Statically re-exported so RN consumers can reach
+// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
+export type {
+  BalancerTokenApi,
+  BalancerV3SwapCalldata,
+  BalancerV3SwapKind,
+  BalancerV3SwapPath,
+  BuildBalancerV3SwapCalldataParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  Defi,
+  GlifUnsignedTx,
+} from '../../tools/defi'
+export { buildBalancerV3SwapCalldata, defi } from '../../tools/defi'
+export {
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+} from '../../tools/defi/glif'
+export type {
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+} from '../../tools/defi/threeJane'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
@@ -240,6 +351,25 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance — read proposals + build unsigned MsgVote envelope.
+// Pure LCD reads + a pure-crypto unsigned-envelope builder (bech32 via
+// @cosmjs/encoding, already externalized for RN; no MPC/WASM). The generic
+// entry (src/index.ts) exports these too; the RN allow-list omitted them so
+// RN consumers (windows/extension, Station) couldn't read gov proposals or
+// build an unsigned vote without re-porting the chain registry.
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from '../../tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from '../../tools/cosmos'
+
 // Token utilities
 export type {
   Coin,
@@ -247,9 +377,23 @@ export type {
   CoinMetadata,
   KnownCoin,
   KnownCoinMetadata,
+  ResolveContractResult,
   TokenMetadataResolver,
+  TokenStandard,
 } from '../../tools/token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  resolveContract,
+  searchToken,
+} from '../../tools/token'
+
+// DEX primitives — read-only on-chain quotes + pure math. No signing, no broadcast.
+// RN-safe: uniswapV2Quote/getAmountOut are pure bigint math; balancerQuote is
+// pure @balancer-labs/balancer-maths; uniswap.* are pure tick math + evmCall.
+export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
