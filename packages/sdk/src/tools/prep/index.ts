@@ -15,6 +15,7 @@ export {
 } from './ibcTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
+export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
   prepareSuiTokenTransferFromKeys,
   type PrepareSuiTokenTransferFromKeysParams,
