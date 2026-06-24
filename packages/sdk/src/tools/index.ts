@@ -25,6 +25,10 @@ export {
   resolveEns,
 } from './evm'
 
+// Balance reads (pure decode + decimal-scale, no signing/broadcast)
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
+
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'

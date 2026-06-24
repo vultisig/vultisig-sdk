@@ -1,3 +1,5 @@
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './cosmos'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './cosmos'
 // Pure-crypto balance reads (decode + SCALE parse + raw RPC). Never signs/broadcasts.
 export {
   balancePolkadot,

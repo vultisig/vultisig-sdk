@@ -401,6 +401,10 @@ export { deriveAddressFromKeys } from '../../tools/address'
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
+// Cosmos bank-denom balance reader (read-only LCD fetch + denom-decode).
+// RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
 // Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
 // dynamic import (NOT a static re-export) because the underlying module imports
 // `@vultisig/core-chain/chains/polkadot/client`, whose top-level
