@@ -251,7 +251,11 @@ export type CryptoToFiatParams = {
 /**
  * Convert a human-readable crypto amount to its fiat value given a unit price.
  *
- * `fiat = amount * price`, rounded to `fiatDecimals` (default 2).
+ * `fiat = amount * price`, then TRUNCATED (not rounded) to `fiatDecimals`
+ * fractional digits (default 2 — cents). Truncation matches the base↔human
+ * path and is fail-safe: the result never exceeds the true value. This is a
+ * float-based display/estimate helper — do NOT use its output as a signing or
+ * min-receive boundary value; use the precision-exact base↔human path for that.
  *
  * @example
  * cryptoToFiat({ amount: 0.05, price: 2000 }) // '100'
