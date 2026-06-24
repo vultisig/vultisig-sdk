@@ -8,6 +8,7 @@ export {
   type PreparePolkadotAssetSendResult,
 } from './polkadotAssetSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
+export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
   prepareSuiTokenTransferFromKeys,
   type PrepareSuiTokenTransferFromKeysParams,
