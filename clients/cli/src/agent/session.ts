@@ -68,7 +68,7 @@ const RECOVERY_MAX_POLLS = 90
 // means "broadcast accepted" — the tx can still revert, expire, or be dropped.
 // After broadcast the session polls vault.getTxStatus until the tx reaches a
 // final state, then emits `confirmed`/`failed` (or `timeout` when the budget is
-// exhausted). Ceiling ≈ interval × max polls (3s × 40 = 120s).
+// exhausted). Ceiling ≈ interval × (maxPolls − 1) ≈ 3s × 39 ≈ 117s.
 const TX_CONFIRM_POLL_INTERVAL_MS = 3000
 const TX_CONFIRM_MAX_POLLS = 40
 
@@ -603,6 +603,13 @@ export class AgentSession {
    * until the budget is spent. Best-effort and non-fatal: if the chain can't be
    * resolved or the vault doesn't expose getTxStatus, the caller's already-
    * emitted `pending` status stands and this returns quietly.
+   *
+   * Scoped to headless callers (ask/pipe) that need machine-readable finality.
+   * The interactive TUI already shows `pending` + an explorer link immediately
+   * and has the dedicated `vultisig tx-status` command, so blocking its prompt
+   * for the full poll budget would be a UX regression the audit didn't scope.
+   * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
+   * is interruptible.
    */
   private async confirmBroadcastedTx(
     txHash: string,
@@ -610,12 +617,15 @@ export class AgentSession {
     explorerUrl: string | undefined,
     ui: UICallbacks
   ): Promise<void> {
+    if (!this.config.askMode && !this.config.viaAgent) return
+
     const chain = resolveChain(chainName ?? '')
     // `as any`: getTxStatus is absent on the minimal `this` used by unit tests
     // and on chains the SDK can't resolve — mirror executor.waitForEvmReceipt.
     if (!chain || typeof (this.vault as any)?.getTxStatus !== 'function') return
 
     for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
+      if (this.abortController?.signal?.aborted) return
       try {
         const result = await (this.vault as any).getTxStatus({ chain, txHash })
         if (result?.status === 'success') {
@@ -632,8 +642,11 @@ export class AgentSession {
           process.stderr.write(`[session] tx confirm poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
         }
       }
-      await this.txConfirmSleep()
+      // No sleep after the final poll — emit timeout without an extra interval.
+      if (attempt < this.txConfirmMaxPolls - 1) await this.txConfirmSleep()
     }
+
+    if (this.abortController?.signal?.aborted) return
 
     if (this.config.verbose) {
       process.stderr.write(

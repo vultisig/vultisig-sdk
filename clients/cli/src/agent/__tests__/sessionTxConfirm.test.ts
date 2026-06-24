@@ -18,6 +18,11 @@ function makeHarness(opts: {
   statuses: Array<StatusResult | 'throw'>
   maxPolls?: number
   includeVault?: boolean
+  // Defaults to headless (askMode). Set false to model the interactive TUI,
+  // where confirmation polling must be skipped.
+  headless?: boolean
+  // When true the abort controller is already aborted before polling starts.
+  aborted?: boolean
 }) {
   const signTxFromBuffer = vi.fn(
     async () =>
@@ -69,9 +74,9 @@ function makeHarness(opts: {
     conversationId: 'conv-1',
     publicKey: 'pk-test',
     cachedContext: { addresses: {} },
-    config: { password: 'pw', askMode: true, verbose: false },
+    config: { password: 'pw', askMode: opts.headless !== false, verbose: false },
     pendingToolResults: [],
-    abortController: null,
+    abortController: opts.aborted ? { signal: { aborted: true } } : null,
     client,
     executor,
     vault: opts.includeVault === false ? undefined : { getTxStatus },
@@ -129,6 +134,23 @@ describe('processMessageLoop — post-broadcast confirmation (F1)', () => {
       includeVault: false,
     })
     await h.run()
+    expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)
+    expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Base', 'pending', 'https://x/1')
+  })
+
+  it('does not poll in interactive (non-headless) mode — only pending is emitted', async () => {
+    const h = makeHarness({ statuses: [{ status: 'success' }], headless: false })
+    await h.run()
+    expect(h.getTxStatus).not.toHaveBeenCalled()
+    expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)
+    expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Base', 'pending', 'https://x/1')
+  })
+
+  it('bails immediately when the operation was aborted (Ctrl-C)', async () => {
+    const h = makeHarness({ statuses: [{ status: 'pending' }], aborted: true })
+    await h.run()
+    expect(h.getTxStatus).not.toHaveBeenCalled()
+    // Only the pre-poll `pending` was emitted; no confirmed/failed/timeout.
     expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)
     expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Base', 'pending', 'https://x/1')
   })
