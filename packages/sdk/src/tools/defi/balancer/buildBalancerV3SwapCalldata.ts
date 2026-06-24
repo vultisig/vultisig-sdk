@@ -7,6 +7,7 @@ import {
   SwapKind,
   Token,
   TokenAmount,
+  ZERO_ADDRESS,
 } from '@balancer/sdk'
 import { getAddress, isAddress } from 'viem'
 
@@ -169,14 +170,15 @@ const buildOfflineQueryOutput = (
   const inToken = new Token(chainId, requireAddress('token address', inputToken.address), inputToken.decimals)
   const outToken = new Token(chainId, requireAddress('token address', outputToken.address), outputToken.decimals)
 
-  // The resolved router address for the route lives on the internal swap object.
-  const to = (swap as unknown as { swap: { to: `0x${string}` } }).swap.to
-
+  // `QueryOutputBase.to` is a required field but `buildCall` resolves the router
+  // address internally from chainId/protocolVersion and ignores this value. Pass
+  // ZERO_ADDRESS as an explicit sentinel instead of reaching into private internals
+  // via an `as unknown` cast. The router address is asserted non-zero after buildCall.
   if (swapKind === SwapKind.GivenIn) {
     const amountIn = paths.reduce((acc, p) => acc + p.inputAmountRaw, 0n)
     return {
       swapKind: SwapKind.GivenIn,
-      to,
+      to: ZERO_ADDRESS,
       amountIn: TokenAmount.fromRawAmount(inToken, amountIn),
       expectedAmountOut: TokenAmount.fromRawAmount(outToken, expectedAmountRaw),
     }
@@ -185,7 +187,7 @@ const buildOfflineQueryOutput = (
   const amountOut = paths.reduce((acc, p) => acc + p.outputAmountRaw, 0n)
   return {
     swapKind: SwapKind.GivenOut,
-    to,
+    to: ZERO_ADDRESS,
     amountOut: TokenAmount.fromRawAmount(outToken, amountOut),
     expectedAmountIn: TokenAmount.fromRawAmount(inToken, expectedAmountRaw),
   }
@@ -275,6 +277,13 @@ export const buildBalancerV3SwapCalldata = (params: BuildBalancerV3SwapCalldataP
     wethIsEth,
     queryOutput,
   })
+
+  // Assert buildCall resolved a real router address. The queryOutput.to sentinel
+  // (ZERO_ADDRESS) is ignored internally; if the SDK ever breaks this contract the
+  // unsigned tx would target the zero address and drain funds on broadcast.
+  if (!isAddress(built.to) || built.to === ZERO_ADDRESS) {
+    throw new Error(`Balancer buildCall returned an invalid router address: ${built.to}`)
+  }
 
   const base: BalancerV3SwapCalldata = {
     to: built.to,

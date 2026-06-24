@@ -1,5 +1,6 @@
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getAddress, isAddress } from 'viem'
+import { ContractFunctionExecutionError, ContractFunctionRevertedError } from 'viem'
 
 import { erc4626ReadAbi } from './abi'
 import type { ArkisPoolKind } from './buildSupplyTx'
@@ -33,8 +34,15 @@ export const resolveArkisPoolKind = async (poolAddress: string): Promise<Resolve
     if (typeof asset === 'string' && isAddress(asset, { strict: false })) {
       return { kind: 'erc4626_vault', asset: getAddress(asset) }
     }
-  } catch {
-    // asset() reverted — treat as a standard Agreement.
+  } catch (err) {
+    // Only swallow a CONTRACT REVERT (asset() not present → standard Agreement).
+    // Re-throw transport / RPC errors (timeout, rate-limit, network outage) so the
+    // caller can retry rather than silently mis-classifying the pool kind and later
+    // building calldata against the wrong ABI.
+    const isContractRevert =
+      err instanceof ContractFunctionRevertedError ||
+      (err instanceof ContractFunctionExecutionError && err.cause instanceof ContractFunctionRevertedError)
+    if (!isContractRevert) throw err
   }
   return { kind: 'agreement' }
 }
