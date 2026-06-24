@@ -39,8 +39,6 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
-export type { FiatToAmountParams } from './utils/fiatToAmount'
-export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export type {
   AmountDirection,
   ConvertAmountParams,
@@ -55,6 +53,8 @@ export {
   toBaseUnits,
   toHumanUnits,
 } from './utils/convertAmount'
+export type { FiatToAmountParams } from './utils/fiatToAmount'
+export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
 // Pure address-format validation (vault-free, no network, no signing):
