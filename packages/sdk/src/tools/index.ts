@@ -8,17 +8,8 @@ export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4By
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
-// DEX on-chain quotes (read-only)
-export type {
-  BalancerPoolState,
-  BalancerQuote,
-  BalancerQuoteParams,
-  BalancerSwapKind,
-  UniswapV2Quote,
-  UniswapV2QuoteParams,
-  UniV2Deployment,
-} from './dex'
-export { balancerQuote, getAmountOut, supportedUniV2Chains, UNI_V2_DEPLOYMENTS, uniswapV2Quote } from './dex'
+// DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
+export * as dex from './dex'
 
 // Token utilities
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
