@@ -386,7 +386,10 @@ export type PipeOutputEvent =
       type: 'tx_status'
       tx_hash: string
       chain: string
-      status: 'pending' | 'confirmed' | 'failed'
+      // 'pending' on broadcast; 'confirmed'/'failed' after post-broadcast
+      // confirmation polling resolves the on-chain outcome; 'timeout' when the
+      // bounded poll budget is exhausted (the tx may still confirm later).
+      status: 'pending' | 'confirmed' | 'failed' | 'timeout'
       explorer_url?: string
     }
   | { type: 'assistant'; content: string }

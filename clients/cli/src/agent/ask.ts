@@ -30,6 +30,10 @@ export type AskResult = {
     hash: string
     chain: string
     explorerUrl?: string
+    // Final lifecycle status from post-broadcast confirmation polling so a
+    // headless caller learns finality, not just that broadcast was accepted:
+    // 'pending' (broadcast) → 'confirmed'/'failed' (resolved) | 'timeout'.
+    status?: string
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
@@ -98,10 +102,19 @@ export class AskInterface {
         // Silently ignored in ask mode
       },
 
-      onTxStatus: (txHash: string, chain: string, _status: string, explorerUrl?: string) => {
-        this.transactions.push({ hash: txHash, chain, explorerUrl })
+      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+        // One tx now emits multiple lifecycle events (pending → confirmed/
+        // failed/timeout). Dedup by hash and update the status in place so the
+        // result carries the latest outcome rather than duplicate rows.
+        const existing = this.transactions.find(t => t.hash === txHash)
+        if (existing) {
+          existing.status = status
+          if (explorerUrl) existing.explorerUrl = explorerUrl
+        } else {
+          this.transactions.push({ hash: txHash, chain, explorerUrl, status })
+        }
         if (this.verbose) {
-          process.stderr.write(`[tx] ${chain}: ${txHash}\n`)
+          process.stderr.write(`[tx] ${chain}: ${txHash} (${status})\n`)
         }
       },
 

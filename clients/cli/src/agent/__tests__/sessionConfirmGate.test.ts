@@ -173,6 +173,9 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      // No `vault` here, so confirmBroadcastedTx early-returns — the broadcast
+      // block still only emits the `pending` status this harness asserts.
+      confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'hello', ui, 0)
     return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction }

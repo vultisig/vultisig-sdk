@@ -176,7 +176,7 @@ export class PipeInterface {
           type: 'tx_status',
           tx_hash: txHash,
           chain,
-          status: status as 'pending' | 'confirmed' | 'failed',
+          status: status as 'pending' | 'confirmed' | 'failed' | 'timeout',
           explorer_url: explorerUrl,
         })
       },

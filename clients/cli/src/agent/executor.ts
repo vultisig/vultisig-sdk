@@ -1690,7 +1690,7 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
-function resolveChain(name: string): Chain | null {
+export function resolveChain(name: string): Chain | null {
   if (!name) return null
 
   // Direct enum match
