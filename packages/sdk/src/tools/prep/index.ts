@@ -12,6 +12,7 @@ export {
   type UndelegateParams,
   type WithdrawRewardsParams,
 } from './cosmosStaking'
+export { buildCw20TransferMsg, type BuildCw20TransferMsgParams, type BuildCw20TransferMsgResult } from './cw20Transfer'
 export {
   IBC_CHAIN_HRP,
   IBC_CHAIN_REVISION,
