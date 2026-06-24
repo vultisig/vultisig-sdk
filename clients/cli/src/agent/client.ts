@@ -661,6 +661,8 @@ export class AgentClient {
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
           ...this.profileHeader(),
         },
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
         signal: this.timeoutSignal(),
       })
     } catch (err) {
@@ -686,6 +688,8 @@ export class AgentClient {
           ...this.profileHeader(),
         },
         body: JSON.stringify(body),
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
         signal: this.timeoutSignal(),
       })
     } catch (err) {
