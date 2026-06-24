@@ -165,6 +165,7 @@ export type {
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
   GetMaxSendAmountFromKeysParams,
+  PrepareJettonTransferTxFromKeysParams,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   VaultIdentity,
@@ -178,6 +179,11 @@ export async function getMaxSendAmountFromKeys(...args: unknown[]) {
 export async function prepareContractCallTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/contractCall')
   return mod.prepareContractCallTxFromKeys(...(args as Parameters<typeof mod.prepareContractCallTxFromKeys>))
+}
+
+export async function prepareJettonTransferTxFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/jettonTransfer')
+  return mod.prepareJettonTransferTxFromKeys(...(args as Parameters<typeof mod.prepareJettonTransferTxFromKeys>))
 }
 
 export async function prepareSendTxFromKeys(...args: unknown[]) {
