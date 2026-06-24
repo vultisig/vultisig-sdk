@@ -293,6 +293,18 @@ function toEnvelope(typeUrl: string, value: Uint8Array): CosmosStakingMsgEnvelop
   return { typeUrl, valueBase64: Buffer.from(value).toString('base64') }
 }
 
+function buildDelegateOrUndelegateValue(params: DelegateParams | UndelegateParams): Uint8Array {
+  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
+  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
+  const amount = validateBaseUnitAmount(params.amount, 'amount')
+  const denom = validateDenom(params.denom, 'denom')
+  return concat(
+    field(1, 2, encodeString(delegator)),
+    field(2, 2, encodeString(validator)),
+    field(3, 2, encodeCoin(denom, amount))
+  )
+}
+
 /**
  * Build an unsigned `cosmos.staking.v1beta1.MsgDelegate` envelope.
  *
@@ -301,16 +313,7 @@ function toEnvelope(typeUrl: string, value: Uint8Array): CosmosStakingMsgEnvelop
  * does not sign or broadcast.
  */
 export function buildDelegateMsg(params: DelegateParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
-  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
-  const amount = validateBaseUnitAmount(params.amount, 'amount')
-  const denom = validateDenom(params.denom, 'denom')
-  const value = concat(
-    field(1, 2, encodeString(delegator)),
-    field(2, 2, encodeString(validator)),
-    field(3, 2, encodeCoin(denom, amount))
-  )
-  return toEnvelope(CosmosMsgType.MsgDelegateUrl, value)
+  return toEnvelope(CosmosMsgType.MsgDelegateUrl, buildDelegateOrUndelegateValue(params))
 }
 
 /**
@@ -318,16 +321,7 @@ export function buildDelegateMsg(params: DelegateParams): CosmosStakingMsgEnvelo
  * Identical wire layout to MsgDelegate; only the typeUrl differs.
  */
 export function buildUndelegateMsg(params: UndelegateParams): CosmosStakingMsgEnvelope {
-  const delegator = validateBech32(params.delegatorAddress, 'delegatorAddress', params.accountPrefix, 'account')
-  const validator = validateBech32(params.validatorAddress, 'validatorAddress', params.validatorPrefix, 'validator')
-  const amount = validateBaseUnitAmount(params.amount, 'amount')
-  const denom = validateDenom(params.denom, 'denom')
-  const value = concat(
-    field(1, 2, encodeString(delegator)),
-    field(2, 2, encodeString(validator)),
-    field(3, 2, encodeCoin(denom, amount))
-  )
-  return toEnvelope(CosmosMsgType.MsgUndelegateUrl, value)
+  return toEnvelope(CosmosMsgType.MsgUndelegateUrl, buildDelegateOrUndelegateValue(params))
 }
 
 /**
