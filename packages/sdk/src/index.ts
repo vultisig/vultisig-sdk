@@ -39,6 +39,20 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from './utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from './utils/convertAmount'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
