@@ -31,6 +31,8 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
   FindSwapQuoteParams,
   JupiterQuoteResponse,
   JupiterSwapParams,
@@ -39,7 +41,12 @@ export type {
   SwapQuote,
 } from './swap'
 export {
+  assembleAstroportSwap,
+  ASTROPORT_ROUTER,
+  buildAstroportSwap,
   buildJupiterSwapTx,
+  classifyAstroportAsset,
+  computeAstroportMinReceive,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
@@ -51,6 +58,8 @@ export {
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   resolveJupiterFeeAccount,
   SOL_NATIVE_MINT,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
 } from './swap'
 
 // DeFi protocol primitives (sdk.defi.*) — build UNSIGNED calldata/msgs only
