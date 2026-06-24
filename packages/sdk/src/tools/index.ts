@@ -2,7 +2,7 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
@@ -10,6 +10,7 @@ export {
   encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   MAX_UINT256,
@@ -17,12 +18,32 @@ export {
   resolveEns,
 } from './evm'
 
+// Balance reads (pure decode + decimal-scale, no signing/broadcast)
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
+
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
+
+// Gas / fee fan-out
+export type { CompareCostsEntry, CompareCostsParams, CompareCostsResult, CompareCostsSkipped, GasTxType } from './gas'
+export { compareCosts, DEFAULT_COMPARE_CHAINS, GAS_UNITS, getChainGasPriceGwei } from './gas'
+import * as gas from './gas'
+// Namespace handle so callers can use the documented `sdk.gas.compareCosts(...)`
+// ergonomic alongside the flat named exports.
+export { gas }
+
+// Balance reads (per-chain, vault-free)
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
+
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
 
 // Token utilities
 export type {
