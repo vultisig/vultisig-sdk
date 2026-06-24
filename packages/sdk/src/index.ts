@@ -470,6 +470,7 @@ export type {
   VaultIdentity,
   Verdict,
 } from './tools'
+export type { BuildSplTransferParams, SplTransferResult } from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -485,6 +486,7 @@ export {
   buildJupiterSwapTx,
   buildRedeem,
   buildSellPt,
+  buildSplTransfer,
   chainAliasMap,
   chainFeeCoin,
   chainsMatch,
