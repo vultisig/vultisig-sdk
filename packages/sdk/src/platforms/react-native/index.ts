@@ -407,6 +407,18 @@ export * as dex from '../../tools/dex'
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
+// over the same proxy `searchToken` already uses, no WASM/native deps.
+export type { PriceBatchResult, PriceQuery, PriceQuote } from '../../tools/price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from '../../tools/price'
+
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
@@ -414,6 +426,43 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
+// Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
+// @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD
+// reads above. The RN allow-list previously omitted these so RN consumers
+// (vultiagent-app, backend) had to re-implement the fetch+parse glue per chain.
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from '../../tools/balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  formatBalance,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance'
+
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
 // statically: the only chain import (`solanaRpcUrl` from
 // `chains/solana/client`) is metro/rollup-overridden to the RN
