@@ -523,6 +523,7 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   prepareTrc20TransferFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
   ResultKind,
