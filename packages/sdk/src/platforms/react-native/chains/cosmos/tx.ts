@@ -25,6 +25,8 @@ import { bech32 } from '@scure/base'
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 
+import { concat, encodeCoin, encodeString, field, varint } from '@/utils/cosmosProto'
+
 // ---------------------------------------------------------------------------
 // Hex utils (RN-safe, no Buffer)
 // ---------------------------------------------------------------------------
@@ -117,70 +119,13 @@ export function deriveCosmosPubkey(compressedPubKeyHex: string, hexChainCode: st
 }
 
 // ---------------------------------------------------------------------------
-// Protobuf helpers (minimal varint + length-delimited encoding)
+// Protobuf helpers — imported from utils/cosmosProto (shared with cosmosStaking.ts)
 // ---------------------------------------------------------------------------
 
-// Exported for unit tests so the bound-check (CR item #7) can be exercised
-// directly. Not part of the public SDK surface — naming convention matches
-// other test-only exports in the SDK.
+// Exported for unit tests so the bound-check can be exercised directly.
+// Not part of the public SDK surface.
 export function varintForTesting(n: number): Uint8Array {
   return varint(n)
-}
-
-function varint(n: number): Uint8Array {
-  // Bound-check: `>>>=` operates on 32-bit unsigned integers, so any value
-  // above 2^32-1 silently wraps and we emit a varint that decodes to a
-  // different number than `n`. Every call-site here is `field-number << 3 |
-  // wireType` (≤ 2^7) or a length prefix derived from `Uint8Array.length`
-  // (capped at 2^32-1 in practice), but we still guard the boundary so a
-  // future caller passing a JS-`number` that came from BigInt arithmetic
-  // can't silently corrupt the protobuf body. We also reject non-integers
-  // and negatives — both produce nonsense varints.
-  if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) {
-    throw new Error(`varint: value out of range (got ${n})`)
-  }
-  const bytes: number[] = []
-  while (n > 0x7f) {
-    bytes.push((n & 0x7f) | 0x80)
-    n >>>= 7
-  }
-  bytes.push(n & 0x7f)
-  return new Uint8Array(bytes)
-}
-
-function field(fieldNum: number, wireType: number, data: Uint8Array): Uint8Array {
-  const tag = varint((fieldNum << 3) | wireType)
-  if (wireType === 2) {
-    const len = varint(data.length)
-    const result = new Uint8Array(tag.length + len.length + data.length)
-    result.set(tag, 0)
-    result.set(len, tag.length)
-    result.set(data, tag.length + len.length)
-    return result
-  }
-  const result = new Uint8Array(tag.length + data.length)
-  result.set(tag, 0)
-  result.set(data, tag.length)
-  return result
-}
-
-function concat(...arrays: Uint8Array[]): Uint8Array {
-  const total = arrays.reduce((s, a) => s + a.length, 0)
-  const result = new Uint8Array(total)
-  let offset = 0
-  for (const a of arrays) {
-    result.set(a, offset)
-    offset += a.length
-  }
-  return result
-}
-
-function encodeString(s: string): Uint8Array {
-  return new TextEncoder().encode(s)
-}
-
-function encodeCoin(denom: string, amount: string): Uint8Array {
-  return concat(field(1, 2, encodeString(denom)), field(2, 2, encodeString(amount)))
 }
 
 function wrapAny(typeUrl: string, value: Uint8Array): Uint8Array {
