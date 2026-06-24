@@ -135,6 +135,9 @@ export {
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  CONSOLIDATE_CHAINS,
+  type ConsolidateChain,
+  type ConsolidateUtxo,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
   prepareContractCallTxFromKeys,
@@ -144,6 +147,9 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  type PrepareUtxoConsolidateResult,
+  prepareUtxoConsolidateTxFromKeys,
+  type PrepareUtxoConsolidateTxFromKeysParams,
   type VaultIdentity,
 } from './prep'
 
