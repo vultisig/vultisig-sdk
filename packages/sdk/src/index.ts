@@ -519,6 +519,7 @@ export type {
   TrxBalance,
   UtxoBalance,
   UtxoBalanceChain,
+  UtxoFeeRate,
   VaultIdentity,
   Verdict,
   XrpBalance,
@@ -637,6 +638,7 @@ export {
   knownTokens,
   knownTokensIndex,
   MAX_UINT256,
+  MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
   normalizeHexBytes,
   parseAmountBig,
@@ -670,6 +672,8 @@ export {
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
   VerifierClient,
 } from './tools'
 
