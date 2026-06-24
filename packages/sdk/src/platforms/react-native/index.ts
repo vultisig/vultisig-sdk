@@ -279,12 +279,13 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
-export type { GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   resolve4ByteSelector,
@@ -446,6 +447,15 @@ export {
   getTrxBalance,
   getXrpBalance,
 } from '../../tools/balance'
+
+// Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
+// statically: the only chain import (`solanaRpcUrl` from
+// `chains/solana/client`) is metro/rollup-overridden to the RN
+// `solanaClient` shim (type-only + lazy `import('@solana/web3.js')`), so this
+// module never drags the Hermes-hostile web3.js graph at init. The reads
+// themselves use the platform `fetch` against the existing solana RPC proxy.
+export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
+export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
