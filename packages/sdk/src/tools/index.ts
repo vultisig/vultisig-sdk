@@ -2,8 +2,7 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
-export type { EvmBalance, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
