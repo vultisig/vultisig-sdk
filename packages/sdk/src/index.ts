@@ -523,6 +523,7 @@ export {
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
   prepareSwapTxFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
   resolve4ByteSelector,
   resolveEns,
   ResultKind,
