@@ -22,10 +22,11 @@ describe('computePersonalSignHash (EIP-191 personal_sign)', () => {
     const got = Buffer.from(computePersonalSignHash(frozen)).toString('hex')
     expect('0x' + got).toBe(hashMessage(frozen))
     // Cross-checks the keccak256 of "\x19Ethereum Signed Message:\n"+len+msg —
-    // the same digest agent-backend's sig.go reconstructs and Ecrecovers.
+    // the same digest agent-backend's sig.go reconstructs and Ecrecovers. len is
+    // the UTF-8 BYTE length (Buffer.byteLength), not the char count.
     expect(got).toBe(
       Buffer.from(
-        keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${frozen.length}${frozen}`))
+        keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${Buffer.byteLength(frozen)}${frozen}`))
       ).toString('hex')
     )
   })

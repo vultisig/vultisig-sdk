@@ -329,7 +329,7 @@ async function createAuthenticatedClient(
  * token revoked between createAuthenticatedClient and the list/delete call
  * recovers instead of surfacing a raw auth error.
  */
-async function withClientAuthRetry<T>(
+export async function withClientAuthRetry<T>(
   client: AgentClient,
   vault: VaultBase,
   password: string | undefined,

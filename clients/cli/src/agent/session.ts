@@ -9,7 +9,7 @@
  *   tx_ready synthesis (server-built transactions buffered then signed)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -128,7 +128,7 @@ export class AgentSession {
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
@@ -867,11 +867,16 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
 /**
  * Classify a thrown backend error as an auth failure (401/403). The AgentClient
  * surfaces HTTP status by embedding it in the Error message (e.g.
- * "Request failed (401): ...").
+ * "Request failed (401): ..."). A word-boundary match keeps every real status
+ * format (`(401)`, `HTTP 401`, bare `401`) while avoiding false positives on
+ * digits embedded in a larger number (a `1401` amount, a `4034` port). We do
+ * NOT tighten to a parens-only shape: a false NEGATIVE silently breaks auth
+ * recovery (the point of this helper), whereas a false positive only costs one
+ * wasted re-auth + an idempotent replay of the exact same request.
  */
 export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? '')
-  return msg.includes('401') || msg.includes('403')
+  return /\b(401|403)\b/.test(msg)
 }
 
 // ============================================================================
@@ -902,8 +907,18 @@ function readTokenStore(): TokenStore {
 function writeTokenStore(store: TokenStore): void {
   const path = getTokenCachePath()
   const dir = join(path, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
   writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
+  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
+  // file keeps its old perms. chmod every write so a pre-existing (or
+  // out-of-band) agent-tokens.json can't retain looser perms now that a
+  // longer-lived refresh token lives here.
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
 }
 
 /**
@@ -932,12 +947,17 @@ function loadCachedToken(publicKey: string): string | null {
 }
 
 // Persists the access token (and optional refresh token) under 0o600 perms.
-// The refresh token is captured for a future POST /auth/refresh exchange; it
-// is preserved across re-saves so a cache entry written by an older build (no
-// refreshToken) upgrades cleanly on the next auth.
+// The refresh token is captured for a future POST /auth/refresh exchange. A
+// prior entry's refreshToken is preserved when this call doesn't carry one
+// (e.g. a backend that stops returning refresh_token shouldn't drop the
+// still-valid token we already hold).
 function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
   const store = readTokenStore()
-  store[publicKey] = { token, expiresAt, refreshToken }
+  store[publicKey] = {
+    token,
+    expiresAt,
+    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
+  }
   try {
     writeTokenStore(store)
   } catch {
