@@ -361,6 +361,21 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope —
+// read-only / builds-unsigned, never signs or broadcasts).
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './tools/cosmos'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
@@ -403,6 +418,10 @@ export type {
   AstroportSwapResult,
   BuildAstroportSwapParams,
   BuildBuyPtParams,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
   BuildRedeemParams,
   BuildSellPtParams,
   BuildThreeJaneSupplyUsdcParams,
@@ -418,6 +437,7 @@ export type {
   FieldDiff,
   FindSwapQuoteParams,
   GetMaxSendAmountFromKeysParams,
+  GlifUnsignedTx,
   IntentClaim,
   InvariantInput,
   InvariantViolation,
@@ -450,6 +470,8 @@ export {
   ASTROPORT_ROUTER,
   buildAstroportSwap,
   buildBuyPt,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
   buildRedeem,
   buildSellPt,
   chainAliasMap,
@@ -476,6 +498,9 @@ export {
   getPublicKey,
   getTokenMetadata,
   getTxStatus,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
   Invariant,
   isPendleChain,
   isZeroAmount,
