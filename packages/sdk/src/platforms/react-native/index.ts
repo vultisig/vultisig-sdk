@@ -251,6 +251,11 @@ export type {
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
 
+// Balance reads (per-chain, vault-free). UTXO reader is a pure fetch helper
+// (only the UtxoChain enum + global fetch), so a static re-export is RN-safe.
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from '../../tools/balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '../../tools/balance'
+
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
