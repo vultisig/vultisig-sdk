@@ -13,7 +13,17 @@ export {
 } from './balance'
 
 // EVM utilities
-export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
+export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  getTokenApprovals,
+  resolve4ByteSelector,
+  resolveEns,
+} from './evm'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
