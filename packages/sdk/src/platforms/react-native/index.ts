@@ -401,6 +401,10 @@ export { deriveAddressFromKeys } from '../../tools/address'
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
+// Cosmos bank-denom balance reader (read-only LCD fetch + denom-decode).
+// RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
 // Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
 // statically: the only chain import (`solanaRpcUrl` from
 // `chains/solana/client`) is metro/rollup-overridden to the RN
