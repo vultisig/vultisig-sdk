@@ -1,5 +1,6 @@
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getAddress, isAddress } from 'viem'
+import { ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError } from 'viem'
 
 import { erc4626ReadAbi } from './abi'
 import type { ArkisPoolKind } from './buildSupplyTx'
@@ -33,8 +34,21 @@ export const resolveArkisPoolKind = async (poolAddress: string): Promise<Resolve
     if (typeof asset === 'string' && isAddress(asset, { strict: false })) {
       return { kind: 'erc4626_vault', asset: getAddress(asset) }
     }
-  } catch {
-    // asset() reverted — treat as a standard Agreement.
+  } catch (err) {
+    // Only swallow an on-chain "no asset()" signal → standard Agreement. That can
+    // surface two ways depending on the contract: a CONTRACT REVERT (no matching
+    // selector and no fallback) OR EMPTY-DATA (0x) when a fallback returns nothing
+    // and viem can't decode an address. Both mean "this pool has no asset() — treat
+    // it as an Agreement". Re-throw everything else (transport timeouts, rate-limit,
+    // network outage) so the caller can retry rather than silently mis-classifying
+    // the pool kind and later building calldata against the wrong ABI.
+    const cause = err instanceof ContractFunctionExecutionError ? err.cause : undefined
+    const isNoAssetSignal =
+      err instanceof ContractFunctionRevertedError ||
+      err instanceof ContractFunctionZeroDataError ||
+      cause instanceof ContractFunctionRevertedError ||
+      cause instanceof ContractFunctionZeroDataError
+    if (!isNoAssetSignal) throw err
   }
   return { kind: 'agreement' }
 }
