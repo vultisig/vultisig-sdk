@@ -2,18 +2,37 @@
 export { deriveAddressFromKeys } from './address'
 
 // EVM utilities
-export { abiDecode, abiEncode, evmCall, evmCheckAllowance, evmTxInfo, resolve4ByteSelector, resolveEns } from './evm'
+export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export {
+  abiDecode,
+  abiEncode,
+  evmCall,
+  evmCheckAllowance,
+  evmTxInfo,
+  getTokenApprovals,
+  resolve4ByteSelector,
+  resolveEns,
+} from './evm'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
-// DEX primitives (read-only / pure math — no signing, no broadcast)
+// DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
 
 // Token utilities
-export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata, TokenMetadataResolver } from './token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from './token'
+export type {
+  Coin,
+  CoinKey,
+  CoinMetadata,
+  KnownCoin,
+  KnownCoinMetadata,
+  ResolveContractResult,
+  TokenMetadataResolver,
+  TokenStandard,
+} from './token'
+export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
 
 // Price / fiat (token USD price via CoinGecko proxy)
 export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
@@ -144,8 +163,14 @@ export {
   type Verdict,
 } from './policy'
 
+// Validation (pure recipient sanity: null / self-send / malformed-EVM)
+export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult } from './validate'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from './validate'
+
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildSplTransfer,
+  type BuildSplTransferParams,
   CONSOLIDATE_CHAINS,
   type ConsolidateChain,
   type ConsolidateUtxo,
@@ -156,11 +181,15 @@ export {
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
+  type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
+  type SplTransferResult,
+  SUI_NATIVE_COIN_TYPE,
   type VaultIdentity,
 } from './prep'
 
