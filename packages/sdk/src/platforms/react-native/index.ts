@@ -286,6 +286,11 @@ export type {
 } from '../../tools/token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
 
+// DEX primitives — read-only Uniswap V3 pool-info + pure tick math. No signing,
+// no broadcast. Built on evmCall (already RN-exported) + pure BigInt math, so
+// RN-safe; the hand-curated allow-list previously omitted this namespace.
+export * as dex from '../../tools/dex'
+
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
