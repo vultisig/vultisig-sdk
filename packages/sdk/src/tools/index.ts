@@ -4,18 +4,34 @@ export { deriveAddressFromKeys } from './address'
 // DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
 export * from './defi'
 
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
+export {
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  type PolkadotAssetBalance,
+  type PolkadotNativeBalance,
+} from './balance'
+
 // EVM utilities
-export type { GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
+
+// Balance reads (pure decode + decimal-scale, no signing/broadcast)
+export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
+export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
@@ -23,6 +39,22 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from './decode'
 
 // DEX primitives (read-only / pure math + on-chain quotes — no signing, no broadcast)
 export * as dex from './dex'
+
+// Gas / fee fan-out
+export type { CompareCostsEntry, CompareCostsParams, CompareCostsResult, CompareCostsSkipped, GasTxType } from './gas'
+export { compareCosts, DEFAULT_COMPARE_CHAINS, GAS_UNITS, getChainGasPriceGwei } from './gas'
+import * as gas from './gas'
+// Namespace handle so callers can use the documented `sdk.gas.compareCosts(...)`
+// ergonomic alongside the flat named exports.
+export { gas }
+
+// Balance reads (per-chain, vault-free)
+export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
+export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
+
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
 
 // Token utilities
 export type {
@@ -36,6 +68,49 @@ export type {
   TokenStandard,
 } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+
+// Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from './balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from './balance'
+
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {
