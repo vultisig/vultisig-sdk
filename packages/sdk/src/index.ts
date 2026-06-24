@@ -525,6 +525,7 @@ export {
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   resolve4ByteSelector,
