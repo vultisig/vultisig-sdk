@@ -40,6 +40,10 @@ export { gas }
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
 
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
+
 // Token utilities
 export type {
   Coin,
