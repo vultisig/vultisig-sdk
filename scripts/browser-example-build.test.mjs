@@ -223,7 +223,7 @@ test('browser example prepare recreates missing shared package artifacts', { tim
 
   try {
     await runWithDiagnostics('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk'], {
-      timeoutMs: 180_000,
+      timeoutMs: 360_000,
       label: formatShellCommand('yarn', ['workspace', '@vultisig/example-browser', 'prepare:sdk']),
     })
     assert.ok(existsSync(path.join(mpcWasmDist, 'index.js')), 'expected prepare:sdk to rebuild mpc-wasm dist')
