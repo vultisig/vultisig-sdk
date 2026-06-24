@@ -1,6 +1,6 @@
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getAddress, isAddress } from 'viem'
-import { ContractFunctionExecutionError, ContractFunctionRevertedError } from 'viem'
+import { ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError } from 'viem'
 
 import { erc4626ReadAbi } from './abi'
 import type { ArkisPoolKind } from './buildSupplyTx'
@@ -35,14 +35,20 @@ export const resolveArkisPoolKind = async (poolAddress: string): Promise<Resolve
       return { kind: 'erc4626_vault', asset: getAddress(asset) }
     }
   } catch (err) {
-    // Only swallow a CONTRACT REVERT (asset() not present → standard Agreement).
-    // Re-throw transport / RPC errors (timeout, rate-limit, network outage) so the
-    // caller can retry rather than silently mis-classifying the pool kind and later
-    // building calldata against the wrong ABI.
-    const isContractRevert =
+    // Only swallow an on-chain "no asset()" signal → standard Agreement. That can
+    // surface two ways depending on the contract: a CONTRACT REVERT (no matching
+    // selector and no fallback) OR EMPTY-DATA (0x) when a fallback returns nothing
+    // and viem can't decode an address. Both mean "this pool has no asset() — treat
+    // it as an Agreement". Re-throw everything else (transport timeouts, rate-limit,
+    // network outage) so the caller can retry rather than silently mis-classifying
+    // the pool kind and later building calldata against the wrong ABI.
+    const cause = err instanceof ContractFunctionExecutionError ? err.cause : undefined
+    const isNoAssetSignal =
       err instanceof ContractFunctionRevertedError ||
-      (err instanceof ContractFunctionExecutionError && err.cause instanceof ContractFunctionRevertedError)
-    if (!isContractRevert) throw err
+      err instanceof ContractFunctionZeroDataError ||
+      cause instanceof ContractFunctionRevertedError ||
+      cause instanceof ContractFunctionZeroDataError
+    if (!isNoAssetSignal) throw err
   }
   return { kind: 'agreement' }
 }
