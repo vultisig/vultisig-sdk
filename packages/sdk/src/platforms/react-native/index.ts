@@ -333,9 +333,18 @@ export type {
   CoinMetadata,
   KnownCoin,
   KnownCoinMetadata,
+  ResolveContractResult,
   TokenMetadataResolver,
+  TokenStandard,
 } from '../../tools/token'
-export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, searchToken } from '../../tools/token'
+export {
+  chainFeeCoin,
+  getTokenMetadata,
+  knownTokens,
+  knownTokensIndex,
+  resolveContract,
+  searchToken,
+} from '../../tools/token'
 
 // DEX primitives — read-only on-chain quotes + pure math. No signing, no broadcast.
 // RN-safe: uniswapV2Quote/getAmountOut are pure bigint math; balancerQuote is
