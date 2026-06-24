@@ -442,6 +442,7 @@ export {
   decodeFromToolResult,
   defi,
   deriveAddressFromKeys,
+  dex,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evmCall,
