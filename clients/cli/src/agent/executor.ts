@@ -10,7 +10,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
 import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
-import { formatUnits } from 'viem'
+import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
@@ -1530,6 +1530,16 @@ export class AgentExecutor {
         return {
           signatures,
           pm_order_ref: input.pm_order_ref,
+          // pm_batch_ref rides along so the backend's batch auto-submit can
+          // dispatch submit_deposit_wallet_batch — without it, Polymarket
+          // BATCH approvals sign but never auto-submit.
+          // Single-order flows omit pm_batch_ref, so this is `undefined` here.
+          // That's safe: JSON.stringify (client.ts ships recent_actions as
+          // JSON) drops undefined-valued keys, and the backend reads it by
+          // value (ar.Data["pm_batch_ref"] → "" when absent) — no consumer
+          // does an `in`/hasOwnProperty existence check. Same pattern as
+          // pm_order_ref above.
+          pm_batch_ref: input.pm_batch_ref,
           auto_submit: !!(input.__pm_auto_submit || input.auto_submit),
         }
       }
@@ -1554,7 +1564,7 @@ export class AgentExecutor {
 
     if (this.verbose) process.stderr.write(`[sign_typed_data] primaryType=${primaryType} domain.name=${domain.name}\n`)
 
-    const eip712Hash = await computeEIP712Hash(domain, types, primaryType, message)
+    const eip712Hash = computeEIP712Hash(domain, types, primaryType, message)
     if (this.verbose) process.stderr.write(`[sign_typed_data] hash=${eip712Hash}\n`)
 
     // Resolve chain from domain chainId or explicit chain param
@@ -1575,11 +1585,44 @@ export class AgentExecutor {
     if (this.verbose)
       process.stderr.write(`[sign_typed_data] signed, format=${sigResult.format}, recovery=${sigResult.recovery}\n`)
 
-    const { r, s } = parseDERSignature(sigResult.signature)
-    const v = (sigResult.recovery ?? 0) + 27
+    // Canonicalize to low-S (EIP-2) — a high-S signature is malleable and
+    // rejected by OpenZeppelin's ECDSA library (which Polymarket's CLOB and
+    // most EVM verifiers use). The recovery parity flips with the fold.
+    const { r, s, recovery } = toCanonicalEvmSignature(sigResult.signature, sigResult.recovery ?? 0)
+    const v = recovery + 27
 
     // 65-byte Ethereum signature: r (32 bytes) + s (32 bytes) + v (1 byte)
     const ethSignature = '0x' + r + s + v.toString(16).padStart(2, '0')
+
+    // Recover-verify gate: confirm the assembled signature recovers to this
+    // vault's own EVM address before returning success. Catches a wrong
+    // recovery id, a botched low-S fold, or a digest/keyshare mismatch right
+    // here instead of leaving it to surface as an opaque on-chain/CLOB
+    // rejection. The EVM address is identical across every EVM chain (same
+    // secp256k1 keyshare), so the chain resolved from domain.chainId is fine.
+    const expectedAddress = await this.vault.address(chain)
+    const recoveredAddress = await recoverAddress({
+      hash: eip712Hash as `0x${string}`,
+      signature: ethSignature as `0x${string}`,
+    })
+    if (recoveredAddress.toLowerCase() !== expectedAddress.toLowerCase()) {
+      // Deterministic vault-context error, not a transient signing failure:
+      // the keyshare that produced this signature does not belong to the
+      // vault address the executor expected to sign for (e.g. the wrong vault
+      // is loaded into this executor's context). Retrying signs with the same
+      // keyshare and fails identically, so the message says so explicitly and
+      // names the loaded vault (name + id) rather than leaving a blank failure,
+      // so the operator can tell which vault is in context. The
+      // SIGNATURE_RECOVERY_MISMATCH prefix stays stable for callers that key off it.
+      throw new Error(
+        `SIGNATURE_RECOVERY_MISMATCH: wrong vault context for EIP-712 signing — ` +
+          `the loaded vault "${this.vault.name}" (id ${this.vault.id}) reports EVM address ` +
+          `${expectedAddress} for ${chain}, but the signature recovered to ${recoveredAddress}. ` +
+          `The signing keyshare does not belong to the expected vault address. This is a deterministic ` +
+          `vault-context error, not a transient signing failure — retrying will not help. ` +
+          `Verify the correct vault/keyshare is loaded into the executor context before signing again.`
+      )
+    }
 
     if (this.verbose) process.stderr.write(`[sign_typed_data] r=${r.slice(0, 16)}... s=${s.slice(0, 16)}... v=${v}\n`)
 
@@ -1588,7 +1631,7 @@ export class AgentExecutor {
       r: '0x' + r,
       s: '0x' + s,
       v,
-      recovery: sigResult.recovery,
+      recovery,
       hash: eip712Hash,
     }
   }
@@ -2014,275 +2057,96 @@ function resolveChainId(chainId: string | number): Chain | null {
 // ============================================================================
 
 /**
- * Compute the EIP-712 hash: keccak256("\x19\x01" || domainSeparator || structHash)
+ * Compute the EIP-712 digest: keccak256("\x19\x01" || domainSeparator || hashStruct(message)).
+ *
+ * Delegates to viem's `hashTypedData` — the vetted encoder the rest of the
+ * ecosystem verifies against, and the same digest the app's reference path
+ * produces via ethers `TypedDataEncoder.hash` (see
+ * vultiagent-app/src/services/eip712Signing.ts). viem derives the
+ * `EIP712Domain` type from the keys actually present on `domain`, so domains
+ * that omit `verifyingContract` (Polymarket's ClobAuthDomain) or carry `salt`
+ * hash correctly. It throws on a message missing a declared field or a
+ * `primaryType` absent from `types` — the fail-loud contract we want, with no
+ * hand-rolled struct encoder to drift from the spec.
  */
-async function computeEIP712Hash(
+function computeEIP712Hash(
   domain: Record<string, unknown>,
   types: Record<string, Array<{ name: string; type: string }>>,
   primaryType: string,
   message: Record<string, unknown>
-): Promise<string> {
-  const { keccak_256 } = await import('@noble/hashes/sha3.js')
+): string {
+  // viem synthesizes the EIP712Domain type from `domain`; a caller-supplied
+  // `EIP712Domain` entry would be treated as a struct type and make viem
+  // reject `primaryType`. Strip it so the synthesized- and explicit-domain
+  // payload shapes hash identically.
+  const messageTypes = { ...types }
+  delete messageTypes.EIP712Domain
 
-  // The EIP712Domain type must contain exactly the fields present in the
-  // domain object (EIP-712 §"definition of domainSeparator"). A fixed
-  // 4-field type breaks domains that omit verifyingContract (e.g.
-  // Polymarket's ClobAuthDomain {name, version, chainId}): the typeHash
-  // would claim 4 fields while the data encodes 3, producing a hash no
-  // verifier can reproduce.
-  const typesWithDomain = types['EIP712Domain']
-    ? types
-    : {
-        ...types,
-        EIP712Domain: EIP712_DOMAIN_FIELDS.filter(f => domain[f.name] !== undefined && domain[f.name] !== null),
-      }
+  // Normalize a string `chainId` to a number. The agent backend serialises
+  // chainId as a JS number, but the JSON wire occasionally double-stringifies
+  // primitives (`domain.chainId` is typed `number | string` upstream).
+  // Crucially, viem hashes a string `chainId` ("137") to a DIFFERENT digest
+  // than the numeric form (137) — whereas ethers `TypedDataEncoder.hash` (the
+  // app's encoder, and what the on-chain DOMAIN_SEPARATOR matches) coerces
+  // both to the same value. Coerce here so our digest agrees with theirs.
+  const normalizedDomain = domain.chainId !== undefined ? { ...domain, chainId: coerceChainId(domain.chainId) } : domain
 
-  const domainSeparator = hashStruct('EIP712Domain', domain, typesWithDomain, keccak_256)
-  const messageHash = hashStruct(primaryType, message, typesWithDomain, keccak_256)
-
-  // \x19\x01 || domainSeparator || messageHash
-  const prefix = new Uint8Array([0x19, 0x01])
-  const combined = new Uint8Array(2 + 32 + 32)
-  combined.set(prefix, 0)
-  combined.set(domainSeparator, 2)
-  combined.set(messageHash, 34)
-
-  const finalHash = keccak_256(combined)
-  return '0x' + Buffer.from(finalHash).toString('hex')
+  return hashTypedData({
+    domain: normalizedDomain,
+    types: messageTypes,
+    primaryType,
+    message,
+  } as Parameters<typeof hashTypedData>[0])
 }
 
 /**
- * Hash a struct: keccak256(typeHash || encodeData)
+ * Coerce an EIP-712 `domain.chainId` (which may arrive as a number or a
+ * decimal/hex string over the JSON wire) to a number. Mirrors the app's
+ * `coerceChainId` in vultiagent-app/src/services/eip712Signing.ts. Throws on
+ * an empty/unparseable value rather than letting viem hash a wrong digest.
  */
-function hashStruct(
-  typeName: string,
-  data: Record<string, unknown>,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  keccak: (data: Uint8Array) => Uint8Array
-): Uint8Array {
-  const typeHash = hashType(typeName, types, keccak)
-  const encodedData = encodeData(typeName, data, types, keccak)
-
-  const combined = new Uint8Array(32 + encodedData.length)
-  combined.set(typeHash, 0)
-  combined.set(encodedData, 32)
-
-  return keccak(combined)
+function coerceChainId(raw: unknown): number | bigint {
+  if (typeof raw === 'number' || typeof raw === 'bigint') return raw
+  const s = String(raw).trim()
+  if (s === '') {
+    throw new Error('EIP-712 domain.chainId is empty')
+  }
+  // Parse decimal and hex via BigInt (exact), then narrow to a JS number only
+  // when it fits safely. Using Number() directly would round values above
+  // MAX_SAFE_INTEGER and silently produce a DIFFERENT EIP-712 digest — viem
+  // accepts a bigint chainId, so return that instead of corrupting the hash.
+  if (/^[0-9]+$/.test(s) || /^0x[0-9a-fA-F]+$/.test(s)) {
+    const big = BigInt(s)
+    return big <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(big) : big
+  }
+  throw new Error(`EIP-712 domain.chainId not parseable: ${String(raw)}`)
 }
 
 /**
- * Compute the type hash: keccak256(encodeType)
+ * secp256k1 group order n (SEC 2 v2, §2.4.1). EIP-2 requires the signature's
+ * `s` value to lie in the lower half of this order; values above n/2 are
+ * malleable and rejected by OpenZeppelin's ECDSA library (which Polymarket's
+ * CLOB and most EVM verifiers use).
  */
-function hashType(
-  typeName: string,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  keccak: (data: Uint8Array) => Uint8Array
-): Uint8Array {
-  const encoded = encodeType(typeName, types)
-  return keccak(new TextEncoder().encode(encoded))
-}
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
 
 /**
- * Encode a type string including referenced types, sorted alphabetically.
- * e.g. "Order(uint256 salt,address maker,...)"
+ * Canonicalize a raw MPC signature for EVM use: parse r/s, fold a high `s`
+ * into the lower half of the curve order (flipping the recovery parity to
+ * match), and return 32-byte hex r/s with the corrected recovery id.
+ *
+ * Exported for unit testing the low-S fold in isolation (the recover-verify
+ * gate in signSingleTypedData rejects a synthetic signature before its
+ * canonicalized output can be inspected through the full path).
  */
-function encodeType(typeName: string, types: Record<string, Array<{ name: string; type: string }>>): string {
-  const fields = getTypeFields(typeName, types)
-
-  // Find all referenced struct types
-  const refs = new Set<string>()
-  findReferencedTypes(typeName, types, refs)
-  refs.delete(typeName) // primary type goes first
-
-  const sortedRefs = [...refs].sort()
-
-  let result = `${typeName}(${fields.map(f => `${f.type} ${f.name}`).join(',')})`
-  for (const ref of sortedRefs) {
-    const refFields = getTypeFields(ref, types)
-    result += `${ref}(${refFields.map(f => `${f.type} ${f.name}`).join(',')})`
+export function toCanonicalEvmSignature(sigHex: string, recovery: number): { r: string; s: string; recovery: number } {
+  const { r, s } = parseDERSignature(sigHex)
+  const sBig = BigInt('0x' + s)
+  if (sBig > SECP256K1_N >> 1n) {
+    const folded = SECP256K1_N - sBig
+    return { r, s: folded.toString(16).padStart(64, '0'), recovery: recovery ^ 1 }
   }
-  return result
-}
-
-function findReferencedTypes(
-  typeName: string,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  refs: Set<string>
-): void {
-  if (refs.has(typeName)) return
-  const fields = getTypeFields(typeName, types)
-  refs.add(typeName)
-  for (const field of fields) {
-    const baseType = field.type.replace(/\[\d*\]$/, '')
-    if (types[baseType]) {
-      findReferencedTypes(baseType, types, refs)
-    }
-  }
-}
-
-/**
- * Standard EIP-712 domain fields in canonical order. computeEIP712Hash
- * filters this list down to the fields actually present in the domain
- * object — including absent fields in the type corrupts the domain
- * separator (see ClobAuthDomain note in computeEIP712Hash).
- */
-const EIP712_DOMAIN_FIELDS: Array<{ name: string; type: string }> = [
-  { name: 'name', type: 'string' },
-  { name: 'version', type: 'string' },
-  { name: 'chainId', type: 'uint256' },
-  { name: 'verifyingContract', type: 'address' },
-  { name: 'salt', type: 'bytes32' },
-]
-
-/**
- * Get fields for a type. Throws when the type isn't declared: every caller
- * is either looking up a type the payload claims to use (primaryType /
- * EIP712Domain) or a ref already verified present via `types[baseType]`,
- * so a miss means the payload's `types` and `primaryType` disagree.
- * Treating it as an empty struct (the old behavior) would hash and sign
- * a digest no verifier can reproduce — same fail-loud contract as the
- * missing-field guard in encodeData.
- */
-function getTypeFields(
-  typeName: string,
-  types: Record<string, Array<{ name: string; type: string }>>
-): Array<{ name: string; type: string }> {
-  const fields = types[typeName]
-  if (!fields) {
-    throw new Error(`EIP-712 encode: missing type definition for struct "${typeName}"`)
-  }
-  return fields
-}
-
-/**
- * ABI-encode struct data fields (each as 32 bytes).
- */
-function encodeData(
-  typeName: string,
-  data: Record<string, unknown>,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  keccak: (data: Uint8Array) => Uint8Array
-): Uint8Array {
-  const fields = getTypeFields(typeName, types)
-
-  const chunks: Uint8Array[] = []
-  for (const field of fields) {
-    const value = data[field.name]
-    // EIP-712 has no optional struct members: every field declared in the
-    // type contributes to the encoding. A missing value for a declared
-    // field can only mean the caller's `types` and `message`/`domain`
-    // disagree — silently skipping it would yield a digest no on-chain
-    // verifier (or the CLOB) can reproduce, i.e. the wallet would sign
-    // something other than what the type claims. Fail loud instead.
-    // (The domain path can't reach this: computeEIP712Hash filters the
-    // synthesized EIP712Domain type to fields actually present.)
-    if (value === undefined || value === null) {
-      throw new Error(
-        `EIP-712 encode: missing value for declared field "${field.name}" (${field.type}) in struct "${typeName}"`
-      )
-    }
-    chunks.push(encodeField(field.type, value, types, keccak))
-  }
-
-  const totalLen = chunks.reduce((sum, c) => sum + c.length, 0)
-  const result = new Uint8Array(totalLen)
-  let offset = 0
-  for (const chunk of chunks) {
-    result.set(chunk, offset)
-    offset += chunk.length
-  }
-  return result
-}
-
-/**
- * Encode a single field value to 32 bytes.
- */
-function encodeField(
-  type: string,
-  value: unknown,
-  types: Record<string, Array<{ name: string; type: string }>>,
-  keccak: (data: Uint8Array) => Uint8Array
-): Uint8Array {
-  // Dynamic types: string and bytes → keccak256 of the content
-  if (type === 'string') {
-    return keccak(new TextEncoder().encode(value as string))
-  }
-  if (type === 'bytes') {
-    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
-    const bytes = hexToBytes(hex)
-    return keccak(bytes)
-  }
-
-  // Struct type → hashStruct recursively
-  const baseType = type.replace(/\[\d*\]$/, '')
-  if (types[baseType] && !type.endsWith(']')) {
-    return hashStruct(baseType, value as Record<string, unknown>, types, keccak)
-  }
-
-  // Array type → keccak256 of concatenated encoded elements
-  if (type.endsWith(']')) {
-    const arr = value as unknown[]
-    const elementType = type.replace(/\[\d*\]$/, '')
-    const encodedElements = arr.map(el => encodeField(elementType, el, types, keccak))
-    const totalLen = encodedElements.reduce((sum, e) => sum + e.length, 0)
-    const concat = new Uint8Array(totalLen)
-    let off = 0
-    for (const el of encodedElements) {
-      concat.set(el, off)
-      off += el.length
-    }
-    return keccak(concat)
-  }
-
-  // Atomic types → 32-byte padded
-  const result = new Uint8Array(32)
-
-  if (type === 'address') {
-    const addr = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
-    const bytes = hexToBytes(addr.toLowerCase())
-    result.set(bytes, 32 - bytes.length)
-    return result
-  }
-
-  if (type === 'bool') {
-    if (value === true || value === 'true' || value === 1 || value === '1') {
-      result[31] = 1
-    }
-    return result
-  }
-
-  if (type.startsWith('uint') || type.startsWith('int')) {
-    const n = BigInt(value as string | number)
-    const hex = n.toString(16).padStart(64, '0')
-    const bytes = hexToBytes(hex)
-    result.set(bytes, 32 - bytes.length)
-    return result
-  }
-
-  if (type.startsWith('bytes')) {
-    // Fixed-size bytes (bytes1..bytes32) — right-padded
-    const hex = (value as string).startsWith('0x') ? (value as string).slice(2) : (value as string)
-    const bytes = hexToBytes(hex)
-    result.set(bytes, 0) // right-padded, not left-padded
-    return result
-  }
-
-  // Fallback: treat as uint256
-  const n = BigInt(value as string | number)
-  const hex = n.toString(16).padStart(64, '0')
-  const bytes = hexToBytes(hex)
-  result.set(bytes, 32 - bytes.length)
-  return result
-}
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex
-  const padded = clean.length % 2 === 1 ? '0' + clean : clean
-  const bytes = new Uint8Array(padded.length / 2)
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16)
-  }
-  return bytes
+  return { r, s, recovery }
 }
 
 /**
