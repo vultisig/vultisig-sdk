@@ -369,6 +369,101 @@ describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
     }
   })
 
+  it('payloads[] mode (Polymarket BATCH) returns pm_batch_ref so the backend can auto-submit the batch', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-batch', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_batch_ref: 'batch-ref-789',
+        __pm_auto_submit_batch: true,
+      })
+      // Skip the 5s inter-MPC-session sleep between the two payloads.
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // Without pm_batch_ref in the return, agent-backend's batch auto-submit
+      // (submit_deposit_wallet_batch) never fires — BATCH approvals sign but
+      // never auto-submit. The __pm_auto_submit_batch flag rides through the
+      // session echo loop (it's __-prefixed), not this return's auto_submit
+      // (which stays order-scoped via __pm_auto_submit, intentionally untouched).
+      expect(recent.data?.pm_batch_ref).toBe('batch-ref-789')
+      // Invariant lock: the order-scoped auto_submit must NOT be flipped by the
+      // batch flag. Input carries __pm_auto_submit_batch but no __pm_auto_submit,
+      // so the return's auto_submit stays false — the batch flag reaches the
+      // backend only via the session echo loop, never this derivation.
+      expect(recent.data?.auto_submit).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('single-order payloads[] (no batch) emits no spurious pm_batch_ref key', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-single', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_order_ref: 'order-ref-123',
+        __pm_auto_submit: true,
+        // NB: no pm_batch_ref — this is the single-order flow.
+      })
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // The return literal sets pm_batch_ref: input.pm_batch_ref, which is
+      // undefined for single-order flows. Confirm gomes's concern is moot:
+      // JSON.stringify (how recent_actions ship to the backend) drops the
+      // undefined-valued key entirely, so downstream never sees a spurious
+      // pm_batch_ref that could confuse an existence check.
+      expect(recent.data?.pm_batch_ref).toBeUndefined()
+      const wireData = JSON.parse(JSON.stringify(recent.data))
+      expect('pm_batch_ref' in wireData).toBe(false)
+      // The order ref still rides along untouched.
+      expect(recent.data?.pm_order_ref).toBe('order-ref-123')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('5-field domain with salt (bytes32) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 

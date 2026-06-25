@@ -1530,6 +1530,16 @@ export class AgentExecutor {
         return {
           signatures,
           pm_order_ref: input.pm_order_ref,
+          // pm_batch_ref rides along so the backend's batch auto-submit can
+          // dispatch submit_deposit_wallet_batch — without it, Polymarket
+          // BATCH approvals sign but never auto-submit.
+          // Single-order flows omit pm_batch_ref, so this is `undefined` here.
+          // That's safe: JSON.stringify (client.ts ships recent_actions as
+          // JSON) drops undefined-valued keys, and the backend reads it by
+          // value (ar.Data["pm_batch_ref"] → "" when absent) — no consumer
+          // does an `in`/hasOwnProperty existence check. Same pattern as
+          // pm_order_ref above.
+          pm_batch_ref: input.pm_batch_ref,
           auto_submit: !!(input.__pm_auto_submit || input.auto_submit),
         }
       }
