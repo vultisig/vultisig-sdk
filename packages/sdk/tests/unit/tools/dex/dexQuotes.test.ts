@@ -68,9 +68,8 @@ describe('uniswapV2Quote reserve mapping + pair-identity guard', () => {
       }
       if (sel === '0x313ce567') return word('12') // decimals() = 18
       if (sel === '0x95d89b41') {
-        // symbol() returns abi-encoded string "TKN"
+        // symbol() returns abi-encoded string "TKN": offset=0x20, length=3, data="TKN" padded
         return ('0x' +
-          ''.padStart(64, '0').replace(/0$/, '') +
           '0000000000000000000000000000000000000000000000000000000000000020' +
           '0000000000000000000000000000000000000000000000000000000000000003' +
           '544b4e0000000000000000000000000000000000000000000000000000000000') as `0x${string}`

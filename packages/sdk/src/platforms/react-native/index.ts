@@ -171,6 +171,8 @@ export type {
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
   PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -200,6 +202,12 @@ export {
 // Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
 // native crypto, safe as a static re-export on the RN graph).
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+// `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
+// both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
+// rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
+// is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
+// Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
+export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
@@ -294,6 +302,14 @@ export {
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+
+// Gas / fee primitives (read-only — uses global `fetch` + a type-only
+// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
+// these so RN consumers (vultiagent-app) couldn't resolve a current
+// sat/vB rate for a UTXO send / consolidation and had to re-implement
+// the THORChain / MayaChain inbound fetch + halt gating by hand.
+export type { UtxoFeeRate } from '../../tools/gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
