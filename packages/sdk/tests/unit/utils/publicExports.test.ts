@@ -37,12 +37,24 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAX_UINT256).toBe((1n << 256n) - 1n)
   })
 
-  it('exports buildJupiterSwapTx + Jupiter affiliate config (Solana swap leg for mcp-ts/backend)', () => {
+it('exports buildJupiterSwapTx + Jupiter affiliate config (Solana swap leg for mcp-ts/backend)', () => {
     expect(typeof sdk.buildJupiterSwapTx).toBe('function')
     expect(typeof sdk.resolveJupiterFeeAccount).toBe('function')
     expect(sdk.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdk.JUPITER_PLATFORM_FEE_BPS).toBe(50)
     expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+
+it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
+    expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
+    // Builds an unsigned descriptor with no RPC/signing material.
+    const tx = sdk.prepareTrc20TransferFromKeys({
+      contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+      to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      amount: '1000000',
+    })
+    expect(tx.functionSelector).toBe('transfer(address,uint256)')
+    expect(tx.parameter).toHaveLength(128)
   })
 
   it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {

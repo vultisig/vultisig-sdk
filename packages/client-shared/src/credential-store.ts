@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 const SERVICE_NAME = 'vultisig'
 
-function getCredentialsPath(): string {
+export function getCredentialsPath(): string {
   return join(process.env.VULTISIG_CONFIG_DIR || join(homedir(), '.vultisig'), 'credentials.enc')
 }
 

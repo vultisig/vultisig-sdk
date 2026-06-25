@@ -59,6 +59,10 @@ export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '.
 export type { SolBalance, SplTokenBalance } from './balance'
 export { getSolBalance, getSplTokenBalance } from './balance'
 
+// Gas / fee primitives
+export type { UtxoFeeRate } from './gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
+
 // Token utilities
 export type {
   Coin,
@@ -276,9 +280,13 @@ export {
   type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
   prepareJettonTransferTxFromKeys,
   type PrepareJettonTransferTxFromKeysParams,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
@@ -287,13 +295,17 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareTrc20TransferFromKeys,
+  type PrepareTrc20TransferFromKeysParams,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
   type RedelegateParams,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
+  TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
+  type UnsignedTrc20Transfer,
   type VaultIdentity,
   type WithdrawRewardsParams,
 } from './prep'

@@ -185,6 +185,57 @@ describe('SwapService', () => {
       })
     })
 
+    it('normalizes Maya native quote output before the near-zero guard', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      const mockQuote = {
+        quote: {
+          native: {
+            swapChain: 'MayaChain' as const,
+            // Native swap APIs return non-Maya outputs in their 8-decimal protocol
+            // precision. For ETH, SDK callers expect wei (18 decimals).
+            expected_amount_out: '506855',
+            expiry: Math.floor(Date.now() / 1000) + 600,
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
+            inbound_address: 'maya1inbound',
+            memo: '=:ETH.ETH:0x1234567890abcdef1234567890abcdef12345678',
+            notes: '',
+            outbound_delay_blocks: 0,
+            outbound_delay_seconds: 0,
+            recommended_min_amount_in: '1000000',
+            warning: '',
+          },
+        },
+        discounts: [],
+      }
+
+      vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.MayaChain,
+          address: 'maya1sender',
+          ticker: 'CACAO',
+          decimals: 10,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 90,
+      })
+
+      expect(result.provider).toBe('mayachain')
+      expect(result.estimatedOutput).toBe(5_068_550_000_000_000n)
+    })
+
     it('should fetch a swap quote for ERC-20 token requiring approval', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
       const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')

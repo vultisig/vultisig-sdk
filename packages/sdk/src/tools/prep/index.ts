@@ -15,6 +15,12 @@ export {
 export { buildCw20TransferMsg, type BuildCw20TransferMsgParams, type BuildCw20TransferMsgResult } from './cw20Transfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
+export {
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
+} from './polkadotAssetSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {
@@ -27,6 +33,12 @@ export {
   prepareThorchainMsgDepositTxFromKeys,
   type PrepareThorchainMsgDepositTxFromKeysParams,
 } from './thorchainMsgDeposit'
+export {
+  prepareTrc20TransferFromKeys,
+  type PrepareTrc20TransferFromKeysParams,
+  TRC20_TRANSFER_SELECTOR,
+  type UnsignedTrc20Transfer,
+} from './trc20'
 export type { VaultIdentity } from './types'
 export {
   CONSOLIDATE_CHAINS,
