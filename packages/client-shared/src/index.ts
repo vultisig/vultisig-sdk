@@ -3,6 +3,7 @@ export { getConfigPath, loadConfig, saveConfig, type VaultEntry, type VsigConfig
 export {
   _resetAll,
   clearCredentials,
+  getCredentialsPath,
   getDecryptionPassword,
   getServerPassword,
   getStoredServerPassword,
