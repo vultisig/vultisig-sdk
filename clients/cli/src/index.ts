@@ -59,6 +59,7 @@ import {
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
 import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
+import { applyRpcOverrides, resolveRpcOverrides } from './core/rpc-overrides'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -130,6 +131,12 @@ program
   .option('-i, --interactive', 'Start interactive shell mode')
   .option('--vault <nameOrId>', 'Specify vault by name or ID')
   .option('--server-url <url>', 'Base Vultisig API URL for FastVault and relay endpoints')
+  .option(
+    '--rpc-override <chain:url>',
+    'Override a chain RPC endpoint, e.g. ethereum:https://my-node (repeatable; EVM + IBC Cosmos chains only). Also via VULTISIG_<CHAIN>_RPC env.',
+    (value: string, prev: string[] = []) => [...prev, value]
+  )
+  .option('--rpc-check', 'Probe custom RPC overrides for liveness/identity at startup')
   .addHelpText(
     'after',
     '\nExit codes:\n' +
@@ -144,6 +151,7 @@ program
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
       '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
+      '  VULTISIG_<CHAIN>_RPC    Override a chain RPC endpoint (e.g. VULTISIG_ETHEREUM_RPC)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
@@ -206,8 +214,26 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
 
     const globalOptions = program.opts<{
       serverUrl?: string
+      rpcOverride?: string[]
+      rpcCheck?: boolean
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
+
+    // Apply per-chain custom RPC overrides (flags + VULTISIG_<CHAIN>_RPC env)
+    // before the SDK does any networking. Diagnostics go to stderr so they
+    // never corrupt the JSON envelope on stdout.
+    const rpcResolution = resolveRpcOverrides({ specs: globalOptions.rpcOverride })
+    for (const warning of rpcResolution.warnings) {
+      console.error(chalk.yellow(warning))
+    }
+    const appliedRpc = await applyRpcOverrides(rpcResolution, { probe: !!globalOptions.rpcCheck })
+    for (const applied of appliedRpc) {
+      if (applied.health && applied.health.status !== 'reachable') {
+        console.error(chalk.yellow(`Custom RPC for ${applied.chain} is ${applied.health.status}: ${applied.url}`))
+      } else if (!isJsonOutput()) {
+        info(`Using custom RPC for ${applied.chain}: ${applied.url}`)
+      }
+    }
 
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
