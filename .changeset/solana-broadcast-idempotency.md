@@ -1,5 +1,6 @@
 ---
 '@vultisig/core-chain': patch
+'@vultisig/sdk': patch
 ---
 
 fix(core-chain): treat duplicate-signature Solana broadcast errors as idempotent success
