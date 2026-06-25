@@ -57,3 +57,12 @@ export const assertSafeEvmDestination = (address: string): void => {
     throw new Error(`Refusing to build transaction: destination ${address} is a ${reason}.`)
   }
 }
+
+/**
+ * Chain-aware overload of the burn-address guard used by swap/bridge tools.
+ * `_chain` is accepted for future non-EVM family routing; EVM detection is
+ * currently shape-based and does not depend on it.
+ */
+export function assertSafeDestination(_chain: string, destination: string): void {
+  assertSafeEvmDestination(destination)
+}
