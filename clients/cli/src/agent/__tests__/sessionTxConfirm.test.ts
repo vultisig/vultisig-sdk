@@ -91,6 +91,7 @@ function makeHarness(opts: {
     dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
     renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
     confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
+    emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     txConfirmSleep: (AgentSession.prototype as any).txConfirmSleep,
   }
   const run = () =>
