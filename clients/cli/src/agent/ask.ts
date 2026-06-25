@@ -14,7 +14,7 @@
 import type { AgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { Suggestion, UICallbacks } from './types'
+import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -33,7 +33,7 @@ export type AskResult = {
     // Final lifecycle status from post-broadcast confirmation polling so a
     // headless caller learns finality, not just that broadcast was accepted:
     // 'pending' (broadcast) → 'confirmed'/'failed' (resolved) | 'timeout'.
-    status?: string
+    status?: TxLifecycleStatus
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
@@ -102,7 +102,7 @@ export class AskInterface {
         // Silently ignored in ask mode
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
         // One tx now emits multiple lifecycle events (pending → confirmed/
         // failed/timeout). Dedup by hash and update the status in place so the
         // result carries the latest outcome rather than duplicate rows.

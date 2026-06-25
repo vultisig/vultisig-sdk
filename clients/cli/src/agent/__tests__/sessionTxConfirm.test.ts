@@ -23,6 +23,9 @@ function makeHarness(opts: {
   headless?: boolean
   // When true the abort controller is already aborted before polling starts.
   aborted?: boolean
+  // Message-loop depth to start at. Depth 0 models a fresh ask/pipe turn;
+  // depth > 0 models a tx_ready arriving inside a multi-turn tool loop.
+  startDepth?: number
 }) {
   const signTxFromBuffer = vi.fn(
     async () =>
@@ -90,7 +93,8 @@ function makeHarness(opts: {
     confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
     txConfirmSleep: (AgentSession.prototype as any).txConfirmSleep,
   }
-  const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'send 1 ETH', ui, 0)
+  const run = () =>
+    (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'send 1 ETH', ui, opts.startDepth ?? 0)
   return { run, ui, getTxStatus }
 }
 
@@ -140,6 +144,21 @@ describe('processMessageLoop — post-broadcast confirmation (F1)', () => {
 
   it('does not poll in interactive (non-headless) mode — only pending is emitted', async () => {
     const h = makeHarness({ statuses: [{ status: 'success' }], headless: false })
+    await h.run()
+    expect(h.getTxStatus).not.toHaveBeenCalled()
+    expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)
+    expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Base', 'pending', 'https://x/1')
+  })
+
+  it('skips the blocking poll inside a multi-turn tool loop (depth > 0)', async () => {
+    // A tx_ready signed at depth > 0 (inside an ongoing tool loop) must NOT
+    // block the recursion on confirmation: the broadcast result is already
+    // queued to drive the server's next turn, and the confirmation status is
+    // never fed back to the server, so blocking would only stack the full poll
+    // budget per leg (a latency cliff for batched txs). The leg keeps its
+    // honest `pending`; no getTxStatus poll runs. (Depth 0 — the common
+    // single-tx ask/pipe case — still polls; see the tests above.)
+    const h = makeHarness({ statuses: [{ status: 'success' }], startDepth: 1 })
     await h.run()
     expect(h.getTxStatus).not.toHaveBeenCalled()
     expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)

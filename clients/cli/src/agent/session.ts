@@ -486,7 +486,19 @@ export class AgentSession {
         const explorerUrl = recent.data.explorer_url as string | undefined
         if (txHash) {
           ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
-          await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+          // Only block on confirmation at the top of the loop (depth 0) — the
+          // common headless ask/pipe single-tx case, where the command should
+          // wait for finality before returning. Inside a multi-turn tool loop
+          // (depth > 0) the broadcast result is already queued on
+          // pendingToolResults (pushed above) and is what drives the server's
+          // next turn; the confirmation status is never fed back to the server,
+          // so blocking the recursion here buys no correctness — it would only
+          // stack up to the full poll budget (~117s) per leg, a latency cliff
+          // for back-to-back/batched txs. Those legs still emit an honest
+          // `pending` (re-checkable later via `vultisig tx-status`).
+          if (depth === 0) {
+            await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+          }
         }
       }
       await this.processMessageLoop(null, ui, depth + 1)
@@ -611,6 +623,11 @@ export class AgentSession {
    * for the full poll budget would be a UX regression the audit didn't scope.
    * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
    * is interruptible.
+   *
+   * The caller only invokes this at message-loop depth 0 (see the call site):
+   * inside a multi-turn tool loop the broadcast result already drives the next
+   * turn, so blocking here would stack the poll budget per leg without feeding
+   * the server any extra signal. Those deeper legs keep their honest `pending`.
    */
   private async confirmBroadcastedTx(
     txHash: string,
@@ -621,19 +638,28 @@ export class AgentSession {
     if (!this.config.askMode && !this.config.viaAgent) return
 
     const chain = resolveChain(chainName ?? '')
-    // `as any`: getTxStatus is absent on the minimal `this` used by unit tests
-    // and on chains the SDK can't resolve — mirror executor.waitForEvmReceipt.
-    if (!chain || typeof (this.vault as any)?.getTxStatus !== 'function') return
+    // Call the SDK's typed `VaultBase.getTxStatus` directly (no `as any`) so a
+    // rename or signature drift on it fails this build — the cast previously
+    // swallowed that. The `typeof` guard stays runtime-meaningful: the unit-test
+    // harness passes a minimal `this` whose vault may omit getTxStatus, and we
+    // also skip chains the SDK can't resolve. (`?.` is redundant at the type
+    // level since `this.vault: VaultBase`, but guards that stub at runtime.)
+    if (!chain || typeof this.vault?.getTxStatus !== 'function') return
 
     for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
       if (this.abortController?.signal?.aborted) return
       try {
-        const result = await (this.vault as any).getTxStatus({ chain, txHash })
-        if (result?.status === 'success') {
+        // TxStatusResult.status is the SDK's exhaustive union
+        // `'pending' | 'success' | 'error'`. Only the two terminal states
+        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // polling until the budget is spent and we emit `timeout` below — a safe
+        // default since the tx may still confirm later.
+        const result = await this.vault.getTxStatus({ chain, txHash })
+        if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
           return
         }
-        if (result?.status === 'error') {
+        if (result.status === 'error') {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
           return
         }

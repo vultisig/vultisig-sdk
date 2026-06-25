@@ -12,7 +12,7 @@ import * as readline from 'node:readline'
 import { AgentErrorCode, normalizeAgentError } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { PipeInputCommand, PipeOutputEvent, Suggestion, UICallbacks } from './types'
+import type { PipeInputCommand, PipeOutputEvent, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export class PipeInterface {
   private session: AgentSession
@@ -171,12 +171,12 @@ export class PipeInterface {
         this.emit({ type: 'suggestions', suggestions })
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
         this.emit({
           type: 'tx_status',
           tx_hash: txHash,
           chain,
-          status: status as 'pending' | 'confirmed' | 'failed' | 'timeout',
+          status,
           explorer_url: explorerUrl,
         })
       },
