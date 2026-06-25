@@ -1,7 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { parseActionDisplay, stakekitBalances, stakekitBuildEnter, stakekitBuildExit, stakekitSearch } from '@/tools/defi/stakekit'
 import type { YieldActionResponse, YieldDiscoverOpportunity } from '@/tools/defi/stakekit'
+import {
+  parseActionDisplay,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitSearch,
+} from '@/tools/defi/stakekit'
 
 // Minimal yield product fixture that matches YieldDiscoverOpportunity shape
 const makeProduct = (overrides: Record<string, unknown> = {}) => ({
@@ -99,7 +105,8 @@ const makeSolanaActionResponse = (): YieldActionResponse => ({
       type: 'STAKE',
       network: 'solana',
       status: 'CREATED',
-      unsignedTransaction: 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQABAQL',
+      unsignedTransaction:
+        'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQABAQL',
       gasEstimate: '{}',
     },
   ],
@@ -241,7 +248,8 @@ describe('sdk.defi.stakekit', () => {
       const product = makeProduct()
       const actionResp = makeEvmActionResponse()
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         // First call: getYield (for resolveActionArgs)
         .mockResolvedValueOnce({
           ok: true,
@@ -356,7 +364,7 @@ describe('sdk.defi.stakekit', () => {
       })
 
       // At least one header set should include X-API-KEY
-      const hasKey = capturedHeaders.some((h) => h['X-API-KEY'] === 'test-key-123')
+      const hasKey = capturedHeaders.some(h => h['X-API-KEY'] === 'test-key-123')
       expect(hasKey).toBe(true)
     })
   })
@@ -397,7 +405,8 @@ describe('sdk.defi.stakekit', () => {
         ],
       }
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         // resolveActionArgs getYield
         .mockResolvedValueOnce({
           ok: true,
@@ -502,7 +511,8 @@ describe('sdk.defi.stakekit', () => {
   describe('stakekitBalances', () => {
     it('returns null on 403 (restricted endpoint)', async () => {
       // searchYields (to enumerate integration IDs)
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
