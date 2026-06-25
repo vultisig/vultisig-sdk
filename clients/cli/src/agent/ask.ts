@@ -169,6 +169,18 @@ export class AskInterface {
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
 
+    return this.partialResult()
+  }
+
+  /**
+   * Snapshot of everything collected so far this turn. Identical to a normal
+   * `ask()` return, but callable from a catch block when `ask()` THREW mid-turn
+   * — e.g. the follow-up request that reports recent_actions back to the backend
+   * fails (timeout/5xx/auth) AFTER a tx has already broadcast and `onTxStatus`
+   * fired. Lets the caller still surface the already-broadcast tx hash in the
+   * error envelope instead of stranding funds the turn just moved.
+   */
+  partialResult(): AskResult {
     return {
       sessionId: this.session.getConversationId() || '',
       response: this.responseParts[this.responseParts.length - 1] || '',

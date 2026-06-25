@@ -225,6 +225,9 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
   // catch may run before it's set (auth/init failure), leaving it empty.
   let conversationId = ''
   let exitCode = 0
+  // Hoisted so the catch can recover partial turn state (already-broadcast tx
+  // hashes) when ask() throws AFTER a broadcast — see the catch block below.
+  let ask: AskInterface | undefined
 
   try {
     const vault = await ctx.ensureActiveVault()
@@ -241,7 +244,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     }
 
     const session = new AgentSession(vault, config)
-    const ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
+    ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
     const callbacks = ask.getCallbacks()
 
     await session.initialize(callbacks)
@@ -261,7 +264,15 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
   } catch (err: unknown) {
     const { code, message } = normalizeAgentError(err)
     exitCode = 1
-    outputAskError(wantsJson, message, code, conversationId)
+    // ask() can throw AFTER a tx already broadcast: a successful sign always
+    // triggers a recursive follow-up request to report recent_actions, and an
+    // HTTP/timeout/5xx failure there rejects sendMessage. Recover the partial
+    // turn so the broadcast hash still reaches the error envelope (and use the
+    // session's conversation id, already assigned during initialize) instead of
+    // stranding the funds with exit-1 and an empty record.
+    const partial = ask?.partialResult()
+    if (partial && !conversationId) conversationId = partial.sessionId
+    outputAskError(wantsJson, message, code, conversationId, partial)
   } finally {
     console.log = originalConsoleLog
     setSilentMode(false)

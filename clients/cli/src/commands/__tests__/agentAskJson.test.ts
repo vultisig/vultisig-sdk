@@ -154,4 +154,32 @@ describe('agent ask --json output contract', () => {
     // The partial tool_calls are carried too, for correlation/de-dup.
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
   })
+
+  it('broadcast THEN thrown follow-up failure → exit non-zero AND error envelope still carries the tx hash (catch path)', async () => {
+    // A successful sign always triggers a recursive follow-up request to report
+    // recent_actions; an HTTP/timeout/5xx failure there REJECTS sendMessage, so
+    // ask() throws instead of returning. The catch path must still recover the
+    // already-broadcast hash from the partial turn — otherwise exit-1 strands the
+    // funds with no identifier. Regression guard for the thrown-after-broadcast
+    // path (the SSE-error-frame path is covered by the test above).
+    driver.run = cb => {
+      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onTxStatus('0xcafef00d', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xcafef00d')
+      throw new Error('backend 503 reporting recent_actions after broadcast')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).not.toBe(0)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.v).toBe(1)
+    // conversation_id recovered from the session even though ask() threw.
+    expect(envelope.error.conversation_id).toBe('conv-abc')
+    // The broadcast tx survives into the error envelope's data block.
+    expect(envelope.data.transactions).toHaveLength(1)
+    expect(envelope.data.transactions[0].hash).toBe('0xcafef00d')
+    expect(envelope.data.transactions[0].status).toBe('broadcast')
+    expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
+  })
 })
