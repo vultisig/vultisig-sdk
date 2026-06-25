@@ -13,6 +13,19 @@ export {
   type WithdrawRewardsParams,
 } from './cosmosStaking'
 export { buildCw20TransferMsg, type BuildCw20TransferMsgParams, type BuildCw20TransferMsgResult } from './cw20Transfer'
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  type IbcCosmosTx,
+  type IbcMsgTransfer,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  type PrepareIbcTransferParams,
+  type PrepareIbcTransferResult,
+  supportedIbcDestinationsFrom,
+} from './ibcTransfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
 export {
