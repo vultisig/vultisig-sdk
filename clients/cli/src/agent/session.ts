@@ -535,7 +535,17 @@ export class AgentSession {
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+        // Route the recovery poll through the same clear→reauth→retry chokepoint
+        // as every other conversation request. Without this, a token revoked
+        // mid-recovery (revoked-but-unexpired, inside the ~3-min window) would
+        // make every poll throw an auth error, fall into the generic
+        // sleep/continue below, and spin through recoveryMaxPolls — silently
+        // losing the assistant reply / tx_ready instead of self-healing. The
+        // helper re-auths once on the first revoked poll; subsequent polls reuse
+        // the refreshed token (no repeated MPC re-signs).
+        resp = await this.withAuthRetry(() =>
+          this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+        )
       } catch (err: any) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)

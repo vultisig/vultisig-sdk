@@ -161,6 +161,82 @@ describe('initialize — resume fallback + signal (findings b/c)', () => {
   })
 })
 
+describe('recoverDisconnectedTurn — revoked token during the recovery poll (finding M1)', () => {
+  // The SSE-disconnect recovery poll must self-heal a token revoked mid-recovery
+  // (revoked-but-unexpired, inside the ~3-min window). Before the fix the poll
+  // called client.messagesSince directly, so a 401 fell into the generic
+  // sleep/continue loop and spun through every poll — silently losing the
+  // assistant reply / tx_ready. The poll now routes through withAuthRetry like
+  // every other conversation request.
+  //
+  // The mock throws 401 while the client token is the revoked one and only
+  // succeeds once re-auth installs 'reauth-tok'. So WITHOUT the wrap there is no
+  // re-auth, the token never changes, and every poll throws → recovery exhausts
+  // with message===null and authenticateVault never called (the red state).
+  function makeRecoveryThis(messagesSince: any, client: any) {
+    return {
+      conversationId: 'conv-1',
+      publicKey: 'pk',
+      vault: { isEncrypted: false, publicKeys: { ecdsa: 'pk' } },
+      config: { verbose: false },
+      recoveryMaxPolls: 4,
+      recoveryPollIntervalMs: 0,
+      client: { messagesSince, ...client },
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
+      recoverySleep: (AgentSession.prototype as any).recoverySleep,
+      applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
+    }
+  }
+
+  it('re-auths + retries the poll on a revoked token instead of spinning to timeout', async () => {
+    let token = 'revoked'
+    const setAuthToken = vi.fn((t: string) => {
+      token = t
+    })
+    const recovered = {
+      id: 'm-recovered',
+      role: 'assistant',
+      content: 'Here is your balance: 1.5 ETH',
+    }
+    const messagesSince = vi.fn(async () => {
+      if (token !== 'reauth-tok') throw authError()
+      return { messages: [recovered], cursor: 'c' }
+    })
+
+    const streamResult: any = { message: null, transactions: [], serverNow: '1718870400000' }
+    const ft = makeRecoveryThis(messagesSince, { setAuthToken })
+
+    await (AgentSession.prototype as any).recoverDisconnectedTurn.call(ft, streamResult, undefined)
+
+    // Self-healed: the revoked token was cleared, re-auth ran once, the new token
+    // was installed, and the retried poll recovered the lost answer.
+    expect(authenticateVault).toHaveBeenCalledTimes(1)
+    expect(setAuthToken).toHaveBeenCalledWith('reauth-tok')
+    expect(streamResult.message?.content).toBe('Here is your balance: 1.5 ETH')
+    // Two messagesSince calls within a SINGLE poll attempt: the 401 + the retry.
+    expect(messagesSince).toHaveBeenCalledTimes(2)
+  })
+
+  it('a persistent (post-retry) auth failure still falls through to the bounded poll loop', async () => {
+    // If re-auth does not clear the 401 (token stays bad), withAuthRetry rethrows
+    // after its one retry; the generic catch then sleeps/continues, so recovery
+    // stays bounded — no worse than today, never an infinite re-auth storm.
+    const setAuthToken = vi.fn() // never updates the token → messagesSince keeps 401-ing
+    const messagesSince = vi.fn(async () => {
+      throw authError()
+    })
+    const streamResult: any = { message: null, transactions: [], serverNow: '1718870400000' }
+    const ft = makeRecoveryThis(messagesSince, { setAuthToken })
+
+    await (AgentSession.prototype as any).recoverDisconnectedTurn.call(ft, streamResult, undefined)
+
+    expect(streamResult.message).toBeNull() // bounded give-up, not a hang
+    // 4 poll attempts × (original + one retry) = 8 calls; re-auth attempted each poll.
+    expect(messagesSince).toHaveBeenCalledTimes(8)
+    expect(authenticateVault).toHaveBeenCalledTimes(4)
+  })
+})
+
 describe('withAuthRetry / isAuthError', () => {
   it('isAuthError classifies 401/403 messages and ignores others', () => {
     expect(isAuthError(new Error('Request failed (401): nope'))).toBe(true)
