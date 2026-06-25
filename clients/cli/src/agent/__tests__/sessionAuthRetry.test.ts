@@ -239,6 +239,32 @@ describe('recoverDisconnectedTurn — revoked token during the recovery poll (fi
     // polls 1-3: messagesSince ×1 each (direct, no further re-auth) = 5 total.
     expect(messagesSince).toHaveBeenCalledTimes(5)
   })
+
+  it('re-auths only ONCE even when the re-auth itself throws (MPC re-sign failure)', async () => {
+    // Codex M1-followup edge: the single re-auth must be "spent" the instant it is
+    // committed to — BEFORE authenticateVault runs — so a re-auth that throws a
+    // NON-auth error (MPC re-sign failure, auth endpoint down) cannot let the next
+    // poll re-enter withAuthRetry and re-sign again. Flipping the flag only in the
+    // catch (on the final error type) would miss this case and re-sign every poll.
+    vi.mocked(authenticateVault).mockImplementationOnce(async () => {
+      throw new Error('mpc re-sign failed') // non-auth error from the re-sign itself
+    })
+    const messagesSince = vi.fn(async () => {
+      throw authError() // token stays revoked for the whole window
+    })
+    const streamResult: any = { message: null, transactions: [], serverNow: '1718870400000' }
+    const ft = makeRecoveryThis(messagesSince, { setAuthToken: vi.fn() })
+
+    await (AgentSession.prototype as any).recoverDisconnectedTurn.call(ft, streamResult, undefined)
+
+    expect(streamResult.message).toBeNull()
+    // Re-auth committed (and threw) on poll 0; polls 1-3 poll directly → never
+    // a second authenticateVault, regardless of the re-sign failure.
+    expect(authenticateVault).toHaveBeenCalledTimes(1)
+    // poll 0: messagesSince ×1 (the 401 that triggers re-auth; the retry never
+    // runs because authenticateVault threw first); polls 1-3: ×1 each = 4 total.
+    expect(messagesSince).toHaveBeenCalledTimes(4)
+  })
 })
 
 describe('withAuthRetry / isAuthError', () => {

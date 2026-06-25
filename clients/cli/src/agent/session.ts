@@ -223,12 +223,19 @@ export class AgentSession {
    * full MPC re-sign via authenticateVault — the backend also exposes
    * POST /auth/refresh, but exchanging the refresh token is a future
    * enhancement (see auth.ts); the re-sign is always available.
+   *
+   * `onReauth` (optional) fires the instant a re-auth is committed to — BEFORE
+   * authenticateVault runs — so a caller in a retry loop (recoverDisconnectedTurn)
+   * can record that its single re-auth has been spent even if the MPC re-sign
+   * itself then throws. Without this hook a re-auth that fails with a non-auth
+   * error would let the caller re-enter and re-sign on every iteration.
    */
-  private async withAuthRetry<T>(request: () => Promise<T>): Promise<T> {
+  private async withAuthRetry<T>(request: () => Promise<T>, onReauth?: () => void): Promise<T> {
     try {
       return await request()
     } catch (err) {
       if (!isAuthError(err)) throw err
+      onReauth?.()
       clearCachedToken(this.publicKey)
       const auth = await authenticateVault(this.client, this.vault, this.config.password)
       this.client.setAuthToken(auth.token)
@@ -535,13 +542,15 @@ export class AgentSession {
 
     // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
     // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
-    // poll routes through withAuthRetry (clear→reauth→retry once); once that has
-    // fired, later polls call messagesSince directly with the refreshed token, so
-    // a *persistent* 401 can't trigger an MPC re-sign on every poll (bounded
-    // re-sign work, no key-share amplification). Later polls still recover the
-    // turn if the refreshed token starts working; otherwise the loop exhausts as
-    // before. Without the wrap a revoked token would spin through recoveryMaxPolls
-    // and silently lose the assistant reply / tx_ready (finding M1).
+    // poll routes through withAuthRetry (clear→reauth→retry once); its onReauth
+    // hook flips authRecovered the instant the re-sign is committed to, so even a
+    // re-auth that itself fails (MPC error, auth endpoint down) can't re-arm. Once
+    // spent, later polls call messagesSince directly with the (best-effort)
+    // refreshed token, so a *persistent* 401 can't trigger an MPC re-sign on every
+    // poll (bounded re-sign work, no key-share amplification). Later polls still
+    // recover the turn if the refreshed token starts working; otherwise the loop
+    // exhausts as before. Without the wrap a revoked token would spin through
+    // recoveryMaxPolls and silently lose the assistant reply / tx_ready (M1).
     let authRecovered = false
 
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
@@ -549,13 +558,13 @@ export class AgentSession {
       try {
         resp = authRecovered
           ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
-          : await this.withAuthRetry(() =>
-              this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(
+              () => this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since }),
+              () => {
+                authRecovered = true
+              }
             )
       } catch (err: any) {
-        // Spend the one-and-only re-auth: a persistent auth failure now stops
-        // re-signing on every subsequent poll (Codex M1-followup).
-        if (isAuthError(err)) authRecovered = true
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
         }
