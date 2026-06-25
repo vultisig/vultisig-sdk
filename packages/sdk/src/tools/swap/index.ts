@@ -1,3 +1,5 @@
+export type { AcrossChain, AcrossQuote, AcrossQuoteParams } from './acrossQuote'
+export { acrossQuote, acrossSupportedChains } from './acrossQuote'
 export type { FindSwapQuoteParams, SwapQuote } from './findSwapQuote'
 export { findSwapQuote } from './findSwapQuote'
 export type { JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResult } from './jupiter'
