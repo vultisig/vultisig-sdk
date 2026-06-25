@@ -11,71 +11,93 @@
  * - `vultisig agent sessions list` - List sessions for current vault
  * - `vultisig agent sessions delete <id>` - Delete a session
  */
-import type { VaultBase } from '@vultisig/sdk'
-import chalk from 'chalk'
-import Table from 'cli-table3'
+import type { VaultBase } from "@vultisig/sdk";
+import chalk from "chalk";
+import Table from "cli-table3";
 
-import type { AgentConfig } from '../agent'
-import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
-import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
-import type { AskResult } from '../agent/ask'
-import { renderBalanceSummaryCard } from '../agent/cards'
-import type { CommandContext } from '../core'
-import { isJsonOutput, outputErrorJson, outputJson, printResult, setSilentMode } from '../lib/output'
+import type { AgentConfig } from "../agent";
+import {
+  AgentClient,
+  AgentSession,
+  AskInterface,
+  authenticateVault,
+  ChatTUI,
+  PipeInterface,
+} from "../agent";
+import { AgentErrorCode, normalizeAgentError } from "../agent/agentErrors";
+import type { AskResult } from "../agent/ask";
+import { renderBalanceSummaryCard } from "../agent/cards";
+import type { CommandContext } from "../core";
+import {
+  isJsonOutput,
+  outputErrorJson,
+  outputJson,
+  printResult,
+  setSilentMode,
+} from "../lib/output";
 
 export type AgentCommandOptions = {
-  backendUrl?: string
-  password?: string
-  viaAgent?: boolean
-  sessionId?: string
-  verbose?: boolean
-  notificationUrl?: string
-  profile?: string
-}
+  backendUrl?: string;
+  password?: string;
+  viaAgent?: boolean;
+  sessionId?: string;
+  verbose?: boolean;
+  notificationUrl?: string;
+  profile?: string;
+};
 
-export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
-  const vault = await ctx.ensureActiveVault()
+export async function executeAgent(
+  ctx: CommandContext,
+  options: AgentCommandOptions,
+): Promise<void> {
+  const vault = await ctx.ensureActiveVault();
 
   const config: AgentConfig = {
-    backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
+    backendUrl:
+      options.backendUrl ||
+      process.env.VULTISIG_AGENT_URL ||
+      "https://abe.vultisig.com",
     vaultName: vault.name,
     vultisig: ctx.sdk,
     password: options.password,
     viaAgent: options.viaAgent,
     sessionId: options.sessionId,
     verbose: options.verbose,
-    notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
-    profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
-  }
+    notificationUrl:
+      options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || "",
+    profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? "",
+  };
 
-  const session = new AgentSession(vault, config)
+  const session = new AgentSession(vault, config);
 
   if (options.viaAgent) {
     // Pipe mode for agent-to-agent communication
-    const pipe = new PipeInterface(session)
-    const callbacks = pipe.getCallbacks()
+    const pipe = new PipeInterface(session);
+    const callbacks = pipe.getCallbacks();
 
     try {
-      await session.initialize(callbacks)
-      const addresses = session.getVaultAddresses()
-      await pipe.start(vault.name, addresses)
+      await session.initialize(callbacks);
+      const addresses = session.getVaultAddresses();
+      await pipe.start(vault.name, addresses);
     } catch (err: unknown) {
-      const { code, message } = normalizeAgentError(err)
-      process.stdout.write(JSON.stringify({ type: 'error', message, code }) + '\n')
-      process.exit(1)
+      const { code, message } = normalizeAgentError(err);
+      process.stdout.write(
+        JSON.stringify({ type: "error", message, code }) + "\n",
+      );
+      process.exit(1);
     }
   } else {
     // Interactive TUI mode
-    const tui = new ChatTUI(session, vault.name, config.verbose)
-    const callbacks = tui.getCallbacks()
+    const tui = new ChatTUI(session, vault.name, config.verbose);
+    const callbacks = tui.getCallbacks();
 
     try {
-      await session.initialize(callbacks)
-      await tui.start()
+      await session.initialize(callbacks);
+      await tui.start();
     } catch (err: unknown) {
-      const { message } = normalizeAgentError(err)
-      console.error(`Agent error: ${message}`)
-      process.exit(1)
+      const { message } = normalizeAgentError(err);
+      console.error(`Agent error: ${message}`);
+      process.exit(1);
     }
   }
 }
@@ -85,15 +107,15 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
 // ============================================================================
 
 export type AgentAskOptions = {
-  backendUrl?: string
-  password?: string
-  session?: string
-  verbose?: boolean
-  json?: boolean
-  profile?: string
+  backendUrl?: string;
+  password?: string;
+  session?: string;
+  verbose?: boolean;
+  json?: boolean;
+  profile?: string;
   /** Opt in to unattended signing/broadcast (`--yes`). Default: deny + report the proposed tx. */
-  autoApprove?: boolean
-}
+  autoApprove?: boolean;
+};
 
 /**
  * Send a single message to the agent and output the response.
@@ -115,11 +137,20 @@ export type AgentAskOptions = {
  * stderr. Shared by the mid-turn `error`-frame path and the catch path so both
  * surface the same shape and a headless caller can branch on it identically.
  */
-function outputAskError(wantsJson: boolean, message: string, code: AgentErrorCode, conversationId: string): void {
+function outputAskError(
+  wantsJson: boolean,
+  message: string,
+  code: AgentErrorCode,
+  conversationId: string,
+): void {
   if (wantsJson) {
-    outputErrorJson({ success: false, v: 1, error: { message, code, conversation_id: conversationId } })
+    outputErrorJson({
+      success: false,
+      v: 1,
+      error: { message, code, conversation_id: conversationId },
+    });
   } else {
-    process.stderr.write(`Error: ${message} [${code}]\n`)
+    process.stderr.write(`Error: ${message} [${code}]\n`);
   }
 }
 
@@ -127,28 +158,34 @@ function outputAskError(wantsJson: boolean, message: string, code: AgentErrorCod
  * Render a human-readable (non-JSON) ask result to stdout: session line, optional
  * confirmation/proposed lines, balance cards, response text, and tx hashes.
  */
-function outputAskHuman(result: AskResult, confirmationRequired: boolean, proposed: string | undefined): void {
+function outputAskHuman(
+  result: AskResult,
+  confirmationRequired: boolean,
+  proposed: string | undefined,
+): void {
   // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
-  process.stdout.write(`session:${result.sessionId}\n`)
+  process.stdout.write(`session:${result.sessionId}\n`);
   if (confirmationRequired) {
-    process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
+    process.stdout.write(
+      `confirmation-required:pass --yes to authorize signing\n`,
+    );
     if (proposed) {
-      process.stdout.write(`proposed:${proposed}\n`)
+      process.stdout.write(`proposed:${proposed}\n`);
     }
   }
   // Balance cards (rendered as a table instead of raw JSON)
   for (const card of result.cards) {
-    process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
+    process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`);
   }
   // Response text
   if (result.response) {
-    process.stdout.write(`\n${result.response}\n`)
+    process.stdout.write(`\n${result.response}\n`);
   }
   // Transaction hashes
   for (const tx of result.transactions) {
-    process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
+    process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`);
     if (tx.explorerUrl) {
-      process.stdout.write(`explorer:${tx.explorerUrl}\n`)
+      process.stdout.write(`explorer:${tx.explorerUrl}\n`);
     }
   }
 }
@@ -157,15 +194,23 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
  * Emit a successful ask turn — the structured JSON envelope (JSON mode) or the
  * human rendering. Computes the confirmation-required / proposed signals once.
  */
-function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId: string): void {
+function outputAskSuccess(
+  wantsJson: boolean,
+  result: AskResult,
+  conversationId: string,
+): void {
   // Machine-detectable signal that a signing step was proposed but denied (no
   // --yes): callers expecting a broadcast must check this, not infer from exit 0.
-  const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
+  const confirmationRequired = result.toolCalls.some(
+    (tc) => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED,
+  );
   // The same summary the gate showed the user (or would have, in --yes mode).
   const proposedCall = result.toolCalls.find(
-    tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
-  )
-  const proposed = proposedCall?.data?.proposed as string | undefined
+    (tc) =>
+      tc.code === AgentErrorCode.CONFIRMATION_REQUIRED &&
+      typeof tc.data?.proposed === "string",
+  );
+  const proposed = proposedCall?.data?.proposed as string | undefined;
 
   if (wantsJson) {
     outputJson({
@@ -177,75 +222,91 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
       ...(confirmationRequired ? { confirmation_required: true } : {}),
       ...(proposed ? { proposed } : {}),
-    })
-    return
+    });
+    return;
   }
-  outputAskHuman(result, confirmationRequired, proposed)
+  outputAskHuman(result, confirmationRequired, proposed);
 }
 
-export async function executeAgentAsk(ctx: CommandContext, message: string, options: AgentAskOptions): Promise<void> {
+export async function executeAgentAsk(
+  ctx: CommandContext,
+  message: string,
+  options: AgentAskOptions,
+): Promise<void> {
   // Suppress info/warn/success messages — only our structured output goes to stdout
-  setSilentMode(true)
+  setSilentMode(true);
 
   // Redirect console.log to stderr so that SDK internals (MPC signing progress,
   // balance updates, etc.) don't pollute our structured stdout output. The
   // structured envelope itself is written via outputJson/outputErrorJson, which
   // go straight to process.stdout and so survive this redirect.
-  const originalConsoleLog = console.log
+  const originalConsoleLog = console.log;
   console.log = (...args: unknown[]) => {
-    process.stderr.write(args.map(String).join(' ') + '\n')
-  }
+    process.stderr.write(args.map(String).join(" ") + "\n");
+  };
 
-  const wantsJson = !!options.json || isJsonOutput()
+  const wantsJson = !!options.json || isJsonOutput();
   // Captured after ask() so both the success and error paths can attach it; the
   // catch may run before it's set (auth/init failure), leaving it empty.
-  let conversationId = ''
-  let exitCode = 0
+  let conversationId = "";
+  let exitCode = 0;
 
   try {
-    const vault = await ctx.ensureActiveVault()
+    const vault = await ctx.ensureActiveVault();
 
     const config: AgentConfig = {
-      backendUrl: options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com',
+      backendUrl:
+        options.backendUrl ||
+        process.env.VULTISIG_AGENT_URL ||
+        "https://abe.vultisig.com",
       vaultName: vault.name,
       vultisig: ctx.sdk,
       password: options.password,
       sessionId: options.session,
       verbose: options.verbose,
       askMode: true,
-      profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
-    }
+      profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? "",
+    };
 
-    const session = new AgentSession(vault, config)
-    const ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
-    const callbacks = ask.getCallbacks()
+    const session = new AgentSession(vault, config);
+    const ask = new AskInterface(
+      session,
+      !!config.verbose,
+      !!options.autoApprove,
+    );
+    const callbacks = ask.getCallbacks();
 
-    await session.initialize(callbacks)
-    const result = await ask.ask(message)
-    conversationId = result.sessionId
+    await session.initialize(callbacks);
+    const result = await ask.ask(message);
+    conversationId = result.sessionId;
 
     // A backend/stream `error` frame mid-turn resolves the turn normally (the
     // SSE handler only calls onError), so without this check a headless caller
     // branching on exit code would see false success. Surface it as the error
     // envelope on stdout and exit non-zero; otherwise emit the success turn.
     if (result.error) {
-      exitCode = 1
-      outputAskError(wantsJson, result.error.message, result.error.code, conversationId)
+      exitCode = 1;
+      outputAskError(
+        wantsJson,
+        result.error.message,
+        result.error.code,
+        conversationId,
+      );
     } else {
-      outputAskSuccess(wantsJson, result, conversationId)
+      outputAskSuccess(wantsJson, result, conversationId);
     }
   } catch (err: unknown) {
-    const { code, message } = normalizeAgentError(err)
-    exitCode = 1
-    outputAskError(wantsJson, message, code, conversationId)
+    const { code, message } = normalizeAgentError(err);
+    exitCode = 1;
+    outputAskError(wantsJson, message, code, conversationId);
   } finally {
-    console.log = originalConsoleLog
-    setSilentMode(false)
+    console.log = originalConsoleLog;
+    setSilentMode(false);
   }
 
   // Clean exit — don't leave dangling handles. Non-zero on a backend/stream
   // error so headless callers can branch on exit code.
-  process.exit(exitCode)
+  process.exit(exitCode);
 }
 
 // ============================================================================
@@ -253,89 +314,117 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
 // ============================================================================
 
 export type AgentSessionsListOptions = {
-  backendUrl?: string
-  password?: string
-}
+  backendUrl?: string;
+  password?: string;
+};
 
-export async function executeAgentSessionsList(ctx: CommandContext, options: AgentSessionsListOptions): Promise<void> {
-  const vault = await ctx.ensureActiveVault()
-  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com'
-  const client = await createAuthenticatedClient(backendUrl, vault, options.password)
+export async function executeAgentSessionsList(
+  ctx: CommandContext,
+  options: AgentSessionsListOptions,
+): Promise<void> {
+  const vault = await ctx.ensureActiveVault();
+  const backendUrl =
+    options.backendUrl ||
+    process.env.VULTISIG_AGENT_URL ||
+    "https://abe.vultisig.com";
+  const client = await createAuthenticatedClient(
+    backendUrl,
+    vault,
+    options.password,
+  );
 
-  const publicKey = vault.publicKeys.ecdsa
+  const publicKey = vault.publicKeys.ecdsa;
 
   // Fetch all pages (backend caps at 100 per request)
-  const PAGE_SIZE = 100
-  const allConversations: Awaited<ReturnType<typeof client.listConversations>>['conversations'] = []
-  let totalCount = 0
-  let skip = 0
+  const PAGE_SIZE = 100;
+  const allConversations: Awaited<
+    ReturnType<typeof client.listConversations>
+  >["conversations"] = [];
+  let totalCount = 0;
+  let skip = 0;
 
   while (true) {
-    const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
-    totalCount = page.total_count
-    allConversations.push(...page.conversations)
-    if (allConversations.length >= totalCount || page.conversations.length < PAGE_SIZE) break
-    skip += PAGE_SIZE
+    const page = await client.listConversations(publicKey, skip, PAGE_SIZE);
+    totalCount = page.total_count;
+    allConversations.push(...page.conversations);
+    if (
+      allConversations.length >= totalCount ||
+      page.conversations.length < PAGE_SIZE
+    )
+      break;
+    skip += PAGE_SIZE;
   }
 
   if (isJsonOutput()) {
     outputJson({
-      sessions: allConversations.map(c => ({
+      sessions: allConversations.map((c) => ({
         id: c.id,
         title: c.title,
         created_at: c.created_at,
         updated_at: c.updated_at,
       })),
       total_count: totalCount,
-    })
-    return
+    });
+    return;
   }
 
   if (allConversations.length === 0) {
-    printResult('No sessions found.')
-    return
+    printResult("No sessions found.");
+    return;
   }
 
   const table = new Table({
-    head: [chalk.cyan('ID'), chalk.cyan('Title'), chalk.cyan('Created'), chalk.cyan('Updated')],
-  })
+    head: [
+      chalk.cyan("ID"),
+      chalk.cyan("Title"),
+      chalk.cyan("Created"),
+      chalk.cyan("Updated"),
+    ],
+  });
 
   for (const conv of allConversations) {
     table.push([
       conv.id,
-      conv.title || chalk.gray('(untitled)'),
+      conv.title || chalk.gray("(untitled)"),
       formatDate(conv.created_at),
       formatDate(conv.updated_at),
-    ])
+    ]);
   }
 
-  printResult(table.toString())
-  printResult(chalk.gray(`\n  ${totalCount} session(s) total`))
+  printResult(table.toString());
+  printResult(chalk.gray(`\n  ${totalCount} session(s) total`));
 }
 
 export type AgentSessionsDeleteOptions = {
-  backendUrl?: string
-  password?: string
-}
+  backendUrl?: string;
+  password?: string;
+};
 
 export async function executeAgentSessionsDelete(
   ctx: CommandContext,
   sessionId: string,
-  options: AgentSessionsDeleteOptions
+  options: AgentSessionsDeleteOptions,
 ): Promise<void> {
-  const vault = await ctx.ensureActiveVault()
-  const backendUrl = options.backendUrl || process.env.VULTISIG_AGENT_URL || 'https://abe.vultisig.com'
-  const client = await createAuthenticatedClient(backendUrl, vault, options.password)
+  const vault = await ctx.ensureActiveVault();
+  const backendUrl =
+    options.backendUrl ||
+    process.env.VULTISIG_AGENT_URL ||
+    "https://abe.vultisig.com";
+  const client = await createAuthenticatedClient(
+    backendUrl,
+    vault,
+    options.password,
+  );
 
-  const publicKey = vault.publicKeys.ecdsa
-  await client.deleteConversation(sessionId, publicKey)
+  const publicKey = vault.publicKeys.ecdsa;
+  await client.deleteConversation(sessionId, publicKey);
 
   if (isJsonOutput()) {
-    outputJson({ deleted: sessionId })
-    return
+    outputJson({ deleted: sessionId });
+    return;
   }
 
-  printResult(chalk.green(`Session ${sessionId} deleted.`))
+  printResult(chalk.green(`Session ${sessionId} deleted.`));
 }
 
 // ============================================================================
@@ -345,19 +434,23 @@ export async function executeAgentSessionsDelete(
 async function createAuthenticatedClient(
   backendUrl: string,
   vault: VaultBase,
-  password?: string
+  password?: string,
 ): Promise<AgentClient> {
-  const client = new AgentClient(backendUrl)
-  const auth = await authenticateVault(client, vault, password)
-  client.setAuthToken(auth.token)
-  return client
+  const client = new AgentClient(backendUrl);
+  const auth = await authenticateVault(client, vault, password);
+  client.setAuthToken(auth.token);
+  return client;
 }
 
 function formatDate(iso: string): string {
   try {
-    const d = new Date(iso)
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const d = new Date(iso);
+    return (
+      d.toLocaleDateString() +
+      " " +
+      d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
   } catch {
-    return iso
+    return iso;
   }
 }
