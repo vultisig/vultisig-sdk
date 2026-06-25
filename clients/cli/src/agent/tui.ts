@@ -16,7 +16,7 @@ import chalk from 'chalk'
 import type { AgentErrorCode } from './agentErrors'
 import { type BalanceSummaryCard, renderBalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { ConversationMessage, Suggestion, UICallbacks } from './types'
+import type { ConversationMessage, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export class ChatTUI {
   private rl: readline.Interface
@@ -221,7 +221,7 @@ export class ChatTUI {
         }
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
         const statusIcon =
           status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)

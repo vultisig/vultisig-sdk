@@ -30,7 +30,7 @@ describe('AskInterface.getCallbacks', () => {
     expect(result.toolCalls[1]).toMatchObject({ action: 'list_vaults', success: false, error: 'failed' })
   })
 
-  it('onTxStatus accumulates transactions', async () => {
+  it('onTxStatus accumulates transactions and records status', async () => {
     const session = {
       getConversationId: () => 'c1',
       sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
@@ -43,8 +43,25 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('send')
 
     expect(result.transactions).toEqual([
-      { hash: '0xhash1', chain: 'Ethereum', status: 'pending', explorerUrl: 'https://explorer.example/1' },
-      { hash: '0xhash2', chain: 'Bitcoin', status: 'pending', explorerUrl: undefined },
+      { hash: '0xhash1', chain: 'Ethereum', explorerUrl: 'https://explorer.example/1', status: 'pending' },
+      { hash: '0xhash2', chain: 'Bitcoin', explorerUrl: undefined, status: 'pending' },
+    ])
+  })
+
+  it('onTxStatus dedups by hash and updates status in place (pending → confirmed)', async () => {
+    const session = {
+      getConversationId: () => 'c1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onTxStatus('0xhash1', 'Ethereum', 'pending', 'https://explorer.example/1')
+        ui.onTxStatus('0xhash1', 'Ethereum', 'confirmed', 'https://explorer.example/1')
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('send')
+
+    expect(result.transactions).toEqual([
+      { hash: '0xhash1', chain: 'Ethereum', explorerUrl: 'https://explorer.example/1', status: 'confirmed' },
     ])
   })
 

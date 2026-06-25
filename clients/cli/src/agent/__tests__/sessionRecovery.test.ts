@@ -295,6 +295,10 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      // No `vault` here, so confirmBroadcastedTx early-returns — the recovered
+      // tx still only emits the `pending` status this harness asserts.
+      confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
+      emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'whats my balance', ui, 0)
     return { run, ui, client, executor }
