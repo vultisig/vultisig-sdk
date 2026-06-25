@@ -31,6 +31,12 @@ export type AskResult = {
   transactions: Array<{
     hash: string
     chain: string
+    /**
+     * Lifecycle status from the backend (e.g. broadcast/pending/confirmed/
+     * failed/timeout) when the frame carried one. Lets a headless caller act on
+     * a tx's fate — not just its existence — through the stable v1 envelope.
+     */
+    status?: string
     explorerUrl?: string
   }>
   /** Server-built balance_summary cards rendered this turn. */
@@ -108,8 +114,8 @@ export class AskInterface {
         // Silently ignored in ask mode
       },
 
-      onTxStatus: (txHash: string, chain: string, _status: string, explorerUrl?: string) => {
-        this.transactions.push({ hash: txHash, chain, explorerUrl })
+      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+        this.transactions.push({ hash: txHash, chain, ...(status ? { status } : {}), explorerUrl })
         if (this.verbose) {
           process.stderr.write(`[tx] ${chain}: ${txHash}\n`)
         }

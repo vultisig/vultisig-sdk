@@ -114,10 +114,34 @@ export type AgentAskOptions = {
  * Write the structured error envelope to stdout (JSON mode) or a human line to
  * stderr. Shared by the mid-turn `error`-frame path and the catch path so both
  * surface the same shape and a headless caller can branch on it identically.
+ *
+ * When a `result` is supplied (the mid-turn `error`-frame path), any tx records
+ * already broadcast this turn — plus the partial response/tool_calls — are
+ * carried in a `data` block alongside the error. A turn can broadcast a tx and
+ * THEN hit an `error` frame (e.g. an indexer/confirmation failure); dropping the
+ * hash there would strand funds a headless caller just moved, leaving exit-1 with
+ * no identifier to track/recover/de-dupe the send. The block is only attached
+ * when non-empty, so the catch path (auth/init failure, no broadcast) keeps the
+ * lean `{message,code,conversation_id}` error shape.
  */
-function outputAskError(wantsJson: boolean, message: string, code: AgentErrorCode, conversationId: string): void {
+function outputAskError(
+  wantsJson: boolean,
+  message: string,
+  code: AgentErrorCode,
+  conversationId: string,
+  result?: AskResult
+): void {
   if (wantsJson) {
-    outputErrorJson({ success: false, v: 1, error: { message, code, conversation_id: conversationId } })
+    const data: Record<string, unknown> = {}
+    if (result?.transactions.length) data.transactions = result.transactions
+    if (result?.toolCalls.length) data.tool_calls = result.toolCalls
+    if (result?.response) data.response = result.response
+    outputErrorJson({
+      success: false,
+      v: 1,
+      error: { message, code, conversation_id: conversationId },
+      ...(Object.keys(data).length > 0 ? { data } : {}),
+    })
   } else {
     process.stderr.write(`Error: ${message} [${code}]\n`)
   }
@@ -230,7 +254,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // envelope on stdout and exit non-zero; otherwise emit the success turn.
     if (result.error) {
       exitCode = 1
-      outputAskError(wantsJson, result.error.message, result.error.code, conversationId)
+      outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
     } else {
       outputAskSuccess(wantsJson, result, conversationId)
     }

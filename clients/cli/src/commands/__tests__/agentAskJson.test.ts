@@ -122,4 +122,36 @@ describe('agent ask --json output contract', () => {
     expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
     expect(envelope.error.conversation_id).toBe('conv-abc')
   })
+
+  it('broadcast THEN SSE error → exit non-zero AND error envelope still carries the tx hash', async () => {
+    // A turn that broadcasts a tx (onTxStatus) and then hits a mid-stream backend
+    // `error` frame (onError) must NOT lose the hash: exit-1 is correct, but a
+    // headless caller still needs the identifier to track/recover the moved funds.
+    // Regression guard for the error envelope dropping result.transactions (F1).
+    driver.run = cb => {
+      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onTxStatus('0xdeadbeef', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xdeadbeef')
+      cb.onError('confirmation indexer failed after broadcast', AgentErrorCode.TRANSACTION_FAILED)
+    }
+
+    const { exitCode } = await runAsk()
+    // Exit non-zero: the turn ended in an error frame.
+    expect(exitCode).not.toBe(0)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.v).toBe(1)
+    expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+    expect(envelope.error.conversation_id).toBe('conv-abc')
+
+    // The broadcast tx record survives into the error envelope's data block.
+    expect(envelope.data).toBeDefined()
+    expect(envelope.data.transactions).toHaveLength(1)
+    expect(envelope.data.transactions[0].hash).toBe('0xdeadbeef')
+    expect(envelope.data.transactions[0].chain).toBe('ethereum')
+    expect(envelope.data.transactions[0].status).toBe('broadcast')
+    expect(envelope.data.transactions[0].explorerUrl).toBe('https://etherscan.io/tx/0xdeadbeef')
+    // The partial tool_calls are carried too, for correlation/de-dup.
+    expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
+  })
 })
