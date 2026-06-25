@@ -28,6 +28,12 @@ export {
 } from './ibcTransfer'
 export { prepareJettonTransferTxFromKeys, type PrepareJettonTransferTxFromKeysParams } from './jettonTransfer'
 export { getMaxSendAmountFromKeys, type GetMaxSendAmountFromKeysParams } from './maxSend'
+export {
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
+} from './polkadotAssetSend'
 export { prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from './send'
 export { buildSplTransfer, type BuildSplTransferParams, type SplTransferResult } from './splTransfer'
 export {

@@ -488,6 +488,8 @@ export type {
   PrepareIbcTransferParams,
   PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PriceBatchResult,
@@ -516,6 +518,7 @@ export type {
   TrxBalance,
   UtxoBalance,
   UtxoBalanceChain,
+  UtxoFeeRate,
   VaultIdentity,
   Verdict,
   XrpBalance,
@@ -572,6 +575,8 @@ export {
   deriveAddressFromKeys,
   dex,
   DOT_DECIMALS,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   estimateCosmosSwapFeeLabel,
   evaluatePolicy,
   evmCall,
@@ -628,6 +633,8 @@ export {
   isZeroAmount,
   knownTokens,
   knownTokensIndex,
+  MAX_UINT256,
+  MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
   normaliseIbcChainId,
   parseAmountBig,
@@ -639,9 +646,11 @@ export {
   pendleMarkets,
   PLAUSIBLE_TOKEN_DECIMALS,
   policy,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
   prepareIbcTransfer,
   prepareJettonTransferTxFromKeys,
+  preparePolkadotAssetSend,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
@@ -662,6 +671,8 @@ export {
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
   VerifierClient,
 } from './tools'
 
@@ -670,6 +681,40 @@ export {
 // service is exposed for callers that already hold a vault and need the richer
 // chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
 export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
+// ============================================================================
+
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from './tools/defi'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
+  riverStatusName,
+} from './tools/defi'
 
 // ============================================================================
 // PUBLIC API - Push Notifications

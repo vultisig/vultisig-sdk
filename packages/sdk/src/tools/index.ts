@@ -1,6 +1,9 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
+export * from './defi'
+
 // Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
 export {
   balancePolkadot,
@@ -17,11 +20,14 @@ export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
@@ -52,6 +58,10 @@ export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from '.
 // Balance reads (per-chain RPC)
 export type { SolBalance, SplTokenBalance } from './balance'
 export { getSolBalance, getSplTokenBalance } from './balance'
+
+// Gas / fee primitives
+export type { UtxoFeeRate } from './gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
 
 // Token utilities
 export type {
@@ -266,12 +276,16 @@ export {
   type IbcCosmosTx,
   type IbcMsgTransfer,
   normaliseIbcChainId,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
   prepareIbcTransfer,
   type PrepareIbcTransferParams,
   type PrepareIbcTransferResult,
   prepareJettonTransferTxFromKeys,
   type PrepareJettonTransferTxFromKeysParams,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
