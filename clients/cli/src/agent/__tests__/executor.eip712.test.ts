@@ -236,6 +236,63 @@ describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
     expectCanonicalHash(recent.data?.hash, PERMIT_DOMAIN, PERMIT_TYPES, 'Permit', PERMIT_MESSAGE)
   })
 
+  it('oversized decimal chainId hashes as an exact bigint, not a rounded Number()', async () => {
+    // A chainId just above Number.MAX_SAFE_INTEGER would round under Number()
+    // (9007199254740993 → ...992), producing a DIFFERENT EIP-712 digest. The
+    // recover-verify gate cannot catch this — the signature is self-consistent
+    // over the wrong digest. coerceChainId must parse it as a bigint so viem
+    // hashes the exact value.
+    const executor = new AgentExecutor(createSigningMockVault())
+    const bigChainId = BigInt(Number.MAX_SAFE_INTEGER) + 2n // 9007199254740993
+
+    const recent = await executor.signTypedData('call-permit-bigchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: bigChainId.toString() },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    const hashFor = (chainId: number | bigint): string =>
+      hashTypedData({
+        domain: { ...PERMIT_DOMAIN, chainId },
+        types: PERMIT_TYPES,
+        primaryType: 'Permit',
+        message: PERMIT_MESSAGE,
+      } as Parameters<typeof hashTypedData>[0])
+    const correctHash = hashFor(bigChainId)
+    const roundedHash = hashFor(Number(bigChainId.toString())) // what Number() would have produced
+    expect(correctHash).not.toBe(roundedHash) // sanity: the two genuinely diverge
+    expect(recent.data?.hash).toBe(correctHash)
+    expect(recent.data?.hash).not.toBe(roundedHash)
+  })
+
+  it('oversized hex chainId hashes as an exact bigint, not a rounded Number()', async () => {
+    // 0x20000000000001 = 9007199254740993 (> MAX_SAFE_INTEGER) — same rounding
+    // trap via the hex branch of coerceChainId.
+    const executor = new AgentExecutor(createSigningMockVault())
+    const hexChainId = '0x20000000000001'
+    const bigChainId = BigInt(hexChainId)
+
+    const recent = await executor.signTypedData('call-permit-hexchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: hexChainId },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    const hashFor = (chainId: number | bigint): string =>
+      hashTypedData({
+        domain: { ...PERMIT_DOMAIN, chainId },
+        types: PERMIT_TYPES,
+        primaryType: 'Permit',
+        message: PERMIT_MESSAGE,
+      } as Parameters<typeof hashTypedData>[0])
+    expect(recent.data?.hash).toBe(hashFor(bigChainId))
+    expect(recent.data?.hash).not.toBe(hashFor(Number(hexChainId)))
+  })
+
   it('full 4-field domain (Polymarket Order) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 

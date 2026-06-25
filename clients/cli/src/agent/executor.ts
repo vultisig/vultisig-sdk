@@ -2101,8 +2101,14 @@ function coerceChainId(raw: unknown): number | bigint {
   if (s === '') {
     throw new Error('EIP-712 domain.chainId is empty')
   }
-  if (/^[0-9]+$/.test(s)) return Number(s)
-  if (/^0x[0-9a-fA-F]+$/.test(s)) return Number(s)
+  // Parse decimal and hex via BigInt (exact), then narrow to a JS number only
+  // when it fits safely. Using Number() directly would round values above
+  // MAX_SAFE_INTEGER and silently produce a DIFFERENT EIP-712 digest — viem
+  // accepts a bigint chainId, so return that instead of corrupting the hash.
+  if (/^[0-9]+$/.test(s) || /^0x[0-9a-fA-F]+$/.test(s)) {
+    const big = BigInt(s)
+    return big <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(big) : big
+  }
   throw new Error(`EIP-712 domain.chainId not parseable: ${String(raw)}`)
 }
 
