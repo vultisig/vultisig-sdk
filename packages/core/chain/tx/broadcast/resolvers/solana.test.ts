@@ -65,4 +65,20 @@ describe('broadcastSolanaTx', () => {
       error: rpcError,
     })
   })
+
+  it('treats a duplicate-signature rejection as an idempotent success', async () => {
+    mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('treats an AlreadyProcessed transaction error as an idempotent success', async () => {
+    mocks.sendRawTransaction.mockRejectedValue(new Error('Transaction error: AlreadyProcessed'))
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
 })
