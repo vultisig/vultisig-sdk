@@ -175,6 +175,28 @@ export {
   TERRA_LCD,
 } from './swap'
 
+// Bridge — Circle CCTP unsigned bridge/claim calldata builders
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from './bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from './bridge'
+
 // Gas / fee primitives (cosmos gas-fee label + gas limits)
 export {
   COSMOS_SWAP_FEE_LABEL_CHAINS,
