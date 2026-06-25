@@ -1,5 +1,7 @@
 export { abiDecode } from './abiDecode'
 export { abiEncode } from './abiEncode'
+export type { EvmBalance, GetEvmBalancesParams } from './balanceEvm'
+export { getEvmBalances } from './balanceEvm'
 export { evmCheckAllowance } from './checkAllowance'
 export { encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 } from './encodeErc20Approve'
 export { evmCall } from './evmCall'
