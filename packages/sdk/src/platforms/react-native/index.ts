@@ -441,6 +441,29 @@ export * as dex from '../../tools/dex'
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// Circle CCTP — pure-crypto (viem-only) bridge/claim calldata builders +
+// contract registry. RN-safe: no chain-client deps, so re-exported statically.
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from '../../tools/bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from '../../tools/bridge'
+
 // Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
 // over the same proxy `searchToken` already uses, no WASM/native deps.
 export type { PriceBatchResult, PriceQuery, PriceQuote } from '../../tools/price'
