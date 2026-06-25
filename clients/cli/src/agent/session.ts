@@ -429,7 +429,7 @@ export class AgentSession {
     // the identical confirm/sign gate below.
     if (streamResult.disconnected && !streamResult.message) {
       ui.onReconnecting?.()
-      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady)
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
     }
 
     // Final message event wins over streamed deltas (which may be partial).
@@ -496,7 +496,8 @@ export class AgentSession {
    */
   private async recoverDisconnectedTurn(
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): Promise<void> {
     if (!this.conversationId) return
 
@@ -556,7 +557,7 @@ export class AgentSession {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards)
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
         return
       }
 
@@ -588,12 +589,24 @@ export class AgentSession {
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
     onTxReady: ((tx: TxReadyPayload) => void) | undefined,
-    replaySignableCards: boolean
+    replaySignableCards: boolean,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
-    if (!replaySignableCards) return
     for (const part of msg.parts ?? []) {
-      if (part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
+      // Balance-summary cards are read-only display, so replay them
+      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // recovered balance card is at worst cosmetic (the live path renders the
+      // same data); only a stale tx_ready is a fund-safety concern. Without this
+      // a balance query whose stream dropped mid-turn recovers the text answer
+      // but silently loses the card.
+      if (part.type === 'data-balance_summary' && part.data) {
+        onBalanceSummary?.(part.data)
+        continue
+      }
+      // Signable cards stay gated: a stale tx_ready must never reach the signer
+      // (see recoverDisconnectedTurn's server-anchor rationale).
+      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
         const tx = part.data as TxReadyPayload
         streamResult.transactions.push(tx)
         onTxReady?.(tx)

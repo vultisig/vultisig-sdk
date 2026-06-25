@@ -39,9 +39,69 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from './utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from './utils/convertAmount'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+
+// Pure address-format validation (vault-free, no network, no signing):
+//   sdk.validate.chainPrefix(address, chain) — HRP/format mismatch check
+//   sdk.address.classify(address)            — chain family of an address
+//   sdk.address.isValidFor(address, chain)   — is the format valid for a chain
+// Canonical port of the Go agent-backend chain-prefix / per-family address
+// FORMAT rules (collapses the Go + abt duplicates).
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from './utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
+export { address, validate } from './utils/addressValidation'
+export { checkChainPrefix } from './utils/chainPrefix'
+
+// ============================================================================
+// PUBLIC API - Tx Shape Normalization (pure, vault-free)
+// ============================================================================
+
+// Canonicalize a build_* tool result into a signing-ready tx envelope and split
+// multi-tx build results (approve+swap, generic transactions[]) into ordered
+// legs. Ports the normalize/split half of the agent-backend's
+// enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
+export type { NormalizeArgs, NormalizedTx } from './tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+
+// ============================================================================
+// PUBLIC API - Canonical Contract / Token Registry (knownContracts)
+// ============================================================================
+
+export {
+  canonicalEvmContracts,
+  canonicalSolanaAddresses,
+  canonicalTronContracts,
+  isCanonicalEvmContract,
+  isCanonicalEvmContractEllipsized,
+  isCanonicalSolanaAddress,
+  isCanonicalSolanaAddressEllipsized,
+  isCanonicalTronContract,
+  isEvmAddressFormat,
+  isKnownContract,
+  knownContracts,
+} from './utils/knownContracts'
 
 // ============================================================================
 // PUBLIC API - Station Migration Primitives
@@ -315,6 +375,21 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope —
+// read-only / builds-unsigned, never signs or broadcasts).
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './tools/cosmos'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
@@ -352,45 +427,283 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AmountUnits,
+  AssetRef,
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
+  BuildBuyPtParams,
+  BuildCw20TransferMsgParams,
+  BuildCw20TransferMsgResult,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  BuildRedeemParams,
+  BuildSellPtParams,
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  CardanoBalance,
+  CardanoNativeToken,
+  ChainFamily,
   Coin,
   CoinKey,
   CoinMetadata,
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  CosmosBalanceChain,
+  CosmosBalanceEntry,
+  CosmosBalanceResult,
+  DecodeFromToolResultInput,
+  Defi,
+  Envelope,
+  EnvelopeKind,
+  EvmGasPrice,
+  FieldDiff,
   FindSwapQuoteParams,
+  GasTxType,
   GetMaxSendAmountFromKeysParams,
+  GetTokenApprovalsResult,
+  GetUtxoBalanceOptions,
+  GlifUnsignedTx,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
   KnownCoin,
   KnownCoinMetadata,
+  PendleActiveMarket,
+  PendleChain,
+  PendleMarketParams,
+  PendleMarketsParams,
+  PendleMarketSummary,
+  PendlePtBuildResult,
+  PendleUnsignedTx,
+  PolicyAssetRef,
+  PolicyEnvelope,
+  PolkadotAssetBalance,
+  PolkadotNativeBalance,
+  PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PriceBatchResult,
+  PriceQuery,
+  PriceQuote,
+  RecipientSanityFlag,
+  RecipientSanityInput,
+  RecipientSanityResult,
+  ResolveContractResult,
+  SolBalance,
+  SplTokenBalance,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+  TokenApproval,
   TokenMetadataResolver,
+  TokenStandard,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  UtxoBalance,
+  UtxoBalanceChain,
+  UtxoFeeRate,
   VaultIdentity,
+  Verdict,
+  XrpBalance,
+} from './tools'
+export type { BuildSplTransferParams, SplTransferResult } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  assembleAstroportSwap,
+  assertBittensorAddress,
+  ASTROPORT_ROUTER,
+  balancePolkadot,
+  buildAstroportSwap,
+  buildBuyPt,
+  buildCw20TransferMsg,
+  buildDelegateMsg,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  buildRedeem,
+  buildRedelegateMsg,
+  buildSellPt,
+  buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  chainAliasMap,
   chainFeeCoin,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  classifyAstroportAsset,
+  coinGeckoIdToSymbol,
+  compareCosts,
+  computeAstroportMinReceive,
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  cosmosBalanceChains,
+  cosmosStaking,
+  decodeBittensorAddress,
+  decodeCosmosTx,
+  decodeEvmTx,
+  decodeFromToolResult,
+  DEFAULT_COMPARE_CHAINS,
+  defi,
   deriveAddressFromKeys,
+  dex,
+  DOT_DECIMALS,
+  encodeErc20Approve,
+  encodeErc20Revoke,
+  estimateCosmosSwapFeeLabel,
+  evaluatePolicy,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  formatDot,
+  formatUtxoBalance,
+  gas,
+  GAS_UNITS,
+  getCardanoBalance,
+  getChainGasPriceGwei,
   getCoinBalance,
+  getCosmosBalance,
+  getCosmosSwapGasLimit,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  getPrice,
+  getPricesBatch,
   getPublicKey,
+  getSolBalance,
+  getSplTokenBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTokenApprovals,
   getTokenMetadata,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
   getTxStatus,
+  getUtxoBalance,
+  getXrpBalance,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+  Invariant,
+  isCosmosBalanceChain,
+  isKnownNativePriceSymbol,
+  isMalformedEvmAddress,
+  isNullAddress,
+  isPendleChain,
+  isSelfSend,
+  isZeroAmount,
   knownTokens,
   knownTokensIndex,
+  MAX_UINT256,
+  MAYACHAIN_NODE_URL,
+  NATIVE_COINGECKO_IDS,
+  parseAmountBig,
+  pendle,
+  PENDLE_ROUTER_V4,
+  PENDLE_SUPPORTED_CHAINS,
+  PendleBuildError,
+  pendleMarket,
+  pendleMarkets,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
+  prepareJettonTransferTxFromKeys,
+  preparePolkadotAssetSend,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
+  recipientSanity,
   resolve4ByteSelector,
+  resolveContract,
   resolveEns,
+  ResultKind,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
   searchToken,
+  stripChainPrefix,
+  supportedUtxoBalanceChains,
+  symbolFromCoinGeckoId,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
   VerifierClient,
 } from './tools'
+
+// Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
+// The pure read-only per-chain gas price lives in `evmGasPrice` above; this
+// service is exposed for callers that already hold a vault and need the richer
+// chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
+export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
+// ============================================================================
+
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from './tools/defi'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
+  riverStatusName,
+} from './tools/defi'
 
 // ============================================================================
 // PUBLIC API - Push Notifications
