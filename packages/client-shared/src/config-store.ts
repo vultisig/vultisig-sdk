@@ -5,8 +5,15 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 
-const CONFIG_DIR = path.join(os.homedir(), '.vultisig')
-const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json')
+// Resolve at call time (not module load) so VULTISIG_CONFIG_DIR is honored,
+// matching credential-store — keeps the vault registry and credentials co-located.
+function getConfigDir(): string {
+  return process.env.VULTISIG_CONFIG_DIR || path.join(os.homedir(), '.vultisig')
+}
+
+function getConfigFilePath(): string {
+  return path.join(getConfigDir(), 'config.json')
+}
 
 export type VaultEntry = {
   id: string
@@ -20,7 +27,7 @@ export type VsigConfig = {
 
 export async function loadConfig(): Promise<VsigConfig> {
   try {
-    const raw = await fs.readFile(CONFIG_PATH, 'utf-8')
+    const raw = await fs.readFile(getConfigFilePath(), 'utf-8')
     return JSON.parse(raw) as VsigConfig
   } catch {
     return { vaults: [] }
@@ -28,10 +35,10 @@ export async function loadConfig(): Promise<VsigConfig> {
 }
 
 export async function saveConfig(config: VsigConfig): Promise<void> {
-  await fs.mkdir(CONFIG_DIR, { recursive: true })
-  await fs.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+  await fs.mkdir(getConfigDir(), { recursive: true })
+  await fs.writeFile(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf-8')
 }
 
 export function getConfigPath(): string {
-  return CONFIG_PATH
+  return getConfigFilePath()
 }

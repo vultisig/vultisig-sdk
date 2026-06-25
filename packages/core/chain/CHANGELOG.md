@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 2.17.8
+
+### Patch Changes
+
+- [#870](https://github.com/vultisig/vultisig-sdk/pull/870) [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize native THORChain and MayaChain swap quote output amounts to destination coin base units before SDK quote formatting and near-zero validation.
+
 ## 2.17.7
 
 ### Patch Changes
