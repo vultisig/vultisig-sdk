@@ -93,6 +93,10 @@ function makeHarness(opts: {
     confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
     emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     txConfirmSleep: (AgentSession.prototype as any).txConfirmSleep,
+    // Passthrough: these tests don't exercise auth-retry; on the happy path
+    // (no 401) withAuthRetry just runs the request once. (Added when fix-07's
+    // withAuthRetry wrapper landed in processMessageLoop via the main merge.)
+    withAuthRetry: <T>(fn: () => Promise<T>) => fn(),
   }
   const run = () =>
     (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'send 1 ETH', ui, opts.startDepth ?? 0)
