@@ -294,6 +294,8 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareTrc20TransferFromKeys,
+  type PrepareTrc20TransferFromKeysParams,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
@@ -301,7 +303,9 @@ export {
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
+  TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
+  type UnsignedTrc20Transfer,
   type VaultIdentity,
   type WithdrawRewardsParams,
 } from './prep'
