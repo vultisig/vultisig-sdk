@@ -427,6 +427,9 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AmountUnits,
   AssetRef,
   AstroportSwapResult,
@@ -459,10 +462,12 @@ export type {
   Defi,
   Envelope,
   EnvelopeKind,
+  EvmBalance,
   EvmGasPrice,
   FieldDiff,
   FindSwapQuoteParams,
   GasTxType,
+  GetEvmBalancesParams,
   GetMaxSendAmountFromKeysParams,
   GetTokenApprovalsResult,
   GetUtxoBalanceOptions,
@@ -536,6 +541,8 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  acrossQuote,
+  acrossSupportedChains,
   AMOUNT_DRIFT_BLOCK_PCT,
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,
@@ -595,6 +602,7 @@ export {
   getCoinBalance,
   getCosmosBalance,
   getCosmosSwapGasLimit,
+  getEvmBalances,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
   getPolkadotAssetBalance,

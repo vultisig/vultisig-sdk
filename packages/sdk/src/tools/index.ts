@@ -16,7 +16,7 @@ export {
 } from './balance'
 
 // EVM utilities
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
@@ -26,6 +26,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
   MAX_UINT256,
   resolve4ByteSelector,
@@ -135,6 +136,9 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AstroportSwapResult,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
@@ -142,6 +146,8 @@ export type {
   SwapQuote,
 } from './swap'
 export {
+  acrossQuote,
+  acrossSupportedChains,
   assembleAstroportSwap,
   ASTROPORT_ROUTER,
   buildAstroportSwap,
