@@ -53,6 +53,11 @@ describe('processMessageLoop — loop-depth cap truncation signal', () => {
     expect(ui.onError).toHaveBeenCalledTimes(1)
     expect(ui.onError.mock.calls[0][1]).toBe(AgentErrorCode.LOOP_DEPTH_EXCEEDED)
 
+    // onDone() still fires as the turn terminator (pipe consumers read until
+    // `done`), but only AFTER the error — the code, not onDone, is the signal.
+    expect(ui.onDone).toHaveBeenCalledTimes(1)
+    expect(ui.onError.mock.invocationCallOrder[0]).toBeLessThan(ui.onDone.mock.invocationCallOrder[0])
+
     // Truncated mid-flight: the queued results must not leak into the next turn.
     expect(fakeThis.pendingToolResults).toHaveLength(0)
 
