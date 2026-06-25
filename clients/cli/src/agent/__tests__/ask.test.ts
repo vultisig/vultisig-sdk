@@ -43,8 +43,8 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('send')
 
     expect(result.transactions).toEqual([
-      { hash: '0xhash1', chain: 'Ethereum', explorerUrl: 'https://explorer.example/1' },
-      { hash: '0xhash2', chain: 'Bitcoin', explorerUrl: undefined },
+      { hash: '0xhash1', chain: 'Ethereum', status: 'pending', explorerUrl: 'https://explorer.example/1' },
+      { hash: '0xhash2', chain: 'Bitcoin', status: 'pending', explorerUrl: undefined },
     ])
   })
 
