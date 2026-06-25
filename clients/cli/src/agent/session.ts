@@ -284,6 +284,17 @@ export class AgentSession {
         `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
       this.pendingToolResults = [] // don't leak into next sendMessage
+      // A depth-capped abort truncates the conversation mid-flight and drops the
+      // queued results above — it is NOT a clean finish. Emit a distinct typed
+      // error FIRST so headless callers can detect the truncation (ask --json
+      // surfaces it in the error envelope and exits non-zero; pipe gets a typed
+      // `error` frame) instead of reading a bare `done` as success. onDone()
+      // still fires after, as a turn terminator, mirroring the SSE-error-frame
+      // path (onError → onDone) — the error code, not onDone, is the signal.
+      ui.onError(
+        `agent message loop exceeded ${MAX_MESSAGE_LOOP_DEPTH} turns; conversation truncated`,
+        AgentErrorCode.LOOP_DEPTH_EXCEEDED
+      )
       ui.onDone()
       return
     }
