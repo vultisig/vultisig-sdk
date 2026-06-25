@@ -16,7 +16,7 @@ export {
 } from './balance'
 
 // EVM utilities
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
@@ -26,6 +26,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
   MAX_UINT256,
   resolve4ByteSelector,
