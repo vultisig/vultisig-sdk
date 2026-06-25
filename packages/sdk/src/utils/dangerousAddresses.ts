@@ -1,61 +1,68 @@
 /**
- * Canonical known-dangerous / burn-address guard for SDK tools.
+ * Canonical dangerous/burn-address list, shared across every SDK build-tx
+ * primitive that encodes value-moving calldata.
  *
- * Ported from the mcp-ts `lib/dangerous-addresses.ts` source contract so the
- * burn-list cannot drift per-tool. Every tool that forwards or builds a
- * destination/recipient address (swap quotes, bridges, build_* calldata) must
- * call `assertSafeDestination(chain, address)` before using it — the function
- * throws a user-facing error the LLM can relay as a refusal rather than
- * silently quoting/building a burn tx.
+ * Port of mcp-ts `src/lib/dangerous-addresses.ts` (itself the parity source for
+ * the Go MCP guard). The CCTP bridge previously inlined a partial EVM burn-list
+ * that DROPPED the third canonical EVM burn address
+ * (`0xdead000000000000000042069420694206942069`, the post-#415 `EVM_DANGEROUS`
+ * variant). A CCTP burn whose `mintRecipient` is that address mints USDC to a
+ * permanently unspendable account on the destination chain. Centralizing the
+ * list here means it can't drift per call-site again.
  *
- * Currently covers the EVM family (the only address shape the SDK's EVM swap /
- * bridge primitives forward today). The structure mirrors mcp-ts so the other
- * families (Solana / UTXO / XRP) can be ported here when their build_* tools
- * land, instead of re-inlining a partial list at each call site.
- *
- * Design notes (mirrors mcp-ts):
- * - EVM addresses are matched by shape (`0x` + 40 hex) regardless of the chain
+ * Design notes (mirrored from the mcp-ts source, see PR #31 review):
+ * - EVM addresses are matched by SHAPE (`0x` + 40 hex) regardless of the chain
  *   name the caller passed. Chains rotate in and out of routing tables; the
- *   burn-address set does not. A 40-hex address on a chain we don't recognise
- *   is still treated as EVM for guard purposes.
- * - Self-send (`from == to`) is intentionally NOT guarded here.
+ *   burn-address set does not. A 40-hex EVM address on a chain we don't yet
+ *   recognise is still treated as EVM for guard purposes, so a newly-added EVM
+ *   chain can't silently escape the guard.
+ * - Comparison is case-insensitive for EVM (normalize to lowercase) so a
+ *   checksummed `0x...dEaD` is rejected the same as `0x...dead`.
+ * - Self-send (`from == to`) is NOT guarded here: self-sends are a legitimate
+ *   smoke-test pattern users run before the real transfer.
  */
 
-const EVM_DANGEROUS: Record<string, string> = {
+/** EVM burn / dead addresses keyed to a human-readable reason. Keys are lowercase. */
+export const EVM_DANGEROUS_ADDRESSES: Record<string, string> = {
   '0x0000000000000000000000000000000000000000':
-    'zero address (ETH burn address) — funds sent here are permanently destroyed',
-  '0x000000000000000000000000000000000000dead': 'dead address — commonly used burn address, funds are unrecoverable',
-  '0xdead000000000000000042069420694206942069': 'dead address variant — funds are unrecoverable',
+    'zero address (ETH burn address): funds sent here are permanently destroyed',
+  '0x000000000000000000000000000000000000dead': 'dead address (commonly used burn address): funds are unrecoverable',
+  '0xdead000000000000000042069420694206942069': 'dead address variant: funds are unrecoverable',
 }
 
+/** Shape of a 20-byte EVM address (`0x` + 40 hex). */
 const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 
 /**
- * Return the dangerous-address table that applies to `destination`. EVM is
- * detected by shape so new EVM chains (and any `chainId` override path) can't
- * silently escape the guard.
+ * Return the dangerous-address reason string if `address` is a known EVM burn
+ * address, otherwise `undefined`. Shape-based: any `0x`+40-hex string is vetted
+ * against the EVM burn-list regardless of the chain it's destined for.
  */
-function getDangerousAddresses(destination: string): Record<string, string> {
-  if (EVM_ADDRESS_RE.test(destination)) return EVM_DANGEROUS
-  return {}
+export const getEvmDangerousReason = (address: string): string | undefined => {
+  if (!EVM_ADDRESS_RE.test(address)) return undefined
+  return EVM_DANGEROUS_ADDRESSES[address.toLowerCase()]
+}
+
+/** True iff `address` is a known EVM burn / dead address. */
+export const isEvmBurnAddress = (address: string): boolean => getEvmDangerousReason(address) !== undefined
+
+/**
+ * Throws a descriptive error if `address` is a known EVM burn / dead address.
+ * Call this in every primitive that encodes a destination/recipient into
+ * value-moving calldata, BEFORE building the calldata.
+ */
+export const assertSafeEvmDestination = (address: string): void => {
+  const reason = getEvmDangerousReason(address)
+  if (reason) {
+    throw new Error(`Refusing to build transaction: destination ${address} is a ${reason}.`)
+  }
 }
 
 /**
- * Throws a descriptive error if `destination` is a known dangerous address.
- * Call this early in every quote/build tool handler, BEFORE any expensive work
- * (price lookups, RPC calls, balance fetches) and BEFORE forwarding the
- * recipient to an upstream API.
- *
- * `chain` is accepted to match the mcp-ts source contract and for future
- * non-EVM family routing; EVM detection is shape-based and does not depend on
- * it.
+ * Chain-aware overload of the burn-address guard used by swap/bridge tools.
+ * `_chain` is accepted for future non-EVM family routing; EVM detection is
+ * currently shape-based and does not depend on it.
  */
 export function assertSafeDestination(_chain: string, destination: string): void {
-  const dangerous = getDangerousAddresses(destination)
-  // Normalize EVM addresses to lowercase for comparison.
-  const normalized = destination.startsWith('0x') ? destination.toLowerCase() : destination
-  const reason = dangerous[normalized]
-  if (reason) {
-    throw new Error(`Refusing to build transaction: destination ${destination} is a ${reason}.`)
-  }
+  assertSafeEvmDestination(destination)
 }
