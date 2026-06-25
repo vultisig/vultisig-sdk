@@ -16,7 +16,7 @@ export {
 } from './balance'
 
 // EVM utilities
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
@@ -26,6 +26,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
   MAX_UINT256,
   resolve4ByteSelector,
@@ -135,25 +136,77 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AstroportSwapResult,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
   NativeSwapMinAmountIn,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
   SwapQuote,
 } from './swap'
 export {
+  acrossQuote,
+  acrossSupportedChains,
   assembleAstroportSwap,
   ASTROPORT_ROUTER,
   buildAstroportSwap,
+  buildJupiterSwapTx,
+  buildSkipAffiliates,
   classifyAstroportAsset,
   computeAstroportMinReceive,
+  DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  quoteSkipRoute,
+  resolveJupiterFeeAccount,
+  resolveLuncFloorUsd,
+  runSkipSwap,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  SkipApiError,
+  skipChainIdToChainName,
+  SOL_NATIVE_MINT,
   TERRA_CHAIN_ID,
   TERRA_LCD,
 } from './swap'
+
+// Bridge — Circle CCTP unsigned bridge/claim calldata builders
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from './bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from './bridge'
 
 // Gas / fee primitives (cosmos gas-fee label + gas limits)
 export {

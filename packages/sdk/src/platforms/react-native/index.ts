@@ -298,7 +298,13 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
+export type {
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  TokenApproval,
+} from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
@@ -308,6 +314,7 @@ export {
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
   MAX_UINT256,
   resolve4ByteSelector,
@@ -433,6 +440,29 @@ export * as dex from '../../tools/dex'
 
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
+
+// Circle CCTP — pure-crypto (viem-only) bridge/claim calldata builders +
+// contract registry. RN-safe: no chain-client deps, so re-exported statically.
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from '../../tools/bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from '../../tools/bridge'
 
 // Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
 // over the same proxy `searchToken` already uses, no WASM/native deps.
