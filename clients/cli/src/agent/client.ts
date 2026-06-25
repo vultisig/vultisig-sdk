@@ -24,6 +24,20 @@ import type {
 
 type JsonErrorBody = { error?: string; code?: string }
 
+/** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
+ *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000
+
+/** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
+ *  to the default. Non-positive / non-numeric values are ignored so a typo
+ *  can't disable the timeout. Exported for direct unit testing of the contract. */
+export function resolveHttpTimeoutMs(): number {
+  const raw = process.env.VULTISIG_HTTP_TIMEOUT_MS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
+}
+
 type StreamCallbacks = {
   onTextDelta?: (delta: string) => void
   // `ok` is set only on the terminal ('done') frame: false when the
@@ -152,9 +166,62 @@ export class AgentClient {
   // dispatch iff its `toolName` is in this set. Empty by default (no
   // client-side dispatch) until the session injects the registry.
   private clientSideToolNames: Set<string> = new Set()
+  // Per-request timeout (ms) applied to every agent-backend fetch. Bounds a
+  // stalled connection so a headless run can't hang indefinitely. Overridable
+  // via the constructor (tests pass a tiny value) or VULTISIG_HTTP_TIMEOUT_MS.
+  private readonly timeoutMs: number
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, timeoutMs?: number) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
+    this.timeoutMs = timeoutMs ?? resolveHttpTimeoutMs()
+  }
+
+  /** Build the AbortSignal for a unary request: a fresh timeout, combined with
+   *  an optional caller signal so caller-initiated cancellation still works. */
+  private timeoutSignal(extra?: AbortSignal): AbortSignal {
+    const timeout = AbortSignal.timeout(this.timeoutMs)
+    return extra ? AbortSignal.any([extra, timeout]) : timeout
+  }
+
+  /** Translate an aborted-fetch rejection into a deterministic error. A
+   *  caller-initiated abort is preserved verbatim (it's a deliberate cancel);
+   *  a timeout abort (DOMException 'TimeoutError') becomes a clear, catchable
+   *  Error so headless callers exit non-zero instead of hanging. */
+  private asRequestError(err: unknown, extra?: AbortSignal): unknown {
+    if (extra?.aborted) return err
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return new Error(`request timed out after ${this.timeoutMs}ms`)
+    }
+    return err
+  }
+
+  /** Read a successful JSON body, routing a body-read failure through the same
+   *  normalization as the fetch() itself. If the backend sends headers then
+   *  stalls the body, fetch() has already resolved and the timeout surfaces
+   *  here during res.json() — so success paths keep the "request timed out
+   *  after Nms" behavior end-to-end instead of leaking the raw abort. */
+  private async readJson<T>(res: Response): Promise<T> {
+    try {
+      return (await res.json()) as T
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
+  }
+
+  /** Read a non-OK response's JSON error body. A genuinely malformed/empty body
+   *  falls back to the status text so callers still get a useful message, but a
+   *  timeout abort that strikes during the body read is re-thrown via
+   *  asRequestError rather than masked as the statusText fallback — keeping the
+   *  "request timed out after Nms" signal end-to-end on the error path too. */
+  private async readErrorBody(res: Response): Promise<JsonErrorBody> {
+    try {
+      return (await res.json()) as JsonErrorBody
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw this.asRequestError(err)
+      }
+      return { error: res.statusText }
+    }
   }
 
   setAuthToken(token: string): void {
@@ -183,16 +250,22 @@ export class AgentClient {
   // ============================================================================
 
   async authenticate(req: AuthTokenRequest): Promise<AuthTokenResponse> {
-    const res = await fetch(`${this.baseUrl}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
-      body: JSON.stringify(req),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
+        body: JSON.stringify(req),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const body = await this.readErrorBody(res)
       throw new Error(`Auth failed (${res.status}): ${body.error || res.statusText}`)
     }
-    const data = (await res.json()) as AuthTokenResponse
+    const data = await this.readJson<AuthTokenResponse>(res)
     this.authToken = data.token
     return data
   }
@@ -203,7 +276,9 @@ export class AgentClient {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/healthz`)
+      // A timeout aborts the fetch → caught here → reported unhealthy, so a
+      // hung backend never blocks init indefinitely.
+      const res = await fetch(`${this.baseUrl}/healthz`, { signal: this.timeoutSignal() })
       return res.ok
     } catch {
       return false
@@ -275,17 +350,52 @@ export class AgentClient {
     callbacks: StreamCallbacks,
     signal?: AbortSignal
   ): Promise<SSEStreamResult> {
-    const res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(req),
-      signal,
-    })
+    // Bound only the initial connect, not the (intentionally unbounded)
+    // long-lived SSE body read — an idle stream sends keep-alive pings, so a
+    // body-level timeout would kill healthy turns. A dedicated controller fires
+    // the connect deadline; it's cleared once headers arrive. The caller signal
+    // (Ctrl+C) is combined in so cancellation still aborts the whole request.
+    const connectController = new AbortController()
+    let connectTimedOut = false
+    // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
+    // (in the finally) already prevents the callback from running after that — JS
+    // is single-threaded and the finally drains as a microtask before the next
+    // timers phase — but the guard makes a late/queued firing a definitive no-op,
+    // so the connect deadline can never abort the live SSE body read.
+    let settled = false
+    const connectTimer = setTimeout(() => {
+      if (settled) return
+      connectTimedOut = true
+      connectController.abort()
+    }, this.timeoutMs)
+    const combinedSignal = signal ? AbortSignal.any([signal, connectController.signal]) : connectController.signal
+
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(req),
+        signal: combinedSignal,
+      })
+    } catch (err) {
+      // A caller abort during connect is a deliberate cancel — re-throw as-is.
+      // Our own connect-deadline abort becomes a clear timeout error.
+      if (connectTimedOut && !signal?.aborted) {
+        throw new Error(`request timed out after ${this.timeoutMs}ms`)
+      }
+      throw err
+    } finally {
+      // Headers received (or fetch failed) — stop bounding; the body read below
+      // runs against `signal` only, so SSE streaming is not time-limited.
+      settled = true
+      clearTimeout(connectTimer)
+    }
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
@@ -572,54 +682,76 @@ export class AgentClient {
   // ============================================================================
 
   private async get<T>(path: string): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'GET',
-      headers: {
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async delete(path: string, body: unknown): Promise<void> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Delete failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
   }

@@ -5,6 +5,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token'
 import { type AccountMeta, PublicKey } from '@solana/web3.js'
+import { Buffer } from 'buffer'
 
 /**
  * Result of {@link buildSplTransfer}: a fully-derived, *unsigned* SPL token

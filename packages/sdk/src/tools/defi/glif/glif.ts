@@ -75,12 +75,16 @@ export type GlifUnsignedTx = {
 export type BuildGlifStakeParams = {
   /** Staker / receiver address (the stICNT mints back here). */
   from: string
-  /** ICNT amount to stake, in 18-decimal base units (wei). */
-  amount: bigint
+  /** ICNT asset amount to stake, in 18-decimal base units (wei). */
+  assetAmount: bigint
   /**
    * Current ICNT allowance the `from` address has granted the pool. When
-   * provided and >= amount the approve step is dropped; omit it (or pass 0n) to
-   * always prepend an approve.
+   * provided and >= assetAmount the approve step is dropped; omit it (or pass 0n)
+   * to always prepend an approve.
+   *
+   * NOTE: this is a BUILD-TIME snapshot — consumers MUST re-check the live
+   * allowance at send time; a delayed or multi-consumer execution may render
+   * this stale (approve missing when needed, or redundant).
    */
   currentAllowance?: bigint
   /**
@@ -101,7 +105,8 @@ export type BuildGlifStakeResult = {
   receiver: `0x${string}`
   pool: `0x${string}`
   asset: `0x${string}`
-  amount: bigint
+  /** ICNT asset amount deposited, in 18-decimal base units. */
+  assetAmount: bigint
   /** True when an approve tx was prepended (allowance was insufficient). */
   approvalRequired: boolean
   /** The unsigned tx sequence: [approve?, deposit]. */
@@ -111,8 +116,8 @@ export type BuildGlifStakeResult = {
 export type BuildGlifRedeemParams = {
   /** stICNT owner address. */
   from: string
-  /** stICNT shares to redeem, in 18-decimal base units (wei). */
-  amount: bigint
+  /** stICNT share amount to redeem, in 18-decimal base units (wei). */
+  shareAmount: bigint
   /**
    * Receiver of the redeemed ICNT. Defaults to `from`. INJECTABLE (see stake);
    * default pins to the owner so the builder exposes no third-party payout path.
@@ -129,7 +134,8 @@ export type BuildGlifRedeemResult = {
   receiver: `0x${string}`
   pool: `0x${string}`
   asset: `0x${string}`
-  amount: bigint
+  /** stICNT share amount redeemed, in 18-decimal base units. */
+  shareAmount: bigint
   /** The unsigned tx sequence: [redeem]. */
   transactions: GlifUnsignedTx[]
 }
@@ -152,24 +158,24 @@ function normalizeAddress(raw: string, field: string): `0x${string}` {
  * Build the unsigned Base tx sequence to STAKE ICNT into GLIF x ICN (mint stICNT).
  *
  * Returns `[approve?, deposit]`. The approve step is included only when
- * `currentAllowance` is missing or below `amount`. Pure / offline — no RPC.
+ * `currentAllowance` is missing or below `assetAmount`. Pure / offline — no RPC.
  *
  * @example
  * ```ts
  * const { transactions } = buildGlifStakeIcnt({
  *   from: '0xabc...',
- *   amount: 10n ** 18n, // 1 ICNT
+ *   assetAmount: 10n ** 18n, // 1 ICNT
  * })
  * ```
  */
 export function buildGlifStakeIcnt(params: BuildGlifStakeParams): BuildGlifStakeResult {
   const from = normalizeAddress(params.from, 'from')
   const receiver = params.receiver ? normalizeAddress(params.receiver, 'receiver') : from
-  const amount = normalizeAmount(params.amount, 'amount')
+  const assetAmount = normalizeAmount(params.assetAmount, 'assetAmount')
   const currentAllowance = params.currentAllowance ?? 0n
   if (currentAllowance < 0n) throw new Error('currentAllowance: must be non-negative')
 
-  const approvalRequired = currentAllowance < amount
+  const approvalRequired = currentAllowance < assetAmount
   const transactions: GlifUnsignedTx[] = []
 
   if (approvalRequired) {
@@ -180,7 +186,7 @@ export function buildGlifStakeIcnt(params: BuildGlifStakeParams): BuildGlifStake
       data: encodeFunctionData({
         abi: erc20Abi,
         functionName: 'approve',
-        args: [GLIF_ICN_BASE_ADDRESSES.pool, amount],
+        args: [GLIF_ICN_BASE_ADDRESSES.pool, assetAmount],
       }),
     })
   }
@@ -192,7 +198,7 @@ export function buildGlifStakeIcnt(params: BuildGlifStakeParams): BuildGlifStake
     data: encodeFunctionData({
       abi: glifPoolWriteAbi,
       functionName: 'deposit',
-      args: [amount, receiver],
+      args: [assetAmount, receiver],
     }),
   })
 
@@ -205,7 +211,7 @@ export function buildGlifStakeIcnt(params: BuildGlifStakeParams): BuildGlifStake
     receiver,
     pool: GLIF_ICN_BASE_ADDRESSES.pool,
     asset: GLIF_ICN_BASE_ADDRESSES.icnt,
-    amount,
+    assetAmount,
     approvalRequired,
     transactions,
   }
@@ -223,19 +229,19 @@ export function buildGlifStakeIcnt(params: BuildGlifStakeParams): BuildGlifStake
  * ```ts
  * const { transactions } = buildGlifRedeemSticnt({
  *   from: '0xabc...',
- *   amount: 10n ** 18n, // 1 stICNT
+ *   shareAmount: 10n ** 18n, // 1 stICNT
  * })
  * ```
  */
 export function buildGlifRedeemSticnt(params: BuildGlifRedeemParams): BuildGlifRedeemResult {
   const from = normalizeAddress(params.from, 'from')
   const receiver = params.receiver ? normalizeAddress(params.receiver, 'receiver') : from
-  const amount = normalizeAmount(params.amount, 'amount')
+  const shareAmount = normalizeAmount(params.shareAmount, 'shareAmount')
 
   const data = encodeFunctionData({
     abi: glifPoolWriteAbi,
     functionName: 'redeem',
-    args: [amount, receiver, from],
+    args: [shareAmount, receiver, from],
   })
 
   return {
@@ -247,7 +253,7 @@ export function buildGlifRedeemSticnt(params: BuildGlifRedeemParams): BuildGlifR
     receiver,
     pool: GLIF_ICN_BASE_ADDRESSES.pool,
     asset: GLIF_ICN_BASE_ADDRESSES.icnt,
-    amount,
+    shareAmount,
     transactions: [
       {
         to: GLIF_ICN_BASE_ADDRESSES.pool,
