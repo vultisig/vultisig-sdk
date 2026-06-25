@@ -20,7 +20,7 @@ import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
-import { AgentExecutor } from './executor'
+import { AgentExecutor, resolveChain } from './executor'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -64,6 +64,14 @@ const MAX_MESSAGE_LOOP_DEPTH = 16
 const RECOVERY_POLL_INTERVAL_MS = 2000
 const RECOVERY_MAX_POLLS = 90
 
+// Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+// means "broadcast accepted" — the tx can still revert, expire, or be dropped.
+// After broadcast the session polls vault.getTxStatus until the tx reaches a
+// final state, then emits `confirmed`/`failed` (or `timeout` when the budget is
+// exhausted). Ceiling ≈ interval × (maxPolls − 1) ≈ 3s × 39 ≈ 117s.
+const TX_CONFIRM_POLL_INTERVAL_MS = 3000
+const TX_CONFIRM_MAX_POLLS = 40
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -81,6 +89,10 @@ export class AgentSession {
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
   private recoveryMaxPolls = RECOVERY_MAX_POLLS
+  // Post-broadcast confirmation poll cadence — instance fields so tests can
+  // drive the loop without real waits.
+  private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
+  private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -465,12 +477,16 @@ export class AgentSession {
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
-      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it.
+      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
+      // then poll for the final on-chain outcome (audit F1) so a headless caller
+      // learns confirmed/failed/timeout instead of treating broadcast as success.
       if (recent.success && recent.data) {
         const txHash = recent.data.tx_hash as string | undefined
         const chain = recent.data.chain as string | undefined
         const explorerUrl = recent.data.explorer_url as string | undefined
-        if (txHash) ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+        if (txHash) {
+          await this.emitAndConfirmTx(txHash, chain, explorerUrl, depth, ui)
+        }
       }
       await this.processMessageLoop(null, ui, depth + 1)
       return
@@ -572,6 +588,114 @@ export class AgentSession {
   /** Sleep between recovery polls. Separate method so tests can stub it out. */
   private recoverySleep(): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, this.recoveryPollIntervalMs))
+  }
+
+  /**
+   * Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+   * means "broadcast accepted"; the tx can still revert, expire, or be dropped,
+   * so a headless caller that stops at `pending` may mark a later-reverted
+   * operation complete. Poll vault.getTxStatus until the tx reaches a final
+   * state and emit the matching lifecycle status (`confirmed`/`failed`), or
+   * `timeout` when the bounded poll budget is exhausted (the tx may still
+   * confirm later — callers can re-check with `vultisig tx-status`).
+   *
+   * Transient RPC/network errors are treated as "not final yet" and retried
+   * until the budget is spent. Best-effort and non-fatal: if the chain can't be
+   * resolved or the vault doesn't expose getTxStatus, the caller's already-
+   * emitted `pending` status stands and this returns quietly.
+   *
+   * Scoped to headless callers (ask/pipe) that need machine-readable finality.
+   * The interactive TUI already shows `pending` + an explorer link immediately
+   * and has the dedicated `vultisig tx-status` command, so blocking its prompt
+   * for the full poll budget would be a UX regression the audit didn't scope.
+   * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
+   * is interruptible.
+   *
+   * The caller only invokes this at message-loop depth 0 (see the call site):
+   * inside a multi-turn tool loop the broadcast result already drives the next
+   * turn, so blocking here would stack the poll budget per leg without feeding
+   * the server any extra signal. Those deeper legs keep their honest `pending`.
+   */
+  private async emitAndConfirmTx(
+    txHash: string,
+    chain: string | undefined,
+    explorerUrl: string | undefined,
+    depth: number,
+    ui: UICallbacks
+  ): Promise<void> {
+    ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+    // Only block on confirmation at the top of the loop (depth 0) — the
+    // common headless ask/pipe single-tx case, where the command should
+    // wait for finality before returning. Inside a multi-turn tool loop
+    // (depth > 0) the broadcast result is already queued on
+    // pendingToolResults (pushed above) and is what drives the server's
+    // next turn; the confirmation status is never fed back to the server,
+    // so blocking the recursion here buys no correctness — it would only
+    // stack up to the full poll budget (~117s) per leg, a latency cliff
+    // for back-to-back/batched txs. Those legs still emit an honest
+    // `pending` (re-checkable later via `vultisig tx-status`).
+    if (depth === 0) {
+      await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+    }
+  }
+
+  private async confirmBroadcastedTx(
+    txHash: string,
+    chainName: string | undefined,
+    explorerUrl: string | undefined,
+    ui: UICallbacks
+  ): Promise<void> {
+    if (!this.config.askMode && !this.config.viaAgent) return
+
+    const chain = resolveChain(chainName ?? '')
+    // Call the SDK's typed `VaultBase.getTxStatus` directly (no `as any`) so a
+    // rename or signature drift on it fails this build — the cast previously
+    // swallowed that. The `typeof` guard stays runtime-meaningful: the unit-test
+    // harness passes a minimal `this` whose vault may omit getTxStatus, and we
+    // also skip chains the SDK can't resolve. (`?.` is redundant at the type
+    // level since `this.vault: VaultBase`, but guards that stub at runtime.)
+    if (!chain || typeof this.vault?.getTxStatus !== 'function') return
+
+    for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
+      if (this.abortController?.signal?.aborted) return
+      try {
+        // TxStatusResult.status is the SDK's exhaustive union
+        // `'pending' | 'success' | 'error'`. Only the two terminal states
+        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // polling until the budget is spent and we emit `timeout` below — a safe
+        // default since the tx may still confirm later.
+        const result = await this.vault.getTxStatus({ chain, txHash })
+        if (result.status === 'success') {
+          ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          return
+        }
+        if (result.status === 'error') {
+          ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          return
+        }
+      } catch (err: any) {
+        // Transient (network/RPC) — keep polling until the budget is spent.
+        if (this.config.verbose) {
+          process.stderr.write(`[session] tx confirm poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+      }
+      // No sleep after the final poll — emit timeout without an extra interval.
+      if (attempt < this.txConfirmMaxPolls - 1) await this.txConfirmSleep()
+    }
+
+    if (this.abortController?.signal?.aborted) return
+
+    if (this.config.verbose) {
+      process.stderr.write(
+        `[session] tx ${txHash} not confirmed within ${this.txConfirmMaxPolls} polls; emitting timeout\n`
+      )
+    }
+    ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+  }
+
+  /** Sleep between confirmation polls. Separate method so tests can stub it out. */
+  private txConfirmSleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.txConfirmPollIntervalMs))
   }
 
   /**

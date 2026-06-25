@@ -14,7 +14,7 @@
 import type { AgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { Suggestion, UICallbacks } from './types'
+import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -31,13 +31,11 @@ export type AskResult = {
   transactions: Array<{
     hash: string
     chain: string
-    /**
-     * Lifecycle status from the backend (e.g. broadcast/pending/confirmed/
-     * failed/timeout) when the frame carried one. Lets a headless caller act on
-     * a tx's fate — not just its existence — through the stable v1 envelope.
-     */
-    status?: string
     explorerUrl?: string
+    // Final lifecycle status from post-broadcast confirmation polling so a
+    // headless caller learns finality, not just that broadcast was accepted:
+    // 'pending' (broadcast) → 'confirmed'/'failed' (resolved) | 'timeout'.
+    status?: TxLifecycleStatus
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
@@ -114,10 +112,19 @@ export class AskInterface {
         // Silently ignored in ask mode
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
-        this.transactions.push({ hash: txHash, chain, ...(status ? { status } : {}), explorerUrl })
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
+        // One tx now emits multiple lifecycle events (pending → confirmed/
+        // failed/timeout). Dedup by hash and update the status in place so the
+        // result carries the latest outcome rather than duplicate rows.
+        const existing = this.transactions.find(t => t.hash === txHash)
+        if (existing) {
+          existing.status = status
+          if (explorerUrl) existing.explorerUrl = explorerUrl
+        } else {
+          this.transactions.push({ hash: txHash, chain, explorerUrl, status })
+        }
         if (this.verbose) {
-          process.stderr.write(`[tx] ${chain}: ${txHash}\n`)
+          process.stderr.write(`[tx] ${chain}: ${txHash} (${status})\n`)
         }
       },
 

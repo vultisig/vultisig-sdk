@@ -1,5 +1,33 @@
 # @vultisig/cli
 
+## 2.8.1
+
+### Patch Changes
+
+- [#867](https://github.com/vultisig/vultisig-sdk/pull/867) [`ddd08af`](https://github.com/vultisig/vultisig-sdk/commit/ddd08af883a1b2ee2f72dac4d406782de9090672) Thanks [@neavra](https://github.com/neavra)! - Agent: poll for final on-chain confirmation after broadcasting a signed tx
+  (audit F1). A `pending` `tx_status` only means "broadcast accepted" — the tx can
+  still revert, expire, or be dropped. After broadcast the session now polls
+  `vault.getTxStatus` until the tx reaches a final state and emits `confirmed` /
+  `failed`, or `timeout` when the bounded poll budget (~120s) is exhausted. The
+  `ask` result records the latest per-tx `status` (deduped by hash), and the pipe
+  `tx_status` event gains a `timeout` status. Best-effort and non-fatal: when the
+  chain can't be resolved or the vault can't poll status, the existing `pending`
+  status stands. The blocking confirmation wait is scoped to the top of the
+  message loop (depth 0 — the single-tx ask/pipe case); inside a multi-turn tool
+  loop a leg keeps its honest `pending` instead of stacking the poll budget per
+  tx. The shared `pending | confirmed | failed | timeout` union is now threaded
+  through the ask result, pipe event, and UI callback without unchecked casts.
+
+## 2.8.0
+
+### Patch Changes
+
+- [#868](https://github.com/vultisig/vultisig-sdk/pull/868) [`6f84f19`](https://github.com/vultisig/vultisig-sdk/commit/6f84f19444752976a6677d3ee4054701b0904eae) Thanks [@neavra](https://github.com/neavra)! - `agent ask --json` now emits one stable v1 envelope on stdout for both success and error. Previously the success envelope was written through a redirected `console.log` and landed on stderr (stdout empty), and the error path wrote a different flat `{error,code}` shape. The envelope now carries `conversation_id` (success + error) and per-tool-call `id`s, and a mid-stream backend/SSE `error` frame makes the command exit non-zero instead of reporting false success.
+
+- Updated dependencies [[`c9a235b`](https://github.com/vultisig/vultisig-sdk/commit/c9a235b959c7c82cd189482fab86ce3d27ddb4ff), [`9585b6f`](https://github.com/vultisig/vultisig-sdk/commit/9585b6f246de3ce537eae201f0d660fc89ff1012), [`f82caf5`](https://github.com/vultisig/vultisig-sdk/commit/f82caf58532f58af9d62b0143c7466cabcd88b06), [`361ba58`](https://github.com/vultisig/vultisig-sdk/commit/361ba58f79f241c4c00e33785a66ec6987628d26), [`7625e0b`](https://github.com/vultisig/vultisig-sdk/commit/7625e0bf325c8957bc3e28270454fd54c5589e2f), [`2024a92`](https://github.com/vultisig/vultisig-sdk/commit/2024a92b44760e1ff2043b0e45b083edc131b16c)]:
+  - @vultisig/sdk@2.8.0
+  - @vultisig/rujira@41.0.0
+
 ## 2.7.0
 
 ### Patch Changes
