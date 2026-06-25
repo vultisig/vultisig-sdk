@@ -11,7 +11,7 @@ import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'
 import { assertSignature } from '@vultisig/core-chain/utils/assertSignature'
 
 import { getQBTCSignedTransaction } from '../../chains/cosmos/qbtc/QBTCHelper'
-import { buildCip20AuxData, patchTxBodyWithAuxHash } from './cardano/buildCip20AuxData'
+import { buildCip20AuxData } from './cardano/buildCip20AuxData'
 import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
@@ -110,9 +110,10 @@ export const compileTx = ({
   }
 
   if (chain === Chain.Cardano) {
-    // hashes[0] is blake2b-256 of the tx body. When a memo is set,
-    // getPreSigningHashes returns blake2b of the patched body (with aux_data_hash
-    // at key 7) so both signing phase and compile phase agree on the same bytes.
+    // hashes[0] is blake2b-256 of the tx body. When a memo is set, WalletCore
+    // already committed the aux_data_hash into the body (key 7) from
+    // SigningInput.auxiliary_data, so the signing and compile phases agree on
+    // the same bytes without any client-side patching.
     const hash = hashes[0]
     const hashHex = Buffer.from(hash).toString('hex')
 
@@ -129,21 +130,16 @@ export const compileTx = ({
       signatureFormat,
     })
 
-    // Re-derive the tx body (and aux data when memo is set) to wrap it with
-    // the witness set and produce the final signed transaction.
+    // Re-derive the tx body to wrap it with the witness set. WalletCore already
+    // committed the aux_data_hash into this body when a memo was set, so it is
+    // used as-is; the matching aux-data bytes go into element [3] of the tx.
     const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
       walletCore.TransactionCompiler.preImageHashes(getCoinType({ chain, walletCore }), txInputData)
     )
 
     const memo = keysignPayload?.memo
-    let txBodyCbor = preOutput.data
-    let auxDataCbor: Uint8Array | undefined
-
-    if (memo) {
-      const cip20 = buildCip20AuxData(memo)
-      auxDataCbor = cip20.auxDataCbor
-      txBodyCbor = patchTxBodyWithAuxHash(txBodyCbor, cip20.auxDataHash)
-    }
+    const txBodyCbor = preOutput.data
+    const auxDataCbor = memo ? buildCip20AuxData(memo).auxDataCbor : undefined
 
     const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
     const encoded = buildSignedCardanoTx({
