@@ -7,6 +7,7 @@ import {
   SwapKind,
   Token,
   TokenAmount,
+  ZERO_ADDRESS,
 } from '@balancer/sdk'
 import { getAddress, isAddress } from 'viem'
 
@@ -169,14 +170,15 @@ const buildOfflineQueryOutput = (
   const inToken = new Token(chainId, requireAddress('token address', inputToken.address), inputToken.decimals)
   const outToken = new Token(chainId, requireAddress('token address', outputToken.address), outputToken.decimals)
 
-  // The resolved router address for the route lives on the internal swap object.
-  const to = (swap as unknown as { swap: { to: `0x${string}` } }).swap.to
-
+  // `QueryOutputBase.to` is a required field but `buildCall` resolves the router
+  // address internally from chainId/protocolVersion and ignores this value. Pass
+  // ZERO_ADDRESS as an explicit sentinel instead of reaching into private internals
+  // via an `as unknown` cast. The router address is asserted non-zero after buildCall.
   if (swapKind === SwapKind.GivenIn) {
     const amountIn = paths.reduce((acc, p) => acc + p.inputAmountRaw, 0n)
     return {
       swapKind: SwapKind.GivenIn,
-      to,
+      to: ZERO_ADDRESS,
       amountIn: TokenAmount.fromRawAmount(inToken, amountIn),
       expectedAmountOut: TokenAmount.fromRawAmount(outToken, expectedAmountRaw),
     }
@@ -185,7 +187,7 @@ const buildOfflineQueryOutput = (
   const amountOut = paths.reduce((acc, p) => acc + p.outputAmountRaw, 0n)
   return {
     swapKind: SwapKind.GivenOut,
-    to,
+    to: ZERO_ADDRESS,
     amountOut: TokenAmount.fromRawAmount(outToken, amountOut),
     expectedAmountIn: TokenAmount.fromRawAmount(inToken, expectedAmountRaw),
   }
@@ -218,6 +220,28 @@ export const buildBalancerV3SwapCalldata = (params: BuildBalancerV3SwapCalldataP
   }
   if (!/^0x([0-9a-fA-F]{2})*$/.test(userData)) {
     throw new Error('userData must be 0x-prefixed even-length hex')
+  }
+  if (swapKindInput !== 'EXACT_IN' && swapKindInput !== 'EXACT_OUT') {
+    throw new Error(`swapKind must be "EXACT_IN" or "EXACT_OUT" (got "${swapKindInput}")`)
+  }
+
+  // Validate that every path shares the same input and output token. Multi-path
+  // Balancer swaps aggregate amounts across parallel routes for a single token
+  // pair. Mixed-pair paths would encode cross-asset amounts into the wrong slots.
+  const firstInputAddr = getAddress(paths[0].tokens[0].address)
+  const firstOutputAddr = getAddress(paths[0].tokens[paths[0].tokens.length - 1].address)
+  for (let i = 1; i < paths.length; i++) {
+    const p = paths[i]
+    if (getAddress(p.tokens[0].address) !== firstInputAddr) {
+      throw new Error(
+        `path[${i}] input token (${p.tokens[0].address}) differs from path[0] input token (${firstInputAddr}); all paths must share the same token pair`
+      )
+    }
+    if (getAddress(p.tokens[p.tokens.length - 1].address) !== firstOutputAddr) {
+      throw new Error(
+        `path[${i}] output token (${p.tokens[p.tokens.length - 1].address}) differs from path[0] output token (${firstOutputAddr}); all paths must share the same token pair`
+      )
+    }
   }
 
   const swapKind = swapKindInput === 'EXACT_OUT' ? SwapKind.GivenOut : SwapKind.GivenIn
@@ -275,6 +299,13 @@ export const buildBalancerV3SwapCalldata = (params: BuildBalancerV3SwapCalldataP
     wethIsEth,
     queryOutput,
   })
+
+  // Assert buildCall resolved a real router address. The queryOutput.to sentinel
+  // (ZERO_ADDRESS) is ignored internally; if the SDK ever breaks this contract the
+  // unsigned tx would target the zero address and drain funds on broadcast.
+  if (!isAddress(built.to) || built.to === ZERO_ADDRESS) {
+    throw new Error(`Balancer buildCall returned an invalid router address: ${built.to}`)
+  }
 
   const base: BalancerV3SwapCalldata = {
     to: built.to,

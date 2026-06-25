@@ -131,10 +131,18 @@ const resolveErc20 = async (chain: EvmChain, contractAddress: string): Promise<R
   const [decimals, symbolHex, nameHex] = await Promise.all([
     client.readContract({ address, abi: erc20Abi, functionName: 'decimals' }),
     client.call({ to: address, data: SYMBOL_SELECTOR }),
-    client.call({ to: address, data: NAME_SELECTOR }),
+    // name() is optional in ERC-20 and some contracts revert on it; tolerate
+    // failures here and fall back to symbol below.
+    client.call({ to: address, data: NAME_SELECTOR }).catch(() => ({ data: undefined })),
   ])
 
-  if (typeof decimals !== 'number' || !Number.isFinite(decimals) || decimals < 0 || decimals > 77) {
+  if (
+    typeof decimals !== 'number' ||
+    !Number.isInteger(decimals) ||
+    !Number.isFinite(decimals) ||
+    decimals < 0 ||
+    decimals > 77
+  ) {
     throw new Error(`contract on ${chain} did not return valid ERC-20 decimals (not an ERC-20 contract?)`)
   }
 

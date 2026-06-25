@@ -143,6 +143,7 @@ program
       '  VULTISIG_VAULT          Default vault name or ID\n' +
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
+      '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
