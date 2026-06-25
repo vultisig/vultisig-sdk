@@ -7,6 +7,8 @@ import {
   stakekitBuildEnter,
   stakekitBuildExit,
   stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
 } from '@/tools/defi/stakekit'
 
 // Minimal yield product fixture that matches YieldDiscoverOpportunity shape
@@ -533,5 +535,57 @@ describe('sdk.defi.stakekit', () => {
       })
       expect(result).toBeNull()
     })
+  })
+})
+
+describe('action-input validation (ported from mcp-ts validateActionInput, Apo #192)', () => {
+  const EVM = '0x' + 'a'.repeat(40)
+  const SUI = '0x' + 'b'.repeat(64)
+
+  it('validateStakekitActionAddress: accepts EVM (40 hex), Sui (64 hex), and non-0x; rejects bad 0x lengths', () => {
+    expect(validateStakekitActionAddress(EVM)).toBeNull()
+    expect(validateStakekitActionAddress(SUI)).toBeNull()
+    expect(validateStakekitActionAddress('cosmos1abc')).toBeNull() // non-0x passes (server-validated)
+    expect(validateStakekitActionAddress('terra1xyz')).toBeNull()
+    // 42-hex "EVM-ish" 0x that is NEITHER 40 nor 64 -> rejected locally (the Sui-fix regression guard)
+    expect(validateStakekitActionAddress('0x' + 'c'.repeat(42))).toMatch(/EVM \(40 hex chars\) or Sui \(64 hex chars\)/)
+    expect(validateStakekitActionAddress('0xdeadbeef')).toMatch(/Invalid 0x-prefixed address/)
+  })
+
+  it('validateStakekitActionInput: rejects non-positive / NaN amounts', () => {
+    expect(validateStakekitActionInput(EVM, '5')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '0.0001')).toBeNull()
+    expect(validateStakekitActionInput(EVM, '0')).toMatch(/positive number/)
+    expect(validateStakekitActionInput(EVM, '-1')).toMatch(/positive number/)
+    expect(validateStakekitActionInput(EVM, 'abc')).toMatch(/positive number/)
+    // address error takes precedence over amount
+    expect(validateStakekitActionInput('0xbad', '5')).toMatch(/Invalid 0x-prefixed address/)
+  })
+
+  it('stakekitBuildEnter throws on a malformed 0x address BEFORE any network call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    await expect(
+      stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'c'.repeat(42), amount: '1' })
+    ).rejects.toThrow(/EVM \(40 hex chars\) or Sui \(64 hex chars\)/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+
+  it('stakekitBuildEnter throws on a non-positive amount BEFORE any network call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    await expect(
+      stakekitBuildEnter({ yieldId: 'ethereum-eth-lido-staking', address: '0x' + 'a'.repeat(40), amount: '0' })
+    ).rejects.toThrow(/positive number/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+
+  it('stakekitBuildExit throws on a malformed 0x address BEFORE any network call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    await expect(
+      stakekitBuildExit({ yieldId: 'ethereum-eth-lido-staking', address: '0xdeadbeef', amount: '1' })
+    ).rejects.toThrow(/Invalid 0x-prefixed address/)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
   })
 })

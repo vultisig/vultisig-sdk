@@ -14,13 +14,7 @@
 //   - Non-EVM steps: HAVE tx_encoding field (solana-tx, sui-tx, tron-tx, ton-tx)
 //   - All-or-nothing: if any step fails to canonicalize, decoded[] used for ALL steps
 
-import type {
-  ScanRequest,
-  Validator,
-  YieldActionResponse,
-  YieldBalance,
-  YieldProduct,
-} from './stakekitApi'
+import type { ScanRequest, Validator, YieldActionResponse, YieldBalance, YieldProduct } from './stakekitApi'
 import {
   buildYieldActionScanRequest,
   callYieldActionWithFallback,
@@ -48,15 +42,12 @@ export type {
   YieldToken,
   YieldTransaction,
 } from './stakekitApi'
-export { buildYieldActionScanRequest,buildYieldStepScanRequest } from './stakekitApi'
+export { buildYieldActionScanRequest, buildYieldStepScanRequest } from './stakekitApi'
 
 // --- Inline withScanRequest helper ---
 // (mcp-ts's withScanRequest isn't available in the SDK — inline it here)
 
-function withScanRequest<T extends object>(
-  scanRequest: ScanRequest,
-  rest: T,
-): { scan_request: ScanRequest } & T {
+function withScanRequest<T extends object>(scanRequest: ScanRequest, rest: T): { scan_request: ScanRequest } & T {
   return { scan_request: scanRequest, ...rest }
 }
 
@@ -68,21 +59,36 @@ function withScanRequest<T extends object>(
  */
 function yieldNetworkToCanonicalChain(network: string): string | null {
   switch (network) {
-    case 'ethereum': return 'Ethereum'
-    case 'arbitrum': return 'Arbitrum'
-    case 'base': return 'Base'
-    case 'optimism': return 'Optimism'
-    case 'polygon': return 'Polygon'
-    case 'avalanche-c': return 'Avalanche'
-    case 'binance': return 'BSC'
-    case 'cronos': return 'CronosChain'
-    case 'zksync': return 'Zksync'
-    case 'sei': return 'Sei'
-    case 'solana': return 'Solana'
-    case 'sui': return 'Sui'
-    case 'tron': return 'Tron'
-    case 'ton': return 'Ton'
-    default: return null
+    case 'ethereum':
+      return 'Ethereum'
+    case 'arbitrum':
+      return 'Arbitrum'
+    case 'base':
+      return 'Base'
+    case 'optimism':
+      return 'Optimism'
+    case 'polygon':
+      return 'Polygon'
+    case 'avalanche-c':
+      return 'Avalanche'
+    case 'binance':
+      return 'BSC'
+    case 'cronos':
+      return 'CronosChain'
+    case 'zksync':
+      return 'Zksync'
+    case 'sei':
+      return 'Sei'
+    case 'solana':
+      return 'Solana'
+    case 'sui':
+      return 'Sui'
+    case 'tron':
+      return 'Tron'
+    case 'ton':
+      return 'Ton'
+    default:
+      return null
   }
 }
 
@@ -114,7 +120,7 @@ const EVM_NETWORKS = new Set([
  *   - `chain` field (PascalCase) derived from first tx network
  */
 export function parseActionDisplay(data: YieldActionResponse) {
-  const decoded = data.transactions.map((tx) => {
+  const decoded = data.transactions.map(tx => {
     let unsigned: Record<string, unknown> | null = null
     try {
       const parsed = JSON.parse(tx.unsignedTransaction) as unknown
@@ -142,13 +148,10 @@ export function parseActionDisplay(data: YieldActionResponse) {
     }
   })
 
-  const firstNetwork =
-    typeof data.transactions[0]?.network === 'string'
-      ? data.transactions[0].network
-      : null
+  const firstNetwork = typeof data.transactions[0]?.network === 'string' ? data.transactions[0].network : null
   const chain = firstNetwork ? yieldNetworkToCanonicalChain(firstNetwork) : null
 
-  const canonicalSteps = decoded.map((step) => {
+  const canonicalSteps = decoded.map(step => {
     const u = step.unsignedTransaction
     if (!u || !chain) return null
     const stepNetwork = typeof step.network === 'string' ? step.network : null
@@ -195,9 +198,7 @@ export function parseActionDisplay(data: YieldActionResponse) {
       } else if (typeof u === 'object') {
         const sol = u as { serialized?: unknown; tx?: unknown }
         candidate =
-          (typeof sol.serialized === 'string' && sol.serialized) ||
-          (typeof sol.tx === 'string' && sol.tx) ||
-          null
+          (typeof sol.serialized === 'string' && sol.serialized) || (typeof sol.tx === 'string' && sol.tx) || null
       }
       if (typeof candidate !== 'string' || candidate.length === 0) return null
       return {
@@ -217,9 +218,7 @@ export function parseActionDisplay(data: YieldActionResponse) {
       } else if (typeof u === 'object') {
         const sui = u as { serialized?: unknown; tx?: unknown }
         candidate =
-          (typeof sui.serialized === 'string' && sui.serialized) ||
-          (typeof sui.tx === 'string' && sui.tx) ||
-          null
+          (typeof sui.serialized === 'string' && sui.serialized) || (typeof sui.tx === 'string' && sui.tx) || null
       }
       if (typeof candidate !== 'string' || candidate.length === 0) return null
       return {
@@ -294,10 +293,8 @@ export function parseActionDisplay(data: YieldActionResponse) {
   })
 
   // All-or-nothing: if any step fails to canonicalize, fall back to `decoded` for all steps.
-  const allCanonicalized = canonicalSteps.every((s) => s !== null)
-  const transactions = allCanonicalized
-    ? (canonicalSteps as NonNullable<(typeof canonicalSteps)[number]>[])
-    : []
+  const allCanonicalized = canonicalSteps.every(s => s !== null)
+  const transactions = allCanonicalized ? (canonicalSteps as NonNullable<(typeof canonicalSteps)[number]>[]) : []
 
   return {
     intent: data.intent,
@@ -316,11 +313,15 @@ export function parseActionDisplay(data: YieldActionResponse) {
 
 function pickValidators(validators: Validator[]): string[] {
   if (validators.length === 0) return []
-  const preferred = validators.find((v) => v.preferred)
+  const preferred = validators.find(v => v.preferred)
   if (preferred) return [preferred.address]
   const topByStake = [...validators].sort((a, b) => {
     const bn = (s: string) => {
-      try { return BigInt(s) } catch { return 0n }
+      try {
+        return BigInt(s)
+      } catch {
+        return 0n
+      }
     }
     const diff = bn(b.stakedBalance) - bn(a.stakedBalance)
     return diff > 0n ? 1 : diff < 0n ? -1 : 0
@@ -332,19 +333,16 @@ async function resolveActionArgs(
   yieldId: string,
   action: 'enter' | 'exit',
   userArgs: { validatorAddresses?: string[]; tronResource?: string },
-  apiKey?: string,
+  apiKey?: string
 ): Promise<{
   validatorAddressForMCP?: string
   validatorAddressesForREST?: string[]
   extras: Record<string, unknown>
 }> {
   const product = await getYield(yieldId, apiKey).catch(() => null)
-  const schema =
-    (product?.args?.[action]?.args ?? {}) as Record<string, { required?: boolean; options?: string[] }>
+  const schema = (product?.args?.[action]?.args ?? {}) as Record<string, { required?: boolean; options?: string[] }>
   const validatorsNeeded =
-    'validatorAddresses' in schema ||
-    'validatorAddress' in schema ||
-    ((product?.validators ?? []).length > 0)
+    'validatorAddresses' in schema || 'validatorAddress' in schema || (product?.validators ?? []).length > 0
 
   const requested = userArgs.validatorAddresses
   let resolvedValidators: string[] = requested && requested.length > 0 ? requested : []
@@ -414,16 +412,17 @@ export async function stakekitSearch(params: {
   })
 
   if (params.token) {
-    products = products.filter(
-      (y) => y.token.symbol.toLowerCase() === params.token!.toLowerCase(),
-    )
+    products = products.filter(y => y.token.symbol.toLowerCase() === params.token!.toLowerCase())
   }
 
   if (params.provider) {
     const needle = params.provider.toLowerCase().replace(/[\s\-_]/g, '')
-    products = products.filter((y) => {
+    products = products.filter(y => {
       const name = y.metadata.provider?.name ?? ''
-      return name.toLowerCase().replace(/[\s\-_]/g, '').includes(needle)
+      return name
+        .toLowerCase()
+        .replace(/[\s\-_]/g, '')
+        .includes(needle)
     })
   }
 
@@ -435,10 +434,7 @@ export async function stakekitSearch(params: {
 }
 
 /** Get full yield product metadata. */
-export async function stakekitDetails(params: {
-  apiKey?: string
-  yieldId: string
-}): Promise<object> {
+export async function stakekitDetails(params: { apiKey?: string; yieldId: string }): Promise<object> {
   const p = await getYield(params.yieldId, params.apiKey)
   return {
     id: p.id,
@@ -456,7 +452,7 @@ export async function stakekitDetails(params: {
     rewardClaiming: p.metadata.rewardClaiming ?? '',
     enterEnabled: p.status.enter,
     exitEnabled: p.status.exit,
-    acceptedTokens: p.tokens.map((t) => ({ symbol: t.symbol, network: t.network, address: t.address })),
+    acceptedTokens: p.tokens.map(t => ({ symbol: t.symbol, network: t.network, address: t.address })),
   }
 }
 
@@ -467,6 +463,36 @@ export async function stakekitBalances(params: {
   network: string
 }): Promise<YieldBalance[] | null> {
   return getBalances(params.address, params.network?.toLowerCase(), params.apiKey)
+}
+
+// Action-input validation — ported verbatim from mcp-ts yield-tools.ts
+// (validateActionAddress / validateActionInput, Apo r1/r2 on companion #192).
+// A 0x-prefixed address must be EVM (40 hex) or Sui (64 hex); a 42-char "EVM-ish"
+// or any other 0x length is rejected locally instead of being forwarded to
+// yield.xyz as an opaque 4xx. Non-0x addresses (Cosmos/Solana/Tron/TON) pass
+// through — yield.xyz validates them server-side.
+const STAKEKIT_EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+const STAKEKIT_SUI_ADDRESS_RE = /^0x[0-9a-fA-F]{64}$/
+
+/** Returns null when valid, else a human-readable error string. */
+export function validateStakekitActionAddress(address: string): string | null {
+  if (STAKEKIT_EVM_ADDRESS_RE.test(address)) return null
+  if (STAKEKIT_SUI_ADDRESS_RE.test(address)) return null
+  if (address.startsWith('0x')) {
+    return 'Invalid 0x-prefixed address: expected EVM (40 hex chars) or Sui (64 hex chars).'
+  }
+  return null
+}
+
+/** Address + positive-amount validation. Returns null when valid, else an error string. */
+export function validateStakekitActionInput(address: string, amount: string): string | null {
+  const addrErr = validateStakekitActionAddress(address)
+  if (addrErr !== null) return addrErr
+  const num = Number(amount)
+  if (Number.isNaN(num) || num <= 0) {
+    return 'Invalid amount. Must be a positive number.'
+  }
+  return null
 }
 
 /**
@@ -482,11 +508,13 @@ export async function stakekitBuildEnter(params: {
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
 }): Promise<object> {
+  const inputErr = validateStakekitActionInput(params.address, params.amount)
+  if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'enter',
     { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
-    params.apiKey,
+    params.apiKey
   )
 
   const mcpArgs: Record<string, unknown> = {
@@ -507,9 +535,7 @@ export async function stakekitBuildEnter(params: {
       args: {
         amount: params.amount,
         ...resolved.extras,
-        ...(resolved.validatorAddressesForREST
-          ? { validatorAddresses: resolved.validatorAddressesForREST }
-          : {}),
+        ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
       },
     },
     apiKey: params.apiKey,
@@ -543,11 +569,13 @@ export async function stakekitBuildExit(params: {
   validatorAddresses?: string[]
   tronResource?: 'BANDWIDTH' | 'ENERGY'
 }): Promise<object> {
+  const inputErr = validateStakekitActionInput(params.address, params.amount)
+  if (inputErr) throw new Error(inputErr)
   const resolved = await resolveActionArgs(
     params.yieldId,
     'exit',
     { validatorAddresses: params.validatorAddresses, tronResource: params.tronResource },
-    params.apiKey,
+    params.apiKey
   )
 
   const mcpArgs: Record<string, unknown> = {
@@ -567,9 +595,7 @@ export async function stakekitBuildExit(params: {
       restBody: {
         addresses: { address: params.address },
         args: { amount: params.amount, ...resolved.extras },
-        ...(resolved.validatorAddressesForREST
-          ? { validatorAddresses: resolved.validatorAddressesForREST }
-          : {}),
+        ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
       },
       apiKey: params.apiKey,
       preferRest: params.yieldId.startsWith('tron-'),
@@ -603,9 +629,18 @@ export async function stakekitBuildManage(params: {
   apiKey?: string
   yieldId: string
   address: string
-  action: 'CLAIM_REWARDS' | 'RESTAKE_REWARDS' | 'WITHDRAW' | 'WITHDRAW_ALL' | 'CLAIM_UNSTAKED' | 'UNLOCK_LOCKED' | 'RESTAKE'
+  action:
+    | 'CLAIM_REWARDS'
+    | 'RESTAKE_REWARDS'
+    | 'WITHDRAW'
+    | 'WITHDRAW_ALL'
+    | 'CLAIM_UNSTAKED'
+    | 'UNLOCK_LOCKED'
+    | 'RESTAKE'
   passthrough: string
 }): Promise<object> {
+  const addrErr = validateStakekitActionAddress(params.address)
+  if (addrErr) throw new Error(addrErr)
   const raw = await callYieldActionWithFallback({
     mcpToolName: 'actions_manage',
     mcpArgs: {
