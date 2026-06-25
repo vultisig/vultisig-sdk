@@ -171,6 +171,8 @@ export type {
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
   PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
@@ -202,6 +204,12 @@ export {
 // Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
 // native crypto, safe as a static re-export on the RN graph).
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+// `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
+// both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
+// rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
+// is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
+// Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
+export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
