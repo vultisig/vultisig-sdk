@@ -231,10 +231,9 @@ export async function getYield(yieldId: string, apiKey?: string): Promise<YieldP
   const cached = getCached<YieldProduct>(cacheKey)
   if (cached) return cached
 
-  const data = await queryUrl<YieldProduct>(
-    `${STAKEKIT_API_BASE}/yields/${encodeURIComponent(yieldId)}`,
-    { headers: authHeaders(apiKey) },
-  )
+  const data = await queryUrl<YieldProduct>(`${STAKEKIT_API_BASE}/yields/${encodeURIComponent(yieldId)}`, {
+    headers: authHeaders(apiKey),
+  })
   setCache(cacheKey, data, CACHE_TTL)
   return data
 }
@@ -256,12 +255,12 @@ export async function getBalances(
   address: string,
   network: string,
   apiKey?: string,
-  yieldIds?: string[],
+  yieldIds?: string[]
 ): Promise<YieldBalance[] | null> {
   let integrationIds = yieldIds
   if (!integrationIds || integrationIds.length === 0) {
     const enabled = await searchYields({ network, limit: 100, apiKey })
-    integrationIds = enabled.map((y) => y.id)
+    integrationIds = enabled.map(y => y.id)
   }
   if (integrationIds.length === 0) {
     return []
@@ -272,7 +271,7 @@ export async function getBalances(
   const out: YieldBalance[] = []
   for (let i = 0; i < integrationIds.length; i += BATCH) {
     const chunk = integrationIds.slice(i, i + BATCH)
-    const body = chunk.map((integrationId) => ({
+    const body = chunk.map(integrationId => ({
       addresses: { address },
       integrationId,
     }))
@@ -308,11 +307,7 @@ export async function getBalances(
   return out
 }
 
-export async function callYieldMCP(
-  toolName: string,
-  args: Record<string, unknown>,
-  apiKey?: string,
-): Promise<string> {
+export async function callYieldMCP(toolName: string, args: Record<string, unknown>, apiKey?: string): Promise<string> {
   const resp = await fetch(STAKEKIT_MCP_URL, {
     method: 'POST',
     headers: authHeaders(apiKey, {
@@ -343,7 +338,7 @@ export async function callYieldActionREST(
   yieldId: string,
   action: 'enter' | 'exit' | string,
   body: Record<string, unknown>,
-  apiKey?: string,
+  apiKey?: string
 ): Promise<YieldActionResponse> {
   // Canonical stakek.it REST shape: `POST /v1/actions/{enter|exit|...}`
   // with `integrationId` in the body alongside `addresses` and `args`.
@@ -376,17 +371,17 @@ export async function callYieldActionREST(
   // built the payload yet. PATCH each null tx to advance it.
   if (Array.isArray(action_response.transactions) && action_response.transactions.length > 0) {
     const needsBuild = action_response.transactions.some(
-      (t) => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null,
+      t => (t as { unsignedTransaction?: unknown }).unsignedTransaction == null
     )
     if (needsBuild) {
       const built = await Promise.all(
-        action_response.transactions.map(async (tx) => {
+        action_response.transactions.map(async tx => {
           const txRec = tx as { id?: string; unsignedTransaction?: unknown }
           if (typeof txRec.id !== 'string' || txRec.unsignedTransaction != null) {
             return tx as unknown
           }
           return await buildYieldTransaction(txRec.id, tx, apiKey)
-        }),
+        })
       )
       action_response.transactions = built as YieldActionResponse['transactions']
     }
@@ -398,11 +393,7 @@ export async function callYieldActionREST(
  * Advance one yield.xyz transaction from `CREATED` → `WAITING_FOR_SIGNATURE`
  * by PATCH'ing it with an empty body. Internal — not exported.
  */
-async function buildYieldTransaction(
-  txId: string,
-  fallback: unknown,
-  apiKey?: string,
-): Promise<unknown> {
+async function buildYieldTransaction(txId: string, fallback: unknown, apiKey?: string): Promise<unknown> {
   try {
     const url = `${STAKEKIT_API_BASE}/transactions/${encodeURIComponent(txId)}`
     const resp = await fetch(url, {
@@ -450,7 +441,7 @@ export async function callYieldActionWithFallback(args: {
       const restMsg = restErr instanceof Error ? restErr.message : String(restErr)
       throw new Error(
         `yield.xyz action failed on BOTH hosted MCP and REST fallback — MCP: ${mcpMsg}; REST: ${restMsg}`,
-        { cause: restErr },
+        { cause: restErr }
       )
     }
   }
@@ -463,17 +454,28 @@ export async function callYieldActionWithFallback(args: {
  */
 function yieldNetworkToEvmChain(network: string): string | null {
   switch (network) {
-    case 'ethereum': return 'Ethereum'
-    case 'arbitrum': return 'Arbitrum'
-    case 'base': return 'Base'
-    case 'optimism': return 'Optimism'
-    case 'polygon': return 'Polygon'
-    case 'avalanche-c': return 'Avalanche'
-    case 'binance': return 'BSC'
-    case 'cronos': return 'CronosChain'
-    case 'zksync': return 'Zksync'
-    case 'sei': return 'Sei'
-    default: return null
+    case 'ethereum':
+      return 'Ethereum'
+    case 'arbitrum':
+      return 'Arbitrum'
+    case 'base':
+      return 'Base'
+    case 'optimism':
+      return 'Optimism'
+    case 'polygon':
+      return 'Polygon'
+    case 'avalanche-c':
+      return 'Avalanche'
+    case 'binance':
+      return 'BSC'
+    case 'cronos':
+      return 'CronosChain'
+    case 'zksync':
+      return 'Zksync'
+    case 'sei':
+      return 'Sei'
+    default:
+      return null
   }
 }
 
