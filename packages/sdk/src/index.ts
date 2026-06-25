@@ -427,6 +427,9 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AmountUnits,
   AssetRef,
   AstroportSwapResult,
@@ -544,6 +547,8 @@ export type {
 export {
   abiDecode,
   abiEncode,
+  acrossQuote,
+  acrossSupportedChains,
   AMOUNT_DRIFT_BLOCK_PCT,
   AMOUNT_DRIFT_WARN_PCT,
   amountDriftPct,

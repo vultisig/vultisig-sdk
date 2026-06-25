@@ -136,6 +136,9 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AstroportSwapResult,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
@@ -149,6 +152,8 @@ export type {
   SwapQuote,
 } from './swap'
 export {
+  acrossQuote,
+  acrossSupportedChains,
   assembleAstroportSwap,
   ASTROPORT_ROUTER,
   buildAstroportSwap,
