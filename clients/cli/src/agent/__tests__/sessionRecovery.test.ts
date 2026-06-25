@@ -56,7 +56,11 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
       config: { verbose: false },
       recoveryMaxPolls: 5,
       recoveryPollIntervalMs: 0,
-      client: { messagesSince },
+      client: { messagesSince, setAuthToken: vi.fn() },
+      // The recovery poll now routes through withAuthRetry (M1). These cases
+      // never throw an auth error, so the helper just passes the call through;
+      // its revoked-token behaviour is covered in sessionAuthRetry.test.ts.
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
     }
