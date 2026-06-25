@@ -7,6 +7,8 @@ import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapC
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 
+import { VaultError, VaultErrorCode } from '../VaultError'
+
 type NativeSwapBroadcastGuardInput = {
   chain: Chain
   keysignPayload: KeysignPayload
@@ -32,7 +34,10 @@ export const assertNativeSwapReadyForBroadcast = async ({
   const currentSeconds = BigInt(Math.floor(now() / 1000))
 
   if (native.expirationTime > 0n && native.expirationTime <= currentSeconds) {
-    throw new Error('Native swap quote is expired; refresh the quote before broadcasting')
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'Native swap quote is expired; refresh the quote before broadcasting'
+    )
   }
 
   if (native.chain !== Chain.THORChain) {
@@ -41,7 +46,10 @@ export const assertNativeSwapReadyForBroadcast = async ({
 
   const sourceChainId = getNativeSwapChainId(chain)
   if (!sourceChainId) {
-    throw new Error(`Cannot validate THORChain inbound vault for unsupported source chain ${chain}`)
+    throw new VaultError(
+      VaultErrorCode.UnsupportedChain,
+      `Cannot validate THORChain inbound vault for unsupported source chain ${chain}`
+    )
   }
 
   const activeInboundAddress = (await getInboundAddresses()).find(
@@ -49,10 +57,16 @@ export const assertNativeSwapReadyForBroadcast = async ({
   )?.address
 
   if (!activeInboundAddress) {
-    throw new Error(`Cannot validate THORChain inbound vault for source chain ${sourceChainId}`)
+    throw new VaultError(
+      VaultErrorCode.NetworkError,
+      `Cannot validate THORChain inbound vault for source chain ${sourceChainId}`
+    )
   }
 
   if (activeInboundAddress.toLowerCase() !== native.vaultAddress.toLowerCase()) {
-    throw new Error('THORChain inbound vault address changed; refresh the swap quote before broadcasting')
+    throw new VaultError(
+      VaultErrorCode.InvalidVault,
+      'THORChain inbound vault address changed; refresh the swap quote before broadcasting'
+    )
   }
 }
