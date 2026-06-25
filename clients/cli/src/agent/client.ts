@@ -195,6 +195,35 @@ export class AgentClient {
     return err
   }
 
+  /** Read a successful JSON body, routing a body-read failure through the same
+   *  normalization as the fetch() itself. If the backend sends headers then
+   *  stalls the body, fetch() has already resolved and the timeout surfaces
+   *  here during res.json() — so success paths keep the "request timed out
+   *  after Nms" behavior end-to-end instead of leaking the raw abort. */
+  private async readJson<T>(res: Response): Promise<T> {
+    try {
+      return (await res.json()) as T
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
+  }
+
+  /** Read a non-OK response's JSON error body. A genuinely malformed/empty body
+   *  falls back to the status text so callers still get a useful message, but a
+   *  timeout abort that strikes during the body read is re-thrown via
+   *  asRequestError rather than masked as the statusText fallback — keeping the
+   *  "request timed out after Nms" signal end-to-end on the error path too. */
+  private async readErrorBody(res: Response): Promise<JsonErrorBody> {
+    try {
+      return (await res.json()) as JsonErrorBody
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw this.asRequestError(err)
+      }
+      return { error: res.statusText }
+    }
+  }
+
   setAuthToken(token: string): void {
     this.authToken = token
   }
@@ -233,10 +262,10 @@ export class AgentClient {
       throw this.asRequestError(err)
     }
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const body = await this.readErrorBody(res)
       throw new Error(`Auth failed (${res.status}): ${body.error || res.statusText}`)
     }
-    const data = (await res.json()) as AuthTokenResponse
+    const data = await this.readJson<AuthTokenResponse>(res)
     this.authToken = data.token
     return data
   }
@@ -670,11 +699,11 @@ export class AgentClient {
     }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
@@ -697,11 +726,11 @@ export class AgentClient {
     }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async delete(path: string, body: unknown): Promise<void> {
@@ -722,7 +751,7 @@ export class AgentClient {
     }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Delete failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
   }

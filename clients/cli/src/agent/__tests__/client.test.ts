@@ -512,6 +512,34 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     )
   })
 
+  // Body-read timeout normalization (CodeRabbit, client.ts unary helpers): if the
+  // backend sends headers then stalls the JSON body, fetch() has already resolved,
+  // so the timeout surfaces during res.json(). Build a Response whose .json()
+  // rejects with a TimeoutError and assert the unary path still surfaces the
+  // normalized "request timed out after Nms" error rather than leaking the raw
+  // abort (success path) or masking it as the statusText fallback (non-OK path).
+  function mockFetchJsonTimesOut(status: number): typeof fetch {
+    return vi.fn(async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: 'Internal Server Error',
+      json: () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+    })) as unknown as typeof fetch
+  }
+
+  it('surfaces a timeout when the SUCCESS body stalls during res.json()', async () => {
+    globalThis.fetch = mockFetchJsonTimesOut(200)
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('surfaces a timeout when the NON-OK error body stalls during res.json()', async () => {
+    globalThis.fetch = mockFetchJsonTimesOut(500)
+    const client = new AgentClient('http://example.com', 20)
+    // Must NOT swallow the timeout as the statusText fallback ("Request failed (500): Internal Server Error").
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
   it('rejects sendMessageStream with a timeout error when the connect hangs', async () => {
     globalThis.fetch = mockHangingFetch()
     const client = new AgentClient('http://example.com', 20)
