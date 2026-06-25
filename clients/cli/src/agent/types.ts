@@ -363,7 +363,7 @@ export type SSEEvent =
  * still confirm later). Shared so the union is preserved end-to-end (pipe
  * event, ask result, UI callback) without unchecked `as` casts.
  */
-export type TxLifecycleStatus = 'pending' | 'confirmed' | 'failed' | 'timeout'
+export type TxLifecycleStatus = 'broadcast' | 'pending' | 'confirmed' | 'failed' | 'timeout'
 
 export type PipeOutputEvent =
   | { type: 'ready'; vault: string; addresses: Record<string, string> }
