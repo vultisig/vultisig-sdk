@@ -37,6 +37,19 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAX_UINT256).toBe((1n << 256n) - 1n)
   })
 
+  it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
+    expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
+    // Builds an unsigned descriptor with no RPC/signing material.
+    const tx = sdk.prepareTrc20TransferFromKeys({
+      contractAddress: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t',
+      from: 'TJRabPrwbZy45sbavfcjinPJC18kjpRTv8',
+      to: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH',
+      amount: '1000000',
+    })
+    expect(tx.functionSelector).toBe('transfer(address,uint256)')
+    expect(tx.parameter).toHaveLength(128)
+  })
+
   it('exports Solana balance reads (native SOL + SPL) for mcp-ts consumers', () => {
     expect(typeof sdk.getSolBalance).toBe('function')
     expect(typeof sdk.getSplTokenBalance).toBe('function')

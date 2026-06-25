@@ -175,9 +175,11 @@ export type {
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
   SplTransferResult,
+  UnsignedTrc20Transfer,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -242,6 +244,15 @@ export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
 export async function prepareSwapTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/swap')
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
+
+// TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
+// no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
+// above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
+// the reviewed base58check + ABI encode and would have to re-port it.
+export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/trc20')
+  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
 }
 
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
