@@ -66,12 +66,36 @@ describe('rpc-overrides', () => {
       expect(getCustomRpcOverride(Chain.Polygon)).toBe(sentinel)
     })
 
-    it('lets a CLI flag override the env var for the same chain', () => {
+    it('lets a CLI flag override the env var for the same chain (engine receives the flag URL)', async () => {
       const resolution = resolveRpcOverrides({
         env: { VULTISIG_ETHEREUM_RPC: 'https://from-env.example' },
         specs: ['ethereum:https://from-flag.example'],
       })
       expect(resolution.applied).toEqual([{ chain: Chain.Ethereum, url: 'https://from-flag.example' }])
+
+      // Prove the precedence survives application — the engine must hold the
+      // flag URL, not the env URL.
+      await applyRpcOverrides(resolution)
+      expect(getCustomRpcOverride(Chain.Ethereum)).toBe('https://from-flag.example')
+    })
+
+    it('resolves multi-word chains from their env spelling (separators ignored)', async () => {
+      const resolution = resolveRpcOverrides({
+        env: {
+          VULTISIG_CRONOS_CHAIN_RPC: 'https://cronos.example',
+          VULTISIG_TERRA_CLASSIC_RPC: 'https://terra-classic.example',
+        },
+      })
+      expect(resolution.warnings).toEqual([])
+      const sorted = [...resolution.applied].sort((a, b) => a.chain.localeCompare(b.chain))
+      expect(sorted).toEqual([
+        { chain: Chain.CronosChain, url: 'https://cronos.example' },
+        { chain: Chain.TerraClassic, url: 'https://terra-classic.example' },
+      ])
+
+      await applyRpcOverrides(resolution)
+      expect(getCustomRpcOverride(Chain.CronosChain)).toBe('https://cronos.example')
+      expect(getCustomRpcOverride(Chain.TerraClassic)).toBe('https://terra-classic.example')
     })
 
     it('ignores overrides for chains that do not support custom RPC', () => {

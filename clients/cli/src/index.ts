@@ -59,7 +59,7 @@ import {
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
 import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
-import { applyRpcOverrides, resolveRpcOverrides } from './core/rpc-overrides'
+import { applyRpcOverrides, parseRpcOverrideArgsFromArgv, resolveRpcOverrides } from './core/rpc-overrides'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -203,6 +203,32 @@ async function findVaultByNameOrId(sdk: Vultisig, nameOrId: string): Promise<Vau
   return null
 }
 
+/**
+ * Resolve + apply per-chain custom RPC overrides (from `--rpc-override` flags
+ * and `VULTISIG_<CHAIN>_RPC` env) before the SDK does any networking. Shared by
+ * the command path (`init`) and interactive mode so both honor the override.
+ * Diagnostics go to stderr so they never corrupt the stdout JSON envelope. When
+ * `--rpc-check` confirms a wrong-chain endpoint, abort rather than risk
+ * broadcasting a fund-moving tx to a node serving a different chain.
+ */
+async function applyConfiguredRpcOverrides(config: { specs?: string[]; check?: boolean }): Promise<void> {
+  const resolution = resolveRpcOverrides({ specs: config.specs })
+  for (const warning of resolution.warnings) {
+    console.error(chalk.yellow(warning))
+  }
+  const applied = await applyRpcOverrides(resolution, { probe: !!config.check })
+  for (const entry of applied) {
+    if (entry.health?.status === 'wrongChain') {
+      throw new Error(`Custom RPC for ${entry.chain} serves the wrong chain (rejected by --rpc-check): ${entry.url}`)
+    }
+    if (entry.health && entry.health.status !== 'reachable') {
+      console.error(chalk.yellow(`Custom RPC for ${entry.chain} is ${entry.health.status}: ${entry.url}`))
+    } else if (!isJsonOutput()) {
+      info(`Using custom RPC for ${entry.chain}: ${entry.url}`)
+    }
+  }
+}
+
 async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL?: number): Promise<CLIContext> {
   if (!ctx) {
     // Cache password BEFORE SDK init if provided
@@ -219,21 +245,7 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
 
-    // Apply per-chain custom RPC overrides (flags + VULTISIG_<CHAIN>_RPC env)
-    // before the SDK does any networking. Diagnostics go to stderr so they
-    // never corrupt the JSON envelope on stdout.
-    const rpcResolution = resolveRpcOverrides({ specs: globalOptions.rpcOverride })
-    for (const warning of rpcResolution.warnings) {
-      console.error(chalk.yellow(warning))
-    }
-    const appliedRpc = await applyRpcOverrides(rpcResolution, { probe: !!globalOptions.rpcCheck })
-    for (const applied of appliedRpc) {
-      if (applied.health && applied.health.status !== 'reachable') {
-        console.error(chalk.yellow(`Custom RPC for ${applied.chain} is ${applied.health.status}: ${applied.url}`))
-      } else if (!isJsonOutput()) {
-        info(`Using custom RPC for ${applied.chain}: ${applied.url}`)
-      }
-    }
+    await applyConfiguredRpcOverrides({ specs: globalOptions.rpcOverride, check: globalOptions.rpcCheck })
 
     const sdk = new Vultisig({
       onPasswordRequired: createPasswordCallback(),
@@ -1623,6 +1635,8 @@ program
 
 async function startInteractiveMode(): Promise<void> {
   const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
+  const rpcArgs = parseRpcOverrideArgsFromArgv(process.argv.slice(2))
+  await applyConfiguredRpcOverrides({ specs: rpcArgs.specs, check: rpcArgs.check })
   const sdk = new Vultisig({
     onPasswordRequired: createPasswordCallback(),
     ...(serverEndpoints ? { serverEndpoints } : {}),

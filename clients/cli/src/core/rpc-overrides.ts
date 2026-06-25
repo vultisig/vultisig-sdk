@@ -7,11 +7,17 @@ import { probeRpcHealth, type RpcHealthResult } from '@vultisig/core-chain/chain
  * CLI wiring for per-chain custom RPC overrides.
  *
  * The override engine (`setCustomRpcOverride`) already lives in core-chain and
- * is honored by the EVM / Cosmos URL resolvers (`getEvmRpcUrl` /
- * `getCosmosRpcUrl`) for all SDK chain ops — balance, quote, broadcast,
- * tx-status. The only gap was a way for a headless CLI operator to set those
- * overrides; this module resolves them from `--rpc-override <chain>:<url>`
- * flags and `VULTISIG_<CHAIN>_RPC` env vars and applies them at SDK init.
+ * is honored by the EVM / Cosmos URL resolvers. The only gap was a way for a
+ * headless CLI operator to set those overrides; this module resolves them from
+ * `--rpc-override <chain>:<url>` flags and `VULTISIG_<CHAIN>_RPC` env vars and
+ * applies them at SDK init.
+ *
+ * Coverage tracks what the resolvers actually read: EVM chains route every op
+ * (balance, gas/nonce, broadcast, tx-status) through `getEvmRpcUrl`. Cosmos
+ * chains honor the override on the LCD/REST paths (`getCosmosRpcUrl`: fee,
+ * account info, LCD balance fallback, wasm queries); the Tendermint-RPC client
+ * used for Cosmos broadcast / tx-status keeps its default endpoint by design (a
+ * custom RPC is treated as an LCD endpoint — a different protocol).
  *
  * Only EVM and IBC-enabled Cosmos chains accept an override (per
  * `isCustomRpcSupported`); THORChain / MayaChain / UTXO / QBTC are excluded by
@@ -54,16 +60,25 @@ export type RpcOverrideResolution = {
 /** Result of applying an override, including an optional liveness probe. */
 export type AppliedRpcOverride = RpcOverride & { health?: RpcHealthResult }
 
-/** Resolve a user-supplied chain token (enum name or short alias) to a `Chain`. */
+/** Strip `_` / `-` so multi-word chains resolve from env var spelling. */
+const stripSeparators = (value: string): string => value.replace(/[_-]/g, '')
+
+/**
+ * Resolve a user-supplied chain token (enum name or short alias) to a `Chain`.
+ * Separators are ignored on both sides so an env spelling like `CRONOS_CHAIN`
+ * (from `VULTISIG_CRONOS_CHAIN_RPC`) or `TERRA_CLASSIC` resolves to the
+ * separator-free enum value (`CronosChain`, `TerraClassic`).
+ */
 function resolveChainToken(token: string): Chain | undefined {
   const lower = token.trim().toLowerCase()
   if (!lower) return undefined
+  const normalized = stripSeparators(lower)
   for (const value of Object.values(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
+    if (typeof value === 'string' && stripSeparators(value.toLowerCase()) === normalized) {
       return value as Chain
     }
   }
-  return CHAIN_ALIASES[lower]
+  return CHAIN_ALIASES[lower] ?? CHAIN_ALIASES[normalized]
 }
 
 /**
@@ -78,6 +93,34 @@ export function parseRpcOverrideSpec(spec: string): { chain: string; url: string
   const url = spec.slice(idx + 1).trim()
   if (!chain || !url) return undefined
   return { chain, url }
+}
+
+/**
+ * Read `--rpc-override <spec>` (repeatable) and `--rpc-check` straight from
+ * argv. Interactive mode builds its SDK before Commander parses the program,
+ * so it can't read `program.opts()` — it mirrors `server-endpoints`' argv
+ * parsing the same way.
+ */
+export function parseRpcOverrideArgsFromArgv(args: string[]): { specs: string[]; check: boolean } {
+  const specs: string[] = []
+  let check = false
+  const flag = '--rpc-override'
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '--rpc-check') {
+      check = true
+    } else if (arg === flag) {
+      const next = args[i + 1]
+      if (next && !next.startsWith('-')) {
+        specs.push(next)
+        i += 1
+      }
+    } else if (arg.startsWith(`${flag}=`)) {
+      const value = arg.slice(flag.length + 1)
+      if (value) specs.push(value)
+    }
+  }
+  return { specs, check }
 }
 
 /** Collect `VULTISIG_<CHAIN>_RPC` pairs from an environment map. */
