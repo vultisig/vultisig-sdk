@@ -485,20 +485,7 @@ export class AgentSession {
         const chain = recent.data.chain as string | undefined
         const explorerUrl = recent.data.explorer_url as string | undefined
         if (txHash) {
-          ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
-          // Only block on confirmation at the top of the loop (depth 0) — the
-          // common headless ask/pipe single-tx case, where the command should
-          // wait for finality before returning. Inside a multi-turn tool loop
-          // (depth > 0) the broadcast result is already queued on
-          // pendingToolResults (pushed above) and is what drives the server's
-          // next turn; the confirmation status is never fed back to the server,
-          // so blocking the recursion here buys no correctness — it would only
-          // stack up to the full poll budget (~117s) per leg, a latency cliff
-          // for back-to-back/batched txs. Those legs still emit an honest
-          // `pending` (re-checkable later via `vultisig tx-status`).
-          if (depth === 0) {
-            await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
-          }
+          await this.emitAndConfirmTx(txHash, chain, explorerUrl, depth, ui)
         }
       }
       await this.processMessageLoop(null, ui, depth + 1)
@@ -629,6 +616,29 @@ export class AgentSession {
    * turn, so blocking here would stack the poll budget per leg without feeding
    * the server any extra signal. Those deeper legs keep their honest `pending`.
    */
+  private async emitAndConfirmTx(
+    txHash: string,
+    chain: string | undefined,
+    explorerUrl: string | undefined,
+    depth: number,
+    ui: UICallbacks
+  ): Promise<void> {
+    ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+    // Only block on confirmation at the top of the loop (depth 0) — the
+    // common headless ask/pipe single-tx case, where the command should
+    // wait for finality before returning. Inside a multi-turn tool loop
+    // (depth > 0) the broadcast result is already queued on
+    // pendingToolResults (pushed above) and is what drives the server's
+    // next turn; the confirmation status is never fed back to the server,
+    // so blocking the recursion here buys no correctness — it would only
+    // stack up to the full poll budget (~117s) per leg, a latency cliff
+    // for back-to-back/batched txs. Those legs still emit an honest
+    // `pending` (re-checkable later via `vultisig tx-status`).
+    if (depth === 0) {
+      await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+    }
+  }
+
   private async confirmBroadcastedTx(
     txHash: string,
     chainName: string | undefined,
