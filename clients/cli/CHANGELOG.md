@@ -1,5 +1,15 @@
 # @vultisig/cli
 
+## 2.8.0
+
+### Patch Changes
+
+- [#868](https://github.com/vultisig/vultisig-sdk/pull/868) [`6f84f19`](https://github.com/vultisig/vultisig-sdk/commit/6f84f19444752976a6677d3ee4054701b0904eae) Thanks [@neavra](https://github.com/neavra)! - `agent ask --json` now emits one stable v1 envelope on stdout for both success and error. Previously the success envelope was written through a redirected `console.log` and landed on stderr (stdout empty), and the error path wrote a different flat `{error,code}` shape. The envelope now carries `conversation_id` (success + error) and per-tool-call `id`s, and a mid-stream backend/SSE `error` frame makes the command exit non-zero instead of reporting false success.
+
+- Updated dependencies [[`c9a235b`](https://github.com/vultisig/vultisig-sdk/commit/c9a235b959c7c82cd189482fab86ce3d27ddb4ff), [`9585b6f`](https://github.com/vultisig/vultisig-sdk/commit/9585b6f246de3ce537eae201f0d660fc89ff1012), [`f82caf5`](https://github.com/vultisig/vultisig-sdk/commit/f82caf58532f58af9d62b0143c7466cabcd88b06), [`361ba58`](https://github.com/vultisig/vultisig-sdk/commit/361ba58f79f241c4c00e33785a66ec6987628d26), [`7625e0b`](https://github.com/vultisig/vultisig-sdk/commit/7625e0bf325c8957bc3e28270454fd54c5589e2f), [`2024a92`](https://github.com/vultisig/vultisig-sdk/commit/2024a92b44760e1ff2043b0e45b083edc131b16c)]:
+  - @vultisig/sdk@2.8.0
+  - @vultisig/rujira@41.0.0
+
 ## 2.7.0
 
 ### Patch Changes

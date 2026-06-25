@@ -1,5 +1,29 @@
 # @vultisig/sdk
 
+## 2.8.0
+
+### Minor Changes
+
+- [#814](https://github.com/vultisig/vultisig-sdk/pull/814) [`c9a235b`](https://github.com/vultisig/vultisig-sdk/commit/c9a235b959c7c82cd189482fab86ce3d27ddb4ff) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.balance.evm` (`getEvmBalances`): a multi-token EVM balance read (native coin + any number of ERC-20s) via RPC, with per-token on-chain `decimals`/`symbol` resolution and raw base-unit + human-readable output.
+
+- [#831](https://github.com/vultisig/vultisig-sdk/pull/831) [`9585b6f`](https://github.com/vultisig/vultisig-sdk/commit/9585b6f246de3ce537eae201f0d660fc89ff1012) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.bridge.cctp` — Circle CCTP USDC bridge + claim calldata builders.
+
+  `buildCctpBridge()` returns an unsigned 2-tx approve+depositForBurn sequence for bridging USDC cross-chain (Ethereum, Avalanche, Optimism, Arbitrum, Base, Polygon). `buildCctpClaim()` returns the unsigned `receiveMessage` mint tx for the destination chain. Pure crypto — builds unsigned calldata only, never signs or broadcasts. Includes a burn-address fund-safety guard on the bridge mintRecipient and a multiple-of-65-bytes attestation shape check on claim. Also exposes the CCTP contract registry (`cctpChains`, `getCctpChain`, `cctpSupportedChains`) and Circle attestation API base. Ports `build_cctp_bridge_usdc` / `build_cctp_claim_usdc` out of mcp-ts into the SDK.
+
+- [#861](https://github.com/vultisig/vultisig-sdk/pull/861) [`f82caf5`](https://github.com/vultisig/vultisig-sdk/commit/f82caf58532f58af9d62b0143c7466cabcd88b06) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add `decodeFromToolResult`, `decodeCosmosTx`, `decodeEvmTx` and related types (`DecodeFromToolResultInput`, `AssetRef`, `ChainFamily`, `Envelope`, `EnvelopeKind`, `PolicyEnvelope`) to the public API
+
+- [#833](https://github.com/vultisig/vultisig-sdk/pull/833) [`361ba58`](https://github.com/vultisig/vultisig-sdk/commit/361ba58f79f241c4c00e33785a66ec6987628d26) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add `sdk.swap.skip` — Skip Go cross-chain route + unsigned-tx prep. Exposes `runSkipSwap`, `quoteSkipRoute`, `buildSkipAffiliates`, `skipChainIdToChainName`, `resolveLuncFloorUsd`, `SkipApiError`, `SKIP_AFFILIATE_ADDRESS_BY_CHAIN`, `DEFAULT_LUNC_NOTIONAL_FLOOR_USD` and the related types (`SkipSwapArgs`, `SkipSwapOutcome`, `SkipSwapSuccess`, `SkipSwapErrorEnvelope`, `SkipUnsignedMsg`, `SkipChainIdsToAffiliates`). Quotes a Skip route and builds the unsigned EVM/cosmos tx envelope for the caller's signing layer — never signs, never broadcasts. Also corrects the canonical dYdX cosmos chain id (`dydx-1` -> `dydx-mainnet-1`).
+
+- [#829](https://github.com/vultisig/vultisig-sdk/pull/829) [`7625e0b`](https://github.com/vultisig/vultisig-sdk/commit/7625e0bf325c8957bc3e28270454fd54c5589e2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.swap.acrossQuote` — a read-only Across bridge quote primitive (ported from the mcp-ts `get_across_quote` tool). Fetches a live Across `suggested-fees` quote, pins + verifies the origin/destination SpokePool deployments (fail-closed on upstream schema drift), checksums + validates inputs, and rejects burn-address recipients via the shared `assertSafeDestination` guard. Quote-only: never builds calldata, signs, or broadcasts. Exported as `acrossQuote`, `acrossSupportedChains`, and the `AcrossChain` / `AcrossQuote` / `AcrossQuoteParams` types.
+
+- [#825](https://github.com/vultisig/vultisig-sdk/pull/825) [`2024a92`](https://github.com/vultisig/vultisig-sdk/commit/2024a92b44760e1ff2043b0e45b083edc131b16c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.prep.trc20Transfer` (`prepareTrc20TransferFromKeys`): a pure-crypto,
+  vault-free builder for an unsigned TRON TRC-20 token transfer. ABI-encodes
+  `transfer(address,uint256)` with checksum-verified base58check address decoding
+  and a uint256 range guard, returning an `UnsignedTrc20Transfer` descriptor (no
+  signing, no RPC, no broadcast). Exported from the package barrel and the
+  React Native entry so mcp-ts / agent-backend / Windows / Station can consume one
+  reviewed TRC-20 calldata implementation.
+
 ## 2.7.0
 
 ### Minor Changes
