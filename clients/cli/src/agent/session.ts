@@ -533,21 +533,29 @@ export class AgentSession {
     const replaySignableCards = serverAnchor !== null
     let cursor: string | undefined
 
+    // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
+    // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
+    // poll routes through withAuthRetry (clear→reauth→retry once); once that has
+    // fired, later polls call messagesSince directly with the refreshed token, so
+    // a *persistent* 401 can't trigger an MPC re-sign on every poll (bounded
+    // re-sign work, no key-share amplification). Later polls still recover the
+    // turn if the refreshed token starts working; otherwise the loop exhausts as
+    // before. Without the wrap a revoked token would spin through recoveryMaxPolls
+    // and silently lose the assistant reply / tx_ready (finding M1).
+    let authRecovered = false
+
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        // Route the recovery poll through the same clear→reauth→retry chokepoint
-        // as every other conversation request. Without this, a token revoked
-        // mid-recovery (revoked-but-unexpired, inside the ~3-min window) would
-        // make every poll throw an auth error, fall into the generic
-        // sleep/continue below, and spin through recoveryMaxPolls — silently
-        // losing the assistant reply / tx_ready instead of self-healing. The
-        // helper re-auths once on the first revoked poll; subsequent polls reuse
-        // the refreshed token (no repeated MPC re-signs).
-        resp = await this.withAuthRetry(() =>
-          this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
-        )
+        resp = authRecovered
+          ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(() =>
+              this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+            )
       } catch (err: any) {
+        // Spend the one-and-only re-auth: a persistent auth failure now stops
+        // re-signing on every subsequent poll (Codex M1-followup).
+        if (isAuthError(err)) authRecovered = true
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
         }

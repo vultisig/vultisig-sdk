@@ -217,11 +217,13 @@ describe('recoverDisconnectedTurn — revoked token during the recovery poll (fi
     expect(messagesSince).toHaveBeenCalledTimes(2)
   })
 
-  it('a persistent (post-retry) auth failure still falls through to the bounded poll loop', async () => {
-    // If re-auth does not clear the 401 (token stays bad), withAuthRetry rethrows
-    // after its one retry; the generic catch then sleeps/continues, so recovery
-    // stays bounded — no worse than today, never an infinite re-auth storm.
-    const setAuthToken = vi.fn() // never updates the token → messagesSince keeps 401-ing
+  it('re-auths at most ONCE across a persistent auth failure (no per-poll MPC re-sign storm)', async () => {
+    // Codex M1-followup: re-auth is a full MPC re-sign, so the recovery loop must
+    // not re-sign on every poll when a 401 persists after the first re-auth. The
+    // first auth-failing poll spends the single re-auth; later polls hit
+    // messagesSince directly with the refreshed token, so authenticateVault fires
+    // exactly once regardless of recoveryMaxPolls — bounded, never a re-sign storm.
+    const setAuthToken = vi.fn() // never makes the token valid → 401 persists
     const messagesSince = vi.fn(async () => {
       throw authError()
     })
@@ -231,9 +233,11 @@ describe('recoverDisconnectedTurn — revoked token during the recovery poll (fi
     await (AgentSession.prototype as any).recoverDisconnectedTurn.call(ft, streamResult, undefined)
 
     expect(streamResult.message).toBeNull() // bounded give-up, not a hang
-    // 4 poll attempts × (original + one retry) = 8 calls; re-auth attempted each poll.
-    expect(messagesSince).toHaveBeenCalledTimes(8)
-    expect(authenticateVault).toHaveBeenCalledTimes(4)
+    // Exactly ONE re-auth for the whole recovery window — not one per poll.
+    expect(authenticateVault).toHaveBeenCalledTimes(1)
+    // poll 0: messagesSince ×2 (original + the single withAuthRetry retry);
+    // polls 1-3: messagesSince ×1 each (direct, no further re-auth) = 5 total.
+    expect(messagesSince).toHaveBeenCalledTimes(5)
   })
 })
 
