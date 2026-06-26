@@ -228,4 +228,30 @@ describe('agent ask --json output contract', () => {
     expect(envelope.error.message).toContain('could not be resumed')
     expect(envelope.error.conversation_id).toBe('conv-abc')
   })
+
+  it('stale --session fallback + REAL first-turn error → real error overrides SESSION_NOT_FOUND', async () => {
+    // The init-time SESSION_NOT_FOUND must be the LOWEST-priority signal: if the
+    // first turn hits a genuine backend/stream error, the envelope must report
+    // the REAL error, not the stale-session fallback. Before the fix, onError was
+    // first-error-wins over a pre-set this.error, so the init signal masked the
+    // real one. Now the init signal lives separately and a turn error overrides.
+    driver.initRun = cb => {
+      cb.onError(
+        'Session stale-id could not be resumed (not found); started a new conversation conv-abc',
+        AgentErrorCode.SESSION_NOT_FOUND
+      )
+    }
+    driver.run = cb => {
+      cb.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).not.toBe(0)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+    expect(envelope.error.code).not.toBe(AgentErrorCode.SESSION_NOT_FOUND)
+    expect(envelope.error.message).toContain('backend stream failed')
+  })
 })
