@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 2.17.10
+
+### Patch Changes
+
+- [#874](https://github.com/vultisig/vultisig-sdk/pull/874) [`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c) Thanks [@neavra](https://github.com/neavra)! - fix(core-chain): treat duplicate-signature Solana broadcast errors as idempotent success
+
+  `broadcastSolanaTx` now classifies "already been processed" / `AlreadyProcessed`
+  rejections from `sendRawTransaction` as an idempotent success (returns instead
+  of routing to `verifyBroadcastByHash`), mirroring the TON/UTXO/Cosmos dedupe
+  guards. This stops a headless retry after an ambiguous broadcast from blindly
+  re-submitting an already-accepted Solana transaction.
+
 ## 2.17.9
 
 ### Patch Changes

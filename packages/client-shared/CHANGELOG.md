@@ -1,5 +1,24 @@
 # @vultisig/client-shared
 
+## 0.2.17
+
+### Patch Changes
+
+- [#878](https://github.com/vultisig/vultisig-sdk/pull/878) [`26dd218`](https://github.com/vultisig/vultisig-sdk/commit/26dd218282b198fdea9c1118e7fe5bc800c071fb) Thanks [@neavra](https://github.com/neavra)! - Harden the vault-registry config store (`config-store.ts`):
+
+  - `loadConfig` now warns to stderr (naming the path and parse error) when
+    `config.json` is corrupted instead of silently reverting to an empty
+    registry, and leaves the bad file intact at load time (the next saveConfig
+    still overwrites it once the user mutates state — this is not durable
+    recovery). A missing file is still treated as the normal first-run case (no
+    warning).
+  - `saveConfig` now writes `config.json` with `0o600` perms (and `chmod`s on
+    every write, since the mode is only honored on create) and creates the
+    config dir with `0o700`, mirroring credential-store's hardening.
+
+- Updated dependencies [[`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/sdk@2.8.4
+
 ## 0.2.16
 
 ### Patch Changes
