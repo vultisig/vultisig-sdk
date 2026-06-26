@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { queryUrl } from './queryUrl'
 
@@ -17,7 +17,7 @@ describe('queryUrl - default timeout (unbounded-fetch perma-load fix)', () => {
       (_url: unknown, init?: RequestInit) =>
         new Promise((_resolve, reject) => {
           init?.signal?.addEventListener('abort', () => reject((init.signal as AbortSignal).reason))
-        }),
+        })
     ) as unknown as typeof fetch
 
     const p = queryUrl('https://api.example.com/coingeicko/api/v3/simple/price')
@@ -32,7 +32,7 @@ describe('queryUrl - default timeout (unbounded-fetch perma-load fix)', () => {
         new Response(JSON.stringify({ ethereum: { usd: 3000 } }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
-        }),
+        })
     ) as unknown as typeof fetch
 
     const res = await queryUrl<{ ethereum: { usd: number } }>('https://api.example.com/x')
