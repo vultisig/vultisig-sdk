@@ -11,8 +11,8 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
-import { isTerminalAgentErrorCode } from './agentErrors'
 import type { AgentErrorCode } from './agentErrors'
+import { isTerminalAgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
 import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
