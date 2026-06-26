@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 2.17.11
+
+### Patch Changes
+
+- [#884](https://github.com/vultisig/vultisig-sdk/pull/884) [`33e663c`](https://github.com/vultisig/vultisig-sdk/commit/33e663ce6ba519cacb7dae5befebe9e3e530b4d7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Lower `cosmosGasRecord[TerraClassic]` from 100 LUNC to 20 LUNC.
+
+  Real on-chain MsgSend cost on columbus-5: ~400k gas x 28.325 uluna/gas ~ 11.33 LUNC.
+  The 100 LUNC floor was blocking sends from wallets with 20-100 LUNC balance even when
+  the transaction would have succeeded. The new 20 LUNC floor gives a ~1.77x buffer.
+
+  Companion to vultisig/agent-backend#1409 and vultisig/mcp-ts#594.
+
 ## 2.17.10
 
 ### Patch Changes
