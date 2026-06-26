@@ -127,17 +127,15 @@ describe('AskInterface.getCallbacks', () => {
     await expect(ui.requestPassword()).rejects.toThrow(/password/i)
   })
 
-  // Error-latching precedence (review #875 M1). SSE/stream `error` frames are
-  // non-terminal — sendMessageStream can emit onError and keep parsing, and the
-  // loop can recurse into later turns. So a transient earlier frame must not mask
-  // the TERMINAL error that actually ended the turn (e.g. LOOP_DEPTH_EXCEEDED).
+  // Error-latching precedence. SSE/stream `error` frames are non-terminal —
+  // sendMessageStream can emit onError and keep parsing, and the loop can recurse
+  // into later turns. A transient earlier frame must not mask the TERMINAL error
+  // that actually ended the turn (e.g. LOOP_DEPTH_EXCEEDED).
   it('lets a terminal LOOP_DEPTH_EXCEEDED override a prior NON-terminal error code', async () => {
     const session = {
       getConversationId: () => 'conv-1',
       sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
-        // An earlier, non-terminal SSE error frame fires mid-turn...
         ui.onError('transient backend hiccup', AgentErrorCode.NETWORK_ERROR)
-        // ...then the loop runs away and the depth cap truncates the turn.
         ui.onError('conversation truncated', AgentErrorCode.LOOP_DEPTH_EXCEEDED)
       }),
     } as unknown as AgentSession
@@ -145,10 +143,6 @@ describe('AskInterface.getCallbacks', () => {
     const ask = new AskInterface(session)
     const result = await ask.ask('go')
 
-    // Red-then-green lock: the old `if (!this.error)` latch kept NETWORK_ERROR
-    // (first wins) and the envelope named the wrong failure. The fix surfaces the
-    // terminal depth-cap code so the headline claim ("ask surfaces loop truncation
-    // as a typed depth-cap error") actually holds.
     expect(result.error?.code).toBe(AgentErrorCode.LOOP_DEPTH_EXCEEDED)
   })
 
@@ -180,5 +174,58 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('go')
 
     expect(result.error?.code).toBe(AgentErrorCode.NETWORK_ERROR)
+  })
+
+  // initialize() runs getCallbacks() BEFORE the first ask(); a stale --session
+  // fallback fires onError(SESSION_NOT_FOUND) there. These cases pin the priority
+  // ordering of that init-time signal vs. a real first-turn error.
+  it('init-time SESSION_NOT_FOUND survives a CLEAN first turn (lowest-priority fallback)', async () => {
+    const session = {
+      getConversationId: () => 'conv-new',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onAssistantMessage('You have 1.0 ETH')
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
+
+    const result = await ask.ask('hello')
+
+    expect(result.error?.code).toBe(AgentErrorCode.SESSION_NOT_FOUND)
+  })
+
+  it('a REAL first-turn error overrides the init-time SESSION_NOT_FOUND', async () => {
+    const session = {
+      getConversationId: () => 'conv-new',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
+
+    const result = await ask.ask('hello')
+
+    expect(result.error?.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+    expect(result.error?.code).not.toBe(AgentErrorCode.SESSION_NOT_FOUND)
+  })
+
+  it('init-time signal does NOT carry into a LATER turn', async () => {
+    const session = {
+      getConversationId: () => 'conv-new',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onAssistantMessage('ok')
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    ask.getCallbacks().onError('stale session not found; started new', AgentErrorCode.SESSION_NOT_FOUND)
+
+    await ask.ask('first')
+    const second = await ask.ask('second')
+
+    expect(second.error).toBeUndefined()
   })
 })
