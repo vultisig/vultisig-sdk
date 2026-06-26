@@ -16,7 +16,15 @@ import chalk from 'chalk'
 import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
-import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
+import {
+  AgentClient,
+  AgentSession,
+  AskInterface,
+  authenticateVault,
+  ChatTUI,
+  isAuthError,
+  PipeInterface,
+} from '../agent'
 import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
 import type { AskResult } from '../agent/ask'
 import { renderBalanceSummaryCard } from '../agent/cards'
@@ -306,7 +314,9 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   let skip = 0
 
   while (true) {
-    const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
+    const page = await withClientAuthRetry(client, vault, options.password, () =>
+      client.listConversations(publicKey, skip, PAGE_SIZE)
+    )
     totalCount = page.total_count
     allConversations.push(...page.conversations)
     if (allConversations.length >= totalCount || page.conversations.length < PAGE_SIZE) break
@@ -363,7 +373,7 @@ export async function executeAgentSessionsDelete(
   const client = await createAuthenticatedClient(backendUrl, vault, options.password)
 
   const publicKey = vault.publicKeys.ecdsa
-  await client.deleteConversation(sessionId, publicKey)
+  await withClientAuthRetry(client, vault, options.password, () => client.deleteConversation(sessionId, publicKey))
 
   if (isJsonOutput()) {
     outputJson({ deleted: sessionId })
@@ -386,6 +396,28 @@ async function createAuthenticatedClient(
   const auth = await authenticateVault(client, vault, password)
   client.setAuthToken(auth.token)
   return client
+}
+
+/**
+ * Run an authenticated request and, on a 401/403, re-auth + retry once. Mirrors
+ * AgentSession.withAuthRetry for the cache-free `agent sessions` commands so a
+ * token revoked between createAuthenticatedClient and the list/delete call
+ * recovers instead of surfacing a raw auth error.
+ */
+export async function withClientAuthRetry<T>(
+  client: AgentClient,
+  vault: VaultBase,
+  password: string | undefined,
+  request: () => Promise<T>
+): Promise<T> {
+  try {
+    return await request()
+  } catch (err) {
+    if (!isAuthError(err)) throw err
+    const auth = await authenticateVault(client, vault, password)
+    client.setAuthToken(auth.token)
+    return await request()
+  }
 }
 
 function formatDate(iso: string): string {
