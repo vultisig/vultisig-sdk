@@ -23,10 +23,9 @@ describe('estimateCosmosSwapFeeLabel', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.Osmosis)).toBe('~0.009 OSMO')
   })
 
-  // TerraClassic carries the 100 LUNC sign-time fee. This is the highest-blast
-  // assertion: under-displaying it would badly mislead the user.
-  it('formats the canonical TerraClassic swap fee (100_000_000 uluna = 100 LUNC)', () => {
-    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~100 LUNC')
+  // TerraClassic send fee lowered from 100 to 20 LUNC (cosmosGasRecord, real MsgSend ~11 LUNC).
+  it('formats the canonical TerraClassic swap fee (20_000_000 uluna = 20 LUNC)', () => {
+    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~20 LUNC')
   })
 
   // Terra (phoenix-1, LUNA) must not be confused with TerraClassic (columbus-5,
