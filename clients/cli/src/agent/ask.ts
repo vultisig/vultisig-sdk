@@ -57,10 +57,17 @@ export class AskInterface {
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
   private error: AskResult['error']
-  // Whether ask() has run at least once. initialize() drives getCallbacks()
-  // BEFORE the first ask() — a stale --session fallback fires
-  // onError(SESSION_NOT_FOUND) there. ask() must NOT clear that initialize-time
-  // error on its first turn, or the result envelope reports false success.
+  // Initialize-time error, kept SEPARATE from the turn error so it stays the
+  // LOWEST-priority signal. initialize() drives getCallbacks() BEFORE the first
+  // ask() — a stale --session fallback fires onError(SESSION_NOT_FOUND) there.
+  // A real first-turn error must override it, so we never pre-set `this.error`
+  // with the init signal; instead partialResult() falls back to `initError` only
+  // when the turn produced no error of its own. Cleared after the first turn so
+  // later turns don't carry the init signal.
+  private initError: AskResult['error']
+  // Whether ask() has run at least once. Distinguishes init-time onError (sets
+  // initError) from turn onError (sets error), and gates clearing initError so
+  // the init signal only carries into the FIRST turn.
   private hasAsked = false
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
@@ -134,10 +141,15 @@ export class AskInterface {
       },
 
       onError: (message: string, code: AgentErrorCode) => {
-        // Record the first backend/stream error so ask() can surface it to the
-        // caller (non-zero exit + error envelope). Keep the human-readable
-        // stderr breadcrumb for verbose/interactive observers.
-        if (!this.error) {
+        // An onError fired BEFORE the first ask() (hasAsked === false) is an
+        // initialize-time signal (e.g. SESSION_NOT_FOUND from a stale --session
+        // fallback). Keep it in initError as the lowest-priority fallback so a
+        // real turn error can still override it. Turn errors record the FIRST
+        // backend/stream error so ask() can surface it (non-zero exit + error
+        // envelope). Keep the human-readable stderr breadcrumb either way.
+        if (!this.hasAsked) {
+          this.initError = { message, code }
+        } else if (!this.error) {
           this.error = { message, code }
         }
         process.stderr.write(`[error] ${message} [${code}]\n`)
@@ -176,13 +188,13 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
-    // Preserve an initialize-time error (e.g. SESSION_NOT_FOUND from a stale
-    // --session fallback, set via getCallbacks().onError during initialize())
-    // into the FIRST turn's result. Clearing it here would drop the promised
-    // signal and a headless caller would see a false-success envelope. Later
-    // turns reset so each turn's snapshot stays clean.
+    // Each turn's error is turn-local — reset it every turn. The initialize-time
+    // signal lives separately in initError (see partialResult's `?? initError`),
+    // so clearing error here can't drop it. initError carries ONLY into the first
+    // turn, so drop it once a prior turn has run.
+    this.error = undefined
     if (this.hasAsked) {
-      this.error = undefined
+      this.initError = undefined
     }
     this.hasAsked = true
 
@@ -207,7 +219,9 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
-      error: this.error,
+      // A real turn error wins; fall back to the init-time signal (e.g. stale
+      // --session SESSION_NOT_FOUND) only when the turn produced no error.
+      error: this.error ?? this.initError,
     }
   }
 }
