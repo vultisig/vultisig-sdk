@@ -1,5 +1,11 @@
 # @vultisig/core-mpc
 
+## 1.8.6
+
+### Patch Changes
+
+- [#764](https://github.com/vultisig/vultisig-sdk/pull/764) [`0dc1620`](https://github.com/vultisig/vultisig-sdk/commit/0dc16206bedcdde8832a068b15383565a6b98896) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add QBTC claim transaction helper utilities for MLDSA claim signing.
+
 ## 1.8.5
 
 ### Patch Changes
