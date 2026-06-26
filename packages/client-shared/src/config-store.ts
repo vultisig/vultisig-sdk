@@ -35,7 +35,7 @@ export async function loadConfig(): Promise<VsigConfig> {
     // read failure (e.g. EACCES) is worth surfacing before falling back.
     if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
       console.warn(
-        `[vultisig] Could not read config at ${filePath}: ${(err as Error).message}. Using an empty registry.`
+        `[vultisig] Could not read config at ${filePath}: ${(err as Error)?.message ?? String(err)}. Using an empty registry.`
       )
     }
     return { vaults: [] }
@@ -45,10 +45,11 @@ export async function loadConfig(): Promise<VsigConfig> {
   } catch (err) {
     // Corrupted config (e.g. partial write or single-byte corruption): warn
     // loudly instead of silently factory-resetting, which would vanish the
-    // user's vault registry. Leave the bad file intact so it stays recoverable
-    // (the next saveConfig overwrites it only when the user mutates state).
+    // user's vault registry. The bad file is left intact AT LOAD TIME (the next
+    // saveConfig still overwrites it when the user mutates state) — this is not
+    // durable recovery, just a chance to inspect the file before the next write.
     console.warn(
-      `[vultisig] Config at ${filePath} is corrupted (${(err as Error).message}); using an empty registry. The file was left intact for recovery.`
+      `[vultisig] Config at ${filePath} is corrupted (${(err as Error)?.message ?? String(err)}); using an empty registry. The file was left intact at load time.`
     )
     return { vaults: [] }
   }

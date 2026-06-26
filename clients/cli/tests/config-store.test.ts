@@ -79,32 +79,51 @@ describe('config-store', () => {
       warnSpy.mockRestore()
     })
 
-    it('does not overwrite the corrupted file on read', async () => {
-      mockFs.readFile.mockResolvedValue('not json')
+    it('warns (and returns empty) when the config is unreadable for a non-ENOENT reason', async () => {
+      // A transient/permission read failure (EACCES) must surface, unlike the
+      // silent ENOENT first-run case. Guards the non-ENOENT branch in loadConfig:
+      // deleting that branch makes this fail (no warn).
+      const eacces = Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      mockFs.readFile.mockRejectedValue(eacces)
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const config = await loadConfig()
+      expect(config).toEqual({ vaults: [] })
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+      expect(String(warnSpy.mock.calls[0][0])).toContain(CONFIG_PATH)
+      warnSpy.mockRestore()
+    })
+
+    it('does not persist during a corrupt load; the next saveConfig overwrites with fresh state', async () => {
+      const RAW_CORRUPT = '{ partial wri'
+      mockFs.readFile.mockResolvedValue(RAW_CORRUPT)
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      // Load must not touch the file — no write-on-corrupt path. This is a real
+      // regression guard: if loadConfig ever gained a writeFile/chmod in the
+      // corrupt branch, these assertions fail.
       await loadConfig()
-      // Leave the bad file intact so it stays recoverable.
       expect(mockFs.writeFile).not.toHaveBeenCalled()
+      expect(mockFs.chmod).not.toHaveBeenCalled()
+
+      // But the corrupt bytes are NOT durably recoverable: the next mutate→save
+      // overwrites them with valid JSON (documents the load-time-only intent).
+      const fresh = makeConfig([makeVault()])
+      await saveConfig(fresh)
+      const written = mockFs.writeFile.mock.calls[0][1]
+      expect(written).toBe(JSON.stringify(fresh, null, 2))
+      expect(written).not.toBe(RAW_CORRUPT)
       warnSpy.mockRestore()
     })
   })
 
   describe('saveConfig', () => {
-    it('creates directory and writes JSON', async () => {
-      const config = makeConfig([makeVault()])
-      await saveConfig(config)
-      expect(mockFs.mkdir).toHaveBeenCalledWith(CONFIG_DIR, { recursive: true, mode: 0o700 })
-      expect(mockFs.writeFile).toHaveBeenCalledWith(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
-    })
-
-    it('writes config with 0o600 perms and a 0o700 dir', async () => {
+    it('creates the dir 0o700 and writes JSON 0o600 (chmod every write)', async () => {
       const config = makeConfig([makeVault()])
       await saveConfig(config)
       // Dir hardened to 0o700.
       expect(mockFs.mkdir).toHaveBeenCalledWith(CONFIG_DIR, { recursive: true, mode: 0o700 })
-      // File created with 0o600...
-      const writeArgs = mockFs.writeFile.mock.calls[0]
-      expect(writeArgs[2]).toEqual({ mode: 0o600 })
+      // File written with the expected content and created with 0o600...
+      expect(mockFs.writeFile).toHaveBeenCalledWith(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
       // ...and chmod'd 0o600 on every write (mode is honored only on create).
       expect(mockFs.chmod).toHaveBeenCalledWith(CONFIG_PATH, 0o600)
     })
@@ -160,7 +179,7 @@ describe('config-store', () => {
       const overridePath = path.join(overrideDir, 'config.json')
       process.env[ENV_KEY] = overrideDir
 
-      mockFs.readFile.mockRejectedValue(new Error('ENOENT'))
+      mockFs.readFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
       const loaded = await loadConfig()
       expect(mockFs.readFile).toHaveBeenCalledWith(overridePath, 'utf-8')
       expect(loaded).toEqual({ vaults: [] })
