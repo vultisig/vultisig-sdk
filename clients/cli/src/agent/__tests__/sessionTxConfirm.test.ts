@@ -26,13 +26,17 @@ function makeHarness(opts: {
   // Message-loop depth to start at. Depth 0 models a fresh ask/pipe turn;
   // depth > 0 models a tx_ready arriving inside a multi-turn tool loop.
   startDepth?: number
+  // Chain label for the emitted tx; defaults to 'Base'. Set 'Solana' to model
+  // the cross-layer broadcast-then-confirm contract for Solana.
+  chain?: string
 }) {
+  const chain = opts.chain ?? 'Base'
   const signTxFromBuffer = vi.fn(
     async () =>
       ({
         tool: 'sign_tx',
         success: true,
-        data: { tx_hash: '0xfeed', chain: 'Base', explorer_url: 'https://x/1' },
+        data: { tx_hash: '0xfeed', chain, explorer_url: 'https://x/1' },
       }) as RecentAction
   )
   const client = {
@@ -40,7 +44,7 @@ function makeHarness(opts: {
       // Fire a server-built tx on the first turn only; later turns are plain text.
       if (client.sendMessageStream.mock.calls.length === 1) {
         callbacks.onTxReady({
-          chain: 'Base',
+          chain,
           txArgs: { tx: { to: '0xR', value: '1' } },
         })
       }
@@ -119,6 +123,21 @@ describe('processMessageLoop — post-broadcast confirmation (F1)', () => {
     await h.run()
     expect(h.ui.onTxStatus).toHaveBeenNthCalledWith(1, '0xfeed', 'Base', 'pending', 'https://x/1')
     expect(h.ui.onTxStatus).toHaveBeenNthCalledWith(2, '0xfeed', 'Base', 'failed', 'https://x/1')
+  })
+
+  it('Solana cross-layer: optimistic broadcast success still surfaces a reverted tx as failed', async () => {
+    // Gold cross-layer contract for PR #874. The Solana broadcast resolver
+    // reports an `AlreadyProcessed` signature as success WITHOUT verifying the
+    // execution outcome — so a processed-but-reverted Solana tx reaches this
+    // confirmation poll already marked broadcast-success (modeled by
+    // signTxFromBuffer.success === true). This proves the AUTHORITY step
+    // (getTxStatus → status resolver reading signatureStatus.err → 'error')
+    // overrides that optimism and emits `failed`, not `confirmed`.
+    const h = makeHarness({ chain: 'Solana', statuses: [{ status: 'error' }] })
+    await h.run()
+    expect(h.ui.onTxStatus).toHaveBeenNthCalledWith(1, '0xfeed', 'Solana', 'pending', 'https://x/1')
+    expect(h.ui.onTxStatus).toHaveBeenNthCalledWith(2, '0xfeed', 'Solana', 'failed', 'https://x/1')
+    expect(h.ui.onTxStatus).toHaveBeenCalledTimes(2)
   })
 
   it('keeps polling through transient RPC errors before confirming', async () => {

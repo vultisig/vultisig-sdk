@@ -65,4 +65,39 @@ describe('broadcastSolanaTx', () => {
       error: rpcError,
     })
   })
+
+  it('treats a duplicate-signature rejection as an idempotent success', async () => {
+    mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('treats an AlreadyProcessed transaction error as an idempotent success', async () => {
+    mocks.sendRawTransaction.mockRejectedValue(new Error('Transaction error: AlreadyProcessed'))
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  // N1 — pins the BROADCAST-LAYER decision for the AlreadyProcessed branch so a
+  // future refactor that re-routes it (e.g. back through verifyBroadcastByHash,
+  // or into a re-broadcast) is caught here. This is the optimistic half of the
+  // reviewed-and-accepted trade-off documented in solana.ts: broadcast reports
+  // success WITHOUT verifying the execution outcome — the authority on real
+  // success/failure is the downstream getTxStatus confirmation poll (see the
+  // status-resolver test and the cross-layer test in
+  // clients/cli/src/agent/__tests__/sessionTxConfirm.test.ts).
+  it('pins the AlreadyProcessed branch: idempotent success, no re-broadcast, no hash verification', async () => {
+    mocks.sendRawTransaction.mockRejectedValue(new Error('This transaction has already been processed'))
+
+    await expect(broadcastSolanaTx({ chain: Chain.Solana, tx })).resolves.toBeUndefined()
+
+    // Single broadcast attempt — the duplicate signature is NOT re-sent.
+    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+    // Resolved as success directly, not routed to the verify-by-hash fallback.
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
 })
