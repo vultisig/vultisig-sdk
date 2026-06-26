@@ -18,6 +18,12 @@ export enum AgentErrorCode {
   SIGNING_FAILED = 'SIGNING_FAILED',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
   LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
+  // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
+  // persistent backend error, or an auth failure that survived the single
+  // retry) so the session fell back to a NEW conversation. Carries the new
+  // conversation id in the message so a headless caller can persist it instead
+  // of silently losing prior context.
+  SESSION_NOT_FOUND = 'SESSION_NOT_FOUND',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 

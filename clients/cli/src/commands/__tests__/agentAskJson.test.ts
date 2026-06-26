@@ -16,13 +16,19 @@ import { resetOutput } from '../../lib/output'
 // Mutable driver shared with the hoisted AgentSession mock below.
 const driver = vi.hoisted(() => ({
   run: null as null | ((cb: UICallbacks) => void | Promise<void>),
+  // initialize()-time driver: lets a test simulate initialize() firing a
+  // callback (e.g. the stale --session → new-convo fallback's onError(
+  // SESSION_NOT_FOUND)) BEFORE the first ask() runs.
+  initRun: null as null | ((cb: UICallbacks) => void | Promise<void>),
   conversationId: 'conv-abc',
 }))
 
 vi.mock('../../agent', async importOriginal => {
   const actual = await importOriginal<typeof import('../../agent')>()
   class FakeSession {
-    async initialize(): Promise<void> {}
+    async initialize(callbacks: UICallbacks): Promise<void> {
+      if (driver.initRun) await driver.initRun(callbacks)
+    }
     getVaultAddresses(): Record<string, string> {
       return {}
     }
@@ -49,13 +55,20 @@ class ExitError extends Error {
 describe('agent ask --json output contract', () => {
   let stdout: string[]
   let stderr: string[]
-  const fakeVault = { name: 'test-vault', publicKeys: { ecdsa: 'pk-ecdsa', eddsa: 'pk-eddsa' } }
-  const ctx = { sdk: {}, ensureActiveVault: vi.fn(async () => fakeVault) } as never
+  const fakeVault = {
+    name: 'test-vault',
+    publicKeys: { ecdsa: 'pk-ecdsa', eddsa: 'pk-eddsa' },
+  }
+  const ctx = {
+    sdk: {},
+    ensureActiveVault: vi.fn(async () => fakeVault),
+  } as never
 
   beforeEach(() => {
     stdout = []
     stderr = []
     driver.run = null
+    driver.initRun = null
     driver.conversationId = 'conv-abc'
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new ExitError(code ?? 0)
@@ -129,7 +142,9 @@ describe('agent ask --json output contract', () => {
     // headless caller still needs the identifier to track/recover the moved funds.
     // Regression guard for the error envelope dropping result.transactions (F1).
     driver.run = cb => {
-      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onToolResult('tool-call-1', 'execute_send', true, {
+        to: '0xrecipient',
+      })
       cb.onTxStatus('0xdeadbeef', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xdeadbeef')
       cb.onError('confirmation indexer failed after broadcast', AgentErrorCode.TRANSACTION_FAILED)
     }
@@ -163,7 +178,9 @@ describe('agent ask --json output contract', () => {
     // funds with no identifier. Regression guard for the thrown-after-broadcast
     // path (the SSE-error-frame path is covered by the test above).
     driver.run = cb => {
-      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onToolResult('tool-call-1', 'execute_send', true, {
+        to: '0xrecipient',
+      })
       cb.onTxStatus('0xcafef00d', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xcafef00d')
       throw new Error('backend 503 reporting recent_actions after broadcast')
     }
@@ -181,5 +198,34 @@ describe('agent ask --json output contract', () => {
     expect(envelope.data.transactions[0].hash).toBe('0xcafef00d')
     expect(envelope.data.transactions[0].status).toBe('broadcast')
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
+  })
+
+  it('stale --session fallback (SESSION_NOT_FOUND at initialize) → exit non-zero + error envelope on first turn', async () => {
+    // initialize() resolves a stale --session by starting a NEW conversation and
+    // firing onError(SESSION_NOT_FOUND) — a non-fatal signal the headless caller
+    // must see so it can persist the new id. Before the fix, ask() cleared this
+    // initialize-time error at turn start, so the turn returned a SUCCESS
+    // envelope and the signal was silently dropped. Regression guard.
+    driver.initRun = cb => {
+      cb.onError(
+        'Session stale-id could not be resumed (not found); started a new conversation conv-abc',
+        AgentErrorCode.SESSION_NOT_FOUND
+      )
+    }
+    // The first turn itself succeeds (new conversation answers normally).
+    driver.run = cb => {
+      cb.onAssistantMessage('You have 1.0 ETH')
+    }
+
+    const { exitCode } = await runAsk()
+    // Non-zero: the stale-session signal must survive into the result envelope.
+    expect(exitCode).not.toBe(0)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.v).toBe(1)
+    expect(envelope.error.code).toBe(AgentErrorCode.SESSION_NOT_FOUND)
+    expect(envelope.error.message).toContain('could not be resumed')
+    expect(envelope.error.conversation_id).toBe('conv-abc')
   })
 })
