@@ -1,5 +1,409 @@
 # @vultisig/sdk
 
+## 2.8.0
+
+### Minor Changes
+
+- [#814](https://github.com/vultisig/vultisig-sdk/pull/814) [`c9a235b`](https://github.com/vultisig/vultisig-sdk/commit/c9a235b959c7c82cd189482fab86ce3d27ddb4ff) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.balance.evm` (`getEvmBalances`): a multi-token EVM balance read (native coin + any number of ERC-20s) via RPC, with per-token on-chain `decimals`/`symbol` resolution and raw base-unit + human-readable output.
+
+- [#831](https://github.com/vultisig/vultisig-sdk/pull/831) [`9585b6f`](https://github.com/vultisig/vultisig-sdk/commit/9585b6f246de3ce537eae201f0d660fc89ff1012) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.bridge.cctp` — Circle CCTP USDC bridge + claim calldata builders.
+
+  `buildCctpBridge()` returns an unsigned 2-tx approve+depositForBurn sequence for bridging USDC cross-chain (Ethereum, Avalanche, Optimism, Arbitrum, Base, Polygon). `buildCctpClaim()` returns the unsigned `receiveMessage` mint tx for the destination chain. Pure crypto — builds unsigned calldata only, never signs or broadcasts. Includes a burn-address fund-safety guard on the bridge mintRecipient and a multiple-of-65-bytes attestation shape check on claim. Also exposes the CCTP contract registry (`cctpChains`, `getCctpChain`, `cctpSupportedChains`) and Circle attestation API base. Ports `build_cctp_bridge_usdc` / `build_cctp_claim_usdc` out of mcp-ts into the SDK.
+
+- [#861](https://github.com/vultisig/vultisig-sdk/pull/861) [`f82caf5`](https://github.com/vultisig/vultisig-sdk/commit/f82caf58532f58af9d62b0143c7466cabcd88b06) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add `decodeFromToolResult`, `decodeCosmosTx`, `decodeEvmTx` and related types (`DecodeFromToolResultInput`, `AssetRef`, `ChainFamily`, `Envelope`, `EnvelopeKind`, `PolicyEnvelope`) to the public API
+
+- [#833](https://github.com/vultisig/vultisig-sdk/pull/833) [`361ba58`](https://github.com/vultisig/vultisig-sdk/commit/361ba58f79f241c4c00e33785a66ec6987628d26) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add `sdk.swap.skip` — Skip Go cross-chain route + unsigned-tx prep. Exposes `runSkipSwap`, `quoteSkipRoute`, `buildSkipAffiliates`, `skipChainIdToChainName`, `resolveLuncFloorUsd`, `SkipApiError`, `SKIP_AFFILIATE_ADDRESS_BY_CHAIN`, `DEFAULT_LUNC_NOTIONAL_FLOOR_USD` and the related types (`SkipSwapArgs`, `SkipSwapOutcome`, `SkipSwapSuccess`, `SkipSwapErrorEnvelope`, `SkipUnsignedMsg`, `SkipChainIdsToAffiliates`). Quotes a Skip route and builds the unsigned EVM/cosmos tx envelope for the caller's signing layer — never signs, never broadcasts. Also corrects the canonical dYdX cosmos chain id (`dydx-1` -> `dydx-mainnet-1`).
+
+- [#829](https://github.com/vultisig/vultisig-sdk/pull/829) [`7625e0b`](https://github.com/vultisig/vultisig-sdk/commit/7625e0bf325c8957bc3e28270454fd54c5589e2f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.swap.acrossQuote` — a read-only Across bridge quote primitive (ported from the mcp-ts `get_across_quote` tool). Fetches a live Across `suggested-fees` quote, pins + verifies the origin/destination SpokePool deployments (fail-closed on upstream schema drift), checksums + validates inputs, and rejects burn-address recipients via the shared `assertSafeDestination` guard. Quote-only: never builds calldata, signs, or broadcasts. Exported as `acrossQuote`, `acrossSupportedChains`, and the `AcrossChain` / `AcrossQuote` / `AcrossQuoteParams` types.
+
+- [#825](https://github.com/vultisig/vultisig-sdk/pull/825) [`2024a92`](https://github.com/vultisig/vultisig-sdk/commit/2024a92b44760e1ff2043b0e45b083edc131b16c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.prep.trc20Transfer` (`prepareTrc20TransferFromKeys`): a pure-crypto,
+  vault-free builder for an unsigned TRON TRC-20 token transfer. ABI-encodes
+  `transfer(address,uint256)` with checksum-verified base58check address decoding
+  and a uint256 range guard, returning an `UnsignedTrc20Transfer` descriptor (no
+  signing, no RPC, no broadcast). Exported from the package barrel and the
+  React Native entry so mcp-ts / agent-backend / Windows / Station can consume one
+  reviewed TRC-20 calldata implementation.
+
+## 2.7.0
+
+### Minor Changes
+
+- [#832](https://github.com/vultisig/vultisig-sdk/pull/832) [`dc43ea2`](https://github.com/vultisig/vultisig-sdk/commit/dc43ea2657915012032bf273c73ede44a183185b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(prep): add `sdk.prep.cosmosStaking` — pure-crypto unsigned msg-envelope builders for cosmos-sdk staking + distribution.
+
+  New public surface `cosmosStaking.{delegate,undelegate,redelegate,withdraw}` (plus the named `buildDelegateMsg` / `buildUndelegateMsg` / `buildRedelegateMsg` / `buildWithdrawRewardsMsg` exports) builds the proto-`Any` (typeUrl + base64 protobuf value) for `MsgDelegate` / `MsgUndelegate` / `MsgBeginRedelegate` / `MsgWithdrawDelegatorReward`. Quotes/builds-unsigned only — never signs or broadcasts. Consolidates the proto-`Any` encoding that mcp-ts `build_cosmos_*` and the app previously re-derived independently into one SDK code path.
+
+- [#844](https://github.com/vultisig/vultisig-sdk/pull/844) [`da59b7f`](https://github.com/vultisig/vultisig-sdk/commit/da59b7f8d7fdf48e26ab4a8617e5273d807b4e66) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.dex.quotes` — read-only on-chain DEX quote primitives:
+
+  - `uniswapV2Quote` / `getAmountOut`: live factory → pair → reserves reads via
+    `evmCall` + canonical constant-product math (997/1000 fee, bigint).
+  - `balancerQuote`: canonical pool math via `@balancer-labs/balancer-maths`
+    `Vault.swap()` over a caller-supplied pool state.
+
+  Both are read-only (no calldata, no signing, no broadcast) and exported from
+  the generic and React Native entry points.
+
+- [#830](https://github.com/vultisig/vultisig-sdk/pull/830) [`4e733c4`](https://github.com/vultisig/vultisig-sdk/commit/4e733c44708e7b81efd0a9b29298c6a9deba5f51) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `dex.uniswap` namespace: read-only Uniswap V3 primitives — canonical
+  BigInt tick math (`getSqrtRatioAtTick` and bidirectional tick ↔ sqrtPriceX96 ↔
+  price with token-decimal adjustment, 18-sig-fig `formatPrice18`) and on-chain
+  pool-info (`uniswapV3PoolInfo`: factory lookup or known-pool read of
+  slot0/liquidity/token metadata via `evmCall`). No signing, no broadcast.
+
+- [#820](https://github.com/vultisig/vultisig-sdk/pull/820) [`4541e6f`](https://github.com/vultisig/vultisig-sdk/commit/4541e6f9899a5c091b73830db1a2db7e739828de) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `evm.getTokenApprovals(chain, { owner })`: read-only enumeration of active
+  ERC-20 approvals (spender allowances) for an address on any supported EVM chain.
+  Scans `Approval(owner, spender, value)` logs (full-history "earliest" with a
+  bounded recent-window fallback when an RPC rejects the unbounded range),
+  de-dupes `(token, spender)` pairs, re-reads the CURRENT `allowance()` per pair so
+  revoked/spent approvals drop out, resolves `symbol()` fail-soft, and flags
+  `isUnlimited` for allowances >= 2^128. No signing, no broadcast. Ported from the
+  mcp-ts `get_token_approvals` tool.
+
+- [#841](https://github.com/vultisig/vultisig-sdk/pull/841) [`b5ca32d`](https://github.com/vultisig/vultisig-sdk/commit/b5ca32d5e53b85f07531c9303e4c33e2dd44de5d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.gas.cosmos` — cosmos gas-fee primitives (`estimateCosmosSwapFeeLabel`,
+  `getCosmosSwapGasLimit`, `COSMOS_SWAP_GAS_LIMIT`, `COSMOS_SWAP_FEE_LABEL_CHAINS`,
+  re-exported `getCosmosGasLimit`). The swap fee label is sourced from the SDK's
+  canonical `cosmosGasRecord` sign-time fee (single source of truth, identical to
+  the mcp-ts `COSMOS_SEND_FEE_BASE_UNITS` labels), covering all 8 IBC-enabled
+  cosmos chains. Exposed at the package index and the React Native entry point.
+
+- [#854](https://github.com/vultisig/vultisig-sdk/pull/854) [`d1b19ed`](https://github.com/vultisig/vultisig-sdk/commit/d1b19ed39102b32f9eb5a51ef794226adb959022) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.defi.glif` — GLIF x ICN liquid-staking calldata builders
+
+  Adds the first protocol under the new `sdk.defi.*` namespace:
+
+  - `buildGlifStakeIcnt(...)` — unsigned `[approve?, deposit]` to stake ICNT and mint
+    stICNT on Base (ERC-4626 `deposit(assets, receiver)`). The approve step is dropped
+    when `currentAllowance >= amount`; the approve spender is pinned to the pool and the
+    approved amount is bounded to the exact stake amount (never unlimited).
+  - `buildGlifRedeemSticnt(...)` — unsigned `[redeem]` to redeem stICNT back to ICNT
+    (`redeem(shares, receiver, owner)`, with `owner` always pinned to `from`).
+
+  Both builders are pure / offline (no RPC), produce UNSIGNED calldata only, and are
+  exported from the generic and React Native entry points. Pinned Base addresses are
+  verified on-chain (`pool.asset() == ICNT`, `pool.symbol() == stICNT`).
+
+- [#859](https://github.com/vultisig/vultisig-sdk/pull/859) [`4f17411`](https://github.com/vultisig/vultisig-sdk/commit/4f17411ea8d739db706631cf873c85df4d329a0f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.osmosis` — unsigned Osmosis Cosmos message builders (GAMM
+  join/exit/swap, Concentrated-Liquidity create/withdraw/collect, Superfluid
+  delegate/undelegate). Builds proto3-encoded unsigned messages only; never signs
+  or broadcasts. Also re-exported on the React Native platform entry.
+
+- [#842](https://github.com/vultisig/vultisig-sdk/pull/842) [`acfd6e4`](https://github.com/vultisig/vultisig-sdk/commit/acfd6e460e4ea27c7a7bcd668371ab1dea32c345) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.balance.polkadot(...)` — a pure-crypto, RN-safe Polkadot balance reader.
+
+  - `balancePolkadot({ address })` returns the full native DOT `pallet_balances`
+    breakdown (free / reserved / frozen / total / spendable + nonce), parsed from
+    the raw SCALE `AccountInfo` blob via `state_getStorage` (no `@polkadot/api`).
+  - `balancePolkadot({ address, assetId })` returns an Asset-Hub `pallet_assets`
+    asset balance (raw u128 base units; USDT id=1984, USDC id=1337, …).
+  - Hard SS58 prefix=0 + checksum + EVM-hex gate so a Bittensor / Kusama / typo'd
+    address can't silently resolve to the wrong-account Polkadot balance.
+
+  Exposed on both the generic entry and the React Native entry (the latter via a
+  lazy dynamic import to keep `@polkadot/api` out of the eager RN bundle).
+
+- [#821](https://github.com/vultisig/vultisig-sdk/pull/821) [`356e841`](https://github.com/vultisig/vultisig-sdk/commit/356e841c35cf38c2671309ae12720666f32745df) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.prep.cw20Transfer` (`buildCw20TransferMsg`): a pure-crypto builder for
+  an UNSIGNED CosmWasm CW-20 token transfer `MsgExecuteContract` amino message.
+  Validates recipient/contract/sender bech32 (HRP match, validator-key reject,
+  20/32-byte payload), rejects native bank denoms and non-positive/non-integer
+  amounts, and emits `{ transfer: { recipient, amount } }` ready to feed into
+  `prepareSignAminoTxFromKeys`. Zero network I/O — never signs, never broadcasts.
+
+- [#822](https://github.com/vultisig/vultisig-sdk/pull/822) [`a22ef41`](https://github.com/vultisig/vultisig-sdk/commit/a22ef4106763fd25992c7f93f72c214dfdcc55d4) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `prepareJettonTransferTxFromKeys` — a vault-free prep helper that builds an
+  UNSIGNED TON Jetton (TEP-74) transfer from raw vault identity (public keys only,
+  no key shares). Sibling of `prepareSendTxFromKeys` / `prepareSwapTxFromKeys`.
+  Wraps the pure `@ton/core` cell builder: emits the `transfer` opcode
+  (`0xf8a7ea5`), routes the internal message to the sender's Jetton wallet, sets
+  `response_destination` to the sender (excess-TON refund), and returns
+  `{signingHashHex, unsignedBocHex, fromAddress, finalize(sigHex)}`. Never signs,
+  never broadcasts. Also exported from the React Native entry point.
+
+- [#855](https://github.com/vultisig/vultisig-sdk/pull/855) [`c778b4c`](https://github.com/vultisig/vultisig-sdk/commit/c778b4cc91a42f4a4488a51ea72a775ad4e78a54) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - add `sdk.defi.river` Omni-CDP builders (open/close trove, delegate approval) for River/Satoshi Protocol
+
+- [#810](https://github.com/vultisig/vultisig-sdk/pull/810) [`f0a5529`](https://github.com/vultisig/vultisig-sdk/commit/f0a5529a8d3cfcce5a2883b5da83e6d15ac270ec) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.amount.convert` conversion primitives: `convertAmount` /
+  `toBaseUnits` / `toHumanUnits` (base-unit ↔ human-readable, precision-exact
+  string math) and `fiatToCrypto` / `cryptoToFiat` (fiat ↔ crypto with the
+  price supplied as an input), plus `AmountConvertError`. Folds the
+  previously-duplicated mcp-ts `convert-amount` and Go validator scale-kernel
+  impls into one canonical, vault-free SDK surface.
+
+- [#840](https://github.com/vultisig/vultisig-sdk/pull/840) [`3bbe0fb`](https://github.com/vultisig/vultisig-sdk/commit/3bbe0fb011ec2f5502f321255f0304f06ea3e079) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.balance.cosmos` (`getCosmosBalance`) — a read-only Cosmos bank-denom balance primitive. Fetches `cosmos/bank/v1beta1/balances/<address>` over LCD (with a Polkachu fallback mirror), decimal-scales the native denom and known/curated denoms via BigInt (no precision loss), and resolves IBC vouchers with decimals pinned from a safe table — emitting unresolvable `ibc/`/`factory/` denoms in raw base units with a `(base units)` caveat so downstream pricing never mis-scales. Exposed from both the default and react-native entry points.
+
+- [#843](https://github.com/vultisig/vultisig-sdk/pull/843) [`dac32f6`](https://github.com/vultisig/vultisig-sdk/commit/dac32f61fc5140b4c612801fc45ba48670dffe19) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.balance.<chain>` read-only balance fetchers for non-EVM /
+  non-Cosmos chains (XRP, TRON, TON, Sui, Cardano, Bittensor/TAO) plus token
+  variants (TRC-20, TON jetton, Sui token), ported from mcp-ts. Pure crypto —
+  decode RPC responses, parse base units, format, validate address format.
+  Read-only; nothing here signs or broadcasts.
+
+- [#816](https://github.com/vultisig/vultisig-sdk/pull/816) [`ed75992`](https://github.com/vultisig/vultisig-sdk/commit/ed759929cd8612a6873f892d33da2857f18ad9f8) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.balance.solana` read-only helpers to the public surface: `getSolBalance(address)` (native SOL — exact u64 lamports via integer/BigInt math, no float corruption) and `getSplTokenBalance(address, mint)` (SPL / Token-2022 — auto-detects the token program, sums balances losslessly across all of the owner's token accounts for the mint). Both are pure RPC reads against the existing Solana proxy and are exported from the node and React Native entrypoints.
+
+- [#836](https://github.com/vultisig/vultisig-sdk/pull/836) [`f4ba189`](https://github.com/vultisig/vultisig-sdk/commit/f4ba18958d351be48ed83c502895be251bacc47a) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.cosmos.gov`: `getCosmosGovernanceProposals` (read-only LCD fetch of governance proposals across IBC-enabled Cosmos chains, gov/v1 with v1beta1 fallback) and `prepareCosmosVote` (builds an unsigned `cosmos-sdk/MsgVote` envelope — validates the voter bech32/HRP, fetches account_number/sequence, fails closed on funded-but-unparseable accounts; never signs or broadcasts). Exported from the generic and React Native entry points.
+
+- [#811](https://github.com/vultisig/vultisig-sdk/pull/811) [`8ed4b59`](https://github.com/vultisig/vultisig-sdk/commit/8ed4b59680e1285cc374fefba8cf1bd98347ef5e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.evm.encodeErc20Approve` + `encodeErc20Revoke`
+
+  Two pure-crypto primitives under the EVM tools module:
+
+  - `encodeErc20Approve(spender, amount)` — ABI-encodes `approve(spender, amount)`
+    calldata (selector `0x095ea7b3`). No RPC, no `decimals()` lookup; the caller
+    passes `amount` already in base units. `MAX_UINT256` is exported for the
+    explicit unlimited-approval case — the API never silently defaults to
+    unlimited (bounded-by-default). `spender` is normalized to its EIP-55
+    checksum.
+  - `encodeErc20Revoke(spender)` — `approve(spender, 0)`, the standard revoke
+    pattern; works on non-standard tokens that don't implement `decimals()`.
+
+  Both produce UNSIGNED calldata only, fail closed on a negative / out-of-range
+  amount or a malformed spender, and are exported from the generic and React
+  Native entry points.
+
+- [#813](https://github.com/vultisig/vultisig-sdk/pull/813) [`5be6408`](https://github.com/vultisig/vultisig-sdk/commit/5be6408aa51e8c20568ff18c4cf604977c3004ec) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.gas.price` (`evmGasPrice`) — a read-only per-chain EVM gas-price primitive.
+  Fetches the current `eth_gasPrice` for any supported EVM chain via the SDK's own
+  per-chain viem client (no extra config, no external API) and returns
+  `{ chain, gasPriceWei, gasPriceGwei }`. The exact value lives in the `gasPriceWei`
+  `bigint` (never round-tripped through a JS number); `gasPriceGwei` is a display-only
+  convenience rounded to 4 decimals, with a genuinely non-zero sub-floor price clamped
+  UP to the smallest renderable value rather than collapsing to a misleading `0`. Fails
+  closed: RPC errors propagate as a thrown error, never a fabricated `0` gas price.
+  Also exposes the previously-internal `GasEstimationService` for vault-bound callers
+  that need the richer chain-specific fee shape. Ported from the mcp-ts `get_gas_price`
+  EVM branch (pure-crypto half only; the CoinGecko USD overlay stays an orchestration
+  concern).
+
+- [#817](https://github.com/vultisig/vultisig-sdk/pull/817) [`da4b301`](https://github.com/vultisig/vultisig-sdk/commit/da4b30119916a2a13d0e4e4f4472e4f28ed810c3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.price.get` (`getPrice`) and `sdk.price.batch` (`getPricesBatch`) — token USD pricing via CoinGecko through the Vultisig proxy. Resolves a USD price (+ 24h change + market cap) across four read-only routes: explicit CoinGecko coin id, EVM contract + chain, Solana mint, or native ticker (via the ported `NATIVE_COINGECKO_IDS` map). Pure-crypto: never returns a fabricated price — a lookup failure throws. `getPricesBatch` fans out in parallel and isolates per-query failures (`{ ok: false, error }`) so one unpriceable token can't sink the batch, with results in input order. Also exports `isKnownNativePriceSymbol`, `symbolFromCoinGeckoId`, `coinGeckoIdToSymbol`, and the `NATIVE_COINGECKO_IDS` map. Ported from the mcp-ts `get_price` price-oracle.
+
+- [#834](https://github.com/vultisig/vultisig-sdk/pull/834) [`7d79b2d`](https://github.com/vultisig/vultisig-sdk/commit/7d79b2d1307873937957b9c8caf1886f01d70190) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.swap.astroport` — `buildAstroportSwap` quotes (read-only `simulate_swap_operations`) and builds an unsigned Astroport router `wasm_execute` envelope for Terra v2 (phoenix-1) in-chain swaps. Pure-crypto: never signs or broadcasts. Ported from mcp-ts. Also exports the helpers `assembleAstroportSwap`, `classifyAstroportAsset`, `computeAstroportMinReceive` and the `ASTROPORT_ROUTER` / `TERRA_LCD` / `TERRA_CHAIN_ID` constants.
+
+- [#819](https://github.com/vultisig/vultisig-sdk/pull/819) [`31eae40`](https://github.com/vultisig/vultisig-sdk/commit/31eae40e82516e192f11c80516b0da784aafe67b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.token.resolveContract` — on-chain token metadata probe (symbol /
+  decimals / name) for a contract or mint address, for long-tail tokens that
+  registry search misses. Supports ERC-20 (every EVM chain), CW20 (TerraClassic /
+  Terra / Osmosis / Kujira) and SPL (Solana). Reads metadata directly over RPC and
+  fails closed (never fabricates a symbol or decimals) when the address is not a
+  recognized token contract / mint. `packages/sdk/src/**` is outside the bundled-
+  changeset CI guard, so this changeset is added manually to publish the new
+  surface to consumers.
+
+- [#824](https://github.com/vultisig/vultisig-sdk/pull/824) [`60edbf4`](https://github.com/vultisig/vultisig-sdk/commit/60edbf43c4f8ab9928781adbd4e5d0f0fba6074c) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.prep.splTransfer` (`buildSplTransfer`): a pure-crypto, ATA-aware Solana SPL token-transfer instruction builder. Deterministically derives the sender + recipient Associated Token Accounts and builds an unsigned `transferChecked` instruction (legacy Token Program + Token-2022). Never signs and never broadcasts — the recent blockhash, recipient create-ATA, and signature stay on-device in `vault.sign`. Exported from the top level, `tools/prep`, and the React Native entry.
+
+- [#818](https://github.com/vultisig/vultisig-sdk/pull/818) [`0e2e2ab`](https://github.com/vultisig/vultisig-sdk/commit/0e2e2abb3bf312df92131fb997dbaa0802f19c79) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.balance.utxo` — UTXO native balance reads
+
+  New vault-free read primitive `getUtxoBalance(chain, address, options?)` for
+  Bitcoin, Litecoin, Dogecoin, Bitcoin-Cash, and Dash via the Blockchair
+  dashboards API (defaults to the Vultisig proxy). Returns base-unit satoshis
+  (string, no float precision loss), a fixed-8-decimal human balance, and the
+  chain ticker. Also exports `formatUtxoBalance` and `supportedUtxoBalanceChains`.
+
+  Ported from mcp-ts `get_utxo_balance` (0 SDK imports) as part of the
+  mcp-ts/backend -> SDK code-as-action consolidation.
+
+- [#823](https://github.com/vultisig/vultisig-sdk/pull/823) [`b9a8cc1`](https://github.com/vultisig/vultisig-sdk/commit/b9a8cc19738333bb42f5d20c6bf849692fec4801) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.prep.utxoConsolidate` (`prepareUtxoConsolidateTxFromKeys`): a pure-crypto,
+  vault-free prep builder that produces an UNSIGNED send-max-to-self UTXO consolidation
+  `KeysignPayload`. Sweeps a caller-supplied set of UTXOs into a single output back to the
+  same address (BTC / LTC / DOGE / BCH / DASH). No network IO, no signing, no broadcast —
+  `vault.sign()` stays on-device.
+
+- [#815](https://github.com/vultisig/vultisig-sdk/pull/815) [`f47f060`](https://github.com/vultisig/vultisig-sdk/commit/f47f0606223a0a1905ebb7745d311384488d4178) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.gas.utxoFeeRate(chain)` — a read-only UTXO fee-rate primitive
+  returning `{ chain, feeRate, feeRateUnit: 'sat/vB' }` for Bitcoin, Litecoin,
+  Dogecoin, Bitcoin-Cash (THORChain) and Dash (MayaChain). Sourced from the
+  `inbound_addresses` `gas_rate`; throws on a halted chain or non-positive rate
+  rather than emitting a zero-fee envelope. Zcash is intentionally unsupported
+  (ZIP-317 conventional fees, not sat/vB). Also exported from the React Native
+  entrypoint.
+
+### Patch Changes
+
+- [#866](https://github.com/vultisig/vultisig-sdk/pull/866) [`d4ba485`](https://github.com/vultisig/vultisig-sdk/commit/d4ba4854a358235a243d8f8bb2aed0680bbdbaea) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(sdk): defi follow-ups from merged-PR suggested changes
+
+  Three fixes across the DeFi calldata builders:
+
+  **sdk.defi.glif — BREAKING rename: `amount` -> `assetAmount` / `shareAmount`**
+  - `BuildGlifStakeParams.amount` -> `assetAmount` (ICNT asset units)
+  - `BuildGlifRedeemParams.amount` -> `shareAmount` (stICNT share units)
+  - Result fields `BuildGlifStakeResult.amount` -> `assetAmount`, `BuildGlifRedeemResult.amount` -> `shareAmount`
+  - Removes the ambiguity: stake inputs are ICNT (asset), redeem inputs are stICNT (shares)
+  - Tests updated to match
+
+  **sdk.defi.balancer — replace private-field reach-through with `ZERO_ADDRESS` sentinel**
+  - `buildBalancerV3SwapCalldata` previously reached into private SDK internals via
+    `(swap as unknown as { swap: { to: ... } }).swap.to` (always returned `undefined`)
+  - Replaced with explicit `ZERO_ADDRESS` sentinel for the required-but-ignored
+    `QueryOutputBase.to` field, matching the SDK's own documented intent
+  - Added post-`buildCall` assertion: throws if the returned router address is zero or
+    invalid, so a future SDK breakage surfaces immediately rather than silently
+    producing calldata targeting the zero address
+
+  **sdk.defi.arkis — re-throw transport errors from `resolvePoolKind`**
+  - The bare `catch {}` previously swallowed ALL errors (transport timeouts, rate-limit
+    errors, network outages) and mis-classified every pool as an Agreement
+  - Now only swallows `ContractFunctionRevertedError` (the expected "no `asset()`"
+    revert that signals a standard Agreement)
+  - Transport and RPC errors are re-thrown so callers can retry
+
+- [#870](https://github.com/vultisig/vultisig-sdk/pull/870) [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize native THORChain and MayaChain swap quote output amounts to destination coin base units before SDK quote formatting and near-zero validation.
+
+## 2.6.0
+
+### Minor Changes
+
+- [#857](https://github.com/vultisig/vultisig-sdk/pull/857) [`fbc5581`](https://github.com/vultisig/vultisig-sdk/commit/fbc558151bc60c5240f6b6721dfd66a0ddec23c9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.balancer.buildBalancerV3SwapCalldata` — a pure, unsigned Balancer v3 swap calldata builder under the new `sdk.defi.*` surface. It thinly wraps `@balancer/sdk` (viem-only, RN-safe) to encode the v3 BatchRouter `swapExactIn`/`swapExactOut` tx from an off-chain SOR quote, with consumer-injectable `userData` (default `0x`). No signing, no broadcast.
+
+- [#856](https://github.com/vultisig/vultisig-sdk/pull/856) [`ae45d06`](https://github.com/vultisig/vultisig-sdk/commit/ae45d068bc64f5b6d11b6c8a43c0cd5b21e0bb4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(sdk): add `sdk.defi.pendle` — UNSIGNED Pendle PT (Principal Token) buy/sell/redeem builders wrapping the Pendle Hosted SDK Convert REST API. Router target is allow-listed to Pendle Router V4, market/PT/underlying are trust-but-verified against the live active-market catalog, and the prerequisite ERC20 approve calldata is hand-encoded with strict bounds. Builds calldata only — never signs, never broadcasts. First protocol under the new `sdk.defi.*` namespace.
+
+- [#853](https://github.com/vultisig/vultisig-sdk/pull/853) [`a6ff6a4`](https://github.com/vultisig/vultisig-sdk/commit/a6ff6a49c2c0672af5c7afc06a7a97ac35e1cb10) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.threeJane` — the first protocol under the new `sdk.defi.*` surface. Builds the unsigned 2-step Ethereum transaction sequence (ERC-20 approve + `Helper.deposit`) to supply USDC into 3Jane and mint the senior `USD3` or staked junior `sUSD3` share. Build-only / pure-crypto: returns unsigned calldata, performs no network IO, never signs or broadcasts. Also exported from the React Native entry point.
+
+- [#858](https://github.com/vultisig/vultisig-sdk/pull/858) [`3043e1b`](https://github.com/vultisig/vultisig-sdk/commit/3043e1be5a869a83fb0946860b9e2d532eedf02f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `sdk.defi.arkis` — a lender-side **supply** builder for the Arkis protocol on Ethereum. Builds the unsigned 2-step sequence (ERC-20 `approve` → ERC-4626 / Agreement `deposit`) and returns the decoded transactions. Builds UNSIGNED calldata only — never signs, never broadcasts. Also surfaces `resolveArkisPoolKind` (optional on-chain `asset()` probe) and `parseArkisTokenAmount` (exact string-math base-unit parse), exposed via the new `sdk.defi` getter.
+
+## 2.5.1
+
+### Patch Changes
+
+- [#809](https://github.com/vultisig/vultisig-sdk/pull/809) [`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor native swap quote expiry and validate THORChain inbound vault addresses before broadcasting stale signed swaps.
+
+- [#808](https://github.com/vultisig/vultisig-sdk/pull/808) [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply native THORChain/Maya swap slippage tolerance to quote requests and signed payload limits so native swaps no longer use a zero minimum-output floor.
+
+## 2.5.0
+
+### Patch Changes
+
+- [#774](https://github.com/vultisig/vultisig-sdk/pull/774) [`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add scanAddress method for Blockaid EVM address reputation scanning
+
+- [#790](https://github.com/vultisig/vultisig-sdk/pull/790) [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Dogecoin Blockchair fee estimation with the app clients by using 25% of the reported baseline.
+
+- [#788](https://github.com/vultisig/vultisig-sdk/pull/788) [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Make `getUrlBaseDomain` resolve the registrable (eTLD+1) domain using the Public Suffix List instead of taking the last two hostname labels. Sites under multi-label public suffixes (`*.vercel.app`, `*.github.io`, `*.pages.dev`, `*.web.app`, `*.co.uk`, …) now resolve to distinct domains, so a connection authorized for one site is no longer treated as authorized for an unrelated sibling under the same suffix.
+
+- [#783](https://github.com/vultisig/vultisig-sdk/pull/783) [`dfd1cf3`](https://github.com/vultisig/vultisig-sdk/commit/dfd1cf3fdf9b650a2e70e8a72f751ef6e465bbbe) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the documented `@vultisig/sdk/electron/main` subpath in the published SDK package.
+
+## 2.4.7
+
+### Patch Changes
+
+- [#785](https://github.com/vultisig/vultisig-sdk/pull/785) [`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): rebrand native token Toncoin (TON) → Gram (GRAM)
+
+  The Open Network renamed its native token TON → GRAM (effective 2026-06-15).
+  Update the display fields of `chainFeeCoin[Chain.Ton]`: `ticker` `TON` → `GRAM`
+  and `logo` `ton` → `gram`. This is a cosmetic token rebrand only — the chain
+  identity (`Chain.Ton`), `priceProviderId` (`the-open-network`), and `decimals`
+  are unchanged, and there is no swap/migration. Patch-bumps `@vultisig/sdk` to
+  rebundle.
+
+## 2.4.6
+
+### Patch Changes
+
+- [#782](https://github.com/vultisig/vultisig-sdk/pull/782) [`9f9b0ec`](https://github.com/vultisig/vultisig-sdk/commit/9f9b0ecc66efbd003ed869a0ea7a2c29f85edef5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(qbtc): set QBTC Cosmos SDK chain ID to `qbtc` (was `qbtc-testnet`)
+
+  The SignDoc built by `QBTCHelper` now uses `qbtc` as the chain ID so signed
+  transactions match the live QBTC chain. Patch-bumps `@vultisig/sdk` to rebundle.
+
+## 2.4.5
+
+### Patch Changes
+
+- [#775](https://github.com/vultisig/vultisig-sdk/pull/775) [`fb6837b`](https://github.com/vultisig/vultisig-sdk/commit/fb6837b263c3c870f1a79e9c6011f27a1cc58f5d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add the original transaction hash to SwapKit tracking URLs so tracker links prefill correctly.
+
+- [#767](https://github.com/vultisig/vultisig-sdk/pull/767) [`ad14563`](https://github.com/vultisig/vultisig-sdk/commit/ad14563fb14358ff3efa96ed32e2304b8fc8d0ae) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(keysign): VULT staking (sVULT) keysign builders + generic EVM contract-call routing
+
+  Adds `keysign/vultStaking/build` (depositFor with an optional VULT→sVULT approval
+  prepended, requestUnstake, claim, cancelUnstake) for native VULT staking on
+  Ethereum.
+
+  Stake reuses the swap-with-approval flow: the payload coin is the VULT token so
+  the EVM signing-input resolver can attach an `erc20ApprovePayload`, and the
+  `depositFor` calldata is emitted as a generic contract call. The routing
+  decision (token coin + zero `toAmount` + `0x` memo + no swap) is extracted into a
+  shared `getIsGenericContractCall` predicate now consumed by the signing-input,
+  fee-quote, and Blockaid simulation/validation resolvers so they all target the
+  same on-chain call (fixes gas being estimated against — and Blockaid scanning —
+  a synthetic ERC-20 transfer instead of the real `depositFor`). Patch-bumps
+  `@vultisig/sdk` to rebundle.
+
+- [#773](https://github.com/vultisig/vultisig-sdk/pull/773) [`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Raise Zcash memo-send fees to the ZIP-317 conventional fee at plan time. WalletCore's `zip_0317` planner flat-sizes OP_RETURN and ignores `byteFee`, so memo sends planned one logical action short and were rejected by the network; the signing-input resolver now re-plans with `zip_0317` off and bumps `byteFee` until the fee clears.
+
+## 2.4.4
+
+### Patch Changes
+
+- [#753](https://github.com/vultisig/vultisig-sdk/pull/753) [`e988851`](https://github.com/vultisig/vultisig-sdk/commit/e98885119f18078a0dde1f1ebdbca20f842c9325) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail Cardano broadcasts before submission when the signed transaction TTL is expired or too close to expiry.
+
+- [#754](https://github.com/vultisig/vultisig-sdk/pull/754) [`35c48e3`](https://github.com/vultisig/vultisig-sdk/commit/35c48e3eac615d62697c9052f43a9dab918b94dd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route UTXO and Cardano broadcast timeouts through transaction hash verification before treating them as landed.
+
+## 2.4.3
+
+### Patch Changes
+
+- [#730](https://github.com/vultisig/vultisig-sdk/pull/730) [`a3859ab`](https://github.com/vultisig/vultisig-sdk/commit/a3859ab400ba02e05da73e23d57e3d261863d922) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Calculate Cardano send fees from WalletCore transaction body bytes instead of using a flat default.
+
+- [#729](https://github.com/vultisig/vultisig-sdk/pull/729) [`2092472`](https://github.com/vultisig/vultisig-sdk/commit/209247266141f4fb8f299e87a257aa00c1a1f2e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add buffered EVM swap gas limits so failed gas estimation no longer falls back to the raw calldata floor.
+
+## 2.4.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
+## 2.4.1
+
+### Patch Changes
+
+- [#766](https://github.com/vultisig/vultisig-sdk/pull/766) [`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(zcash): add trailing slash to branch-id RPC URL
+
+  The live ZIP-243 branch-id fetch POSTs to a bare `${rootApiUrl}/zcash`, which the
+  proxy now 301-redirects to `/zcash/`. Following a 301 downgrades POST→GET, so the
+  request lands as `GET /zcash/` → HTTP 405, breaking all Zcash signing on the
+  "Sign Transaction" screen. Add the trailing slash so the POST hits the working
+  endpoint directly (live-verified 200 with consensus.nextblock).
+
+## 2.4.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an external recipient for native + CowSwap swaps
+
+  `findSwapQuote` now accepts an optional `recipient` address. When set, the
+  swapped output is routed to that address via the native THORChain/MayaChain
+  memo `destination` and the CowSwap order `receiver`. Aggregators that would pay
+  the swap initiator (1inch, KyberSwap, LiFi, SwapKit) are skipped for
+  custom-recipient swaps so funds are never silently misrouted. When `recipient`
+  is omitted, routing and payout are unchanged.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131);
+  external recipient for the remaining aggregators is a follow-up.
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an explicit gas limit override for EVM swaps
+
+  `buildSwapKeysignPayload` now accepts an optional `gasLimitOverride` (units).
+  When set on an EVM swap it replaces the aggregator's estimated
+  `ethereumSpecific.gasLimit` (and the mirrored 1inch `tx.gas`), while the gas
+  price is still computed normally. Ignored for non-EVM chains and when omitted —
+  no behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support a custom slippage tolerance in findSwapQuote
+
+  `findSwapQuote` now accepts an optional `slippageTolerance` (in percent, e.g.
+  `0.5` = 0.5%). It is forwarded to the general aggregators that accept a slippage
+  override, each converted to that provider's native unit: 1inch and SwapKit
+  (percent), KyberSwap (basis points), and LiFi (fraction). CowSwap (RFQ limit
+  order) and the native THORChain/MayaChain protocols use their own protection
+  and ignore it. When omitted, every provider keeps its existing default — no
+  behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): validate recipient and slippage overrides in findSwapQuote
+
+  `findSwapQuote` now trims the optional `recipient` and treats empty/whitespace
+  strings as no recipient, so a blank value no longer gates off initiator-paying
+  aggregators or gets forwarded as a native `destination` / CowSwap `receiver`.
+  It also rejects an invalid `slippageTolerance` (negative, `NaN`, or non-finite)
+  up front with a `SwapError` instead of letting the bad value propagate into
+  every provider call.
+
+## 2.3.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
+- [#763](https://github.com/vultisig/vultisig-sdk/pull/763) [`e5b07fb`](https://github.com/vultisig/vultisig-sdk/commit/e5b07fbfc09f55af64025950078050388e7b080d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Populate THORChain custom Cosmos payload fees from SignAmino input fees.
+
 ## 2.3.5
 
 ### Patch Changes

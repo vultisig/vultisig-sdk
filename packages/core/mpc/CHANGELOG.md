@@ -1,5 +1,131 @@
 # @vultisig/core-mpc
 
+## 1.8.5
+
+### Patch Changes
+
+- Updated dependencies [[`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03)]:
+  - @vultisig/core-chain@2.17.8
+
+## 1.8.4
+
+### Patch Changes
+
+- [#809](https://github.com/vultisig/vultisig-sdk/pull/809) [`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor native swap quote expiry and validate THORChain inbound vault addresses before broadcasting stale signed swaps.
+
+- [#808](https://github.com/vultisig/vultisig-sdk/pull/808) [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply native THORChain/Maya swap slippage tolerance to quote requests and signed payload limits so native swaps no longer use a zero minimum-output floor.
+
+- Updated dependencies [[`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4), [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13)]:
+  - @vultisig/core-chain@2.17.7
+
+## 1.8.3
+
+### Patch Changes
+
+- Updated dependencies [[`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37), [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21), [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607)]:
+  - @vultisig/core-chain@2.17.6
+  - @vultisig/lib-utils@0.10.2
+
+## 1.8.2
+
+### Patch Changes
+
+- Updated dependencies [[`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349)]:
+  - @vultisig/core-chain@2.17.5
+
+## 1.8.1
+
+### Patch Changes
+
+- [#782](https://github.com/vultisig/vultisig-sdk/pull/782) [`9f9b0ec`](https://github.com/vultisig/vultisig-sdk/commit/9f9b0ecc66efbd003ed869a0ea7a2c29f85edef5) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(qbtc): set QBTC Cosmos SDK chain ID to `qbtc` (was `qbtc-testnet`)
+
+  The SignDoc built by `QBTCHelper` now uses `qbtc` as the chain ID so signed
+  transactions match the live QBTC chain. Patch-bumps `@vultisig/sdk` to rebundle.
+
+## 1.8.0
+
+### Minor Changes
+
+- [#767](https://github.com/vultisig/vultisig-sdk/pull/767) [`ad14563`](https://github.com/vultisig/vultisig-sdk/commit/ad14563fb14358ff3efa96ed32e2304b8fc8d0ae) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(keysign): VULT staking (sVULT) keysign builders + generic EVM contract-call routing
+
+  Adds `keysign/vultStaking/build` (depositFor with an optional VULT→sVULT approval
+  prepended, requestUnstake, claim, cancelUnstake) for native VULT staking on
+  Ethereum.
+
+  Stake reuses the swap-with-approval flow: the payload coin is the VULT token so
+  the EVM signing-input resolver can attach an `erc20ApprovePayload`, and the
+  `depositFor` calldata is emitted as a generic contract call. The routing
+  decision (token coin + zero `toAmount` + `0x` memo + no swap) is extracted into a
+  shared `getIsGenericContractCall` predicate now consumed by the signing-input,
+  fee-quote, and Blockaid simulation/validation resolvers so they all target the
+  same on-chain call (fixes gas being estimated against — and Blockaid scanning —
+  a synthetic ERC-20 transfer instead of the real `depositFor`). Patch-bumps
+  `@vultisig/sdk` to rebundle.
+
+### Patch Changes
+
+- [#775](https://github.com/vultisig/vultisig-sdk/pull/775) [`fb6837b`](https://github.com/vultisig/vultisig-sdk/commit/fb6837b263c3c870f1a79e9c6011f27a1cc58f5d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add the original transaction hash to SwapKit tracking URLs so tracker links prefill correctly.
+
+- [#773](https://github.com/vultisig/vultisig-sdk/pull/773) [`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Raise Zcash memo-send fees to the ZIP-317 conventional fee at plan time. WalletCore's `zip_0317` planner flat-sizes OP_RETURN and ignores `byteFee`, so memo sends planned one logical action short and were rejected by the network; the signing-input resolver now re-plans with `zip_0317` off and bumps `byteFee` until the fee clears.
+
+- Updated dependencies [[`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47)]:
+  - @vultisig/core-chain@2.17.4
+
+## 1.7.4
+
+### Patch Changes
+
+- Updated dependencies [[`e988851`](https://github.com/vultisig/vultisig-sdk/commit/e98885119f18078a0dde1f1ebdbca20f842c9325), [`35c48e3`](https://github.com/vultisig/vultisig-sdk/commit/35c48e3eac615d62697c9052f43a9dab918b94dd)]:
+  - @vultisig/core-chain@2.17.3
+
+## 1.7.3
+
+### Patch Changes
+
+- [#730](https://github.com/vultisig/vultisig-sdk/pull/730) [`a3859ab`](https://github.com/vultisig/vultisig-sdk/commit/a3859ab400ba02e05da73e23d57e3d261863d922) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Calculate Cardano send fees from WalletCore transaction body bytes instead of using a flat default.
+
+- [#729](https://github.com/vultisig/vultisig-sdk/pull/729) [`2092472`](https://github.com/vultisig/vultisig-sdk/commit/209247266141f4fb8f299e87a257aa00c1a1f2e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add buffered EVM swap gas limits so failed gas estimation no longer falls back to the raw calldata floor.
+
+## 1.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62)]:
+  - @vultisig/core-chain@2.17.2
+
+## 1.7.1
+
+### Patch Changes
+
+- Updated dependencies [[`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c)]:
+  - @vultisig/core-chain@2.17.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an explicit gas limit override for EVM swaps
+
+  `buildSwapKeysignPayload` now accepts an optional `gasLimitOverride` (units).
+  When set on an EVM swap it replaces the aggregator's estimated
+  `ethereumSpecific.gasLimit` (and the mirrored 1inch `tx.gas`), while the gas
+  price is still computed normally. Ignored for non-EVM chains and when omitted —
+  no behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- Updated dependencies [[`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d), [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af), [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0)]:
+  - @vultisig/core-chain@2.17.0
+
+## 1.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd)]:
+  - @vultisig/core-chain@2.16.6
+
 ## 1.6.9
 
 ### Patch Changes

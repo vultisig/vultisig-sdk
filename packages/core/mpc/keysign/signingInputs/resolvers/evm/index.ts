@@ -17,6 +17,7 @@ import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainS
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
 import { toTwAddress } from '../../../tw/toTwAddress'
+import { getIsGenericContractCall } from '../../../utils/getIsGenericContractCall'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { SigningInputsResolver } from '../../resolver'
 import { getErc20ApproveSigningInput } from './erc20'
@@ -49,6 +50,13 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
 
+  // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
+  // is a generic contract call (e.g. staking depositFor, whose token amount lives
+  // in the calldata) rather than a plain ERC-20 transfer: send the calldata to
+  // `toAddress` instead of building a transfer to `coin.contractAddress`. Shared
+  // with the fee-quote and Blockaid resolvers so they target the same call.
+  const isGenericContractCall = getIsGenericContractCall(keysignPayload)
+
   const getToAddress = () => {
     if (swapPayload) {
       return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
@@ -58,7 +66,7 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
       })
     }
 
-    if (coin.isNativeToken) {
+    if (coin.isNativeToken || isGenericContractCall) {
       return keysignPayload.toAddress
     }
 
@@ -133,6 +141,15 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
         transfer: TW.Ethereum.Proto.Transaction.Transfer.create({
           amount,
           data: keysignPayload.memo ? memoToTxData(shouldBePresent(keysignPayload.memo)) : undefined,
+        }),
+      }
+    }
+
+    if (isGenericContractCall) {
+      return {
+        contractGeneric: TW.Ethereum.Proto.Transaction.ContractGeneric.create({
+          amount,
+          data: toEvmTxData(shouldBePresent(keysignPayload.memo)),
         }),
       }
     }

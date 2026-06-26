@@ -102,7 +102,24 @@ describe('Noon USDC vault transaction planning', () => {
 })
 
 describe('Noon API parsing', () => {
-  it('reads 7d net APY for the configured loan address', async () => {
+  it('reads 7d net APY for the configured loan address from the current API shape', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: {
+              '7d': { net: { apy_pct: '11.5512' } },
+            },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(11.5512)
+  })
+
+  it('keeps reading 7d net APY from the legacy API shape', async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         vaults: [
@@ -117,6 +134,54 @@ describe('Noon API parsing', () => {
     await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(11.5512)
   })
 
+  it('falls back to legacy APY data when current-shape data is absent', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: {},
+            '7d': { net: { apy_pct: '10.25' } },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(10.25)
+  })
+
+  it('falls back to legacy APY data when current-shape data is not an object', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: null,
+            '7d': { net: { apy_pct: '9.75' } },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(9.75)
+  })
+
+  it('falls back to legacy APY data when ir["7d"] is present but null (partial-migration window)', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        vaults: [
+          {
+            loan_address: noonUsdcVaultConfig.loanAddress,
+            ir: { '7d': null },
+            '7d': { net: { apy_pct: '8.0' } },
+          },
+        ],
+      })
+    )
+
+    await expect(fetchNoonUsdcVaultApy(fetchImpl)).resolves.toBe(8.0)
+  })
+
   it('combines APY and Accountable TVL metrics', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes('back.noon.capital')) {
@@ -124,7 +189,9 @@ describe('Noon API parsing', () => {
           vaults: [
             {
               loan_address: noonUsdcVaultConfig.loanAddress,
-              '7d': { net: { apy_pct: '11.5512' } },
+              ir: {
+                '7d': { net: { apy_pct: '11.5512' } },
+              },
             },
           ],
         })

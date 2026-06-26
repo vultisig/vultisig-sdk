@@ -255,9 +255,17 @@ describe('SF + CR2 — pendingToolResults catch-block contract', () => {
   })
 })
 
-describe('AgentClient SSE parser — clientExecuted routing', () => {
-  function makeClient(): AgentClient {
+describe('AgentClient SSE parser — registry-based client-side tool routing', () => {
+  // The backend's V1ToolInputAvailable frame carries NO `clientExecuted`
+  // discriminator (the flag was removed). The client must identify client-side
+  // tools via its own registry (mirroring the app's toolUIRegistry), injected
+  // by the session via setClientSideToolNames. These names mirror
+  // CLIENT_SIDE_TOOL_DISPATCH.
+  const CLIENT_SIDE_NAMES = new Set(['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book'])
+
+  function makeClient(registry: Set<string> | null = CLIENT_SIDE_NAMES): AgentClient {
     const c = new AgentClient('http://localhost:8084')
+    if (registry) c.setClientSideToolNames(registry)
     return c
   }
 
@@ -275,22 +283,38 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     ;(client as any).handleSSEEvent('', eventJson, result, callbacks, toolNameByCallId)
   }
 
-  it('fires onClientSideToolCall when clientExecuted=true on tool-input-available', () => {
-    const client = makeClient()
+  // Representative CURRENT-backend frame: NO clientExecuted field.
+  const currentBackendVaultCoinEvent = JSON.stringify({
+    type: 'tool-input-available',
+    toolCallId: 'c1',
+    toolName: 'vault_coin',
+    input: { tokens: [{ chain: 'Base', ticker: 'USDC' }] },
+  })
+
+  // BEFORE/AFTER differential — the core of the fix. Against a current-backend
+  // frame (no clientExecuted), the OLD strict `parsed.clientExecuted === true`
+  // check NEVER dispatched (the 4 client-side tools were dead). With the
+  // registry injected, the SAME frame now dispatches by toolName membership.
+  it('PRE-FIX repro: a current-backend frame does NOT dispatch when no registry is set', () => {
+    // No registry injected ⇒ no membership ⇒ no dispatch. This is the dead
+    // state the old clientExecuted gate produced against the live backend.
+    const client = makeClient(null)
     const onClientSideToolCall = vi.fn()
     const onToolProgress = vi.fn()
 
-    feedEvent(
-      client,
-      JSON.stringify({
-        type: 'tool-input-available',
-        toolCallId: 'c1',
-        toolName: 'vault_coin',
-        input: { tokens: [{ chain: 'Base', ticker: 'USDC' }] },
-        clientExecuted: true,
-      }),
-      { onClientSideToolCall, onToolProgress }
-    )
+    feedEvent(client, currentBackendVaultCoinEvent, { onClientSideToolCall, onToolProgress })
+
+    expect(onClientSideToolCall).not.toHaveBeenCalled()
+    // The tool still degrades to display-only progress (the silent regression).
+    expect(onToolProgress).toHaveBeenCalled()
+  })
+
+  it('POST-FIX: the SAME current-backend frame DOES dispatch via registry match', () => {
+    const client = makeClient() // registry injected (as session does)
+    const onClientSideToolCall = vi.fn()
+    const onToolProgress = vi.fn()
+
+    feedEvent(client, currentBackendVaultCoinEvent, { onClientSideToolCall, onToolProgress })
 
     expect(onClientSideToolCall).toHaveBeenCalledOnce()
     expect(onClientSideToolCall).toHaveBeenCalledWith('c1', 'vault_coin', {
@@ -299,7 +323,22 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     expect(onToolProgress).toHaveBeenCalled()
   })
 
-  it('does NOT fire onClientSideToolCall when clientExecuted is absent (MCP tool)', () => {
+  it('dispatches every registry tool from a current-backend frame (all 4 tools alive again)', () => {
+    for (const toolName of CLIENT_SIDE_NAMES) {
+      const client = makeClient()
+      const onClientSideToolCall = vi.fn()
+      feedEvent(
+        client,
+        JSON.stringify({ type: 'tool-input-available', toolCallId: 'c', toolName, input: { action: 'add' } }),
+        { onClientSideToolCall }
+      )
+      expect(onClientSideToolCall, `expected ${toolName} to dispatch`).toHaveBeenCalledWith('c', toolName, {
+        action: 'add',
+      })
+    }
+  })
+
+  it('does NOT fire for a non-client-side toolName (server-side / MCP) — no over-trigger', () => {
     const client = makeClient()
     const onClientSideToolCall = vi.fn()
     const onToolProgress = vi.fn()
@@ -319,28 +358,28 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
     expect(onToolProgress).toHaveBeenCalled()
   })
 
-  it('does NOT fire onClientSideToolCall when clientExecuted is non-true (malformed)', () => {
+  it('ignores a stray clientExecuted flag — identification is registry-only now', () => {
+    // Even if some backend re-introduced the flag, a non-registry tool must
+    // NOT dispatch (registry is the sole source of truth).
     const client = makeClient()
     const onClientSideToolCall = vi.fn()
 
-    for (const v of ['true', 1, 'yes', {}]) {
-      feedEvent(
-        client,
-        JSON.stringify({
-          type: 'tool-input-available',
-          toolCallId: 'c',
-          toolName: 'vault_coin',
-          input: {},
-          clientExecuted: v,
-        }),
-        { onClientSideToolCall }
-      )
-    }
+    feedEvent(
+      client,
+      JSON.stringify({
+        type: 'tool-input-available',
+        toolCallId: 'c',
+        toolName: 'polymarket_search',
+        input: {},
+        clientExecuted: true,
+      }),
+      { onClientSideToolCall }
+    )
 
     expect(onClientSideToolCall).not.toHaveBeenCalled()
   })
 
-  it('does NOT fire onClientSideToolCall on tool-input-start frames', () => {
+  it('does NOT fire on tool-input-start frames (only tool-input-available dispatches)', () => {
     const client = makeClient()
     const onClientSideToolCall = vi.fn()
 
@@ -350,7 +389,6 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
         type: 'tool-input-start',
         toolCallId: 'c',
         toolName: 'vault_coin',
-        clientExecuted: true, // even if present, only tool-input-available should trigger dispatch
       }),
       { onClientSideToolCall }
     )
@@ -369,7 +407,6 @@ describe('AgentClient SSE parser — clientExecuted routing', () => {
         toolCallId: 'c',
         toolName: 'vault_coin',
         input: null,
-        clientExecuted: true,
       }),
       { onClientSideToolCall }
     )
@@ -475,6 +512,35 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect(data.pm_order_ref).toBe('ref-fb415704')
     // The executor's own result fields ride along untouched.
     expect((data.signatures as unknown[]).length).toBe(2)
+  })
+
+  it('echoes pm_batch_ref (+ __pm_auto_submit_batch) for Polymarket BATCH auto-submit', async () => {
+    // BATCH approvals carry a bare pm_batch_ref (no __ prefix) plus the
+    // __pm_auto_submit_batch flag. agent-backend reads ar.Data["pm_batch_ref"]
+    // to dispatch submit_deposit_wallet_batch; if the echo loop drops it,
+    // BATCH approvals sign but never auto-submit.
+    const batchInput = {
+      payloads: [
+        { id: 'order', primaryType: 'Order', domain: {}, types: {}, message: {}, chain: 'Polygon' },
+        { id: 'auth', primaryType: 'ClobAuth', domain: {}, types: {}, message: {}, chain: 'Ethereum' },
+      ],
+      pm_batch_ref: 'batch-ref-789',
+      __pm_auto_submit_batch: true,
+    }
+    // Deliberately OMIT pm_batch_ref from the executor result so the only way
+    // it can reach recent.data is the session input-echo loop under test. If
+    // the mock pre-seeded it, this assertion would pass even with the echo
+    // condition reverted (tautology). Mirrors the bare-result pattern below.
+    const results = await dispatch(batchInput, {
+      signatures: [{ id: 'order', signature: '0xorder' }],
+      auto_submit: true,
+    })
+
+    const data = results[0].data!
+    // bare pm_batch_ref survives the echo loop...
+    expect(data.pm_batch_ref).toBe('batch-ref-789')
+    // ...and the __-prefixed batch flag rides through on the __ branch.
+    expect(data.__pm_auto_submit_batch).toBe(true)
   })
 
   it('does NOT echo non-marker input keys (payloads stay out of the result)', async () => {

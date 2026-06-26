@@ -10,8 +10,9 @@
 import * as readline from 'node:readline'
 
 import { AgentErrorCode, normalizeAgentError } from './agentErrors'
+import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { PipeInputCommand, PipeOutputEvent, Suggestion, UICallbacks } from './types'
+import type { PipeInputCommand, PipeOutputEvent, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export class PipeInterface {
   private session: AgentSession
@@ -55,7 +56,11 @@ export class PipeInterface {
         type: 'history',
         messages: history
           .filter(m => m.content_type !== 'action_result')
-          .map(m => ({ role: m.role, content: m.content, created_at: m.created_at })),
+          .map(m => ({
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          })),
       })
     }
 
@@ -158,22 +163,30 @@ export class PipeInterface {
         this.emit({ type: 'assistant', content })
       },
 
+      onBalanceSummary: (card: BalanceSummaryCard) => {
+        this.emit({ type: 'balance_summary', card })
+      },
+
       onSuggestions: (suggestions: Suggestion[]) => {
         this.emit({ type: 'suggestions', suggestions })
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
         this.emit({
           type: 'tx_status',
           tx_hash: txHash,
           chain,
-          status: status as 'pending' | 'confirmed' | 'failed',
+          status,
           explorer_url: explorerUrl,
         })
       },
 
       onError: (message: string, code: AgentErrorCode) => {
         this.emit({ type: 'error', message, code })
+      },
+
+      onReconnecting: () => {
+        this.emit({ type: 'reconnecting' })
       },
 
       onDone: () => {
@@ -185,7 +198,11 @@ export class PipeInterface {
         return new Promise(resolve => {
           this.pendingPasswordResolve = resolve
           // Signal that password is needed
-          this.emit({ type: 'error', message: 'PASSWORD_REQUIRED', code: AgentErrorCode.PASSWORD_REQUIRED })
+          this.emit({
+            type: 'error',
+            message: 'PASSWORD_REQUIRED',
+            code: AgentErrorCode.PASSWORD_REQUIRED,
+          })
         })
       },
 

@@ -17,10 +17,18 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
-import { AgentClient } from './client'
+import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
+import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
-import { AgentExecutor } from './executor'
-import type { AgentConfig, ConversationMessage, MessageContext, RecentAction, UICallbacks } from './types'
+import { AgentExecutor, resolveChain } from './executor'
+import type {
+  AgentConfig,
+  ConversationMessage,
+  MessageContext,
+  RecentAction,
+  TxReadyPayload,
+  UICallbacks,
+} from './types'
 
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
 // reached via tx_ready synthesis (not a registry tool name) but uses the
@@ -50,6 +58,20 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
+// Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
+// On a dropped SSE stream the session polls /messages/since this many times,
+// this far apart, for the assistant message the detached backend persisted.
+const RECOVERY_POLL_INTERVAL_MS = 2000
+const RECOVERY_MAX_POLLS = 90
+
+// Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+// means "broadcast accepted" — the tx can still revert, expire, or be dropped.
+// After broadcast the session polls vault.getTxStatus until the tx reaches a
+// final state, then emits `confirmed`/`failed` (or `timeout` when the budget is
+// exhausted). Ceiling ≈ interval × (maxPolls − 1) ≈ 3s × 39 ≈ 117s.
+const TX_CONFIRM_POLL_INTERVAL_MS = 3000
+const TX_CONFIRM_MAX_POLLS = 40
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -63,12 +85,25 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Disconnect-recovery poll cadence — instance fields so tests can drive the
+  // poll loop without real 2s waits.
+  private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
+  private recoveryMaxPolls = RECOVERY_MAX_POLLS
+  // Post-broadcast confirmation poll cadence — instance fields so tests can
+  // drive the loop without real waits.
+  private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
+  private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
+    // Registry-based client-side tool identification: tell the client which
+    // tools the CLI executes locally so a `tool-input-available` frame is
+    // dispatched on toolName membership (mirroring the app's toolUIRegistry),
+    // not on a `clientExecuted` wire flag the backend no longer sends.
+    this.client.setClientSideToolNames(new Set(Object.keys(CLIENT_SIDE_TOOL_DISPATCH)))
     if (config.profile) {
       this.client.setProfile(config.profile)
     }
@@ -257,6 +292,12 @@ export class AgentSession {
     const request: any = {
       public_key: this.publicKey,
       context: this.cachedContext ? { ...this.cachedContext } : {},
+      // Advertise the card surfaces the CLI can render. Without this the backend
+      // takes the legacy path and instructs the model to echo card_payload JSON
+      // verbatim into message content (raw JSON in the terminal). With it, the
+      // backend emits a typed data-balance_summary SSE part and the model
+      // narrates. See cards.ts / backend types.go SupportedSurfaces.
+      supported_surfaces: [...CLI_SUPPORTED_SURFACES],
     }
 
     // Signal to backend that an AI agent is calling (adjusts prompt for structured output)
@@ -282,6 +323,12 @@ export class AgentSession {
 
     // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
     let serverTxStoredFromStream = 0
+    // Whether a balance_summary card was rendered from the SSE data part this
+    // turn. When true, the message-content fallback still runs to STRIP any
+    // leftover echoed JSON from the displayed text, but does not render a second
+    // card (guards against a misbehaving backend emitting both the typed part
+    // and a verbatim echo).
+    let balanceCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -326,6 +373,13 @@ export class AgentSession {
           if (this.config.password) {
             this.executor.setPassword(this.config.password)
           }
+        }
+      },
+      onBalanceSummary: (raw: unknown) => {
+        const card = parseBalanceSummaryEnvelope(raw)
+        if (card) {
+          balanceCardRendered = true
+          ui.onBalanceSummary?.(card)
         }
       },
       onMessage: (_msg: any) => {
@@ -378,10 +432,27 @@ export class AgentSession {
       await Promise.all(pendingDispatches)
     }
 
+    // Mid-turn disconnect recovery: the SSE stream dropped before the backend
+    // delivered the final assistant message. The backend keeps processing on a
+    // detached context and persists the answer (+ any tx_ready card), so poll
+    // /messages/since to recover what the dropped stream missed. Bounded so a
+    // backend that never persists can't hang the turn. `onTxReady` reuses the
+    // same callback the live stream uses, so a recovered tx_ready flows through
+    // the identical confirm/sign gate below.
+    if (streamResult.disconnected && !streamResult.message) {
+      ui.onReconnecting?.()
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
+    }
+
     // Final message event wins over streamed deltas (which may be partial).
     const responseText = streamResult.message?.content || streamResult.fullText || ''
 
-    const displayText = stripLeakedToolCallTags(responseText)
+    let displayText = stripLeakedToolCallTags(responseText)
+
+    if (displayText) {
+      displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
+    }
+
     if (displayText) {
       ui.onAssistantMessage(displayText)
     }
@@ -406,12 +477,16 @@ export class AgentSession {
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
-      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it.
+      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
+      // then poll for the final on-chain outcome (audit F1) so a headless caller
+      // learns confirmed/failed/timeout instead of treating broadcast as success.
       if (recent.success && recent.data) {
         const txHash = recent.data.tx_hash as string | undefined
         const chain = recent.data.chain as string | undefined
         const explorerUrl = recent.data.explorer_url as string | undefined
-        if (txHash) ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+        if (txHash) {
+          await this.emitAndConfirmTx(txHash, chain, explorerUrl, depth, ui)
+        }
       }
       await this.processMessageLoop(null, ui, depth + 1)
       return
@@ -424,6 +499,262 @@ export class AgentSession {
     }
 
     ui.onDone()
+  }
+
+  /**
+   * Recover a turn whose SSE stream dropped before delivering the final
+   * assistant message. Polls /messages/since (server-clock anchored via
+   * X-Server-Now) until the persisted assistant message lands or the bounded
+   * budget is exhausted. On success it patches `streamResult.message` so the
+   * normal downstream flow surfaces the answer, and replays any persisted
+   * `data-tx_ready` part through `onTxReady` so a recovered signable card hits
+   * the same confirm/sign gate as a live one.
+   */
+  private async recoverDisconnectedTurn(
+    streamResult: SSEStreamResult,
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
+  ): Promise<void> {
+    if (!this.conversationId) return
+
+    // Prefer the server clock (X-Server-Now, epoch ms); fall back to a slightly
+    // back-dated local clock so a missing header can't skew the anchor past the
+    // just-persisted message.
+    //
+    // Fund-safety: the local-clock fallback is only trustworthy enough to
+    // recover the *text* answer. Under clock skew between rapid consecutive
+    // turns, a back-dated local anchor can reach back far enough that
+    // /messages/since returns a PRIOR turn's assistant row; replaying that
+    // row's `data-tx_ready` would route an already-superseded transaction into
+    // the sign gate (and auto-broadcast it under --yes). So signable cards are
+    // replayed only when the anchor came from the server clock — which reliably
+    // excludes earlier turns. A stale recovered *text* answer is at worst a
+    // cosmetic glitch; a stale recovered *transaction* is not.
+    const serverAnchor = serverNowToIso(streamResult.serverNow)
+    const since = serverAnchor ?? new Date(Date.now() - 2000).toISOString()
+    const replaySignableCards = serverAnchor !== null
+    let cursor: string | undefined
+
+    for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
+      let resp
+      try {
+        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+      } catch (err: any) {
+        if (this.config.verbose) {
+          process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+        await this.recoverySleep()
+        continue
+      }
+
+      // Advance the opaque cursor so subsequent polls never re-scan or skip ties.
+      if (resp.cursor) cursor = resp.cursor
+
+      // The detached backend writes the assistant message last; take the newest
+      // assistant row that actually carries content or a recovered card. Newest
+      // (not oldest) is deliberate: a single turn can persist several assistant
+      // rows (clarifier / fast-path ack, then the final answer), and we want the
+      // final one — oldest-after-anchor would surface an early clarifier instead.
+      //
+      // Fund-safety cross-repo invariant: this "newest qualifying row" is only
+      // safe to route to the sign gate because no concurrent writer persists an
+      // *executable* tx_ready (full txArgs/send_tx/swap_tx) into a live
+      // conversation during the recovery window. The single concurrent writer
+      // today — the scheduler — persists an inert `{ proposal_id }` sidecar that
+      // `storeServerTransaction` rejects (no tx envelope → returns false → never
+      // signed). If a future background path ever persists an executable
+      // tx_ready into a shared conversation, this selection + the server-anchor
+      // gate would route it straight to the signer (auto-broadcast under --yes);
+      // such a writer must scope its conversation or this must filter by turn.
+      const assistant = [...resp.messages]
+        .reverse()
+        .find(m => m.role === 'assistant' && (!!m.content || hasTxReadyPart(m.parts)))
+      if (assistant) {
+        if (this.config.verbose) {
+          process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
+        }
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
+        return
+      }
+
+      await this.recoverySleep()
+    }
+
+    if (this.config.verbose) {
+      process.stderr.write(`[session] recovery exhausted after ${this.recoveryMaxPolls} polls; turn answer lost\n`)
+    }
+  }
+
+  /** Sleep between recovery polls. Separate method so tests can stub it out. */
+  private recoverySleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.recoveryPollIntervalMs))
+  }
+
+  /**
+   * Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+   * means "broadcast accepted"; the tx can still revert, expire, or be dropped,
+   * so a headless caller that stops at `pending` may mark a later-reverted
+   * operation complete. Poll vault.getTxStatus until the tx reaches a final
+   * state and emit the matching lifecycle status (`confirmed`/`failed`), or
+   * `timeout` when the bounded poll budget is exhausted (the tx may still
+   * confirm later — callers can re-check with `vultisig tx-status`).
+   *
+   * Transient RPC/network errors are treated as "not final yet" and retried
+   * until the budget is spent. Best-effort and non-fatal: if the chain can't be
+   * resolved or the vault doesn't expose getTxStatus, the caller's already-
+   * emitted `pending` status stands and this returns quietly.
+   *
+   * Scoped to headless callers (ask/pipe) that need machine-readable finality.
+   * The interactive TUI already shows `pending` + an explorer link immediately
+   * and has the dedicated `vultisig tx-status` command, so blocking its prompt
+   * for the full poll budget would be a UX regression the audit didn't scope.
+   * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
+   * is interruptible.
+   *
+   * The caller only invokes this at message-loop depth 0 (see the call site):
+   * inside a multi-turn tool loop the broadcast result already drives the next
+   * turn, so blocking here would stack the poll budget per leg without feeding
+   * the server any extra signal. Those deeper legs keep their honest `pending`.
+   */
+  private async emitAndConfirmTx(
+    txHash: string,
+    chain: string | undefined,
+    explorerUrl: string | undefined,
+    depth: number,
+    ui: UICallbacks
+  ): Promise<void> {
+    ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+    // Only block on confirmation at the top of the loop (depth 0) — the
+    // common headless ask/pipe single-tx case, where the command should
+    // wait for finality before returning. Inside a multi-turn tool loop
+    // (depth > 0) the broadcast result is already queued on
+    // pendingToolResults (pushed above) and is what drives the server's
+    // next turn; the confirmation status is never fed back to the server,
+    // so blocking the recursion here buys no correctness — it would only
+    // stack up to the full poll budget (~117s) per leg, a latency cliff
+    // for back-to-back/batched txs. Those legs still emit an honest
+    // `pending` (re-checkable later via `vultisig tx-status`).
+    if (depth === 0) {
+      await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+    }
+  }
+
+  private async confirmBroadcastedTx(
+    txHash: string,
+    chainName: string | undefined,
+    explorerUrl: string | undefined,
+    ui: UICallbacks
+  ): Promise<void> {
+    if (!this.config.askMode && !this.config.viaAgent) return
+
+    const chain = resolveChain(chainName ?? '')
+    // Call the SDK's typed `VaultBase.getTxStatus` directly (no `as any`) so a
+    // rename or signature drift on it fails this build — the cast previously
+    // swallowed that. The `typeof` guard stays runtime-meaningful: the unit-test
+    // harness passes a minimal `this` whose vault may omit getTxStatus, and we
+    // also skip chains the SDK can't resolve. (`?.` is redundant at the type
+    // level since `this.vault: VaultBase`, but guards that stub at runtime.)
+    if (!chain || typeof this.vault?.getTxStatus !== 'function') return
+
+    for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
+      if (this.abortController?.signal?.aborted) return
+      try {
+        // TxStatusResult.status is the SDK's exhaustive union
+        // `'pending' | 'success' | 'error'`. Only the two terminal states
+        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // polling until the budget is spent and we emit `timeout` below — a safe
+        // default since the tx may still confirm later.
+        const result = await this.vault.getTxStatus({ chain, txHash })
+        if (result.status === 'success') {
+          ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          return
+        }
+        if (result.status === 'error') {
+          ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          return
+        }
+      } catch (err: any) {
+        // Transient (network/RPC) — keep polling until the budget is spent.
+        if (this.config.verbose) {
+          process.stderr.write(`[session] tx confirm poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+      }
+      // No sleep after the final poll — emit timeout without an extra interval.
+      if (attempt < this.txConfirmMaxPolls - 1) await this.txConfirmSleep()
+    }
+
+    if (this.abortController?.signal?.aborted) return
+
+    if (this.config.verbose) {
+      process.stderr.write(
+        `[session] tx ${txHash} not confirmed within ${this.txConfirmMaxPolls} polls; emitting timeout\n`
+      )
+    }
+    ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+  }
+
+  /** Sleep between confirmation polls. Separate method so tests can stub it out. */
+  private txConfirmSleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.txConfirmPollIntervalMs))
+  }
+
+  /**
+   * Fold a recovered assistant message back into the live stream result: the
+   * authoritative message wins over any partial deltas, and any persisted
+   * `data-tx_ready` part is replayed through the live tx_ready callback so the
+   * card flows through the same confirm/sign gate.
+   *
+   * `replaySignableCards` gates the tx_ready replay: it is false when the
+   * recovery anchor was the local-clock fallback (no X-Server-Now), where a
+   * recovered card cannot be proven to belong to the current turn. See
+   * recoverDisconnectedTurn — a stale tx_ready must never reach the signer.
+   */
+  private applyRecoveredMessage(
+    msg: ConversationMessage,
+    streamResult: SSEStreamResult,
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    replaySignableCards: boolean,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
+  ): void {
+    streamResult.message = msg
+    for (const part of msg.parts ?? []) {
+      // Balance-summary cards are read-only display, so replay them
+      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // recovered balance card is at worst cosmetic (the live path renders the
+      // same data); only a stale tx_ready is a fund-safety concern. Without this
+      // a balance query whose stream dropped mid-turn recovers the text answer
+      // but silently loses the card.
+      if (part.type === 'data-balance_summary' && part.data) {
+        onBalanceSummary?.(part.data)
+        continue
+      }
+      // Signable cards stay gated: a stale tx_ready must never reach the signer
+      // (see recoverDisconnectedTurn's server-anchor rationale).
+      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
+        const tx = part.data as TxReadyPayload
+        streamResult.transactions.push(tx)
+        onTxReady?.(tx)
+      }
+    }
+  }
+
+  /**
+   * Legacy-path fallback for echoed balance_summary cards. If the backend
+   * ignored supported_surfaces (older build) and the model echoed a
+   * card_payload verbatim into the message content, pretty-render it instead
+   * of dumping raw JSON. The extractor runs even when the SSE card already
+   * fired this turn — a misbehaving backend could emit BOTH the typed part and
+   * an echoed blob, so we always STRIP the leftover JSON from the displayed
+   * text; we only render the card when one wasn't already rendered (no
+   * double-render). Returns the text to display with any JSON blob stripped.
+   */
+  private renderEchoedBalanceCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractBalanceSummaryFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onBalanceSummary?.(extracted.card)
+    }
+    return extracted.remainingText
   }
 
   /**
@@ -496,7 +827,10 @@ export class AgentSession {
         const failure: RecentAction = {
           tool: toolName,
           success: false,
-          data: { error: 'Password not provided', code: AgentErrorCode.PASSWORD_REQUIRED },
+          data: {
+            error: 'Password not provided',
+            code: AgentErrorCode.PASSWORD_REQUIRED,
+          },
         }
         ui.onToolCall(toolCallId, toolName, input)
         ui.onToolResult(
@@ -565,11 +899,14 @@ export class AgentSession {
       recent = { tool: toolName, success: false, data: { error: message } }
     }
 
-    // Echo protocol markers (__*, pm_order_ref) back so server-side
-    // handlers like autoSubmitPolymarketOrder can find them.
+    // Echo protocol markers (__*, pm_order_ref, pm_batch_ref) back so
+    // server-side handlers like autoSubmitPolymarketOrder and the batch
+    // auto-submit (submit_deposit_wallet_batch) can find them. pm_batch_ref
+    // has no __ prefix and isn't the order ref, so it must be named here or
+    // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
     for (const key of Object.keys(input)) {
-      if (key.startsWith('__') || key === 'pm_order_ref') {
+      if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
     }
@@ -633,6 +970,24 @@ export function stripLeakedToolCallTags(text: string): string {
     .replace(/<\/?minimax:tool_call>/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/**
+ * Convert an X-Server-Now header (epoch milliseconds as a string) into an
+ * RFC3339 timestamp for the /messages/since bootstrap anchor. Returns null
+ * when the header is absent or unparseable so the caller can fall back to a
+ * local-clock anchor.
+ */
+export function serverNowToIso(serverNow: string | null): string | null {
+  if (!serverNow) return null
+  const ms = Number(serverNow)
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return new Date(ms).toISOString()
+}
+
+/** True if any message part is a persisted `data-tx_ready` signable card. */
+function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
+  return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
 }
 
 // ============================================================================

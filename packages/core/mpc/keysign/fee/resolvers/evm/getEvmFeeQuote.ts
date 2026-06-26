@@ -6,6 +6,7 @@ import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxP
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
+import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIsGenericContractCall'
 import { getKeysignAmount } from '@vultisig/core-mpc/keysign/utils/getKeysignAmount'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -18,6 +19,11 @@ import { encodeFunctionData, erc20Abi } from 'viem'
 import { publicActionsL2 } from 'viem/zksync'
 
 const baseFeeMultiplier = (value: bigint) => (value * 15n) / 10n
+const dataTxGasLimitBufferNumerator = 3n
+const dataTxGasLimitBufferDenominator = 2n
+
+const addDataTxGasLimitBuffer = (value: bigint) =>
+  (value * dataTxGasLimitBufferNumerator + dataTxGasLimitBufferDenominator - 1n) / dataTxGasLimitBufferDenominator
 
 type EvmFeeQuote = {
   gasLimit: bigint
@@ -44,15 +50,23 @@ export const getEvmFeeQuote = async ({
   const amount = getKeysignAmount(keysignPayload)
   const receiver = keysignPayload.toAddress
   const data = keysignPayload.memo ? formatDataToHex(keysignPayload.memo) : undefined
+  const swapPayload = getKeysignSwapPayload(keysignPayload)
+  // Native swaps use chain-specific router builders instead of EVM calldata estimation here.
+  const shouldBufferDataTxGasLimit = Boolean(
+    (data || (swapPayload && 'general' in swapPayload)) && chain !== EvmChain.Mantle
+  )
 
-  const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint =>
-    bigIntMax(...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined))
+  const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
+    const gasLimit = bigIntMax(
+      ...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
+    )
+
+    return shouldBufferDataTxGasLimit ? addDataTxGasLimitBuffer(gasLimit) : gasLimit
+  }
 
   const getBaseFee = async () => baseFeeMultiplier(await getEvmBaseFee(chain))
 
   const getEstimateGasParams = async () => {
-    const swapPayload = getKeysignSwapPayload(keysignPayload)
-
     if (swapPayload) {
       return matchRecordUnion<
         KeysignSwapPayload,
@@ -89,24 +103,28 @@ export const getEvmFeeQuote = async ({
       return null
     }
 
-    if (coin.id) {
-      const transferData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [receiver as `0x${string}`, amount],
-      })
-
+    // Native send, or a generic contract call (e.g. staking depositFor): estimate
+    // against `memo` calldata sent to `toAddress`. For a generic call `amount` is
+    // 0 (zero toAmount), so this also covers its zero value — and crucially avoids
+    // estimating a synthetic ERC-20 transfer to coin.id.
+    if (getIsGenericContractCall(keysignPayload) || !coin.id) {
       return {
-        to: coin.id as `0x${string}`,
-        value: 0n,
-        data: transferData,
+        to: receiver as `0x${string}`,
+        value: amount,
+        data,
       }
     }
 
+    const transferData = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [receiver as `0x${string}`, amount],
+    })
+
     return {
-      to: receiver as `0x${string}`,
-      value: amount,
-      data,
+      to: coin.id as `0x${string}`,
+      value: 0n,
+      data: transferData,
     }
   }
 

@@ -39,9 +39,86 @@ export { ValidationHelpers } from './utils/validation'
 // PUBLIC API - Conversion / Normalization Utilities (vault-free)
 // ============================================================================
 
+export type {
+  AmountDirection,
+  ConvertAmountParams,
+  CryptoToFiatParams,
+  FiatToCryptoParams,
+} from './utils/convertAmount'
+export {
+  AmountConvertError,
+  convertAmount,
+  cryptoToFiat,
+  fiatToCrypto,
+  toBaseUnits,
+  toHumanUnits,
+} from './utils/convertAmount'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+
+// Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
+// Ported from the agent-backend validator — PURE math only, no grounding.
+// Lets mcp-ts / agent-backend ground claimed amounts and fees through the SDK
+// instead of re-implementing base-unit scaling + the token-decimals table.
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from './utils/validateNormalizers'
+
+// Pure address-format validation (vault-free, no network, no signing):
+//   sdk.validate.chainPrefix(address, chain) — HRP/format mismatch check
+//   sdk.address.classify(address)            — chain family of an address
+//   sdk.address.isValidFor(address, chain)   — is the format valid for a chain
+// Canonical port of the Go agent-backend chain-prefix / per-family address
+// FORMAT rules (collapses the Go + abt duplicates).
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from './utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
+export { address, validate } from './utils/addressValidation'
+export { checkChainPrefix } from './utils/chainPrefix'
+
+// ============================================================================
+// PUBLIC API - Tx Shape Normalization (pure, vault-free)
+// ============================================================================
+
+// Canonicalize a build_* tool result into a signing-ready tx envelope and split
+// multi-tx build results (approve+swap, generic transactions[]) into ordered
+// legs. Ports the normalize/split half of the agent-backend's
+// enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
+export type { NormalizeArgs, NormalizedTx } from './tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+
+// ============================================================================
+// PUBLIC API - Canonical Contract / Token Registry (knownContracts)
+// ============================================================================
+
+export {
+  canonicalEvmContracts,
+  canonicalSolanaAddresses,
+  canonicalTronContracts,
+  isCanonicalEvmContract,
+  isCanonicalEvmContractEllipsized,
+  isCanonicalSolanaAddress,
+  isCanonicalSolanaAddressEllipsized,
+  isCanonicalTronContract,
+  isEvmAddressFormat,
+  isKnownContract,
+  knownContracts,
+} from './utils/knownContracts'
 
 // ============================================================================
 // PUBLIC API - Station Migration Primitives
@@ -315,6 +392,21 @@ export {
   getUnbondingDelegationsUrl,
 } from '@vultisig/core-chain/chains/cosmos/staking/lcdQueries'
 
+// Cosmos governance (read proposals + build unsigned MsgVote envelope —
+// read-only / builds-unsigned, never signs or broadcasts).
+export type {
+  CosmosVoteEnvelope,
+  GetCosmosGovernanceProposalsParams,
+  GetGovernanceProposalsResult,
+  GovChain,
+  GovernanceProposal,
+  PrepareCosmosVoteParams,
+  ProposalStatus,
+  VoteOption,
+  VoteTally,
+} from './tools/cosmos'
+export { getCosmosGovernanceProposals, prepareCosmosVote } from './tools/cosmos'
+
 // ============================================================================
 // PUBLIC API - Token Registry & Chain Data
 // ============================================================================
@@ -333,7 +425,13 @@ export type {
 // PUBLIC API - Security Scanning
 // ============================================================================
 
-export type { RiskLevel, SiteScanResult, TransactionSimulationResult, TransactionValidationResult } from './types'
+export type {
+  AddressScanResult,
+  RiskLevel,
+  SiteScanResult,
+  TransactionSimulationResult,
+  TransactionValidationResult,
+} from './types'
 
 // ============================================================================
 // PUBLIC API - Cosmos Message Type Constants
@@ -346,45 +444,371 @@ export { CosmosMsgType } from './types'
 // ============================================================================
 
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
+  AmountUnits,
+  AssetRef,
+  AstroportSwapResult,
+  BuildAstroportSwapParams,
+  BuildBuyPtParams,
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  BuildCw20TransferMsgParams,
+  BuildCw20TransferMsgResult,
+  BuildGlifRedeemParams,
+  BuildGlifRedeemResult,
+  BuildGlifStakeParams,
+  BuildGlifStakeResult,
+  BuildRedeemParams,
+  BuildSellPtParams,
+  BuildThreeJaneSupplyUsdcParams,
+  BuildThreeJaneSupplyUsdcResult,
+  CardanoBalance,
+  CardanoNativeToken,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+  ChainFamily,
   Coin,
   CoinKey,
   CoinMetadata,
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  CosmosBalanceChain,
+  CosmosBalanceEntry,
+  CosmosBalanceResult,
+  DecodeFromToolResultInput,
+  Defi,
+  Envelope,
+  EnvelopeKind,
+  EvmBalance,
+  EvmGasPrice,
+  EvmScanRequest,
+  FieldDiff,
   FindSwapQuoteParams,
+  GasTxType,
+  GetEvmBalancesParams,
   GetMaxSendAmountFromKeysParams,
+  GetTokenApprovalsResult,
+  GetUtxoBalanceOptions,
+  GlifUnsignedTx,
+  IbcCosmosTx,
+  IbcMsgTransfer,
+  IntentClaim,
+  InvariantInput,
+  InvariantViolation,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
   KnownCoin,
   KnownCoinMetadata,
+  PendleActiveMarket,
+  PendleChain,
+  PendleMarketParams,
+  PendleMarketsParams,
+  PendleMarketSummary,
+  PendlePtBuildResult,
+  PendleUnsignedTx,
+  PolicyAssetRef,
+  PolicyEnvelope,
+  PolkadotAssetBalance,
+  PolkadotNativeBalance,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
+  PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareTrc20TransferFromKeysParams,
+  PriceBatchResult,
+  PriceQuery,
+  PriceQuote,
+  RecipientSanityFlag,
+  RecipientSanityInput,
+  RecipientSanityResult,
+  ResolveContractResult,
+  ScanRequest,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
+  SolBalance,
+  SplTokenBalance,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  ThreeJaneTranche,
+  ThreeJaneTxStep,
+  TokenApproval,
   TokenMetadataResolver,
+  TokenStandard,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  UnsignedTrc20Transfer,
+  UnsupportedScanRequest,
+  UtxoBalance,
+  UtxoBalanceChain,
+  UtxoFeeRate,
+  Validator,
   VaultIdentity,
+  Verdict,
+  XrpBalance,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from './tools'
+export type { BuildSplTransferParams, SplTransferResult } from './tools'
+export type {
+  CosmosStakingMsgEnvelope,
+  DelegateParams,
+  RedelegateParams,
+  UndelegateParams,
+  WithdrawRewardsParams,
 } from './tools'
 export {
   abiDecode,
   abiEncode,
+  acrossQuote,
+  acrossSupportedChains,
+  AMOUNT_DRIFT_BLOCK_PCT,
+  AMOUNT_DRIFT_WARN_PCT,
+  amountDriftPct,
+  assembleAstroportSwap,
+  assertBittensorAddress,
+  ASTROPORT_ROUTER,
+  balancePolkadot,
+  buildAstroportSwap,
+  buildBuyPt,
+  buildCctpBridge,
+  buildCctpClaim,
+  buildCw20TransferMsg,
+  buildDelegateMsg,
+  buildGlifRedeemSticnt,
+  buildGlifStakeIcnt,
+  buildJupiterSwapTx,
+  buildRedeem,
+  buildRedelegateMsg,
+  buildSellPt,
+  buildSkipAffiliates,
+  buildSplTransfer,
+  buildUndelegateMsg,
+  buildWithdrawRewardsMsg,
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  chainAliasMap,
   chainFeeCoin,
+  chainsMatch,
+  checkInvariants,
+  claimInterpretations,
+  classifyAstroportAsset,
+  coinGeckoIdToSymbol,
+  compareCosts,
+  computeAstroportMinReceive,
+  COSMOS_SWAP_FEE_LABEL_CHAINS,
+  COSMOS_SWAP_GAS_LIMIT,
+  cosmosBalanceChains,
+  cosmosStaking,
+  decodeBittensorAddress,
+  decodeCosmosTx,
+  decodeEvmTx,
+  decodeFromToolResult,
+  DEFAULT_COMPARE_CHAINS,
+  DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
+  defi,
   deriveAddressFromKeys,
+  dex,
+  DOT_DECIMALS,
+  encodeErc20Approve,
+  encodeErc20Revoke,
+  estimateCosmosSwapFeeLabel,
+  evaluatePolicy,
   evmCall,
   evmCheckAllowance,
+  evmGasPrice,
   evmTxInfo,
   findSwapQuote,
+  formatDot,
+  formatUsdc,
+  formatUtxoBalance,
+  gas,
+  GAS_UNITS,
+  getCardanoBalance,
+  getCctpChain,
+  getChainGasPriceGwei,
   getCoinBalance,
+  getCosmosBalance,
+  getCosmosSwapGasLimit,
+  getEvmBalances,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  getPrice,
+  getPricesBatch,
   getPublicKey,
+  getSolBalance,
+  getSplTokenBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTokenApprovals,
   getTokenMetadata,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
   getTxStatus,
+  getUtxoBalance,
+  getXrpBalance,
+  GLIF_ICN_BASE_ADDRESSES,
+  GLIF_ICN_TOKEN_DECIMALS,
+  glifPoolWriteAbi,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  Invariant,
+  isCosmosBalanceChain,
+  isKnownNativePriceSymbol,
+  isMalformedEvmAddress,
+  isNullAddress,
+  isPendleChain,
+  isSelfSend,
+  isZeroAmount,
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
   knownTokens,
   knownTokensIndex,
+  MAX_UINT256,
+  MAYACHAIN_NODE_URL,
+  NATIVE_COINGECKO_IDS,
+  normaliseIbcChainId,
+  normalizeHexBytes,
+  parseActionDisplay,
+  parseAmountBig,
+  parseUsdcAmount,
+  pendle,
+  PENDLE_ROUTER_V4,
+  PENDLE_SUPPORTED_CHAINS,
+  PendleBuildError,
+  pendleMarket,
+  pendleMarkets,
+  PLAUSIBLE_TOKEN_DECIMALS,
+  policy,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
+  prepareIbcTransfer,
+  prepareJettonTransferTxFromKeys,
+  preparePolkadotAssetSend,
   prepareSendTxFromKeys,
   prepareSignAminoTxFromKeys,
   prepareSignDirectTxFromKeys,
+  prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
+  prepareTrc20TransferFromKeys,
+  prepareUtxoConsolidateTxFromKeys,
+  quoteSkipRoute,
+  recipientSanity,
   resolve4ByteSelector,
+  resolveContract,
   resolveEns,
+  resolveJupiterFeeAccount,
+  resolveLuncFloorUsd,
+  ResultKind,
+  runSkipSwap,
+  sanitizeAmount,
+  scaleDecimalClaimToAtomic,
   searchToken,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  SkipApiError,
+  skipChainIdToChainName,
+  SOL_NATIVE_MINT,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  stripChainPrefix,
+  supportedIbcDestinationsFrom,
+  supportedUtxoBalanceChains,
+  symbolFromCoinGeckoId,
+  TERRA_CHAIN_ID,
+  TERRA_LCD,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
   VerifierClient,
 } from './tools'
+
+// Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
+// The pure read-only per-chain gas price lives in `evmGasPrice` above; this
+// service is exposed for callers that already hold a vault and need the richer
+// chain-specific fee shape (base fee / priority / cosmos gas limit, etc).
+export { GasEstimationService } from './vault/services/GasEstimationService'
+
+// ============================================================================
+// PUBLIC API - DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders
+// ============================================================================
+
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from './tools/defi'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  describeRiverMarket,
+  findRiverInsertHints,
+  formatRiverPercentWad,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  RIVER_TROVE_STATUS_NAMES,
+  riverStatusName,
+} from './tools/defi'
 
 // ============================================================================
 // PUBLIC API - Push Notifications

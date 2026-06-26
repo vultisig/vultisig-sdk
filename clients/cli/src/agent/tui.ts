@@ -14,8 +14,9 @@ import * as readline from 'node:readline'
 import chalk from 'chalk'
 
 import type { AgentErrorCode } from './agentErrors'
+import { type BalanceSummaryCard, renderBalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
-import type { ConversationMessage, Suggestion, UICallbacks } from './types'
+import type { ConversationMessage, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export class ChatTUI {
   private rl: readline.Interface
@@ -198,6 +199,19 @@ export class ChatTUI {
         this.currentStreamText = ''
       },
 
+      onBalanceSummary: (card: BalanceSummaryCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        // Clear the buffered stream text: a `data-balance_summary` part can
+        // arrive after some text deltas, and a following onAssistantMessage
+        // whose content equals the buffered partial would otherwise hit the
+        // `content !== this.currentStreamText` guard and be silently dropped.
+        this.currentStreamText = ''
+        console.log(renderBalanceSummaryCard(card))
+      },
+
       onSuggestions: (suggestions: Suggestion[]) => {
         if (suggestions.length > 0) {
           console.log(chalk.gray('  Suggestions:'))
@@ -207,7 +221,7 @@ export class ChatTUI {
         }
       },
 
-      onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => {
+      onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => {
         const statusIcon =
           status === 'confirmed' ? chalk.green('✓') : status === 'failed' ? chalk.red('✗') : chalk.yellow('⏳')
         console.log(`  ${statusIcon} ${chalk.bold('TX')} [${chain}]: ${txHash.slice(0, 12)}...${txHash.slice(-8)}`)
@@ -223,6 +237,14 @@ export class ChatTUI {
         }
         const suffix = this.verbose ? chalk.gray(` (${code})`) : ''
         console.log(`  ${chalk.red('Error')}: ${message}${suffix}`)
+      },
+
+      onReconnecting: () => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        console.log(chalk.gray('  Connection dropped — recovering response…'))
       },
 
       onDone: () => {

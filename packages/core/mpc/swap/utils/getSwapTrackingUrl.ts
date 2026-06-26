@@ -76,10 +76,14 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
           if (sourceChain === Chain.Ton && txHash.startsWith('0x')) {
             throw new Error(`TON tx hash must not have a 0x prefix (got: ${txHash.slice(0, 10)}...)`)
           }
-          // Bare hash (no `0x` prefix) -- `stripHexPrefix` is a no-op when the
-          // hash is already prefix-free (UTXO chains, Ripple, TON, etc.) and strips
-          // `0x` from EVM hashes to match track.swapkit.dev's expected format.
-          return `https://track.swapkit.dev/?tx=${encodeURIComponent(stripHexPrefix(txHash))}&chainId=${chainId}`
+          // `tx` remains the bare tracker identifier, while `hash` carries the
+          // original source-chain tx hash that SwapKit uses to prefill the form.
+          const searchParams = new URLSearchParams({
+            tx: stripHexPrefix(txHash),
+            chainId,
+            hash: txHash,
+          })
+          return `https://track.swapkit.dev/?${searchParams.toString()}`
         }
         // SwapKitSourceChain extended without updating swapKitTrackerChainId
         // -> silent fallback to block explorer would degrade tracking

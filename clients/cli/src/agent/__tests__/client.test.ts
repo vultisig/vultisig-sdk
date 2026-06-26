@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
-import { AgentClient } from '../client'
+import { AgentClient, resolveHttpTimeoutMs } from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -22,12 +22,46 @@ function makeChunkedStream(chunks: string[]): ReadableStream<Uint8Array> {
   })
 }
 
-function mockFetchSSE(chunks: string[]): typeof fetch {
+function mockFetchSSE(chunks: string[], headers?: Record<string, string>): typeof fetch {
   return vi.fn(
     async () =>
       new Response(makeChunkedStream(chunks), {
         status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
+        headers: { 'Content-Type': 'text/event-stream', ...headers },
+      })
+  ) as typeof fetch
+}
+
+/**
+ * Stream that yields `chunks` then errors the body mid-flight to simulate a
+ * dropped SSE connection. If `onBeforeError` is provided it runs right before
+ * the body errors (used to flip an AbortController so the read loop sees a
+ * user-cancel rather than a transport drop).
+ */
+function makeDroppingStream(chunks: string[], onBeforeError?: () => void): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  let i = 0
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (i < chunks.length) {
+        controller.enqueue(encoder.encode(chunks[i++]))
+      } else {
+        onBeforeError?.()
+        controller.error(new Error('ECONNRESET: socket hang up'))
+      }
+    },
+  })
+}
+
+function mockFetchDropping(
+  chunks: string[],
+  opts?: { headers?: Record<string, string>; onBeforeError?: () => void }
+): typeof fetch {
+  return vi.fn(
+    async () =>
+      new Response(makeDroppingStream(chunks, opts?.onBeforeError), {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream', ...opts?.headers },
       })
   ) as typeof fetch
 }
@@ -265,6 +299,30 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
+  // cat4-cli-supported-surfaces: the backend emits data-balance_summary when
+  // the client advertised "balance_summary" in supported_surfaces. Previously
+  // this v1 part routed to the 'ignore' bucket (client.ts:421) and the card was
+  // silently dropped; now it surfaces via onBalanceSummary.
+  it('routes data-balance_summary to onBalanceSummary with the envelope payload', async () => {
+    const onBalanceSummary = vi.fn()
+
+    const envelope = {
+      surface: 'balance_summary',
+      accounts: [{ chainId: 'Ethereum', address: '0xabc', tokens: [{ symbol: 'ETH', amountDecimal: '1.0' }] }],
+    }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-balance_summary', data: envelope })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'balance' }, { onBalanceSummary })
+
+    expect(onBalanceSummary).toHaveBeenCalledTimes(1)
+    expect(onBalanceSummary).toHaveBeenCalledWith(envelope)
+  })
+
   it('handles v1 error events via errorText', async () => {
     const onError = vi.fn()
     globalThis.fetch = mockFetchSSE(['data: {"type":"error","errorText":"boom"}\n\n'])
@@ -273,6 +331,56 @@ describe('AgentClient.sendMessageStream', () => {
     await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onError })
 
     expect(onError).toHaveBeenCalledWith('boom', AgentErrorCode.UNKNOWN_ERROR)
+  })
+
+  it('marks finished + captures X-Server-Now on a clean stream', async () => {
+    globalThis.fetch = mockFetchSSE(
+      [
+        'data: {"type":"text-delta","id":"t","delta":"hi"}\n\n',
+        'data: {"type":"data-message","data":{"message":{"id":"m","conversation_id":"c1","role":"assistant","content":"hi","content_type":"text","created_at":"2026-04-17T00:00:00Z"}}}\n\n',
+        'data: {"type":"finish"}\n\n',
+      ],
+      { 'X-Server-Now': '1718870400000' }
+    )
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.finished).toBe(true)
+    expect(result.disconnected).toBe(false)
+    expect(result.serverNow).toBe('1718870400000')
+    expect(result.message?.content).toBe('hi')
+  })
+
+  // Disconnect-recovery contract: a transport drop mid-turn must NOT throw and
+  // must NOT mark the turn finished — it flags `disconnected` so the caller can
+  // recover via /messages/since. The X-Server-Now header (captured before the
+  // first chunk) survives to anchor that recovery poll.
+  it('flags disconnected (no throw, not finished) when the stream drops mid-turn', async () => {
+    globalThis.fetch = mockFetchDropping(['data: {"type":"text-delta","id":"t","delta":"partial ans"}\n\n'], {
+      headers: { 'X-Server-Now': '1718870400000' },
+    })
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.disconnected).toBe(true)
+    expect(result.finished).toBe(false)
+    expect(result.message).toBeNull() // the answer never arrived on the wire
+    expect(result.fullText).toBe('partial ans') // only the partial delta showed
+    expect(result.serverNow).toBe('1718870400000')
+  })
+
+  // A deliberate Ctrl+C (AbortController.abort()) is NOT a dropped connection:
+  // re-throw so the caller shows "[cancelled]" instead of silently recovering.
+  it('re-throws (does not recover) when the read fails after a user abort', async () => {
+    const ac = new AbortController()
+    globalThis.fetch = mockFetchDropping(['data: {"type":"text-delta","id":"t","delta":"x"}\n\n'], {
+      onBeforeError: () => ac.abort(),
+    })
+
+    const client = new AgentClient('http://example.com')
+    await expect(client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {}, ac.signal)).rejects.toThrow()
   })
 })
 
@@ -301,7 +409,14 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
   }
 
   it('reports ok=false when the tool output is {"status":"error"}', async () => {
-    expect(await lastDoneOk({ output: { status: 'error', error: 'execute_send (EVM): invalid address' } })).toBe(false)
+    expect(
+      await lastDoneOk({
+        output: {
+          status: 'error',
+          error: 'execute_send (EVM): invalid address',
+        },
+      })
+    ).toBe(false)
   })
 
   it('reports ok=false when the tool output has an {"error"} field', async () => {
@@ -331,5 +446,182 @@ describe('AgentClient — honest tool success (fund-safety #B)', () => {
 
   it('still treats a clean stringified payload as success', async () => {
     expect(await lastDoneOk({ output: '{"tx_hash":"0xabc","status":"pending"}' })).toBe(true)
+  })
+})
+
+/**
+ * Mimics fetch's abort contract: never resolves, but rejects with the signal's
+ * abort reason once the (timeout/caller) signal fires — so a stalled backend is
+ * indistinguishable from a half-open socket. Without the timeout work this hangs
+ * forever (the vitest test would time out / go red); with it the call rejects
+ * within `timeoutMs`.
+ */
+function mockHangingFetch(): typeof fetch {
+  return vi.fn(
+    (_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        if (!signal) return // no signal → genuinely hangs (the bug we're fixing)
+        if (signal.aborted) {
+          reject(signal.reason)
+          return
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+  ) as typeof fetch
+}
+
+describe('AgentClient — request timeouts (headless-hang guard)', () => {
+  const originalFetch = globalThis.fetch
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  const authReq = { public_key: 'pk', chain_code_hex: 'cc', message: 'm', signature: 's' }
+
+  it('healthCheck resolves false when the request hangs past the timeout', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.healthCheck()).resolves.toBe(false)
+  })
+
+  it('rejects a unary POST with a clear timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects a unary DELETE with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.deleteConversation('c1', 'pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects authenticate with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.authenticate(authReq)).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects a unary GET (messagesSince) with a timeout error when it hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.messagesSince('c1', { since: '2026-01-01T00:00:00Z' })).rejects.toThrow(
+      /request timed out after 20ms/
+    )
+  })
+
+  // Body-read timeout normalization (CodeRabbit, client.ts unary helpers): if the
+  // backend sends headers then stalls the JSON body, fetch() has already resolved,
+  // so the timeout surfaces during res.json(). Build a Response whose .json()
+  // rejects with a TimeoutError and assert the unary path still surfaces the
+  // normalized "request timed out after Nms" error rather than leaking the raw
+  // abort (success path) or masking it as the statusText fallback (non-OK path).
+  function mockFetchJsonTimesOut(status: number): typeof fetch {
+    return vi.fn(async () => ({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: 'Internal Server Error',
+      json: () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+    })) as unknown as typeof fetch
+  }
+
+  it('surfaces a timeout when the SUCCESS body stalls during res.json()', async () => {
+    globalThis.fetch = mockFetchJsonTimesOut(200)
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('surfaces a timeout when the NON-OK error body stalls during res.json()', async () => {
+    globalThis.fetch = mockFetchJsonTimesOut(500)
+    const client = new AgentClient('http://example.com', 20)
+    // Must NOT swallow the timeout as the statusText fallback ("Request failed (500): Internal Server Error").
+    await expect(client.createConversation('pk')).rejects.toThrow(/request timed out after 20ms/)
+  })
+
+  it('rejects sendMessageStream with a timeout error when the connect hangs', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const client = new AgentClient('http://example.com', 20)
+    await expect(client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})).rejects.toThrow(
+      /request timed out after 20ms/
+    )
+  })
+
+  // Cancellation must survive the combined-signal path: a caller Ctrl+C aborts
+  // the connect, and it must surface as a deliberate cancel (the original abort
+  // reason), NOT be mislabeled as a timeout. Asserting the positive AbortError
+  // identity (not merely "no timeout text") guards against a regression that
+  // swallowed the abort into some unrelated error.
+  it('still aborts sendMessageStream on a caller signal, preserving cancel semantics', async () => {
+    globalThis.fetch = mockHangingFetch()
+    const ac = new AbortController()
+    // Large timeout so the caller abort — not the deadline — wins the race.
+    const client = new AgentClient('http://example.com', 60_000)
+    const p = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {}, ac.signal)
+    ac.abort()
+    const err = await p.then(
+      () => {
+        throw new Error('expected rejection')
+      },
+      (e: unknown) => e
+    )
+    expect(err).toBeInstanceOf(DOMException)
+    expect((err as DOMException).name).toBe('AbortError')
+    expect(String((err as Error).message)).not.toMatch(/timed out/)
+  })
+
+  // The connect deadline must bound ONLY the initial connect, never the
+  // long-lived SSE body. With a tiny timeout but a body whose terminal frame
+  // arrives well after that deadline, the stream must still complete cleanly
+  // (finished, not disconnected) — proving the connect timer is cleared once
+  // headers arrive and can't abort the live read.
+  it('does not abort the SSE body when it streams past the connect timeout', async () => {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(encoder.encode('data: {"type":"text-delta","id":"t","delta":"slow"}\n\n'))
+        // Emit the terminal frame after a delay far exceeding the 15ms connect
+        // deadline; a body-level timeout would abort here and flag disconnected.
+        await new Promise(r => setTimeout(r, 120))
+        controller.enqueue(encoder.encode('data: {"type":"finish"}\n\n'))
+        controller.close()
+      },
+    })
+    globalThis.fetch = vi.fn(
+      async () => new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    ) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 15)
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.finished).toBe(true)
+    expect(result.disconnected).toBe(false)
+    expect(result.fullText).toBe('slow')
+  })
+})
+
+describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
+  const original = process.env.VULTISIG_HTTP_TIMEOUT_MS
+  afterEach(() => {
+    if (original === undefined) delete process.env.VULTISIG_HTTP_TIMEOUT_MS
+    else process.env.VULTISIG_HTTP_TIMEOUT_MS = original
+  })
+
+  it('defaults to 30000 when the env var is unset', () => {
+    delete process.env.VULTISIG_HTTP_TIMEOUT_MS
+    expect(resolveHttpTimeoutMs()).toBe(30_000)
+  })
+
+  it('honors a valid positive override', () => {
+    process.env.VULTISIG_HTTP_TIMEOUT_MS = '5000'
+    expect(resolveHttpTimeoutMs()).toBe(5000)
+  })
+
+  // "A typo can't disable the timeout": junk / non-positive values fall back to
+  // the default rather than producing 0/NaN (which would neuter the bound).
+  it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])('falls back to the default for invalid value %j', val => {
+    process.env.VULTISIG_HTTP_TIMEOUT_MS = val
+    expect(resolveHttpTimeoutMs()).toBe(30_000)
   })
 })
