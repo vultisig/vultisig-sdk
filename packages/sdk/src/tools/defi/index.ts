@@ -13,6 +13,7 @@ import * as glif from './glif'
 import * as osmosis from './osmosis'
 import { pendle } from './pendle'
 import { river } from './river'
+import * as stakekitModule from './stakekit'
 import * as threeJane from './threeJane'
 
 export { arkis }
@@ -22,6 +23,7 @@ export * as glif from './glif'
 export * as osmosis from './osmosis'
 export * from './pendle'
 export * from './river'
+export * from './stakekit'
 export * as threeJane from './threeJane'
 
 /** Grouped namespace object, exposed as `sdk.defi`. */
@@ -32,6 +34,7 @@ export const defi = {
   osmosis,
   pendle,
   river,
+  stakekit: stakekitModule.stakekit,
   threeJane,
 } as const
 
