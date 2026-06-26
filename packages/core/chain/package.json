@@ -835,6 +835,11 @@
       "import": "./dist/coin/balance/index.js",
       "default": "./dist/coin/balance/index.js"
     },
+    "./coin/balance/getEvmChainBalances": {
+      "types": "./dist/coin/balance/getEvmChainBalances.d.ts",
+      "import": "./dist/coin/balance/getEvmChainBalances.js",
+      "default": "./dist/coin/balance/getEvmChainBalances.js"
+    },
     "./coin/balance/resolver": {
       "types": "./dist/coin/balance/resolver.d.ts",
       "import": "./dist/coin/balance/resolver.js",
