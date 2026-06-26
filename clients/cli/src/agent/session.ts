@@ -248,10 +248,14 @@ export class AgentSession {
     } catch (err) {
       if (!isAuthError(err)) throw err
       onReauth?.()
+      // authenticateVault (MPC re-sign) may not return a refreshToken; capture
+      // the previously cached one before clearing so it survives the re-auth and
+      // the later /auth/refresh path stays available.
+      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
       clearCachedToken(this.publicKey)
       const auth = await authenticateVault(this.client, this.vault, this.config.password)
       this.client.setAuthToken(auth.token)
-      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
+      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
       return await request()
     }
   }
@@ -1076,6 +1080,14 @@ function writeTokenStore(store: TokenStore): void {
   const dir = join(path, '..')
   // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
+  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
+  // every write so it can't retain looser perms now that refresh tokens live here.
+  try {
+    chmodSync(dir, 0o700)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
   writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
   // writeFileSync's `mode` is honored only when the file is CREATED; an existing
   // file keeps its old perms. chmod every write so a pre-existing (or

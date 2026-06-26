@@ -9,7 +9,7 @@
 //       falls back to a new conversation instead of throwing uncaught;
 //   (c) that fallback emits a typed, non-fatal SESSION_NOT_FOUND signal carrying
 //       the new conversation id (silent context-loss is observable now).
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -283,5 +283,30 @@ describe('withAuthRetry / isAuthError', () => {
     await expect((AgentSession.prototype as any).withAuthRetry.call(ft, request)).rejects.toThrow(/boom/)
     expect(request).toHaveBeenCalledTimes(1)
     expect(authenticateVault).not.toHaveBeenCalled()
+  })
+
+  it('preserves a previously cached refreshToken when re-auth returns none (CodeRabbit Major)', async () => {
+    // withAuthRetry clears the whole cache entry before re-authenticating. If the
+    // MPC re-sign comes back WITHOUT a refreshToken, the prior one must survive —
+    // the clear-before-save must not strand it. Red before capture-before-clear.
+    const storePath = join(process.env.VULTISIG_CONFIG_DIR!, 'agent-tokens.json')
+    const seeded = { pk: { token: 'stale-tok', expiresAt: 9_999_999_999, refreshToken: 'old-rt' } }
+    writeFileSync(storePath, JSON.stringify(seeded))
+    // Re-auth succeeds but omits refreshToken (backend stopped returning one).
+    vi.mocked(authenticateVault).mockResolvedValueOnce({ token: 'reauth-tok', expiresAt: 9_999_999_999 } as any)
+
+    const ft = makeFakeThis()
+    let calls = 0
+    const request = vi.fn(async () => {
+      calls++
+      if (calls === 1) throw authError()
+      return 'ok'
+    })
+
+    await expect((AgentSession.prototype as any).withAuthRetry.call(ft, request)).resolves.toBe('ok')
+
+    const persisted = JSON.parse(readFileSync(storePath, 'utf-8'))
+    expect(persisted.pk.token).toBe('reauth-tok')
+    expect(persisted.pk.refreshToken).toBe('old-rt') // preserved, not dropped
   })
 })

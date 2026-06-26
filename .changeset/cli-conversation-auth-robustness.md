@@ -17,6 +17,9 @@ new conversation id so a headless caller knows prior context was dropped.
 Models the backend's `refresh_token`/`access_token` in `AuthTokenResponse` and
 persists the refresh token in the token cache (0o600) for a future
 `POST /auth/refresh` exchange; the retry path re-auths via MPC re-sign today.
+The retry preserves a previously cached refresh token when the re-auth response
+omits one, and the cache directory is chmod'd to 0o700 on every write (not only
+on create) so a pre-existing `~/.vultisig` can't retain looser perms on upgrade.
 
 Adds the first `auth.ts` unit tests (EIP-191 hash cross-checked against viem,
 DER→65-byte formatting, signing-retry classification) plus session
