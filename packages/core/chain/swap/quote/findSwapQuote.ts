@@ -5,6 +5,9 @@ import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
+import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
+import { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
+import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -56,6 +59,7 @@ export type SwapAffiliateConfig = {
   oneInch?: OneInchAffiliateConfig
   kyber?: KyberSwapBaseAffiliateConfig
   lifi?: LifiAffiliateConfig
+  jupiter?: JupiterAffiliateConfig
 }
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -82,7 +86,15 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   slippageTolerance?: number
 }
 
-type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName =
+  | 'CowSwap'
+  | 'KyberSwap'
+  | '1inch'
+  | 'Jupiter'
+  | 'LiFi'
+  | 'SwapKit'
+  | 'THORChain'
+  | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -127,6 +139,7 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   'SwapKit',
   'KyberSwap',
   '1inch',
+  'Jupiter',
   'LiFi',
 ] as const
 
@@ -299,6 +312,7 @@ type ProviderSlippage = {
   swapKitPercent: number | undefined
   lifiFraction: number | undefined
   kyberBps: number | undefined
+  jupiterBps: number | undefined
 }
 const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
   const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
@@ -309,6 +323,7 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
     swapKitPercent: slippageTolerance,
     lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
     kyberBps: bps,
+    jupiterBps: bps,
   }
 }
 
@@ -370,6 +385,7 @@ export const findSwapQuote = async ({
     swapKitPercent: swapKitSlippagePercent,
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
+    jupiterBps: jupiterSlippageBps,
     nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
@@ -494,6 +510,35 @@ export const findSwapQuote = async ({
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
             slippage: oneInchSlippagePercent,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
+
+    if (
+      !hasCustomRecipient &&
+      fromChain === toChain &&
+      isOneOf(fromChain, jupiterSwapEnabledChains) &&
+      isOneOf(toChain, jupiterSwapEnabledChains)
+    ) {
+      result.push({
+        providerName: 'Jupiter',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getJupiterSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: toChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+            jupiterConfig: affiliateConfig?.jupiter,
+            slippageTolerance: jupiterSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }

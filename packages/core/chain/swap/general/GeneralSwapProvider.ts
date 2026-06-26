@@ -1,4 +1,4 @@
-export const generalSwapProviders = ['1inch', 'li.fi', 'kyber', 'swapkit', 'cowswap'] as const
+export const generalSwapProviders = ['1inch', 'li.fi', 'kyber', 'swapkit', 'cowswap', 'jupiter'] as const
 
 export type GeneralSwapProvider = (typeof generalSwapProviders)[number]
 
@@ -8,4 +8,5 @@ export const generalSwapProviderName: Record<GeneralSwapProvider, string> = {
   kyber: 'KyberSwap',
   swapkit: 'SwapKit',
   cowswap: 'CowSwap',
+  jupiter: 'Jupiter',
 }

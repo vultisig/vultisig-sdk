@@ -6,12 +6,20 @@ import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
  *
  * - `li.fi` → scan.li.fi (or orb.helius.dev for Solana settlement)
  * - `thorchain` / `mayachain` → native chain scanner
- * - `1inch`, `kyber`, `swapkit` → no per-tx aggregator page; fall back to source-chain explorer
+ * - `1inch`, `jupiter`, `kyber`, `swapkit` → no per-tx aggregator page; fall back to source-chain explorer
  *
  * Keep this union in sync with iOS `ExplorerLinkBuilder.swift` and Android
  * `ExplorerLinkRepository.getSwapProgressLink`.
  */
-export const swapExplorerProviders = ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'thorchain'] as const
+export const swapExplorerProviders = [
+  '1inch',
+  'jupiter',
+  'kyber',
+  'li.fi',
+  'mayachain',
+  'swapkit',
+  'thorchain',
+] as const
 
 export type SwapExplorerProvider = (typeof swapExplorerProviders)[number]
 
@@ -36,7 +44,7 @@ const stripHexPrefix = (value: string): string =>
  * so every consumer (vultisig-windows, vultiagent-app, future RN SDK) routes
  * tx-history links to the same scanner.
  *
- * For aggregators without a public per-tx page (`1inch`, `kyber`, `swapkit`),
+ * For aggregators without a public per-tx page (`1inch`, `jupiter`, `kyber`, `swapkit`),
  * the source-chain explorer is returned so the row never renders as a dead link.
  */
 export const getSwapExplorerUrl = ({ provider, txHash, fromChain }: GetSwapExplorerUrlInput): string => {
@@ -53,6 +61,7 @@ export const getSwapExplorerUrl = ({ provider, txHash, fromChain }: GetSwapExplo
     case 'mayachain':
       return `https://www.explorer.mayachain.info/tx/${stripHexPrefix(txHash)}`
     case '1inch':
+    case 'jupiter':
     case 'kyber':
     case 'swapkit':
       // No public aggregator scanner. Source-chain explorer keeps the link

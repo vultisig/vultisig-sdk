@@ -43,6 +43,42 @@ export type InjectSolanaAtaResult = {
   ataInjected: boolean
 }
 
+const getSolanaTokenProgramId = async (mintAddress: string): Promise<PublicKey> => {
+  const mintPubkey = new PublicKey(mintAddress)
+  const client = getSolanaClient()
+
+  // Resolve token program from mint account owner (Token vs Token-2022).
+  // Failing to resolve the mint (RPC timeout, bad address, closed account) must
+  // throw rather than fall back to TOKEN_PROGRAM_ID — a silent fallback would
+  // derive the wrong ATA and produce an opaque simulation failure.
+  const mintInfo = await client.getAccountInfo(mintPubkey)
+  if (!mintInfo) {
+    throw new Error(`Mint account ${mintAddress} not found - cannot determine Token vs Token-2022 program`)
+  }
+  // Explicit allowlist of recognized token programs. Falling back to
+  // TOKEN_PROGRAM_ID for any other owner (custom forks, mis-typed addresses,
+  // accidentally-passed non-mint accounts) derives the WRONG ATA and produces
+  // an opaque simulation error rather than a clear cause. (#519 r-N NeO blocking #1.)
+  if (mintInfo.owner.equals(TOKEN_PROGRAM_ID)) {
+    return TOKEN_PROGRAM_ID
+  }
+  if (mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)) {
+    return TOKEN_2022_PROGRAM_ID
+  }
+
+  throw new Error(
+    `Mint ${mintAddress} is owned by unsupported program ${mintInfo.owner.toBase58()} - expected Token or Token-2022`
+  )
+}
+
+export const getSolanaAssociatedTokenAddress = async (mintAddress: string, owner: string): Promise<PublicKey> => {
+  const mintPubkey = new PublicKey(mintAddress)
+  const ownerPubkey = new PublicKey(owner)
+  const tokenProgramId = await getSolanaTokenProgramId(mintAddress)
+
+  return getAssociatedTokenAddressSync(mintPubkey, ownerPubkey, false, tokenProgramId)
+}
+
 /**
  * Checks whether the destination SPL-token ATA exists and, if not, prepends a
  * `createAssociatedTokenAccountIdempotentInstruction` to the LiFi transaction.
@@ -81,29 +117,7 @@ export const injectSolanaAtaIfMissing = async (
   const payerPubkey = new PublicKey(payer)
 
   const client = getSolanaClient()
-
-  // Resolve token program from mint account owner (Token vs Token-2022).
-  // Failing to resolve the mint (RPC timeout, bad address, closed account) must
-  // throw rather than fall back to TOKEN_PROGRAM_ID — a silent fallback would
-  // derive the wrong ATA and produce an opaque simulation failure.
-  const mintInfo = await client.getAccountInfo(mintPubkey)
-  if (!mintInfo) {
-    throw new Error(`Mint account ${mintAddress} not found - cannot determine Token vs Token-2022 program`)
-  }
-  // Explicit allowlist of recognized token programs. Falling back to
-  // TOKEN_PROGRAM_ID for any other owner (custom forks, mis-typed addresses,
-  // accidentally-passed non-mint accounts) derives the WRONG ATA and produces
-  // an opaque simulation error rather than a clear cause. (#519 r-N NeO blocking #1.)
-  let tokenProgramId: PublicKey
-  if (mintInfo.owner.equals(TOKEN_PROGRAM_ID)) {
-    tokenProgramId = TOKEN_PROGRAM_ID
-  } else if (mintInfo.owner.equals(TOKEN_2022_PROGRAM_ID)) {
-    tokenProgramId = TOKEN_2022_PROGRAM_ID
-  } else {
-    throw new Error(
-      `Mint ${mintAddress} is owned by unsupported program ${mintInfo.owner.toBase58()} - expected Token or Token-2022`
-    )
-  }
+  const tokenProgramId = await getSolanaTokenProgramId(mintAddress)
 
   // Validate that the owner is on the ed25519 curve (i.e. a normal wallet keypair).
   // In Vultisig flows the swap destination is always a user wallet — off-curve
