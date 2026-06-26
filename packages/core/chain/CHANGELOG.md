@@ -1,5 +1,12 @@
 # @vultisig/core-chain
 
+## 2.17.9
+
+### Patch Changes
+
+- Updated dependencies [[`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e)]:
+  - @vultisig/lib-utils@0.10.3
+
 ## 2.17.8
 
 ### Patch Changes
