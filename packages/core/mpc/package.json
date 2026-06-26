@@ -24,6 +24,11 @@
       "import": "./dist/chains/cosmos/qbtc/QBTCHelper.js",
       "default": "./dist/chains/cosmos/qbtc/QBTCHelper.js"
     },
+    "./chains/cosmos/qbtc/QBTCTx": {
+      "types": "./dist/chains/cosmos/qbtc/QBTCTx.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/QBTCTx.js",
+      "default": "./dist/chains/cosmos/qbtc/QBTCTx.js"
+    },
     "./compression/getSevenZip": {
       "types": "./dist/compression/getSevenZip.d.ts",
       "browser": "./dist/compression/getSevenZip.browser.js",

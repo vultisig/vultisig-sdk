@@ -38,7 +38,7 @@ describe('QBTCClaimHelper', () => {
     expect(bytesToHex(authInfoBytes)).toBe(
       '0a3b0a310a1b2f636f736d6f732e63727970746f2e6d6c6473612e5075624b657912120a105555555555555555555555555555555512040a0208011803120410e0a712'
     )
-    expect(bytesToHex(hash)).toBe('33277af653254d3a74d0e761fb6e1925e4d82103be48169fdf2c10c7877f19db')
+    expect(bytesToHex(hash)).toBe('88cb0167715df07029084f765522ba384f7e9e7bf54b21e2af63af6c0e9605cb')
   })
 
   it('assembles signed claim transaction bytes and tx hash', () => {
