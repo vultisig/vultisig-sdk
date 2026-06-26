@@ -12,7 +12,7 @@ export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Kujira]: defaultGas,
   [Chain.Terra]: defaultGas,
   [Chain.Dydx]: 2500000000000000n,
-  [Chain.TerraClassic]: 100000000n,
+  [Chain.TerraClassic]: 20000000n,
   [Chain.Noble]: 30000n,
   [Chain.Akash]: 200000n,
 }
