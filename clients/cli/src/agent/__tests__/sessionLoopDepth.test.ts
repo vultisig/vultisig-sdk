@@ -32,6 +32,11 @@ describe('processMessageLoop — loop-depth cap truncation signal', () => {
   it('past the depth cap: emits LOOP_DEPTH_EXCEEDED, clears the queue, never hits the backend', async () => {
     const ui = makeUi()
     const sendMessageStream = vi.fn()
+    // HARNESS PRECONDITION: `conversationId` MUST be truthy. The depth guard at
+    // session.ts sits BELOW the `if (!this.conversationId) return` early-return at
+    // the top of processMessageLoop. A falsy conversationId would bail before the
+    // guard is ever reached, and this test would pass vacuously (onError never
+    // called, queue never touched) for the wrong reason. Keep it set.
     const fakeThis: any = {
       conversationId: 'conv-1',
       publicKey: 'pk-test',

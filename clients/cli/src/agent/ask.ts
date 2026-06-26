@@ -11,6 +11,7 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
+import { isTerminalAgentErrorCode } from './agentErrors'
 import type { AgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
@@ -57,6 +58,10 @@ export class AskInterface {
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
   private error: AskResult['error']
+  // Tracks whether the currently-latched `error` is a terminal one (e.g. the
+  // depth cap). A terminal error may overwrite a prior non-terminal one; once a
+  // terminal error is recorded, later frames cannot replace it. See onError.
+  private errorIsTerminal = false
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
@@ -129,11 +134,19 @@ export class AskInterface {
       },
 
       onError: (message: string, code: AgentErrorCode) => {
-        // Record the first backend/stream error so ask() can surface it to the
-        // caller (non-zero exit + error envelope). Keep the human-readable
-        // stderr breadcrumb for verbose/interactive observers.
-        if (!this.error) {
+        // Record an error so ask() can surface it to the caller (non-zero exit +
+        // error envelope). SSE/stream `error` frames are NON-TERMINAL in this
+        // codebase: sendMessageStream can invoke onError and keep parsing, and
+        // processMessageLoop continues into later recursive turns — so a transient
+        // earlier frame must not mask the terminal error that actually ended the
+        // turn (e.g. LOOP_DEPTH_EXCEEDED). Rule: latch the first error, but let a
+        // terminal code overwrite a previously-recorded non-terminal one; never
+        // let a later frame replace an already-recorded terminal error. Keep the
+        // human-readable stderr breadcrumb for verbose/interactive observers.
+        const isTerminal = isTerminalAgentErrorCode(code)
+        if (!this.error || (isTerminal && !this.errorIsTerminal)) {
           this.error = { message, code }
+          this.errorIsTerminal = isTerminal
         }
         process.stderr.write(`[error] ${message} [${code}]\n`)
       },
@@ -172,6 +185,7 @@ export class AskInterface {
     this.transactions = []
     this.cards = []
     this.error = undefined
+    this.errorIsTerminal = false
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)

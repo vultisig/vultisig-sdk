@@ -27,6 +27,22 @@ export function isAgentErrorCode(value: string): value is AgentErrorCode {
   return AGENT_ERROR_CODE_VALUES.has(value)
 }
 
+/**
+ * Terminal error codes: a fatal condition that ends the turn itself, as opposed
+ * to a non-terminal SSE/stream `error` frame (which `sendMessageStream` can emit
+ * while continuing to parse — see {@link AskInterface.getCallbacks}). The depth
+ * cap is the canonical terminal case: it aborts the message loop mid-flight.
+ *
+ * When `ask` latches the first error for its envelope, a terminal code is allowed
+ * to overwrite a previously-recorded *non-terminal* one so the envelope names the
+ * failure that actually ended the turn rather than an earlier transient frame.
+ */
+const TERMINAL_AGENT_ERROR_CODES = new Set<AgentErrorCode>([AgentErrorCode.LOOP_DEPTH_EXCEEDED])
+
+export function isTerminalAgentErrorCode(code: AgentErrorCode): boolean {
+  return TERMINAL_AGENT_ERROR_CODES.has(code)
+}
+
 export type NormalizedAgentError = {
   code: AgentErrorCode
   message: string
