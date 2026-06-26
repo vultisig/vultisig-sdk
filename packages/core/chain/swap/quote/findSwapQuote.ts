@@ -34,7 +34,7 @@ import {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
+import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
@@ -63,6 +63,23 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
   affiliateConfig?: SwapAffiliateConfig
+  /**
+   * Optional external recipient for the swapped output. When omitted the swap
+   * pays out to the user's own derived address (existing behavior). When set,
+   * only providers that route the output to an explicit address are used —
+   * native THORChain/MayaChain (memo destination) and CowSwap (order
+   * `receiver`); aggregators that would silently pay the initiator are skipped
+   * so funds are never sent to the wrong address.
+   */
+  recipient?: string
+  /**
+   * Optional slippage tolerance, expressed in PERCENT (e.g. `0.5` = 0.5%,
+   * `3` = 3%). When omitted each provider keeps its own default. Applied to the
+   * general aggregators that accept a slippage override (1inch, KyberSwap, LiFi,
+   * SwapKit); CowSwap (RFQ limit order) and the native THORChain/MayaChain
+   * protocols use their own protection mechanisms and ignore this value.
+   */
+  slippageTolerance?: number
 }
 
 type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
@@ -166,17 +183,6 @@ const BPS_DENOMINATOR = 10_000n
 const isWithinPreferenceBand = (outputAmount: bigint, bestOutputAmount: bigint): boolean =>
   outputAmount * BPS_DENOMINATOR >= bestOutputAmount * (BPS_DENOMINATOR - SWAP_QUOTE_PREFERENCE_BAND_BPS)
 
-/** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
-function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
-  if (fromDecimals === toDecimals) {
-    return value
-  }
-  if (toDecimals > fromDecimals) {
-    return value * 10n ** BigInt(toDecimals - fromDecimals)
-  }
-  return value / 10n ** BigInt(fromDecimals - toDecimals)
-}
-
 /**
  * Comparable destination amount in the destination token's smallest units (same
  * scale as `general.dstAmount`).
@@ -191,9 +197,7 @@ function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number)
  */
 function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {
-    const nativePrecision = getNativeSwapDecimals(to)
-    const raw = BigInt(q.quote.native.expected_amount_out)
-    return rebaseDecimals(raw, nativePrecision, to.decimals)
+    return nativeSwapAmountToCoinBaseUnit(BigInt(q.quote.native.expected_amount_out), to)
   }
   return BigInt(q.quote.general.dstAmount)
 }
@@ -239,6 +243,75 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
   return selected?.quote ?? null
 }
 
+// `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values up
+// front so they don't propagate into every provider call and fail with
+// non-actionable downstream errors. Cap at 50%: above that every provider
+// effectively accepts any output including near-zero, which is economically
+// indefensible and guards against decimal-unit typos (e.g. 100 instead of 1.00).
+const SLIPPAGE_TOLERANCE_MAX_PERCENT = 50
+const assertValidSlippageTolerance = (slippageTolerance: number | undefined): void => {
+  if (
+    slippageTolerance !== undefined &&
+    (!Number.isFinite(slippageTolerance) || slippageTolerance < 0 || slippageTolerance > SLIPPAGE_TOLERANCE_MAX_PERCENT)
+  ) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `slippageTolerance must be a finite, non-negative percent value no greater than ${SLIPPAGE_TOLERANCE_MAX_PERCENT}. Received "${slippageTolerance}".`
+    )
+  }
+}
+
+// Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
+
+// Validate a custom swap recipient is a properly-formatted EVM address before it
+// reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —
+// a plausible-but-wrong address (right hex length, wrong wallet) would produce a
+// valid order that sends buy tokens to the wrong wallet with no on-chain recovery,
+// so throw early with a clear error. Only enforce the EVM format when the pair can
+// actually reach CowSwap (same-chain EVM ERC-20 on a supported chain); for native
+// THOR/Maya pairs the node validates the destination downstream, so a malformed
+// non-EVM address fails there and the EVM check is skipped. Extracted from
+// findSwapQuote to keep that function's cognitive complexity within the gate.
+const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
+  if (recipient === undefined || isEvmAddress(recipient)) return
+  const cowSwapPathReachable =
+    isChainOfKind(from.chain, 'evm') &&
+    from.id !== undefined &&
+    isChainOfKind(to.chain, 'evm') &&
+    to.id !== undefined &&
+    from.chain === to.chain &&
+    isOneOf(from.chain, cowSwapSupportedChains)
+  if (cowSwapPathReachable) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `recipient "${recipient}" is not a valid EVM address. Expected a 0x-prefixed 40-character hex string.`
+    )
+  }
+}
+
+// Convert the percent slippage tolerance (e.g. 0.5 = 0.5%) into each aggregator's
+// native unit. `undefined` leaves every provider on its own default (no behaviour
+// change). Extracted from findSwapQuote to keep its cognitive complexity in budget.
+type ProviderSlippage = {
+  nativeBps: number | undefined
+  oneInchPercent: number | undefined
+  swapKitPercent: number | undefined
+  lifiFraction: number | undefined
+  kyberBps: number | undefined
+}
+const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
+  const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
+
+  return {
+    nativeBps: bps,
+    oneInchPercent: slippageTolerance,
+    swapKitPercent: slippageTolerance,
+    lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
+    kyberBps: bps,
+  }
+}
+
 export const findSwapQuote = async ({
   from,
   to,
@@ -246,6 +319,8 @@ export const findSwapQuote = async ({
   referral,
   vultDiscountTier,
   affiliateConfig,
+  recipient,
+  slippageTolerance,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -268,6 +343,36 @@ export const findSwapQuote = async ({
 
   const referralDiscount: SwapDiscount[] = referral ? [{ referral: {} }] : []
 
+  // When the caller requests an external recipient, restrict routing to the
+  // providers that send the swapped output to an explicit address (native +
+  // CowSwap). Aggregators that pay the initiator would silently misroute funds,
+  // so they are not offered for custom-recipient swaps until they thread the
+  // receiver through (tracked in vultisig/vultisig-windows#4131).
+  // Trim and treat empty/whitespace strings as no recipient, so route gating
+  // and recipient forwarding only react to a genuine custom address.
+  const normalizedRecipient = recipient?.trim() || undefined
+  const hasCustomRecipient = normalizedRecipient !== undefined
+
+  // Validate a custom recipient up front (see assertValidCustomRecipient) so a
+  // malformed address can't reach CowSwap and misroute the fill. No-op when the
+  // recipient is undefined.
+  assertValidCustomRecipient(normalizedRecipient, from, to)
+
+  // `slippageTolerance` is a percent (e.g. 0.5 = 0.5%). Reject invalid values
+  // up front so they don't propagate into every provider call and fail with
+  // non-actionable downstream errors.
+  assertValidSlippageTolerance(slippageTolerance)
+
+  // Convert the slippage tolerance to each aggregator's native unit (see
+  // toProviderSlippage); `undefined` leaves each provider on its own default.
+  const {
+    oneInchPercent: oneInchSlippagePercent,
+    swapKitPercent: swapKitSlippagePercent,
+    lifiFraction: lifiSlippageFraction,
+    kyberBps: kyberSlippageBps,
+    nativeBps: nativeSlippageBps,
+  } = toProviderSlippage(slippageTolerance)
+
   const involvedChains = [from.chain, to.chain]
 
   const matchingSwapChains = nativeSwapChains.filter(swapChain =>
@@ -284,10 +389,11 @@ export const findSwapQuote = async ({
         const amountNumber = bigIntToNumber(amount, fromDecimals)
         const native = await getNativeSwapQuote({
           swapChain,
-          destination: to.address,
+          destination: normalizedRecipient ?? to.address,
           from,
           to,
           amount: amountNumber,
+          slippageToleranceBps: nativeSlippageBps,
           referral,
           affiliateBps,
           nativeAffiliateConfig: affiliateConfig?.native,
@@ -314,6 +420,12 @@ export const findSwapQuote = async ({
     // by solvers against ERC-20 balances. The consumer signs the order's
     // EIP-712 digest and submits it via `submitCowSwapOrder` — see
     // `cowswap_order` handling in `buildSwapKeysignPayload`.
+    //
+    // Because of that ERC-20 gate, a native-ETH (`from.id === undefined`) pair
+    // never reaches this fetcher, so the `receiver` guard below is unreachable
+    // for native-token swaps. A custom recipient on such a pair is therefore
+    // only ever honoured through the native THORChain/MayaChain `destination`
+    // path above — not here.
     if (
       fromChain === toChain &&
       isOneOf(fromChain, cowSwapSupportedChains) &&
@@ -331,7 +443,7 @@ export const findSwapQuote = async ({
             buyToken,
             sellAmount: chainAmount,
             from: from.address,
-            receiver: from.address,
+            receiver: normalizedRecipient ?? from.address,
             chainConfig: cowChainConfig,
             affiliateBps,
           })
@@ -342,6 +454,7 @@ export const findSwapQuote = async ({
     }
 
     if (
+      !hasCustomRecipient &&
       isOneOf(fromChain, kyberSwapEnabledChains) &&
       isOneOf(toChain, kyberSwapEnabledChains) &&
       fromChain === toChain
@@ -361,6 +474,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             kyberConfig: affiliateConfig?.kyber,
+            slippageTolerance: kyberSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -368,7 +482,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
+    if (!hasCustomRecipient && isOneOf(from.chain, oneInchSwapEnabledChains) && from.chain === to.chain) {
       result.push({
         providerName: '1inch',
         fetch: async (): Promise<SwapQuote> => {
@@ -379,6 +493,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
+            slippage: oneInchSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -386,7 +501,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, lifiSwapEnabledChains) && isOneOf(toChain, lifiSwapEnabledChains)) {
       result.push({
         providerName: 'LiFi',
         fetch: async (): Promise<SwapQuote> => {
@@ -402,6 +517,7 @@ export const findSwapQuote = async ({
             amount: chainAmount,
             affiliateBps,
             lifiAffiliateConfig: affiliateConfig?.lifi,
+            slippage: lifiSlippageFraction,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -409,7 +525,7 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
+    if (!hasCustomRecipient && isOneOf(fromChain, swapKitSourceChains) && isOneOf(toChain, swapKitEnabledChains)) {
       result.push({
         providerName: 'SwapKit',
         fetch: async (): Promise<SwapQuote> => {
@@ -424,6 +540,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            slippage: swapKitSlippagePercent,
           })
 
           return { quote: { general }, discounts: vultDiscount }

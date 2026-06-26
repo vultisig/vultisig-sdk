@@ -1,5 +1,96 @@
 # @vultisig/cli
 
+## 2.8.1
+
+### Patch Changes
+
+- [#867](https://github.com/vultisig/vultisig-sdk/pull/867) [`ddd08af`](https://github.com/vultisig/vultisig-sdk/commit/ddd08af883a1b2ee2f72dac4d406782de9090672) Thanks [@neavra](https://github.com/neavra)! - Agent: poll for final on-chain confirmation after broadcasting a signed tx
+  (audit F1). A `pending` `tx_status` only means "broadcast accepted" — the tx can
+  still revert, expire, or be dropped. After broadcast the session now polls
+  `vault.getTxStatus` until the tx reaches a final state and emits `confirmed` /
+  `failed`, or `timeout` when the bounded poll budget (~120s) is exhausted. The
+  `ask` result records the latest per-tx `status` (deduped by hash), and the pipe
+  `tx_status` event gains a `timeout` status. Best-effort and non-fatal: when the
+  chain can't be resolved or the vault can't poll status, the existing `pending`
+  status stands. The blocking confirmation wait is scoped to the top of the
+  message loop (depth 0 — the single-tx ask/pipe case); inside a multi-turn tool
+  loop a leg keeps its honest `pending` instead of stacking the poll budget per
+  tx. The shared `pending | confirmed | failed | timeout` union is now threaded
+  through the ask result, pipe event, and UI callback without unchecked casts.
+
+## 2.8.0
+
+### Patch Changes
+
+- [#868](https://github.com/vultisig/vultisig-sdk/pull/868) [`6f84f19`](https://github.com/vultisig/vultisig-sdk/commit/6f84f19444752976a6677d3ee4054701b0904eae) Thanks [@neavra](https://github.com/neavra)! - `agent ask --json` now emits one stable v1 envelope on stdout for both success and error. Previously the success envelope was written through a redirected `console.log` and landed on stderr (stdout empty), and the error path wrote a different flat `{error,code}` shape. The envelope now carries `conversation_id` (success + error) and per-tool-call `id`s, and a mid-stream backend/SSE `error` frame makes the command exit non-zero instead of reporting false success.
+
+- Updated dependencies [[`c9a235b`](https://github.com/vultisig/vultisig-sdk/commit/c9a235b959c7c82cd189482fab86ce3d27ddb4ff), [`9585b6f`](https://github.com/vultisig/vultisig-sdk/commit/9585b6f246de3ce537eae201f0d660fc89ff1012), [`f82caf5`](https://github.com/vultisig/vultisig-sdk/commit/f82caf58532f58af9d62b0143c7466cabcd88b06), [`361ba58`](https://github.com/vultisig/vultisig-sdk/commit/361ba58f79f241c4c00e33785a66ec6987628d26), [`7625e0b`](https://github.com/vultisig/vultisig-sdk/commit/7625e0bf325c8957bc3e28270454fd54c5589e2f), [`2024a92`](https://github.com/vultisig/vultisig-sdk/commit/2024a92b44760e1ff2043b0e45b083edc131b16c)]:
+  - @vultisig/sdk@2.8.0
+  - @vultisig/rujira@41.0.0
+
+## 2.7.0
+
+### Patch Changes
+
+- [#849](https://github.com/vultisig/vultisig-sdk/pull/849) [`7f93069`](https://github.com/vultisig/vultisig-sdk/commit/7f93069d9003728919d43ef0acc1287a96870c59) Thanks [@neavra](https://github.com/neavra)! - Add a configurable request timeout to all agent-backend HTTP calls in the CLI. A stalled TCP connection (half-open socket, hung load balancer, dropped packets) previously left `vsig agent` invocations hanging forever in headless/CI runs. Every unary fetch (auth, health, conversations, delete, messages-since) and the initial connect of the SSE message stream are now bounded by `AbortSignal.timeout` (default 30s, overridable via `VULTISIG_HTTP_TIMEOUT_MS`). A timeout surfaces as a clear, catchable `request timed out after Nms` error; caller-supplied cancellation signals are preserved.
+
+- [#852](https://github.com/vultisig/vultisig-sdk/pull/852) [`026a41b`](https://github.com/vultisig/vultisig-sdk/commit/026a41bf23c9d3344ef431ad4b126ebc755f95a9) Thanks [@neavra](https://github.com/neavra)! - Harden agent `sign_typed_data`: replace the hand-rolled EIP-712 encoder with viem's `hashTypedData` (matching the digest ethers `TypedDataEncoder.hash` produces), enforce low-S (EIP-2) canonicalization on the MPC signature, and add a recover-verify gate that confirms the assembled signature recovers to the vault's EVM address (throws an actionable, non-retryable `SIGNATURE_RECOVERY_MISMATCH` vault-context error otherwise — naming both addresses and pointing the caller at the loaded vault/keyshare rather than failing blank). Fixes wrong-domain-separator digests for domains that omit `verifyingContract` (Polymarket ClobAuth) or carry `salt`, and prevents malleable/unrecoverable signatures from being returned as success.
+
+- [#851](https://github.com/vultisig/vultisig-sdk/pull/851) [`0126319`](https://github.com/vultisig/vultisig-sdk/commit/0126319ed686d978a0d0b70c43a00f9e82c2a8a7) Thanks [@neavra](https://github.com/neavra)! - Echo `pm_batch_ref` from the agent `sign_typed_data` path so Polymarket BATCH
+  approvals auto-submit. The multi-payload (batch) return now includes
+  `pm_batch_ref` alongside `pm_order_ref`, and the client-side tool dispatch echo
+  loop forwards the bare `pm_batch_ref` marker into the recent-action data.
+  Previously BATCH approvals signed but the backend never dispatched
+  `submit_deposit_wallet_batch` because the marker was dropped.
+- Updated dependencies [[`dc43ea2`](https://github.com/vultisig/vultisig-sdk/commit/dc43ea2657915012032bf273c73ede44a183185b), [`d4ba485`](https://github.com/vultisig/vultisig-sdk/commit/d4ba4854a358235a243d8f8bb2aed0680bbdbaea), [`da59b7f`](https://github.com/vultisig/vultisig-sdk/commit/da59b7f8d7fdf48e26ab4a8617e5273d807b4e66), [`4e733c4`](https://github.com/vultisig/vultisig-sdk/commit/4e733c44708e7b81efd0a9b29298c6a9deba5f51), [`4541e6f`](https://github.com/vultisig/vultisig-sdk/commit/4541e6f9899a5c091b73830db1a2db7e739828de), [`b5ca32d`](https://github.com/vultisig/vultisig-sdk/commit/b5ca32d5e53b85f07531c9303e4c33e2dd44de5d), [`d1b19ed`](https://github.com/vultisig/vultisig-sdk/commit/d1b19ed39102b32f9eb5a51ef794226adb959022), [`7af5ab2`](https://github.com/vultisig/vultisig-sdk/commit/7af5ab236f3bdd0ba3b78198940044adcd157507), [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03), [`4f17411`](https://github.com/vultisig/vultisig-sdk/commit/4f17411ea8d739db706631cf873c85df4d329a0f), [`acfd6e4`](https://github.com/vultisig/vultisig-sdk/commit/acfd6e460e4ea27c7a7bcd668371ab1dea32c345), [`356e841`](https://github.com/vultisig/vultisig-sdk/commit/356e841c35cf38c2671309ae12720666f32745df), [`a22ef41`](https://github.com/vultisig/vultisig-sdk/commit/a22ef4106763fd25992c7f93f72c214dfdcc55d4), [`c778b4c`](https://github.com/vultisig/vultisig-sdk/commit/c778b4cc91a42f4a4488a51ea72a775ad4e78a54), [`f0a5529`](https://github.com/vultisig/vultisig-sdk/commit/f0a5529a8d3cfcce5a2883b5da83e6d15ac270ec), [`3bbe0fb`](https://github.com/vultisig/vultisig-sdk/commit/3bbe0fb011ec2f5502f321255f0304f06ea3e079), [`dac32f6`](https://github.com/vultisig/vultisig-sdk/commit/dac32f61fc5140b4c612801fc45ba48670dffe19), [`ed75992`](https://github.com/vultisig/vultisig-sdk/commit/ed759929cd8612a6873f892d33da2857f18ad9f8), [`f4ba189`](https://github.com/vultisig/vultisig-sdk/commit/f4ba18958d351be48ed83c502895be251bacc47a), [`8ed4b59`](https://github.com/vultisig/vultisig-sdk/commit/8ed4b59680e1285cc374fefba8cf1bd98347ef5e), [`5be6408`](https://github.com/vultisig/vultisig-sdk/commit/5be6408aa51e8c20568ff18c4cf604977c3004ec), [`da4b301`](https://github.com/vultisig/vultisig-sdk/commit/da4b30119916a2a13d0e4e4f4472e4f28ed810c3), [`7d79b2d`](https://github.com/vultisig/vultisig-sdk/commit/7d79b2d1307873937957b9c8caf1886f01d70190), [`31eae40`](https://github.com/vultisig/vultisig-sdk/commit/31eae40e82516e192f11c80516b0da784aafe67b), [`60edbf4`](https://github.com/vultisig/vultisig-sdk/commit/60edbf43c4f8ab9928781adbd4e5d0f0fba6074c), [`0e2e2ab`](https://github.com/vultisig/vultisig-sdk/commit/0e2e2abb3bf312df92131fb997dbaa0802f19c79), [`b9a8cc1`](https://github.com/vultisig/vultisig-sdk/commit/b9a8cc19738333bb42f5d20c6bf849692fec4801), [`f47f060`](https://github.com/vultisig/vultisig-sdk/commit/f47f0606223a0a1905ebb7745d311384488d4178)]:
+  - @vultisig/sdk@2.7.0
+  - @vultisig/client-shared@0.2.16
+  - @vultisig/core-chain@2.17.8
+  - @vultisig/rujira@40.0.0
+
+## 2.6.0
+
+### Patch Changes
+
+- Updated dependencies [[`fbc5581`](https://github.com/vultisig/vultisig-sdk/commit/fbc558151bc60c5240f6b6721dfd66a0ddec23c9), [`ae45d06`](https://github.com/vultisig/vultisig-sdk/commit/ae45d068bc64f5b6d11b6c8a43c0cd5b21e0bb4e), [`a6ff6a4`](https://github.com/vultisig/vultisig-sdk/commit/a6ff6a49c2c0672af5c7afc06a7a97ac35e1cb10), [`3043e1b`](https://github.com/vultisig/vultisig-sdk/commit/3043e1be5a869a83fb0946860b9e2d532eedf02f)]:
+  - @vultisig/sdk@2.6.0
+  - @vultisig/rujira@39.0.0
+
+## 2.5.0
+
+### Minor Changes
+
+- [#781](https://github.com/vultisig/vultisig-sdk/pull/781) [`d0743b5`](https://github.com/vultisig/vultisig-sdk/commit/d0743b5ef2d5275966c0d8a34bcb6c1329bdef44) Thanks [@neavra](https://github.com/neavra)! - Advertise `supported_surfaces: ["balance_summary"]` to the agent backend and
+  render the `data-balance_summary` card as a terminal table instead of triggering
+  the backend's legacy "echo card_payload JSON verbatim" path. Adds a defensive
+  fallback that pretty-renders a balance card envelope if it ever arrives embedded
+  in message content (older backend). Cards surface in the TUI (table), pipe mode
+  (`balance_summary` NDJSON event), and `agent ask` (`cards` field / rendered
+  table). Card string fields (token symbol, chain, address, amounts) are stripped
+  of terminal control bytes at the parse boundary so attacker-influenced on-chain
+  metadata or a legacy-echoed payload can't inject ANSI/OSC escape sequences into
+  the rendered balances table.
+
+### Patch Changes
+
+- [#779](https://github.com/vultisig/vultisig-sdk/pull/779) [`3cb521d`](https://github.com/vultisig/vultisig-sdk/commit/3cb521d190ab67a24199249f4494f02bf31cbcb1) Thanks [@neavra](https://github.com/neavra)! - Fix CLI client-side tool dispatch. The CLI gated dispatch on a `clientExecuted` wire flag the backend no longer emits, so `sign_typed_data`, `vault_coin`, `vault_chain`, and `address_book` silently stopped dispatching and degraded to display-only progress. Dispatch now keys on the existing client-side-tool registry (mirroring the app's `toolUIRegistry`), restoring those flows.
+
+- [#780](https://github.com/vultisig/vultisig-sdk/pull/780) [`cbd8f13`](https://github.com/vultisig/vultisig-sdk/commit/cbd8f13112405a56f7b5d27c3562c2f161909ac9) Thanks [@neavra](https://github.com/neavra)! - Recover the assistant answer (and any tx_ready signable card) when an agent SSE stream drops mid-turn. The backend keeps processing on a detached context and persists the message, so on a transport disconnect the CLI now polls `/messages/since` (server-clock anchored via `X-Server-Now`, opaque-cursor round-trip, bounded retries) to recover what the dropped stream missed instead of losing the turn. A recovered tx_ready flows through the same confirm/sign gate as a live one. Pipe mode emits a `reconnecting` event so agent consumers can distinguish "still working" from "failed"; a deliberate Ctrl+C abort is unaffected.
+
+- Updated dependencies [[`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37), [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21), [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607), [`dfd1cf3`](https://github.com/vultisig/vultisig-sdk/commit/dfd1cf3fdf9b650a2e70e8a72f751ef6e465bbbe)]:
+  - @vultisig/sdk@2.5.0
+  - @vultisig/core-chain@2.17.6
+  - @vultisig/rujira@38.0.0
+
+## 2.4.0
+
+### Patch Changes
+
+- Updated dependencies [[`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d), [`3156d9f`](https://github.com/vultisig/vultisig-sdk/commit/3156d9fbe5116cb7d92e9e0033e036e1da1eb2fa), [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af), [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0)]:
+  - @vultisig/core-chain@2.17.0
+  - @vultisig/sdk@2.4.0
+  - @vultisig/rujira@37.0.0
+
 ## 2.3.3
 
 ### Patch Changes

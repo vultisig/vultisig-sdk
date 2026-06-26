@@ -67,8 +67,8 @@ const leanChainFeeCoin: Record<Chain, KnownCoinMetadata> = {
     priceProviderId: 'solana',
   },
   [Chain.Ton]: {
-    ticker: 'TON',
-    logo: 'ton',
+    ticker: 'GRAM',
+    logo: 'gram',
     decimals: 9,
     priceProviderId: 'the-open-network',
   },

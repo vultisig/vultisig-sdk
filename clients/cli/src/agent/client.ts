@@ -15,6 +15,7 @@ import type {
   GetConversationResponse,
   ListConversationsRequest,
   ListConversationsResponse,
+  MessagesSinceResponse,
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
@@ -23,6 +24,20 @@ import type {
 
 type JsonErrorBody = { error?: string; code?: string }
 
+/** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
+ *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000
+
+/** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
+ *  to the default. Non-positive / non-numeric values are ignored so a typo
+ *  can't disable the timeout. Exported for direct unit testing of the contract. */
+export function resolveHttpTimeoutMs(): number {
+  const raw = process.env.VULTISIG_HTTP_TIMEOUT_MS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
+}
+
 type StreamCallbacks = {
   onTextDelta?: (delta: string) => void
   // `ok` is set only on the terminal ('done') frame: false when the
@@ -30,7 +45,12 @@ type StreamCallbacks = {
   // true on a clean result, undefined when the stream carries no output
   // (older backends) so the consumer can fall back to its prior default.
   onToolProgress?: (tool: string, status: 'running' | 'done', label?: string, ok?: boolean) => void
-  // Fired for `tool-input-available` with `clientExecuted: true`.
+  // Fired for `tool-input-available` whose `toolName` is in the client's
+  // client-side tool registry (see `AgentClient.setClientSideToolNames`).
+  // Identification is registry-based — mirroring the app's `toolUIRegistry` —
+  // because the backend deliberately no longer sends a `clientExecuted`
+  // discriminator flag ("clients identify client-side tools via their own
+  // tool registries; the server must not add discriminator flags").
   // Client runs the tool and ships the result via recent_actions.
   // Sync-only: callers must dispatch async work themselves (push to a
   // promise queue) — keeps `void`'d call at the SSE boundary safe from
@@ -39,6 +59,11 @@ type StreamCallbacks = {
   onTitle?: (title: string) => void
   onSuggestions?: (suggestions: Suggestion[]) => void
   onTxReady?: (tx: TxReadyPayload) => void
+  // Fired for the `data-balance_summary` SSE part the backend emits when the
+  // client advertised "balance_summary" in supported_surfaces. Carries the raw
+  // card envelope; the consumer validates + renders it. Replaces the legacy
+  // verbatim-echo path where the card arrived as raw JSON in message content.
+  onBalanceSummary?: (card: unknown) => void
   onMessage?: (msg: ConversationMessage) => void
   onError?: (error: string, code: AgentErrorCode) => void
 }
@@ -133,13 +158,81 @@ export class AgentClient {
   private authToken: string | null = null
   private profile: string = ''
   verbose = false
+  // Names of tools this client executes locally (client-side tools). The
+  // backend's V1ToolInputAvailable frame carries NO discriminator flag —
+  // "clients identify client-side tools via their own tool registries; the
+  // server must not add discriminator flags". So the client mirrors the
+  // app's `toolUIRegistry`: a `tool-input-available` frame triggers local
+  // dispatch iff its `toolName` is in this set. Empty by default (no
+  // client-side dispatch) until the session injects the registry.
+  private clientSideToolNames: Set<string> = new Set()
+  // Per-request timeout (ms) applied to every agent-backend fetch. Bounds a
+  // stalled connection so a headless run can't hang indefinitely. Overridable
+  // via the constructor (tests pass a tiny value) or VULTISIG_HTTP_TIMEOUT_MS.
+  private readonly timeoutMs: number
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, timeoutMs?: number) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
+    this.timeoutMs = timeoutMs ?? resolveHttpTimeoutMs()
+  }
+
+  /** Build the AbortSignal for a unary request: a fresh timeout, combined with
+   *  an optional caller signal so caller-initiated cancellation still works. */
+  private timeoutSignal(extra?: AbortSignal): AbortSignal {
+    const timeout = AbortSignal.timeout(this.timeoutMs)
+    return extra ? AbortSignal.any([extra, timeout]) : timeout
+  }
+
+  /** Translate an aborted-fetch rejection into a deterministic error. A
+   *  caller-initiated abort is preserved verbatim (it's a deliberate cancel);
+   *  a timeout abort (DOMException 'TimeoutError') becomes a clear, catchable
+   *  Error so headless callers exit non-zero instead of hanging. */
+  private asRequestError(err: unknown, extra?: AbortSignal): unknown {
+    if (extra?.aborted) return err
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return new Error(`request timed out after ${this.timeoutMs}ms`)
+    }
+    return err
+  }
+
+  /** Read a successful JSON body, routing a body-read failure through the same
+   *  normalization as the fetch() itself. If the backend sends headers then
+   *  stalls the body, fetch() has already resolved and the timeout surfaces
+   *  here during res.json() — so success paths keep the "request timed out
+   *  after Nms" behavior end-to-end instead of leaking the raw abort. */
+  private async readJson<T>(res: Response): Promise<T> {
+    try {
+      return (await res.json()) as T
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
+  }
+
+  /** Read a non-OK response's JSON error body. A genuinely malformed/empty body
+   *  falls back to the status text so callers still get a useful message, but a
+   *  timeout abort that strikes during the body read is re-thrown via
+   *  asRequestError rather than masked as the statusText fallback — keeping the
+   *  "request timed out after Nms" signal end-to-end on the error path too. */
+  private async readErrorBody(res: Response): Promise<JsonErrorBody> {
+    try {
+      return (await res.json()) as JsonErrorBody
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw this.asRequestError(err)
+      }
+      return { error: res.statusText }
+    }
   }
 
   setAuthToken(token: string): void {
     this.authToken = token
+  }
+
+  /** Inject the set of tool names this client executes locally. Identification
+   *  of client-side tools is registry-based (mirroring the app's
+   *  `toolUIRegistry`), not a wire flag — see `maybeEmitClientSideToolCall`. */
+  setClientSideToolNames(names: Set<string>): void {
+    this.clientSideToolNames = names
   }
 
   /** Set the billing-profile slug sent as X-Vultisig-Abe-Profile on every
@@ -157,16 +250,22 @@ export class AgentClient {
   // ============================================================================
 
   async authenticate(req: AuthTokenRequest): Promise<AuthTokenResponse> {
-    const res = await fetch(`${this.baseUrl}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
-      body: JSON.stringify(req),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
+        body: JSON.stringify(req),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const body = await this.readErrorBody(res)
       throw new Error(`Auth failed (${res.status}): ${body.error || res.statusText}`)
     }
-    const data = (await res.json()) as AuthTokenResponse
+    const data = await this.readJson<AuthTokenResponse>(res)
     this.authToken = data.token
     return data
   }
@@ -177,7 +276,9 @@ export class AgentClient {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/healthz`)
+      // A timeout aborts the fetch → caught here → reported unhealthy, so a
+      // hung backend never blocks init indefinitely.
+      const res = await fetch(`${this.baseUrl}/healthz`, { signal: this.timeoutSignal() })
       return res.ok
     } catch {
       return false
@@ -217,6 +318,28 @@ export class AgentClient {
     return this.post<SendMessageResponse>(`/agent/conversations/${conversationId}/messages`, req)
   }
 
+  /**
+   * Reconnect-and-replay: fetch messages persisted to the conversation after
+   * the supplied anchor. Used to recover a turn whose SSE stream dropped
+   * mid-flight (the backend keeps processing on a detached context and
+   * persists the assistant answer + any tx_ready card).
+   *
+   * First poll passes `{ since: <RFC3339> }` (bootstrap, anchored to the
+   * server clock from X-Server-Now); subsequent polls round-trip the opaque
+   * `{ cursor }` returned in the previous response so no tied row is skipped.
+   * See agent-backend messages_since.go (issue #209 / PR #219).
+   */
+  async messagesSince(
+    conversationId: string,
+    anchor: { since?: string; cursor?: string }
+  ): Promise<MessagesSinceResponse> {
+    const qs = new URLSearchParams()
+    // cursor wins on tie (matches the backend's parseMessagesSinceAnchor).
+    if (anchor.cursor) qs.set('cursor', anchor.cursor)
+    else if (anchor.since) qs.set('since', anchor.since)
+    return this.get<MessagesSinceResponse>(`/agent/conversations/${conversationId}/messages/since?${qs.toString()}`)
+  }
+
   // ============================================================================
   // Messages - SSE Streaming mode
   // ============================================================================
@@ -227,17 +350,52 @@ export class AgentClient {
     callbacks: StreamCallbacks,
     signal?: AbortSignal
   ): Promise<SSEStreamResult> {
-    const res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(req),
-      signal,
-    })
+    // Bound only the initial connect, not the (intentionally unbounded)
+    // long-lived SSE body read — an idle stream sends keep-alive pings, so a
+    // body-level timeout would kill healthy turns. A dedicated controller fires
+    // the connect deadline; it's cleared once headers arrive. The caller signal
+    // (Ctrl+C) is combined in so cancellation still aborts the whole request.
+    const connectController = new AbortController()
+    let connectTimedOut = false
+    // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
+    // (in the finally) already prevents the callback from running after that — JS
+    // is single-threaded and the finally drains as a microtask before the next
+    // timers phase — but the guard makes a late/queued firing a definitive no-op,
+    // so the connect deadline can never abort the live SSE body read.
+    let settled = false
+    const connectTimer = setTimeout(() => {
+      if (settled) return
+      connectTimedOut = true
+      connectController.abort()
+    }, this.timeoutMs)
+    const combinedSignal = signal ? AbortSignal.any([signal, connectController.signal]) : connectController.signal
+
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(req),
+        signal: combinedSignal,
+      })
+    } catch (err) {
+      // A caller abort during connect is a deliberate cancel — re-throw as-is.
+      // Our own connect-deadline abort becomes a clear timeout error.
+      if (connectTimedOut && !signal?.aborted) {
+        throw new Error(`request timed out after ${this.timeoutMs}ms`)
+      }
+      throw err
+    } finally {
+      // Headers received (or fetch failed) — stop bounding; the body read below
+      // runs against `signal` only, so SSE streaming is not time-limited.
+      settled = true
+      clearTimeout(connectTimer)
+    }
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
@@ -253,6 +411,13 @@ export class AgentClient {
       suggestions: [],
       transactions: [],
       message: null,
+      finished: false,
+      disconnected: false,
+      // A-C2 contract: the backend stamps server-side wall-clock (epoch ms) on
+      // the SSE response headers before the first chunk, so the recovery poll
+      // anchors /messages/since to the server clock instead of Date.now()
+      // (eliminates NTP-skew-induced poll swallowing). See message.go.
+      serverNow: res.headers.get('X-Server-Now'),
     }
 
     // Per-stream map: v1 tool-output-available frames omit toolName (see
@@ -317,6 +482,19 @@ export class AgentClient {
           break
         }
       }
+    } catch (err) {
+      // A user-initiated cancel (Ctrl+C → AbortController.abort()) is a
+      // deliberate stop, not a dropped connection — re-throw so the caller
+      // surfaces "[cancelled]" and does NOT try to recover the turn.
+      if (signal?.aborted) {
+        throw err
+      }
+      // Any other read failure is a mid-turn transport drop. The backend keeps
+      // processing on a detached context and persists the answer (+ tx_ready),
+      // so flag the partial result and let the caller poll /messages/since to
+      // recover what we missed instead of losing the turn outright.
+      result.disconnected = true
+      if (this.verbose) process.stderr.write(`[SSE] stream dropped mid-turn: ${sseErrorToMessage(err)}\n`)
     } finally {
       reader.releaseLock()
     }
@@ -370,6 +548,13 @@ export class AgentClient {
             callbacks.onTxReady?.(txReady)
           }
           break
+        case 'balance_summary': {
+          // v1 custom-data part: envelope under `.data`. Legacy event-header
+          // form would carry it inline, so accept both shapes.
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onBalanceSummary?.(card)
+          break
+        }
         case 'message': {
           const msg = v1Data?.message ?? parsed.message ?? parsed
           result.message = msg
@@ -381,7 +566,8 @@ export class AgentClient {
           break
         }
         case 'done':
-          // Stream complete
+          // Terminal finish frame — the turn completed cleanly, no recovery needed.
+          result.finished = true
           break
       }
     } catch (e) {
@@ -430,11 +616,17 @@ export class AgentClient {
     callId: string | null,
     toolName?: string
   ): void {
+    // Registry-based identification (mirrors the app's toolUIRegistry): a
+    // `tool-input-available` frame is dispatched locally iff its toolName is
+    // in this client's client-side tool registry. The backend sends no
+    // `clientExecuted` discriminator (it was removed) — keying on a wire flag
+    // here is what left these tools dead, so we key on the registry instead.
+    // Non-registry tools (server-side / MCP) fall through untouched.
     if (
       v1Type !== 'tool-input-available' ||
-      parsed.clientExecuted !== true ||
       !callId ||
       !toolName ||
+      !this.clientSideToolNames.has(toolName) ||
       !callbacks.onClientSideToolCall
     ) {
       return
@@ -472,6 +664,8 @@ export class AgentClient {
         return 'suggestions'
       case 'data-tx_ready':
         return 'tx_ready'
+      case 'data-balance_summary':
+        return 'balance_summary'
       case 'data-message':
         return 'message'
       case 'error':
@@ -487,38 +681,77 @@ export class AgentClient {
   // Private helpers
   // ============================================================================
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+  private async get<T>(path: string): Promise<T> {
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
+  }
+
+  private async post<T>(path: string, body: unknown): Promise<T> {
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
+
+    if (!res.ok) {
+      const errorBody = await this.readErrorBody(res)
+      throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
+    }
+
+    return this.readJson<T>(res)
   }
 
   private async delete(path: string, body: unknown): Promise<void> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Delete failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
   }
@@ -529,4 +762,15 @@ export type SSEStreamResult = {
   suggestions: Suggestion[]
   transactions: TxReadyPayload[]
   message: ConversationMessage | null
+  /** True once the terminal finish/done frame was seen — the turn completed
+   *  cleanly and no /messages/since recovery is required. */
+  finished: boolean
+  /** True when the SSE read loop ended on a transport error mid-turn (a
+   *  dropped connection, not a user abort). Signals the caller to recover the
+   *  persisted answer via /messages/since. */
+  disconnected: boolean
+  /** X-Server-Now (epoch millis as a string) captured from the SSE response
+   *  headers — the server-clock bootstrap anchor for the recovery poll.
+   *  null when the header is absent (older backend). */
+  serverNow: string | null
 }

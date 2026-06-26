@@ -1,5 +1,120 @@
 # @vultisig/core-chain
 
+## 2.17.8
+
+### Patch Changes
+
+- [#870](https://github.com/vultisig/vultisig-sdk/pull/870) [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize native THORChain and MayaChain swap quote output amounts to destination coin base units before SDK quote formatting and near-zero validation.
+
+## 2.17.7
+
+### Patch Changes
+
+- [#809](https://github.com/vultisig/vultisig-sdk/pull/809) [`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor native swap quote expiry and validate THORChain inbound vault addresses before broadcasting stale signed swaps.
+
+- [#808](https://github.com/vultisig/vultisig-sdk/pull/808) [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply native THORChain/Maya swap slippage tolerance to quote requests and signed payload limits so native swaps no longer use a zero minimum-output floor.
+
+## 2.17.6
+
+### Patch Changes
+
+- [#774](https://github.com/vultisig/vultisig-sdk/pull/774) [`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add scanAddress method for Blockaid EVM address reputation scanning
+
+- [#790](https://github.com/vultisig/vultisig-sdk/pull/790) [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Dogecoin Blockchair fee estimation with the app clients by using 25% of the reported baseline.
+
+- Updated dependencies [[`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607)]:
+  - @vultisig/lib-utils@0.10.2
+
+## 2.17.5
+
+### Patch Changes
+
+- [#785](https://github.com/vultisig/vultisig-sdk/pull/785) [`4097213`](https://github.com/vultisig/vultisig-sdk/commit/4097213ae0c35b668e54a4a9149968860849b349) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ton): rebrand native token Toncoin (TON) → Gram (GRAM)
+
+  The Open Network renamed its native token TON → GRAM (effective 2026-06-15).
+  Update the display fields of `chainFeeCoin[Chain.Ton]`: `ticker` `TON` → `GRAM`
+  and `logo` `ton` → `gram`. This is a cosmetic token rebrand only — the chain
+  identity (`Chain.Ton`), `priceProviderId` (`the-open-network`), and `decimals`
+  are unchanged, and there is no swap/migration. Patch-bumps `@vultisig/sdk` to
+  rebundle.
+
+## 2.17.4
+
+### Patch Changes
+
+- [#773](https://github.com/vultisig/vultisig-sdk/pull/773) [`ba1372e`](https://github.com/vultisig/vultisig-sdk/commit/ba1372e6cc76243e6c44114d706ae0b00c524e47) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Raise Zcash memo-send fees to the ZIP-317 conventional fee at plan time. WalletCore's `zip_0317` planner flat-sizes OP_RETURN and ignores `byteFee`, so memo sends planned one logical action short and were rejected by the network; the signing-input resolver now re-plans with `zip_0317` off and bumps `byteFee` until the fee clears.
+
+## 2.17.3
+
+### Patch Changes
+
+- [#753](https://github.com/vultisig/vultisig-sdk/pull/753) [`e988851`](https://github.com/vultisig/vultisig-sdk/commit/e98885119f18078a0dde1f1ebdbca20f842c9325) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail Cardano broadcasts before submission when the signed transaction TTL is expired or too close to expiry.
+
+- [#754](https://github.com/vultisig/vultisig-sdk/pull/754) [`35c48e3`](https://github.com/vultisig/vultisig-sdk/commit/35c48e3eac615d62697c9052f43a9dab918b94dd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route UTXO and Cardano broadcast timeouts through transaction hash verification before treating them as landed.
+
+## 2.17.2
+
+### Patch Changes
+
+- [#769](https://github.com/vultisig/vultisig-sdk/pull/769) [`406c261`](https://github.com/vultisig/vultisig-sdk/commit/406c261a702989fbdcdc3fde54b51c0b3eab8b62) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Handle the current Noon vault APY API shape when reading 7d net yield metrics.
+
+## 2.17.1
+
+### Patch Changes
+
+- [#766](https://github.com/vultisig/vultisig-sdk/pull/766) [`f265fe0`](https://github.com/vultisig/vultisig-sdk/commit/f265fe0d33abda6b1157b248151217fc558f911c) Thanks [@realpaaao](https://github.com/realpaaao)! - fix(zcash): add trailing slash to branch-id RPC URL
+
+  The live ZIP-243 branch-id fetch POSTs to a bare `${rootApiUrl}/zcash`, which the
+  proxy now 301-redirects to `/zcash/`. Following a 301 downgrades POST→GET, so the
+  request lands as `GET /zcash/` → HTTP 405, breaking all Zcash signing on the
+  "Sign Transaction" screen. Add the trailing slash so the POST hits the working
+  endpoint directly (live-verified 200 with consensus.nextblock).
+
+## 2.17.0
+
+### Minor Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`0567316`](https://github.com/vultisig/vultisig-sdk/commit/056731699c9d1c9f16d9c9eb049e747c73f1c33d) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support an external recipient for native + CowSwap swaps
+
+  `findSwapQuote` now accepts an optional `recipient` address. When set, the
+  swapped output is routed to that address via the native THORChain/MayaChain
+  memo `destination` and the CowSwap order `receiver`. Aggregators that would pay
+  the swap initiator (1inch, KyberSwap, LiFi, SwapKit) are skipped for
+  custom-recipient swaps so funds are never silently misrouted. When `recipient`
+  is omitted, routing and payout are unchanged.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131);
+  external recipient for the remaining aggregators is a follow-up.
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`e240dae`](https://github.com/vultisig/vultisig-sdk/commit/e240dae5df253b544e688c3e41d3037ec30fbdc0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): support a custom slippage tolerance in findSwapQuote
+
+  `findSwapQuote` now accepts an optional `slippageTolerance` (in percent, e.g.
+  `0.5` = 0.5%). It is forwarded to the general aggregators that accept a slippage
+  override, each converted to that provider's native unit: 1inch and SwapKit
+  (percent), KyberSwap (basis points), and LiFi (fraction). CowSwap (RFQ limit
+  order) and the native THORChain/MayaChain protocols use their own protection
+  and ignore it. When omitted, every provider keeps its existing default — no
+  behavior change.
+
+  Part of wiring the Advanced Swap settings (vultisig/vultisig-windows#4131).
+
+### Patch Changes
+
+- [#757](https://github.com/vultisig/vultisig-sdk/pull/757) [`a3dbf1b`](https://github.com/vultisig/vultisig-sdk/commit/a3dbf1b55f0e83cacdefbbee3532a01d8f7ba3af) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(swap): validate recipient and slippage overrides in findSwapQuote
+
+  `findSwapQuote` now trims the optional `recipient` and treats empty/whitespace
+  strings as no recipient, so a blank value no longer gates off initiator-paying
+  aggregators or gets forwarded as a native `destination` / CowSwap `receiver`.
+  It also rejects an invalid `slippageTolerance` (negative, `NaN`, or non-finite)
+  up front with a `SwapError` instead of letting the bad value propagate into
+  every provider call.
+
+## 2.16.6
+
+### Patch Changes
+
+- [#711](https://github.com/vultisig/vultisig-sdk/pull/711) [`ea8afd2`](https://github.com/vultisig/vultisig-sdk/commit/ea8afd2d468380e1f5e36cae50ba9111c7b2c1bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preflight THORChain native swap quotes against inbound halt flags before requesting a quote.
+
 ## 2.16.5
 
 ### Patch Changes

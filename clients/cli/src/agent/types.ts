@@ -7,6 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
+import type { BalanceSummaryCard } from './cards'
 
 // ============================================================================
 // Configuration
@@ -109,6 +110,30 @@ export type ConversationMessage = {
   audio_url?: string
   metadata?: Record<string, unknown>
   created_at: string
+  // AI-SDK UIMessagePart list, present on messages fetched from
+  // /messages/since (the disconnect-recovery endpoint). Text parts carry the
+  // assistant answer; `data-tx_ready` parts carry a persisted signable card so
+  // a turn that dropped its SSE stream mid-flight can still recover both.
+  parts?: ConversationMessagePart[]
+}
+
+// Minimal projection of the backend's UIMessagePart (internal/types/parts.go).
+// Only the fields the CLI recovery path reads are typed; `type` is the
+// discriminator ("text", "data-tx_ready", "tool-<name>", …).
+export type ConversationMessagePart = {
+  type: string
+  text?: string
+  id?: string
+  data?: unknown
+}
+
+// Response body of GET /agent/conversations/:id/messages/since — the
+// reconnect-and-replay contract (agent-backend messages_since.go). `cursor` is
+// an OPAQUE composite (created_at, id) token to round-trip on the next poll.
+export type MessagesSinceResponse = {
+  messages: ConversationMessage[]
+  cursor: string
+  toolResults?: Record<string, unknown>
 }
 
 // ============================================================================
@@ -185,6 +210,14 @@ export type SendMessageRequest = {
   selected_suggestion_id?: string
   /** Signals that the caller is an AI agent; backend adjusts prompt accordingly */
   via_agent?: boolean
+  /**
+   * Data-part surface keys the CLI can render. When "balance_summary" is
+   * present the backend emits a `data-balance_summary` SSE part and strips
+   * `card_payload` from the model-visible tool result, so the model narrates
+   * instead of echoing raw card JSON into message content (the legacy
+   * verbatim-echo path). See backend types.go SupportedSurfaces.
+   */
+  supported_surfaces?: string[]
 }
 
 export type ToolDefinition = {
@@ -294,7 +327,11 @@ export type UsageInfo = {
 // ============================================================================
 
 export type SSETextDelta = { delta: string }
-export type SSEToolProgress = { tool: string; status: 'running' | 'done'; label?: string }
+export type SSEToolProgress = {
+  tool: string
+  status: 'running' | 'done'
+  label?: string
+}
 export type SSETitle = { title: string }
 export type SSESuggestions = { suggestions: Suggestion[] }
 export type SSETxReady = TxReadyPayload
@@ -319,10 +356,22 @@ export type SSEEvent =
 // Pipe Interface (--via-agent mode) Event Types
 // ============================================================================
 
+/**
+ * Transaction lifecycle status emitted by post-broadcast confirmation polling.
+ * `pending` on broadcast → `confirmed`/`failed` once the on-chain outcome
+ * resolves → `timeout` when the bounded poll budget is exhausted (the tx may
+ * still confirm later). Shared so the union is preserved end-to-end (pipe
+ * event, ask result, UI callback) without unchecked `as` casts.
+ */
+export type TxLifecycleStatus = 'broadcast' | 'pending' | 'confirmed' | 'failed' | 'timeout'
+
 export type PipeOutputEvent =
   | { type: 'ready'; vault: string; addresses: Record<string, string> }
   | { type: 'session'; id: string }
-  | { type: 'history'; messages: Array<{ role: string; content: string; created_at: string }> }
+  | {
+      type: 'history'
+      messages: Array<{ role: string; content: string; created_at: string }>
+    }
   | { type: 'auth'; status: 'authenticated' | 'failed'; error?: string }
   | { type: 'conversation'; id: string }
   | { type: 'text_delta'; delta: string }
@@ -346,11 +395,16 @@ export type PipeOutputEvent =
       type: 'tx_status'
       tx_hash: string
       chain: string
-      status: 'pending' | 'confirmed' | 'failed'
+      status: TxLifecycleStatus
       explorer_url?: string
     }
   | { type: 'assistant'; content: string }
+  | { type: 'balance_summary'; card: BalanceSummaryCard }
   | { type: 'suggestions'; suggestions: Suggestion[] }
+  // Emitted when the SSE stream dropped mid-turn and the CLI is polling
+  // /messages/since to recover the answer — lets an agent consumer
+  // distinguish "still working" from "failed".
+  | { type: 'reconnecting' }
   | { type: 'error'; message: string; code: AgentErrorCode }
   | { type: 'done' }
 
@@ -375,10 +429,16 @@ export type UICallbacks = {
     code?: AgentErrorCode
   ) => void
   onAssistantMessage: (content: string) => void
+  /** Render a server-built balance_summary card (data-balance_summary SSE part,
+   *  or the legacy verbatim-echo fallback parsed from message content). */
+  onBalanceSummary?: (card: BalanceSummaryCard) => void
   onSuggestions: (suggestions: Suggestion[]) => void
-  onTxStatus: (txHash: string, chain: string, status: string, explorerUrl?: string) => void
+  onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void
   onDone: () => void
+  // Fired when a mid-turn SSE disconnect is detected and the session begins
+  // polling /messages/since to recover the dropped answer/tx_ready.
+  onReconnecting?: () => void
   onNotification?: (title: string, body: string) => void
   requestPassword: () => Promise<string>
   requestConfirmation: (message: string) => Promise<boolean>

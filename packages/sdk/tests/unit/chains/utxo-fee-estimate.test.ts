@@ -71,7 +71,7 @@ describe('estimateUtxoFee — Blockchair baseline + 25% buffer', () => {
     expect(rate).toBe(1)
   })
 
-  it('Dogecoin: keeps the /10 workaround (Blockchair reports 10x too high)', async () => {
+  it('Dogecoin: matches the app clients by using 25% of Blockchair baseline', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -86,7 +86,7 @@ describe('estimateUtxoFee — Blockchair baseline + 25% buffer', () => {
       apiUrlKind: 'blockchair',
     })
 
-    // Dogecoin uses floor(base / 10), NOT the +25% buffer path.
-    expect(rate).toBe(50_000)
+    // Dogecoin uses floor(base / 4), matching the iOS and Android multiplier.
+    expect(rate).toBe(125_000)
   })
 })

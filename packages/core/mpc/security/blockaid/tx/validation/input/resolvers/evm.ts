@@ -3,6 +3,7 @@ import { blockaidEvmChain, BlockaidSupportedEvmChain } from '@vultisig/core-chai
 import { BlockaidTxValidationInput } from '@vultisig/core-chain/security/blockaid/tx/validation/resolver'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
+import { getIsGenericContractCall } from '@vultisig/core-mpc/keysign/utils/getIsGenericContractCall'
 import { getKeysignCoin } from '@vultisig/core-mpc/keysign/utils/getKeysignCoin'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
@@ -50,7 +51,7 @@ export const getEvmBlockaidTxValidationInput: BlockaidTxValidationInputResolver<
   const amount = BigInt(payload.toAmount)
   const receiver = payload.toAddress as `0x${string}`
 
-  if (!coin.id) {
+  if (getIsGenericContractCall(payload) || !coin.id) {
     return toEvmBlockaidTxScanInput({
       to: receiver,
       value: `0x${bigIntToHex(amount)}`,
