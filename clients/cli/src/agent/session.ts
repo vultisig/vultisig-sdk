@@ -325,6 +325,23 @@ export class AgentSession {
         `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
       this.pendingToolResults = [] // don't leak into next sendMessage
+      // A depth-capped abort truncates the conversation mid-flight and drops the
+      // queued results above — it is NOT a clean finish. Emit a distinct typed
+      // error FIRST so headless callers can detect the truncation (ask --json
+      // surfaces it in the error envelope and exits non-zero; pipe gets a typed
+      // `error` frame) instead of reading a bare `done` as success. onDone()
+      // still fires after, purely as the turn terminator (pipe consumers read
+      // frames until `done`). This error-then-done shape matches the precedent in
+      // pipe.ts handleCommand, whose sendMessage catch emits an `error` frame then
+      // `done`. It is deliberately NOT the requestPassword/requestConfirmation
+      // shape: those emit NON-terminal `error` frames and keep the turn alive
+      // awaiting a reply. Pipe-consumer contract: inspect for an `error` frame
+      // before treating `done` as success — the error code, not onDone, is the
+      // signal.
+      ui.onError(
+        `agent message loop exceeded ${MAX_MESSAGE_LOOP_DEPTH} turns; conversation truncated`,
+        AgentErrorCode.LOOP_DEPTH_EXCEEDED
+      )
       ui.onDone()
       return
     }

@@ -12,6 +12,7 @@
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
 import type { AgentErrorCode } from './agentErrors'
+import { isTerminalAgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard } from './cards'
 import type { AgentSession } from './session'
 import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
@@ -65,6 +66,10 @@ export class AskInterface {
   // when the turn produced no error of its own. Cleared after the first turn so
   // later turns don't carry the init signal.
   private initError: AskResult['error']
+  // Tracks whether the currently-latched `error` is a terminal one (e.g. the
+  // depth cap). A terminal error may overwrite a prior non-terminal one; once a
+  // terminal error is recorded, later frames cannot replace it. See onError.
+  private errorIsTerminal = false
   // Whether ask() has run at least once. Distinguishes init-time onError (sets
   // initError) from turn onError (sets error), and gates clearing initError so
   // the init signal only carries into the FIRST turn.
@@ -144,13 +149,16 @@ export class AskInterface {
         // An onError fired BEFORE the first ask() (hasAsked === false) is an
         // initialize-time signal (e.g. SESSION_NOT_FOUND from a stale --session
         // fallback). Keep it in initError as the lowest-priority fallback so a
-        // real turn error can still override it. Turn errors record the FIRST
-        // backend/stream error so ask() can surface it (non-zero exit + error
-        // envelope). Keep the human-readable stderr breadcrumb either way.
+        // real turn error can still override it. For turn errors: latch the first
+        // error, but let a terminal code overwrite a previously-recorded non-terminal
+        // one (LOOP_DEPTH_EXCEEDED etc.); once a terminal error is latched, later
+        // frames cannot replace it. Keep the stderr breadcrumb either way.
+        const isTerminal = isTerminalAgentErrorCode(code)
         if (!this.hasAsked) {
           this.initError = { message, code }
-        } else if (!this.error) {
+        } else if (!this.error || (isTerminal && !this.errorIsTerminal)) {
           this.error = { message, code }
+          this.errorIsTerminal = isTerminal
         }
         process.stderr.write(`[error] ${message} [${code}]\n`)
       },
@@ -195,6 +203,7 @@ export class AskInterface {
     this.error = undefined
     if (this.hasAsked) {
       this.initError = undefined
+      this.errorIsTerminal = false
     }
     this.hasAsked = true
 
