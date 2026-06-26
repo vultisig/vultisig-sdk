@@ -28,7 +28,7 @@ export async function authenticateVault(
   vault: VaultBase,
   password?: string,
   maxAttempts = 3
-): Promise<{ token: string; expiresAt: number }> {
+): Promise<{ token: string; expiresAt: number; refreshToken?: string }> {
   // Get vault keys
   const publicKey = vault.publicKeys.ecdsa
   const chainCode = vault.hexChainCode
@@ -77,6 +77,12 @@ export async function authenticateVault(
       return {
         token: authResponse.token,
         expiresAt: authResponse.expires_at,
+        // Captured + persisted by the session token cache. The backend exposes
+        // POST /auth/refresh to exchange it for a fresh access token without a
+        // new MPC round; wiring that exchange is a future enhancement — today
+        // the CLI re-auths via a full MPC re-sign (authenticateVault), which is
+        // always available and avoids depending on refresh-token rotation.
+        refreshToken: authResponse.refresh_token,
       }
     } catch (err: any) {
       lastError = err
@@ -96,8 +102,10 @@ export async function authenticateVault(
  * Hash = keccak256("\x19Ethereum Signed Message:\n" + len(message) + message)
  *
  * Returns 32-byte Uint8Array hash.
+ *
+ * Exported for unit testing (a regression here silently breaks ALL agent auth).
  */
-function computePersonalSignHash(message: string): Uint8Array {
+export function computePersonalSignHash(message: string): Uint8Array {
   const messageBytes = new TextEncoder().encode(message)
   const prefix = `\x19Ethereum Signed Message:\n${messageBytes.length}`
   const prefixBytes = new TextEncoder().encode(prefix)
@@ -116,8 +124,10 @@ function computePersonalSignHash(message: string): Uint8Array {
  * The SDK returns signature as DER-encoded hex for ECDSA.
  * The backend expects raw r || s || v (65 bytes total).
  * v = 27 or 28 (from recovery id 0 or 1).
+ *
+ * Exported for unit testing (a regression here silently breaks ALL agent auth).
  */
-function formatSignature65(sigHex: string, recovery: number): string {
+export function formatSignature65(sigHex: string, recovery: number): string {
   // Remove 0x prefix if present
   const hex = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
   const bytes = Buffer.from(hex, 'hex')

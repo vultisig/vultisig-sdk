@@ -57,6 +57,11 @@ export class AskInterface {
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
   private error: AskResult['error']
+  // Whether ask() has run at least once. initialize() drives getCallbacks()
+  // BEFORE the first ask() — a stale --session fallback fires
+  // onError(SESSION_NOT_FOUND) there. ask() must NOT clear that initialize-time
+  // error on its first turn, or the result envelope reports false success.
+  private hasAsked = false
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
@@ -171,7 +176,15 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
-    this.error = undefined
+    // Preserve an initialize-time error (e.g. SESSION_NOT_FOUND from a stale
+    // --session fallback, set via getCallbacks().onError during initialize())
+    // into the FIRST turn's result. Clearing it here would drop the promised
+    // signal and a headless caller would see a false-success envelope. Later
+    // turns reset so each turn's snapshot stays clean.
+    if (this.hasAsked) {
+      this.error = undefined
+    }
+    this.hasAsked = true
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)

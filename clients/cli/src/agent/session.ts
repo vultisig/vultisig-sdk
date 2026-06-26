@@ -9,7 +9,7 @@
  *   tx_ready synthesis (server-built transactions buffered then signed)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -140,38 +140,41 @@ export class AgentSession {
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
 
-    // Create or resume conversation
+    // Create or resume conversation. Every conversation request routes through
+    // withAuthRetry so a revoked-but-unexpired cached token recovers uniformly
+    // (clear → re-auth → retry once) on EVERY path — the fresh-convo create
+    // used to skip this and hard-throw `Authentication failed` (finding a).
     if (this.config.sessionId) {
       this.conversationId = this.config.sessionId
-      // Fetch historical messages for resumed sessions
+      // Fetch historical messages for resumed sessions.
       try {
-        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
-        // Re-authenticate on 401/403 and retry once
-        if (err.message?.includes('401') || err.message?.includes('403')) {
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
-          this.historyMessages = conv.messages || []
-        } else {
-          // Session not found or other error — reset to new conversation
-          this.conversationId = null
-          this.historyMessages = []
-          const conv = await this.client.createConversation(this.publicKey)
-          this.conversationId = conv.id
-        }
+        // Resume failed: a stale/typo'd --session-id, a persistent backend
+        // error, or an auth failure that survived the single retry. Fall back
+        // to a fresh conversation rather than hard-failing (finding b — the old
+        // 401 branch retried getConversation once with no fallback and threw
+        // uncaught on a second failure), but surface a typed, NON-FATAL signal
+        // so a headless caller knows prior context was dropped and can persist
+        // the NEW conversation id (finding c — the fallback used to be silent).
+        this.conversationId = null
+        this.historyMessages = []
+        const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
+        this.conversationId = conv.id
+        ui.onError(
+          `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); started a new conversation ${conv.id}`,
+          AgentErrorCode.SESSION_NOT_FOUND
+        )
       }
     } else {
-      const conv = await this.client.createConversation(this.publicKey)
+      const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
       this.conversationId = conv.id
     }
 
@@ -216,6 +219,44 @@ export class AgentSession {
           process.stderr.write(`[session] push notification setup failed: ${err}\n`)
         }
       }
+    }
+  }
+
+  /**
+   * Run an authenticated backend request and, on a 401/403, do a single
+   * clear → re-auth → retry. This is the ONE chokepoint every conversation
+   * request shares (resume fetch, fresh-convo create, error-fallback create,
+   * and the send-message stream) so a revoked-but-unexpired cached token
+   * recovers identically everywhere instead of throwing on some paths.
+   *
+   * The retry replays the EXACT same `request` closure, which matters for the
+   * send-message path: the replayed body must carry the same content +
+   * recent_actions or the LLM re-emits tool calls (runaway loop). Re-auth is a
+   * full MPC re-sign via authenticateVault — the backend also exposes
+   * POST /auth/refresh, but exchanging the refresh token is a future
+   * enhancement (see auth.ts); the re-sign is always available.
+   *
+   * `onReauth` (optional) fires the instant a re-auth is committed to — BEFORE
+   * authenticateVault runs — so a caller in a retry loop (recoverDisconnectedTurn)
+   * can record that its single re-auth has been spent even if the MPC re-sign
+   * itself then throws. Without this hook a re-auth that fails with a non-auth
+   * error would let the caller re-enter and re-sign on every iteration.
+   */
+  private async withAuthRetry<T>(request: () => Promise<T>, onReauth?: () => void): Promise<T> {
+    try {
+      return await request()
+    } catch (err) {
+      if (!isAuthError(err)) throw err
+      onReauth?.()
+      // authenticateVault (MPC re-sign) may not return a refreshToken; capture
+      // the previously cached one before clearing so it survives the re-auth and
+      // the later /auth/refresh path stays available.
+      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
+      clearCachedToken(this.publicKey)
+      const auth = await authenticateVault(this.client, this.vault, this.config.password)
+      this.client.setAuthToken(auth.token)
+      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
+      return await request()
     }
   }
 
@@ -394,37 +435,21 @@ export class AgentSession {
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
     // message and trigger an LLM-loop where it re-emits the same tool
-    // calls forever.
+    // calls forever. withAuthRetry replays this exact closure once on auth
+    // failure; a non-auth error (or a persistent auth failure) rethrows here.
     let streamResult
-    let authRetried = false
-    while (true) {
-      try {
-        streamResult = await this.client.sendMessageStream(
-          this.conversationId,
-          request,
-          callbacks,
-          this.abortController?.signal
-        )
-        break
-      } catch (err: any) {
-        const isAuthErr = err.message?.includes('401') || err.message?.includes('403')
-        if (isAuthErr && !authRetried) {
-          authRetried = true
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          continue
-        }
-        // Non-401 or already retried: restore the spliced batch so the
-        // caller (or next user turn) can resume from the same queue
-        // state. SF in sendMessage's catch will clear if the user
-        // doesn't retry.
-        if (flushedThisCall.length > 0) {
-          this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
-        }
-        throw err
+    try {
+      streamResult = await this.withAuthRetry(() =>
+        this.client.sendMessageStream(this.conversationId!, request, callbacks, this.abortController?.signal)
+      )
+    } catch (err) {
+      // Non-401 or already-retried auth failure: restore the spliced batch so
+      // the caller (or next user turn) can resume from the same queue state.
+      // SF in sendMessage's catch will clear if the user doesn't retry.
+      if (flushedThisCall.length > 0) {
+        this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
       }
+      throw err
     }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
@@ -535,10 +560,30 @@ export class AgentSession {
     const replaySignableCards = serverAnchor !== null
     let cursor: string | undefined
 
+    // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
+    // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
+    // poll routes through withAuthRetry (clear→reauth→retry once); its onReauth
+    // hook flips authRecovered the instant the re-sign is committed to, so even a
+    // re-auth that itself fails (MPC error, auth endpoint down) can't re-arm. Once
+    // spent, later polls call messagesSince directly with the (best-effort)
+    // refreshed token, so a *persistent* 401 can't trigger an MPC re-sign on every
+    // poll (bounded re-sign work, no key-share amplification). Later polls still
+    // recover the turn if the refreshed token starts working; otherwise the loop
+    // exhausts as before. Without the wrap a revoked token would spin through
+    // recoveryMaxPolls and silently lose the assistant reply / tx_ready (M1).
+    let authRecovered = false
+
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+        resp = authRecovered
+          ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(
+              () => this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since }),
+              () => {
+                authRecovered = true
+              }
+            )
       } catch (err: any) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
@@ -990,6 +1035,21 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
   return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
 }
 
+/**
+ * Classify a thrown backend error as an auth failure (401/403). The AgentClient
+ * surfaces HTTP status by embedding it in the Error message (e.g.
+ * "Request failed (401): ..."). A word-boundary match keeps every real status
+ * format (`(401)`, `HTTP 401`, bare `401`) while avoiding false positives on
+ * digits embedded in a larger number (a `1401` amount, a `4034` port). We do
+ * NOT tighten to a parens-only shape: a false NEGATIVE silently breaks auth
+ * recovery (the point of this helper), whereas a false positive only costs one
+ * wasted re-auth + an idempotent replay of the exact same request.
+ */
+export function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /\b(401|403)\b/.test(msg)
+}
+
 // ============================================================================
 // Agent Token Cache
 //
@@ -997,7 +1057,7 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
 // Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
 // ============================================================================
 
-type TokenEntry = { token: string; expiresAt: number }
+type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
 type TokenStore = Record<string, TokenEntry>
 
 function getTokenCachePath(): string {
@@ -1018,8 +1078,26 @@ function readTokenStore(): TokenStore {
 function writeTokenStore(store: TokenStore): void {
   const path = getTokenCachePath()
   const dir = join(path, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
+  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
+  // every write so it can't retain looser perms now that refresh tokens live here.
+  try {
+    chmodSync(dir, 0o700)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
   writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
+  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
+  // file keeps its old perms. chmod every write so a pre-existing (or
+  // out-of-band) agent-tokens.json can't retain looser perms now that a
+  // longer-lived refresh token lives here.
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
 }
 
 /**
@@ -1047,9 +1125,18 @@ function loadCachedToken(publicKey: string): string | null {
   return entry.token
 }
 
-function saveCachedToken(publicKey: string, token: string, expiresAt: number): void {
+// Persists the access token (and optional refresh token) under 0o600 perms.
+// The refresh token is captured for a future POST /auth/refresh exchange. A
+// prior entry's refreshToken is preserved when this call doesn't carry one
+// (e.g. a backend that stops returning refresh_token shouldn't drop the
+// still-valid token we already hold).
+function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
   const store = readTokenStore()
-  store[publicKey] = { token, expiresAt }
+  store[publicKey] = {
+    token,
+    expiresAt,
+    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
+  }
   try {
     writeTokenStore(store)
   } catch {
