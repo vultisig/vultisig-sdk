@@ -12,7 +12,11 @@ list`/`delete` commands.
 A `--session-id` resume whose 401 survives the single retry — or that fails for
 any other reason — now falls back to a fresh conversation instead of throwing
 uncaught, and emits a typed, non-fatal `SESSION_NOT_FOUND` signal carrying the
-new conversation id so a headless caller knows prior context was dropped.
+new conversation id so a headless caller knows prior context was dropped. In
+`agent ask`, that initialize-time signal is now preserved into the first turn's
+result envelope (it was previously cleared at turn start, so a stale-session
+`ask --json` returned a false-success envelope instead of the promised non-zero
+`SESSION_NOT_FOUND`).
 
 Models the backend's `refresh_token`/`access_token` in `AuthTokenResponse` and
 persists the refresh token in the token cache (0o600) for a future
