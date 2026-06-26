@@ -1,5 +1,25 @@
 # @vultisig/cli
 
+## 2.8.4
+
+### Patch Changes
+
+- [#879](https://github.com/vultisig/vultisig-sdk/pull/879) [`f34ef93`](https://github.com/vultisig/vultisig-sdk/commit/f34ef932ba18c19accccc716098c3c16b83da625) Thanks [@neavra](https://github.com/neavra)! - Fix `agent ask` error reporting so a real first-turn backend/stream error is no
+  longer masked by the initialize-time `SESSION_NOT_FOUND` signal. The
+  stale-`--session` fallback signal is now kept separately and used only as a
+  lowest-priority fallback when the turn produced no error of its own, so a
+  genuine turn error wins while a clean turn after a stale-session fallback still
+  reports `SESSION_NOT_FOUND` (non-zero exit).
+
+- [#875](https://github.com/vultisig/vultisig-sdk/pull/875) [`a1d711b`](https://github.com/vultisig/vultisig-sdk/commit/a1d711beaf1694883688cd8e430c8b38162975b6) Thanks [@neavra](https://github.com/neavra)! - agent: surface a loop-depth overrun as a typed `LOOP_DEPTH_EXCEEDED` error instead of a success-shaped `done`.
+
+  When the agent message loop exceeds `MAX_MESSAGE_LOOP_DEPTH` (16), `processMessageLoop` previously cleared the queued tool results and called `ui.onDone()` — the same callback used on a clean finish — so a headless caller (`agent ask --json` / `--via-agent` pipe) could not distinguish a depth-capped truncation from a completed turn. It now emits `AgentErrorCode.LOOP_DEPTH_EXCEEDED` via `ui.onError` first (ask exits non-zero with an error envelope; pipe gets a typed `error` frame), then `onDone()` as the turn terminator.
+
+- Updated dependencies [[`26dd218`](https://github.com/vultisig/vultisig-sdk/commit/26dd218282b198fdea9c1118e7fe5bc800c071fb), [`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/client-shared@0.2.17
+  - @vultisig/core-chain@2.17.10
+  - @vultisig/sdk@2.8.4
+
 ## 2.8.2
 
 ### Patch Changes
