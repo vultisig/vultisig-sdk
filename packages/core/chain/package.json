@@ -290,6 +290,41 @@
       "import": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js",
       "default": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js"
     },
+    "./chains/cosmos/qbtc/governance/getQbtcGovParams": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcMyVote": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposals": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposalTally": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js"
+    },
+    "./chains/cosmos/qbtc/governance/parseGov": {
+      "types": "./dist/chains/cosmos/qbtc/governance/parseGov.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/parseGov.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/parseGov.js"
+    },
+    "./chains/cosmos/qbtc/governance/proposal": {
+      "types": "./dist/chains/cosmos/qbtc/governance/proposal.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/proposal.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/proposal.js"
+    },
+    "./chains/cosmos/qbtc/governance/voteOption": {
+      "types": "./dist/chains/cosmos/qbtc/governance/voteOption.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/voteOption.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/voteOption.js"
+    },
     "./chains/cosmos/qbtc/protoEncoding": {
       "types": "./dist/chains/cosmos/qbtc/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/qbtc/protoEncoding.js",
