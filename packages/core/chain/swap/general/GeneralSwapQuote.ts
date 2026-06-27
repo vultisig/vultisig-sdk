@@ -64,7 +64,7 @@ export type GeneralSwapTx =
  * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
  * `@vultisig/core-chain/swap/utils/getSwapExplorerUrl` instead of routing
  * by hand — the helper covers the LI.FI / Helius scanners and falls back to
- * the source-chain explorer for `1inch` / `kyber` / `swapkit` (none of which
+ * the source-chain explorer for `1inch` / `jupiter` / `kyber` / `swapkit` (none of which
  * expose a per-tx aggregator page).
  */
 export type GeneralSwapQuote = {
