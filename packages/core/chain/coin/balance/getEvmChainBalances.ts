@@ -62,10 +62,16 @@ export const getEvmChainBalances = async (input: GetEvmChainBalancesInput): Prom
         }
   )
 
-  const results = await publicClient.multicall({
-    allowFailure: true,
-    contracts,
-  })
+  const results = await publicClient
+    .multicall({
+      allowFailure: true,
+      contracts,
+    })
+    .catch(() => undefined)
+
+  if (!results) {
+    return getFallbackBalances(input)
+  }
 
   return Object.fromEntries(
     coins.map((coin, index) => {
