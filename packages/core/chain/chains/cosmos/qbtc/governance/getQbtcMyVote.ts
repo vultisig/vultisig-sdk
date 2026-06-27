@@ -33,10 +33,13 @@ export const getQbtcMyVote = async ({ proposalId, voter }: GetQbtcMyVoteInput): 
     .map(({ option, weight }) => {
       const parsed = parseQbtcVoteOption(option ?? '')
       if (!parsed) return undefined
-      // Drop entries with an unparseable weight rather than coercing to 0,
-      // which would make a malformed LCD payload look like a valid vote.
-      const weightFraction = Number(weight ?? '0')
-      if (!Number.isFinite(weightFraction)) return undefined
+      // Drop entries whose weight isn't a valid 0..1 fraction rather than
+      // coercing to 0, which would make a malformed LCD payload look like a
+      // valid vote.
+      const weightFraction = Number(weight)
+      if (!Number.isFinite(weightFraction) || weightFraction < 0 || weightFraction > 1) {
+        return undefined
+      }
       return { option: parsed, weight: weightFraction }
     })
     .filter((entry): entry is { option: QbtcVoteOptionKey; weight: number } => entry !== undefined)
