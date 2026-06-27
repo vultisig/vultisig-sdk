@@ -147,7 +147,7 @@ export const getJupiterSwapQuote = async ({
           amount: quotedPlatformFee,
           decimals: to.decimals,
           chain: Chain.Solana,
-          id: to.id,
+          id: outputMint,
         },
       },
     },

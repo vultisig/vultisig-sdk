@@ -663,15 +663,17 @@ export const findSwapQuote = async ({
   // the runtime `fetchers[]` array order, which shifts based on
   // `shouldPreferGeneralSwap`. The below-min preference is a separate concept:
   // we pick which provider's hint to surface, not which provider to query
-  // first. KyberSwap typically surfaces the cleanest EVM messages, then 1inch
-  // and LiFi (cross-chain matrix), then SwapKit (catch-all), then the two
-  // native protocols. This ordering is independent of routing and gives
+  // first. KyberSwap typically surfaces the cleanest EVM messages, then 1inch,
+  // Jupiter for same-chain Solana, LiFi (cross-chain matrix), SwapKit
+  // (catch-all), then the two native protocols. This ordering is independent
+  // of routing and gives
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [
     'CowSwap',
     'KyberSwap',
     '1inch',
+    'Jupiter',
     'LiFi',
     'SwapKit',
     'THORChain',

@@ -132,6 +132,45 @@ describe('getJupiterSwapQuote', () => {
     expect(quote.tx.solana.networkFee).toBe(BigInt(solanaConfig.baseFee + solanaConfig.ataRentLamports + 1234))
   })
 
+  it('uses the wrapped SOL mint as the fee asset id for native SOL outputs', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input)
+      const body = url.includes('/quote')
+        ? {
+            ...quoteResponse,
+            inputMint: USDC_MINT,
+            outputMint: SOL_NATIVE_MINT,
+          }
+        : { swapTransaction, prioritizationFeeLamports: 1234 }
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    const quote = await getJupiterSwapQuote({
+      from: {
+        chain: Chain.Solana,
+        address: USER,
+        id: USDC_MINT,
+        decimals: 6,
+        ticker: 'USDC',
+      },
+      to: {
+        chain: Chain.Solana,
+        address: USER,
+        decimals: 9,
+        ticker: 'SOL',
+      },
+      amount: 100000000n,
+      affiliateBps: 50,
+      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
+    })
+
+    expect('solana' in quote.tx).toBe(true)
+    if (!('solana' in quote.tx)) {
+      throw new Error('Expected Solana Jupiter transaction')
+    }
+    expect(quote.tx.solana.swapFee.id).toBe(SOL_NATIVE_MINT)
+  })
+
   it('derives the Jupiter feeAccount with the Token-2022 program when the output mint is Token-2022', async () => {
     vi.mocked(getSolanaClient).mockReturnValue({
       getAccountInfo: vi

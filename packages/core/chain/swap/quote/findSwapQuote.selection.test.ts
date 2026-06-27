@@ -299,7 +299,7 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('swapkit')
   })
 
-  it('selects Jupiter for same-chain Solana quotes when it beats LiFi within the preference band', async () => {
+  it('selects Jupiter for same-chain Solana quotes when LiFi only beats it within the preference band', async () => {
     const solanaSameChainCoins = {
       from: {
         chain: Chain.Solana,
@@ -316,10 +316,10 @@ describe('findSwapQuote parallel selection', () => {
       },
     } as const
 
-    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'li.fi'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'li.fi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
-    vi.mocked(getJupiterSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'jupiter'))
+    vi.mocked(getJupiterSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'jupiter'))
 
     const quote = await findSwapQuote({ ...solanaSameChainCoins, amount: 100000000n })
 
@@ -417,6 +417,33 @@ describe('findSwapQuote parallel selection', () => {
         amount: 1n,
       })
     ).rejects.toThrow('Amount below the minimum required by a swap provider.')
+  })
+
+  it('prefers a same-chain Solana Jupiter below-minimum message over LiFi', async () => {
+    const solanaSameChainCoins = {
+      from: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        decimals: 9,
+        ticker: 'SOL',
+      },
+      to: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6,
+        ticker: 'USDC',
+      },
+    } as const
+
+    vi.mocked(getJupiterSwapQuote).mockRejectedValue(new Error('Jupiter minimum amount is 0.01 SOL'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('LiFi minimum amount is 0.02 SOL'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    await expect(findSwapQuote({ ...solanaSameChainCoins, amount: 1n })).rejects.toThrow(
+      'Jupiter minimum amount is 0.01 SOL'
+    )
   })
 
   it('omits noisy provider errors from the all-fail message', async () => {
