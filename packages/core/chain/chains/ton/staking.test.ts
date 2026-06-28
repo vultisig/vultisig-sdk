@@ -6,8 +6,8 @@ import {
   isTonNominatorImplementation,
   isTonStakingComment,
   tonPoolHasCapacity,
-  TonStakingPool,
   tonStakingDepositComment,
+  TonStakingPool,
   tonStakingWithdrawComment,
 } from './staking'
 
@@ -60,9 +60,7 @@ describe('TON nominator pool eligibility', () => {
   })
 
   it('treats missing/zero max nominators as having capacity', () => {
-    expect(
-      tonPoolHasCapacity({ ...basePool, currentNominators: undefined })
-    ).toBe(true)
+    expect(tonPoolHasCapacity({ ...basePool, currentNominators: undefined })).toBe(true)
     expect(tonPoolHasCapacity({ ...basePool, maxNominators: 0 })).toBe(true)
   })
 
@@ -79,9 +77,7 @@ describe('TON nominator pool eligibility', () => {
   it('is stakeable only when verified, nominator, and with capacity', () => {
     expect(isStakeableTonPool(basePool)).toBe(true)
     expect(isStakeableTonPool({ ...basePool, verified: false })).toBe(false)
-    expect(
-      isStakeableTonPool({ ...basePool, implementation: 'liquidTF' })
-    ).toBe(false)
+    expect(isStakeableTonPool({ ...basePool, implementation: 'liquidTF' })).toBe(false)
     expect(
       isStakeableTonPool({
         ...basePool,

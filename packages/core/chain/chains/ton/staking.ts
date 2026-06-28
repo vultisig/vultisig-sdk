@@ -1,5 +1,7 @@
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
+import { tonAddressToBounceable } from './address'
+
 /**
  * Public TonAPI host. The staking endpoints (`/v2/staking/*`) are served
  * exclusively by `tonapi.io` — the Vultisig `/ton` proxy fronts toncenter v3,
@@ -61,8 +63,7 @@ const tonStakingComments = new Set<string>([
  * deposit/withdraw sent non-bounceable can be absorbed (lost) by the pool
  * instead of bounced back if rejected.
  */
-export const isTonStakingComment = (memo: string | undefined): boolean =>
-  !!memo && tonStakingComments.has(memo.trim())
+export const isTonStakingComment = (memo: string | undefined): boolean => !!memo && tonStakingComments.has(memo.trim())
 
 /**
  * Processing-commission buffer (nanotons) added on top of a pool's `min_stake`
@@ -99,8 +100,9 @@ type RawTonStakingPoolEntry = {
 }
 
 /**
- * A staking-pool list entry. `address` is the raw `0:` pool contract address,
- * `apy` is a percentage (e.g. `13.27` = 13.27%), and `minStake` is in nanotons.
+ * A staking-pool list entry. `address` is the bounceable user-friendly (`EQ…`)
+ * pool contract address (normalized from the raw `0:` API form), `apy` is a
+ * percentage (e.g. `13.27` = 13.27%), and `minStake` is in nanotons.
  */
 export type TonStakingPool = {
   address: string
@@ -115,7 +117,10 @@ export type TonStakingPool = {
 }
 
 const mapPoolEntry = (entry: RawTonStakingPoolEntry): TonStakingPool => ({
-  address: entry.address,
+  // Normalize to the bounceable `EQ…` form at the boundary so no caller can
+  // build a staking transfer to a raw/non-bounceable destination (which the
+  // pool would absorb instead of bouncing back on rejection).
+  address: tonAddressToBounceable(entry.address),
   name: entry.name,
   apy: entry.apy,
   minStake: BigInt(Math.trunc(entry.min_stake)),
@@ -178,15 +183,13 @@ export type TonStakingPoolInfo = {
 }
 
 /** Fetches computed pool metadata (name, APY, implementation, cycle end). */
-export const getTonStakingPoolInfo = async (
-  poolAddress: string
-): Promise<TonStakingPoolInfo | undefined> => {
-  const url = `${tonApiPublicUrl}/v2/staking/pool/${poolAddress}`
+export const getTonStakingPoolInfo = async (poolAddress: string): Promise<TonStakingPoolInfo | undefined> => {
+  const url = `${tonApiPublicUrl}/v2/staking/pool/${encodeURIComponent(poolAddress)}`
   const { pool } = await queryUrl<{ pool?: RawTonStakingPoolInfo }>(url)
   if (!pool) return undefined
 
   return {
-    address: pool.address,
+    address: pool.address ? tonAddressToBounceable(pool.address) : undefined,
     name: pool.name,
     apy: pool.apy,
     minStake: pool.min_stake !== undefined ? BigInt(Math.trunc(pool.min_stake)) : undefined,
@@ -207,7 +210,8 @@ type RawTonNominatorPosition = {
  * An account's position in a nominator pool. All amounts are nanotons. `amount`
  * is the active stake; `pendingDeposit` is a just-placed stake awaiting the
  * next validation cycle; `pendingWithdraw`/`readyWithdraw` indicate an
- * in-progress withdrawal (funds locked until the cycle ends).
+ * in-progress withdrawal (funds locked until the cycle ends). `pool` is the
+ * bounceable user-friendly (`EQ…`) pool address (normalized from raw `0:`).
  */
 export type TonNominatorPosition = {
   pool: string
@@ -222,14 +226,12 @@ export type TonNominatorPosition = {
  * (`/v2/staking/nominator/{accountId}/pools`) — the authoritative source for
  * staked positions. `accountId` accepts the user-friendly wallet address.
  */
-export const getTonNominatorPools = async (
-  accountId: string
-): Promise<TonNominatorPosition[]> => {
-  const url = `${tonApiPublicUrl}/v2/staking/nominator/${accountId}/pools`
+export const getTonNominatorPools = async (accountId: string): Promise<TonNominatorPosition[]> => {
+  const url = `${tonApiPublicUrl}/v2/staking/nominator/${encodeURIComponent(accountId)}/pools`
   const { pools } = await queryUrl<{ pools: RawTonNominatorPosition[] }>(url)
 
   return pools.map(position => ({
-    pool: position.pool,
+    pool: tonAddressToBounceable(position.pool),
     amount: BigInt(Math.trunc(position.amount)),
     pendingDeposit: BigInt(Math.trunc(position.pending_deposit)),
     pendingWithdraw: BigInt(Math.trunc(position.pending_withdraw)),

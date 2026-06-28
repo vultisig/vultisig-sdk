@@ -28,9 +28,7 @@ export const tonAddressToRaw = (userFriendlyAddress: string): string => {
  * already in user-friendly form are returned re-encoded as bounceable.
  */
 export const tonAddressToBounceable = (address: string): string => {
-  const parsed = address.includes(':')
-    ? Address.parseRaw(address)
-    : Address.parse(address)
+  const parsed = address.includes(':') ? Address.parseRaw(address) : Address.parse(address)
 
   return parsed.toString({ bounceable: true, testOnly: false, urlSafe: true })
 }
