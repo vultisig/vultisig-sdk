@@ -137,6 +137,15 @@ type SwapKitQuoteResponse = {
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
   tx?: unknown
+  // SwapKit returns a ready-made ERC-20 approve tx for EVM routes whose executor
+  // pulls the token via transferFrom from a spender that is NOT `tx.to` (e.g. the
+  // 1inch executor behind the THORChain aggregator). Its `data` is approve(spender,
+  // amount); the spender is the REAL allowance target. We thread that spender onto
+  // GeneralSwapTx.evm.approvalAddress so the consumer (mcp-ts execute_swap) emits
+  // the approve to the correct address. On-chain proof of the gap this closes:
+  // tx 0xa3aadf17 reverted "ERC20: transfer amount exceeds allowance" — vault had
+  // allowance to tx.to (Diamond 0x9025B8ff…) but 0 to the 1inch executor.
+  approvalTx?: { to?: string; data?: string }
   targetAddress?: string
   depositAddress?: string
   inboundAddress?: string
@@ -340,7 +349,18 @@ const safeBigInt = (value: string | number | bigint | undefined): bigint | undef
   return BigInt(value)
 }
 
-const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
+// Decode the spender from a SwapKit-provided approve() calldata
+// (approve(address spender, uint256 amount) — selector 0x095ea7b3). Returns the
+// 20-byte spender address, or undefined if the calldata is missing/not an approve.
+const decodeApproveSpender = (data: string | undefined): string | undefined => {
+  if (typeof data !== 'string' || !data.startsWith('0x095ea7b3') || data.length < 74) {
+    return undefined
+  }
+  const spender = `0x${data.slice(34, 74)}`
+  return /^0x[0-9a-fA-F]{40}$/.test(spender) ? spender : undefined
+}
+
+const buildEvmTx = (tx: unknown, fromAddress: string, approvalTx?: SwapKitSwapResponse['approvalTx']): GeneralSwapTx => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }
@@ -353,6 +373,11 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
+  // When SwapKit hands back a ready-made approve tx, its spender is the REAL
+  // allowance target (often an inner executor != tx.to). Surface it so the
+  // consumer approves the correct contract instead of the router.
+  const approvalAddress = decodeApproveSpender(approvalTx?.data)
+
   return {
     evm: {
       from: evmTx.from ?? fromAddress,
@@ -360,6 +385,7 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
       data: evmTx.data ?? '0x',
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
+      ...(approvalAddress ? { approvalAddress } : {}),
     },
   }
 }
@@ -561,7 +587,7 @@ const buildSwapKitTx = (
     return buildTransferTx(response, from, amount)
   }
 
-  return buildEvmTx(response.tx, from.address)
+  return buildEvmTx(response.tx, from.address, response.approvalTx)
 }
 
 const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {

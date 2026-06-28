@@ -843,4 +843,86 @@ describe('getSwapKitQuote', () => {
       })
     ).rejects.toBeInstanceOf(SwapKitNoEligibleRoutesError)
   })
+
+  // Inner-spender fix: SwapKit `/v3/swap` returns a top-level `approvalTx` whose
+  // approve() spender is the route's INNER executor (e.g. the 1inch executor
+  // 0x6c0ad82f…), NOT the outer Diamond router. Approving only the router
+  // reverts "transfer amount exceeds allowance". We decode that spender and
+  // surface it as evm.approvalAddress so the approve leg targets it.
+  // On-chain proof: USDC→ETH tx 0xa3aadf17 (approve spender 0x6c0ad82f…).
+  it('threads the approvalTx approve() spender onto evm.approvalAddress', async () => {
+    // approve(0x6c0ad82f9721a6dc986381d19338601a2e6370e5, amount)
+    const innerExecutor = '0x6c0ad82f9721a6dc986381d19338601a2e6370e5'
+    const approveData =
+      '0x095ea7b3' +
+      '000000000000000000000000' +
+      innerExecutor.slice(2) +
+      'f'.repeat(64)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [{ routeId: 'one-inch-route', providers: ['ONEINCH'], expectedBuyAmount: '0.3' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '0.3',
+          providers: ['ONEINCH'],
+          tx: { from: '0xsender', to: '0x9025b8ff', data: '0xda5d4170', value: '0', gas: '210000' },
+          approvalTx: {
+            to: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+            data: approveData,
+          },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        ticker: 'USDC',
+        id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        decimals: 6,
+      },
+      to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      evm: { to: '0x9025b8ff', approvalAddress: innerExecutor },
+    })
+  })
+
+  it('omits evm.approvalAddress when the swap response carries no approvalTx', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [{ routeId: 'native-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '12.4',
+          providers: ['ONEINCH'],
+          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', decimals: 6 },
+      amount: 10_000_000_000_000_000n,
+    })
+
+    expect(quote.tx.evm).toBeDefined()
+    expect((quote.tx.evm as Record<string, unknown>).approvalAddress).toBeUndefined()
+  })
 })
