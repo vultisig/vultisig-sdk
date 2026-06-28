@@ -43,4 +43,24 @@ describe('getSolanaTxStatus', () => {
       isKnown: true,
     })
   })
+
+  // The AUTHORITY step for the broadcast-layer trade-off documented in
+  // ../../broadcast/resolvers/solana.ts: an AlreadyProcessed broadcast can be a
+  // *processed-but-reverted* tx that the broadcast resolver optimistically
+  // reports as success. This proves the confirmation poll detects that revert —
+  // a non-null `signatureStatus.err` returns status 'error' WITHOUT needing the
+  // (possibly not-yet-indexed) transaction details, so a reverted Solana tx is
+  // surfaced as a failure downstream.
+  it('returns error when the signature status carries an execution error', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'finalized' }],
+    })
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+      status: 'error',
+      isKnown: true,
+    })
+    // The error is decided from the signature status alone — no tx fetch needed.
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
 })

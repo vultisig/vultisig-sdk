@@ -17,6 +17,13 @@ export enum AgentErrorCode {
   TRANSACTION_FAILED = 'TRANSACTION_FAILED',
   SIGNING_FAILED = 'SIGNING_FAILED',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
+  LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
+  // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
+  // persistent backend error, or an auth failure that survived the single
+  // retry) so the session fell back to a NEW conversation. Carries the new
+  // conversation id in the message so a headless caller can persist it instead
+  // of silently losing prior context.
+  SESSION_NOT_FOUND = 'SESSION_NOT_FOUND',
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
@@ -24,6 +31,22 @@ const AGENT_ERROR_CODE_VALUES = new Set<string>(Object.values(AgentErrorCode))
 
 export function isAgentErrorCode(value: string): value is AgentErrorCode {
   return AGENT_ERROR_CODE_VALUES.has(value)
+}
+
+/**
+ * Terminal error codes: a fatal condition that ends the turn itself, as opposed
+ * to a non-terminal SSE/stream `error` frame (which `sendMessageStream` can emit
+ * while continuing to parse — see {@link AskInterface.getCallbacks}). The depth
+ * cap is the canonical terminal case: it aborts the message loop mid-flight.
+ *
+ * When `ask` latches the first error for its envelope, a terminal code is allowed
+ * to overwrite a previously-recorded *non-terminal* one so the envelope names the
+ * failure that actually ended the turn rather than an earlier transient frame.
+ */
+const TERMINAL_AGENT_ERROR_CODES = new Set<AgentErrorCode>([AgentErrorCode.LOOP_DEPTH_EXCEEDED])
+
+export function isTerminalAgentErrorCode(code: AgentErrorCode): boolean {
+  return TERMINAL_AGENT_ERROR_CODES.has(code)
 }
 
 export type NormalizedAgentError = {

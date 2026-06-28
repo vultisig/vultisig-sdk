@@ -1,16 +1,34 @@
 // Address derivation
 export { deriveAddressFromKeys } from './address'
 
+// DeFi protocol primitives (sdk.defi.*) — unsigned-tx builders only
+export * from './defi'
+
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet)
+export {
+  balancePolkadot,
+  DOT_DECIMALS,
+  formatDot,
+  getPolkadotAssetBalance,
+  getPolkadotNativeBalance,
+  type PolkadotAssetBalance,
+  type PolkadotNativeBalance,
+} from './balance'
+
 // EVM utilities
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from './evm'
+export type { EvmBalance, EvmGasPrice, GetEvmBalancesParams, GetTokenApprovalsResult, TokenApproval } from './evm'
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from './evm'
@@ -38,6 +56,14 @@ export { gas }
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
 export { formatUtxoBalance, getUtxoBalance, supportedUtxoBalanceChains } from './balance'
 
+// Balance reads (per-chain RPC)
+export type { SolBalance, SplTokenBalance } from './balance'
+export { getSolBalance, getSplTokenBalance } from './balance'
+
+// Gas / fee primitives
+export type { UtxoFeeRate } from './gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from './gas'
+
 // Token utilities
 export type {
   Coin,
@@ -50,6 +76,49 @@ export type {
   TokenStandard,
 } from './token'
 export { chainFeeCoin, getTokenMetadata, knownTokens, knownTokensIndex, resolveContract, searchToken } from './token'
+
+// Balance reads for non-EVM, non-Cosmos chains (sui/ton/tron/xrp/cardano/tao)
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from './balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from './balance'
+
+// Price / fiat (token USD price via CoinGecko proxy)
+export type { PriceBatchResult, PriceQuery, PriceQuote } from './price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from './price'
 
 // Cosmos governance (read proposals + build unsigned MsgVote envelope)
 export type {
@@ -67,25 +136,77 @@ export { getCosmosGovernanceProposals, prepareCosmosVote } from './cosmos'
 
 // Swap
 export type {
+  AcrossChain,
+  AcrossQuote,
+  AcrossQuoteParams,
   AstroportSwapResult,
   BuildAstroportSwapParams,
   FindSwapQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResult,
   NativeSwapMinAmountIn,
+  SkipChainIdsToAffiliates,
+  SkipSwapArgs,
+  SkipSwapErrorEnvelope,
+  SkipSwapOutcome,
+  SkipSwapSuccess,
+  SkipUnsignedMsg,
   SwapQuote,
 } from './swap'
 export {
+  acrossQuote,
+  acrossSupportedChains,
   assembleAstroportSwap,
   ASTROPORT_ROUTER,
   buildAstroportSwap,
+  buildJupiterSwapTx,
+  buildSkipAffiliates,
   classifyAstroportAsset,
   computeAstroportMinReceive,
+  DEFAULT_LUNC_NOTIONAL_FLOOR_USD,
   findSwapQuote,
   getNativeSwapDecimals,
   getNativeSwapMinAmountIn,
+  JUPITER_AFFILIATE_FEE_ATAS,
+  JUPITER_AFFILIATE_FEE_OWNER,
+  JUPITER_API_BASE_URL,
+  JUPITER_DEFAULT_SLIPPAGE_BPS,
+  JUPITER_PLATFORM_FEE_BPS,
   NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
+  quoteSkipRoute,
+  resolveJupiterFeeAccount,
+  resolveLuncFloorUsd,
+  runSkipSwap,
+  SKIP_AFFILIATE_ADDRESS_BY_CHAIN,
+  SkipApiError,
+  skipChainIdToChainName,
+  SOL_NATIVE_MINT,
   TERRA_CHAIN_ID,
   TERRA_LCD,
 } from './swap'
+
+// Bridge — Circle CCTP unsigned bridge/claim calldata builders
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from './bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from './bridge'
 
 // Gas / fee primitives (cosmos gas-fee label + gas limits)
 export {
@@ -111,6 +232,7 @@ export type {
   BuildRedeemParams,
   BuildSellPtParams,
   Defi,
+  EvmScanRequest,
   GlifUnsignedTx,
   PendleActiveMarket,
   PendleChain,
@@ -119,6 +241,20 @@ export type {
   PendleMarketSummary,
   PendlePtBuildResult,
   PendleUnsignedTx,
+  ScanRequest,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
 } from './defi'
 export {
   buildBalancerV3SwapCalldata,
@@ -127,17 +263,27 @@ export {
   buildGlifStakeIcnt,
   buildRedeem,
   buildSellPt,
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
   defi,
   GLIF_ICN_BASE_ADDRESSES,
   GLIF_ICN_TOKEN_DECIMALS,
   glifPoolWriteAbi,
   isPendleChain,
+  parseActionDisplay,
   pendle,
   PENDLE_ROUTER_V4,
   PENDLE_SUPPORTED_CHAINS,
   PendleBuildError,
   pendleMarket,
   pendleMarkets,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
   stripChainPrefix,
 } from './defi'
 
@@ -201,9 +347,23 @@ export {
   type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  type IbcCosmosTx,
+  type IbcMsgTransfer,
+  normaliseIbcChainId,
+  POLKADOT_ASSET_HUB_KNOWN_ASSETS,
   prepareContractCallTxFromKeys,
+  prepareIbcTransfer,
+  type PrepareIbcTransferParams,
+  type PrepareIbcTransferResult,
   prepareJettonTransferTxFromKeys,
   type PrepareJettonTransferTxFromKeysParams,
+  preparePolkadotAssetSend,
+  type PreparePolkadotAssetSendParams,
+  type PreparePolkadotAssetSendResult,
   prepareSendTxFromKeys,
   type PrepareSendTxFromKeysParams,
   prepareSignAminoTxFromKeys,
@@ -212,13 +372,18 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareTrc20TransferFromKeys,
+  type PrepareTrc20TransferFromKeysParams,
   type PrepareUtxoConsolidateResult,
   prepareUtxoConsolidateTxFromKeys,
   type PrepareUtxoConsolidateTxFromKeysParams,
   type RedelegateParams,
   type SplTransferResult,
   SUI_NATIVE_COIN_TYPE,
+  supportedIbcDestinationsFrom,
+  TRC20_TRANSFER_SELECTOR,
   type UndelegateParams,
+  type UnsignedTrc20Transfer,
   type VaultIdentity,
   type WithdrawRewardsParams,
 } from './prep'

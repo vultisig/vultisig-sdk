@@ -56,7 +56,11 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
       config: { verbose: false },
       recoveryMaxPolls: 5,
       recoveryPollIntervalMs: 0,
-      client: { messagesSince },
+      client: { messagesSince, setAuthToken: vi.fn() },
+      // The recovery poll now routes through withAuthRetry (M1). These cases
+      // never throw an auth error, so the helper just passes the call through;
+      // its revoked-token behaviour is covered in sessionAuthRetry.test.ts.
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
     }
@@ -289,12 +293,17 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       client,
       executor,
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      // No `vault` here, so confirmBroadcastedTx early-returns — the recovered
+      // tx still only emits the `pending` status this harness asserts.
+      confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
+      emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'whats my balance', ui, 0)
     return { run, ui, client, executor }
@@ -353,6 +362,7 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
         setPassword: vi.fn(),
       },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,

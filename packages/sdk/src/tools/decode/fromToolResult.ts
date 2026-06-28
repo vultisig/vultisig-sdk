@@ -148,7 +148,7 @@ function tryBase64ThenHex(s: string): Uint8Array {
  */
 export function decodeFromToolResult(input: DecodeFromToolResultInput): Envelope {
   const args = asArgsObject(input.args)
-  const chainHint = (input.chain ?? (args['chain'] as string) ?? '').toString().trim()
+  const chainHint = (input.chain ?? (args['chain'] as string) ?? (args['from_chain'] as string) ?? '').toString().trim()
   const family = inferFamily(input, args)
 
   if (!family) {

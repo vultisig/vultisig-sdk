@@ -9,7 +9,7 @@
  *   tx_ready synthesis (server-built transactions buffered then signed)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -20,7 +20,7 @@ import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
-import { AgentExecutor } from './executor'
+import { AgentExecutor, resolveChain } from './executor'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -64,6 +64,14 @@ const MAX_MESSAGE_LOOP_DEPTH = 16
 const RECOVERY_POLL_INTERVAL_MS = 2000
 const RECOVERY_MAX_POLLS = 90
 
+// Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+// means "broadcast accepted" — the tx can still revert, expire, or be dropped.
+// After broadcast the session polls vault.getTxStatus until the tx reaches a
+// final state, then emits `confirmed`/`failed` (or `timeout` when the budget is
+// exhausted). Ceiling ≈ interval × (maxPolls − 1) ≈ 3s × 39 ≈ 117s.
+const TX_CONFIRM_POLL_INTERVAL_MS = 3000
+const TX_CONFIRM_MAX_POLLS = 40
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -81,6 +89,10 @@ export class AgentSession {
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
   private recoveryMaxPolls = RECOVERY_MAX_POLLS
+  // Post-broadcast confirmation poll cadence — instance fields so tests can
+  // drive the loop without real waits.
+  private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
+  private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -128,38 +140,41 @@ export class AgentSession {
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
 
-    // Create or resume conversation
+    // Create or resume conversation. Every conversation request routes through
+    // withAuthRetry so a revoked-but-unexpired cached token recovers uniformly
+    // (clear → re-auth → retry once) on EVERY path — the fresh-convo create
+    // used to skip this and hard-throw `Authentication failed` (finding a).
     if (this.config.sessionId) {
       this.conversationId = this.config.sessionId
-      // Fetch historical messages for resumed sessions
+      // Fetch historical messages for resumed sessions.
       try {
-        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
-        // Re-authenticate on 401/403 and retry once
-        if (err.message?.includes('401') || err.message?.includes('403')) {
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
-          this.historyMessages = conv.messages || []
-        } else {
-          // Session not found or other error — reset to new conversation
-          this.conversationId = null
-          this.historyMessages = []
-          const conv = await this.client.createConversation(this.publicKey)
-          this.conversationId = conv.id
-        }
+        // Resume failed: a stale/typo'd --session-id, a persistent backend
+        // error, or an auth failure that survived the single retry. Fall back
+        // to a fresh conversation rather than hard-failing (finding b — the old
+        // 401 branch retried getConversation once with no fallback and threw
+        // uncaught on a second failure), but surface a typed, NON-FATAL signal
+        // so a headless caller knows prior context was dropped and can persist
+        // the NEW conversation id (finding c — the fallback used to be silent).
+        this.conversationId = null
+        this.historyMessages = []
+        const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
+        this.conversationId = conv.id
+        ui.onError(
+          `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); started a new conversation ${conv.id}`,
+          AgentErrorCode.SESSION_NOT_FOUND
+        )
       }
     } else {
-      const conv = await this.client.createConversation(this.publicKey)
+      const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
       this.conversationId = conv.id
     }
 
@@ -204,6 +219,44 @@ export class AgentSession {
           process.stderr.write(`[session] push notification setup failed: ${err}\n`)
         }
       }
+    }
+  }
+
+  /**
+   * Run an authenticated backend request and, on a 401/403, do a single
+   * clear → re-auth → retry. This is the ONE chokepoint every conversation
+   * request shares (resume fetch, fresh-convo create, error-fallback create,
+   * and the send-message stream) so a revoked-but-unexpired cached token
+   * recovers identically everywhere instead of throwing on some paths.
+   *
+   * The retry replays the EXACT same `request` closure, which matters for the
+   * send-message path: the replayed body must carry the same content +
+   * recent_actions or the LLM re-emits tool calls (runaway loop). Re-auth is a
+   * full MPC re-sign via authenticateVault — the backend also exposes
+   * POST /auth/refresh, but exchanging the refresh token is a future
+   * enhancement (see auth.ts); the re-sign is always available.
+   *
+   * `onReauth` (optional) fires the instant a re-auth is committed to — BEFORE
+   * authenticateVault runs — so a caller in a retry loop (recoverDisconnectedTurn)
+   * can record that its single re-auth has been spent even if the MPC re-sign
+   * itself then throws. Without this hook a re-auth that fails with a non-auth
+   * error would let the caller re-enter and re-sign on every iteration.
+   */
+  private async withAuthRetry<T>(request: () => Promise<T>, onReauth?: () => void): Promise<T> {
+    try {
+      return await request()
+    } catch (err) {
+      if (!isAuthError(err)) throw err
+      onReauth?.()
+      // authenticateVault (MPC re-sign) may not return a refreshToken; capture
+      // the previously cached one before clearing so it survives the re-auth and
+      // the later /auth/refresh path stays available.
+      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
+      clearCachedToken(this.publicKey)
+      const auth = await authenticateVault(this.client, this.vault, this.config.password)
+      this.client.setAuthToken(auth.token)
+      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
+      return await request()
     }
   }
 
@@ -272,6 +325,23 @@ export class AgentSession {
         `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
       this.pendingToolResults = [] // don't leak into next sendMessage
+      // A depth-capped abort truncates the conversation mid-flight and drops the
+      // queued results above — it is NOT a clean finish. Emit a distinct typed
+      // error FIRST so headless callers can detect the truncation (ask --json
+      // surfaces it in the error envelope and exits non-zero; pipe gets a typed
+      // `error` frame) instead of reading a bare `done` as success. onDone()
+      // still fires after, purely as the turn terminator (pipe consumers read
+      // frames until `done`). This error-then-done shape matches the precedent in
+      // pipe.ts handleCommand, whose sendMessage catch emits an `error` frame then
+      // `done`. It is deliberately NOT the requestPassword/requestConfirmation
+      // shape: those emit NON-terminal `error` frames and keep the turn alive
+      // awaiting a reply. Pipe-consumer contract: inspect for an `error` frame
+      // before treating `done` as success — the error code, not onDone, is the
+      // signal.
+      ui.onError(
+        `agent message loop exceeded ${MAX_MESSAGE_LOOP_DEPTH} turns; conversation truncated`,
+        AgentErrorCode.LOOP_DEPTH_EXCEEDED
+      )
       ui.onDone()
       return
     }
@@ -382,37 +452,21 @@ export class AgentSession {
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
     // message and trigger an LLM-loop where it re-emits the same tool
-    // calls forever.
+    // calls forever. withAuthRetry replays this exact closure once on auth
+    // failure; a non-auth error (or a persistent auth failure) rethrows here.
     let streamResult
-    let authRetried = false
-    while (true) {
-      try {
-        streamResult = await this.client.sendMessageStream(
-          this.conversationId,
-          request,
-          callbacks,
-          this.abortController?.signal
-        )
-        break
-      } catch (err: any) {
-        const isAuthErr = err.message?.includes('401') || err.message?.includes('403')
-        if (isAuthErr && !authRetried) {
-          authRetried = true
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          continue
-        }
-        // Non-401 or already retried: restore the spliced batch so the
-        // caller (or next user turn) can resume from the same queue
-        // state. SF in sendMessage's catch will clear if the user
-        // doesn't retry.
-        if (flushedThisCall.length > 0) {
-          this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
-        }
-        throw err
+    try {
+      streamResult = await this.withAuthRetry(() =>
+        this.client.sendMessageStream(this.conversationId!, request, callbacks, this.abortController?.signal)
+      )
+    } catch (err) {
+      // Non-401 or already-retried auth failure: restore the spliced batch so
+      // the caller (or next user turn) can resume from the same queue state.
+      // SF in sendMessage's catch will clear if the user doesn't retry.
+      if (flushedThisCall.length > 0) {
+        this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
       }
+      throw err
     }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
@@ -429,7 +483,7 @@ export class AgentSession {
     // the identical confirm/sign gate below.
     if (streamResult.disconnected && !streamResult.message) {
       ui.onReconnecting?.()
-      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady)
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
     }
 
     // Final message event wins over streamed deltas (which may be partial).
@@ -465,12 +519,16 @@ export class AgentSession {
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
-      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it.
+      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
+      // then poll for the final on-chain outcome (audit F1) so a headless caller
+      // learns confirmed/failed/timeout instead of treating broadcast as success.
       if (recent.success && recent.data) {
         const txHash = recent.data.tx_hash as string | undefined
         const chain = recent.data.chain as string | undefined
         const explorerUrl = recent.data.explorer_url as string | undefined
-        if (txHash) ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+        if (txHash) {
+          await this.emitAndConfirmTx(txHash, chain, explorerUrl, depth, ui)
+        }
       }
       await this.processMessageLoop(null, ui, depth + 1)
       return
@@ -496,7 +554,8 @@ export class AgentSession {
    */
   private async recoverDisconnectedTurn(
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): Promise<void> {
     if (!this.conversationId) return
 
@@ -518,10 +577,30 @@ export class AgentSession {
     const replaySignableCards = serverAnchor !== null
     let cursor: string | undefined
 
+    // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
+    // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
+    // poll routes through withAuthRetry (clear→reauth→retry once); its onReauth
+    // hook flips authRecovered the instant the re-sign is committed to, so even a
+    // re-auth that itself fails (MPC error, auth endpoint down) can't re-arm. Once
+    // spent, later polls call messagesSince directly with the (best-effort)
+    // refreshed token, so a *persistent* 401 can't trigger an MPC re-sign on every
+    // poll (bounded re-sign work, no key-share amplification). Later polls still
+    // recover the turn if the refreshed token starts working; otherwise the loop
+    // exhausts as before. Without the wrap a revoked token would spin through
+    // recoveryMaxPolls and silently lose the assistant reply / tx_ready (M1).
+    let authRecovered = false
+
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+        resp = authRecovered
+          ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(
+              () => this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since }),
+              () => {
+                authRecovered = true
+              }
+            )
       } catch (err: any) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
@@ -556,7 +635,7 @@ export class AgentSession {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards)
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
         return
       }
 
@@ -574,6 +653,114 @@ export class AgentSession {
   }
 
   /**
+   * Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+   * means "broadcast accepted"; the tx can still revert, expire, or be dropped,
+   * so a headless caller that stops at `pending` may mark a later-reverted
+   * operation complete. Poll vault.getTxStatus until the tx reaches a final
+   * state and emit the matching lifecycle status (`confirmed`/`failed`), or
+   * `timeout` when the bounded poll budget is exhausted (the tx may still
+   * confirm later — callers can re-check with `vultisig tx-status`).
+   *
+   * Transient RPC/network errors are treated as "not final yet" and retried
+   * until the budget is spent. Best-effort and non-fatal: if the chain can't be
+   * resolved or the vault doesn't expose getTxStatus, the caller's already-
+   * emitted `pending` status stands and this returns quietly.
+   *
+   * Scoped to headless callers (ask/pipe) that need machine-readable finality.
+   * The interactive TUI already shows `pending` + an explorer link immediately
+   * and has the dedicated `vultisig tx-status` command, so blocking its prompt
+   * for the full poll budget would be a UX regression the audit didn't scope.
+   * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
+   * is interruptible.
+   *
+   * The caller only invokes this at message-loop depth 0 (see the call site):
+   * inside a multi-turn tool loop the broadcast result already drives the next
+   * turn, so blocking here would stack the poll budget per leg without feeding
+   * the server any extra signal. Those deeper legs keep their honest `pending`.
+   */
+  private async emitAndConfirmTx(
+    txHash: string,
+    chain: string | undefined,
+    explorerUrl: string | undefined,
+    depth: number,
+    ui: UICallbacks
+  ): Promise<void> {
+    ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+    // Only block on confirmation at the top of the loop (depth 0) — the
+    // common headless ask/pipe single-tx case, where the command should
+    // wait for finality before returning. Inside a multi-turn tool loop
+    // (depth > 0) the broadcast result is already queued on
+    // pendingToolResults (pushed above) and is what drives the server's
+    // next turn; the confirmation status is never fed back to the server,
+    // so blocking the recursion here buys no correctness — it would only
+    // stack up to the full poll budget (~117s) per leg, a latency cliff
+    // for back-to-back/batched txs. Those legs still emit an honest
+    // `pending` (re-checkable later via `vultisig tx-status`).
+    if (depth === 0) {
+      await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+    }
+  }
+
+  private async confirmBroadcastedTx(
+    txHash: string,
+    chainName: string | undefined,
+    explorerUrl: string | undefined,
+    ui: UICallbacks
+  ): Promise<void> {
+    if (!this.config.askMode && !this.config.viaAgent) return
+
+    const chain = resolveChain(chainName ?? '')
+    // Call the SDK's typed `VaultBase.getTxStatus` directly (no `as any`) so a
+    // rename or signature drift on it fails this build — the cast previously
+    // swallowed that. The `typeof` guard stays runtime-meaningful: the unit-test
+    // harness passes a minimal `this` whose vault may omit getTxStatus, and we
+    // also skip chains the SDK can't resolve. (`?.` is redundant at the type
+    // level since `this.vault: VaultBase`, but guards that stub at runtime.)
+    if (!chain || typeof this.vault?.getTxStatus !== 'function') return
+
+    for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
+      if (this.abortController?.signal?.aborted) return
+      try {
+        // TxStatusResult.status is the SDK's exhaustive union
+        // `'pending' | 'success' | 'error'`. Only the two terminal states
+        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // polling until the budget is spent and we emit `timeout` below — a safe
+        // default since the tx may still confirm later.
+        const result = await this.vault.getTxStatus({ chain, txHash })
+        if (result.status === 'success') {
+          ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          return
+        }
+        if (result.status === 'error') {
+          ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          return
+        }
+      } catch (err: any) {
+        // Transient (network/RPC) — keep polling until the budget is spent.
+        if (this.config.verbose) {
+          process.stderr.write(`[session] tx confirm poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+      }
+      // No sleep after the final poll — emit timeout without an extra interval.
+      if (attempt < this.txConfirmMaxPolls - 1) await this.txConfirmSleep()
+    }
+
+    if (this.abortController?.signal?.aborted) return
+
+    if (this.config.verbose) {
+      process.stderr.write(
+        `[session] tx ${txHash} not confirmed within ${this.txConfirmMaxPolls} polls; emitting timeout\n`
+      )
+    }
+    ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+  }
+
+  /** Sleep between confirmation polls. Separate method so tests can stub it out. */
+  private txConfirmSleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.txConfirmPollIntervalMs))
+  }
+
+  /**
    * Fold a recovered assistant message back into the live stream result: the
    * authoritative message wins over any partial deltas, and any persisted
    * `data-tx_ready` part is replayed through the live tx_ready callback so the
@@ -588,12 +775,24 @@ export class AgentSession {
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
     onTxReady: ((tx: TxReadyPayload) => void) | undefined,
-    replaySignableCards: boolean
+    replaySignableCards: boolean,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
-    if (!replaySignableCards) return
     for (const part of msg.parts ?? []) {
-      if (part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
+      // Balance-summary cards are read-only display, so replay them
+      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // recovered balance card is at worst cosmetic (the live path renders the
+      // same data); only a stale tx_ready is a fund-safety concern. Without this
+      // a balance query whose stream dropped mid-turn recovers the text answer
+      // but silently loses the card.
+      if (part.type === 'data-balance_summary' && part.data) {
+        onBalanceSummary?.(part.data)
+        continue
+      }
+      // Signable cards stay gated: a stale tx_ready must never reach the signer
+      // (see recoverDisconnectedTurn's server-anchor rationale).
+      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
         const tx = part.data as TxReadyPayload
         streamResult.transactions.push(tx)
         onTxReady?.(tx)
@@ -762,11 +961,14 @@ export class AgentSession {
       recent = { tool: toolName, success: false, data: { error: message } }
     }
 
-    // Echo protocol markers (__*, pm_order_ref) back so server-side
-    // handlers like autoSubmitPolymarketOrder can find them.
+    // Echo protocol markers (__*, pm_order_ref, pm_batch_ref) back so
+    // server-side handlers like autoSubmitPolymarketOrder and the batch
+    // auto-submit (submit_deposit_wallet_batch) can find them. pm_batch_ref
+    // has no __ prefix and isn't the order ref, so it must be named here or
+    // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
     for (const key of Object.keys(input)) {
-      if (key.startsWith('__') || key === 'pm_order_ref') {
+      if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
     }
@@ -850,6 +1052,21 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
   return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
 }
 
+/**
+ * Classify a thrown backend error as an auth failure (401/403). The AgentClient
+ * surfaces HTTP status by embedding it in the Error message (e.g.
+ * "Request failed (401): ..."). A word-boundary match keeps every real status
+ * format (`(401)`, `HTTP 401`, bare `401`) while avoiding false positives on
+ * digits embedded in a larger number (a `1401` amount, a `4034` port). We do
+ * NOT tighten to a parens-only shape: a false NEGATIVE silently breaks auth
+ * recovery (the point of this helper), whereas a false positive only costs one
+ * wasted re-auth + an idempotent replay of the exact same request.
+ */
+export function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /\b(401|403)\b/.test(msg)
+}
+
 // ============================================================================
 // Agent Token Cache
 //
@@ -857,7 +1074,7 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
 // Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
 // ============================================================================
 
-type TokenEntry = { token: string; expiresAt: number }
+type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
 type TokenStore = Record<string, TokenEntry>
 
 function getTokenCachePath(): string {
@@ -878,8 +1095,26 @@ function readTokenStore(): TokenStore {
 function writeTokenStore(store: TokenStore): void {
   const path = getTokenCachePath()
   const dir = join(path, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
+  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
+  // every write so it can't retain looser perms now that refresh tokens live here.
+  try {
+    chmodSync(dir, 0o700)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
   writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
+  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
+  // file keeps its old perms. chmod every write so a pre-existing (or
+  // out-of-band) agent-tokens.json can't retain looser perms now that a
+  // longer-lived refresh token lives here.
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
 }
 
 /**
@@ -907,9 +1142,18 @@ function loadCachedToken(publicKey: string): string | null {
   return entry.token
 }
 
-function saveCachedToken(publicKey: string, token: string, expiresAt: number): void {
+// Persists the access token (and optional refresh token) under 0o600 perms.
+// The refresh token is captured for a future POST /auth/refresh exchange. A
+// prior entry's refreshToken is preserved when this call doesn't carry one
+// (e.g. a backend that stops returning refresh_token shouldn't drop the
+// still-valid token we already hold).
+function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
   const store = readTokenStore()
-  store[publicKey] = { token, expiresAt }
+  store[publicKey] = {
+    token,
+    expiresAt,
+    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
+  }
   try {
     writeTokenStore(store)
   } catch {

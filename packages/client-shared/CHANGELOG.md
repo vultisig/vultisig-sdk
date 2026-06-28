@@ -1,5 +1,40 @@
 # @vultisig/client-shared
 
+## 0.2.17
+
+### Patch Changes
+
+- [#878](https://github.com/vultisig/vultisig-sdk/pull/878) [`26dd218`](https://github.com/vultisig/vultisig-sdk/commit/26dd218282b198fdea9c1118e7fe5bc800c071fb) Thanks [@neavra](https://github.com/neavra)! - Harden the vault-registry config store (`config-store.ts`):
+
+  - `loadConfig` now warns to stderr (naming the path and parse error) when
+    `config.json` is corrupted instead of silently reverting to an empty
+    registry, and leaves the bad file intact at load time (the next saveConfig
+    still overwrites it once the user mutates state — this is not durable
+    recovery). A missing file is still treated as the normal first-run case (no
+    warning).
+  - `saveConfig` now writes `config.json` with `0o600` perms (and `chmod`s on
+    every write, since the mode is only honored on create) and creates the
+    config dir with `0o700`, mirroring credential-store's hardening.
+
+- Updated dependencies [[`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/sdk@2.8.4
+
+## 0.2.16
+
+### Patch Changes
+
+- [#850](https://github.com/vultisig/vultisig-sdk/pull/850) [`7af5ab2`](https://github.com/vultisig/vultisig-sdk/commit/7af5ab236f3bdd0ba3b78198940044adcd157507) Thanks [@neavra](https://github.com/neavra)! - Honor `VULTISIG_CONFIG_DIR` in the shared `config-store` (vault registry). Previously the
+  registry path (`config.json`) was hardcoded to `~/.vultisig` at module load and ignored the
+  env var, while `credential-store` honored it — so in Docker/CI with a custom config dir the
+  credentials and the vault registry diverged and a loaded wallet became invisible. The config
+  dir is now resolved at call time, matching `credential-store`, so both co-locate.
+
+  Also exports `getCredentialsPath` from `credential-store` so consumers (and tests) can
+  assert the registry and credentials resolve to the same directory.
+
+- Updated dependencies [[`dc43ea2`](https://github.com/vultisig/vultisig-sdk/commit/dc43ea2657915012032bf273c73ede44a183185b), [`d4ba485`](https://github.com/vultisig/vultisig-sdk/commit/d4ba4854a358235a243d8f8bb2aed0680bbdbaea), [`da59b7f`](https://github.com/vultisig/vultisig-sdk/commit/da59b7f8d7fdf48e26ab4a8617e5273d807b4e66), [`4e733c4`](https://github.com/vultisig/vultisig-sdk/commit/4e733c44708e7b81efd0a9b29298c6a9deba5f51), [`4541e6f`](https://github.com/vultisig/vultisig-sdk/commit/4541e6f9899a5c091b73830db1a2db7e739828de), [`b5ca32d`](https://github.com/vultisig/vultisig-sdk/commit/b5ca32d5e53b85f07531c9303e4c33e2dd44de5d), [`d1b19ed`](https://github.com/vultisig/vultisig-sdk/commit/d1b19ed39102b32f9eb5a51ef794226adb959022), [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03), [`4f17411`](https://github.com/vultisig/vultisig-sdk/commit/4f17411ea8d739db706631cf873c85df4d329a0f), [`acfd6e4`](https://github.com/vultisig/vultisig-sdk/commit/acfd6e460e4ea27c7a7bcd668371ab1dea32c345), [`356e841`](https://github.com/vultisig/vultisig-sdk/commit/356e841c35cf38c2671309ae12720666f32745df), [`a22ef41`](https://github.com/vultisig/vultisig-sdk/commit/a22ef4106763fd25992c7f93f72c214dfdcc55d4), [`c778b4c`](https://github.com/vultisig/vultisig-sdk/commit/c778b4cc91a42f4a4488a51ea72a775ad4e78a54), [`f0a5529`](https://github.com/vultisig/vultisig-sdk/commit/f0a5529a8d3cfcce5a2883b5da83e6d15ac270ec), [`3bbe0fb`](https://github.com/vultisig/vultisig-sdk/commit/3bbe0fb011ec2f5502f321255f0304f06ea3e079), [`dac32f6`](https://github.com/vultisig/vultisig-sdk/commit/dac32f61fc5140b4c612801fc45ba48670dffe19), [`ed75992`](https://github.com/vultisig/vultisig-sdk/commit/ed759929cd8612a6873f892d33da2857f18ad9f8), [`f4ba189`](https://github.com/vultisig/vultisig-sdk/commit/f4ba18958d351be48ed83c502895be251bacc47a), [`8ed4b59`](https://github.com/vultisig/vultisig-sdk/commit/8ed4b59680e1285cc374fefba8cf1bd98347ef5e), [`5be6408`](https://github.com/vultisig/vultisig-sdk/commit/5be6408aa51e8c20568ff18c4cf604977c3004ec), [`da4b301`](https://github.com/vultisig/vultisig-sdk/commit/da4b30119916a2a13d0e4e4f4472e4f28ed810c3), [`7d79b2d`](https://github.com/vultisig/vultisig-sdk/commit/7d79b2d1307873937957b9c8caf1886f01d70190), [`31eae40`](https://github.com/vultisig/vultisig-sdk/commit/31eae40e82516e192f11c80516b0da784aafe67b), [`60edbf4`](https://github.com/vultisig/vultisig-sdk/commit/60edbf43c4f8ab9928781adbd4e5d0f0fba6074c), [`0e2e2ab`](https://github.com/vultisig/vultisig-sdk/commit/0e2e2abb3bf312df92131fb997dbaa0802f19c79), [`b9a8cc1`](https://github.com/vultisig/vultisig-sdk/commit/b9a8cc19738333bb42f5d20c6bf849692fec4801), [`f47f060`](https://github.com/vultisig/vultisig-sdk/commit/f47f0606223a0a1905ebb7745d311384488d4178)]:
+  - @vultisig/sdk@2.7.0
+
 ## 0.2.15
 
 ### Patch Changes

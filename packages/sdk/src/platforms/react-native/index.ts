@@ -171,11 +171,15 @@ export type {
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
   PrepareJettonTransferTxFromKeysParams,
+  PreparePolkadotAssetSendParams,
+  PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
   PrepareUtxoConsolidateTxFromKeysParams,
   SplTransferResult,
+  UnsignedTrc20Transfer,
   VaultIdentity,
 } from '../../tools/prep'
 
@@ -200,6 +204,12 @@ export {
 // Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
 // native crypto, safe as a static re-export on the RN graph).
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
+// `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
+// both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
+// rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
+// is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
+// Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
+export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
@@ -234,6 +244,15 @@ export async function prepareSignDirectTxFromKeys(...args: unknown[]) {
 export async function prepareSwapTxFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/swap')
   return mod.prepareSwapTxFromKeys(...(args as Parameters<typeof mod.prepareSwapTxFromKeys>))
+}
+
+// TRON TRC-20 transfer calldata builder (pure crypto — @noble/hashes only,
+// no RPC, no signing). RN-safe; lazy-imported to match the prep helper pattern
+// above. Without this, RN consumers (Station / vultisig-windows) couldn't reach
+// the reviewed base58check + ABI encode and would have to re-port it.
+export async function prepareTrc20TransferFromKeys(...args: unknown[]) {
+  const mod = await import('../../tools/prep/trc20')
+  return mod.prepareTrc20TransferFromKeys(...(args as Parameters<typeof mod.prepareTrc20TransferFromKeys>))
 }
 
 // Lazy import: `splTransfer` statically pulls `@solana/web3.js`, which reads
@@ -279,18 +298,36 @@ export {
 } from '../../tools/swap/astroport'
 
 // EVM utilities (viem-backed — requires app to install `viem` as a peer dep)
-export type { EvmGasPrice, GetTokenApprovalsResult, TokenApproval } from '../../tools/evm'
+export type {
+  EvmBalance,
+  EvmGasPrice,
+  GetEvmBalancesParams,
+  GetTokenApprovalsResult,
+  TokenApproval,
+} from '../../tools/evm'
 export {
   abiDecode,
   abiEncode,
+  encodeErc20Approve,
+  encodeErc20Revoke,
   evmCall,
   evmCheckAllowance,
   evmGasPrice,
   evmTxInfo,
+  getEvmBalances,
   getTokenApprovals,
+  MAX_UINT256,
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+
+// Gas / fee primitives (read-only — uses global `fetch` + a type-only
+// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
+// these so RN consumers (vultiagent-app) couldn't resolve a current
+// sat/vB rate for a UTXO send / consolidation and had to re-implement
+// the THORChain / MayaChain inbound fetch + halt gating by hand.
+export type { UtxoFeeRate } from '../../tools/gas'
+export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
@@ -404,6 +441,41 @@ export * as dex from '../../tools/dex'
 // Address derivation from raw vault identity
 export { deriveAddressFromKeys } from '../../tools/address'
 
+// Circle CCTP — pure-crypto (viem-only) bridge/claim calldata builders +
+// contract registry. RN-safe: no chain-client deps, so re-exported statically.
+export type {
+  BuildCctpBridgeParams,
+  BuildCctpClaimParams,
+  CctpAttestationResult,
+  CctpBridgeResult,
+  CctpChainConfig,
+  CctpClaimResult,
+  CctpUnsignedTx,
+} from '../../tools/bridge'
+export {
+  buildCctpBridge,
+  buildCctpClaim,
+  cctpAttestationApiBase,
+  cctpChains,
+  cctpSupportedChains,
+  formatUsdc,
+  getCctpChain,
+  normalizeHexBytes,
+  parseUsdcAmount,
+} from '../../tools/bridge'
+
+// Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
+// over the same proxy `searchToken` already uses, no WASM/native deps.
+export type { PriceBatchResult, PriceQuery, PriceQuote } from '../../tools/price'
+export {
+  coinGeckoIdToSymbol,
+  getPrice,
+  getPricesBatch,
+  isKnownNativePriceSymbol,
+  NATIVE_COINGECKO_IDS,
+  symbolFromCoinGeckoId,
+} from '../../tools/price'
+
 // Atomic chain helpers (balance fetchers, vault-free)
 export { getCoinBalance } from './getCoinBalance'
 
@@ -411,6 +483,72 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
+// Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
+// @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD
+// reads above. The RN allow-list previously omitted these so RN consumers
+// (vultiagent-app, backend) had to re-implement the fetch+parse glue per chain.
+export type {
+  CardanoBalance,
+  CardanoNativeToken,
+  SuiAllBalancesResult,
+  SuiBalance,
+  SuiCoinBalance,
+  SuiTokenBalance,
+  TaoBalance,
+  TonBalance,
+  TonJettonBalance,
+  Trc20TokenBalance,
+  TronAccountResources,
+  TrxBalance,
+  XrpBalance,
+} from '../../tools/balance'
+export {
+  assertBittensorAddress,
+  decodeBittensorAddress,
+  formatBalance,
+  getCardanoBalance,
+  getSuiAllBalances,
+  getSuiBalance,
+  getSuiTokenBalance,
+  getTaoBalance,
+  getTonBalance,
+  getTonJettonBalance,
+  getTrc20TokenBalance,
+  getTronAccountResources,
+  getTrxBalance,
+  getXrpBalance,
+} from '../../tools/balance'
+
+// Pure-crypto balance reads (Polkadot DOT + Assets-pallet). Exported via a lazy
+// dynamic import (NOT a static re-export) because the underlying module imports
+// `@vultisig/core-chain/chains/polkadot/client`, whose top-level
+// `import { ApiPromise, HttpProvider } from '@polkadot/api'` would pull the BN.js
+// double-bundle into the eager RN bundle and crash at module init. Deferring the
+// import to call time matches the proven RN polkadot-resolver pattern in
+// ./getCoinBalance and keeps the eager bundle free of @polkadot/api.
+export type { PolkadotAssetBalance, PolkadotNativeBalance } from '../../tools/balance'
+export async function balancePolkadot(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.balancePolkadot(...(args as Parameters<typeof mod.balancePolkadot>))
+}
+export async function getPolkadotNativeBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotNativeBalance(...(args as Parameters<typeof mod.getPolkadotNativeBalance>))
+}
+export async function getPolkadotAssetBalance(...args: unknown[]) {
+  const mod = await import('../../tools/balance')
+  return mod.getPolkadotAssetBalance(...(args as Parameters<typeof mod.getPolkadotAssetBalance>))
+}
+
+// Solana balance reads (native SOL + SPL/Token-2022). Safe to re-export
+// statically: the only chain import (`solanaRpcUrl` from
+// `chains/solana/client`) is metro/rollup-overridden to the RN
+// `solanaClient` shim (type-only + lazy `import('@solana/web3.js')`), so this
+// module never drags the Hermes-hostile web3.js graph at init. The reads
+// themselves use the platform `fetch` against the existing solana RPC proxy.
+export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
+export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
@@ -445,3 +583,32 @@ export { MemoryStorage } from '../../storage/MemoryStorage'
 
 // Event emitter
 export { UniversalEventEmitter } from '../../events/EventEmitter'
+
+// DeFi — River Omni-CDP (pure viem encodeFunctionData, no RPC, RN-safe)
+// Open trove resolves hints on-chain (EVM RPC), but delegate approval and
+// close trove are fully offline. All builders return unsigned calldata only.
+export type {
+  BuildRiverCloseTroveParams,
+  BuildRiverDelegateApprovalParams,
+  BuildRiverOpenTroveParams,
+  RiverAffiliateConfig,
+  RiverChain,
+  RiverChainConfig,
+  RiverCloseTroveMeta,
+  RiverDelegateApprovalMeta,
+  RiverMarket,
+  RiverOpenTroveMeta,
+  RiverTxBuild,
+  RiverUnsignedTx,
+} from '../../tools/defi/river'
+export {
+  buildRiverCloseTrove,
+  buildRiverDelegateApproval,
+  buildRiverOpenTrove,
+  isRiverChain,
+  river,
+  RIVER_CHAIN_CONFIG,
+  RIVER_DEFAULT_MAX_FEE_BPS,
+  RIVER_SUPPORTED_CHAINS,
+  riverStatusName,
+} from '../../tools/defi/river'

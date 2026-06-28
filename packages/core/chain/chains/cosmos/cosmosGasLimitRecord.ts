@@ -41,12 +41,15 @@ export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
  * writes that the standard SDK gas estimate omits. In practice this adds
  * ~200-800 gas on top of the base delegate cost (~2M), so a 2M limit fails
  * consistently ("out of gas in location: ValuePerByte; gasWanted: 2000000,
- * gasUsed: 200X"). 3M sits safely under the 100 LUNC fee floor at msgCount=1
- * (3M * 28.325 uluna/gas ≈ 84.97 LUNC < 100 LUNC). The msgCount scaling is
- * disabled for TerraClassic: at msgCount>=2, scaled gasWanted would exceed
- * 100 LUNC, causing node rejection when the tx fee amount (cosmosGasRecord
- * [TerraClassic]=100_000_000 uluna) no longer covers gasWanted * gasPrice.
- * Columbus-5 callers must split multi-validator claims into separate txs.
+ * gasUsed: 200X"). 3M needs ~84.97 LUNC at sign time (3M * 28.325 uluna/gas).
+ * That fee is supplied by the CONSUMER's separate per-msg staking fee
+ * (mcp-ts COSMOS_STAKING_FEE_PER_MSG_BASE_UNITS[TerraClassic] = 100 LUNC/msg,
+ * written into the signAmino / signDirect fee) — NOT by
+ * `cosmosGasRecord[TerraClassic]`, which is the native MsgSend fee floor
+ * (20 LUNC) and never governs staking. The msgCount scaling is disabled for
+ * TerraClassic: at msgCount>=2, scaled gasWanted would push the required fee
+ * above the 100 LUNC per-msg staking fee, causing node rejection. Columbus-5
+ * callers must split multi-validator claims into separate txs.
  */
 const cosmosStakingGasLimitRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: 350_000n,
@@ -87,9 +90,10 @@ export const getCosmosStakingGasLimit = ({ chain, msgCount = 1 }: GetCosmosStaki
 
   const base = cosmosStakingGasLimitRecord[chain]
 
-  // TerraClassic: fee-floor cap (see comment on cosmosStakingGasLimitRecord).
-  // Scaling would push gasWanted above 100 LUNC at msgCount>=2; single-msg
-  // policy keeps the tx fee within the cosmosGasRecord floor for columbus-5.
+  // TerraClassic: staking-fee cap (see comment on cosmosStakingGasLimitRecord).
+  // Scaling would push the required fee above the consumer's 100 LUNC per-msg
+  // staking fee at msgCount>=2; single-msg policy keeps the tx within that fee
+  // for columbus-5 (independent of the 20 LUNC cosmosGasRecord send floor).
   if (chain === Chain.TerraClassic) return base
 
   const n = BigInt(Math.max(1, msgCount))

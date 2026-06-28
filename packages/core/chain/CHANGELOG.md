@@ -1,5 +1,48 @@
 # @vultisig/core-chain
 
+## 2.18.0
+
+### Minor Changes
+
+- [#888](https://github.com/vultisig/vultisig-sdk/pull/888) [`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC governance support under `chains/cosmos/qbtc/governance/`: REST clients for the Cosmos `x/gov v1` proposals, tally, votes and params endpoints, plus the domain types and wire parsers. Mirrors the existing `qbtc/claim` split and is consumed by the wallet's QBTC governance UI.
+
+## 2.17.11
+
+### Patch Changes
+
+- [#884](https://github.com/vultisig/vultisig-sdk/pull/884) [`33e663c`](https://github.com/vultisig/vultisig-sdk/commit/33e663ce6ba519cacb7dae5befebe9e3e530b4d7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Lower `cosmosGasRecord[TerraClassic]` from 100 LUNC to 20 LUNC.
+
+  Real on-chain MsgSend cost on columbus-5: ~400k gas x 28.325 uluna/gas ~ 11.33 LUNC.
+  The 100 LUNC floor was blocking sends from wallets with 20-100 LUNC balance even when
+  the transaction would have succeeded. The new 20 LUNC floor gives a ~1.77x buffer.
+
+  Companion to vultisig/agent-backend#1409 and vultisig/mcp-ts#594.
+
+## 2.17.10
+
+### Patch Changes
+
+- [#874](https://github.com/vultisig/vultisig-sdk/pull/874) [`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c) Thanks [@neavra](https://github.com/neavra)! - fix(core-chain): treat duplicate-signature Solana broadcast errors as idempotent success
+
+  `broadcastSolanaTx` now classifies "already been processed" / `AlreadyProcessed`
+  rejections from `sendRawTransaction` as an idempotent success (returns instead
+  of routing to `verifyBroadcastByHash`), mirroring the TON/UTXO/Cosmos dedupe
+  guards. This stops a headless retry after an ambiguous broadcast from blindly
+  re-submitting an already-accepted Solana transaction.
+
+## 2.17.9
+
+### Patch Changes
+
+- Updated dependencies [[`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e)]:
+  - @vultisig/lib-utils@0.10.3
+
+## 2.17.8
+
+### Patch Changes
+
+- [#870](https://github.com/vultisig/vultisig-sdk/pull/870) [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize native THORChain and MayaChain swap quote output amounts to destination coin base units before SDK quote formatting and near-zero validation.
+
 ## 2.17.7
 
 ### Patch Changes

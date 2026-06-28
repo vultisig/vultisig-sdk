@@ -36,7 +36,7 @@ import {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
+import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
@@ -198,17 +198,6 @@ const BPS_DENOMINATOR = 10_000n
 const isWithinPreferenceBand = (outputAmount: bigint, bestOutputAmount: bigint): boolean =>
   outputAmount * BPS_DENOMINATOR >= bestOutputAmount * (BPS_DENOMINATOR - SWAP_QUOTE_PREFERENCE_BAND_BPS)
 
-/** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
-function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
-  if (fromDecimals === toDecimals) {
-    return value
-  }
-  if (toDecimals > fromDecimals) {
-    return value * 10n ** BigInt(toDecimals - fromDecimals)
-  }
-  return value / 10n ** BigInt(fromDecimals - toDecimals)
-}
-
 /**
  * Comparable destination amount in the destination token's smallest units (same
  * scale as `general.dstAmount`).
@@ -223,9 +212,7 @@ function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number)
  */
 function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {
-    const nativePrecision = getNativeSwapDecimals(to)
-    const raw = BigInt(q.quote.native.expected_amount_out)
-    return rebaseDecimals(raw, nativePrecision, to.decimals)
+    return nativeSwapAmountToCoinBaseUnit(BigInt(q.quote.native.expected_amount_out), to)
   }
   return BigInt(q.quote.general.dstAmount)
 }

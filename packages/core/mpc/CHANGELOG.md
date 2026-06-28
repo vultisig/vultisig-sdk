@@ -1,5 +1,47 @@
 # @vultisig/core-mpc
 
+## 1.8.10
+
+### Patch Changes
+
+- Updated dependencies [[`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c)]:
+  - @vultisig/core-chain@2.18.0
+
+## 1.8.9
+
+### Patch Changes
+
+- Updated dependencies [[`33e663c`](https://github.com/vultisig/vultisig-sdk/commit/33e663ce6ba519cacb7dae5befebe9e3e530b4d7)]:
+  - @vultisig/core-chain@2.17.11
+
+## 1.8.8
+
+### Patch Changes
+
+- Updated dependencies [[`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/core-chain@2.17.10
+
+## 1.8.7
+
+### Patch Changes
+
+- Updated dependencies [[`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e)]:
+  - @vultisig/lib-utils@0.10.3
+  - @vultisig/core-chain@2.17.9
+
+## 1.8.6
+
+### Patch Changes
+
+- [#764](https://github.com/vultisig/vultisig-sdk/pull/764) [`0dc1620`](https://github.com/vultisig/vultisig-sdk/commit/0dc16206bedcdde8832a068b15383565a6b98896) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add QBTC claim transaction helper utilities for MLDSA claim signing.
+
+## 1.8.5
+
+### Patch Changes
+
+- Updated dependencies [[`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03)]:
+  - @vultisig/core-chain@2.17.8
+
 ## 1.8.4
 
 ### Patch Changes
