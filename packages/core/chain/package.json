@@ -720,6 +720,11 @@
       "import": "./dist/chains/ton/messageBody/types.js",
       "default": "./dist/chains/ton/messageBody/types.js"
     },
+    "./chains/ton/staking": {
+      "types": "./dist/chains/ton/staking.d.ts",
+      "import": "./dist/chains/ton/staking.js",
+      "default": "./dist/chains/ton/staking.js"
+    },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
       "import": "./dist/chains/tron/config.js",
