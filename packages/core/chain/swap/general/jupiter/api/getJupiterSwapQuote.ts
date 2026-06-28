@@ -98,10 +98,9 @@ export const getJupiterSwapQuote = async ({
     quoteParams.set('platformFeeBps', affiliateBps.toString())
   }
 
-  const quoteResponse = await requestJson<JupiterQuoteResponse>(
-    `${baseUrl}/swap/v1/quote?${quoteParams.toString()}`,
-    { headers: { Accept: 'application/json' } }
-  )
+  const quoteResponse = await requestJson<JupiterQuoteResponse>(`${baseUrl}/swap/v1/quote?${quoteParams.toString()}`, {
+    headers: { Accept: 'application/json' },
+  })
 
   // The fee mint is the OUTPUT mint (ExactIn). Derive the fee ATA up front so
   // it can be sent to /swap and so we know which program owns it for the

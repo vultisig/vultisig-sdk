@@ -45,9 +45,7 @@ const resolveTokenProgramId = async (mintPubkey: PublicKey): Promise<PublicKey> 
   const client = getSolanaClient()
   const mintInfo = await client.getAccountInfo(mintPubkey)
   if (!mintInfo) {
-    throw new Error(
-      `Mint account ${mintPubkey.toBase58()} not found - cannot determine Token vs Token-2022 program`
-    )
+    throw new Error(`Mint account ${mintPubkey.toBase58()} not found - cannot determine Token vs Token-2022 program`)
   }
   if (mintInfo.owner.equals(TOKEN_PROGRAM_ID)) {
     return TOKEN_PROGRAM_ID

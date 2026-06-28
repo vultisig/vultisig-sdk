@@ -43,12 +43,14 @@ describe('getJupiterSwapQuote', () => {
 
   beforeEach(() => {
     calls = []
-    vi.mocked(deriveJupiterFeeAccount).mockReset().mockResolvedValue({
-      feeAccount,
-      tokenProgramId: {} as never,
-      mintPubkey: {} as never,
-      ownerPubkey: {} as never,
-    })
+    vi.mocked(deriveJupiterFeeAccount)
+      .mockReset()
+      .mockResolvedValue({
+        feeAccount,
+        tokenProgramId: {} as never,
+        mintPubkey: {} as never,
+        ownerPubkey: {} as never,
+      })
     vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
 
     vi.stubGlobal(
