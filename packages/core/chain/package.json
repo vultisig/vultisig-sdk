@@ -690,6 +690,21 @@
       "import": "./dist/chains/solana/staking/cooldownGate.js",
       "default": "./dist/chains/solana/staking/cooldownGate.js"
     },
+    "./chains/solana/staking/metadata/enrichValidators": {
+      "types": "./dist/chains/solana/staking/metadata/enrichValidators.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/enrichValidators.js",
+      "default": "./dist/chains/solana/staking/metadata/enrichValidators.js"
+    },
+    "./chains/solana/staking/metadata/stakewizProvider": {
+      "types": "./dist/chains/solana/staking/metadata/stakewizProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/stakewizProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/stakewizProvider.js"
+    },
+    "./chains/solana/staking/metadata/ValidatorMetadataProvider": {
+      "types": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js"
+    },
     "./chains/solana/staking/models/stakeAccount": {
       "types": "./dist/chains/solana/staking/models/stakeAccount.d.ts",
       "import": "./dist/chains/solana/staking/models/stakeAccount.js",
