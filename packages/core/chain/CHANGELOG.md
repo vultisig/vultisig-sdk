@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 2.20.0
+
+### Minor Changes
+
+- [#900](https://github.com/vultisig/vultisig-sdk/pull/900) [`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking foundation — models + RPC read layer
+
+  Phase 1 of Solana native staking. Adds the chain-layer read foundation under
+  `@vultisig/core-chain/chains/solana/staking`: config, stake-account/validator
+  models (jsonParsed parsing + activation-state derivation), the RPC read layer
+  (getVoteAccounts / stake-account scan / epoch / rent / inflation / supply), and
+  the withdraw cooldown gate. No UI, no signing, no validator-metadata source.
+
 ## 2.19.0
 
 ### Minor Changes
