@@ -78,6 +78,28 @@ describe('parseStakeAccount', () => {
     ).toBeUndefined()
   })
 
+  it('rejects a delegation object missing its voter instead of treating it as undelegated', () => {
+    expect(
+      parseStakeAccount({
+        pubkey: 'X',
+        lamports: 1n,
+        parsedInfo: {
+          meta: {
+            rentExemptReserve: '2282880',
+            authorized: { staker: 'STAKER_PUBKEY', withdrawer: 'WITHDRAWER_PUBKEY' },
+          },
+          stake: {
+            delegation: {
+              stake: '5000000000',
+              activationEpoch: '100',
+              deactivationEpoch: sentinel.toString(),
+            },
+          },
+        },
+      })
+    ).toBeUndefined()
+  })
+
   it('rejects a delegation with an unparseable numeric field instead of coercing it to 0n', () => {
     expect(
       parseStakeAccount({

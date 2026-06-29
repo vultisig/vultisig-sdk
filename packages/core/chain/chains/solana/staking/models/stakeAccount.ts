@@ -151,7 +151,12 @@ export const parseStakeAccount = ({
 
   const delegationInfo = parsedInfo?.stake?.delegation
   let delegation: SolanaStakeDelegation | undefined
-  if (delegationInfo?.voter) {
+  if (delegationInfo) {
+    // A delegation object with no `voter` is a malformed row, not an
+    // undelegated account — reject it rather than fabricating "inactive".
+    if (!delegationInfo.voter) {
+      return undefined
+    }
     const activationEpoch = toBigInt(delegationInfo.activationEpoch)
     const deactivationEpoch = toBigInt(delegationInfo.deactivationEpoch)
     const stake = toBigInt(delegationInfo.stake)
