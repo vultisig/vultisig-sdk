@@ -626,20 +626,29 @@ JSON output for two-step create:
 
 #### Agent Ask (One-Shot Mode)
 
-Send a single natural-language message and get a structured response. Designed for AI-to-AI communication:
+Send a single natural-language message and get a structured response. Designed for AI-to-AI communication.
+
+**Password resolution:** `agent ask` unlocks the vault from the keyring/env chain before prompting, so a headless operator never has to put the password on argv. Set it up **once** — store it in the OS keyring with `vsig auth setup` (recommended), or export `VAULT_PASSWORD` (or `VAULT_PASSWORDS="VaultName:pw ..."` for multiple vaults) — then run `agent ask` with **no** `--password`. The `--password` flag still works as a fallback but is discouraged: it exposes the secret to `ps` and shell history, and triggers a stderr warning.
 
 ```bash
-# Simple query
-vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
+# Recommended: store the password once, then no --password on each call
+vsig auth setup                 # stores in the OS keyring
+# or: export VAULT_PASSWORD="..."
+
+# Simple query (password resolved from keyring/env)
+vultisig agent ask "What is my ETH balance?"
 
 # Execute a transaction
-vultisig agent ask "Send 0.01 ETH to 0x742d..." --password "$VAULT_PASSWORD"
+vultisig agent ask "Send 0.01 ETH to 0x742d..."
 
 # Continue a conversation (multi-turn)
-vultisig agent ask "Now swap it to USDC" --session abc123 --password "$VAULT_PASSWORD"
+vultisig agent ask "Now swap it to USDC" --session abc123
 
 # JSON output (for parsing)
-vultisig agent ask "Check my portfolio" --password "$VAULT_PASSWORD" --json
+vultisig agent ask "Check my portfolio" --json
+
+# Fallback only — exposes the secret to `ps`/shell history (emits a warning)
+vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
 ```
 
 **Text output (default):**
@@ -699,7 +708,7 @@ SSE `error` events may optionally include a `code` field from the backend; if it
 **Agent ask options:**
 - `--session <id>` - Continue an existing conversation
 - `--backend-url <url>` - Agent backend URL (default: https://abe.vultisig.com)
-- `--password <password>` - Vault password for signing
+- `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env — see **Password resolution** above)
 - `--verbose` - Show tool calls and debug info on stderr
 - `--json` - Output structured JSON
 
@@ -711,15 +720,17 @@ For interactive TUI or piped agent-to-agent communication:
 # Interactive TUI with chat interface
 vultisig agent
 
-# Pipe mode for agent-to-agent (NDJSON)
-vultisig agent --via-agent --password "$VAULT_PASSWORD"
+# Pipe mode for agent-to-agent (NDJSON) — password resolved from keyring/env
+vultisig agent --via-agent
 ```
+
+The vault password is resolved from the keyring/env chain (`vsig auth setup` or `VAULT_PASSWORD`) the same way as `agent ask`; in `--via-agent` mode it can also be supplied over the pipe protocol (see below). `--password` remains a discouraged fallback.
 
 **Agent chat options:**
 - `--via-agent` - NDJSON pipe mode for agent-to-agent communication (24h password cache)
 - `--verbose` - Show detailed tool call parameters
 - `--backend-url <url>` - Agent backend URL
-- `--password <password>` - Vault password
+- `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env)
 - `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
 - `--session-id <id>` - Resume an existing session
 

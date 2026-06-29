@@ -15,6 +15,7 @@ import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
+import { resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
@@ -127,9 +128,26 @@ export class AgentSession {
 
     // Authenticate - use cached token if valid, otherwise sign a new one
     try {
-      // Unlock vault first if encrypted
+      // Unlock vault first if encrypted. Resolve the password from the
+      // keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
+      // VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up
+      // the keyring or env never has to put a funds-controlling secret on argv.
+      // argv `--password` (config.password) still works but is de-emphasized:
+      // it lands the secret in `ps`/shell history, so warn when it's used.
+      // Only when the chain resolves nothing do we fall back to the mode's own
+      // interactive prompt (TUI readline / via-agent protocol; ask-mode throws).
       if (this.vault.isEncrypted) {
-        const password = this.config.password || (await ui.requestPassword())
+        let password: string
+        if (this.config.password) {
+          process.stderr.write(
+            'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
+              'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
+          )
+          password = this.config.password
+        } else {
+          password =
+            (await resolvePasswordNonInteractive(this.vault.id, this.vault.name)) ?? (await ui.requestPassword())
+        }
         await (this.vault as any).unlock?.(password)
         this.executor.setPassword(password)
       }
