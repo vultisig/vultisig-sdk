@@ -35,18 +35,32 @@ let jupiterConfig: JupiterConfig = {
   baseUrl: defaultBaseUrl,
 }
 
+/**
+ * Trim an override and strip trailing slashes. Blank/whitespace-only values are
+ * treated as absent (returns `undefined`) so they fall back to the default
+ * rather than producing relative `/swap/v1/...` URLs downstream.
+ */
+const normalizeBaseUrl = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim().replace(/\/+$/, '')
+  return trimmed ? trimmed : undefined
+}
+
 export const configureJupiter = (config: Partial<JupiterConfig>) => {
+  const baseUrl = normalizeBaseUrl(config.baseUrl)
   jupiterConfig = {
     ...jupiterConfig,
-    ...(config.baseUrl !== undefined ? { baseUrl: config.baseUrl } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
   }
 }
 
 export const getJupiterConfig = (): JupiterConfig => {
-  const baseUrl = readEnv('JUPITER_BASE_URL') ?? readEnv('VULTISIG_JUPITER_BASE_URL') ?? jupiterConfig.baseUrl
+  const baseUrl =
+    normalizeBaseUrl(readEnv('JUPITER_BASE_URL')) ??
+    normalizeBaseUrl(readEnv('VULTISIG_JUPITER_BASE_URL')) ??
+    jupiterConfig.baseUrl
 
   return {
     ...jupiterConfig,
-    baseUrl: baseUrl.replace(/\/$/, ''),
+    baseUrl,
   }
 }
