@@ -937,10 +937,14 @@ export class AgentSession {
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
+      // Carry a structured code (not just prose) so the backend/LLM can branch:
+      // TOOL_UNSUPPORTED means this client can't run the tool at all, so retry
+      // is pointless — pick an alternative. Mirrors the `recent.data?.code`
+      // convention runPasswordGatedTool reads.
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { error: `unimplemented in CLI: ${toolName}` },
+        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
       })
       return
     }

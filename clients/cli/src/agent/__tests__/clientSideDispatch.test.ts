@@ -2,19 +2,96 @@
 // SSE parser routing, dispatch chain serialization, queue state contracts).
 import { describe, expect, it, vi } from 'vitest'
 
+import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
 import { AgentSession, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
 import type { RecentAction } from '../types'
 
-describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
-  // Locks the registry surface — drift is caught at test time, not runtime.
-  // Discriminator tools (vault_coin / vault_chain / address_book) carry an
-  // inner `action: 'add' | 'remove'` so two-letter CRUD is one tool name on
-  // the wire, matching the agent-backend's `clientSideToolNames`.
-  const EXPECTED_ENTRIES = ['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book']
+// ────────────────────────────────────────────────────────────────────────────
+// Backend contract source of truth — vendored from agent-backend.
+//
+// SYNC MECHANISM: this constant is a hand-mirrored copy of the agent-backend's
+// `clientSideToolNames` map (Go) at
+//   internal/service/agent/tools.go:549-559
+// The SDK repo can't import Go, so the backend set is vendored here as ONE
+// obvious place. When the backend adds/renames/removes a client-side tool,
+// update this constant — the parity test below then forces every entry to be
+// reclassified (implemented / mobile-only-excluded / rewritten), so a real
+// CLI↔backend contract drift fails red instead of silently shipping.
+const BACKEND_CLIENT_SIDE_TOOLS = [
+  'vault_coin',
+  'vault_chain',
+  'create_vault',
+  'plugin_install',
+  'create_policy',
+  'delete_policy',
+  'sign_typed_data',
+  'polymarket_sign_bet',
+  'polymarket_sign_batch',
+].sort()
 
-  it('has exactly the expected tool names', () => {
-    expect(Object.keys(registry).sort()).toEqual(EXPECTED_ENTRIES.slice().sort())
+// How each backend client-side tool maps onto the CLI. Every entry of
+// BACKEND_CLIENT_SIDE_TOOLS must land in EXACTLY ONE of these three buckets —
+// the exhaustiveness test below enforces that, so a newly-added backend tool
+// (absent from all three) fails red until a human classifies it.
+
+// (a) Implemented locally by the CLI — present in CLIENT_SIDE_TOOL_DISPATCH.
+const CLI_IMPLEMENTED = ['vault_coin', 'vault_chain', 'sign_typed_data']
+
+// (b) Intentionally NOT implemented — mobile-only flows (VultiServer /
+//     multi-device / plugin+policy UX) that the headless CLI can't drive.
+const MOBILE_ONLY_EXCLUDED = ['create_vault', 'plugin_install', 'create_policy', 'delete_policy']
+
+// (c) Never reach the CLI under their own name: agent-backend/mcp rewrites
+//     Polymarket bet/batch signing into a `sign_typed_data` client call
+//     (see the "Polymarket marker echo" suite below), so the CLI handles them
+//     via the sign_typed_data dispatcher, not a dedicated tool.
+const BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA = ['polymarket_sign_bet', 'polymarket_sign_batch']
+
+// CLI-local client-side tool the backend DEFINES (`AddressBookTool`,
+// tools.go:423 — flat add/remove discriminator, validated in action_tools.go)
+// but OMITS from the canonical `clientSideToolNames` map (tools.go:549-559).
+// The CLI implements it, so it's listed here as a known backend-map gap rather
+// than silently folded into the parity assertion. If the backend later adds
+// `address_book` to clientSideToolNames, move it into CLI_IMPLEMENTED.
+const CLI_LOCAL_NOT_IN_BACKEND_MAP = ['address_book']
+
+describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', () => {
+  // The expected CLI registry surface, DERIVED from the backend contract:
+  // everything the CLI implements (backend tools it runs) plus the documented
+  // CLI-local tool the backend map omits. Deriving it (rather than hardcoding a
+  // frozen literal) is what makes drift fail red — change the backend set or a
+  // classification bucket and this expectation shifts with it.
+  const EXPECTED_REGISTRY_KEYS = [...CLI_IMPLEMENTED, ...CLI_LOCAL_NOT_IN_BACKEND_MAP].sort()
+
+  it('registry keys equal the backend-derived expected set (fails red on drift)', () => {
+    expect(Object.keys(registry).sort()).toEqual(EXPECTED_REGISTRY_KEYS)
+  })
+
+  it('every backend client-side tool is classified exactly once (catches a new backend tool)', () => {
+    const classified = [...CLI_IMPLEMENTED, ...MOBILE_ONLY_EXCLUDED, ...BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA].sort()
+    // Exhaustive + disjoint: the union of the three buckets is precisely the
+    // backend set. A backend tool missing from all buckets (or listed twice)
+    // breaks this — forcing a deliberate classification on every contract change.
+    expect(classified).toEqual(BACKEND_CLIENT_SIDE_TOOLS)
+    expect(classified.length).toBe(new Set(classified).size) // no duplicates across buckets
+  })
+
+  it('classification buckets only name real backend tools (catches a backend rename)', () => {
+    const backend = new Set(BACKEND_CLIENT_SIDE_TOOLS)
+    for (const name of [...CLI_IMPLEMENTED, ...MOBILE_ONLY_EXCLUDED, ...BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA]) {
+      expect(backend.has(name), `${name} is not in BACKEND_CLIENT_SIDE_TOOLS — stale classification`).toBe(true)
+    }
+    // The CLI-local tool is genuinely absent from the backend map (that's the point).
+    for (const name of CLI_LOCAL_NOT_IN_BACKEND_MAP) {
+      expect(backend.has(name), `${name} unexpectedly appeared in the backend map — reclassify it`).toBe(false)
+    }
+  })
+
+  it('every CLI-implemented tool is actually present in the dispatch registry', () => {
+    for (const name of CLI_IMPLEMENTED) {
+      expect(registry, `${name} classified CLI_IMPLEMENTED but missing from registry`).toHaveProperty(name)
+    }
   })
 
   it('does NOT include create_vault (mobile-only, needs VultiServer/multi-device flow)', () => {
@@ -27,6 +104,11 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     expect(registry).not.toHaveProperty('delete_policy')
   })
 
+  it('does NOT include the rewritten Polymarket tools (they arrive as sign_typed_data)', () => {
+    expect(registry).not.toHaveProperty('polymarket_sign_bet')
+    expect(registry).not.toHaveProperty('polymarket_sign_batch')
+  })
+
   it('does NOT include sign_tx (handled via tx_ready SSE channel, not client-side tool dispatch)', () => {
     expect(registry).not.toHaveProperty('sign_tx')
   })
@@ -35,6 +117,39 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     for (const value of Object.values(registry)) {
       expect(typeof value).toBe('function')
     }
+  })
+})
+
+describe('dispatchClientSideTool — unimplemented tool emits a typed error code', () => {
+  // A tool the backend asks the client to run but that has no entry in
+  // CLIENT_SIDE_TOOL_DISPATCH must push a failure RecentAction carrying the
+  // structured AgentErrorCode.TOOL_UNSUPPORTED (not just a prose string) so the
+  // backend/LLM can branch — "this client can't run it, don't retry".
+  async function dispatchUnknown(toolName: string): Promise<RecentAction[]> {
+    const pendingToolResults: RecentAction[] = []
+    const fakeThis = { pendingToolResults }
+    await (AgentSession.prototype as any).dispatchClientSideTool.call(
+      fakeThis,
+      'tc-x',
+      toolName,
+      {},
+      {
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+      }
+    )
+    return pendingToolResults
+  }
+
+  it('pushes success:false with AgentErrorCode.TOOL_UNSUPPORTED in data.code', async () => {
+    const results = await dispatchUnknown('definitely_not_a_real_tool')
+    expect(results).toHaveLength(1)
+    expect(results[0].tool).toBe('definitely_not_a_real_tool')
+    expect(results[0].success).toBe(false)
+    // The structured discriminator — a machine-branchable code, not just prose.
+    expect(results[0].data?.code).toBe(AgentErrorCode.TOOL_UNSUPPORTED)
+    // Human-readable line preserved alongside the code.
+    expect(results[0].data?.error).toContain('unimplemented in CLI')
   })
 })
 

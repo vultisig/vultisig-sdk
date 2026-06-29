@@ -11,6 +11,12 @@ export enum AgentErrorCode {
   PASSWORD_REQUIRED = 'PASSWORD_REQUIRED',
   CONFIRMATION_REQUIRED = 'CONFIRMATION_REQUIRED',
   ACTION_NOT_IMPLEMENTED = 'ACTION_NOT_IMPLEMENTED',
+  // A client-side tool the backend asked this client to execute is not in the
+  // CLI's dispatch registry. Distinct from ACTION_NOT_IMPLEMENTED (an SDK
+  // operation the CLI hasn't wired up): TOOL_UNSUPPORTED says "this *client*
+  // can't run this tool at all", so the LLM should pick an alternative rather
+  // than retry the same unsupported tool.
+  TOOL_UNSUPPORTED = 'TOOL_UNSUPPORTED',
   INVALID_INPUT = 'INVALID_INPUT',
   NETWORK_ERROR = 'NETWORK_ERROR',
   TIMEOUT = 'TIMEOUT',
