@@ -116,15 +116,18 @@ export async function promptForPassword(vaultName?: string, vaultId?: string): P
 }
 
 /**
- * Get password using the standard resolution order:
+ * Resolve a password from the NON-INTERACTIVE chain only:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
  * 2. OS keyring (stored by `vsig auth setup`)
  * 3. Environment variables
- * 4. Interactive prompt (only if not in silent/JSON mode)
  *
- * Passwords are cached after resolution to avoid re-prompting in interactive mode.
+ * Returns null when none of these is configured — it never prompts. Use this
+ * when the caller has its own interactive prompt to fall back to (e.g. the
+ * agent session's mode-specific UI callbacks), so the keyring/env chain is
+ * consulted before a headless operator is forced onto argv `--password`.
+ * Resolved passwords are cached for subsequent calls.
  */
-export async function getPassword(vaultId: string, vaultName?: string): Promise<string> {
+export async function resolvePasswordNonInteractive(vaultId: string, vaultName?: string): Promise<string | null> {
   // 1. Check in-memory cache (includes explicit --password flag)
   const cachedPassword = getCachedPassword(vaultId, vaultName)
   if (cachedPassword) {
@@ -150,6 +153,25 @@ export async function getPassword(vaultId: string, vaultName?: string): Promise<
     cachePassword(vaultId, envPassword)
     if (vaultName) cachePassword(vaultName, envPassword)
     return envPassword
+  }
+
+  return null
+}
+
+/**
+ * Get password using the standard resolution order:
+ * 1. In-memory cache (set by CLI --password flag or previous prompt)
+ * 2. OS keyring (stored by `vsig auth setup`)
+ * 3. Environment variables
+ * 4. Interactive prompt (only if not in silent/JSON mode)
+ *
+ * Passwords are cached after resolution to avoid re-prompting in interactive mode.
+ */
+export async function getPassword(vaultId: string, vaultName?: string): Promise<string> {
+  // 1–3. Cache → keyring → env (no prompting)
+  const resolved = await resolvePasswordNonInteractive(vaultId, vaultName)
+  if (resolved) {
+    return resolved
   }
 
   // 4. In silent/JSON/non-interactive mode, we can't prompt - throw an error
