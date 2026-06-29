@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cachePassword,
   clearCachedPassword,
+  getCachedPassword,
   getPassword,
   resolvePasswordNonInteractive,
 } from '../../core/password-manager'
@@ -209,6 +210,31 @@ describe('AgentSession.initialize — password resolution chain', () => {
     expect(ui.requestPassword).toHaveBeenCalledTimes(1)
     expect(unlock).toHaveBeenNthCalledWith(2, 'good-secret')
     expect(ft.executor.setPassword).toHaveBeenCalledWith('good-secret')
+    // The winning password is cached (so a later in-process lookup doesn't
+    // re-fetch the stale stored value), under both id and name.
+    expect(getCachedPassword('vault-id-1')).toBe('good-secret')
+    expect(getCachedPassword('vault-id-1', 'My Vault')).toBe('good-secret')
+  })
+
+  it('ask mode: a stale stored password is evicted and the error names the stored credential (not "use --password")', async () => {
+    // ask mode has no interactive prompt, so re-prompting would misdirect a
+    // headless operator. The stale value must be cleared and the error must
+    // point at the stored credential, not at argv.
+    vi.mocked(getServerPassword).mockResolvedValue('stale-secret' as any)
+    const unlock = vi.fn(async () => {
+      throw new Error('invalid password')
+    })
+    const ft = makeFakeThis({ config: { askMode: true }, vault: { unlock } })
+    const ui = makeAskUi() // requestPassword throws "Use --password flag"
+
+    await expect(initialize.call(ft, ui)).rejects.toThrow(/Stored vault password .* was rejected/i)
+    // The stale value was actually evicted from the module cache (it was cached
+    // by resolvePasswordNonInteractive, then cleared on the unlock failure).
+    expect(getCachedPassword('vault-id-1')).toBeNull()
+    expect(getCachedPassword('vault-id-1', 'My Vault')).toBeNull()
+    // ask mode never re-prompts.
+    expect(ui.requestPassword).not.toHaveBeenCalled()
+    expect(unlock).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT re-prompt when an argv --password is wrong (no silent retry of an explicit secret)', async () => {

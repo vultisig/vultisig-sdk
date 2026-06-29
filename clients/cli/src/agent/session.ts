@@ -15,7 +15,7 @@ import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
-import { clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
+import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
@@ -160,15 +160,32 @@ export class AgentSession {
         try {
           await (this.vault as any).unlock?.(password)
         } catch (unlockErr) {
-          // A stale keyring/env entry shouldn't strand an interactive session:
-          // drop the bad cached value and let the mode's own UI prompt for the
-          // right password once. ask mode's requestPassword throws, so a
-          // headless caller surfaces a clear auth failure instead of looping.
+          // Only a stored (keyring/env) password gets a second chance — an
+          // explicit argv `--password` or a value the user just typed is
+          // rethrown as-is.
           if (!fromStoredChain) throw unlockErr
+          // The stored password was rejected: drop it so it isn't reused. Guard
+          // the name delete — clearCachedPassword('') would wipe the WHOLE cache
+          // (every other vault loaded this process), and name is typed string.
           clearCachedPassword(this.vault.id)
-          clearCachedPassword(this.vault.name)
+          if (this.vault.name) clearCachedPassword(this.vault.name)
+          // ask mode has no interactive prompt — its requestPassword throws the
+          // misleading "use --password flag", which would point a headless
+          // operator at argv instead of at the stale stored credential. Surface
+          // the real cause directly.
+          if (this.config.askMode) {
+            throw new Error(
+              `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
+                'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
+            )
+          }
+          // Interactive (TUI / via-agent): let the user supply the right
+          // password once, and cache the winner so a later in-process lookup
+          // doesn't re-fetch the stale stored value.
           password = await ui.requestPassword()
           await (this.vault as any).unlock?.(password)
+          cachePassword(this.vault.id, password)
+          if (this.vault.name) cachePassword(this.vault.name, password)
         }
         this.executor.setPassword(password)
       }
