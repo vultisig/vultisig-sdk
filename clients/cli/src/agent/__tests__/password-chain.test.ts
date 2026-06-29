@@ -15,7 +15,13 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { clearCachedPassword } from '../../core/password-manager'
+import {
+  cachePassword,
+  clearCachedPassword,
+  getPassword,
+  resolvePasswordNonInteractive,
+} from '../../core/password-manager'
+import { resetOutput, setSilentMode } from '../../lib/output'
 import { authenticateVault } from '../auth'
 import { AgentSession } from '../session'
 
@@ -51,7 +57,7 @@ function makeAskUi() {
   } as any
 }
 
-function makeFakeThis(over: { config?: any; client?: any } = {}) {
+function makeFakeThis(over: { config?: any; client?: any; vault?: any } = {}) {
   return {
     client: {
       healthCheck: vi.fn(async () => true),
@@ -62,11 +68,11 @@ function makeFakeThis(over: { config?: any; client?: any } = {}) {
     },
     vault: {
       isEncrypted: true,
-      isUnlocked: () => false,
       unlock: vi.fn(async () => {}),
       id: 'vault-id-1',
       name: 'My Vault',
       publicKeys: { ecdsa: 'pk' },
+      ...over.vault,
     },
     config: { askMode: true, ...over.config },
     publicKey: 'pk',
@@ -158,6 +164,69 @@ describe('AgentSession.initialize — password resolution chain', () => {
     expect(warned).toMatch(/keyring|VAULT_PASSWORD|env/i)
   })
 
+  it('resolves a per-vault password from the VAULT_PASSWORDS map with no --password', async () => {
+    // Map format is "key:password key:password" (whitespace-separated), keyed
+    // by vault id or name — the path a multi-vault headless operator relies on.
+    process.env.VAULT_PASSWORDS = 'other-vault:nope vault-id-1:map-secret'
+    const ft = makeFakeThis()
+    const ui = makeAskUi()
+
+    await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
+
+    expect(ft.vault.unlock).toHaveBeenCalledWith('map-secret')
+    expect(ui.requestPassword).not.toHaveBeenCalled()
+  })
+
+  it('falls through to env when the keyring lookup throws (keyring unavailable)', async () => {
+    vi.mocked(getServerPassword).mockRejectedValue(new Error('keyring unavailable') as any)
+    process.env.VAULT_PASSWORD = 'env-secret'
+    const ft = makeFakeThis()
+    const ui = makeAskUi()
+
+    await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
+
+    expect(ft.vault.unlock).toHaveBeenCalledWith('env-secret')
+    expect(ui.requestPassword).not.toHaveBeenCalled()
+  })
+
+  it('re-prompts and retries unlock when a stored (keyring) password is stale (interactive mode)', async () => {
+    // A stale keyring entry must not strand an interactive session: the bad
+    // value is cleared and the UI prompt supplies the right one.
+    vi.mocked(getServerPassword).mockResolvedValue('stale-secret' as any)
+    const unlock = vi.fn(async (pw: string) => {
+      if (pw === 'stale-secret') throw new Error('invalid password')
+    })
+    const ft = makeFakeThis({ config: { askMode: false }, vault: { unlock } })
+    const ui = {
+      onError: vi.fn(),
+      requestPassword: vi.fn(async () => 'good-secret'),
+      onNotification: undefined,
+    } as any
+
+    await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
+
+    expect(unlock).toHaveBeenNthCalledWith(1, 'stale-secret')
+    expect(ui.requestPassword).toHaveBeenCalledTimes(1)
+    expect(unlock).toHaveBeenNthCalledWith(2, 'good-secret')
+    expect(ft.executor.setPassword).toHaveBeenCalledWith('good-secret')
+  })
+
+  it('does NOT re-prompt when an argv --password is wrong (no silent retry of an explicit secret)', async () => {
+    const unlock = vi.fn(async () => {
+      throw new Error('invalid password')
+    })
+    const ft = makeFakeThis({ config: { askMode: false, password: 'argv-wrong' }, vault: { unlock } })
+    const ui = {
+      onError: vi.fn(),
+      requestPassword: vi.fn(async () => 'good-secret'),
+      onNotification: undefined,
+    } as any
+
+    await expect(initialize.call(ft, ui)).rejects.toThrow(/invalid password/)
+    expect(ui.requestPassword).not.toHaveBeenCalled()
+    expect(unlock).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to the UI prompt only when the chain resolves nothing', async () => {
     // Non-ask UI whose requestPassword RESOLVES (e.g. TUI/pipe). With no env,
     // no keyring, no argv, the chain returns null and init uses the UI prompt.
@@ -172,5 +241,46 @@ describe('AgentSession.initialize — password resolution chain', () => {
 
     expect(ui.requestPassword).toHaveBeenCalledTimes(1)
     expect(ft.vault.unlock).toHaveBeenCalledWith('prompted-secret')
+  })
+})
+
+// Locks the password-manager refactor that splits the non-interactive chain
+// (cache → keyring → env) out of getPassword into resolvePasswordNonInteractive.
+describe('password-manager — non-interactive chain + getPassword delegation', () => {
+  beforeEach(() => {
+    clearCachedPassword()
+    delete process.env.VAULT_PASSWORD
+    delete process.env.VAULT_PASSWORDS
+    vi.mocked(getServerPassword).mockReset()
+    vi.mocked(getServerPassword).mockResolvedValue(null as any)
+  })
+
+  afterEach(() => {
+    clearCachedPassword()
+    resetOutput()
+  })
+
+  it('resolvePasswordNonInteractive honors precedence: cache short-circuits the keyring', async () => {
+    cachePassword('vault-id-1', 'cached-secret')
+    const got = await resolvePasswordNonInteractive('vault-id-1', 'My Vault')
+    expect(got).toBe('cached-secret')
+    // Step 1 returned — the keyring branch must never be consulted.
+    expect(getServerPassword).not.toHaveBeenCalled()
+  })
+
+  it('resolvePasswordNonInteractive returns null when nothing is configured (never prompts)', async () => {
+    const got = await resolvePasswordNonInteractive('vault-id-1', 'My Vault')
+    expect(got).toBeNull()
+  })
+
+  it('getPassword still throws in silent/JSON mode when the chain is empty (no prompt)', async () => {
+    setSilentMode(true)
+    await expect(getPassword('vault-id-1', 'My Vault')).rejects.toThrow(/Password required but not provided/)
+  })
+
+  it('getPassword delegates to the chain and returns the env-resolved value', async () => {
+    setSilentMode(true) // ensure no interactive prompt even if the chain were empty
+    process.env.VAULT_PASSWORD = 'env-secret'
+    await expect(getPassword('vault-id-1', 'My Vault')).resolves.toBe('env-secret')
   })
 })

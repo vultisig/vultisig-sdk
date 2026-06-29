@@ -15,7 +15,7 @@ import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
-import { resolvePasswordNonInteractive } from '../core/password-manager'
+import { clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
@@ -138,6 +138,10 @@ export class AgentSession {
       // interactive prompt (TUI readline / via-agent protocol; ask-mode throws).
       if (this.vault.isEncrypted) {
         let password: string
+        // Whether `password` came from the non-interactive keyring/env chain —
+        // a stale stored value must be cleared and re-prompted, not left to
+        // strand an interactive session.
+        let fromStoredChain = false
         if (this.config.password) {
           process.stderr.write(
             'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
@@ -145,10 +149,27 @@ export class AgentSession {
           )
           password = this.config.password
         } else {
-          password =
-            (await resolvePasswordNonInteractive(this.vault.id, this.vault.name)) ?? (await ui.requestPassword())
+          const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+          if (resolved !== null) {
+            password = resolved
+            fromStoredChain = true
+          } else {
+            password = await ui.requestPassword()
+          }
         }
-        await (this.vault as any).unlock?.(password)
+        try {
+          await (this.vault as any).unlock?.(password)
+        } catch (unlockErr) {
+          // A stale keyring/env entry shouldn't strand an interactive session:
+          // drop the bad cached value and let the mode's own UI prompt for the
+          // right password once. ask mode's requestPassword throws, so a
+          // headless caller surfaces a clear auth failure instead of looping.
+          if (!fromStoredChain) throw unlockErr
+          clearCachedPassword(this.vault.id)
+          clearCachedPassword(this.vault.name)
+          password = await ui.requestPassword()
+          await (this.vault as any).unlock?.(password)
+        }
         this.executor.setPassword(password)
       }
 

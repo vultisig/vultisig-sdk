@@ -60,6 +60,7 @@ vultisig create fast --name "My Wallet" --password "mypassword" --email user@exa
 ```
 
 You'll be prompted to:
+
 1. Enter the verification code sent to your email
 
 ### Create a Secure Vault (Multi-Device)
@@ -69,16 +70,19 @@ vultisig create secure --name "Team Wallet" --shares 3
 ```
 
 This creates a secure vault with configurable N-of-M threshold:
+
 1. A QR code displays in your terminal
 2. Other participants scan with Vultisig mobile app (iOS/Android)
 3. Once all devices join, keygen runs automatically
 4. Vault is created and ready to use
 
 **Secure vault options:**
+
 - `--shares <n>` - Number of participating devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: 2)
 
 **Example session:**
+
 ```bash
 $ vultisig create secure --name "Team Wallet" --shares 3
 
@@ -115,6 +119,7 @@ vultisig create-from-seedphrase secure --name "Team Wallet" --shares 3
 ```
 
 **Import options:**
+
 - `--mnemonic <words>` - Recovery phrase (space-separated words)
 - `--discover-chains` - Scan chains for existing balances before import
 - `--chains <chains>` - Specific chains to enable (comma-separated)
@@ -125,6 +130,7 @@ When `--mnemonic` is not provided, you'll be prompted to enter it securely (mask
 > **Note:** Phantom wallet uses a non-standard derivation path for Solana. If your seedphrase was originally created in Phantom and you're importing Solana funds, use `--use-phantom-solana-path`. When using `--discover-chains`, this is auto-detected.
 
 **Example session:**
+
 ```bash
 $ vultisig create-from-seedphrase fast --name "My Wallet" --email user@example.com --password "mypassword" --discover-chains
 
@@ -213,34 +219,37 @@ vultisig -i
 
 ### Vault Management
 
-| Command | Description |
-|---------|-------------|
-| `create fast` | Create a new fast vault (server-assisted 2-of-2) |
-| `create secure` | Create a secure vault (multi-device MPC) |
-| `import <file>` | Import vault from .vult file |
-| `delete [vault]` | Delete a vault from local storage |
-| `create-from-seedphrase fast` | Import seedphrase as FastVault (2-of-2) |
-| `create-from-seedphrase secure` | Import seedphrase as SecureVault (N-of-M) |
-| `join secure` | Join an existing SecureVault creation session |
-| `export [path]` | Export vault to file |
-| `verify <vaultId>` | Verify vault with email code |
-| `vaults` | List all stored vaults |
-| `switch <vaultId>` | Switch to a different vault |
-| `rename <newName>` | Rename the active vault |
-| `info` | Show detailed vault information |
+| Command                         | Description                                      |
+| ------------------------------- | ------------------------------------------------ |
+| `create fast`                   | Create a new fast vault (server-assisted 2-of-2) |
+| `create secure`                 | Create a secure vault (multi-device MPC)         |
+| `import <file>`                 | Import vault from .vult file                     |
+| `delete [vault]`                | Delete a vault from local storage                |
+| `create-from-seedphrase fast`   | Import seedphrase as FastVault (2-of-2)          |
+| `create-from-seedphrase secure` | Import seedphrase as SecureVault (N-of-M)        |
+| `join secure`                   | Join an existing SecureVault creation session    |
+| `export [path]`                 | Export vault to file                             |
+| `verify <vaultId>`              | Verify vault with email code                     |
+| `vaults`                        | List all stored vaults                           |
+| `switch <vaultId>`              | Switch to a different vault                      |
+| `rename <newName>`              | Rename the active vault                          |
+| `info`                          | Show detailed vault information                  |
 
 **Create fast options:**
+
 - `--name <name>` - Vault name (required)
 - `--password <password>` - Vault password (required)
 - `--email <email>` - Email for verification (required)
 
 **Create secure options:**
+
 - `--name <name>` - Vault name (required)
 - `--password <password>` - Vault password (optional)
 - `--shares <n>` - Number of devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: 2)
 
 **Delete options:**
+
 - `[vault]` - Vault name or ID to delete (defaults to active vault)
 - `-y, --yes` - Skip confirmation prompt
 
@@ -259,6 +268,7 @@ vultisig delete "Test Vault" --yes
 ```
 
 **Join secure options:**
+
 - `--qr <payload>` - QR code payload from initiator (vultisig://...)
 - `--qr-file <path>` - Read QR payload from file
 - `--mnemonic <words>` - Seedphrase (required for seedphrase-based sessions)
@@ -266,6 +276,7 @@ vultisig delete "Test Vault" --yes
 - `--devices <n>` - Total devices in session (default: 2)
 
 **Create-from-seedphrase fast options:**
+
 - `--name <name>` - Vault name (required)
 - `--email <email>` - Email for verification (required)
 - `--password <password>` - Vault password (required)
@@ -275,6 +286,7 @@ vultisig delete "Test Vault" --yes
 - `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 **Create-from-seedphrase secure options:**
+
 - `--name <name>` - Vault name (required)
 - `--shares <n>` - Number of devices (default: 3)
 - `--threshold <n>` - Signing threshold (default: ceil((shares+1)/2))
@@ -285,6 +297,7 @@ vultisig delete "Test Vault" --yes
 - `--use-phantom-solana-path` - Use Phantom wallet derivation path for Solana
 
 **Export options:**
+
 - `[path]` - Output file or directory (defaults to SDK-generated filename in current directory)
 - `--password <password>` - Password to unlock encrypted vaults
 - `--exportPassword <password>` - Password to encrypt the export file (defaults to `--password` if provided)
@@ -309,27 +322,27 @@ vultisig export
 
 ### Wallet Operations
 
-| Command | Description |
-|---------|-------------|
-| `balance [chain]` | Show balance for a chain or all chains |
-| `send <chain> <to> <amount>` | Send tokens to an address |
-| `addresses` | Show all vault addresses |
-| `portfolio` | Show total portfolio value |
+| Command                      | Description                            |
+| ---------------------------- | -------------------------------------- |
+| `balance [chain]`            | Show balance for a chain or all chains |
+| `send <chain> <to> <amount>` | Send tokens to an address              |
+| `addresses`                  | Show all vault addresses               |
+| `portfolio`                  | Show total portfolio value             |
 
 ### Chain & Token Management
 
-| Command | Description |
-|---------|-------------|
-| `chains` | List and manage chains (--add, --remove) |
-| `tokens <chain>` | List and manage tokens for a chain |
+| Command          | Description                              |
+| ---------------- | ---------------------------------------- |
+| `chains`         | List and manage chains (--add, --remove) |
+| `tokens <chain>` | List and manage tokens for a chain       |
 
 ### Swap Operations
 
-| Command | Description |
-|---------|-------------|
-| `swap-chains` | List chains that support swaps |
-| `swap-quote <from> <to> <amount>` | Get a swap quote |
-| `swap <from> <to> <amount>` | Execute a swap |
+| Command                           | Description                    |
+| --------------------------------- | ------------------------------ |
+| `swap-chains`                     | List chains that support swaps |
+| `swap-quote <from> <to> <amount>` | Get a swap quote               |
+| `swap <from> <to> <amount>`       | Execute a swap                 |
 
 ```bash
 # Get a swap quote
@@ -349,11 +362,11 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 
 ### Advanced Operations
 
-| Command | Description |
-|---------|-------------|
-| `sign` | Sign pre-hashed bytes for custom transactions |
-| `broadcast` | Broadcast a pre-signed raw transaction |
-| `tx-status <chain> <txHash>` | Check transaction confirmation status |
+| Command                      | Description                                   |
+| ---------------------------- | --------------------------------------------- |
+| `sign`                       | Sign pre-hashed bytes for custom transactions |
+| `broadcast`                  | Broadcast a pre-signed raw transaction        |
+| `tx-status <chain> <txHash>` | Check transaction confirmation status         |
 
 #### Transaction Status
 
@@ -371,6 +384,7 @@ vultisig tx-status ethereum 0x9f8e7d6c... -o json
 ```
 
 **Output:**
+
 ```
 ✓ Transaction status: success
 Status: success
@@ -379,6 +393,7 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 ```
 
 **JSON output:**
+
 ```json
 {
   "chain": "ethereum",
@@ -409,6 +424,7 @@ vultisig sign --chain ethereum --bytes "..." -o json
 ```
 
 **Output:**
+
 ```
 Signature: <base64-encoded signature>
 Recovery: 0
@@ -416,6 +432,7 @@ Format: ecdsa
 ```
 
 **JSON output:**
+
 ```json
 {
   "signature": "<base64>",
@@ -443,6 +460,7 @@ vultisig broadcast --chain sui --raw-tx '{"unsignedTx":"...","signature":"..."}'
 ```
 
 **Output:**
+
 ```
 TX Hash: 0x9f8e7d6c...
 Explorer: https://etherscan.io/tx/0x9f8e7d6c...
@@ -450,17 +468,17 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 
 **Supported broadcast formats by chain:**
 
-| Chain | `--raw-tx` Format |
-|-------|-------------------|
-| EVM (Ethereum, Polygon, etc.) | Hex-encoded signed tx |
-| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx |
-| Solana | Base64-encoded tx bytes |
-| Sui | JSON: `{"unsignedTx":"...","signature":"..."}` |
-| Cosmos | JSON: `{"tx_bytes":"..."}` or base64 |
-| TON | Base64 BOC |
-| Polkadot | Hex-encoded extrinsic |
-| Ripple | Hex-encoded tx blob |
-| Tron | JSON tx object |
+| Chain                          | `--raw-tx` Format                              |
+| ------------------------------ | ---------------------------------------------- |
+| EVM (Ethereum, Polygon, etc.)  | Hex-encoded signed tx                          |
+| UTXO (Bitcoin, Litecoin, etc.) | Hex-encoded raw tx                             |
+| Solana                         | Base64-encoded tx bytes                        |
+| Sui                            | JSON: `{"unsignedTx":"...","signature":"..."}` |
+| Cosmos                         | JSON: `{"tx_bytes":"..."}` or base64           |
+| TON                            | Base64 BOC                                     |
+| Polkadot                       | Hex-encoded extrinsic                          |
+| Ripple                         | Hex-encoded tx blob                            |
+| Tron                           | JSON tx object                                 |
 
 #### Example: Custom EVM Transaction
 
@@ -614,6 +632,7 @@ vultisig create fast --name "Agent Wallet" --password "$VAULT_PASSWORD" --email 
 ```
 
 JSON output for two-step create:
+
 ```json
 {
   "vaultId": "023118...",
@@ -652,6 +671,7 @@ vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
 ```
 
 **Text output (default):**
+
 ```
 session:abc123-def456
 
@@ -662,12 +682,21 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 ```
 
 **JSON output (`--json`):**
+
 ```json
 {
   "session_id": "abc123-def456",
   "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
   "tool_calls": [
-    { "action": "get_balances", "success": true, "data": { "balances": [{ "chain": "Ethereum", "symbol": "ETH", "amount": "1.5", "decimals": 18, "raw_amount": "1500000000000000000" }] } }
+    {
+      "action": "get_balances",
+      "success": true,
+      "data": {
+        "balances": [
+          { "chain": "Ethereum", "symbol": "ETH", "amount": "1.5", "decimals": 18, "raw_amount": "1500000000000000000" }
+        ]
+      }
+    }
   ],
   "transactions": [
     { "hash": "0x9f8e7d6c...", "chain": "ethereum", "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..." }
@@ -687,25 +716,26 @@ Each entry in `tool_calls` may include `code` when `success` is false (same valu
 
 Orchestrators should branch on `code`. The message in `error` / `message` stays human-readable and may change between releases.
 
-| Code | Typical meaning |
-|------|-----------------|
-| `BACKEND_UNREACHABLE` | Agent health check failed or backend not responding |
-| `AUTH_FAILED` | Auth/token failure, HTTP 401/403, or wrong vault password |
-| `VAULT_LOCKED` | Encrypted vault needs unlock (password) |
-| `PASSWORD_REQUIRED` | Password was not supplied when required (e.g. pipe mode or signing) |
-| `CONFIRMATION_REQUIRED` | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`) |
-| `ACTION_NOT_IMPLEMENTED` | Local executor does not implement this action type |
-| `INVALID_INPUT` | Bad parameters, unknown chain, malformed NDJSON input, etc. |
-| `NETWORK_ERROR` | RPC/fetch connectivity (includes many SDK `VaultError` network cases) |
-| `TIMEOUT` | Deadline exceeded, or abort where the message indicates a timeout |
-| `TRANSACTION_FAILED` | Build/broadcast/gas errors mapped from the SDK |
-| `SIGNING_FAILED` | MPC/signing failed |
-| `SESSION_NOT_INITIALIZED` | Internal session state error |
-| `UNKNOWN_ERROR` | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
+| Code                      | Typical meaning                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `BACKEND_UNREACHABLE`     | Agent health check failed or backend not responding                                                                          |
+| `AUTH_FAILED`             | Auth/token failure, HTTP 401/403, or wrong vault password                                                                    |
+| `VAULT_LOCKED`            | Encrypted vault needs unlock (password)                                                                                      |
+| `PASSWORD_REQUIRED`       | Password was not supplied when required (e.g. pipe mode or signing)                                                          |
+| `CONFIRMATION_REQUIRED`   | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`)                                                |
+| `ACTION_NOT_IMPLEMENTED`  | Local executor does not implement this action type                                                                           |
+| `INVALID_INPUT`           | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                  |
+| `NETWORK_ERROR`           | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                        |
+| `TIMEOUT`                 | Deadline exceeded, or abort where the message indicates a timeout                                                            |
+| `TRANSACTION_FAILED`      | Build/broadcast/gas errors mapped from the SDK                                                                               |
+| `SIGNING_FAILED`          | MPC/signing failed                                                                                                           |
+| `SESSION_NOT_INITIALIZED` | Internal session state error                                                                                                 |
+| `UNKNOWN_ERROR`           | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
 
 SSE `error` events may optionally include a `code` field from the backend; if it matches one of the values above, it is passed through unchanged. Otherwise the CLI infers a code from the message.
 
 **Agent ask options:**
+
 - `--session <id>` - Continue an existing conversation
 - `--backend-url <url>` - Agent backend URL (default: https://abe.vultisig.com)
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env — see **Password resolution** above)
@@ -727,6 +757,7 @@ vultisig agent --via-agent
 The vault password is resolved from the keyring/env chain (`vsig auth setup` or `VAULT_PASSWORD`) the same way as `agent ask`; in `--via-agent` mode it can also be supplied over the pipe protocol (see below). `--password` remains a discouraged fallback.
 
 **Agent chat options:**
+
 - `--via-agent` - NDJSON pipe mode for agent-to-agent communication (24h password cache)
 - `--verbose` - Show detailed tool call parameters
 - `--backend-url <url>` - Agent backend URL
@@ -740,27 +771,27 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 
 **Input commands** (send on stdin):
 
-| Type | Fields | Purpose |
-|------|--------|---------|
-| `message` | `content: string` | Send a natural-language message |
-| `confirm` | `confirmed: boolean` | Respond to a confirmation request |
-| `password` | `password: string` | Provide vault password when requested |
+| Type       | Fields               | Purpose                               |
+| ---------- | -------------------- | ------------------------------------- |
+| `message`  | `content: string`    | Send a natural-language message       |
+| `confirm`  | `confirmed: boolean` | Respond to a confirmation request     |
+| `password` | `password: string`   | Provide vault password when requested |
 
 **Output events** (emitted on stdout):
 
-| Type | Fields | When |
-|------|--------|------|
-| `ready` | `vault, addresses` | Session initialized, addresses for all chains |
-| `session` | `id` | Conversation ID for resuming later |
-| `history` | `messages[]` | Previous messages when resuming a session |
-| `text_delta` | `delta` | Streaming text chunk from the agent |
-| `tool_call` | `id, action, params?, status` | Action started (`running`) |
-| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false) |
-| `tx_status` | `tx_hash, chain, status, explorer_url?` | Transaction broadcast/confirmed/failed |
-| `assistant` | `content` | Full assistant response |
-| `suggestions` | `suggestions[]` | Suggested follow-up actions |
-| `error` | `message, code` | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
-| `done` | `{}` | Response cycle complete |
+| Type          | Fields                                      | When                                                                                                     |
+| ------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ready`       | `vault, addresses`                          | Session initialized, addresses for all chains                                                            |
+| `session`     | `id`                                        | Conversation ID for resuming later                                                                       |
+| `history`     | `messages[]`                                | Previous messages when resuming a session                                                                |
+| `text_delta`  | `delta`                                     | Streaming text chunk from the agent                                                                      |
+| `tool_call`   | `id, action, params?, status`               | Action started (`running`)                                                                               |
+| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false)                                                        |
+| `tx_status`   | `tx_hash, chain, status, explorer_url?`     | Transaction broadcast/confirmed/failed                                                                   |
+| `assistant`   | `content`                                   | Full assistant response                                                                                  |
+| `suggestions` | `suggestions[]`                             | Suggested follow-up actions                                                                              |
+| `error`       | `message, code`                             | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
+| `done`        | `{}`                                        | Response cycle complete                                                                                  |
 
 **Example session:**
 
@@ -793,13 +824,13 @@ vultisig agent sessions delete abc123
 
 #### Agent Command Summary
 
-| Command | Description |
-|---------|-------------|
-| `agent ask <message>` | One-shot: send message, get response, exit |
-| `agent` | Interactive TUI chat interface |
-| `agent --via-agent` | NDJSON pipe mode for agent-to-agent |
-| `agent sessions list` | List chat sessions |
-| `agent sessions delete <id>` | Delete a session |
+| Command                      | Description                                |
+| ---------------------------- | ------------------------------------------ |
+| `agent ask <message>`        | One-shot: send message, get response, exit |
+| `agent`                      | Interactive TUI chat interface             |
+| `agent --via-agent`          | NDJSON pipe mode for agent-to-agent        |
+| `agent sessions list`        | List chat sessions                         |
+| `agent sessions delete <id>` | Delete a session                           |
 
 #### Environment Variables for Automation
 
@@ -819,12 +850,12 @@ VULTISIG_SILENT=1
 
 ### Settings
 
-| Command | Description |
-|---------|-------------|
-| `currency [code]` | View or set currency preference |
-| `server` | Check server connectivity |
-| `discount` | Show your VULT discount tier for swap fees |
-| `address-book` | Manage saved addresses |
+| Command           | Description                                |
+| ----------------- | ------------------------------------------ |
+| `currency [code]` | View or set currency preference            |
+| `server`          | Check server connectivity                  |
+| `discount`        | Show your VULT discount tier for swap fees |
+| `address-book`    | Manage saved addresses                     |
 
 #### Discount Tiers
 
@@ -839,6 +870,7 @@ vultisig discount --refresh
 ```
 
 **Output:**
+
 ```text
 +----------------------------------------+
 |          VULT Discount Tier            |
@@ -856,41 +888,41 @@ vultisig discount --refresh
 
 **Tier levels:**
 
-| Tier | VULT Required | Swap Fee | Discount |
-|------|---------------|----------|----------|
-| None | 0 | 50 bps | - |
-| Bronze | 1,500 | 45 bps | 5 bps |
-| Silver | 3,000 | 40 bps | 10 bps |
-| Gold | 7,500 | 30 bps | 20 bps |
-| Platinum | 15,000 | 25 bps | 25 bps |
-| Diamond | 100,000 | 15 bps | 35 bps |
-| Ultimate | 1,000,000 | 0 bps | 50 bps |
+| Tier     | VULT Required | Swap Fee | Discount |
+| -------- | ------------- | -------- | -------- |
+| None     | 0             | 50 bps   | -        |
+| Bronze   | 1,500         | 45 bps   | 5 bps    |
+| Silver   | 3,000         | 40 bps   | 10 bps   |
+| Gold     | 7,500         | 30 bps   | 20 bps   |
+| Platinum | 15,000        | 25 bps   | 25 bps   |
+| Diamond  | 100,000       | 15 bps   | 35 bps   |
+| Ultimate | 1,000,000     | 0 bps    | 50 bps   |
 
 Thorguard NFT holders receive a free tier upgrade (up to gold tier).
 
 ### CLI Management
 
-| Command | Description |
-|---------|-------------|
-| `version` | Show detailed version info |
-| `update` | Check for updates |
-| `completion` | Generate shell completion |
+| Command      | Description                |
+| ------------ | -------------------------- |
+| `version`    | Show detailed version info |
+| `update`     | Check for updates          |
+| `completion` | Generate shell completion  |
 
 ### Interactive Shell Commands
 
-| Command | Description |
-|---------|-------------|
-| `vault <name>` | Switch to a different vault |
-| `vaults` | List all vaults |
-| `create` | Create a new vault |
-| `import <file>` | Import vault from file |
-| `delete [name]` | Delete a vault |
-| `lock` | Lock vault (clear cached password) |
-| `unlock` | Unlock vault (cache password) |
-| `status` | Show vault status |
-| `help` | Show available commands |
-| `.clear` | Clear the screen |
-| `.exit` | Exit the shell |
+| Command         | Description                        |
+| --------------- | ---------------------------------- |
+| `vault <name>`  | Switch to a different vault        |
+| `vaults`        | List all vaults                    |
+| `create`        | Create a new vault                 |
+| `import <file>` | Import vault from file             |
+| `delete [name]` | Delete a vault                     |
+| `lock`          | Lock vault (clear cached password) |
+| `unlock`        | Unlock vault (cache password)      |
+| `status`        | Show vault status                  |
+| `help`          | Show available commands            |
+| `.clear`        | Clear the screen                   |
+| `.exit`         | Exit the shell                     |
 
 ## Global Options
 
@@ -931,6 +963,7 @@ Use `-o json` or `--output json` to get structured JSON output. JSON mode automa
 # Get balance as JSON
 vultisig balance ethereum -o json
 ```
+
 ```json
 {
   "chain": "ethereum",
@@ -946,6 +979,7 @@ vultisig balance ethereum -o json
 # Get all balances as JSON
 vultisig balance -o json
 ```
+
 ```json
 {
   "balances": [
@@ -959,6 +993,7 @@ vultisig balance -o json
 # Get portfolio as JSON
 vultisig portfolio -o json
 ```
+
 ```json
 {
   "portfolio": {
@@ -973,11 +1008,10 @@ vultisig portfolio -o json
 # List vaults as JSON
 vultisig vaults -o json
 ```
+
 ```json
 {
-  "vaults": [
-    { "id": "abc123", "name": "Main Wallet", "isActive": true }
-  ],
+  "vaults": [{ "id": "abc123", "name": "Main Wallet", "isActive": true }],
   "activeVaultId": "abc123"
 }
 ```
@@ -986,6 +1020,7 @@ vultisig vaults -o json
 # Get swap quote as JSON
 vultisig swap-quote ethereum thorchain 0.1 -o json
 ```
+
 ```json
 {
   "quote": {
@@ -999,6 +1034,7 @@ vultisig swap-quote ethereum thorchain 0.1 -o json
 ```
 
 JSON output is ideal for:
+
 - Scripting and automation
 - Parsing output programmatically
 - Integration with other tools (e.g., `jq`):
@@ -1067,6 +1103,7 @@ Configuration is stored in `~/.vultisig/`:
 ## Supported Chains
 
 40+ blockchains including:
+
 - **EVM**: Ethereum, Polygon, Arbitrum, Optimism, BSC, Base, Avalanche
 - **UTXO**: Bitcoin, Litecoin, Dogecoin, Dash, Zcash
 - **Cosmos**: Cosmos Hub, THORChain, Maya, Dydx, Kujira
@@ -1074,22 +1111,23 @@ Configuration is stored in `~/.vultisig/`:
 
 ## Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Invalid usage |
-| 3 | Configuration error |
-| 4 | Authentication error |
-| 5 | Network error |
-| 6 | Vault error |
-| 7 | Transaction error |
+| Code | Meaning              |
+| ---- | -------------------- |
+| 0    | Success              |
+| 1    | General error        |
+| 2    | Invalid usage        |
+| 3    | Configuration error  |
+| 4    | Authentication error |
+| 5    | Network error        |
+| 6    | Vault error          |
+| 7    | Transaction error    |
 
 ## Troubleshooting
 
 ### "No active vault" error
 
 Create or import a vault first:
+
 ```bash
 vultisig create fast --name "My Wallet" --password "mypassword" --email user@example.com
 # or
