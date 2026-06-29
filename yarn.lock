@@ -3435,9 +3435,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mysten/sui@npm:^2.19.0":
-  version: 2.19.0
-  resolution: "@mysten/sui@npm:2.19.0"
+"@mysten/sui@npm:^2.20.1":
+  version: 2.20.1
+  resolution: "@mysten/sui@npm:2.20.1"
   dependencies:
     "@graphql-typed-document-node/core": "npm:^3.2.0"
     "@mysten/bcs": "npm:^2.1.0"
@@ -3454,7 +3454,7 @@ __metadata:
     graphql: "npm:^16.14.2"
     poseidon-lite: "npm:0.2.1"
     valibot: "npm:^1.4.1"
-  checksum: 10c0/29e8e913a9ed4f68ba54cc62634b128b127bc5deca7acd0d454472c5b62210950984aede62a94a34454e7271636eac46502f367047d9d7ef10c7693ea820442f
+  checksum: 10c0/330912fe0f954e7f0e6ed57754a530b78aec3521956afce75fa673274d0aa4ca258f6cce42ad88f0a10c759ba0e2c972fb12c42ced96b0e48a67ff808796984f
   languageName: node
   linkType: hard
 
@@ -6965,7 +6965,7 @@ __metadata:
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@lifi/sdk": "npm:^4.0.0"
-    "@mysten/sui": "npm:^2.19.0"
+    "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
     "@polkadot/util": "npm:^14.0.3"
@@ -7003,7 +7003,7 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@bufbuild/protobuf": "npm:^2.12.0"
     "@cosmjs/encoding": "npm:^0.39.0"
-    "@mysten/sui": "npm:^2.19.0"
+    "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.15"
@@ -7210,7 +7210,7 @@ __metadata:
     "@formatjs/intl-numberformat": "npm:^9.3.11"
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
     "@lifi/sdk": "npm:^4.0.0"
-    "@mysten/sui": "npm:^2.19.0"
+    "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
     "@rollup/plugin-alias": "npm:^6.0.0"
