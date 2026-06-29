@@ -117,6 +117,75 @@ export class AgentSession {
   }
 
   /**
+   * Unlock the vault before auth when it's encrypted. Resolve the password from
+   * the keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
+   * VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up the
+   * keyring or env never has to put a funds-controlling secret on argv. argv
+   * `--password` (config.password) still works but is de-emphasized: it lands
+   * the secret in `ps`/shell history, so its use warns. Only when the chain
+   * resolves nothing do we fall back to the mode's own interactive prompt (TUI
+   * readline / via-agent protocol; ask-mode throws). A stale stored password is
+   * cleared and re-prompted in interactive modes rather than stranding init.
+   */
+  private async unlockEncryptedVault(ui: UICallbacks): Promise<void> {
+    if (!this.vault.isEncrypted) {
+      return
+    }
+    let password: string
+    // Whether `password` came from the non-interactive keyring/env chain — a
+    // stale stored value gets cleared and re-prompted; an argv/typed value does
+    // not (it was the caller's explicit choice).
+    let fromStoredChain = false
+    if (this.config.password) {
+      process.stderr.write(
+        'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
+          'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
+      )
+      password = this.config.password
+    } else {
+      const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+      if (resolved !== null) {
+        password = resolved
+        fromStoredChain = true
+      } else {
+        password = await ui.requestPassword()
+      }
+    }
+    try {
+      await (this.vault as any).unlock?.(password)
+    } catch (unlockErr) {
+      if (!fromStoredChain) throw unlockErr
+      password = await this.recoverFromStaleStoredPassword(ui)
+    }
+    this.executor.setPassword(password)
+  }
+
+  /**
+   * The stored (keyring/env) password was rejected by unlock. Drop it so it
+   * isn't reused, then recover: ask mode has no interactive prompt (its
+   * requestPassword throws the misleading "use --password flag"), so surface the
+   * real cause; interactive modes (TUI / via-agent) re-prompt once and cache the
+   * winner. Returns the password that successfully unlocked the vault.
+   */
+  private async recoverFromStaleStoredPassword(ui: UICallbacks): Promise<string> {
+    // Guard the name delete — clearCachedPassword('') would wipe the WHOLE cache
+    // (every other vault loaded this process), and name is typed `string`.
+    clearCachedPassword(this.vault.id)
+    if (this.vault.name) clearCachedPassword(this.vault.name)
+    if (this.config.askMode) {
+      throw new Error(
+        `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
+          'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
+      )
+    }
+    const password = await ui.requestPassword()
+    await (this.vault as any).unlock?.(password)
+    cachePassword(this.vault.id, password)
+    if (this.vault.name) cachePassword(this.vault.name, password)
+    return password
+  }
+
+  /**
    * Initialize the session: health check, authenticate, create conversation.
    */
   async initialize(ui: UICallbacks): Promise<void> {
@@ -128,67 +197,7 @@ export class AgentSession {
 
     // Authenticate - use cached token if valid, otherwise sign a new one
     try {
-      // Unlock vault first if encrypted. Resolve the password from the
-      // keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
-      // VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up
-      // the keyring or env never has to put a funds-controlling secret on argv.
-      // argv `--password` (config.password) still works but is de-emphasized:
-      // it lands the secret in `ps`/shell history, so warn when it's used.
-      // Only when the chain resolves nothing do we fall back to the mode's own
-      // interactive prompt (TUI readline / via-agent protocol; ask-mode throws).
-      if (this.vault.isEncrypted) {
-        let password: string
-        // Whether `password` came from the non-interactive keyring/env chain —
-        // a stale stored value must be cleared and re-prompted, not left to
-        // strand an interactive session.
-        let fromStoredChain = false
-        if (this.config.password) {
-          process.stderr.write(
-            'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
-              'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
-          )
-          password = this.config.password
-        } else {
-          const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
-          if (resolved !== null) {
-            password = resolved
-            fromStoredChain = true
-          } else {
-            password = await ui.requestPassword()
-          }
-        }
-        try {
-          await (this.vault as any).unlock?.(password)
-        } catch (unlockErr) {
-          // Only a stored (keyring/env) password gets a second chance — an
-          // explicit argv `--password` or a value the user just typed is
-          // rethrown as-is.
-          if (!fromStoredChain) throw unlockErr
-          // The stored password was rejected: drop it so it isn't reused. Guard
-          // the name delete — clearCachedPassword('') would wipe the WHOLE cache
-          // (every other vault loaded this process), and name is typed string.
-          clearCachedPassword(this.vault.id)
-          if (this.vault.name) clearCachedPassword(this.vault.name)
-          // ask mode has no interactive prompt — its requestPassword throws the
-          // misleading "use --password flag", which would point a headless
-          // operator at argv instead of at the stale stored credential. Surface
-          // the real cause directly.
-          if (this.config.askMode) {
-            throw new Error(
-              `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
-                'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
-            )
-          }
-          // Interactive (TUI / via-agent): let the user supply the right
-          // password once, and cache the winner so a later in-process lookup
-          // doesn't re-fetch the stale stored value.
-          password = await ui.requestPassword()
-          await (this.vault as any).unlock?.(password)
-          cachePassword(this.vault.id, password)
-          if (this.vault.name) cachePassword(this.vault.name, password)
-        }
-        this.executor.setPassword(password)
-      }
+      await this.unlockEncryptedVault(ui)
 
       const cached = loadCachedToken(this.publicKey)
       if (cached) {
