@@ -6946,7 +6946,7 @@ __metadata:
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
-    viem: "npm:^2.52.2"
+    viem: "npm:^2.53.1"
     vitest: "npm:^4.1.8"
     ws: "npm:^8.21.0"
   bin:
@@ -6998,7 +6998,7 @@ __metadata:
     date-fns: "npm:^4.4.0"
     ethers: "npm:^6.17.0"
     tiny-secp256k1: "npm:^2.2.4"
-    viem: "npm:^2.52.2"
+    viem: "npm:^2.53.1"
     xrpl: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7032,7 +7032,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     cosmjs-types: "npm:^0.11.0"
     long: "npm:^5.3.2"
-    viem: "npm:^2.52.2"
+    viem: "npm:^2.53.1"
   languageName: unknown
   linkType: soft
 
@@ -7132,7 +7132,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
     tldts: "npm:^6.1.0"
-    viem: "npm:^2.52.2"
+    viem: "npm:^2.53.1"
   languageName: unknown
   linkType: soft
 
@@ -7287,7 +7287,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     util: "npm:^0.12.5"
     uuid: "npm:^14.0.1"
-    viem: "npm:^2.52.2"
+    viem: "npm:^2.53.1"
     vite-plugin-node-polyfills: "npm:^0.28.0"
     vite-plugin-wasm: "npm:^3.6.0"
     vitest: "npm:^4.1.8"
@@ -19640,9 +19640,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.52.2":
-  version: 2.52.2
-  resolution: "viem@npm:2.52.2"
+"viem@npm:^2.53.1":
+  version: 2.53.1
+  resolution: "viem@npm:2.53.1"
   dependencies:
     "@noble/curves": "npm:1.9.1"
     "@noble/hashes": "npm:1.8.0"
@@ -19657,7 +19657,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/5a94c8170cce7f9dafd1b21da4e9dd6c7782600ada7b02db87cf721a2db5b81e8c13476a5e75fcbd4baf852dd9738254e015482076581cb7ce33059e04f57a02
+  checksum: 10c0/fa6cfa2068d0681f21d5e8e596956bb48079e32a096c5cb27831707441f4006c6b696d3b9715861b73a15ffd65962abf23c32024259aef08f5568ea4a503a840
   languageName: node
   linkType: hard
 
