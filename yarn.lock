@@ -6987,7 +6987,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.19.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:2.20.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -7040,7 +7040,7 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.15"
-    "@vultisig/core-chain": "npm:2.19.0"
+    "@vultisig/core-chain": "npm:2.20.0"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7223,7 +7223,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=2.10.0"
+    "@vultisig/sdk": ">=2.11.0"
   languageName: unknown
   linkType: soft
 
