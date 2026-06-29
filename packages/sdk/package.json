@@ -244,7 +244,7 @@
     "@types/events": "^3",
     "@types/node": "^26.0.0",
     "@types/path-browserify": "^1",
-    "@vitest/coverage-v8": "4.1.8",
+    "@vitest/coverage-v8": "4.1.9",
     "concurrently": "^10.0.3",
     "dotenv": "^17.4.2",
     "electron": "^42.4.1",
