@@ -7106,7 +7106,7 @@ __metadata:
     tailwindcss: "npm:^4.3.1"
     typescript: "npm:^6.0.3"
     vite: "npm:^8.0.16"
-    vite-plugin-electron: "npm:^1.0.4"
+    vite-plugin-electron: "npm:^1.1.0"
     vite-plugin-electron-renderer: "npm:^1.0.0"
     wait-on: "npm:^9.0.10"
   languageName: unknown
@@ -19688,9 +19688,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite-plugin-electron@npm:^1.0.4":
-  version: 1.0.4
-  resolution: "vite-plugin-electron@npm:1.0.4"
+"vite-plugin-electron@npm:^1.1.0":
+  version: 1.1.0
+  resolution: "vite-plugin-electron@npm:1.1.0"
   dependencies:
     local-pkg: "npm:^1.2.1"
   peerDependencies:
@@ -19698,7 +19698,7 @@ __metadata:
   peerDependenciesMeta:
     vite-plugin-electron-renderer:
       optional: true
-  checksum: 10c0/7428a22406c35f011ed02653dffea715df20fd5cc0ab77671cde72998a0d2c008e3524c7a172a96314e151dd412208a2ca9b960eae1c9b3ff292f37dfe32b2a2
+  checksum: 10c0/e160f5f3e2fa4f0bca9f092ffbd58e51dc60d41e0e63186d5a8b9962407ccf727f28254a60eeeff566d1dd6a11d68763e8393d2370fd5f96770ed996c5d8411d
   languageName: node
   linkType: hard
 
