@@ -25,7 +25,9 @@ export const fetchSolanaValidators = async (): Promise<SolanaValidator[]> => {
   const toValidator = (account: (typeof current)[number], isDelinquent: boolean): SolanaValidator => ({
     votePubkey: account.votePubkey,
     nodePubkey: account.nodePubkey,
-    activatedStake: BigInt(Math.trunc(account.activatedStake)),
+    // `activatedStake` arrives from the RPC as a JSON number — keep it as-is
+    // rather than minting a falsely-exact bigint from an already-lossy value.
+    activatedStake: account.activatedStake,
     commission: account.commission,
     epochVoteAccount: account.epochVoteAccount,
     isDelinquent,
@@ -115,9 +117,14 @@ export const fetchSolanaInflationRate = async (): Promise<number> => {
   return total
 }
 
-/** Total SOL supply in lamports — the denominator for the staked fraction. */
-export const fetchSolanaTotalSupply = async (): Promise<bigint> => {
+/**
+ * Total SOL supply in lamports — the denominator for the staked fraction in the
+ * APY fallback. `getSupply` returns a JSON number that exceeds 2^53, so it is
+ * already approximate; kept as `number` (the ratio it feeds only needs ~2dp),
+ * not minted into a falsely-exact bigint.
+ */
+export const fetchSolanaTotalSupply = async (): Promise<number> => {
   const client = getSolanaClient()
   const { value } = await client.getSupply()
-  return BigInt(Math.trunc(value.total))
+  return value.total
 }

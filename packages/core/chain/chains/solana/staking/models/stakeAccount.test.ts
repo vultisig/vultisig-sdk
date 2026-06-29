@@ -62,6 +62,44 @@ describe('parseStakeAccount', () => {
   it('returns undefined when the account is not a parsed stake account', () => {
     expect(parseStakeAccount({ pubkey: 'X', lamports: 0n, parsedInfo: undefined })).toBeUndefined()
   })
+
+  it('rejects a row with a missing authority instead of fabricating an empty one', () => {
+    expect(
+      parseStakeAccount({
+        pubkey: 'X',
+        lamports: 1n,
+        parsedInfo: {
+          meta: {
+            rentExemptReserve: '2282880',
+            authorized: { staker: 'STAKER_PUBKEY' },
+          },
+        },
+      })
+    ).toBeUndefined()
+  })
+
+  it('rejects a delegation with an unparseable numeric field instead of coercing it to 0n', () => {
+    expect(
+      parseStakeAccount({
+        pubkey: 'X',
+        lamports: 1n,
+        parsedInfo: {
+          meta: {
+            rentExemptReserve: '2282880',
+            authorized: { staker: 'STAKER_PUBKEY', withdrawer: 'WITHDRAWER_PUBKEY' },
+          },
+          stake: {
+            delegation: {
+              voter: 'VOTE_PUBKEY',
+              stake: 'not-a-number',
+              activationEpoch: '100',
+              deactivationEpoch: sentinel.toString(),
+            },
+          },
+        },
+      })
+    ).toBeUndefined()
+  })
 })
 
 describe('isDeactivationSentinel', () => {

@@ -25,8 +25,14 @@ export type SolanaValidator = {
   votePubkey: string
   /** The validator's identity (node) pubkey. */
   nodePubkey: string
-  /** Total active stake delegated to this validator, in lamports. */
-  activatedStake: bigint
+  /**
+   * Total active stake delegated to this validator, in lamports. Sourced from
+   * `getVoteAccounts`, which serializes it as a JSON number — so for very large
+   * validators this is already an approximate (>2^53) value. Kept as `number`
+   * rather than dressed up as an exact `bigint`; it drives sort / voting-power
+   * display only, never balance math.
+   */
+  activatedStake: number
   /** Commission percentage (0–100) the validator takes from rewards. */
   commission: number
   /** Whether this vote account has voted in the current epoch. */

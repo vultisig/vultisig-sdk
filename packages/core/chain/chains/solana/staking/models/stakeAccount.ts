@@ -111,14 +111,14 @@ type ParsedStakeInfo = {
   }
 }
 
-const toBigInt = (value: string | number | undefined): bigint => {
+const toBigInt = (value: string | number | undefined): bigint | undefined => {
   if (value === undefined) {
-    return 0n
+    return undefined
   }
   try {
     return BigInt(typeof value === 'number' ? Math.trunc(value) : value)
   } catch {
-    return 0n
+    return undefined
   }
 }
 
@@ -136,28 +136,42 @@ export const parseStakeAccount = ({
   lamports: bigint
   parsedInfo: ParsedStakeInfo | undefined
 }): SolanaStakeAccount | undefined => {
+  // Reject partially-malformed payloads rather than coercing them into
+  // fabricated zero/empty values — a bogus `0n` stake or empty authority would
+  // surface downstream as wrong balances or a falsely inactive/available state.
   const meta = parsedInfo?.meta
-  if (!meta?.authorized) {
+  if (!meta?.authorized?.staker || !meta.authorized.withdrawer) {
+    return undefined
+  }
+
+  const rentExemptReserve = toBigInt(meta.rentExemptReserve)
+  if (rentExemptReserve === undefined) {
     return undefined
   }
 
   const delegationInfo = parsedInfo?.stake?.delegation
   let delegation: SolanaStakeDelegation | undefined
   if (delegationInfo?.voter) {
+    const activationEpoch = toBigInt(delegationInfo.activationEpoch)
+    const deactivationEpoch = toBigInt(delegationInfo.deactivationEpoch)
+    const stake = toBigInt(delegationInfo.stake)
+    if (activationEpoch === undefined || deactivationEpoch === undefined || stake === undefined) {
+      return undefined
+    }
     delegation = {
       votePubkey: delegationInfo.voter,
-      activationEpoch: toBigInt(delegationInfo.activationEpoch),
-      deactivationEpoch: toBigInt(delegationInfo.deactivationEpoch),
-      stake: toBigInt(delegationInfo.stake),
+      activationEpoch,
+      deactivationEpoch,
+      stake,
     }
   }
 
   return {
     pubkey,
     lamports,
-    rentExemptReserve: toBigInt(meta.rentExemptReserve),
-    staker: meta.authorized.staker ?? '',
-    withdrawer: meta.authorized.withdrawer ?? '',
+    rentExemptReserve,
+    staker: meta.authorized.staker,
+    withdrawer: meta.authorized.withdrawer,
     delegation,
   }
 }
