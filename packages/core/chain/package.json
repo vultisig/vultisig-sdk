@@ -680,6 +680,31 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/solana/staking/config": {
+      "types": "./dist/chains/solana/staking/config.d.ts",
+      "import": "./dist/chains/solana/staking/config.js",
+      "default": "./dist/chains/solana/staking/config.js"
+    },
+    "./chains/solana/staking/cooldownGate": {
+      "types": "./dist/chains/solana/staking/cooldownGate.d.ts",
+      "import": "./dist/chains/solana/staking/cooldownGate.js",
+      "default": "./dist/chains/solana/staking/cooldownGate.js"
+    },
+    "./chains/solana/staking/models/stakeAccount": {
+      "types": "./dist/chains/solana/staking/models/stakeAccount.d.ts",
+      "import": "./dist/chains/solana/staking/models/stakeAccount.js",
+      "default": "./dist/chains/solana/staking/models/stakeAccount.js"
+    },
+    "./chains/solana/staking/models/validator": {
+      "types": "./dist/chains/solana/staking/models/validator.d.ts",
+      "import": "./dist/chains/solana/staking/models/validator.js",
+      "default": "./dist/chains/solana/staking/models/validator.js"
+    },
+    "./chains/solana/staking/rpc": {
+      "types": "./dist/chains/solana/staking/rpc.d.ts",
+      "import": "./dist/chains/solana/staking/rpc.js",
+      "default": "./dist/chains/solana/staking/rpc.js"
+    },
     "./chains/sui/buildTransactionFromJson": {
       "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
       "import": "./dist/chains/sui/buildTransactionFromJson.js",
