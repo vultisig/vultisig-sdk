@@ -5,6 +5,8 @@ import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
+import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
+import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -82,7 +84,15 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   slippageTolerance?: number
 }
 
-type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName =
+  | 'CowSwap'
+  | 'KyberSwap'
+  | '1inch'
+  | 'LiFi'
+  | 'SwapKit'
+  | 'Jupiter'
+  | 'THORChain'
+  | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -124,6 +134,11 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   'CowSwap',
   'THORChain',
   'MayaChain',
+  // Jupiter is slotted ahead of the EVM/multi-chain aggregators: it only enters
+  // the candidate set for same-chain Solana pairs (see fetcher registration
+  // below), where it has no aggregator markup and carries our own affiliate fee,
+  // so on a near-tie it is preferred over SwapKit/LiFi for those pairs.
+  'Jupiter',
   'SwapKit',
   'KyberSwap',
   '1inch',
@@ -299,6 +314,7 @@ type ProviderSlippage = {
   swapKitPercent: number | undefined
   lifiFraction: number | undefined
   kyberBps: number | undefined
+  jupiterBps: number | undefined
 }
 const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
   const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
@@ -309,6 +325,7 @@ const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlip
     swapKitPercent: slippageTolerance,
     lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
     kyberBps: bps,
+    jupiterBps: bps,
   }
 }
 
@@ -370,6 +387,7 @@ export const findSwapQuote = async ({
     swapKitPercent: swapKitSlippagePercent,
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
+    jupiterBps: jupiterSlippageBps,
     nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
@@ -494,6 +512,31 @@ export const findSwapQuote = async ({
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
             slippage: oneInchSlippagePercent,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
+
+    // Jupiter — Solana-only, same-chain (SOL↔SPL, SPL↔SPL). It cannot route any
+    // cross-chain pair, so it is offered only when both legs are on Solana.
+    if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
+      result.push({
+        providerName: 'Jupiter',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getJupiterSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: fromChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+            slippageBps: jupiterSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -627,6 +670,7 @@ export const findSwapQuote = async ({
     'CowSwap',
     'KyberSwap',
     '1inch',
+    'Jupiter',
     'LiFi',
     'SwapKit',
     'THORChain',

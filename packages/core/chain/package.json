@@ -1447,6 +1447,26 @@
       "import": "./dist/swap/general/GeneralSwapQuote.js",
       "default": "./dist/swap/general/GeneralSwapQuote.js"
     },
+    "./swap/general/jupiter/api/getJupiterSwapQuote": {
+      "types": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.d.ts",
+      "import": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js",
+      "default": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js"
+    },
+    "./swap/general/jupiter/api/jupiterFeeAta": {
+      "types": "./dist/swap/general/jupiter/api/jupiterFeeAta.d.ts",
+      "import": "./dist/swap/general/jupiter/api/jupiterFeeAta.js",
+      "default": "./dist/swap/general/jupiter/api/jupiterFeeAta.js"
+    },
+    "./swap/general/jupiter/config": {
+      "types": "./dist/swap/general/jupiter/config.d.ts",
+      "import": "./dist/swap/general/jupiter/config.js",
+      "default": "./dist/swap/general/jupiter/config.js"
+    },
+    "./swap/general/jupiter/JupiterSwapEnabledChains": {
+      "types": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.d.ts",
+      "import": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js",
+      "default": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js"
+    },
     "./swap/general/kyber/api/baseUrl": {
       "types": "./dist/swap/general/kyber/api/baseUrl.d.ts",
       "import": "./dist/swap/general/kyber/api/baseUrl.js",

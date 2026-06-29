@@ -6,12 +6,20 @@ import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
  *
  * - `li.fi` → scan.li.fi (or orb.helius.dev for Solana settlement)
  * - `thorchain` / `mayachain` → native chain scanner
- * - `1inch`, `kyber`, `swapkit` → no per-tx aggregator page; fall back to source-chain explorer
+ * - `1inch`, `kyber`, `swapkit`, `jupiter` → no per-tx aggregator page; fall back to source-chain explorer
  *
  * Keep this union in sync with iOS `ExplorerLinkBuilder.swift` and Android
  * `ExplorerLinkRepository.getSwapProgressLink`.
  */
-export const swapExplorerProviders = ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'thorchain'] as const
+export const swapExplorerProviders = [
+  '1inch',
+  'kyber',
+  'li.fi',
+  'mayachain',
+  'swapkit',
+  'jupiter',
+  'thorchain',
+] as const
 
 export type SwapExplorerProvider = (typeof swapExplorerProviders)[number]
 
@@ -55,6 +63,7 @@ export const getSwapExplorerUrl = ({ provider, txHash, fromChain }: GetSwapExplo
     case '1inch':
     case 'kyber':
     case 'swapkit':
+    case 'jupiter':
       // No public aggregator scanner. Source-chain explorer keeps the link
       // useful (Etherscan / Solscan / etc.) without fabricating a URL.
       return getBlockExplorerUrl({ chain: fromChain, entity: 'tx', value: txHash })
