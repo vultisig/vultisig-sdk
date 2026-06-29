@@ -132,11 +132,21 @@ describe('getSwapExplorerUrl', () => {
         })
       ).toBe(`https://solscan.io/tx/${SOL_TX_HASH}`)
     })
+
+    it('jupiter falls back to the Solana block explorer', () => {
+      expect(
+        getSwapExplorerUrl({
+          provider: 'jupiter',
+          txHash: SOL_TX_HASH,
+          fromChain: Chain.Solana,
+        })
+      ).toBe(`https://solscan.io/tx/${SOL_TX_HASH}`)
+    })
   })
 
   it('exposes every provider via swapExplorerProviders', () => {
     expect([...swapExplorerProviders].sort()).toEqual(
-      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'thorchain'].sort()
+      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'jupiter', 'thorchain'].sort()
     )
   })
 })
