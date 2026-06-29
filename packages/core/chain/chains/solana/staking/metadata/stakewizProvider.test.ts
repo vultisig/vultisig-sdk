@@ -36,6 +36,40 @@ describe('stakewizValidatorMetadataProvider', () => {
     expect(map['V2']).toBeUndefined()
   })
 
+  it('skips malformed rows and preserves a genuine 0% APY without throwing', async () => {
+    stubFetch((async () =>
+      okResponse([
+        null,
+        'garbage',
+        42,
+        { vote_identity: 123 },
+        {
+          vote_identity: 'V1',
+          name: 456,
+          image: null,
+          apy_estimate: 'x',
+          wiz_score: 'y',
+        },
+        {
+          vote_identity: 'V2',
+          name: '  Bob  ',
+          apy_estimate: 0,
+          wiz_score: 80.6,
+        },
+      ])) as typeof fetch)
+
+    const map = await stakewizValidatorMetadataProvider.metadata(['V1', 'V2'])
+    // Valid pubkey, but every field is invalid → all collapse to undefined.
+    expect(map['V1']).toEqual({})
+    // Trimmed name, rounded score, and a real 0% APY preserved (not dropped).
+    expect(map['V2']).toEqual({
+      name: 'Bob',
+      logoUrl: undefined,
+      apyEstimate: 0,
+      score: 81,
+    })
+  })
+
   it('returns {} on a non-ok response (graceful degradation)', async () => {
     stubFetch((async () => ({ ok: false, status: 503 }) as Response) as typeof fetch)
     expect(await stakewizValidatorMetadataProvider.metadata(['V1'])).toEqual({})

@@ -21,26 +21,34 @@ import { ValidatorMetadataProvider } from './ValidatorMetadataProvider'
  */
 const stakewizValidatorsUrl = 'https://api.stakewiz.com/validators'
 
-type StakewizValidatorRow = {
-  vote_identity?: string
-  name?: string | null
-  image?: string | null
-  apy_estimate?: number | null
-  wiz_score?: number | null
+// The wire is untrusted: the never-throw contract means a malformed element
+// (`null`, `name: 123`, …) must be skipped, not allowed to throw. So rows are
+// typed as opaque records and every field is read through a runtime guard.
+type StakewizValidatorRow = Record<string, unknown>
+
+const asTrimmedString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value.trim() || undefined : undefined
+
+const asFiniteNumber = (value: unknown): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+/**
+ * Stakewiz reports `apy_estimate` as a percentage (e.g. 5.72) — store as a
+ * fraction. A genuine `0` is preserved (0% APY ≠ "no APY"); only missing /
+ * non-finite / negative values collapse to `undefined`.
+ */
+const apyFraction = (percent: unknown): number | undefined => {
+  const value = asFiniteNumber(percent)
+  return value !== undefined && value >= 0 ? value / 100 : undefined
 }
 
-/** Stakewiz reports `apy_estimate` as a percentage (e.g. 5.72) — store as a fraction. */
-const apyFraction = (percent: number | null | undefined): number | undefined =>
-  typeof percent === 'number' && Number.isFinite(percent) && percent > 0 ? percent / 100 : undefined
-
 const toMetadata = (row: StakewizValidatorRow): ValidatorMetadata => {
-  const name = row.name?.trim()
-  const image = row.image?.trim()
+  const wizScore = asFiniteNumber(row.wiz_score)
   return {
-    name: name || undefined,
-    logoUrl: image || undefined,
+    name: asTrimmedString(row.name),
+    logoUrl: asTrimmedString(row.image),
     apyEstimate: apyFraction(row.apy_estimate),
-    score: typeof row.wiz_score === 'number' ? Math.round(row.wiz_score) : undefined,
+    score: wizScore === undefined ? undefined : Math.round(wizScore),
   }
 }
 
@@ -58,7 +66,7 @@ export const stakewizValidatorMetadataProvider: ValidatorMetadataProvider = {
       if (!response.ok) {
         throw new Error(`Stakewiz responded ${response.status}`)
       }
-      return (await response.json()) as StakewizValidatorRow[]
+      return (await response.json()) as unknown
     })
 
     // Outage / rate-limit / malformed response — degrade to on-chain-only.
@@ -68,9 +76,14 @@ export const stakewizValidatorMetadataProvider: ValidatorMetadataProvider = {
 
     const map: Record<string, ValidatorMetadata> = {}
     for (const row of result.data) {
-      const votePubkey = row.vote_identity
+      // Skip malformed elements (`null`, primitives, missing/invalid pubkey)
+      // rather than letting a field access throw — the never-throw contract.
+      if (typeof row !== 'object' || row === null) {
+        continue
+      }
+      const votePubkey = asTrimmedString((row as StakewizValidatorRow).vote_identity)
       if (votePubkey && requested.has(votePubkey)) {
-        map[votePubkey] = toMetadata(row)
+        map[votePubkey] = toMetadata(row as StakewizValidatorRow)
       }
     }
     return map
