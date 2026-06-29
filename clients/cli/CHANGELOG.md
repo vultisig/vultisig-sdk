@@ -1,5 +1,24 @@
 # @vultisig/cli
 
+## 2.11.0
+
+### Patch Changes
+
+- [#899](https://github.com/vultisig/vultisig-sdk/pull/899) [`00ede74`](https://github.com/vultisig/vultisig-sdk/commit/00ede74e6db1bd08ded0b25cc32c1f477e6b0d22) Thanks [@neavra](https://github.com/neavra)! - agent: resolve the vault password from the keyring/env chain before prompting
+
+  `vultisig agent` (including `agent ask` and `--via-agent`) now resolves the vault
+  password from the in-memory cache → OS keyring (`vsig auth setup`) →
+  `VAULT_PASSWORDS`/`VAULT_PASSWORD` env chain before falling back to an
+  interactive prompt. Headless operators who configured the keyring or env no
+  longer have to pass `--password` on argv (which exposed the secret to `ps` and
+  shell history). `--password` still works but is de-emphasized and now emits a
+  stderr warning pointing at the keyring/env path.
+
+- Updated dependencies [[`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1)]:
+  - @vultisig/core-chain@2.20.0
+  - @vultisig/sdk@2.11.0
+  - @vultisig/rujira@44.0.0
+
 ## 2.10.0
 
 ### Patch Changes
