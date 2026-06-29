@@ -4,31 +4,27 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { AgentSession, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
+import {
+  AgentSession,
+  BACKEND_CLIENT_SIDE_TOOL_NAMES,
+  CLIENT_SIDE_DISPATCH_TOOL_NAMES,
+  CLIENT_SIDE_TOOL_DISPATCH as registry,
+} from '../session'
 import type { RecentAction } from '../types'
 
 // ────────────────────────────────────────────────────────────────────────────
-// Backend contract source of truth — vendored from agent-backend.
+// Backend contract source of truth.
 //
-// SYNC MECHANISM: this constant is a hand-mirrored copy of the agent-backend's
-// `clientSideToolNames` map (Go) at
-//   internal/service/agent/tools.go:549-559
-// The SDK repo can't import Go, so the backend set is vendored here as ONE
-// obvious place. When the backend adds/renames/removes a client-side tool,
-// update this constant — the parity test below then forces every entry to be
-// reclassified (implemented / mobile-only-excluded / rewritten), so a real
+// SYNC MECHANISM: `BACKEND_CLIENT_SIDE_TOOL_NAMES` (in session.ts, imported
+// above) is the single hand-mirrored copy of the agent-backend's
+// `clientSideToolNames` map (Go) at internal/service/agent/tools.go:549-559 —
+// it lives in PRODUCTION code because the session routes SSE dispatch on it, so
+// the test and the runtime can't drift from each other. The SDK repo can't
+// import Go, so when the backend adds/renames/removes a client-side tool, update
+// that one production constant — the parity test below then forces every entry
+// to be reclassified (implemented / mobile-only-excluded / rewritten), so a real
 // CLI↔backend contract drift fails red instead of silently shipping.
-const BACKEND_CLIENT_SIDE_TOOLS = [
-  'vault_coin',
-  'vault_chain',
-  'create_vault',
-  'plugin_install',
-  'create_policy',
-  'delete_policy',
-  'sign_typed_data',
-  'polymarket_sign_bet',
-  'polymarket_sign_batch',
-].sort()
+const BACKEND_CLIENT_SIDE_TOOLS = [...BACKEND_CLIENT_SIDE_TOOL_NAMES].sort()
 
 // How each backend client-side tool maps onto the CLI. Every entry of
 // BACKEND_CLIENT_SIDE_TOOLS must land in EXACTLY ONE of these three buckets —
@@ -68,7 +64,7 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', 
     expect(Object.keys(registry).sort()).toEqual(EXPECTED_REGISTRY_KEYS)
   })
 
-  it('every backend client-side tool is classified exactly once (catches a new backend tool)', () => {
+  it('every backend client-side tool is classified exactly once (catches a new backend tool once the vendored constant is updated)', () => {
     const classified = [...CLI_IMPLEMENTED, ...MOBILE_ONLY_EXCLUDED, ...BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA].sort()
     // Exhaustive + disjoint: the union of the three buckets is precisely the
     // backend set. A backend tool missing from all buckets (or listed twice)
@@ -120,6 +116,53 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', 
   })
 })
 
+describe('CLIENT_SIDE_DISPATCH_TOOL_NAMES — routing surface is the backend superset', () => {
+  // The SSE layer routes a tool-input-available frame to dispatch iff its
+  // toolName is in this set (session.ts passes it to setClientSideToolNames).
+  // It MUST be a superset of the implemented registry — otherwise an
+  // unimplemented backend tool never reaches dispatchClientSideTool and the
+  // TOOL_UNSUPPORTED path is dead code (the bug this PR fixes).
+  it('is exactly the backend contract ∪ the implemented registry keys', () => {
+    const expected = new Set([...BACKEND_CLIENT_SIDE_TOOL_NAMES, ...Object.keys(registry)])
+    expect([...CLIENT_SIDE_DISPATCH_TOOL_NAMES].sort()).toEqual([...expected].sort())
+  })
+
+  it('routes every IMPLEMENTED tool (so it reaches its handler)', () => {
+    for (const name of Object.keys(registry)) {
+      expect(CLIENT_SIDE_DISPATCH_TOOL_NAMES.has(name), `${name} must route to its handler`).toBe(true)
+    }
+  })
+
+  it('routes the UNIMPLEMENTED backend tools too (so they reach the TOOL_UNSUPPORTED path)', () => {
+    const unimplemented = BACKEND_CLIENT_SIDE_TOOL_NAMES.filter(n => !(n in registry))
+    expect(unimplemented.length).toBeGreaterThan(0) // sanity: there ARE unimplemented backend tools
+    for (const name of unimplemented) {
+      expect(CLIENT_SIDE_DISPATCH_TOOL_NAMES.has(name), `${name} must route so it can report TOOL_UNSUPPORTED`).toBe(
+        true
+      )
+    }
+  })
+
+  it('the session wires the full dispatch set into the client (constructor production path)', () => {
+    // Guards the actual glue: AgentSession must hand the SUPERSET routing set to
+    // the client, not just Object.keys(CLIENT_SIDE_TOOL_DISPATCH). Without this,
+    // reverting session.ts:setClientSideToolNames to the registry keys would
+    // silently kill the TOOL_UNSUPPORTED path while every set-level test above
+    // stayed green (they inject the set directly rather than via the session).
+    const spy = vi.spyOn(AgentClient.prototype, 'setClientSideToolNames')
+    try {
+      // Empty ecdsa pubkey ⇒ AgentExecutor skips VaultStateStore (no fs side effect).
+      const fakeVault = { publicKeys: { ecdsa: '' }, isEncrypted: false } as any
+      new AgentSession(fakeVault, { backendUrl: 'http://localhost:8084' } as any)
+      expect(spy).toHaveBeenCalledTimes(1)
+      const passed = spy.mock.calls[0][0] as Set<string>
+      expect([...passed].sort()).toEqual([...CLIENT_SIDE_DISPATCH_TOOL_NAMES].sort())
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
 describe('dispatchClientSideTool — unimplemented tool emits a typed error code', () => {
   // A tool the backend asks the client to run but that has no entry in
   // CLIENT_SIDE_TOOL_DISPATCH must push a failure RecentAction carrying the
@@ -150,6 +193,16 @@ describe('dispatchClientSideTool — unimplemented tool emits a typed error code
     expect(results[0].data?.code).toBe(AgentErrorCode.TOOL_UNSUPPORTED)
     // Human-readable line preserved alongside the code.
     expect(results[0].data?.error).toContain('unimplemented in CLI')
+  })
+
+  it('reports TOOL_UNSUPPORTED for a REAL backend client-side tool the CLI does not implement', async () => {
+    // create_vault is in the backend contract (so it routes to dispatch) but
+    // has no handler in CLIENT_SIDE_TOOL_DISPATCH — the exact production case.
+    expect(BACKEND_CLIENT_SIDE_TOOL_NAMES).toContain('create_vault')
+    expect(registry).not.toHaveProperty('create_vault')
+    const results = await dispatchUnknown('create_vault')
+    expect(results[0].success).toBe(false)
+    expect(results[0].data?.code).toBe(AgentErrorCode.TOOL_UNSUPPORTED)
   })
 })
 
@@ -372,11 +425,12 @@ describe('SF + CR2 — pendingToolResults catch-block contract', () => {
 
 describe('AgentClient SSE parser — registry-based client-side tool routing', () => {
   // The backend's V1ToolInputAvailable frame carries NO `clientExecuted`
-  // discriminator (the flag was removed). The client must identify client-side
-  // tools via its own registry (mirroring the app's toolUIRegistry), injected
-  // by the session via setClientSideToolNames. These names mirror
-  // CLIENT_SIDE_TOOL_DISPATCH.
-  const CLIENT_SIDE_NAMES = new Set(['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book'])
+  // discriminator (the flag was removed). The client identifies client-side
+  // tools via the dispatch-routing set the session injects through
+  // setClientSideToolNames. Derive it from the SAME production constant the
+  // session uses (not a hand-copied literal) so this suite can't drift from the
+  // real routing surface.
+  const CLIENT_SIDE_NAMES = new Set(CLIENT_SIDE_DISPATCH_TOOL_NAMES)
 
   function makeClient(registry: Set<string> | null = CLIENT_SIDE_NAMES): AgentClient {
     const c = new AgentClient('http://localhost:8084')
@@ -438,7 +492,7 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
     expect(onToolProgress).toHaveBeenCalled()
   })
 
-  it('dispatches every registry tool from a current-backend frame (all 4 tools alive again)', () => {
+  it('dispatches every routed client-side tool name from a current-backend frame', () => {
     for (const toolName of CLIENT_SIDE_NAMES) {
       const client = makeClient()
       const onClientSideToolCall = vi.fn()
@@ -451,6 +505,26 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
         action: 'add',
       })
     }
+  })
+
+  it('routes an UNIMPLEMENTED backend client-side tool to dispatch (production path for TOOL_UNSUPPORTED)', () => {
+    // The bug Codex caught: if the routing set were only the implemented
+    // registry keys, create_vault's frame would fall through as display-only
+    // progress and never reach dispatchClientSideTool — so TOOL_UNSUPPORTED
+    // would be dead code. Routing on the backend superset makes it reachable.
+    const client = makeClient()
+    const onClientSideToolCall = vi.fn()
+    const onToolProgress = vi.fn()
+
+    feedEvent(
+      client,
+      JSON.stringify({ type: 'tool-input-available', toolCallId: 'cv', toolName: 'create_vault', input: {} }),
+      { onClientSideToolCall, onToolProgress }
+    )
+
+    // It IS intercepted for dispatch (where the !handler branch emits the
+    // structured failure — verified at the dispatch level above).
+    expect(onClientSideToolCall).toHaveBeenCalledWith('cv', 'create_vault', {})
   })
 
   it('does NOT fire for a non-client-side toolName (server-side / MCP) — no over-trigger', () => {
