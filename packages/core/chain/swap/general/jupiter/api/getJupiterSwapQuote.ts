@@ -67,11 +67,12 @@ const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
  * Fetch a Solana same-chain swap quote from Jupiter and build the signed-tx
  * payload the keysign pipeline expects.
  *
- * Affiliate fee: when `affiliateBps > 0`, `platformFeeBps` is sent on the quote
- * and the fee ATA (output mint, owner = `jupiterFeeOwnerAddress`) is derived,
- * passed to `/swap` as `feeAccount`, and an idempotent create instruction is
- * prepended to the returned transaction. When `affiliateBps` is 0 (e.g. an
- * Ultimate-tier VULT holder), no fee is charged and no fee account is touched.
+ * Affiliate fee: when `affiliateBps > 0`, `platformFeeBps` is sent on the quote.
+ * The fee ATA (output mint, owner = `jupiterFeeOwnerAddress`) is derived, passed
+ * to `/swap` as `feeAccount`, and an idempotent create instruction is prepended
+ * to the returned transaction only when the quote actually returns a non-zero
+ * `platformFee.amount`. When `affiliateBps` is 0 (e.g. an Ultimate-tier VULT
+ * holder) or Jupiter floors the fee to zero, no fee account is touched.
  */
 export const getJupiterSwapQuote = async ({
   from,
@@ -85,7 +86,7 @@ export const getJupiterSwapQuote = async ({
   const inputMint = mintFor(from)
   const outputMint = mintFor(to)
 
-  const chargesFee = affiliateBps > 0
+  const requestsPlatformFee = affiliateBps > 0
 
   const quoteParams = new URLSearchParams({
     swapMode: 'ExactIn',
@@ -94,13 +95,22 @@ export const getJupiterSwapQuote = async ({
     amount: amount.toString(),
     slippageBps: slippageBps.toString(),
   })
-  if (chargesFee) {
+  if (requestsPlatformFee) {
     quoteParams.set('platformFeeBps', affiliateBps.toString())
   }
 
   const quoteResponse = await requestJson<JupiterQuoteResponse>(`${baseUrl}/swap/v1/quote?${quoteParams.toString()}`, {
     headers: { Accept: 'application/json' },
   })
+
+  // Gate the fee-account flow on the actually quoted fee, not just the requested
+  // bps: Jupiter can floor `platformFee.amount` to 0 (tiny amounts, route with no
+  // fee-eligible mint) even when we asked for a fee. Deriving a fee account and
+  // paying ATA rent for a zero fee would break the "no fee account when the fee
+  // floors to zero" contract. Require both a requested fee and a non-zero quoted
+  // amount before touching the fee account.
+  const swapFeeAmount = BigInt(quoteResponse.platformFee?.amount ?? '0')
+  const chargesFee = requestsPlatformFee && swapFeeAmount > 0n
 
   // The fee mint is the OUTPUT mint (ExactIn). Derive the fee ATA up front so
   // it can be sent to /swap and so we know which program owns it for the
@@ -140,8 +150,6 @@ export const getJupiterSwapQuote = async ({
   // per fee mint; idempotent thereafter). Jupiter embeds its own priority fee in
   // the returned tx, which the consumer surfaces at broadcast time.
   const networkFee = BigInt(solanaConfig.baseFee) + (chargesFee ? BigInt(solanaConfig.ataRentLamports) : 0n)
-
-  const swapFeeAmount = BigInt(quoteResponse.platformFee?.amount ?? '0')
 
   return {
     dstAmount: quoteResponse.outAmount,

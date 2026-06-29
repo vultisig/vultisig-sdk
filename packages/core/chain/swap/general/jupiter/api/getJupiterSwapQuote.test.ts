@@ -115,6 +115,45 @@ describe('getJupiterSwapQuote', () => {
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
   })
 
+  it('skips the fee account when Jupiter floors the platform fee to zero', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              // Fee requested (platformFeeBps sent), but the quoted amount floors to 0.
+              platformFee: { amount: '0', feeBps: 50 },
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    // The fee was still requested on the quote...
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url).toContain('platformFeeBps=50')
+
+    // ...but with a zero quoted fee no fee account is derived, prepended, or sent.
+    expect(deriveJupiterFeeAccount).not.toHaveBeenCalled()
+    expect(prependJupiterFeeAta).not.toHaveBeenCalled()
+
+    const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
+    expect(JSON.parse(swapCall.init!.body as string)).not.toHaveProperty('feeAccount')
+
+    // Untouched Jupiter transaction flows through verbatim and the swap fee is 0.
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+    expect('solana' in quote.tx && quote.tx.solana.swapFee.amount).toBe(0n)
+  })
+
   it('throws when Jupiter returns no serialized transaction', async () => {
     vi.stubGlobal(
       'fetch',
