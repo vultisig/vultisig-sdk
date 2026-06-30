@@ -1,3 +1,4 @@
+import { SendTransactionError } from '@solana/web3.js'
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { sendJitoTransaction } from '@vultisig/core-chain/chains/solana/jito'
@@ -6,6 +7,30 @@ import base58 from 'bs58'
 
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
+
+/**
+ * Hoists the on-chain rejection reason into a Solana send error's message.
+ *
+ * On a preflight rejection the RPC returns the actionable detail in
+ * `data.err` / `data.logs` (the program logs), which `web3.js` exposes via
+ * `SendTransactionError.logs`. The bare `.message` ("failed to send
+ * transaction") hides it, so any consumer reading only the top-level message
+ * loses the reason. Fold the program logs into the message — preserving the
+ * original error as `cause` — so the real reason ("insufficient lamports",
+ * "custom program error: 0x1", a failed instruction) reaches the surface.
+ */
+const withSolanaBroadcastReason = (error: unknown): unknown => {
+  if (!(error instanceof SendTransactionError)) {
+    return error
+  }
+
+  const { logs } = error
+  if (!logs || logs.length === 0) {
+    return error
+  }
+
+  return new Error([error.message, ...logs].join('\n'), { cause: error })
+}
 
 export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async ({ chain, tx }) => {
   const rawTransaction = base58.decode(tx.encoded)
@@ -48,6 +73,10 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
     if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
       return
     }
-    await verifyBroadcastByHash({ chain, tx, error })
+    await verifyBroadcastByHash({
+      chain,
+      tx,
+      error: withSolanaBroadcastReason(error),
+    })
   }
 }
