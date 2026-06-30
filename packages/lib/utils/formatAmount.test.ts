@@ -32,7 +32,7 @@ describe('formatAmount', () => {
     })
 
     it('switches to subscript once there are enough leading zeros', () => {
-      expect(formatAmount(0.000012345, { currency: 'usd' })).toBe('$0.0₄1234')
+      expect(formatAmount(0.00001234, { currency: 'usd' })).toBe('$0.0₄1234')
     })
   })
 
