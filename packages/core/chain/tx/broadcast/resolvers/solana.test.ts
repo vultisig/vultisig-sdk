@@ -44,6 +44,30 @@ describe('broadcastSolanaTx', () => {
     })
   })
 
+  it('retries transient blockhash misses before accepting the standard RPC relay', async () => {
+    mocks.sendRawTransaction.mockRejectedValueOnce(new Error('Blockhash not found')).mockResolvedValue('rpc-signature')
+
+    await broadcastSolanaTx({ chain: Chain.Solana, tx })
+
+    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(2)
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('routes persistent blockhash misses through hash verification after bounded retries', async () => {
+    const rpcError = new Error('BlockhashNotFound')
+    mocks.sendRawTransaction.mockRejectedValue(rpcError)
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await broadcastSolanaTx({ chain: Chain.Solana, tx })
+
+    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(3)
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
+      chain: Chain.Solana,
+      tx,
+      error: rpcError,
+    })
+  })
+
   it('falls back to standard RPC when JITO rejects the transaction', async () => {
     mocks.sendJitoTransaction.mockRejectedValue(new Error('jito unavailable'))
 

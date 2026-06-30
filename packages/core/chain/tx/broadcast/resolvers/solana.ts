@@ -8,6 +8,11 @@ import base58 from 'bs58'
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
+const solanaStandardRpcMaxAttempts = 3
+
+const isTransientBlockhashError = (error: unknown) =>
+  isInError(error, 'Blockhash not found', 'blockhash not found', 'BlockhashNotFound')
+
 /**
  * Hoists the on-chain rejection reason into a Solana send error's message.
  *
@@ -32,6 +37,25 @@ const withSolanaBroadcastReason = (error: unknown): unknown => {
   return new Error([error.message, ...logs].join('\n'), { cause: error })
 }
 
+const sendSolanaRawTransaction = async (rawTransaction: Uint8Array) => {
+  const client = getSolanaClient()
+
+  for (let attempt = 1; attempt <= solanaStandardRpcMaxAttempts; attempt++) {
+    try {
+      await client.sendRawTransaction(rawTransaction, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      })
+      return
+    } catch (error) {
+      if (isTransientBlockhashError(error) && attempt < solanaStandardRpcMaxAttempts) {
+        continue
+      }
+      throw error
+    }
+  }
+}
+
 export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async ({ chain, tx }) => {
   const rawTransaction = base58.decode(tx.encoded)
 
@@ -44,12 +68,8 @@ export const broadcastSolanaTx: BroadcastTxResolver<OtherChain.Solana> = async (
     console.warn('[solana] JITO sendTransaction failed, falling back to standard RPC:', err)
   }
 
-  const client = getSolanaClient()
   try {
-    await client.sendRawTransaction(rawTransaction, {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
-    })
+    await sendSolanaRawTransaction(rawTransaction)
   } catch (error) {
     // A duplicate-signature error means the node already accepted this exact
     // signed transaction. Treat it as an idempotent success so a headless
