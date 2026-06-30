@@ -259,7 +259,7 @@ function packedConsumerSmoke(workRoot, tgzPath) {
       2
     ) + '\n'
   )
-  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\nminPublishTime: 0\n')
 
   const cacheFolder = path.join(repoRoot, '.yarn/cache')
   const env = {
@@ -395,7 +395,7 @@ function packedCliBinSmoke(
       2
     ) + '\n'
   )
-  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\nminPublishTime: 0\n')
 
   const cacheFolder = path.join(repoRoot, '.yarn/cache')
   const env = {
@@ -458,7 +458,7 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
       2
     ) + '\n'
   )
-  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\n')
+  writeFileSync(path.join(consumer, '.yarnrc.yml'), 'nodeLinker: node-modules\nminPublishTime: 0\n')
 
   const cacheFolder = path.join(repoRoot, '.yarn/cache')
   const env = {
