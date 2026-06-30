@@ -853,11 +853,7 @@ describe('getSwapKitQuote', () => {
   it('threads the approvalTx approve() spender onto evm.approvalAddress', async () => {
     // approve(0x6c0ad82f9721a6dc986381d19338601a2e6370e5, amount)
     const innerExecutor = '0x6c0ad82f9721a6dc986381d19338601a2e6370e5'
-    const approveData =
-      '0x095ea7b3' +
-      '000000000000000000000000' +
-      innerExecutor.slice(2) +
-      'f'.repeat(64)
+    const approveData = '0x095ea7b3' + '000000000000000000000000' + innerExecutor.slice(2) + 'f'.repeat(64)
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -922,7 +918,8 @@ describe('getSwapKitQuote', () => {
       amount: 10_000_000_000_000_000n,
     })
 
-    expect(quote.tx.evm).toBeDefined()
-    expect((quote.tx.evm as Record<string, unknown>).approvalAddress).toBeUndefined()
+    const evmTx = quote.tx as { evm: Record<string, unknown> }
+    expect(evmTx.evm).toBeDefined()
+    expect(evmTx.evm.approvalAddress).toBeUndefined()
   })
 })
