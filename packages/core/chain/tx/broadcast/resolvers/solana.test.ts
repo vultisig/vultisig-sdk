@@ -1,3 +1,4 @@
+import { SendTransactionError } from '@solana/web3.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -53,17 +54,40 @@ describe('broadcastSolanaTx', () => {
   })
 
   it('verifies by hash when standard RPC rejects after JITO acceptance', async () => {
-    const rpcError = new Error('already processed')
+    const rpcError = new Error('blockhash not found')
     mocks.sendRawTransaction.mockRejectedValue(rpcError)
     mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 
     await broadcastSolanaTx({ chain: Chain.Solana, tx })
 
+    // A non-SendTransactionError is forwarded verbatim — nothing to hoist.
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
       chain: Chain.Solana,
       tx,
       error: rpcError,
     })
+  })
+
+  it('hoists SendTransactionError program logs into the verified error message', async () => {
+    const sendError = new SendTransactionError({
+      action: 'send',
+      signature: 'sig',
+      transactionMessage: 'Transaction simulation failed: custom program error: 0x1',
+      logs: [
+        'Program 11111111111111111111111111111111 invoke [1]',
+        'Program 11111111111111111111111111111111 failed: insufficient lamports',
+      ],
+    })
+    mocks.sendRawTransaction.mockRejectedValue(sendError)
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await broadcastSolanaTx({ chain: Chain.Solana, tx })
+
+    const { error } = mocks.verifyBroadcastByHash.mock.calls[0][0]
+    expect(error).toBeInstanceOf(Error)
+    expect(error.cause).toBe(sendError)
+    expect(error.message).toContain('Transaction simulation failed')
+    expect(error.message).toContain('insufficient lamports')
   })
 
   it('treats a duplicate-signature rejection as an idempotent success', async () => {
