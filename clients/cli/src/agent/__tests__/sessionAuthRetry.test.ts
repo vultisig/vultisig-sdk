@@ -56,6 +56,10 @@ function makeFakeThis(over: { config?: any; client?: any } = {}) {
     cachedContext: null,
     pushService: null,
     withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
+    // initialize delegates the encrypted-vault unlock to this private method;
+    // bind it so the prototype-driven call resolves (vault here is unencrypted,
+    // so it early-returns).
+    unlockEncryptedVault: (AgentSession.prototype as any).unlockEncryptedVault,
   }
 }
 
