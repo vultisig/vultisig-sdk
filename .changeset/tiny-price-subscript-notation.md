@@ -1,5 +1,6 @@
 ---
 "@vultisig/lib-utils": patch
+"@vultisig/sdk": patch
 ---
 
 Show tiny fiat amounts (e.g. LUNC-style prices below one cent) with significant
