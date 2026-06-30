@@ -110,10 +110,15 @@ function normalizeValue(value: unknown): string {
   return '0'
 }
 
-/** Optional server gas_limit, as a string, when present and usable. */
+/** Optional server gas_limit as a non-negative integer string. Digit-guarded
+ *  like {@link normalizeValue} so a malformed value never reaches the executor's
+ *  `BigInt(swapTx.gas_limit)` (executor.ts patchEvmGas) — for the bundled path
+ *  that BigInt throw would land on the MAIN leg, AFTER the approve already
+ *  broadcast. A non-integer / unit-suffixed gas limit is dropped (undefined →
+ *  the SDK estimates gas itself) rather than passed through. */
 function normalizeGasLimit(value: unknown): string | undefined {
-  if (typeof value === 'string' && value.trim() !== '') return value
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return String(value)
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) return value.trim()
   return undefined
 }
 

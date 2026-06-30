@@ -538,8 +538,14 @@ export class AgentSession {
         // frames deterministically re-emit on the next turn once their on-chain
         // precondition still holds — fail-safe, never a partial/wrong sign.
         if (serverTxStoredFromStream > 0) {
-          if (this.config.verbose)
-            process.stderr.write('[session] tx_ready ignored: one signable tx already buffered this turn\n')
+          // Unconditional (not verbose-gated): dropping a signable tx is
+          // significant enough to always surface, so it is never silent under
+          // `--yes` / non-verbose. The first frame still signs and the turn
+          // recurses; a dropped distinct frame re-emits next turn when its
+          // on-chain precondition still holds.
+          process.stderr.write(
+            '[session] additional signable tx_ready ignored this turn (one already buffered); it will re-emit next turn if still needed\n'
+          )
           return
         }
         if (this.executor.storeServerTransaction(tx)) {

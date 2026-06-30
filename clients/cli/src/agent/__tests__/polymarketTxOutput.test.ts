@@ -137,6 +137,21 @@ describe('buildTxReadyFromToolOutput — valid flat envelopes → single-leg tx'
     expect(out?.tx).toMatchObject({ value: '0' })
   })
 
+  it('normalizes a malformed value to "0" (never reaches BigInt as-is)', () => {
+    // The tx is still signed (to+data are valid); only the malformed value is
+    // sanitized to '0' so executor's BigInt(value) can't throw / over-send.
+    const env = { ...setupTradingApprove(), value: 'not-a-number' }
+    const out = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)
+    expect(out?.tx).toMatchObject({ to: USDC_E, value: '0', data: APPROVE_DATA })
+  })
+
+  it('drops a malformed gas_limit (so the SDK estimates instead of throwing)', () => {
+    const env = { ...depositWrapPlain(), gas_limit: '250000 wei' }
+    const out = buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)
+    expect(out?.tx).toMatchObject({ to: ONRAMP, data: WRAP_DATA })
+    expect((out?.tx as Record<string, unknown>)?.gas_limit).toBeUndefined()
+  })
+
   it('marks the envelope __buildTx and passes the action through (for the confirm summary)', () => {
     const out = buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, depositWrapPlain())
     expect(out?.__buildTx).toBe(true)
@@ -240,13 +255,6 @@ describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the 
   it('rejects a chain outside the Polymarket EVM allowlist', () => {
     const env = { ...setupTradingApprove(), chain: 'Ethereum', chain_id: '1' }
     expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
-  })
-
-  it('rejects a malformed value (non-integer) rather than signing it', () => {
-    // a malformed value must not reach BigInt(); the leg defaults value to '0'
-    const env = { ...setupTradingApprove(), value: 'not-a-number' }
-    const out = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)
-    expect(out?.tx).toMatchObject({ value: '0' })
   })
 
   it('rejects non-object output', () => {
