@@ -10,6 +10,7 @@
 // sessionTxConfirm/sessionConfirmGate.
 import { describe, expect, it, vi } from 'vitest'
 
+import { buildTxReadyFromToolOutput, POLYMARKET_SETUP_TRADING_TOOL } from '../polymarketTxOutput'
 import { AgentSession } from '../session'
 import type { RecentAction } from '../types'
 
@@ -76,8 +77,26 @@ function makeHarness(txReadyPayloads: unknown[]) {
   return { run, storeServerTransaction, signTxFromBuffer }
 }
 
-const TX_A = { __buildTx: true, chain: 'Polygon', chain_id: '137', tx: { to: '0xA', value: '0', data: '0xaa' } }
-const TX_B = { __buildTx: true, chain: 'Polygon', chain_id: '137', tx: { to: '0xB', value: '0', data: '0xbb' } }
+// Derived from the REAL bridge (not hand-written literals) so a shape change in
+// buildTxReadyFromToolOutput is exercised on the session's onTxReady path too.
+const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
+const SPENDER = '0x4bfb41d5b3570defd03c39a9a4d8de6bd8b8982e'
+const TX_A = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, {
+  chain: 'Polygon',
+  chain_id: '137',
+  to: USDC_E,
+  value: '0',
+  data: '0x095ea7b3' + '0'.repeat(120),
+  action: 'approve',
+})
+const TX_B = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, {
+  chain: 'Polygon',
+  chain_id: '137',
+  to: SPENDER,
+  value: '0',
+  data: '0x095ea7b3' + '1'.repeat(120),
+  action: 'approve',
+})
 
 describe('processMessageLoop — first-wins for signable tx_ready (C1)', () => {
   it('buffers + signs exactly once when a single tx_ready arrives', async () => {

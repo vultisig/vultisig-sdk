@@ -340,6 +340,36 @@ describe('AgentClient.sendMessageStream', () => {
       })
     })
 
+    it('fires onTxReady with a multi-leg {approvalTxArgs,txArgs} for a bundled deposit wrap', async () => {
+      const onTxReady = vi.fn()
+      const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
+      const WRAP_DATA = '0xea598cb0' + '0'.repeat(184)
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_deposit', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: ONRAMP,
+          value: '0',
+          data: WRAP_DATA,
+          gas_limit: '250000',
+          action: 'wrap_usdce_to_pusd',
+          needs_approval: true,
+          approval_tx: { to: USDC_E, data: APPROVE_DATA, value: '0' },
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'deposit' }, { onTxReady })
+
+      expect(onTxReady).toHaveBeenCalledTimes(1)
+      expect(onTxReady.mock.calls[0][0]).toMatchObject({
+        __buildTx: true,
+        chain: 'Polygon',
+        approvalTxArgs: { tx: { to: USDC_E, data: APPROVE_DATA } },
+        txArgs: { tx: { to: ONRAMP, data: WRAP_DATA, gas_limit: '250000' } },
+      })
+    })
+
     it('does NOT fire onTxReady for a no_op envelope (guard)', async () => {
       const onTxReady = vi.fn()
       globalThis.fetch = mockFetchSSE(
