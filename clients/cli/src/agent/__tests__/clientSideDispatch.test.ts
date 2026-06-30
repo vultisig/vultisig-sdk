@@ -24,33 +24,33 @@ import type { RecentAction } from '../types'
 // that one production constant — the parity test below then forces every entry
 // to be reclassified (implemented / mobile-only-excluded / rewritten), so a real
 // CLI↔backend contract drift fails red instead of silently shipping.
-const BACKEND_CLIENT_SIDE_TOOLS = [...BACKEND_CLIENT_SIDE_TOOL_NAMES].sort()
+const backendClientSideTools = [...BACKEND_CLIENT_SIDE_TOOL_NAMES].sort()
 
 // How each backend client-side tool maps onto the CLI. Every entry of
-// BACKEND_CLIENT_SIDE_TOOLS must land in EXACTLY ONE of these three buckets —
+// backendClientSideTools must land in EXACTLY ONE of these three buckets —
 // the exhaustiveness test below enforces that, so a newly-added backend tool
 // (absent from all three) fails red until a human classifies it.
 
 // (a) Implemented locally by the CLI — present in CLIENT_SIDE_TOOL_DISPATCH.
-const CLI_IMPLEMENTED = ['vault_coin', 'vault_chain', 'sign_typed_data']
+const cliImplemented = ['vault_coin', 'vault_chain', 'sign_typed_data']
 
 // (b) Intentionally NOT implemented — mobile-only flows (VultiServer /
 //     multi-device / plugin+policy UX) that the headless CLI can't drive.
-const MOBILE_ONLY_EXCLUDED = ['create_vault', 'plugin_install', 'create_policy', 'delete_policy']
+const mobileOnlyExcluded = ['create_vault', 'plugin_install', 'create_policy', 'delete_policy']
 
 // (c) Never reach the CLI under their own name: agent-backend/mcp rewrites
 //     Polymarket bet/batch signing into a `sign_typed_data` client call
 //     (see the "Polymarket marker echo" suite below), so the CLI handles them
 //     via the sign_typed_data dispatcher, not a dedicated tool.
-const BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA = ['polymarket_sign_bet', 'polymarket_sign_batch']
+const backendRewrittenToSignTypedData = ['polymarket_sign_bet', 'polymarket_sign_batch']
 
 // CLI-local client-side tool the backend DEFINES (`AddressBookTool`,
 // tools.go:423 — flat add/remove discriminator, validated in action_tools.go)
 // but OMITS from the canonical `clientSideToolNames` map (tools.go:549-559).
 // The CLI implements it, so it's listed here as a known backend-map gap rather
 // than silently folded into the parity assertion. If the backend later adds
-// `address_book` to clientSideToolNames, move it into CLI_IMPLEMENTED.
-const CLI_LOCAL_NOT_IN_BACKEND_MAP = ['address_book']
+// `address_book` to clientSideToolNames, move it into cliImplemented.
+const cliLocalNotInBackendMap = ['address_book']
 
 describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', () => {
   // The expected CLI registry surface, DERIVED from the backend contract:
@@ -58,35 +58,35 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', 
   // CLI-local tool the backend map omits. Deriving it (rather than hardcoding a
   // frozen literal) is what makes drift fail red — change the backend set or a
   // classification bucket and this expectation shifts with it.
-  const EXPECTED_REGISTRY_KEYS = [...CLI_IMPLEMENTED, ...CLI_LOCAL_NOT_IN_BACKEND_MAP].sort()
+  const EXPECTED_REGISTRY_KEYS = [...cliImplemented, ...cliLocalNotInBackendMap].sort()
 
   it('registry keys equal the backend-derived expected set (fails red on drift)', () => {
     expect(Object.keys(registry).sort()).toEqual(EXPECTED_REGISTRY_KEYS)
   })
 
   it('every backend client-side tool is classified exactly once (catches a new backend tool once the vendored constant is updated)', () => {
-    const classified = [...CLI_IMPLEMENTED, ...MOBILE_ONLY_EXCLUDED, ...BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA].sort()
+    const classified = [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData].sort()
     // Exhaustive + disjoint: the union of the three buckets is precisely the
     // backend set. A backend tool missing from all buckets (or listed twice)
     // breaks this — forcing a deliberate classification on every contract change.
-    expect(classified).toEqual(BACKEND_CLIENT_SIDE_TOOLS)
+    expect(classified).toEqual(backendClientSideTools)
     expect(classified.length).toBe(new Set(classified).size) // no duplicates across buckets
   })
 
   it('classification buckets only name real backend tools (catches a backend rename)', () => {
-    const backend = new Set(BACKEND_CLIENT_SIDE_TOOLS)
-    for (const name of [...CLI_IMPLEMENTED, ...MOBILE_ONLY_EXCLUDED, ...BACKEND_REWRITTEN_TO_SIGN_TYPED_DATA]) {
-      expect(backend.has(name), `${name} is not in BACKEND_CLIENT_SIDE_TOOLS — stale classification`).toBe(true)
+    const backend = new Set(backendClientSideTools)
+    for (const name of [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData]) {
+      expect(backend.has(name), `${name} is not in backendClientSideTools — stale classification`).toBe(true)
     }
     // The CLI-local tool is genuinely absent from the backend map (that's the point).
-    for (const name of CLI_LOCAL_NOT_IN_BACKEND_MAP) {
+    for (const name of cliLocalNotInBackendMap) {
       expect(backend.has(name), `${name} unexpectedly appeared in the backend map — reclassify it`).toBe(false)
     }
   })
 
   it('every CLI-implemented tool is actually present in the dispatch registry', () => {
-    for (const name of CLI_IMPLEMENTED) {
-      expect(registry, `${name} classified CLI_IMPLEMENTED but missing from registry`).toHaveProperty(name)
+    for (const name of cliImplemented) {
+      expect(registry, `${name} classified cliImplemented but missing from registry`).toHaveProperty(name)
     }
   })
 
@@ -524,7 +524,15 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
 
     // It IS intercepted for dispatch (where the !handler branch emits the
     // structured failure — verified at the dispatch level above).
+    expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
     expect(onClientSideToolCall).toHaveBeenCalledWith('cv', 'create_vault', {})
+    // It ALSO emits a 'running' progress frame: dispatch and progress are
+    // independent signals — handleToolProgress fires onToolProgress for every
+    // tool-input frame AND routes registry tools to dispatch (not a fallback).
+    // Pinning the progress call documents that; the dispatch-times(1) above is
+    // what fails red if a routing regression drops dispatch and leaves only
+    // this progress frame behind.
+    expect(onToolProgress).toHaveBeenCalledWith('create_vault', 'running', undefined, undefined)
   })
 
   it('does NOT fire for a non-client-side toolName (server-side / MCP) — no over-trigger', () => {
