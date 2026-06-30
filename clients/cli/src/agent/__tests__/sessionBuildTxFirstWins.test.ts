@@ -49,6 +49,7 @@ function makeHarness(txReadyPayloads: unknown[]) {
     onTxStatus: vi.fn(),
     onError: vi.fn(),
     onDone: vi.fn(),
+    onNotification: vi.fn(),
     requestPassword: vi.fn(async () => 'pw'),
     requestConfirmation: vi.fn(async () => true),
   }
@@ -74,7 +75,7 @@ function makeHarness(txReadyPayloads: unknown[]) {
     withAuthRetry: <T>(fn: () => Promise<T>) => fn(),
   }
   const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'deposit $5', ui, 1)
-  return { run, storeServerTransaction, signTxFromBuffer }
+  return { run, storeServerTransaction, signTxFromBuffer, ui }
 }
 
 // Derived from the REAL bridge (not hand-written literals) so a shape change in
@@ -99,20 +100,24 @@ const TX_B = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, {
 })
 
 describe('processMessageLoop — first-wins for signable tx_ready (C1)', () => {
-  it('buffers + signs exactly once when a single tx_ready arrives', async () => {
+  it('buffers + signs exactly once when a single tx_ready arrives (no deferral notice)', async () => {
     const h = makeHarness([TX_A])
     await h.run()
     expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
     expect(h.storeServerTransaction).toHaveBeenCalledWith(TX_A)
     expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+    expect(h.ui.onNotification).not.toHaveBeenCalled()
   })
 
-  it('keeps the FIRST and drops the second when two tx_ready arrive in one turn', async () => {
+  it('keeps the FIRST, drops the second, and REPORTS the deferral when two arrive in one turn', async () => {
     const h = makeHarness([TX_A, TX_B])
     await h.run()
     // second frame never reaches the executor — no silent overwrite
     expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
     expect(h.storeServerTransaction).toHaveBeenCalledWith(TX_A)
     expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+    // the drop is reported (not silent under --yes), addressing the cross-model
+    // finding that a dropped distinct frame must not vanish unreported
+    expect(h.ui.onNotification).toHaveBeenCalledTimes(1)
   })
 })

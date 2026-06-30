@@ -90,10 +90,12 @@ function isAddress(value: unknown): value is string {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)
 }
 
-/** Non-empty 0x calldata carrying at least a 4-byte selector. Rejects `'0x'`
- *  (empty) so a value-only / no-op envelope can never be mistaken for a call. */
+/** Non-empty 0x calldata: whole bytes (even hex length) carrying at least a
+ *  4-byte selector. Rejects `'0x'` (empty), odd-length hex (never valid ABI
+ *  calldata), and any value-only / no-op envelope so it can't be mistaken for a
+ *  call. */
 function isCalldata(value: unknown): value is string {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]{8,}$/.test(value)
+  return typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2}){4,}$/.test(value)
 }
 
 /** Normalise a tx `value` to a non-negative integer string the SDK can parse
@@ -188,9 +190,17 @@ export function buildTxReadyFromToolOutput(toolName: string, output: unknown): T
   // approve is signed+confirmed (receipt-wait) BEFORE the wrap, never shipped as
   // a single tx. `needs_approval` with a missing/invalid `approval_tx` fails
   // closed (return null) — signing only the wrap would revert / regress funds.
-  if (env.needs_approval === true) {
+  // Truthy (not strict `=== true`): a non-boolean-truthy `needs_approval` (e.g.
+  // `1` / `'true'`) must still route through the fail-closed bundled path
+  // (which requires a valid approval_tx or returns null) — never fall through
+  // to signing the wrap leg alone against a stale allowance.
+  if (env.needs_approval) {
     const approval = asRecord(env.approval_tx)
-    const approveLeg = approval ? extractLeg(approval) : null
+    // Re-apply the top-level error gate to the nested approve leg (defense in
+    // depth): an approval_tx carrying an error marker must never be signed even
+    // if it happens to carry a well-formed to/data.
+    if (!approval || approval.status === 'error' || 'error' in approval) return null
+    const approveLeg = extractLeg(approval)
     if (!approveLeg) return null
     return {
       __buildTx: true,

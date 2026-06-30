@@ -26,7 +26,7 @@ import {
 const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
 const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
-const WRAP_DATA = '0xea598cb0' + '0'.repeat(184)
+const WRAP_DATA = '0x62355638' + '0'.repeat(192)
 
 /** A realistic `polymarket_setup_trading` approve envelope. */
 function setupTradingApprove() {
@@ -177,6 +177,20 @@ describe('buildTxReadyFromToolOutput — bundled approve+wrap → multi-leg', ()
     expect(out?.tx).toBeUndefined()
   })
 
+  it('routes a TRUTHY non-boolean needs_approval (1) through the bundled multi-leg path', () => {
+    // hardening: a non-boolean-truthy needs_approval must NOT fall through to
+    // signing the wrap alone against a stale allowance.
+    const env = { ...depositWrapBundled(), needs_approval: 1 }
+    const out = buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)
+    expect(out?.approvalTxArgs).toMatchObject({ tx: { to: USDC_E, data: APPROVE_DATA } })
+    expect(out?.txArgs).toMatchObject({ tx: { to: ONRAMP, data: WRAP_DATA } })
+  })
+
+  it('FAILS CLOSED: truthy needs_approval (1) but approval_tx missing → null (never the lone wrap)', () => {
+    const env = { ...depositWrapPlain(), needs_approval: 1 }
+    expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)).toBeNull()
+  })
+
   it('FAILS CLOSED: needs_approval=true but approval_tx missing → null (never sign the wrap alone)', () => {
     const env = { ...depositWrapPlain(), needs_approval: true }
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)).toBeNull()
@@ -184,6 +198,15 @@ describe('buildTxReadyFromToolOutput — bundled approve+wrap → multi-leg', ()
 
   it('FAILS CLOSED: needs_approval=true but approval_tx has no calldata → null', () => {
     const env = { ...depositWrapPlain(), needs_approval: true, approval_tx: { to: USDC_E, value: '0' } }
+    expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)).toBeNull()
+  })
+
+  it('FAILS CLOSED: needs_approval=true but approval_tx carries an error marker → null', () => {
+    const env = {
+      ...depositWrapPlain(),
+      needs_approval: true,
+      approval_tx: { to: USDC_E, data: APPROVE_DATA, value: '0', error: 'simulated approve failure' },
+    }
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, env)).toBeNull()
   })
 
@@ -226,8 +249,24 @@ describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the 
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, { status: 'error', error: 'boom' })).toBeNull()
   })
 
+  it('rejects status:"error" even with a well-formed tx and no top-level error key', () => {
+    // isolates the `status === 'error'` branch from the `'error' in env` branch
+    const env = { ...setupTradingApprove(), status: 'error' }
+    expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
+  })
+
+  it('rejects when chain_id is present but chain is absent', () => {
+    const env = { chain_id: '137', to: USDC_E, value: '0', data: APPROVE_DATA }
+    expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
+  })
+
   it('rejects empty calldata "0x"', () => {
     const env = { ...setupTradingApprove(), data: '0x' }
+    expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
+  })
+
+  it('rejects odd-length (non-whole-byte) calldata', () => {
+    const env = { ...setupTradingApprove(), data: '0x095ea7b3a' } // 9 hex nibbles
     expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
   })
 
