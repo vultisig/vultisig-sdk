@@ -5,6 +5,7 @@
  * Supports both JSON and SSE streaming responses.
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
+import { buildTxReadyFromToolOutput, CLI_BUILD_TX_TOOL_NAMES } from './polymarketTxOutput'
 import type {
   AuthTokenRequest,
   AuthTokenResponse,
@@ -606,7 +607,31 @@ export class AgentClient {
 
     const ok = deriveToolDoneOk(status, parsed.output)
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
+    this.maybeSignBuildTxOutput(status, toolName, parsed.output, callbacks)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
+  }
+
+  /**
+   * Design B: sign Polymarket flat-tx-builder outputs the way the mobile app
+   * does. These tools deliberately don't set `producesCalldata`, so they emit
+   * NO `tx_ready` frame — their flat `{chain,chain_id,to,value,data}` envelope
+   * only rides the `tool-output-available` channel. When an allowlisted tool
+   * finishes, lift its flat tx into the EXISTING `onTxReady` pipeline. The
+   * bridge guards against non-tx results (`no_op` / `insufficient_usdce`) so
+   * those never reach the signer. The same tool can never also emit a real
+   * `tx_ready` (producesCalldata is OFF), so there is no double-sign path.
+   */
+  private maybeSignBuildTxOutput(
+    status: 'running' | 'done' | undefined,
+    toolName: string | undefined,
+    output: unknown,
+    callbacks: StreamCallbacks
+  ): void {
+    if (status !== 'done' || !toolName || !callbacks.onTxReady || !CLI_BUILD_TX_TOOL_NAMES.has(toolName)) return
+    const txReady = buildTxReadyFromToolOutput(toolName, output)
+    if (!txReady) return
+    if (this.verbose) process.stderr.write(`[SSE:build_tx] ${toolName} → onTxReady (signable flat tx)\n`)
+    callbacks.onTxReady(txReady)
   }
 
   private maybeEmitClientSideToolCall(
