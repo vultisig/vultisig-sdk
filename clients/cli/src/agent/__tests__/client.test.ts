@@ -299,6 +299,83 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
+  // Design B: the CLI signs Polymarket flat-tx-builder outputs the way mobile
+  // does, by reading the flat tx off the tool-output-available channel for an
+  // allowlist and feeding the EXISTING onTxReady pipeline. These tools don't set
+  // producesCalldata (no tx_ready frame), so this is the only sign trigger.
+  describe('build-tx bridge: tool-output-available → onTxReady', () => {
+    const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
+    const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
+
+    function outputFrame(toolName: string, output: object): string[] {
+      return [
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-pm', toolName })}\n\n`,
+        `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'tc-pm', output })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ]
+    }
+
+    it('fires onTxReady with a wrapped {chain,chain_id,tx} for an allowlisted flat envelope', async () => {
+      const onTxReady = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_setup_trading', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: USDC_E,
+          value: '0',
+          data: APPROVE_DATA,
+          action: 'approve',
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onTxReady })
+
+      expect(onTxReady).toHaveBeenCalledTimes(1)
+      expect(onTxReady.mock.calls[0][0]).toMatchObject({
+        __buildTx: true,
+        chain: 'Polygon',
+        chain_id: '137',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      })
+    })
+
+    it('does NOT fire onTxReady for a no_op envelope (guard)', async () => {
+      const onTxReady = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_setup_trading', {
+          chain: 'Polygon',
+          chain_id: '137',
+          action: 'no_op',
+          message: 'All spenders approved.',
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onTxReady })
+
+      expect(onTxReady).not.toHaveBeenCalled()
+    })
+
+    it('does NOT fire onTxReady for a tool outside the allowlist', async () => {
+      const onTxReady = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_place_bet', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: USDC_E,
+          value: '0',
+          data: APPROVE_DATA,
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'bet' }, { onTxReady })
+
+      expect(onTxReady).not.toHaveBeenCalled()
+    })
+  })
+
   // cat4-cli-supported-surfaces: the backend emits data-balance_summary when
   // the client advertised "balance_summary" in supported_surfaces. Previously
   // this v1 part routed to the 'ignore' bucket (client.ts:421) and the card was

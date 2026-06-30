@@ -302,6 +302,23 @@ export type TxReadyPayload = {
   swap_tx?: Record<string, unknown>
   send_tx?: Record<string, unknown>
   tx?: Record<string, unknown>
+  /**
+   * Multi-leg (approve + main) envelope legs. The executor's
+   * `storeServerTransaction` buffers both legs and `signMultiLeg` signs the
+   * approve, waits for its receipt, then signs the main leg. Each leg nests its
+   * own flat tx under `.tx`. Populated by the Polymarket build-tx bridge for a
+   * bundled deposit approve→wrap (see `polymarketTxOutput.ts`) and by mcp-ts
+   * `execute_*` envelopes.
+   */
+  approvalTxArgs?: Record<string, unknown>
+  txArgs?: Record<string, unknown>
+  /**
+   * Internal marker: this signable envelope was synthesized by the Polymarket
+   * flat-tx-builder bridge (`polymarketTxOutput.ts`) from a `tool-output-available`
+   * frame, not received on a `tx_ready` channel. Used only to render an accurate
+   * confirm-gate summary (`AgentExecutor.getPendingSummary`); inert to signing.
+   */
+  __buildTx?: boolean
 }
 
 export type TokenSearchResult = {

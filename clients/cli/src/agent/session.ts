@@ -528,6 +528,20 @@ export class AgentSession {
         ui.onSuggestions(suggestions)
       },
       onTxReady: (tx: any) => {
+        // First-wins per turn. The executor buffers a single 'latest' slot and
+        // signs it once after the stream (below), so a SECOND signable tx in the
+        // same turn would overwrite the first and silently leave it unsigned.
+        // The legacy `tx_ready` channel is safe (backend emits ≤1/turn), but the
+        // Design B build-tx bridge can surface a second signable frame if the
+        // model chains two flat-builder calls in one turn. Keep the FIRST and
+        // drop the rest: signing the first recurses (depth+1) and the dropped
+        // frames deterministically re-emit on the next turn once their on-chain
+        // precondition still holds — fail-safe, never a partial/wrong sign.
+        if (serverTxStoredFromStream > 0) {
+          if (this.config.verbose)
+            process.stderr.write('[session] tx_ready ignored: one signable tx already buffered this turn\n')
+          return
+        }
         if (this.executor.storeServerTransaction(tx)) {
           serverTxStoredFromStream++
           if (this.config.password) {
@@ -605,11 +619,12 @@ export class AgentSession {
     // Routed straight to the executor (no Action wrapper); result is
     // pushed onto pendingToolResults and recursed for the next turn.
     //
-    // Backend contract: the agent emits at most one tx_ready per stream
-    // turn. storeServerTransaction overwrites a single 'latest' buffer
-    // slot — if the backend ever emits two tx_ready events in one turn,
-    // only the last would be signed. That is not a currently supported
-    // flow; multi-leg sequences use separate turns via recursion.
+    // One signable tx per turn. storeServerTransaction buffers a single
+    // 'latest' slot; the onTxReady handler above enforces first-wins so a
+    // second signable frame in the same turn can never overwrite (and silently
+    // drop) the first. Multi-leg approve→main sequences run within signMultiLeg;
+    // multi-step flows (e.g. deposit approve then wrap) advance across turns via
+    // the recursion below.
     if (serverTxStoredFromStream > 0) {
       if (this.config.verbose)
         process.stderr.write(
