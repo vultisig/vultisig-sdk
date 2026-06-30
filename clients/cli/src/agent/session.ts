@@ -538,13 +538,25 @@ export class AgentSession {
         // frames deterministically re-emit on the next turn once their on-chain
         // precondition still holds — fail-safe, never a partial/wrong sign.
         if (serverTxStoredFromStream > 0) {
-          // Unconditional (not verbose-gated): dropping a signable tx is
-          // significant enough to always surface, so it is never silent under
-          // `--yes` / non-verbose. The first frame still signs and the turn
-          // recurses; a dropped distinct frame re-emits next turn when its
-          // on-chain precondition still holds.
+          // First-wins: the executor buffers a single 'latest' slot and signs it
+          // once after the stream, so a SECOND signable frame in the same turn
+          // would overwrite (and silently drop) the first. The legacy tx_ready
+          // channel is safe (backend emits ≤1/turn); the Design B build-tx bridge
+          // can surface a second frame if the model chains two flat-builder calls
+          // in one turn. Keep the FIRST (guaranteed forward progress — the
+          // multi-step deposit flow completes across turns via the recursion
+          // below) and REPORT the deferral so it is never silent: the dropped
+          // tool's output stays in the backend conversation, so the frame
+          // re-emerges on the next turn when its on-chain precondition still
+          // holds. We do NOT fail the turn (that risks a no-progress loop if the
+          // model re-emits both frames every turn) and we do NOT overwrite (that
+          // would drop the first, unsigned).
           process.stderr.write(
-            '[session] additional signable tx_ready ignored this turn (one already buffered); it will re-emit next turn if still needed\n'
+            '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+          )
+          ui.onNotification?.(
+            'Transaction deferred',
+            'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
           )
           return
         }

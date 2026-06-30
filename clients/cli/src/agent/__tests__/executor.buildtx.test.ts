@@ -23,7 +23,7 @@ import {
 const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
 const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
-const WRAP_DATA = '0xea598cb0' + '0'.repeat(184)
+const WRAP_DATA = '0x62355638' + '0'.repeat(192)
 
 function createMockVault(): VaultBase {
   return {

@@ -343,7 +343,7 @@ describe('AgentClient.sendMessageStream', () => {
     it('fires onTxReady with a multi-leg {approvalTxArgs,txArgs} for a bundled deposit wrap', async () => {
       const onTxReady = vi.fn()
       const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
-      const WRAP_DATA = '0xea598cb0' + '0'.repeat(184)
+      const WRAP_DATA = '0x62355638' + '0'.repeat(192)
       globalThis.fetch = mockFetchSSE(
         outputFrame('polymarket_deposit', {
           chain: 'Polygon',
