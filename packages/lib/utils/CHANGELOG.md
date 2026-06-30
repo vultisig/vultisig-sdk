@@ -1,5 +1,13 @@
 # @vultisig/lib-utils
 
+## 0.10.4
+
+### Patch Changes
+
+- [#918](https://github.com/vultisig/vultisig-sdk/pull/918) [`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Show tiny fiat amounts (e.g. LUNC-style prices below one cent) with significant
+  digits and compact subscript notation instead of rounding them to "$0.00"
+  (e.g. 0.00000003 now renders as $0.0₇3).
+
 ## 0.10.3
 
 ### Patch Changes
