@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.21.0",
+  "version": "2.22.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -719,6 +719,16 @@
       "types": "./dist/chains/solana/staking/rpc.d.ts",
       "import": "./dist/chains/solana/staking/rpc.js",
       "default": "./dist/chains/solana/staking/rpc.js"
+    },
+    "./chains/solana/staking/tx/buildUnsignedStakingTx": {
+      "types": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.d.ts",
+      "import": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js",
+      "default": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js"
+    },
+    "./chains/solana/staking/tx/stakingPayload": {
+      "types": "./dist/chains/solana/staking/tx/stakingPayload.d.ts",
+      "import": "./dist/chains/solana/staking/tx/stakingPayload.js",
+      "default": "./dist/chains/solana/staking/tx/stakingPayload.js"
     },
     "./chains/sui/buildTransactionFromJson": {
       "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
@@ -2028,6 +2038,7 @@
     "cbor-x": "^1.6.4",
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
+    "long": "^5.3.2",
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.53.1",
     "xrpl": "^5.0.0"
