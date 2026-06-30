@@ -36,57 +36,71 @@ describe('buildUnsignedStakingTx', () => {
       priorityFeeLimit: 200_000,
     })
 
-  const decode = (base64: string) => {
+  // Decodes the relayed bytes through the same path the SDK signing resolver
+  // uses, and returns the message account keys (base58) so each op can assert
+  // which accounts it touches — a wrong-but-stable proto mapping would
+  // otherwise still decode into "some" transaction and pass.
+  const accountKeysOf = (base64: string): string[] => {
     const coinType = walletCore.CoinType.solana
     const decoded = walletCore.TransactionDecoder.decode(coinType, Buffer.from(base64, 'base64'))
-    return TW.Solana.Proto.DecodingTransactionOutput.decode(decoded)
+    const { transaction } = TW.Solana.Proto.DecodingTransactionOutput.decode(decoded)
+    expect(transaction).toBeTruthy()
+    return transaction?.v0?.accountKeys ?? transaction?.legacy?.accountKeys ?? []
   }
 
-  it('builds a delegate (create+initialize+delegate) tx that decodes back', () => {
-    const base64 = build({
-      op: 'delegate',
-      votePubkey: voteAccount,
-      lamports: 2_000_000_000n,
-    })
-    expect(base64.length).toBeGreaterThan(0)
-    // Round-trips through the same decoder the SDK relay path uses.
-    const { transaction } = decode(base64)
-    expect(transaction).toBeTruthy()
+  // Stake program — present in every native-staking instruction.
+  const stakeProgramId = 'Stake11111111111111111111111111111111111111'
+
+  it('delegate references the validator vote account and derives a fresh stake account', () => {
+    const keys = accountKeysOf(build({ op: 'delegate', votePubkey: voteAccount, lamports: 2_000_000_000n }))
+    expect(keys).toContain(sender)
+    expect(keys).toContain(stakeProgramId)
+    expect(keys).toContain(voteAccount)
+    // delegate omits the stake account so wallet-core derives a NEW one — our
+    // arbitrary fixed `stakeAccount` must not appear.
+    expect(keys).not.toContain(stakeAccount)
   })
 
-  it('builds a deactivate (unstake) tx that decodes back', () => {
-    const base64 = build({ op: 'unstake', stakeAccount })
-    const { transaction } = decode(base64)
-    expect(transaction).toBeTruthy()
+  it('deactivate (unstake) references the existing stake account, not a validator', () => {
+    const keys = accountKeysOf(build({ op: 'unstake', stakeAccount }))
+    expect(keys).toContain(stakeProgramId)
+    expect(keys).toContain(stakeAccount)
+    // Deactivate carries no validator.
+    expect(keys).not.toContain(voteAccount)
   })
 
-  it('builds a withdraw tx that decodes back', () => {
-    const base64 = build({
-      op: 'withdraw',
-      stakeAccount,
-      lamports: 1_000_000_000n,
-    })
-    const { transaction } = decode(base64)
-    expect(transaction).toBeTruthy()
+  it('withdraw references the existing stake account and the recipient (sender)', () => {
+    const keys = accountKeysOf(build({ op: 'withdraw', stakeAccount, lamports: 1_000_000_000n }))
+    expect(keys).toContain(stakeProgramId)
+    expect(keys).toContain(stakeAccount)
+    expect(keys).toContain(sender)
+    expect(keys).not.toContain(voteAccount)
   })
 
-  it('builds a move-stake redelegate tx (explicit stake account) that decodes back', () => {
-    const base64 = build({
-      op: 'moveStakeRedelegate',
-      stakeAccount,
-      votePubkey: voteAccount,
-      lamports: 1_000_000_000n,
-    })
-    const { transaction } = decode(base64)
-    expect(transaction).toBeTruthy()
+  it('move-stake redelegate re-delegates the EXISTING stake account to the validator', () => {
+    const keys = accountKeysOf(
+      build({ op: 'moveStakeRedelegate', stakeAccount, votePubkey: voteAccount, lamports: 1_000_000_000n })
+    )
+    expect(keys).toContain(stakeProgramId)
+    // Unlike a fresh delegate, the existing account is set explicitly...
+    expect(keys).toContain(stakeAccount)
+    // ...and re-delegated to the validator.
+    expect(keys).toContain(voteAccount)
   })
 
-  it('is deterministic for a fixed blockhash + payload (byte parity across devices)', () => {
+  it('is byte-stable for a fixed payload + blockhash (the MPC relay parity contract)', () => {
     const payload = {
       op: 'delegate' as const,
       votePubkey: voteAccount,
       lamports: 2_000_000_000n,
     }
-    expect(build(payload)).toEqual(build(payload))
+    // Pinned known-good encoding — peers sign these exact relayed bytes, so a
+    // change here is an intentional encoding change to review, not noise.
+    const expected =
+      'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAICupKbGPinFIKvvVQexMuxfmVR3auvr57kkIe6mkURtIsz4QGrXslwGLXSdJJmKlRZKeSHfnc3Q3XZZuy7iCrGwoGp9UXGSxcUSGMyUw9SvF/WNruCJuh/UTj29mKAAAAAF68hTcsFSGbzOqwW8Xn4U30dQEzTIvP1NCDkX6BLoqLBqfVFxjHdMkoVmOYaR1etoteuKObS21cc1VbIQAAAAAGp9UXGTWE0P7tm7NDHRMga+VEKBtXuFZsxTdf9AAAAAah2BelAgULaAeR5s5tuI4eW3FQ9h/GeQpOtNEAAAAAAwZGb+UhFzL/7K26csOb57yM5bvF9xJrLEObOkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAah2BeRN1QqmDQ3vf4qerJVf1NcinhyK2ikncAAAAAA6KfLEEmpo7Wh9r/unHsIxcpySPvcuWIboAQrWi0zIHYFBwAJA6CGAQAAAAAABwAFAkANAwAIAwABAHwDAAAA6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iwgAAAAAAAAAEdmQnoxek1iZThWZDhnWlo4bkUxa0NUOUxEWmtxRFgxAJQ1dwAAAADIAAAAAAAAAAah2BeRN1QqmDQ3vf4qerJVf1NcinhyK2ikncAAAAAACQIBAnQAAAAA6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0izqSmxj4pxSCr71UHsTLsX5lUd2rr6+e5JCHuppFEbSLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkGAQMEBQYABAIAAAAA'
+    const actual = build(payload)
+    expect(actual).toBe(expected)
+    // And rebuilding is deterministic (no timestamps / randomness).
+    expect(build(payload)).toBe(actual)
   })
 })
