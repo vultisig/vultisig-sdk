@@ -1,5 +1,64 @@
 # @vultisig/core-chain
 
+## 2.21.0
+
+### Minor Changes
+
+- [#912](https://github.com/vultisig/vultisig-sdk/pull/912) [`403d5d5`](https://github.com/vultisig/vultisig-sdk/commit/403d5d5f7c7dba3e45cb818899db00f765541ecf) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): validator-metadata seam (Stakewiz, swappable)
+
+  Phase 2 of Solana native staking. Adds a swappable off-chain enrichment seam for
+  validator display metadata (name / logo / APY estimate / score) on top of the
+  Phase 1 on-chain `getVoteAccounts` rows, under
+  `@vultisig/core-chain/chains/solana/staking/metadata`:
+
+  - `ValidatorMetadataProvider` — provider interface; contract: never throws.
+  - `stakewizProvider` — concrete impl over api.stakewiz.com (`apy_estimate`
+    percent→fraction, `image`→logo, `wiz_score`→score). Degrades to an empty map
+    on any outage / non-OK / parse error so callers fall back to on-chain-only.
+  - `enrichValidators` — merges the metadata map onto the validator rows; the
+    provider is injectable for tests.
+
+## 2.20.0
+
+### Minor Changes
+
+- [#900](https://github.com/vultisig/vultisig-sdk/pull/900) [`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking foundation — models + RPC read layer
+
+  Phase 1 of Solana native staking. Adds the chain-layer read foundation under
+  `@vultisig/core-chain/chains/solana/staking`: config, stake-account/validator
+  models (jsonParsed parsing + activation-state derivation), the RPC read layer
+  (getVoteAccounts / stake-account scan / epoch / rent / inflation / supply), and
+  the withdraw cooldown gate. No UI, no signing, no validator-metadata source.
+
+## 2.19.0
+
+### Minor Changes
+
+- [#894](https://github.com/vultisig/vultisig-sdk/pull/894) [`605fbba`](https://github.com/vultisig/vultisig-sdk/commit/605fbbaf107c553898f11f4f7eb6b56a59c01b9e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): add Jupiter as a Solana same-chain swap provider with a VULT-scaled affiliate fee
+
+  `findSwapQuote` now offers Jupiter for on-Solana token pairs (SOL↔SPL, SPL↔SPL),
+  preferred over SwapKit/LiFi on a near-tie. Jupiter is Solana-only and same-chain
+  — it is never offered for any cross-chain route, and native SOL cross-chain swaps
+  stay on THORChain.
+
+  The Jupiter quote sends `platformFeeBps` = `max(0, 50 − vultTierDiscountBps)`
+  (the existing `getSwapAffiliateBps` value, shared with every other provider), and
+  the swap request sends `feeAccount` = the Associated Token Account of
+  `(owner = Vultisig fee wallet, mint = output mint)`. An idempotent
+  `createAssociatedTokenAccount` instruction for that fee ATA is prepended to the
+  returned transaction (Jupiter does not auto-create it). When the affiliate bps
+  floors to 0 (Ultimate-tier VULT holder), no platform fee or fee account is used.
+
+  New public surface: `swap/general/jupiter/*` (`getJupiterSwapQuote`,
+  `configureJupiter`, `jupiterSwapEnabledChains`) and `jupiter` added to
+  `generalSwapProviders` and the swap explorer providers.
+
+- [#893](https://github.com/vultisig/vultisig-sdk/pull/893) [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add TON nominator-pool staking support. `@vultisig/core-chain` gains a tonapi staking client (`chains/ton/staking`) — pool list, computed pool info, and account nominator positions — plus per-implementation deposit/withdraw comment resolution (`whales` → `Deposit`/`Withdraw`, `tf` → `d`/`w`), pool eligibility/capacity filters, and a `tonAddressToBounceable` helper that normalizes raw `0:` pool addresses to the bounceable `EQ…` form. `@vultisig/core-mpc` now forces TON transfers bounceable for any staking comment (via `isTonStakingComment`), so a rejected pool deposit/withdraw bounces back instead of being absorbed.
+
+### Patch Changes
+
+- [#886](https://github.com/vultisig/vultisig-sdk/pull/886) [`baedd96`](https://github.com/vultisig/vultisig-sdk/commit/baedd96e9d75a9d73880a59503f95b527d692428) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add an EVM chain balance batching helper backed by Multicall3.
+
 ## 2.18.0
 
 ### Minor Changes
