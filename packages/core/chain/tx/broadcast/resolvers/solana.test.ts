@@ -1,5 +1,5 @@
 import { SendTransactionError } from '@solana/web3.js'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   sendJitoTransaction: vi.fn(),
@@ -33,6 +33,10 @@ describe('broadcastSolanaTx', () => {
     mocks.sendRawTransaction.mockResolvedValue('rpc-signature')
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('relays through standard RPC even when JITO accepts the transaction', async () => {
     await broadcastSolanaTx({ chain: Chain.Solana, tx })
 
@@ -45,20 +49,31 @@ describe('broadcastSolanaTx', () => {
   })
 
   it('retries transient blockhash misses before accepting the standard RPC relay', async () => {
+    vi.useFakeTimers()
     mocks.sendRawTransaction.mockRejectedValueOnce(new Error('Blockhash not found')).mockResolvedValue('rpc-signature')
 
-    await broadcastSolanaTx({ chain: Chain.Solana, tx })
+    const promise = broadcastSolanaTx({ chain: Chain.Solana, tx })
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await promise
 
     expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(2)
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
   it('routes persistent blockhash misses through hash verification after bounded retries', async () => {
+    vi.useFakeTimers()
     const rpcError = new Error('BlockhashNotFound')
     mocks.sendRawTransaction.mockRejectedValue(rpcError)
     mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 
-    await broadcastSolanaTx({ chain: Chain.Solana, tx })
+    const promise = broadcastSolanaTx({ chain: Chain.Solana, tx })
+
+    await vi.advanceTimersByTimeAsync(1_500)
+    await promise
 
     expect(mocks.sendRawTransaction).toHaveBeenCalledTimes(3)
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
@@ -78,7 +93,7 @@ describe('broadcastSolanaTx', () => {
   })
 
   it('verifies by hash when standard RPC rejects after JITO acceptance', async () => {
-    const rpcError = new Error('blockhash not found')
+    const rpcError = new Error('rpc rejected')
     mocks.sendRawTransaction.mockRejectedValue(rpcError)
     mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 

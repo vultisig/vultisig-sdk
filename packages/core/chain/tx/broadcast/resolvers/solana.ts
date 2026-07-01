@@ -9,9 +9,12 @@ import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 const solanaStandardRpcMaxAttempts = 3
+const solanaStandardRpcRetryDelayMs = 500
 
 const isTransientBlockhashError = (error: unknown) =>
   isInError(error, 'Blockhash not found', 'blockhash not found', 'BlockhashNotFound')
+
+const wait = (durationMs: number) => new Promise(resolve => setTimeout(resolve, durationMs))
 
 /**
  * Hoists the on-chain rejection reason into a Solana send error's message.
@@ -49,6 +52,7 @@ const sendSolanaRawTransaction = async (rawTransaction: Uint8Array) => {
       return
     } catch (error) {
       if (isTransientBlockhashError(error) && attempt < solanaStandardRpcMaxAttempts) {
+        await wait(solanaStandardRpcRetryDelayMs * attempt)
         continue
       }
       throw error
