@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.17.11",
+  "version": "2.22.1",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -289,6 +289,41 @@
       "types": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.d.ts",
       "import": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js",
       "default": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcGovParams": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcMyVote": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposals": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposalTally": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js"
+    },
+    "./chains/cosmos/qbtc/governance/parseGov": {
+      "types": "./dist/chains/cosmos/qbtc/governance/parseGov.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/parseGov.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/parseGov.js"
+    },
+    "./chains/cosmos/qbtc/governance/proposal": {
+      "types": "./dist/chains/cosmos/qbtc/governance/proposal.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/proposal.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/proposal.js"
+    },
+    "./chains/cosmos/qbtc/governance/voteOption": {
+      "types": "./dist/chains/cosmos/qbtc/governance/voteOption.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/voteOption.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/voteOption.js"
     },
     "./chains/cosmos/qbtc/protoEncoding": {
       "types": "./dist/chains/cosmos/qbtc/protoEncoding.d.ts",
@@ -645,6 +680,56 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/solana/staking/config": {
+      "types": "./dist/chains/solana/staking/config.d.ts",
+      "import": "./dist/chains/solana/staking/config.js",
+      "default": "./dist/chains/solana/staking/config.js"
+    },
+    "./chains/solana/staking/cooldownGate": {
+      "types": "./dist/chains/solana/staking/cooldownGate.d.ts",
+      "import": "./dist/chains/solana/staking/cooldownGate.js",
+      "default": "./dist/chains/solana/staking/cooldownGate.js"
+    },
+    "./chains/solana/staking/metadata/enrichValidators": {
+      "types": "./dist/chains/solana/staking/metadata/enrichValidators.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/enrichValidators.js",
+      "default": "./dist/chains/solana/staking/metadata/enrichValidators.js"
+    },
+    "./chains/solana/staking/metadata/stakewizProvider": {
+      "types": "./dist/chains/solana/staking/metadata/stakewizProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/stakewizProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/stakewizProvider.js"
+    },
+    "./chains/solana/staking/metadata/ValidatorMetadataProvider": {
+      "types": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js"
+    },
+    "./chains/solana/staking/models/stakeAccount": {
+      "types": "./dist/chains/solana/staking/models/stakeAccount.d.ts",
+      "import": "./dist/chains/solana/staking/models/stakeAccount.js",
+      "default": "./dist/chains/solana/staking/models/stakeAccount.js"
+    },
+    "./chains/solana/staking/models/validator": {
+      "types": "./dist/chains/solana/staking/models/validator.d.ts",
+      "import": "./dist/chains/solana/staking/models/validator.js",
+      "default": "./dist/chains/solana/staking/models/validator.js"
+    },
+    "./chains/solana/staking/rpc": {
+      "types": "./dist/chains/solana/staking/rpc.d.ts",
+      "import": "./dist/chains/solana/staking/rpc.js",
+      "default": "./dist/chains/solana/staking/rpc.js"
+    },
+    "./chains/solana/staking/tx/buildUnsignedStakingTx": {
+      "types": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.d.ts",
+      "import": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js",
+      "default": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js"
+    },
+    "./chains/solana/staking/tx/stakingPayload": {
+      "types": "./dist/chains/solana/staking/tx/stakingPayload.d.ts",
+      "import": "./dist/chains/solana/staking/tx/stakingPayload.js",
+      "default": "./dist/chains/solana/staking/tx/stakingPayload.js"
+    },
     "./chains/sui/buildTransactionFromJson": {
       "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
       "import": "./dist/chains/sui/buildTransactionFromJson.js",
@@ -719,6 +804,11 @@
       "types": "./dist/chains/ton/messageBody/types.d.ts",
       "import": "./dist/chains/ton/messageBody/types.js",
       "default": "./dist/chains/ton/messageBody/types.js"
+    },
+    "./chains/ton/staking": {
+      "types": "./dist/chains/ton/staking.d.ts",
+      "import": "./dist/chains/ton/staking.js",
+      "default": "./dist/chains/ton/staking.js"
     },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
@@ -834,6 +924,11 @@
       "types": "./dist/coin/balance/index.d.ts",
       "import": "./dist/coin/balance/index.js",
       "default": "./dist/coin/balance/index.js"
+    },
+    "./coin/balance/getEvmChainBalances": {
+      "types": "./dist/coin/balance/getEvmChainBalances.d.ts",
+      "import": "./dist/coin/balance/getEvmChainBalances.js",
+      "default": "./dist/coin/balance/getEvmChainBalances.js"
     },
     "./coin/balance/resolver": {
       "types": "./dist/coin/balance/resolver.d.ts",
@@ -1412,6 +1507,11 @@
       "import": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js",
       "default": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js"
     },
+    "./swap/general/jupiter/api/jupiterFeeAta": {
+      "types": "./dist/swap/general/jupiter/api/jupiterFeeAta.d.ts",
+      "import": "./dist/swap/general/jupiter/api/jupiterFeeAta.js",
+      "default": "./dist/swap/general/jupiter/api/jupiterFeeAta.js"
+    },
     "./swap/general/jupiter/config": {
       "types": "./dist/swap/general/jupiter/config.d.ts",
       "import": "./dist/swap/general/jupiter/config.js",
@@ -1919,7 +2019,7 @@
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
     "@lifi/sdk": "^4.0.0",
-    "@mysten/sui": "^2.19.0",
+    "@mysten/sui": "^2.20.1",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
@@ -1930,7 +2030,7 @@
     "@ton/crypto": "^3.3.0",
     "@trustwallet/wallet-core": "^4.6.15",
     "@vultisig/core-config": "0.9.1",
-    "@vultisig/lib-utils": "0.10.3",
+    "@vultisig/lib-utils": "0.10.4",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
@@ -1938,8 +2038,9 @@
     "cbor-x": "^1.6.4",
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
+    "long": "^5.3.2",
     "tiny-secp256k1": "^2.2.4",
-    "viem": "^2.52.2",
+    "viem": "^2.53.1",
     "xrpl": "^5.0.0"
   }
 }

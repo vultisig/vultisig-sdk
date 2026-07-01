@@ -3,23 +3,34 @@ import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import {
+  getJupiterConfig,
   JupiterAffiliateConfig,
-  JupiterSwapConfig,
-  jupiterSwapConfig,
+  jupiterFeeOwnerAddress,
+  normalizeJupiterBaseUrl,
 } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { JupiterSwapEnabledChain } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
-import {
-  getSolanaAssociatedTokenAddress,
-  injectSolanaAtaIfMissing,
-} from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
+
+import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
+
+/** Canonical wrapped-SOL mint, used as the mint address for native SOL legs. */
+const solanaNativeMint = 'So11111111111111111111111111111111111111112'
+
+/** Jupiter default slippage when the caller does not override (bps). */
+const DEFAULT_JUPITER_SLIPPAGE_BPS = 50
 
 type Input = Record<TransferDirection, AccountCoin<JupiterSwapEnabledChain>> & {
   amount: bigint
-  affiliateBps: number
+  /** VULT-scaled affiliate fee in bps. `0` disables the platform fee entirely. */
+  affiliateBps?: number
   jupiterConfig?: JupiterAffiliateConfig
-  slippageTolerance?: number
+  /** Slippage tolerance in bps (e.g. 50 = 0.5%). Defaults to 50. */
+  slippageBps?: number
+}
+
+type JupiterPlatformFee = {
+  amount?: string
+  feeBps?: number
 }
 
 type JupiterQuoteResponse = {
@@ -27,127 +38,138 @@ type JupiterQuoteResponse = {
   inAmount: string
   outputMint: string
   outAmount: string
-  otherAmountThreshold: string
-  swapMode: string
-  slippageBps: number
-  platformFee?: { amount: string; feeBps: number }
-  priceImpactPct: string
-  routePlan: Array<{
-    swapInfo: {
-      ammKey: string
-      label?: string
-      inputMint: string
-      outputMint: string
-      inAmount: string
-      outAmount: string
-      feeAmount: string
-      feeMint: string
-    }
-    percent: number
-  }>
+  otherAmountThreshold?: string
+  swapMode?: string
+  slippageBps?: number
+  priceImpactPct?: string
+  platformFee?: JupiterPlatformFee | null
+  routePlan?: unknown[]
 }
 
 type JupiterSwapResponse = {
   swapTransaction?: string
-  prioritizationFeeLamports?: number
-  error?: string
+  lastValidBlockHeight?: number
 }
 
-export const SOL_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
+const mintFor = ({ id }: AccountCoin): string => id ?? solanaNativeMint
 
-const toMint = (coin: AccountCoin<JupiterSwapEnabledChain>): string => coin.id?.trim() || SOL_NATIVE_MINT
+const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(url, init)
+  const rawText = await response.text().catch(() => '')
 
-const buildJupiterUrl = (config: JupiterSwapConfig, path: string, params?: URLSearchParams): string => {
-  const base = config.baseUrl.replace(/\/+$/, '')
-  return `${base}${path}${params ? `?${params.toString()}` : ''}`
+  if (!response.ok) {
+    const hint = rawText ? ` ${rawText.slice(0, 200)}` : ''
+    throw new Error(`Jupiter request failed (${response.status}): ${response.statusText}${hint}`)
+  }
+
+  try {
+    return JSON.parse(rawText) as T
+  } catch {
+    throw new Error('Jupiter returned a non-JSON response.')
+  }
 }
 
+/**
+ * Fetch a Solana same-chain swap quote from Jupiter and build the signed-tx
+ * payload the keysign pipeline expects.
+ *
+ * Affiliate fee: when `affiliateBps > 0`, `platformFeeBps` is sent on the quote.
+ * The fee ATA (output mint, owner = `jupiterFeeOwnerAddress`) is derived, passed
+ * to `/swap` as `feeAccount`, and an idempotent create instruction is prepended
+ * to the returned transaction only when the quote actually returns a non-zero
+ * `platformFee.amount`. When `affiliateBps` is 0 (e.g. an Ultimate-tier VULT
+ * holder) or Jupiter floors the fee to zero, no fee account is touched.
+ */
 export const getJupiterSwapQuote = async ({
   from,
   to,
   amount,
-  affiliateBps,
+  affiliateBps = 0,
   jupiterConfig,
-  slippageTolerance,
+  slippageBps = DEFAULT_JUPITER_SLIPPAGE_BPS,
 }: Input): Promise<GeneralSwapQuote> => {
-  if (amount <= 0n) {
-    throw new Error('Jupiter swap amount must be greater than zero')
+  const { baseUrl: configuredBaseUrl } = getJupiterConfig()
+  const baseUrl = normalizeJupiterBaseUrl(jupiterConfig?.baseUrl) ?? configuredBaseUrl
+  const feeOwner = jupiterConfig?.feeOwner ?? jupiterFeeOwnerAddress
+
+  const inputMint = mintFor(from)
+  const outputMint = mintFor(to)
+
+  const requestsPlatformFee = affiliateBps > 0
+
+  const quoteParams = new URLSearchParams({
+    swapMode: 'ExactIn',
+    inputMint,
+    outputMint,
+    amount: amount.toString(),
+    slippageBps: slippageBps.toString(),
+  })
+  if (requestsPlatformFee) {
+    quoteParams.set('platformFeeBps', affiliateBps.toString())
   }
 
-  const config: JupiterSwapConfig = {
-    ...jupiterSwapConfig,
-    ...jupiterConfig,
-  }
-
-  const inputMint = toMint(from)
-  const outputMint = toMint(to)
-
-  if (inputMint === outputMint) {
-    throw new Error('Jupiter swap input and output mint must differ')
-  }
-
-  const shouldApplyPlatformFee = affiliateBps > 0
-  const slippageBps = slippageTolerance ?? config.defaultSlippageBps
-
-  const quoteParams = new URLSearchParams(
-    Object.entries({
-      inputMint,
-      outputMint,
-      amount: amount.toString(),
-      slippageBps: String(slippageBps),
-      swapMode: 'ExactIn',
-      platformFeeBps: shouldApplyPlatformFee ? String(affiliateBps) : undefined,
-    }).flatMap(([key, value]) => (value === undefined ? [] : [[key, value]]))
-  )
-
-  const quote = await queryUrl<JupiterQuoteResponse>(buildJupiterUrl(config, '/swap/v1/quote', quoteParams))
-  const quotedPlatformFee = BigInt(quote.platformFee?.amount ?? 0)
-  const shouldCreateFeeAccount = shouldApplyPlatformFee && quotedPlatformFee > 0n
-  const feeAccount = shouldCreateFeeAccount
-    ? (await getSolanaAssociatedTokenAddress(outputMint, config.feeOwner)).toBase58()
-    : undefined
-
-  const swapBody = {
-    userPublicKey: from.address,
-    quoteResponse: quote,
-    wrapAndUnwrapSol: true,
-    useSharedAccounts: true,
-    asLegacyTransaction: false,
-    dynamicComputeUnitLimit: true,
-    feeAccount: shouldCreateFeeAccount ? feeAccount : undefined,
-  }
-
-  const swapResponse = await queryUrl<JupiterSwapResponse>(buildJupiterUrl(config, '/swap/v1/swap'), {
-    body: Object.fromEntries(Object.entries(swapBody).filter(([, value]) => value !== undefined)),
+  const quoteResponse = await requestJson<JupiterQuoteResponse>(`${baseUrl}/swap/v1/quote?${quoteParams.toString()}`, {
+    headers: { Accept: 'application/json' },
   })
 
-  if (swapResponse.error) {
-    throw new Error(`Jupiter swap error: ${swapResponse.error}`)
-  }
+  // Gate the fee-account flow on the actually quoted fee, not just the requested
+  // bps: Jupiter can floor `platformFee.amount` to 0 (tiny amounts, route with no
+  // fee-eligible mint) even when we asked for a fee. Deriving a fee account and
+  // paying ATA rent for a zero fee would break the "no fee account when the fee
+  // floors to zero" contract. Require both a requested fee and a non-zero quoted
+  // amount before touching the fee account.
+  const swapFeeAmount = BigInt(quoteResponse.platformFee?.amount ?? '0')
+  const chargesFee = requestsPlatformFee && swapFeeAmount > 0n
+
+  // The fee mint is the OUTPUT mint (ExactIn). Derive the fee ATA up front so
+  // it can be sent to /swap and so we know which program owns it for the
+  // prepended create instruction.
+  const feeAccountInfo = chargesFee ? await deriveJupiterFeeAccount({ outputMint, feeOwner }) : undefined
+
+  const swapResponse = await requestJson<JupiterSwapResponse>(`${baseUrl}/swap/v1/swap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      quoteResponse,
+      userPublicKey: from.address,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      ...(feeAccountInfo ? { feeAccount: feeAccountInfo.feeAccount } : {}),
+    }),
+  })
 
   if (!swapResponse.swapTransaction) {
-    throw new Error('Jupiter swap response missing swapTransaction')
+    throw new Error('Jupiter swap response did not include a serialized transaction.')
   }
 
-  const { data, ataInjected } = shouldCreateFeeAccount
-    ? await injectSolanaAtaIfMissing(swapResponse.swapTransaction, outputMint, config.feeOwner, from.address)
-    : { data: swapResponse.swapTransaction, ataInjected: false }
+  const data = feeAccountInfo
+    ? await prependJupiterFeeAta({
+        txData: swapResponse.swapTransaction,
+        feeAccount: feeAccountInfo.feeAccount,
+        mintPubkey: feeAccountInfo.mintPubkey,
+        ownerPubkey: feeAccountInfo.ownerPubkey,
+        tokenProgramId: feeAccountInfo.tokenProgramId,
+      })
+    : swapResponse.swapTransaction
 
-  const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
+  // Network fee is an upper-bound estimate: Solana's per-signature base fee plus
+  // the fee-ATA rent buffer when we prepend a create instruction (charged once
+  // per fee mint; idempotent thereafter). Jupiter embeds its own priority fee in
+  // the returned tx, which the consumer surfaces at broadcast time.
+  const networkFee = BigInt(solanaConfig.baseFee) + (chargesFee ? BigInt(solanaConfig.ataRentLamports) : 0n)
 
   return {
-    dstAmount: quote.outAmount,
+    dstAmount: quoteResponse.outAmount,
     provider: 'jupiter',
-    routeProvider: quote.routePlan.map(route => route.swapInfo.label ?? route.swapInfo.ammKey).join(' + ') || undefined,
     tx: {
       solana: {
         data,
-        networkFee: BigInt(solanaConfig.baseFee + (swapResponse.prioritizationFeeLamports ?? 0)) + ataRentBuffer,
+        networkFee,
         swapFee: {
-          amount: quotedPlatformFee,
+          amount: swapFeeAmount,
           decimals: to.decimals,
           chain: Chain.Solana,
-          id: outputMint,
+          id: to.id,
         },
       },
     },

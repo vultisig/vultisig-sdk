@@ -1,5 +1,66 @@
 # @vultisig/cli
 
+## 2.13.0
+
+### Patch Changes
+
+- Updated dependencies [[`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31), [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a)]:
+  - @vultisig/core-chain@2.22.0
+  - @vultisig/sdk@2.13.0
+  - @vultisig/rujira@46.0.0
+
+## 2.12.1
+
+### Patch Changes
+
+- [#898](https://github.com/vultisig/vultisig-sdk/pull/898) [`8daa669`](https://github.com/vultisig/vultisig-sdk/commit/8daa6696670cefb6f5fa3e800ff433ba7a95c132) Thanks [@neavra](https://github.com/neavra)! - Agent: when the backend asks the CLI to run a client-side tool it doesn't implement, emit a structured `TOOL_UNSUPPORTED` error code (in the failure `RecentAction`'s `data.code`) so the backend/LLM can branch — pick an alternative instead of retrying or waiting on an action that will never report. The CLI now routes SSE `tool-input-available` frames on the backend's full client-side tool contract (a superset of the implemented dispatch registry), so an unimplemented tool reaches the dispatcher and reports `TOOL_UNSUPPORTED` instead of silently degrading to display-only progress. The human-readable stderr line and `error` string are preserved.
+
+## 2.12.0
+
+### Patch Changes
+
+- Updated dependencies [[`403d5d5`](https://github.com/vultisig/vultisig-sdk/commit/403d5d5f7c7dba3e45cb818899db00f765541ecf)]:
+  - @vultisig/core-chain@2.21.0
+  - @vultisig/sdk@2.12.0
+  - @vultisig/rujira@45.0.0
+
+## 2.11.0
+
+### Patch Changes
+
+- [#899](https://github.com/vultisig/vultisig-sdk/pull/899) [`00ede74`](https://github.com/vultisig/vultisig-sdk/commit/00ede74e6db1bd08ded0b25cc32c1f477e6b0d22) Thanks [@neavra](https://github.com/neavra)! - agent: resolve the vault password from the keyring/env chain before prompting
+
+  `vultisig agent` (including `agent ask` and `--via-agent`) now resolves the vault
+  password from the in-memory cache → OS keyring (`vsig auth setup`) →
+  `VAULT_PASSWORDS`/`VAULT_PASSWORD` env chain before falling back to an
+  interactive prompt. Headless operators who configured the keyring or env no
+  longer have to pass `--password` on argv (which exposed the secret to `ps` and
+  shell history). `--password` still works but is de-emphasized and now emits a
+  stderr warning pointing at the keyring/env path.
+
+- Updated dependencies [[`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1)]:
+  - @vultisig/core-chain@2.20.0
+  - @vultisig/sdk@2.11.0
+  - @vultisig/rujira@44.0.0
+
+## 2.10.0
+
+### Patch Changes
+
+- Updated dependencies [[`baedd96`](https://github.com/vultisig/vultisig-sdk/commit/baedd96e9d75a9d73880a59503f95b527d692428), [`605fbba`](https://github.com/vultisig/vultisig-sdk/commit/605fbbaf107c553898f11f4f7eb6b56a59c01b9e), [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9)]:
+  - @vultisig/core-chain@2.19.0
+  - @vultisig/sdk@2.10.0
+  - @vultisig/rujira@43.0.0
+
+## 2.9.0
+
+### Patch Changes
+
+- Updated dependencies [[`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c)]:
+  - @vultisig/core-chain@2.18.0
+  - @vultisig/sdk@2.9.0
+  - @vultisig/rujira@42.0.0
+
 ## 2.8.4
 
 ### Patch Changes

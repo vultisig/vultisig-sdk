@@ -90,9 +90,9 @@ type SwapQuoteProviderName =
   | 'CowSwap'
   | 'KyberSwap'
   | '1inch'
-  | 'Jupiter'
   | 'LiFi'
   | 'SwapKit'
+  | 'Jupiter'
   | 'THORChain'
   | 'MayaChain'
 
@@ -136,10 +136,14 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   'CowSwap',
   'THORChain',
   'MayaChain',
+  // Jupiter is slotted ahead of the EVM/multi-chain aggregators: it only enters
+  // the candidate set for same-chain Solana pairs (see fetcher registration
+  // below), where it has no aggregator markup and carries our own affiliate fee,
+  // so on a near-tie it is preferred over SwapKit/LiFi for those pairs.
+  'Jupiter',
   'SwapKit',
   'KyberSwap',
   '1inch',
-  'Jupiter',
   'LiFi',
 ] as const
 
@@ -517,12 +521,9 @@ export const findSwapQuote = async ({
       })
     }
 
-    if (
-      !hasCustomRecipient &&
-      fromChain === toChain &&
-      isOneOf(fromChain, jupiterSwapEnabledChains) &&
-      isOneOf(toChain, jupiterSwapEnabledChains)
-    ) {
+    // Jupiter — Solana-only, same-chain (SOL↔SPL, SPL↔SPL). It cannot route any
+    // cross-chain pair, so it is offered only when both legs are on Solana.
+    if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
       result.push({
         providerName: 'Jupiter',
         fetch: async (): Promise<SwapQuote> => {
@@ -533,12 +534,12 @@ export const findSwapQuote = async ({
             },
             to: {
               ...to,
-              chain: toChain,
+              chain: fromChain,
             },
             amount: chainAmount,
             affiliateBps,
             jupiterConfig: affiliateConfig?.jupiter,
-            slippageTolerance: jupiterSlippageBps,
+            slippageBps: jupiterSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -663,10 +664,9 @@ export const findSwapQuote = async ({
   // the runtime `fetchers[]` array order, which shifts based on
   // `shouldPreferGeneralSwap`. The below-min preference is a separate concept:
   // we pick which provider's hint to surface, not which provider to query
-  // first. KyberSwap typically surfaces the cleanest EVM messages, then 1inch,
-  // Jupiter for same-chain Solana, LiFi (cross-chain matrix), SwapKit
-  // (catch-all), then the two native protocols. This ordering is independent
-  // of routing and gives
+  // first. KyberSwap typically surfaces the cleanest EVM messages, then 1inch
+  // and LiFi (cross-chain matrix), then SwapKit (catch-all), then the two
+  // native protocols. This ordering is independent of routing and gives
   // deterministic message selection regardless of `Promise.allSettled`
   // resolution order. (#535 r3 — NeO preferably-blocking response.)
   const belowMinimumProviderOrder: SwapQuoteProviderName[] = [

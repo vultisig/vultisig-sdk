@@ -15,6 +15,7 @@ import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
+import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
@@ -35,14 +36,17 @@ import type {
 // same gate via `runPasswordGatedTool('sign_tx', …)` below.
 const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
 
-// Client-side tool dispatch table. Each entry maps an inbound
-// `tool-input-available` toolName to the matching per-tool executor method.
-// The factory is invoked lazily so the executor pointer is captured at
-// dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
+// Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
+// entry maps an inbound `tool-input-available` toolName to the matching per-tool
+// executor method. The factory is invoked lazily so the executor pointer is
+// captured at dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
 //
-// Must stay aligned with backend's `clientSideToolNames`. `sign_tx` uses
-// the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only. The CRUD trio
+// This is a SUBSET of the backend's client-side contract
+// (`BACKEND_CLIENT_SIDE_TOOL_NAMES`): `sign_tx` uses the tx_ready channel
+// instead; create_vault / plugin_install / create_policy / delete_policy are
+// mobile-only; the Polymarket bet/batch tools arrive rewritten as
+// `sign_typed_data`. Backend client-side tools NOT in this table dispatch to the
+// `TOOL_UNSUPPORTED` path (see `dispatchClientSideTool`). The CRUD trio
 // (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
 // discriminator that each wrapper method switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<
@@ -54,6 +58,37 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<
   vault_chain: (ex, id, input) => ex.vaultChain(id, input),
   address_book: (ex, id, input) => ex.addressBook(id, input),
 }
+
+// The agent-backend's client-side tool contract — `clientSideToolNames`
+// (agent-backend internal/service/agent/tools.go:549-559). These are the tools
+// the backend hands to the CLIENT to execute: it emits a `tool-input-available`
+// SSE frame and expects the outcome back via `recent_actions`.
+export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
+  'vault_coin',
+  'vault_chain',
+  'create_vault',
+  'plugin_install',
+  'create_policy',
+  'delete_policy',
+  'sign_typed_data',
+  'polymarket_sign_bet',
+  'polymarket_sign_batch',
+]
+
+// Every tool name the SSE layer intercepts for local dispatch: the backend's
+// client-side contract PLUS `address_book` (which the CLI implements and the
+// backend treats as a client-side action via AddressBookTool/tools.go:423,
+// though it's currently omitted from the clientSideToolNames map). Routing on
+// this SUPERSET of the implemented registry — rather than on the registry keys
+// alone — is what makes the `TOOL_UNSUPPORTED` signal reachable: a backend
+// client-side tool the CLI doesn't implement (create_vault, plugin_install, …)
+// now reaches `dispatchClientSideTool` and gets a structured failure
+// RecentAction, instead of silently degrading to display-only tool progress and
+// leaving the backend/LLM waiting on an action that will never report.
+export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  ...BACKEND_CLIENT_SIDE_TOOL_NAMES,
+  ...Object.keys(CLIENT_SIDE_TOOL_DISPATCH),
+])
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
@@ -100,10 +135,13 @@ export class AgentSession {
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
     // Registry-based client-side tool identification: tell the client which
-    // tools the CLI executes locally so a `tool-input-available` frame is
-    // dispatched on toolName membership (mirroring the app's toolUIRegistry),
-    // not on a `clientExecuted` wire flag the backend no longer sends.
-    this.client.setClientSideToolNames(new Set(Object.keys(CLIENT_SIDE_TOOL_DISPATCH)))
+    // tool names to dispatch locally so a `tool-input-available` frame is routed
+    // on toolName membership (mirroring the app's toolUIRegistry), not on a
+    // `clientExecuted` wire flag the backend no longer sends. This is the
+    // backend's full client-side contract (a superset of the implemented
+    // registry), so an unimplemented tool still reaches dispatch and reports a
+    // structured TOOL_UNSUPPORTED rather than vanishing as display-only progress.
+    this.client.setClientSideToolNames(new Set(CLIENT_SIDE_DISPATCH_TOOL_NAMES))
     if (config.profile) {
       this.client.setProfile(config.profile)
     }
@@ -113,6 +151,75 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+  }
+
+  /**
+   * Unlock the vault before auth when it's encrypted. Resolve the password from
+   * the keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
+   * VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up the
+   * keyring or env never has to put a funds-controlling secret on argv. argv
+   * `--password` (config.password) still works but is de-emphasized: it lands
+   * the secret in `ps`/shell history, so its use warns. Only when the chain
+   * resolves nothing do we fall back to the mode's own interactive prompt (TUI
+   * readline / via-agent protocol; ask-mode throws). A stale stored password is
+   * cleared and re-prompted in interactive modes rather than stranding init.
+   */
+  private async unlockEncryptedVault(ui: UICallbacks): Promise<void> {
+    if (!this.vault.isEncrypted) {
+      return
+    }
+    let password: string
+    // Whether `password` came from the non-interactive keyring/env chain — a
+    // stale stored value gets cleared and re-prompted; an argv/typed value does
+    // not (it was the caller's explicit choice).
+    let fromStoredChain = false
+    if (this.config.password) {
+      process.stderr.write(
+        'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
+          'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
+      )
+      password = this.config.password
+    } else {
+      const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+      if (resolved !== null) {
+        password = resolved
+        fromStoredChain = true
+      } else {
+        password = await ui.requestPassword()
+      }
+    }
+    try {
+      await (this.vault as any).unlock?.(password)
+    } catch (unlockErr) {
+      if (!fromStoredChain) throw unlockErr
+      password = await this.recoverFromStaleStoredPassword(ui)
+    }
+    this.executor.setPassword(password)
+  }
+
+  /**
+   * The stored (keyring/env) password was rejected by unlock. Drop it so it
+   * isn't reused, then recover: ask mode has no interactive prompt (its
+   * requestPassword throws the misleading "use --password flag"), so surface the
+   * real cause; interactive modes (TUI / via-agent) re-prompt once and cache the
+   * winner. Returns the password that successfully unlocked the vault.
+   */
+  private async recoverFromStaleStoredPassword(ui: UICallbacks): Promise<string> {
+    // Guard the name delete — clearCachedPassword('') would wipe the WHOLE cache
+    // (every other vault loaded this process), and name is typed `string`.
+    clearCachedPassword(this.vault.id)
+    if (this.vault.name) clearCachedPassword(this.vault.name)
+    if (this.config.askMode) {
+      throw new Error(
+        `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
+          'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
+      )
+    }
+    const password = await ui.requestPassword()
+    await (this.vault as any).unlock?.(password)
+    cachePassword(this.vault.id, password)
+    if (this.vault.name) cachePassword(this.vault.name, password)
+    return password
   }
 
   /**
@@ -127,12 +234,7 @@ export class AgentSession {
 
     // Authenticate - use cached token if valid, otherwise sign a new one
     try {
-      // Unlock vault first if encrypted
-      if (this.vault.isEncrypted) {
-        const password = this.config.password || (await ui.requestPassword())
-        await (this.vault as any).unlock?.(password)
-        this.executor.setPassword(password)
-      }
+      await this.unlockEncryptedVault(ui)
 
       const cached = loadCachedToken(this.publicKey)
       if (cached) {
@@ -937,10 +1039,15 @@ export class AgentSession {
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
+      // Carry a structured code (not just prose) so the backend/LLM can branch:
+      // TOOL_UNSUPPORTED means this client can't run the tool at all, so retry
+      // is pointless — pick an alternative. This early return pushes straight to
+      // pendingToolResults (bypassing runPasswordGatedTool / ui.onToolResult);
+      // the code reaches the backend on the next flush into context.recent_actions.
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { error: `unimplemented in CLI: ${toolName}` },
+        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
       })
       return
     }

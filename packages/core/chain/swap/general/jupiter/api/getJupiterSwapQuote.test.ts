@@ -1,295 +1,191 @@
-import { getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getJupiterSwapQuote, SOL_NATIVE_MINT } from './getJupiterSwapQuote'
+import { getJupiterSwapQuote } from './getJupiterSwapQuote'
+import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
 
-vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
-  getSolanaClient: vi.fn(),
+vi.mock('./jupiterFeeAta', () => ({
+  deriveJupiterFeeAccount: vi.fn(),
+  prependJupiterFeeAta: vi.fn(),
 }))
 
-const FEE_OWNER = '8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z'
-const USER = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-const BASE_URL = 'https://jupiter.example'
+const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const feeOwner = '8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z'
+const customFeeOwner = 'CustomFeeOwner111111111111111111111111111111'
+const customBaseUrl = 'https://jupiter-proxy.example/jup'
+const feeAccount = 'FeeAtaAddr1111111111111111111111111111111111'
 
-const quoteResponse = {
-  inputMint: SOL_NATIVE_MINT,
-  inAmount: '100000000',
-  outputMint: USDC_MINT,
-  outAmount: '14230000',
-  otherAmountThreshold: '14158850',
-  swapMode: 'ExactIn',
-  slippageBps: 50,
-  platformFee: { amount: '71150', feeBps: 50 },
-  priceImpactPct: '0',
-  routePlan: [
-    {
-      swapInfo: {
-        ammKey: 'whirlpool-key',
-        label: 'Whirlpool',
-        inputMint: SOL_NATIVE_MINT,
-        outputMint: USDC_MINT,
-        inAmount: '100000000',
-        outAmount: '14230000',
-        feeAmount: '4000',
-        feeMint: SOL_NATIVE_MINT,
-      },
-      percent: 100,
-    },
-  ],
-}
+const solNative = {
+  chain: Chain.Solana,
+  address: 'SoLAddrSender1111111111111111111111111111111',
+  decimals: 9,
+  ticker: 'SOL',
+} as const
 
-const buildSwapTransaction = async () => {
-  const { Keypair, SystemProgram, TransactionMessage, VersionedTransaction } = await import('@solana/web3.js')
-  const payer = new PublicKey(USER)
-  const tx = new VersionedTransaction(
-    new TransactionMessage({
-      payerKey: payer,
-      recentBlockhash: Keypair.generate().publicKey.toBase58(),
-      instructions: [
-        SystemProgram.transfer({
-          fromPubkey: payer,
-          toPubkey: Keypair.generate().publicKey,
-          lamports: 1,
-        }),
-      ],
-    }).compileToV0Message()
-  )
-  return Buffer.from(tx.serialize()).toString('base64')
-}
+const solUsdc = {
+  chain: Chain.Solana,
+  address: 'SoLAddrSender1111111111111111111111111111111',
+  id: usdcMint,
+  decimals: 6,
+  ticker: 'USDC',
+} as const
+
+const jsonResponse = (body: unknown): Response =>
+  ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: () => Promise.resolve(JSON.stringify(body)),
+  }) as unknown as Response
+
+type FetchCall = { url: string; init?: RequestInit }
 
 describe('getJupiterSwapQuote', () => {
-  let fetchMock: ReturnType<typeof vi.fn>
-  let swapTransaction: string
+  let calls: FetchCall[]
 
-  beforeEach(async () => {
-    swapTransaction = await buildSwapTransaction()
-    fetchMock = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
-      const url = String(input)
-      const body = url.includes('/quote') ? quoteResponse : { swapTransaction, prioritizationFeeLamports: 1234 }
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    vi.mocked(getSolanaClient).mockReturnValue({
-      getAccountInfo: vi
-        .fn()
-        .mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce(null),
-      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
-    } as any)
+  beforeEach(() => {
+    calls = []
+    vi.mocked(deriveJupiterFeeAccount)
+      .mockReset()
+      .mockResolvedValue({
+        feeAccount,
+        tokenProgramId: {} as never,
+        mintPubkey: {} as never,
+        ownerPubkey: {} as never,
+      })
+    vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              platformFee: { amount: '5000', feeBps: 50 },
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
-    vi.restoreAllMocks()
   })
 
-  it('builds a Jupiter Solana quote with platform fee and derived feeAccount', async () => {
-    const quote = await getJupiterSwapQuote({
-      from: {
-        chain: Chain.Solana,
-        address: USER,
-        decimals: 9,
-        ticker: 'SOL',
-      },
-      to: {
-        chain: Chain.Solana,
-        address: USER,
-        id: USDC_MINT,
-        decimals: 6,
-        ticker: 'USDC',
-      },
-      amount: 100000000n,
-      affiliateBps: 50,
-      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
+  it('sends platformFeeBps on the quote and feeAccount on the swap when a fee is charged', async () => {
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url).toContain('swapMode=ExactIn')
+    expect(quoteCall.url).toContain('platformFeeBps=50')
+    expect(quoteCall.url).toContain(`outputMint=${usdcMint}`)
+
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
+
+    const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
+    expect(JSON.parse(swapCall.init!.body as string)).toMatchObject({
+      userPublicKey: solNative.address,
+      feeAccount,
     })
 
-    const quoteUrl = String(fetchMock.mock.calls[0][0])
-    expect(quoteUrl).toContain(`${BASE_URL}/swap/v1/quote`)
-    expect(quoteUrl).toContain(`inputMint=${SOL_NATIVE_MINT}`)
-    expect(quoteUrl).toContain(`outputMint=${USDC_MINT}`)
-    expect(quoteUrl).toContain('platformFeeBps=50')
-
-    const swapBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
-    expect(swapBody.feeAccount).toBe(
-      getAssociatedTokenAddressSync(new PublicKey(USDC_MINT), new PublicKey(FEE_OWNER)).toBase58()
-    )
-
+    expect(prependJupiterFeeAta).toHaveBeenCalledOnce()
     expect(quote.provider).toBe('jupiter')
-    expect(quote.dstAmount).toBe('14230000')
-    expect(quote.routeProvider).toBe('Whirlpool')
-    expect('solana' in quote.tx).toBe(true)
-    if (!('solana' in quote.tx)) {
-      throw new Error('Expected Solana Jupiter transaction')
-    }
-    expect(quote.tx.solana.swapFee.amount).toBe(71150n)
-    expect(quote.tx.solana.swapFee.id).toBe(USDC_MINT)
-    expect(quote.tx.solana.networkFee).toBe(BigInt(solanaConfig.baseFee + solanaConfig.ataRentLamports + 1234))
+    expect(quote.dstAmount).toBe('1000000')
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('prepended-base64-tx')
   })
 
-  it('uses the wrapped SOL mint as the fee asset id for native SOL outputs', async () => {
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url = String(input)
-      const body = url.includes('/quote')
-        ? {
-            ...quoteResponse,
-            inputMint: USDC_MINT,
-            outputMint: SOL_NATIVE_MINT,
-          }
-        : { swapTransaction, prioritizationFeeLamports: 1234 }
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    })
-
-    const quote = await getJupiterSwapQuote({
-      from: {
-        chain: Chain.Solana,
-        address: USER,
-        id: USDC_MINT,
-        decimals: 6,
-        ticker: 'USDC',
-      },
-      to: {
-        chain: Chain.Solana,
-        address: USER,
-        decimals: 9,
-        ticker: 'SOL',
-      },
-      amount: 100000000n,
-      affiliateBps: 50,
-      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
-    })
-
-    expect('solana' in quote.tx).toBe(true)
-    if (!('solana' in quote.tx)) {
-      throw new Error('Expected Solana Jupiter transaction')
-    }
-    expect(quote.tx.solana.swapFee.id).toBe(SOL_NATIVE_MINT)
-  })
-
-  it('derives the Jupiter feeAccount with the Token-2022 program when the output mint is Token-2022', async () => {
-    vi.mocked(getSolanaClient).mockReturnValue({
-      getAccountInfo: vi
-        .fn()
-        .mockResolvedValueOnce({ owner: TOKEN_2022_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce({ owner: TOKEN_2022_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce(null),
-      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
-    } as any)
-
+  it('uses per-call Jupiter affiliate config overrides', async () => {
     await getJupiterSwapQuote({
-      from: {
-        chain: Chain.Solana,
-        address: USER,
-        decimals: 9,
-        ticker: 'SOL',
-      },
-      to: {
-        chain: Chain.Solana,
-        address: USER,
-        id: USDC_MINT,
-        decimals: 6,
-        ticker: 'USDC',
-      },
-      amount: 100000000n,
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
       affiliateBps: 50,
-      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
+      jupiterConfig: {
+        feeOwner: customFeeOwner,
+        baseUrl: `${customBaseUrl}//`,
+      },
     })
 
-    const swapBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
-    expect(swapBody.feeAccount).toBe(
-      getAssociatedTokenAddressSync(
-        new PublicKey(USDC_MINT),
-        new PublicKey(FEE_OWNER),
-        false,
-        TOKEN_2022_PROGRAM_ID
-      ).toBase58()
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url.startsWith(`${customBaseUrl}/swap/v1/quote`)).toBe(true)
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner: customFeeOwner })
+  })
+
+  it('omits the platform fee entirely when affiliateBps is 0', async () => {
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url).not.toContain('platformFeeBps')
+
+    expect(deriveJupiterFeeAccount).not.toHaveBeenCalled()
+    expect(prependJupiterFeeAta).not.toHaveBeenCalled()
+
+    const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
+    expect(JSON.parse(swapCall.init!.body as string)).not.toHaveProperty('feeAccount')
+
+    // Untouched Jupiter transaction flows through verbatim.
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+  })
+
+  it('skips the fee account when Jupiter floors the platform fee to zero', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              // Fee requested (platformFeeBps sent), but the quoted amount floors to 0.
+              platformFee: { amount: '0', feeBps: 50 },
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
     )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    // The fee was still requested on the quote...
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url).toContain('platformFeeBps=50')
+
+    // ...but with a zero quoted fee no fee account is derived, prepended, or sent.
+    expect(deriveJupiterFeeAccount).not.toHaveBeenCalled()
+    expect(prependJupiterFeeAta).not.toHaveBeenCalled()
+
+    const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
+    expect(JSON.parse(swapCall.init!.body as string)).not.toHaveProperty('feeAccount')
+
+    // Untouched Jupiter transaction flows through verbatim and the swap fee is 0.
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+    expect('solana' in quote.tx && quote.tx.solana.swapFee.amount).toBe(0n)
   })
 
-  it('omits Jupiter platform fee params and ATA creation when affiliate bps is zero', async () => {
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url = String(input)
-      const body = url.includes('/quote')
-        ? { ...quoteResponse, platformFee: undefined }
-        : { swapTransaction, prioritizationFeeLamports: 1234 }
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    })
-    vi.mocked(getSolanaClient).mockClear()
+  it('throws when Jupiter returns no serialized transaction', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) => {
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(jsonResponse({ outAmount: '1000000', outputMint: usdcMint }))
+        }
+        return Promise.resolve(jsonResponse({}))
+      })
+    )
 
-    const quote = await getJupiterSwapQuote({
-      from: {
-        chain: Chain.Solana,
-        address: USER,
-        decimals: 9,
-        ticker: 'SOL',
-      },
-      to: {
-        chain: Chain.Solana,
-        address: USER,
-        id: USDC_MINT,
-        decimals: 6,
-        ticker: 'USDC',
-      },
-      amount: 100000000n,
-      affiliateBps: 0,
-      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
-    })
-
-    const quoteUrl = String(fetchMock.mock.calls[0][0])
-    expect(quoteUrl).not.toContain('platformFeeBps')
-
-    const swapBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)
-    expect(swapBody.feeAccount).toBeUndefined()
-    expect(getSolanaClient).not.toHaveBeenCalled()
-
-    expect('solana' in quote.tx).toBe(true)
-    if (!('solana' in quote.tx)) {
-      throw new Error('Expected Solana Jupiter transaction')
-    }
-    expect(quote.tx.solana.data).toBe(swapTransaction)
-    expect(quote.tx.solana.swapFee.amount).toBe(0n)
-    expect(quote.tx.solana.networkFee).toBe(BigInt(solanaConfig.baseFee + 1234))
-  })
-
-  it('does not add ATA rent when the Jupiter fee account already exists', async () => {
-    vi.mocked(getSolanaClient).mockReturnValue({
-      getAccountInfo: vi
-        .fn()
-        .mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID, data: Buffer.alloc(82) })
-        .mockResolvedValueOnce({ owner: TOKEN_PROGRAM_ID, data: Buffer.alloc(165) }),
-      getAddressLookupTable: vi.fn().mockResolvedValue({ value: null }),
-    } as any)
-
-    const quote = await getJupiterSwapQuote({
-      from: {
-        chain: Chain.Solana,
-        address: USER,
-        decimals: 9,
-        ticker: 'SOL',
-      },
-      to: {
-        chain: Chain.Solana,
-        address: USER,
-        id: USDC_MINT,
-        decimals: 6,
-        ticker: 'USDC',
-      },
-      amount: 100000000n,
-      affiliateBps: 50,
-      jupiterConfig: { feeOwner: FEE_OWNER, baseUrl: BASE_URL },
-    })
-
-    expect('solana' in quote.tx).toBe(true)
-    if (!('solana' in quote.tx)) {
-      throw new Error('Expected Solana Jupiter transaction')
-    }
-    expect(quote.tx.solana.data).toBe(swapTransaction)
-    expect(quote.tx.solana.networkFee).toBe(BigInt(solanaConfig.baseFee + 1234))
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+    ).rejects.toThrow(/did not include a serialized transaction/)
   })
 })
