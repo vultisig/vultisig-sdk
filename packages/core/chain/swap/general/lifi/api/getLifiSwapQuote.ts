@@ -313,6 +313,21 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
+        // LI.FI `estimate.approvalAddress` is the address that will call
+        // `transferFrom` on the input ERC-20. It can differ from `to` (the
+        // Diamond / router) when an inner executor (e.g. 1inch
+        // AggregationExecutor) pulls the token directly. The field is always
+        // present in the LiFi API response (`Estimate.approvalAddress: string`)
+        // but may be the zero address or equal to `to` for native-token routes.
+        // Pass it through so mcp-ts (and other consumers) can approve the
+        // correct spender instead of the Diamond.
+        //
+        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
+        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
+        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
+        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
+        // actual transferFrom caller → revert.
+        const approvalAddr = estimate.approvalAddress
         return {
           evm: {
             from: shouldBePresent(from),
@@ -320,6 +335,12 @@ export const getLifiSwapQuote = async ({
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+            // Include approvalAddress when it is present and non-zero so the
+            // consumer can approve the right spender. Omit for the zero address
+            // (native-only routes) to avoid a spurious zero-address approval.
+            ...(approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000'
+              ? { approvalAddress: approvalAddr }
+              : {}),
             ...(swapFee
               ? {
                   affiliateFee: {
