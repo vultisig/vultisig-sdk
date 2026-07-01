@@ -299,6 +299,153 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
+  // Phase-1 dual-read: the CLI derives a client-side signable candidate from the
+  // tool-output-available channel and hands it to the session via `onToolOutputTx`
+  // (SEPARATE from the backend `tx_ready` channel). Flat off-chain tools
+  // (polymarket) have no tx_ready and are the sign source; `execute_*` prep tools
+  // are parity-only.
+  describe('tool-output signing bridge: tool-output-available → onToolOutputTx', () => {
+    const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
+    const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
+
+    function outputFrame(toolName: string, output: object): string[] {
+      return [
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-pm', toolName })}\n\n`,
+        `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'tc-pm', output })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ]
+    }
+
+    it('fires onToolOutputTx (flat) with a wrapped {chain,chain_id,tx} for an allowlisted flat envelope', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_setup_trading', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: USDC_E,
+          value: '0',
+          data: APPROVE_DATA,
+          action: 'approve',
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][0]).toMatchObject({
+        __buildTx: true,
+        chain: 'Polygon',
+        chain_id: '137',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      })
+      expect(onToolOutputTx.mock.calls[0][1]).toBe('polymarket_setup_trading')
+      expect(onToolOutputTx.mock.calls[0][2]).toBe('flat')
+    })
+
+    it('fires onToolOutputTx with a multi-leg {approvalTxArgs,txArgs} for a bundled deposit wrap', async () => {
+      const onToolOutputTx = vi.fn()
+      const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
+      const WRAP_DATA = '0x62355638' + '0'.repeat(192)
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_deposit', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: ONRAMP,
+          value: '0',
+          data: WRAP_DATA,
+          gas_limit: '250000',
+          action: 'wrap_usdce_to_pusd',
+          needs_approval: true,
+          approval_tx: { to: USDC_E, data: APPROVE_DATA, value: '0' },
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'deposit' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][0]).toMatchObject({
+        __buildTx: true,
+        chain: 'Polygon',
+        approvalTxArgs: { tx: { to: USDC_E, data: APPROVE_DATA } },
+        txArgs: { tx: { to: ONRAMP, data: WRAP_DATA, gas_limit: '250000' } },
+      })
+    })
+
+    it('fires onToolOutputTx (prep) for an execute_* prep envelope with tx_encoding (parity candidate)', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('execute_send', {
+          txArgs: {
+            chain: 'Base',
+            chain_id: '8453',
+            tx_encoding: 'evm-tx',
+            tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+          },
+          stepperConfig: {},
+          resolved: {},
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
+    })
+
+    it('does NOT fire onToolOutputTx for an execute_* prep envelope MISSING tx_encoding (backend phantom-card guard)', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('execute_send', {
+          txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+          stepperConfig: {},
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).not.toHaveBeenCalled()
+    })
+
+    it('does NOT fire onToolOutputTx for a no_op envelope (guard)', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_setup_trading', {
+          chain: 'Polygon',
+          chain_id: '137',
+          action: 'no_op',
+          message: 'All spenders approved.',
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).not.toHaveBeenCalled()
+    })
+
+    it('does NOT fire onToolOutputTx for a tool outside the allowlist', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('polymarket_place_bet', {
+          chain: 'Polygon',
+          chain_id: '137',
+          to: USDC_E,
+          value: '0',
+          data: APPROVE_DATA,
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'bet' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).not.toHaveBeenCalled()
+    })
+  })
+
   // cat4-cli-supported-surfaces: the backend emits data-balance_summary when
   // the client advertised "balance_summary" in supported_surfaces. Previously
   // this v1 part routed to the 'ignore' bucket (client.ts:421) and the card was
