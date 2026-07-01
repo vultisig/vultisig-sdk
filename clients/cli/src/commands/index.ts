@@ -29,6 +29,10 @@ export { executeSignBytes, signBytes } from './sign'
 export type { BroadcastRawParams, BroadcastRawResult } from './broadcast'
 export { executeBroadcast } from './broadcast'
 
+// ⚠️ SPIKE / THROWAWAY — deterministic Polymarket protocol commands (Path B).
+export type { PolymarketBuyParams } from './polymarket'
+export { executePolymarketBuy } from './polymarket'
+
 // Transaction status command
 export type { TxStatusParams } from './tx-status'
 export { executeTxStatus } from './tx-status'
