@@ -6,6 +6,7 @@ import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
+import { buildCip20AuxData } from '../../../tx/compile/cardano/buildCip20AuxData'
 import { SigningInputsResolver } from '../resolver'
 
 /** Encodes a token amount as big-endian bytes for WalletCore's Cardano proto. */
@@ -20,6 +21,11 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
 
   const coin = shouldBePresent(keysignPayload.coin)
   const isTokenSend = coin.contractAddress !== ''
+
+  // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
+  // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the
+  // bytes in the signed transaction. No client-side body patching needed.
+  const auxiliaryData = keysignPayload.memo ? buildCip20AuxData(keysignPayload.memo).auxDataCbor : undefined
 
   const tokenBundle = isTokenSend
     ? (() => {
@@ -47,6 +53,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
       forceFee: Long.fromString(byteFee.toString()),
     }),
     ttl: Long.fromString(ttl.toString()),
+    auxiliaryData,
 
     utxos: keysignPayload.utxoInfo.map(({ hash, amount, index }) =>
       TW.Cardano.Proto.TxInput.create({
