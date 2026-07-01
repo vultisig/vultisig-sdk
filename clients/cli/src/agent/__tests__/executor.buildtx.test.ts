@@ -18,7 +18,7 @@ import {
   buildTxReadyFromToolOutput,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
-} from '../polymarketTxOutput'
+} from '../toolOutputSigning'
 
 const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'

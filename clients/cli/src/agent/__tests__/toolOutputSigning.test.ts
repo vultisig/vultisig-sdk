@@ -18,10 +18,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildTxReadyFromToolOutput,
-  CLI_BUILD_TX_TOOL_NAMES,
+  CLI_SIGNABLE_FLAT_TOOLS,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
-} from '../polymarketTxOutput'
+} from '../toolOutputSigning'
 
 const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
@@ -81,9 +81,26 @@ function depositWrapBundled() {
   }
 }
 
-describe('CLI_BUILD_TX_TOOL_NAMES', () => {
-  it('contains exactly the two flat-calldata Polymarket builders', () => {
-    expect([...CLI_BUILD_TX_TOOL_NAMES].sort()).toEqual([POLYMARKET_DEPOSIT_TOOL, POLYMARKET_SETUP_TRADING_TOOL].sort())
+describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
+  it('includes the flat Polymarket builders and the flat produces_calldata tools', () => {
+    // Polymarket flat builders (no tx_ready) + flat produces_calldata tools that
+    // DO emit tx_ready (erc20_approve) or a structurally-unsignable one
+    // (build_custom_* — divergent to_address/calldata).
+    for (const t of [
+      POLYMARKET_DEPOSIT_TOOL,
+      POLYMARKET_SETUP_TRADING_TOOL,
+      'erc20_approve',
+      'build_custom_credit_topup',
+    ]) {
+      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
+    }
+  })
+
+  it('excludes EIP-712 / non-flat tools (signed via sign_typed_data)', () => {
+    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
+    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
+    // execute_* are PREP (parity-only), NOT in the flat-enrichment allowlist.
+    expect(CLI_SIGNABLE_FLAT_TOOLS.has('execute_swap')).toBe(false)
   })
 })
 
@@ -223,6 +240,53 @@ describe('buildTxReadyFromToolOutput — bundled approve+wrap → multi-leg', ()
   })
 })
 
+describe('buildTxReadyFromToolOutput — flat produces_calldata tools (generalized past polymarket)', () => {
+  it('wraps a standalone erc20_approve flat envelope into {chain,chain_id,tx}', () => {
+    const env = { chain: 'Base', chain_id: '8453', to: USDC_E, value: '0', data: APPROVE_DATA }
+    const out = buildTxReadyFromToolOutput('erc20_approve', env)
+    expect(out).toMatchObject({ chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } })
+  })
+
+  it('NORMALIZES the divergent build_custom_credit_topup card (to_address→to, calldata→data)', () => {
+    // mcp-ts payments card uses to_address/calldata; the executor signer reads
+    // to/data. The per-tool normalizer makes it signable client-side (it is NOT
+    // signable off the backend tx_ready, which wraps to_address/calldata verbatim).
+    const ROUTER = '0x1111111111111111111111111111111111111111'
+    const card = {
+      kind: 'credit_topup',
+      chain: 'Polygon',
+      chain_id: '137',
+      to_address: ROUTER,
+      token_contract: USDC_E,
+      calldata: WRAP_DATA,
+      from_address: '0x000000000000000000000000000000000000dEaD',
+    }
+    const out = buildTxReadyFromToolOutput('build_custom_credit_topup', card)
+    expect(out).toMatchObject({ chain: 'Polygon', chain_id: '137', tx: { to: ROUTER, value: '0', data: WRAP_DATA } })
+  })
+
+  it('build_custom_credit_topup with needs_approval maps to the two-leg approve→main path', () => {
+    const ROUTER = '0x1111111111111111111111111111111111111111'
+    const card = {
+      kind: 'credit_topup',
+      chain: 'Polygon',
+      chain_id: '137',
+      to_address: ROUTER,
+      calldata: WRAP_DATA,
+      needs_approval: true,
+      approval_tx: { to: USDC_E, data: APPROVE_DATA, value: '0' },
+    }
+    const out = buildTxReadyFromToolOutput('build_custom_credit_topup', card)
+    expect(out?.approvalTxArgs).toMatchObject({ tx: { to: USDC_E, data: APPROVE_DATA } })
+    expect(out?.txArgs).toMatchObject({ tx: { to: ROUTER, data: WRAP_DATA } })
+  })
+
+  it('FAILS CLOSED on an unknown-shape flat tool with no usable to/data', () => {
+    const card = { kind: 'credit_topup', chain: 'Polygon', chain_id: '137', mystery_field: 'x' }
+    expect(buildTxReadyFromToolOutput('build_custom_credit_topup', card)).toBeNull()
+  })
+})
+
 describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the guard)', () => {
   it('rejects setup_trading no_op (no to/data)', () => {
     const noOp = {
@@ -291,8 +355,17 @@ describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the 
     expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
   })
 
-  it('rejects a chain outside the Polymarket EVM allowlist', () => {
+  it('ACCEPTS a second EVM chain (Ethereum) — proves the chain guard is not hardcoded to Polygon', () => {
+    // Generalized past #922's Polygon-only pin: any supported EVM chain whose
+    // (chain ⇄ chain_id) agree is accepted. This is the design's "second EVM
+    // chain to prove non-hardcoding".
     const env = { ...setupTradingApprove(), chain: 'Ethereum', chain_id: '1' }
+    const out = buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)
+    expect(out).toMatchObject({ chain: 'Ethereum', chain_id: '1', tx: { to: USDC_E, data: APPROVE_DATA } })
+  })
+
+  it('rejects a NON-EVM chain (flat enrichment is EVM-only in Phase 1)', () => {
+    const env = { ...setupTradingApprove(), chain: 'Bitcoin', chain_id: '0' }
     expect(buildTxReadyFromToolOutput(POLYMARKET_SETUP_TRADING_TOOL, env)).toBeNull()
   })
 

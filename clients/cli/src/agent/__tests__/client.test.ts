@@ -299,11 +299,12 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
-  // Design B: the CLI signs Polymarket flat-tx-builder outputs the way mobile
-  // does, by reading the flat tx off the tool-output-available channel for an
-  // allowlist and feeding the EXISTING onTxReady pipeline. These tools don't set
-  // producesCalldata (no tx_ready frame), so this is the only sign trigger.
-  describe('build-tx bridge: tool-output-available → onTxReady', () => {
+  // Phase-1 dual-read: the CLI derives a client-side signable candidate from the
+  // tool-output-available channel and hands it to the session via `onToolOutputTx`
+  // (SEPARATE from the backend `tx_ready` channel). Flat off-chain tools
+  // (polymarket) have no tx_ready and are the sign source; `execute_*` prep tools
+  // are parity-only.
+  describe('tool-output signing bridge: tool-output-available → onToolOutputTx', () => {
     const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
     const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
 
@@ -315,8 +316,8 @@ describe('AgentClient.sendMessageStream', () => {
       ]
     }
 
-    it('fires onTxReady with a wrapped {chain,chain_id,tx} for an allowlisted flat envelope', async () => {
-      const onTxReady = vi.fn()
+    it('fires onToolOutputTx (flat) with a wrapped {chain,chain_id,tx} for an allowlisted flat envelope', async () => {
+      const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('polymarket_setup_trading', {
           chain: 'Polygon',
@@ -329,19 +330,21 @@ describe('AgentClient.sendMessageStream', () => {
       )
 
       const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onTxReady })
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onToolOutputTx })
 
-      expect(onTxReady).toHaveBeenCalledTimes(1)
-      expect(onTxReady.mock.calls[0][0]).toMatchObject({
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][0]).toMatchObject({
         __buildTx: true,
         chain: 'Polygon',
         chain_id: '137',
         tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
       })
+      expect(onToolOutputTx.mock.calls[0][1]).toBe('polymarket_setup_trading')
+      expect(onToolOutputTx.mock.calls[0][2]).toBe('flat')
     })
 
-    it('fires onTxReady with a multi-leg {approvalTxArgs,txArgs} for a bundled deposit wrap', async () => {
-      const onTxReady = vi.fn()
+    it('fires onToolOutputTx with a multi-leg {approvalTxArgs,txArgs} for a bundled deposit wrap', async () => {
+      const onToolOutputTx = vi.fn()
       const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
       const WRAP_DATA = '0x62355638' + '0'.repeat(192)
       globalThis.fetch = mockFetchSSE(
@@ -359,10 +362,10 @@ describe('AgentClient.sendMessageStream', () => {
       )
 
       const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'deposit' }, { onTxReady })
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'deposit' }, { onToolOutputTx })
 
-      expect(onTxReady).toHaveBeenCalledTimes(1)
-      expect(onTxReady.mock.calls[0][0]).toMatchObject({
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][0]).toMatchObject({
         __buildTx: true,
         chain: 'Polygon',
         approvalTxArgs: { tx: { to: USDC_E, data: APPROVE_DATA } },
@@ -370,8 +373,25 @@ describe('AgentClient.sendMessageStream', () => {
       })
     })
 
-    it('does NOT fire onTxReady for a no_op envelope (guard)', async () => {
-      const onTxReady = vi.fn()
+    it('fires onToolOutputTx (prep) for an execute_* prep envelope (parity candidate)', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('execute_send', {
+          txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+          stepperConfig: {},
+          resolved: {},
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
+    })
+
+    it('does NOT fire onToolOutputTx for a no_op envelope (guard)', async () => {
+      const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('polymarket_setup_trading', {
           chain: 'Polygon',
@@ -382,13 +402,13 @@ describe('AgentClient.sendMessageStream', () => {
       )
 
       const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onTxReady })
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'approve' }, { onToolOutputTx })
 
-      expect(onTxReady).not.toHaveBeenCalled()
+      expect(onToolOutputTx).not.toHaveBeenCalled()
     })
 
-    it('does NOT fire onTxReady for a tool outside the allowlist', async () => {
-      const onTxReady = vi.fn()
+    it('does NOT fire onToolOutputTx for a tool outside the allowlist', async () => {
+      const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('polymarket_place_bet', {
           chain: 'Polygon',
@@ -400,9 +420,9 @@ describe('AgentClient.sendMessageStream', () => {
       )
 
       const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'bet' }, { onTxReady })
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'bet' }, { onToolOutputTx })
 
-      expect(onTxReady).not.toHaveBeenCalled()
+      expect(onToolOutputTx).not.toHaveBeenCalled()
     })
   })
 

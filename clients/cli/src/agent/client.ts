@@ -5,7 +5,7 @@
  * Supports both JSON and SSE streaming responses.
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
-import { buildTxReadyFromToolOutput, CLI_BUILD_TX_TOOL_NAMES } from './polymarketTxOutput'
+import { CLI_PARITY_PREP_TOOLS, CLI_SIGNABLE_FLAT_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
 import type {
   AuthTokenRequest,
   AuthTokenResponse,
@@ -60,6 +60,13 @@ type StreamCallbacks = {
   onTitle?: (title: string) => void
   onSuggestions?: (suggestions: Suggestion[]) => void
   onTxReady?: (tx: TxReadyPayload) => void
+  // Phase-1 dual-read: a client-side signable candidate ENRICHED from a
+  // `tool-output-available` frame (distinct from the backend `tx_ready`
+  // channel). The session captures this separately so it can keep `tx_ready`
+  // authoritative when signable and use the tool-output candidate as the parity
+  // reference (and as the sign source only when no usable `tx_ready` arrives).
+  // `source` distinguishes a flat enrichment from an `execute_*` prep passthrough.
+  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => void
   // Fired for the `data-balance_summary` SSE part the backend emits when the
   // client advertised "balance_summary" in supported_surfaces. Carries the raw
   // card envelope; the consumer validates + renders it. Replaces the legacy
@@ -607,31 +614,36 @@ export class AgentClient {
 
     const ok = deriveToolDoneOk(status, parsed.output)
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
-    this.maybeSignBuildTxOutput(status, toolName, parsed.output, callbacks)
+    this.maybeSignToolOutput(status, toolName, parsed.output, callbacks)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
   }
 
   /**
-   * Design B: sign Polymarket flat-tx-builder outputs the way the mobile app
-   * does. These tools deliberately don't set `producesCalldata`, so they emit
-   * NO `tx_ready` frame — their flat `{chain,chain_id,to,value,data}` envelope
-   * only rides the `tool-output-available` channel. When an allowlisted tool
-   * finishes, lift its flat tx into the EXISTING `onTxReady` pipeline. The
-   * bridge guards against non-tx results (`no_op` / `insufficient_usdce`) so
-   * those never reach the signer. The same tool can never also emit a real
-   * `tx_ready` (producesCalldata is OFF), so there is no double-sign path.
+   * Phase-1 dual-read: derive a client-side signable candidate from a signable
+   * tool's raw `tool-output-available` output — the same envelope mobile reads —
+   * and hand it to the session via `onToolOutputTx` (SEPARATE from the backend
+   * `tx_ready` channel). The session decides how to use it:
+   *  - flat off-chain tools with NO `tx_ready` (polymarket) → the sign source
+   *    (unchanged from #922);
+   *  - `produces_calldata` tools that also emit `tx_ready` (`execute_*`,
+   *    `erc20_approve`, `build_custom_*`) → the PARITY reference; `tx_ready`
+   *    stays authoritative when signable.
+   * The bridge guards against non-tx results (`no_op` / `insufficient_*` /
+   * errors) so those never reach the signer. Zero backend change.
    */
-  private maybeSignBuildTxOutput(
+  private maybeSignToolOutput(
     status: 'running' | 'done' | undefined,
     toolName: string | undefined,
     output: unknown,
     callbacks: StreamCallbacks
   ): void {
-    if (status !== 'done' || !toolName || !callbacks.onTxReady || !CLI_BUILD_TX_TOOL_NAMES.has(toolName)) return
-    const txReady = buildTxReadyFromToolOutput(toolName, output)
-    if (!txReady) return
-    if (this.verbose) process.stderr.write(`[SSE:build_tx] ${toolName} → onTxReady (signable flat tx)\n`)
-    callbacks.onTxReady(txReady)
+    if (status !== 'done' || !toolName || !callbacks.onToolOutputTx) return
+    if (!CLI_SIGNABLE_FLAT_TOOLS.has(toolName) && !CLI_PARITY_PREP_TOOLS.has(toolName)) return
+    const candidate = deriveToolOutputCandidate(toolName, output)
+    if (!candidate) return
+    if (this.verbose)
+      process.stderr.write(`[SSE:tool_output] ${toolName} → onToolOutputTx (${candidate.source} candidate)\n`)
+    callbacks.onToolOutputTx(candidate.payload, toolName, candidate.source)
   }
 
   private maybeEmitClientSideToolCall(

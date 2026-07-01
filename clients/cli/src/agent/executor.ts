@@ -2053,7 +2053,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
 /**
  * Resolve a Chain from a numeric EVM chain ID.
  */
-function resolveChainId(chainId: string | number): Chain | null {
+export function resolveChainId(chainId: string | number): Chain | null {
   const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
   if (isNaN(id)) return null
 

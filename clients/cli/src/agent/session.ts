@@ -22,6 +22,7 @@ import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSumm
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import { diffToolOutputParity, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -481,8 +482,20 @@ export class AgentSession {
       }
     }
 
-    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
-    let serverTxStoredFromStream = 0
+    // Phase-1 dual-read. Two signable candidates are captured per turn (first-wins
+    // by source) and reconciled AFTER the stream (see `selectAndBufferSignable`):
+    //  - `txReadyCandidate`: the backend-enriched payload off the `data-tx_ready`
+    //    channel — AUTHORITATIVE for signing whenever it is signable (today's
+    //    behavior, unchanged).
+    //  - `toolOutputCandidate`: a client-side candidate ENRICHED from a
+    //    `tool-output-available` frame — the PARITY reference, and the sign source
+    //    only when no usable `tx_ready` arrives (polymarket [no tx_ready];
+    //    `build_custom_*` [structurally-unsignable tx_ready]).
+    // Deferring selection to end-of-stream lets us compare both channels (the
+    // Phase-1 parity deliverable) and prefer the safe source without depending on
+    // wire arrival order.
+    let txReadyCandidate: TxReadyPayload | null = null
+    let toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -528,44 +541,27 @@ export class AgentSession {
         ui.onSuggestions(suggestions)
       },
       onTxReady: (tx: any) => {
-        // First-wins per turn. The executor buffers a single 'latest' slot and
-        // signs it once after the stream (below), so a SECOND signable tx in the
-        // same turn would overwrite the first and silently leave it unsigned.
-        // The legacy `tx_ready` channel is safe (backend emits ≤1/turn), but the
-        // Design B build-tx bridge can surface a second signable frame if the
-        // model chains two flat-builder calls in one turn. Keep the FIRST and
-        // drop the rest: signing the first recurses (depth+1) and the dropped
-        // frames deterministically re-emit on the next turn once their on-chain
+        // Capture the FIRST `tx_ready` this turn (do NOT store yet — selection is
+        // deferred to `selectAndBufferSignable` after the stream so the parity
+        // cross-check can compare both channels). A SECOND frame is deferred: the
+        // executor signs one payload per turn; the dropped tool's output stays in
+        // the backend conversation and re-emerges next turn once its on-chain
         // precondition still holds — fail-safe, never a partial/wrong sign.
-        if (serverTxStoredFromStream > 0) {
-          // First-wins: the executor buffers a single 'latest' slot and signs it
-          // once after the stream, so a SECOND signable frame in the same turn
-          // would overwrite (and silently drop) the first. The legacy tx_ready
-          // channel is safe (backend emits ≤1/turn); the Design B build-tx bridge
-          // can surface a second frame if the model chains two flat-builder calls
-          // in one turn. Keep the FIRST (guaranteed forward progress — the
-          // multi-step deposit flow completes across turns via the recursion
-          // below) and REPORT the deferral so it is never silent: the dropped
-          // tool's output stays in the backend conversation, so the frame
-          // re-emerges on the next turn when its on-chain precondition still
-          // holds. We do NOT fail the turn (that risks a no-progress loop if the
-          // model re-emits both frames every turn) and we do NOT overwrite (that
-          // would drop the first, unsigned).
-          process.stderr.write(
-            '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
-          )
-          ui.onNotification?.(
-            'Transaction deferred',
-            'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
-          )
+        if (txReadyCandidate !== null) {
+          this.reportDeferredSignable(ui)
           return
         }
-        if (this.executor.storeServerTransaction(tx)) {
-          serverTxStoredFromStream++
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
+        txReadyCandidate = tx as TxReadyPayload
+      },
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => {
+        // Client-side candidate enriched from a `tool-output-available` frame.
+        // First-wins per turn; used by `selectAndBufferSignable` as the parity
+        // reference (and the sign source only when no usable `tx_ready` arrives).
+        if (toolOutputCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
         }
+        toolOutputCandidate = { payload, toolName, source }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -637,17 +633,14 @@ export class AgentSession {
     // Routed straight to the executor (no Action wrapper); result is
     // pushed onto pendingToolResults and recursed for the next turn.
     //
-    // One signable tx per turn. storeServerTransaction buffers a single
-    // 'latest' slot; the onTxReady handler above enforces first-wins so a
-    // second signable frame in the same turn can never overwrite (and silently
-    // drop) the first. Multi-leg approve→main sequences run within signMultiLeg;
-    // multi-step flows (e.g. deposit approve then wrap) advance across turns via
-    // the recursion below.
-    if (serverTxStoredFromStream > 0) {
-      if (this.config.verbose)
-        process.stderr.write(
-          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
-        )
+    // Phase-1 dual-read reconciliation: cross-check the two channels (parity —
+    // logged loudly on divergence) and buffer the SAFE sign source (a signable
+    // `tx_ready` is authoritative; else the client tool-output candidate). One
+    // signable tx per turn — multi-leg approve→main runs within signMultiLeg;
+    // multi-step flows advance across turns via the recursion below.
+    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, toolOutputCandidate)
+    if (bufferedSignable) {
+      if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
       const signToolCallId = `tx_sign_${Date.now()}`
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
@@ -676,6 +669,103 @@ export class AgentSession {
     }
 
     ui.onDone()
+  }
+
+  /**
+   * Report that a second signable frame arrived in the same turn and was
+   * deferred (the executor signs one payload per turn). Never silent: the
+   * dropped tool's output stays in the backend conversation, so the frame
+   * re-emerges next turn if its on-chain precondition still holds. We neither
+   * fail the turn (risks a no-progress loop) nor overwrite the first (would drop
+   * it unsigned).
+   */
+  private reportDeferredSignable(ui: UICallbacks): void {
+    process.stderr.write(
+      '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+    )
+    ui.onNotification?.(
+      'Transaction deferred',
+      'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
+    )
+  }
+
+  /**
+   * Phase-1 dual-read reconciliation. Given the two per-turn candidates, run the
+   * parity cross-check (when both are present) and buffer the SAFE sign source
+   * into the executor. Returns true when something was buffered to sign.
+   *
+   * Selection order (fund-safety):
+   *  1. a SIGNABLE `tx_ready` — AUTHORITATIVE, unchanged from today's behavior;
+   *  2. the client tool-output candidate — covers flat off-chain tools with no
+   *     `tx_ready` (polymarket) and flat tools whose `tx_ready` is structurally
+   *     unsignable (`build_custom_*`, divergent `to_address`/`calldata`);
+   *  3. an unsignable `tx_ready` as last resort — preserves today's behavior (it
+   *     surfaces its own error at sign time) rather than silently dropping it.
+   * `payloadLooksSignable` mirrors the executor's real requirements so a
+   * structurally-present-but-unsignable `tx_ready` (which `storeServerTransaction`
+   * would still buffer, only to throw at sign time) doesn't pre-empt a good
+   * tool-output candidate.
+   */
+  private selectAndBufferSignable(
+    txReadyCandidate: TxReadyPayload | null,
+    toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null
+  ): boolean {
+    // Parity cross-check (Phase-1 deliverable): both channels produced a payload
+    // for this turn — prove the client-side port against the live backend.
+    if (txReadyCandidate && toolOutputCandidate) {
+      this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
+    }
+
+    const ordered: Array<{ surface: 'tx_ready' | 'tool_output'; payload: TxReadyPayload }> = []
+    if (txReadyCandidate && payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+    if (toolOutputCandidate) {
+      ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
+    }
+    if (txReadyCandidate && !payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+
+    for (const { surface, payload } of ordered) {
+      if (this.executor.storeServerTransaction(payload)) {
+        if (this.config.password) this.executor.setPassword(this.config.password)
+        if (this.config.verbose) {
+          const both = txReadyCandidate && toolOutputCandidate ? 'both channels' : 'single channel'
+          process.stderr.write(`[session] buffered signable from ${surface} (${both})\n`)
+        }
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Compare the client-enriched tool-output candidate to the backend `tx_ready`
+   * for the same turn and log the result. On a safety-relevant divergence this
+   * logs LOUDLY (always to stderr, not just under --verbose) — that divergence
+   * signal is exactly what Phase 1 exists to surface before Phase 2 makes
+   * tool-output the sole signing source.
+   */
+  private logToolOutputParity(
+    toolOutput: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' },
+    txReady: TxReadyPayload
+  ): void {
+    const result = diffToolOutputParity(toolOutput.payload, txReady)
+    const exclusive = result.txReadyExclusive.length
+      ? ` | tx_ready-exclusive: ${result.txReadyExclusive.join(',')}`
+      : ''
+    if (result.match) {
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[parity] ${toolOutput.toolName} (${toolOutput.source}): tool-output == tx_ready ✓${exclusive}\n`
+        )
+      }
+      return
+    }
+    process.stderr.write(
+      `[parity][DIVERGENCE] ${toolOutput.toolName} (${toolOutput.source}): tool-output != tx_ready — ${result.divergences.join('; ')}${exclusive}\n`
+    )
   }
 
   /**
