@@ -6960,7 +6960,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.21.0, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:2.22.1, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -6982,7 +6982,7 @@ __metadata:
     "@ton/crypto": "npm:^3.3.0"
     "@trustwallet/wallet-core": "npm:^4.6.15"
     "@vultisig/core-config": "npm:0.9.1"
-    "@vultisig/lib-utils": "npm:0.10.3"
+    "@vultisig/lib-utils": "npm:0.10.4"
     bip32: "npm:^5.0.1"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
@@ -6990,6 +6990,7 @@ __metadata:
     cbor-x: "npm:^1.6.4"
     date-fns: "npm:^4.4.0"
     ethers: "npm:^6.17.0"
+    long: "npm:^5.3.2"
     tiny-secp256k1: "npm:^2.2.4"
     viem: "npm:^2.53.1"
     xrpl: "npm:^5.0.0"
@@ -7013,12 +7014,12 @@ __metadata:
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.6.15"
-    "@vultisig/core-chain": "npm:2.21.0"
+    "@vultisig/core-chain": "npm:2.22.1"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
     "@vultisig/lib-schnorr": "npm:0.9.0"
-    "@vultisig/lib-utils": "npm:0.10.3"
+    "@vultisig/lib-utils": "npm:0.10.4"
     "@vultisig/mpc-types": "npm:0.2.3"
     bitcoinjs-lib: "npm:^7.0.1"
     bs58: "npm:^6.0.0"
@@ -7118,7 +7119,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/lib-utils@npm:0.10.3, @vultisig/lib-utils@workspace:packages/lib/utils":
+"@vultisig/lib-utils@npm:0.10.4, @vultisig/lib-utils@workspace:packages/lib/utils":
   version: 0.0.0-use.local
   resolution: "@vultisig/lib-utils@workspace:packages/lib/utils"
   dependencies:
@@ -7196,7 +7197,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=2.12.0"
+    "@vultisig/sdk": ">=2.13.1"
   languageName: unknown
   linkType: soft
 

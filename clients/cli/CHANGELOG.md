@@ -1,5 +1,20 @@
 # @vultisig/cli
 
+## 2.13.0
+
+### Patch Changes
+
+- Updated dependencies [[`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31), [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a)]:
+  - @vultisig/core-chain@2.22.0
+  - @vultisig/sdk@2.13.0
+  - @vultisig/rujira@46.0.0
+
+## 2.12.1
+
+### Patch Changes
+
+- [#898](https://github.com/vultisig/vultisig-sdk/pull/898) [`8daa669`](https://github.com/vultisig/vultisig-sdk/commit/8daa6696670cefb6f5fa3e800ff433ba7a95c132) Thanks [@neavra](https://github.com/neavra)! - Agent: when the backend asks the CLI to run a client-side tool it doesn't implement, emit a structured `TOOL_UNSUPPORTED` error code (in the failure `RecentAction`'s `data.code`) so the backend/LLM can branch — pick an alternative instead of retrying or waiting on an action that will never report. The CLI now routes SSE `tool-input-available` frames on the backend's full client-side tool contract (a superset of the implemented dispatch registry), so an unimplemented tool reaches the dispatcher and reports `TOOL_UNSUPPORTED` instead of silently degrading to display-only progress. The human-readable stderr line and `error` string are preserved.
+
 ## 2.12.0
 
 ### Patch Changes

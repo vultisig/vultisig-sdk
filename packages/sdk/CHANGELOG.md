@@ -1,5 +1,41 @@
 # @vultisig/sdk
 
+## 2.13.1
+
+### Patch Changes
+
+- [#918](https://github.com/vultisig/vultisig-sdk/pull/918) [`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Show tiny fiat amounts (e.g. LUNC-style prices below one cent) with significant
+  digits and compact subscript notation instead of rounding them to "$0.00"
+  (e.g. 0.00000003 now renders as $0.0₇3).
+
+## 2.13.0
+
+### Minor Changes
+
+- [#915](https://github.com/vultisig/vultisig-sdk/pull/915) [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): native-staking transaction builder (byte-parity)
+
+  Phase 3 of Solana native staking. Adds the signing core for the delegate flow
+  (and the proto for the later unstake / withdraw / move-stake ops) under
+  `@vultisig/core-chain/chains/solana/staking/tx`:
+
+  - `stakingPayload` — discriminated staking-op intent (delegate / unstake /
+    withdraw / move-stake deactivate + redelegate sub-steps).
+  - `buildUnsignedStakingTx` — maps a payload to the wallet-core Solana stake
+    proto (`delegateStakeTransaction` derives the stake account; move-redelegate
+    sets it explicitly), compiles a zero-signature envelope via
+    `TransactionCompiler`, and returns it base64-encoded. This is the MPC
+    byte-parity contract: the initiating device builds these bytes once (pinning
+    the recent blockhash + the derived stake-account address) and relays them via
+    `signSolana.rawTransactions`, so every co-signer signs the identical message.
+
+  Adds `long` to core-chain deps (Long-typed proto amount fields). Byte-parity
+  tests build delegate / deactivate / withdraw / move-redelegate txs against real
+  wallet-core, decode them back, and assert determinism.
+
+### Patch Changes
+
+- [#916](https://github.com/vultisig/vultisig-sdk/pull/916) [`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Solana broadcast: surface the on-chain rejection reason. When `sendTransaction` is rejected at preflight, the RPC returns the actionable detail in `data.err` / `data.logs` (the program logs), which web3.js exposes via `SendTransactionError.logs` while leaving the bare `.message` ("failed to send transaction") uninformative. The broadcast resolver now folds those program logs into the thrown error's message (preserving the original error as `cause`), so consumers reading the top-level message see _why_ the network rejected the transaction — "insufficient lamports", a custom program error, a failed instruction — instead of just that it failed.
+
 ## 2.12.0
 
 ### Minor Changes
