@@ -191,6 +191,15 @@ describe('payloadLooksSignable — selection guard mirrors the executor', () => 
     expect(
       payloadLooksSignable({ approvalTxArgs: { tx: { to: TO, data: DATA } }, txArgs: { tx: { data: DATA2 } } })
     ).toBe(false)
+    // both legs signable but chains DISAGREE → not signable (mirrors
+    // storeServerTransaction's multi-leg same-chain guard; never prefer a
+    // cross-chain 2-leg envelope the executor would reject).
+    expect(
+      payloadLooksSignable({
+        approvalTxArgs: { chain: 'Polygon', tx: { to: TO, data: DATA } },
+        txArgs: { chain: 'Base', tx: { to: ROUTER, data: DATA2 } },
+      })
+    ).toBe(false)
   })
 
   it('null / non-object → not signable', () => {

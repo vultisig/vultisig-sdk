@@ -442,10 +442,12 @@ const HARD_FIELDS: Array<keyof CanonicalLeg> = [
 /**
  * Compare a client-enriched tool-output candidate to the backend `tx_ready` for
  * the SAME tool call. Surfaces safety-relevant divergences (to / value / data /
- * chain / chain_id / tx_encoding / amount / memo, per leg, plus leg count) so
- * the caller can log them LOUDLY. This is how Phase 1 proves the client-side
- * port against the live backend before Phase 2 makes tool-output the sole
- * source. `gas_limit` is advisory (the SDK re-estimates) and reported softly.
+ * chain / chain_id / tx_encoding / amount / memo / gas_limit, per leg, plus leg
+ * count) so the caller can log them LOUDLY. This is how Phase 1 proves the
+ * client-side port against the live backend before Phase 2 makes tool-output the
+ * sole source. `gas_limit` counts: it changes the signed EVM gasLimit (see
+ * `HARD_FIELDS`). Only tx_ready-exclusive fields (typed_confirm, sequence_id)
+ * are excluded from `match`.
  */
 export function diffToolOutputParity(enriched: unknown, txReady: unknown): ParityResult {
   const ce = canonicalizeForParity(enriched)
