@@ -37,6 +37,7 @@ import {
   executeImport,
   executeInfo,
   executeJoinSecure,
+  executePolymarketBuy,
   executePortfolio,
   executeRename,
   executeRujiraBalance,
@@ -740,6 +741,45 @@ program
         password: options.password,
       })
     })
+  )
+
+// ⚠️ SPIKE / THROWAWAY — deterministic Polymarket protocol commands (Path B).
+// Prototype: build→MPC-sign→submit with the LLM removed. Not for merge.
+const polymarketCmd = program.command('polymarket').description('[SPIKE] Deterministic Polymarket protocol commands')
+polymarketCmd
+  .command('buy')
+  .description('[SPIKE] Build, MPC-sign, and submit a Polymarket buy order deterministically (no LLM)')
+  .option('--token-id <id>', 'CLOB token id to buy (requires §A place_bet token_id support)')
+  .option('--price <price>', 'Limit price per share, 0-1 (omit for marketable)', parseFloat)
+  .requiredOption('--size <shares>', 'Number of outcome shares to buy', parseFloat)
+  .option('--tif <tif>', 'Time-in-force: ioc|gtc (§A-dependent; ignored by stock mcp-ts)')
+  .option('--event-slug <slug>', 'Fallback: event slug (used when --token-id/§A is unavailable)')
+  .option('--outcome <outcome>', 'Fallback: outcome name (paired with --event-slug)')
+  .option('--password <password>', 'Vault password for signing')
+  .action(
+    withExit(
+      async (options: {
+        tokenId?: string
+        price?: number
+        size: number
+        tif?: string
+        eventSlug?: string
+        outcome?: string
+        password?: string
+      }) => {
+        const context = await init(program.opts().vault, options.password)
+        await executePolymarketBuy(context, {
+          tokenId: options.tokenId,
+          price: options.price,
+          size: options.size,
+          tif: options.tif === 'ioc' || options.tif === 'gtc' ? options.tif : undefined,
+          eventSlug: options.eventSlug,
+          outcome: options.outcome,
+          password: options.password,
+          verbose: !!program.opts().verbose,
+        })
+      }
+    )
   )
 
 // Command: Broadcast raw transaction
