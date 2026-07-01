@@ -1,6 +1,6 @@
 import { Chain, CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 
-import { areEqualCoins, CoinKey } from '../../coin/Coin'
+import { CoinKey } from '../../coin/Coin'
 
 const cosmosGasLimitRecord: Record<CosmosChain, bigint> = {
   [Chain.Cosmos]: 200000n,
@@ -10,22 +10,20 @@ const cosmosGasLimitRecord: Record<CosmosChain, bigint> = {
   [Chain.Noble]: 200000n,
   [Chain.Akash]: 200000n,
   [Chain.Terra]: 300000n,
-  // TerraClassic default covers both bank.MsgSend (uluna ~80k) and
-  // ibc.MsgTransfer (~150-200k), with margin for chain load. uusd
-  // (USTC) MsgSend has its own 1M override below for the burn-tax /
-  // treasury post-handler path; IBC `MsgTransfer` is exempt from the
-  // burn tax (per classic-terra/core fee_tax.go::FilterMsgAndComputeTax)
-  // so it falls through to this default.
-  [Chain.TerraClassic]: 400000n,
+  // TerraClassic must stay byte-for-byte in sync with iOS
+  // (TerraHelperStruct.GasLimit) and Android (CosmosHelper.getChainGasLimit)
+  // so cross-device co-signing produces the same SignDoc — the gas limit is
+  // part of the pre-sign image. Both mobile clients hardcode 300000 for
+  // every columbus-5 send denom (uluna, uusd bank denoms, IBC transfers,
+  // wasm), so this is a single value with no per-denom override. The burn
+  // tax on non-uluna bank denoms is carried in the fee AMOUNT (precomputed
+  // upstream), not the gas limit.
+  [Chain.TerraClassic]: 300000n,
   [Chain.THORChain]: 20000000n,
   [Chain.MayaChain]: 2000000000n,
 }
 
 export const getCosmosGasLimit = (coin: CoinKey<CosmosChain>): bigint => {
-  if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-    return 1_000_000n
-  }
-
   return cosmosGasLimitRecord[coin.chain]
 }
 
