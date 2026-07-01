@@ -373,11 +373,16 @@ describe('AgentClient.sendMessageStream', () => {
       })
     })
 
-    it('fires onToolOutputTx (prep) for an execute_* prep envelope (parity candidate)', async () => {
+    it('fires onToolOutputTx (prep) for an execute_* prep envelope with tx_encoding (parity candidate)', async () => {
       const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('execute_send', {
-          txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+          txArgs: {
+            chain: 'Base',
+            chain_id: '8453',
+            tx_encoding: 'evm-tx',
+            tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+          },
           stepperConfig: {},
           resolved: {},
         })
@@ -388,6 +393,21 @@ describe('AgentClient.sendMessageStream', () => {
 
       expect(onToolOutputTx).toHaveBeenCalledTimes(1)
       expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
+    })
+
+    it('does NOT fire onToolOutputTx for an execute_* prep envelope MISSING tx_encoding (backend phantom-card guard)', async () => {
+      const onToolOutputTx = vi.fn()
+      globalThis.fetch = mockFetchSSE(
+        outputFrame('execute_send', {
+          txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+          stepperConfig: {},
+        })
+      )
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx })
+
+      expect(onToolOutputTx).not.toHaveBeenCalled()
     })
 
     it('does NOT fire onToolOutputTx for a no_op envelope (guard)', async () => {

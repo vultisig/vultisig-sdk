@@ -19,6 +19,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTxReadyFromToolOutput,
   CLI_SIGNABLE_FLAT_TOOLS,
+  deriveToolOutputCandidate,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
 } from '../toolOutputSigning'
@@ -375,5 +376,47 @@ describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the 
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, 'not json')).toBeNull()
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, 42)).toBeNull()
     expect(buildTxReadyFromToolOutput(POLYMARKET_DEPOSIT_TOOL, [setupTradingApprove()])).toBeNull()
+  })
+})
+
+describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard', () => {
+  it('flat signable tool → candidate tagged source:flat', () => {
+    const c = deriveToolOutputCandidate(POLYMARKET_SETUP_TRADING_TOOL, setupTradingApprove())
+    expect(c?.source).toBe('flat')
+    expect(c?.payload).toMatchObject({ tx: { to: USDC_E, data: APPROVE_DATA } })
+  })
+
+  it('execute_* prep WITH tx_encoding → candidate tagged source:prep (parity-only)', () => {
+    const prep = {
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm-tx',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      stepperConfig: {},
+    }
+    const c = deriveToolOutputCandidate('execute_send', prep)
+    expect(c?.source).toBe('prep')
+  })
+
+  it('execute_* prep MISSING tx_encoding → null (mirror backend enrichBuildResult phantom-card suppression)', () => {
+    const phantom = {
+      txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', phantom)).toBeNull()
+  })
+
+  it('execute_* prep with empty tx_encoding → null', () => {
+    const phantom = {
+      txArgs: { chain: 'Base', chain_id: '8453', tx_encoding: '', tx: { to: USDC_E } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', phantom)).toBeNull()
+  })
+
+  it('tool outside both allowlists → null', () => {
+    expect(deriveToolOutputCandidate('get_balances', { txArgs: { tx_encoding: 'evm-tx' } })).toBeNull()
   })
 })

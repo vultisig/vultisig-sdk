@@ -299,9 +299,16 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
   if (CLI_PARITY_PREP_TOOLS.has(toolName)) {
     const env = asRecord(output)
     if (!env || env.status === 'error' || 'error' in env) return null
-    // Must be an execute-prep envelope (has txArgs). Passthrough verbatim; the
-    // executor already parses `{approvalTxArgs?, txArgs}`.
-    if (!env.txArgs || typeof env.txArgs !== 'object') return null
+    const txArgs = asRecord(env.txArgs)
+    if (!txArgs) return null
+    // Mirror the backend phantom-card guard (enrichBuildResult, agent.go:8294-8300):
+    // an execute-prep envelope whose `txArgs` lacks a `tx_encoding` discriminator is
+    // structurally malformed and the backend SUPPRESSES its `tx_ready` (returns nil,
+    // emitting only a live tool-output frame). Refuse to derive a candidate for it —
+    // otherwise, with no `tx_ready` twin to compare against, it could become a sign
+    // source. (`selectAndBufferSignable` also never signs a `source:'prep'`
+    // candidate — belt-and-suspenders; prep is PARITY-ONLY.)
+    if (typeof txArgs.tx_encoding !== 'string' || txArgs.tx_encoding === '') return null
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
   return null
@@ -425,6 +432,11 @@ const HARD_FIELDS: Array<keyof CanonicalLeg> = [
   'txEncoding',
   'amount',
   'memo',
+  // gas_limit is signing-relevant, NOT advisory: signEvmServerTx copies a
+  // server-supplied gas_limit into the signed ethereumSpecific.gasLimit when it
+  // exceeds the SDK estimate, so a gas_limit divergence means different signed
+  // bytes/fee. Parity must surface it.
+  'gasLimit',
 ]
 
 /**
@@ -461,17 +473,11 @@ export function diffToolOutputParity(enriched: unknown, txReady: unknown): Parit
         divergences.push(`leg[${i}].${f}: tool-output ${a ?? '∅'} vs tx_ready ${b ?? '∅'}`)
       }
     }
-    if (ce.legs[i].gasLimit !== ct.legs[i].gasLimit) {
-      // Advisory only — do not fail parity on gas_limit.
-      divergences.push(
-        `leg[${i}].gasLimit(advisory): tool-output ${ce.legs[i].gasLimit ?? '∅'} vs tx_ready ${ct.legs[i].gasLimit ?? '∅'}`
-      )
-    }
   }
   const txReadyExclusive = ct.exclusive.filter(k => !ce.exclusive.includes(k))
-  // `match` ignores the advisory gas_limit line and the exclusive fields.
-  const hardDivergences = divergences.filter(d => !d.includes('(advisory)'))
-  return { match: hardDivergences.length === 0, divergences, txReadyExclusive }
+  // `match` ignores only the tx_ready-exclusive fields (legitimately never on
+  // tool-output). Every HARD_FIELDS divergence — incl. gas_limit — fails parity.
+  return { match: divergences.length === 0, divergences, txReadyExclusive }
 }
 
 // ============================================================================
@@ -494,7 +500,14 @@ export function payloadLooksSignable(payload: unknown): boolean {
   const approval = asRecord(env.approvalTxArgs)
   const main = asRecord(env.txArgs)
   if (approval && main) {
-    return legSignable(approval) && legSignable(main)
+    if (!legSignable(approval) || !legSignable(main)) return false
+    // Mirror storeServerTransaction's multi-leg guard: both legs must resolve to
+    // the SAME chain (it rejects a cross-chain 2-leg envelope). If they disagree,
+    // the executor would reject at store time, so it does not "look signable" here.
+    const aChain = str(approval.chain)
+    const mChain = str(main.chain)
+    if (aChain && mChain && aChain !== mChain) return false
+    return true
   }
   return legSignable(env)
 }

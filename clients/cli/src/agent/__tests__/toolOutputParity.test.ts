@@ -82,12 +82,9 @@ describe('diffToolOutputParity — matching payloads', () => {
     expect(canonicalizeForParity(mk())?.legs[0]).toMatchObject({ to: TO, chain: 'Base', chainId: '8453' })
   })
 
-  it('gas_limit difference is advisory — does not break match', () => {
-    const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA } }
-    const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '250000' } }
-    const r = diffToolOutputParity(enriched, txReady)
-    expect(r.match).toBe(true)
-    expect(r.divergences.some(d => d.includes('gasLimit(advisory)'))).toBe(true)
+  it('equal gas_limit on both channels → match', () => {
+    const mk = () => ({ chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '250000' } })
+    expect(diffToolOutputParity(mk(), mk()).match).toBe(true)
   })
 
   it('reports tx_ready-exclusive fields (typed_confirm, sequence_id) without breaking match', () => {
@@ -133,6 +130,22 @@ describe('diffToolOutputParity — real divergences (logged LOUDLY by the sessio
     const r = diffToolOutputParity(single, multi)
     expect(r.match).toBe(false)
     expect(r.divergences.some(d => d.includes('leg count'))).toBe(true)
+  })
+
+  it('flags a gas_limit divergence — it changes the signed EVM gasLimit, not advisory', () => {
+    const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA } }
+    const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '250000' } }
+    const r = diffToolOutputParity(enriched, txReady)
+    expect(r.match).toBe(false)
+    expect(r.divergences.some(d => d.includes('gasLimit'))).toBe(true)
+  })
+
+  it('flags an amount divergence (non-EVM send value must match)', () => {
+    const enriched = { txArgs: { tx_encoding: 'utxo-psbt', to: 'bc1qxyz', amount: '1000' } }
+    const txReady = { txArgs: { tx_encoding: 'utxo-psbt', to: 'bc1qxyz', amount: '2000' } }
+    const r = diffToolOutputParity(enriched, txReady)
+    expect(r.match).toBe(false)
+    expect(r.divergences.some(d => d.includes('amount'))).toBe(true)
   })
 
   it('flags a non-EVM memo divergence (THOR/Maya routing must match)', () => {

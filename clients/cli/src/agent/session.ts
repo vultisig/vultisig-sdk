@@ -22,7 +22,7 @@ import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSumm
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
-import { diffToolOutputParity, payloadLooksSignable } from './toolOutputSigning'
+import { CLI_SIGNABLE_FLAT_TOOLS, diffToolOutputParity, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -720,7 +720,13 @@ export class AgentSession {
     if (txReadyCandidate && payloadLooksSignable(txReadyCandidate)) {
       ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
     }
-    if (toolOutputCandidate) {
+    // ONLY a FLAT tool-output candidate is ever a sign source. `execute_*` PREP
+    // candidates are PARITY-ONLY: the backend suppresses `tx_ready` for a
+    // malformed prep envelope (phantom card, missing tx_encoding — agent.go:8294),
+    // and signing the prep tool-output in that case would defeat that suppression.
+    // (`deriveToolOutputCandidate` already refuses a prep envelope without
+    // tx_encoding; this is the load-bearing second guard.)
+    if (toolOutputCandidate && toolOutputCandidate.source === 'flat') {
       ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
     }
     if (txReadyCandidate && !payloadLooksSignable(txReadyCandidate)) {
@@ -1004,6 +1010,8 @@ export class AgentSession {
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
+    let replayedTxReady = false
+    let signableFlatToolPart: string | undefined
     for (const part of msg.parts ?? []) {
       // Balance-summary cards are read-only display, so replay them
       // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
@@ -1021,7 +1029,29 @@ export class AgentSession {
         const tx = part.data as TxReadyPayload
         streamResult.transactions.push(tx)
         onTxReady?.(tx)
+        replayedTxReady = true
       }
+      // Detect a persisted FLAT signable tool part (polymarket / build_custom_*).
+      // These emit NO `data-tx_ready` — their signable output rides the
+      // tool-output-available channel, which the recovery path does NOT
+      // reconstruct (only `data-tx_ready` is replayed). Track it so we can WARN.
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        const toolName = part.type.slice('tool-'.length)
+        if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) signableFlatToolPart = toolName
+      }
+    }
+    // Phase-1 limitation (widened here past polymarket to the build_custom_*
+    // tools): a mid-turn disconnect on a tool-output-only signable tool cannot
+    // have its client-side candidate reconstructed from the persisted parts, so
+    // the transaction is not signed this turn. Fail-CLOSED (never a wrong sign),
+    // but warn LOUDLY rather than drop it silently — full tool-output replay in
+    // recovery is a follow-up.
+    if (signableFlatToolPart && !replayedTxReady) {
+      process.stderr.write(
+        `[session][recovery] recovered turn ran signable tool '${signableFlatToolPart}', whose signable output ` +
+          `rides tool-output-available (no data-tx_ready). The recovery path does not reconstruct that candidate, ` +
+          `so NO transaction was signed this turn — re-run the request to sign. (Known Phase-1 limitation.)\n`
+      )
     }
   }
 

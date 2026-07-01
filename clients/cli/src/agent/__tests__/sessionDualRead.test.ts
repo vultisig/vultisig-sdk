@@ -22,8 +22,8 @@ const APPROVE_B = '0x095ea7b3' + '1'.repeat(120)
 
 /** A frame descriptor: which channel fires, with which payload. */
 type Frame =
-  | ({ channel: 'tx_ready' } & { payload: unknown })
-  | { channel: 'tool_output'; payload: unknown; toolName: string }
+  | { channel: 'tx_ready'; payload: unknown }
+  | { channel: 'tool_output'; payload: unknown; toolName: string; source?: 'flat' | 'prep' }
 
 function makeHarness(frames: Frame[]) {
   const storeServerTransaction = vi.fn(() => true)
@@ -40,7 +40,7 @@ function makeHarness(frames: Frame[]) {
       if (client.sendMessageStream.mock.calls.length === 1) {
         for (const f of frames) {
           if (f.channel === 'tx_ready') callbacks.onTxReady(f.payload)
-          else callbacks.onToolOutputTx(f.payload, f.toolName, 'flat')
+          else callbacks.onToolOutputTx(f.payload, f.toolName, f.source ?? 'flat')
         }
       }
       return { message: { content: 'ok' }, fullText: '', transactions: [], disconnected: false }
@@ -175,5 +175,16 @@ describe('processMessageLoop — dual-read candidate selection', () => {
     expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
     expect(h.storeServerTransaction).toHaveBeenCalledWith(txReady)
     expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+  })
+
+  it('NEVER signs a PREP candidate, even with no tx_ready (prep is parity-only — phantom-card safety)', async () => {
+    // A source:'prep' tool-output candidate with no tx_ready twin (e.g. the
+    // backend suppressed tx_ready for a phantom-card execute_* envelope) must NOT
+    // be buffered/signed — selectAndBufferSignable only signs source:'flat'.
+    const prep = { txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_A } } }
+    const h = makeHarness([{ channel: 'tool_output', payload: prep, toolName: 'execute_send', source: 'prep' }])
+    await h.run()
+    expect(h.storeServerTransaction).not.toHaveBeenCalled()
+    expect(h.signTxFromBuffer).not.toHaveBeenCalled()
   })
 })

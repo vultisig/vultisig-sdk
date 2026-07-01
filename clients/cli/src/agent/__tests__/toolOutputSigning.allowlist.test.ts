@@ -57,6 +57,32 @@ describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
   })
 })
 
+describe('CLI_SIGNABLE_FLAT_TOOLS — independent anchor vs the mcp-ts source of truth', () => {
+  // Hand-mirrored from the mcp-ts sources (mcp-ts is a separate repo — this is a
+  // MIRROR, not an import; keep it in sync by hand so a drift forces a conscious
+  // reconciliation instead of a silent divergence). Sources:
+  //   evm/erc20-approve.ts:145 (producesCalldata: true) → flat {chain,chain_id,to,value,data}
+  //   payments/build-custom-credit-topup.ts:86, build-credit-pack-topup.ts:98,
+  //   build-max-subscription-renewal.ts:72, build-pro-subscription-renewal.ts:72
+  //     (producesCalldata: true; DIVERGENT to_address/calldata card shape)
+  // Flat tools that DO emit tx_ready (produces_calldata), enriched + parity-checked by the CLI:
+  const MCP_TS_FLAT_PRODUCES_CALLDATA = [
+    'erc20_approve',
+    'build_custom_credit_topup',
+    'build_credit_pack_topup',
+    'build_max_subscription_renewal',
+    'build_pro_subscription_renewal',
+  ] as const
+  // BUILD_TX_EXACT flat builders that set NO producesCalldata (no tx_ready) — the CLI is their
+  // ONLY signer. Sources: polymarket/polymarket-tools.ts (setup_trading:1371, deposit:1872).
+  const MCP_TS_FLAT_NO_TX_READY = [POLYMARKET_DEPOSIT_TOOL, POLYMARKET_SETUP_TRADING_TOOL] as const
+
+  it('equals exactly (mcp-ts flat produces_calldata) ∪ (BUILD_TX_EXACT flat no-tx_ready)', () => {
+    const expected = new Set<string>([...MCP_TS_FLAT_PRODUCES_CALLDATA, ...MCP_TS_FLAT_NO_TX_READY])
+    expect(new Set(CLI_SIGNABLE_FLAT_TOOLS)).toEqual(expected)
+  })
+})
+
 describe('CLI_PARITY_PREP_TOOLS', () => {
   it('contains exactly the execute_* signer-ready prep tools', () => {
     expect([...CLI_PARITY_PREP_TOOLS].sort()).toEqual(['execute_contract_call', 'execute_send', 'execute_swap'])
