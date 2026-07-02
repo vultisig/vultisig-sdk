@@ -71,14 +71,6 @@ const getSolanaTokenProgramId = async (mintAddress: string): Promise<PublicKey> 
   )
 }
 
-export const getSolanaAssociatedTokenAddress = async (mintAddress: string, owner: string): Promise<PublicKey> => {
-  const mintPubkey = new PublicKey(mintAddress)
-  const ownerPubkey = new PublicKey(owner)
-  const tokenProgramId = await getSolanaTokenProgramId(mintAddress)
-
-  return getAssociatedTokenAddressSync(mintPubkey, ownerPubkey, false, tokenProgramId)
-}
-
 /**
  * Checks whether the destination SPL-token ATA exists and, if not, prepends a
  * `createAssociatedTokenAccountIdempotentInstruction` to the LiFi transaction.
