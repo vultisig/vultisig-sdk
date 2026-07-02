@@ -2,6 +2,11 @@ export type JupiterConfig = {
   baseUrl: string
 }
 
+export type JupiterAffiliateConfig = {
+  feeOwner: string
+  baseUrl?: string
+}
+
 /**
  * Vultisig-proxied Jupiter base URL. The proxy injects any required upstream
  * credentials server-side and shields the client from Jupiter rate limits, so
@@ -40,13 +45,13 @@ let jupiterConfig: JupiterConfig = {
  * treated as absent (returns `undefined`) so they fall back to the default
  * rather than producing relative `/swap/v1/...` URLs downstream.
  */
-const normalizeBaseUrl = (value: string | undefined): string | undefined => {
+export const normalizeJupiterBaseUrl = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim().replace(/\/+$/, '')
   return trimmed ? trimmed : undefined
 }
 
 export const configureJupiter = (config: Partial<JupiterConfig>) => {
-  const baseUrl = normalizeBaseUrl(config.baseUrl)
+  const baseUrl = normalizeJupiterBaseUrl(config.baseUrl)
   jupiterConfig = {
     ...jupiterConfig,
     ...(baseUrl ? { baseUrl } : {}),
@@ -55,8 +60,8 @@ export const configureJupiter = (config: Partial<JupiterConfig>) => {
 
 export const getJupiterConfig = (): JupiterConfig => {
   const baseUrl =
-    normalizeBaseUrl(readEnv('JUPITER_BASE_URL')) ??
-    normalizeBaseUrl(readEnv('VULTISIG_JUPITER_BASE_URL')) ??
+    normalizeJupiterBaseUrl(readEnv('JUPITER_BASE_URL')) ??
+    normalizeJupiterBaseUrl(readEnv('VULTISIG_JUPITER_BASE_URL')) ??
     jupiterConfig.baseUrl
 
   return {

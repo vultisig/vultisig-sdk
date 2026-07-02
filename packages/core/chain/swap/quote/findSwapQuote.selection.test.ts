@@ -1,6 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import type { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
@@ -23,6 +24,10 @@ vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => (
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote', () => ({
+  getJupiterSwapQuote: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote', () => ({
@@ -66,7 +71,10 @@ const evmSameChainCoins = {
   },
 } as const
 
-function minimalGeneralQuote(dstAmount: string, provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi'): GeneralSwapQuote {
+function minimalGeneralQuote(
+  dstAmount: string,
+  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi' | 'jupiter'
+): GeneralSwapQuote {
   const base = {
     dstAmount,
     tx: {
@@ -100,6 +108,8 @@ describe('findSwapQuote parallel selection', () => {
   beforeEach(() => {
     vi.mocked(getCowSwapQuote).mockReset()
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
+    vi.mocked(getJupiterSwapQuote).mockReset()
+    vi.mocked(getJupiterSwapQuote).mockRejectedValue(new Error('skip jupiter'))
     vi.mocked(getKyberSwapQuote).mockReset()
     vi.mocked(getOneInchSwapQuote).mockReset()
     vi.mocked(getLifiSwapQuote).mockReset()
@@ -289,6 +299,66 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('swapkit')
   })
 
+  it('selects Jupiter for same-chain Solana quotes when LiFi only beats it within the preference band', async () => {
+    const solanaSameChainCoins = {
+      from: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        decimals: 9,
+        ticker: 'SOL',
+      },
+      to: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6,
+        ticker: 'USDC',
+      },
+    } as const
+
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getJupiterSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'jupiter'))
+
+    const quote = await findSwapQuote({ ...solanaSameChainCoins, amount: 100000000n })
+
+    expect('general' in quote.quote).toBe(true)
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('jupiter')
+    expect(getJupiterSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        affiliateBps: 50,
+      })
+    )
+  })
+
+  it('does not register Jupiter for cross-chain Solana routes', async () => {
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    await findSwapQuote({
+      from: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        decimals: 9,
+        ticker: 'SOL',
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        decimals: 18,
+        ticker: 'ETH',
+      },
+      amount: 100000000n,
+    })
+
+    expect(getJupiterSwapQuote).not.toHaveBeenCalled()
+  })
+
   it('when all providers fail, reports every attempted provider', async () => {
     const mayaError = 'maya last error'
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
@@ -347,6 +417,33 @@ describe('findSwapQuote parallel selection', () => {
         amount: 1n,
       })
     ).rejects.toThrow('Amount below the minimum required by a swap provider.')
+  })
+
+  it('prefers a same-chain Solana Jupiter below-minimum message over LiFi', async () => {
+    const solanaSameChainCoins = {
+      from: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        decimals: 9,
+        ticker: 'SOL',
+      },
+      to: {
+        chain: Chain.Solana,
+        address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+        id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6,
+        ticker: 'USDC',
+      },
+    } as const
+
+    vi.mocked(getJupiterSwapQuote).mockRejectedValue(new Error('Jupiter minimum amount is 0.01 SOL'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('LiFi minimum amount is 0.02 SOL'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+
+    await expect(findSwapQuote({ ...solanaSameChainCoins, amount: 1n })).rejects.toThrow(
+      'Jupiter minimum amount is 0.01 SOL'
+    )
   })
 
   it('omits noisy provider errors from the all-fail message', async () => {

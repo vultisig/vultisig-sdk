@@ -11,6 +11,8 @@ vi.mock('./jupiterFeeAta', () => ({
 
 const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const feeOwner = '8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z'
+const customFeeOwner = 'CustomFeeOwner111111111111111111111111111111'
+const customBaseUrl = 'https://jupiter-proxy.example/jup'
 const feeAccount = 'FeeAtaAddr1111111111111111111111111111111111'
 
 const solNative = {
@@ -97,6 +99,37 @@ describe('getJupiterSwapQuote', () => {
     expect(quote.provider).toBe('jupiter')
     expect(quote.dstAmount).toBe('1000000')
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('prepended-base64-tx')
+  })
+
+  it('uses per-call Jupiter affiliate config overrides', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        feeOwner: customFeeOwner,
+        baseUrl: `${customBaseUrl}//`,
+      },
+    })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url.startsWith(`${customBaseUrl}/swap/v1/quote`)).toBe(true)
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner: customFeeOwner })
+  })
+
+  it('falls back to the default fee owner when the per-call override is blank', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        feeOwner: '   ',
+      },
+    })
+
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
   })
 
   it('omits the platform fee entirely when affiliateBps is 0', async () => {
