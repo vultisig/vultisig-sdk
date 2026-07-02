@@ -118,6 +118,20 @@ describe('getJupiterSwapQuote', () => {
     expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner: customFeeOwner })
   })
 
+  it('falls back to the default fee owner when the per-call override is blank', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        feeOwner: '   ',
+      },
+    })
+
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
+  })
+
   it('omits the platform fee entirely when affiliateBps is 0', async () => {
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
 

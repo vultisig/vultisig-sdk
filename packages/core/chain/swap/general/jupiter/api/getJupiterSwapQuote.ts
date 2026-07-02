@@ -90,7 +90,7 @@ export const getJupiterSwapQuote = async ({
 }: Input): Promise<GeneralSwapQuote> => {
   const { baseUrl: configuredBaseUrl } = getJupiterConfig()
   const baseUrl = normalizeJupiterBaseUrl(jupiterConfig?.baseUrl) ?? configuredBaseUrl
-  const feeOwner = jupiterConfig?.feeOwner ?? jupiterFeeOwnerAddress
+  const feeOwner = jupiterConfig?.feeOwner.trim() || jupiterFeeOwnerAddress
 
   const inputMint = mintFor(from)
   const outputMint = mintFor(to)
