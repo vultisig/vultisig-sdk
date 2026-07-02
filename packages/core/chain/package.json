@@ -680,6 +680,11 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/solana/staking/apyResolver": {
+      "types": "./dist/chains/solana/staking/apyResolver.d.ts",
+      "import": "./dist/chains/solana/staking/apyResolver.js",
+      "default": "./dist/chains/solana/staking/apyResolver.js"
+    },
     "./chains/solana/staking/config": {
       "types": "./dist/chains/solana/staking/config.d.ts",
       "import": "./dist/chains/solana/staking/config.js",
