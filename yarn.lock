@@ -6032,12 +6032,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@trustwallet/wallet-core@npm:^4.6.15":
-  version: 4.6.15
-  resolution: "@trustwallet/wallet-core@npm:4.6.15"
+"@trustwallet/wallet-core@npm:^4.7.0":
+  version: 4.7.0
+  resolution: "@trustwallet/wallet-core@npm:4.7.0"
   dependencies:
     protobufjs: "npm:>=6.11.3"
-  checksum: 10c0/d1452f9833af2e2ad8d5ad69cdbe77a0ced70f658442727d9266a3e23b1cb3c7addc0acf462f2637599106c2c81f8a1f416c0d5a03446fe4204a00f07c58513d
+  checksum: 10c0/b40814760940e40f2a907364440c70be6b2d2dcdb5be2ef270ffc66909642d07dcdb24d644f750ccabfe5dfd5a8756cce95ae24ea88c442adfaf633b700f6ef3
   languageName: node
   linkType: hard
 
@@ -6960,7 +6960,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-chain@npm:2.22.1, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
+"@vultisig/core-chain@npm:2.22.2, @vultisig/core-chain@workspace:^, @vultisig/core-chain@workspace:packages/core/chain":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
@@ -6980,7 +6980,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.6.15"
+    "@trustwallet/wallet-core": "npm:^4.7.0"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-utils": "npm:0.10.4"
     bip32: "npm:^5.0.1"
@@ -7013,8 +7013,8 @@ __metadata:
     "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@solana/web3.js": "npm:^1.98.4"
-    "@trustwallet/wallet-core": "npm:^4.6.15"
-    "@vultisig/core-chain": "npm:2.22.1"
+    "@trustwallet/wallet-core": "npm:^4.7.0"
+    "@vultisig/core-chain": "npm:2.22.2"
     "@vultisig/core-config": "npm:0.9.1"
     "@vultisig/lib-dkls": "npm:0.9.0"
     "@vultisig/lib-mldsa": "npm:0.9.0"
@@ -7197,7 +7197,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=2.13.1"
+    "@vultisig/sdk": ">=2.13.2"
   languageName: unknown
   linkType: soft
 
@@ -7234,7 +7234,7 @@ __metadata:
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
-    "@trustwallet/wallet-core": "npm:^4.6.15"
+    "@trustwallet/wallet-core": "npm:^4.7.0"
     "@types/chrome": "npm:^0.2.0"
     "@types/events": "npm:^3"
     "@types/node": "npm:^26.0.0"
