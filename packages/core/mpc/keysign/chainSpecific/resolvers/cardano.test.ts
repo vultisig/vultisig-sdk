@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { Chain } from '@vultisig/core-chain/Chain'
 
 import { getCardanoSigningInputs } from '../../signingInputs/resolvers/cardano'
-import { buildCip20AuxData, patchTxBodyWithAuxHash } from '../../../tx/compile/cardano/buildCip20AuxData'
+import { buildCip20AuxData } from '../../../tx/compile/cardano/buildCip20AuxData'
 import { buildSignedCardanoTx } from '../../../tx/compile/cardano/buildSignedCardanoTx'
 import { CardanoChainSpecific } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
@@ -107,10 +107,11 @@ const calculateFinalSignedTxFee = async ({
     return CARDANO_A_PARAM * BigInt(signedTx.length) + CARDANO_B_PARAM
   }
 
-  const { auxDataCbor, auxDataHash } = buildCip20AuxData(keysignPayload.memo)
-  const patchedTxBodyCbor = patchTxBodyWithAuxHash(preOutput.data, auxDataHash)
+  // WalletCore already committed the aux hash into the body (key 7) from
+  // SigningInput.auxiliary_data, so use it as-is and embed the aux-data bytes.
+  const { auxDataCbor } = buildCip20AuxData(keysignPayload.memo)
   const signedTx = buildSignedCardanoTx({
-    txBodyCbor: patchedTxBodyCbor,
+    txBodyCbor: preOutput.data,
     publicKey: publicKeyBytes,
     signature,
     auxDataCbor,
