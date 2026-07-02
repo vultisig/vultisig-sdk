@@ -199,6 +199,10 @@ export async function coordinateMultiPartySigning(
     throw new Error('No message hashes provided for signing')
   }
 
+  if (signatureAlgorithm === 'mldsa') {
+    throw new Error('SecureVault multi-party signing helper does not support ML-DSA key shares')
+  }
+
   // All participating party IDs
   const allPartyIds = shares.map(s => s.localPartyId)
 
