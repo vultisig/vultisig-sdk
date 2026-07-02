@@ -65,19 +65,27 @@ export const onChainApy = ({
 }
 
 /**
- * Resolves the APY fraction for `validator`. `metadataApy` is the Stakewiz
- * passthrough when present; `inflationRate` / `totalSupplyLamports` drive the
- * on-chain fallback. `totalActivatedStake` defaults to the validator's own
- * activated stake.
+ * Resolves the APY fraction for `validator`. The Stakewiz `apyEstimate` is the
+ * preferred value when present; otherwise the on-chain fallback derives it from
+ * `inflationRate`, `totalSupplyLamports`, and `totalActivatedStake`.
+ *
+ * `totalActivatedStake` is the NETWORK-wide total activated stake (the
+ * `fractionStaked` denominator numerator), NOT this validator's own
+ * `activatedStake` — feeding a single validator's stake would collapse
+ * `fractionStaked` and explode the APY. Compute it once from the full validator
+ * set via `networkActivatedStake` and pass it in (mirrors iOS, which threads the
+ * summed validator-set stake through as `totalActivatedStake`).
  */
 export const resolveValidatorApy = ({
   validator,
   inflationRate,
   totalSupplyLamports,
+  totalActivatedStake,
 }: {
   validator: SolanaValidator
   inflationRate: number | undefined
   totalSupplyLamports: number | undefined
+  totalActivatedStake: number
 }): number | undefined => {
   const metadataApy = validator.metadata.apyEstimate
   if (metadataApy !== undefined && metadataApy > 0) {
@@ -86,7 +94,7 @@ export const resolveValidatorApy = ({
   return onChainApy({
     inflationRate,
     commission: validator.commission,
-    totalActivatedStake: validator.activatedStake,
+    totalActivatedStake,
     totalSupplyLamports,
   })
 }

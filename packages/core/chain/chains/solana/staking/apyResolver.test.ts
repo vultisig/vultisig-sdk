@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { onChainApy, resolveValidatorApy } from './apyResolver'
-import { SolanaValidator } from './models/validator'
+import { networkActivatedStake, SolanaValidator } from './models/validator'
 
 const validator = (overrides?: Partial<SolanaValidator>): SolanaValidator => ({
   votePubkey: 'V',
@@ -14,12 +14,16 @@ const validator = (overrides?: Partial<SolanaValidator>): SolanaValidator => ({
   ...overrides,
 })
 
+// Network total activated stake for the 50%-staked scenario (supply 2e12).
+const networkStaked = 1_000_000_000_000
+
 describe('resolveValidatorApy', () => {
   it('prefers the Stakewiz metadata estimate when present', () => {
     const apy = resolveValidatorApy({
       validator: validator({ metadata: { apyEstimate: 0.072 } }),
       inflationRate: 0.08,
       totalSupplyLamports: 2_000_000_000_000,
+      totalActivatedStake: networkStaked,
     })
     expect(apy).toBe(0.072)
   })
@@ -29,8 +33,26 @@ describe('resolveValidatorApy', () => {
       validator: validator(),
       inflationRate: 0.08,
       totalSupplyLamports: 2_000_000_000_000, // 50% staked
+      totalActivatedStake: networkStaked,
     })
     expect(apy).toBeGreaterThan(0)
+    // Sane range — the fallback must use the NETWORK total, not a single
+    // validator's stake (which would collapse fractionStaked and explode APY).
+    expect(apy).toBeLessThan(1)
+  })
+
+  it('uses the network total, not the validator stake, for the fallback', () => {
+    // A validator holding a tiny slice of a large network: its own
+    // `activatedStake` as the denominator would yield an absurd APY; the
+    // network total keeps it sane.
+    const apy = resolveValidatorApy({
+      validator: validator({ activatedStake: 1_000_000_000 }),
+      inflationRate: 0.08,
+      totalSupplyLamports: 2_000_000_000_000,
+      totalActivatedStake: networkStaked,
+    })
+    expect(apy).toBeGreaterThan(0)
+    expect(apy).toBeLessThan(1)
   })
 
   it('returns undefined when neither source yields a value', () => {
@@ -39,8 +61,25 @@ describe('resolveValidatorApy', () => {
         validator: validator(),
         inflationRate: undefined,
         totalSupplyLamports: undefined,
+        totalActivatedStake: networkStaked,
       })
     ).toBeUndefined()
+  })
+})
+
+describe('networkActivatedStake', () => {
+  it('sums activated stake across the validator set', () => {
+    expect(
+      networkActivatedStake([
+        validator({ activatedStake: 1_000_000_000 }),
+        validator({ activatedStake: 2_500_000_000 }),
+        validator({ activatedStake: 0 }),
+      ])
+    ).toBe(3_500_000_000)
+  })
+
+  it('is zero for an empty set', () => {
+    expect(networkActivatedStake([])).toBe(0)
   })
 })
 
