@@ -4,7 +4,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import {
   getJupiterConfig,
-  JupiterAffiliateConfig,
+  type JupiterAffiliateConfig,
   jupiterFeeOwnerAddress,
   normalizeJupiterBaseUrl,
 } from '@vultisig/core-chain/swap/general/jupiter/config'
@@ -74,11 +74,12 @@ const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
  * payload the keysign pipeline expects.
  *
  * Affiliate fee: when `affiliateBps > 0`, `platformFeeBps` is sent on the quote.
- * The fee ATA (output mint, owner = `jupiterFeeOwnerAddress`) is derived, passed
- * to `/swap` as `feeAccount`, and an idempotent create instruction is prepended
- * to the returned transaction only when the quote actually returns a non-zero
- * `platformFee.amount`. When `affiliateBps` is 0 (e.g. an Ultimate-tier VULT
- * holder) or Jupiter floors the fee to zero, no fee account is touched.
+ * The fee ATA (output mint, owner = `jupiterConfig.feeOwner` or
+ * `jupiterFeeOwnerAddress`) is derived, passed to `/swap` as `feeAccount`, and
+ * an idempotent create instruction is prepended to the returned transaction
+ * only when the quote actually returns a non-zero `platformFee.amount`. When
+ * `affiliateBps` is 0 (e.g. an Ultimate-tier VULT holder) or Jupiter floors the
+ * fee to zero, no fee account is touched.
  */
 export const getJupiterSwapQuote = async ({
   from,
@@ -90,7 +91,7 @@ export const getJupiterSwapQuote = async ({
 }: Input): Promise<GeneralSwapQuote> => {
   const { baseUrl: configuredBaseUrl } = getJupiterConfig()
   const baseUrl = normalizeJupiterBaseUrl(jupiterConfig?.baseUrl) ?? configuredBaseUrl
-  const feeOwner = jupiterConfig?.feeOwner.trim() || jupiterFeeOwnerAddress
+  const feeOwner = jupiterConfig?.feeOwner?.trim() || jupiterFeeOwnerAddress
 
   const inputMint = mintFor(from)
   const outputMint = mintFor(to)

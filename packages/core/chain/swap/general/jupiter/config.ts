@@ -3,7 +3,17 @@ export type JupiterConfig = {
 }
 
 export type JupiterAffiliateConfig = {
-  feeOwner: string
+  /**
+   * Solana wallet that owns Jupiter affiliate fee token accounts.
+   *
+   * The per-swap `feeAccount` is derived as this owner's ATA for the quoted
+   * output mint. Omit this config to use Vultisig's default fee owner.
+   */
+  feeOwner?: string
+  /**
+   * Optional per-call Jupiter proxy/API base URL. Blank values are ignored so
+   * callers fall back to the configured default.
+   */
   baseUrl?: string
 }
 
