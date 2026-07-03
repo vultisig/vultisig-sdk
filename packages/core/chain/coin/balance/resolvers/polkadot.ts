@@ -56,6 +56,16 @@ const decodePolkadotPublicKey = (address: string): Uint8Array => {
   return payload.subarray(1)
 }
 
+const readU128LE = (hex: string, byteOffset: number, label: string): bigint => {
+  const start = byteOffset * 2
+  const valueHex = hex.slice(start, start + 32)
+  const leBytes = valueHex.match(/.{2}/g)
+  if (!leBytes || leBytes.length !== 16) {
+    throw new Error(`Failed to parse ${label} balance hex: ${valueHex}`)
+  }
+  return BigInt('0x' + leBytes.reverse().join(''))
+}
+
 // Storage key: assetsAccountPrefix
 //   + blake2_128_concat(le_u32(assetId))   — 16-byte hash + 4-byte raw
 //   + blake2_128_concat(accountId_32bytes)  — 16-byte hash + 32-byte raw
@@ -144,18 +154,15 @@ export const getPolkadotCoinBalance: CoinBalanceResolver = async input => {
   // SCALE AccountInfo layout (frame_system + pallet_balances v47):
   //   nonce(u32) + consumers(u32) + providers(u32) + sufficients(u32)
   //   + AccountData { free(u128), reserved(u128), frozen(u128), flags(u128) }
-  // free is always at byte offset 16, length 16, encoded LE — stable across the
-  // misc_frozen/fee_frozen → frozen/flags migration, since `free` is always the
-  // first AccountData field.
+  // Native send max paths need spendable funds, not total free funds. Frozen
+  // locks do not reduce `free`, but they do reduce transferable balance.
   const hex = result.startsWith('0x') ? result.slice(2) : result
-  if (hex.length < 64 || !/^[0-9a-fA-F]+$/.test(hex)) {
+  if (hex.length < 128 || !/^[0-9a-fA-F]+$/.test(hex)) {
     throw new Error(`Unexpected storage response format: ${result}`)
   }
-  const freeHex = hex.slice(32, 64)
 
-  const leBytes = freeHex.match(/.{2}/g)
-  if (!leBytes) {
-    throw new Error(`Failed to parse free balance hex: ${freeHex}`)
-  }
-  return BigInt('0x' + leBytes.reverse().join(''))
+  const free = readU128LE(hex, 16, 'free')
+  const frozen = readU128LE(hex, 48, 'frozen')
+
+  return free > frozen ? free - frozen : 0n
 }

@@ -13,6 +13,32 @@ import { getPolkadotCoinBalance } from './polkadot'
 // Public key: d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
 const VALID_DOT_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5'
 
+const u128LE = (value: bigint): string => {
+  const bytes = Array.from({ length: 16 }, (_, index) =>
+    ((value >> BigInt(index * 8)) & 0xffn).toString(16).padStart(2, '0')
+  )
+  return bytes.join('')
+}
+
+const buildSystemAccountHex = ({
+  free,
+  reserved = 0n,
+  frozen = 0n,
+}: {
+  free: bigint
+  reserved?: bigint
+  frozen?: bigint
+}): string =>
+  '0x' +
+  '00000000' + // nonce
+  '00000000' + // consumers
+  '01000000' + // providers
+  '00000000' + // sufficients
+  u128LE(free) +
+  u128LE(reserved) +
+  u128LE(frozen) +
+  u128LE(0n)
+
 // Storage key verification (computed offline via @polkadot/util-crypto + @noble/hashes):
 //
 //   twox128("Assets")  = 682a59d51ab9e48a8c8cc418ff9708d2
@@ -214,23 +240,13 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     queryUrlMock.mockReset()
   })
 
-  it('queries relay chain RPC for native DOT (no id present)', async () => {
+  it('queries relay chain RPC for native spendable DOT (no id present)', async () => {
     // SCALE-encoded AccountInfo with free balance = 1_000_000_000_000n (1 DOT)
     // Layout: nonce(u32=0) + consumers(u32=0) + providers(u32=1) + sufficients(u32=0)
     //         + free(u128) + reserved(u128) + frozen(u128) + flags(u128)
     // free = 1_000_000_000_000 = 0x000000E8D4A51000 LE-encoded in 16 bytes:
     //   LE bytes: 00 10 A5 D4 E8 00 00 00 00 00 00 00 00 00 00 00
-    const freeLE = '0010a5d4e80000000000000000000000'
-    const fakeResult =
-      '0x' +
-      '00000000' + // nonce
-      '00000000' + // consumers
-      '01000000' + // providers
-      '00000000' + // sufficients
-      freeLE + // free (16 bytes LE)
-      '00000000000000000000000000000000' + // reserved
-      '00000000000000000000000000000000' + // frozen
-      '00000000000000000000000000000000' // flags
+    const fakeResult = buildSystemAccountHex({ free: 1_000_000_000_000n })
 
     queryUrlMock.mockResolvedValue({ result: fakeResult })
 
@@ -252,6 +268,39 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     expect(storageKey.startsWith('0x26aa394eea5630e07c48ae0c9558cef7')).toBe(true)
 
     expect(balance).toBe(1_000_000_000_000n)
+  })
+
+  it('subtracts frozen locks from native DOT spendable balance', async () => {
+    queryUrlMock.mockResolvedValue({
+      result: buildSystemAccountHex({
+        free: 1_000_000_000_000n,
+        reserved: 50_000_000_000n,
+        frozen: 300_000_000_000n,
+      }),
+    })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+    })
+
+    expect(balance).toBe(700_000_000_000n)
+  })
+
+  it('clamps native DOT spendable balance to zero when frozen exceeds free', async () => {
+    queryUrlMock.mockResolvedValue({
+      result: buildSystemAccountHex({
+        free: 1_000_000_000n,
+        frozen: 2_000_000_000n,
+      }),
+    })
+
+    const balance = await getPolkadotCoinBalance({
+      chain: Chain.Polkadot,
+      address: VALID_DOT_ADDRESS,
+    })
+
+    expect(balance).toBe(0n)
   })
 
   it('returns 0n for a null RPC result (empty account)', async () => {
