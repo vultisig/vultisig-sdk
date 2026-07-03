@@ -12,6 +12,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { toBaseUnits } from '../../../src/utils/convertAmount'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -20,21 +21,18 @@ import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 // ---------------------------------------------------------------------------
 
 function parseAmount(amount: string, decimals: number): bigint {
-  if (!amount || amount.trim() === '') {
-    throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
-  }
-
-  const trimmed = amount.trim()
-  const num = Number(trimmed)
-  if (isNaN(num) || num <= 0) {
+  const trimmed = amount?.trim()
+  if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
+  let chainAmount: bigint
+  try {
+    chainAmount = BigInt(toBaseUnits(trimmed, decimals))
+  } catch {
     throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
   }
-
-  const [whole, fraction = ''] = trimmed.split('.')
-  const paddedFraction = fraction.padEnd(decimals, '0').slice(0, decimals)
-  const combined = whole + paddedFraction
-
-  return BigInt(combined)
+  if (chainAmount <= 0n) {
+    throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+  }
+  return chainAmount
 }
 
 function formatUnits(value: bigint, decimals: number): string {
@@ -202,6 +200,24 @@ describe('parseAmount (private helper)', () => {
 
   it('should throw InvalidAmount for non-numeric input', () => {
     expect(() => parseAmount('abc', 18)).toThrow(VaultError)
+  })
+
+  it('should reject hex-looking amount input', () => {
+    expect(() => parseAmount('0x10', 18)).toThrow(VaultError)
+    try {
+      parseAmount('0x10', 18)
+    } catch (e) {
+      expect((e as VaultError).code).toBe(VaultErrorCode.InvalidAmount)
+    }
+  })
+
+  it('should reject scientific-notation amount input', () => {
+    expect(() => parseAmount('1e5', 18)).toThrow(VaultError)
+    try {
+      parseAmount('1e5', 18)
+    } catch (e) {
+      expect((e as VaultError).code).toBe(VaultErrorCode.InvalidAmount)
+    }
   })
 
   it('should throw with InvalidAmount error code', () => {
