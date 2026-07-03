@@ -164,6 +164,29 @@ describe('processMessageLoop — dual-read candidate selection', () => {
     expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
     expect(h.storeServerTransaction).toHaveBeenCalledWith(txReady)
     expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+    // A parity TWIN (same tx on both channels) is dropped SILENTLY — no deferral.
+    expect(h.ui.onNotification).not.toHaveBeenCalled()
+  })
+
+  it('signs the tx_ready but DEFERS (never silently drops) a DISTINCT flat tool-output candidate in the same turn', async () => {
+    // Cross-channel first-wins gap (round-2 Codex+correctness convergence): a flat
+    // tool-output-only signable (polymarket) arrives in the SAME turn as an
+    // UNRELATED signable tx_ready. Only one payload signs per turn — the tx_ready
+    // is authoritative — but the DISTINCT flat candidate must be REPORTED as
+    // deferred, never silently dropped (a user-requested fund action must not vanish).
+    const unrelatedTxReady = { chain: 'Polygon', chain_id: '137', tx: { to: ROUTER, value: '0', data: APPROVE_B } }
+    expect(payloadLooksSignable(unrelatedTxReady)).toBe(true)
+    const h = makeHarness([
+      { channel: 'tool_output', payload: TX_A, toolName: POLYMARKET_SETUP_TRADING_TOOL },
+      { channel: 'tx_ready', payload: unrelatedTxReady },
+    ])
+    await h.run()
+    // tx_ready (authoritative) signs.
+    expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
+    expect(h.storeServerTransaction).toHaveBeenCalledWith(unrelatedTxReady)
+    expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+    // …and the distinct flat candidate is DEFERRED (not silently dropped).
+    expect(h.ui.onNotification).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to the tool-output candidate when tx_ready is structurally UNSIGNABLE (build_custom_* shape)', async () => {

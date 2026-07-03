@@ -95,11 +95,21 @@ describe('diffToolOutputParity — matching payloads', () => {
     expect(diffToolOutputParity(enriched, txReady).match).toBe(true)
   })
 
-  it('hex gas_limit differing in magnitude from decimal → divergence caught (no blind spot)', () => {
-    // Regression for the parity gas blind spot: hex used to canonicalize to
-    // undefined on BOTH sides, masking a real hex-vs-decimal magnitude divergence.
+  it('hex gas_limit differing in magnitude from decimal → divergence caught', () => {
     const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '0x5208' } } // 21000
     const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '30000' } }
+    const r = diffToolOutputParity(enriched, txReady)
+    expect(r.match).toBe(false)
+    expect(r.divergences.some(d => d.includes('gasLimit'))).toBe(true)
+  })
+
+  it('BOTH sides hex, differing magnitude → divergence caught (the real blind-spot regression)', () => {
+    // The precise regression the parity gas fix closes: the OLD normalizeGasLimit
+    // reduced BOTH hex sides to `undefined`, and `undefined === undefined` was NOT
+    // flagged — so `0x5208` (21000) vs `0x7530` (30000) FALSELY reported match.
+    // canonGasLimit reduces both to a decimal magnitude, so the divergence surfaces.
+    const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '0x5208' } } // 21000
+    const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '0x7530' } } // 30000
     const r = diffToolOutputParity(enriched, txReady)
     expect(r.match).toBe(false)
     expect(r.divergences.some(d => d.includes('gasLimit'))).toBe(true)

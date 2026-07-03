@@ -638,7 +638,7 @@ export class AgentSession {
     // `tx_ready` is authoritative; else the client tool-output candidate). One
     // signable tx per turn — multi-leg approve→main runs within signMultiLeg;
     // multi-step flows advance across turns via the recursion below.
-    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, toolOutputCandidate)
+    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, toolOutputCandidate, ui)
     if (bufferedSignable) {
       if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
@@ -708,12 +708,14 @@ export class AgentSession {
    */
   private selectAndBufferSignable(
     txReadyCandidate: TxReadyPayload | null,
-    toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null
+    toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null,
+    ui: UICallbacks
   ): boolean {
     // Parity cross-check (Phase-1 deliverable): both channels produced a payload
     // for this turn — prove the client-side port against the live backend.
+    let parityMatched = false
     if (txReadyCandidate && toolOutputCandidate) {
-      this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
+      parityMatched = this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
     }
 
     const ordered: Array<{ surface: 'tx_ready' | 'tool_output'; payload: TxReadyPayload }> = []
@@ -740,6 +742,17 @@ export class AgentSession {
           const both = txReadyCandidate && toolOutputCandidate ? 'both channels' : 'single channel'
           process.stderr.write(`[session] buffered signable from ${surface} (${both})\n`)
         }
+        // Cross-channel first-wins gap: when we sign the `tx_ready` but a DISTINCT
+        // FLAT tool-output candidate is also present and did NOT match parity, the
+        // two are different transactions (e.g. an `execute_send` tx_ready alongside
+        // an unrelated `polymarket_deposit` flat output in one turn), NOT a twin.
+        // Only ONE payload signs per turn, so the flat candidate goes unsigned —
+        // report it as DEFERRED (never SILENTLY drop a user-requested fund action;
+        // it re-emerges next turn). A parity TWIN (erc20_approve: flat + its own
+        // tx_ready, parityMatched) is the SAME tx and is correctly dropped silently.
+        if (surface === 'tx_ready' && toolOutputCandidate?.source === 'flat' && !parityMatched) {
+          this.reportDeferredSignable(ui)
+        }
         return true
       }
     }
@@ -756,7 +769,7 @@ export class AgentSession {
   private logToolOutputParity(
     toolOutput: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' },
     txReady: TxReadyPayload
-  ): void {
+  ): boolean {
     const result = diffToolOutputParity(toolOutput.payload, txReady)
     const exclusive = result.txReadyExclusive.length
       ? ` | tx_ready-exclusive: ${result.txReadyExclusive.join(',')}`
@@ -767,11 +780,12 @@ export class AgentSession {
           `[parity] ${toolOutput.toolName} (${toolOutput.source}): tool-output == tx_ready ✓${exclusive}\n`
         )
       }
-      return
+      return true
     }
     process.stderr.write(
       `[parity][DIVERGENCE] ${toolOutput.toolName} (${toolOutput.source}): tool-output != tx_ready — ${result.divergences.join('; ')}${exclusive}\n`
     )
+    return false
   }
 
   /**
