@@ -4,6 +4,7 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { broadcastTx as coreBroadcastTx } from '@vultisig/core-chain/tx/broadcast'
 import { getTxHash } from '@vultisig/core-chain/tx/hash'
+import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
 import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
@@ -53,7 +54,11 @@ const extractResolverTxHash = (broadcastResult: unknown): string | undefined => 
 export class BroadcastService {
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
-    private wasmProvider: WasmProvider
+    private wasmProvider: WasmProvider,
+    private confirmationOptions: {
+      approvalConfirmationTimeoutMs?: number
+      approvalConfirmationIntervalMs?: number
+    } = {}
   ) {}
 
   /**
@@ -125,7 +130,9 @@ export class BroadcastService {
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
-      for (const txInputData of txInputsArray) {
+      const shouldConfirmApprovalFirst = !!keysignPayload.erc20ApprovePayload && txInputsArray.length > 1
+
+      for (const [index, txInputData] of txInputsArray.entries()) {
         const compiledTx = compileTx({
           publicKey,
           txInputData,
@@ -147,6 +154,10 @@ export class BroadcastService {
         })
 
         txHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+
+        if (shouldConfirmApprovalFirst && index === 0) {
+          await this.waitForConfirmation(chain, txHash)
+        }
       }
 
       return txHash
@@ -157,5 +168,32 @@ export class BroadcastService {
         error instanceof Error ? error : new Error(String(error))
       )
     }
+  }
+
+  private async waitForConfirmation(chain: Chain, txHash: string): Promise<void> {
+    const timeoutMs = this.confirmationOptions.approvalConfirmationTimeoutMs ?? 60_000
+    const intervalMs = this.confirmationOptions.approvalConfirmationIntervalMs ?? 3_000
+    const deadline = Date.now() + timeoutMs
+    let lastError: unknown
+
+    while (Date.now() <= deadline) {
+      const result = await getTxStatus({ chain, hash: txHash }).catch(error => {
+        lastError = error
+        return undefined
+      })
+
+      if (result?.status === 'success') return
+      if (result?.status === 'error') {
+        throw new Error(`Approval tx failed: ${txHash}`)
+      }
+
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) break
+
+      await new Promise(resolve => setTimeout(resolve, Math.min(intervalMs, remainingMs)))
+    }
+
+    const suffix = lastError instanceof Error ? ` Last status error: ${lastError.message}` : ''
+    throw new Error(`Approval tx not confirmed within ${timeoutMs / 1000}s: ${txHash}.${suffix}`)
   }
 }
