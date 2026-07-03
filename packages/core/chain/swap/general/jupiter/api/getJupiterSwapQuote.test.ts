@@ -132,6 +132,22 @@ describe('getJupiterSwapQuote', () => {
     expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
   })
 
+  it('allows overriding only the per-call Jupiter base URL', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        baseUrl: `${customBaseUrl}//`,
+      },
+    })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url.startsWith(`${customBaseUrl}/swap/v1/quote`)).toBe(true)
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
+  })
+
   it('omits the platform fee entirely when affiliateBps is 0', async () => {
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
 
@@ -169,7 +185,13 @@ describe('getJupiterSwapQuote', () => {
       })
     )
 
-    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+    const quote = await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: { feeOwner: customFeeOwner },
+    })
 
     // The fee was still requested on the quote...
     const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
