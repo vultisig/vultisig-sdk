@@ -1,14 +1,15 @@
-import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
-import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
-import { getEvmCoinBalance } from '@vultisig/core-chain/coin/balance/resolvers/evm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { EvmChain } from '../../Chain'
+import { getEvmChainBalances } from './getEvmChainBalances'
+import { getEvmCoinBalance } from './resolvers/evm'
 
 vi.mock('@vultisig/core-chain/chains/evm/client', () => ({
   getEvmClient: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/coin/balance/resolvers/evm', () => ({
+vi.mock('./resolvers/evm', () => ({
   getEvmCoinBalance: vi.fn(),
 }))
 
@@ -21,7 +22,7 @@ const usdc = '0x00000000000000000000000000000000000000bb'
 const badToken = '0x00000000000000000000000000000000000000cc'
 
 describe('getEvmChainBalances', () => {
-  it('fetches native and ERC20 balances in one multicall and decodes failed calls as zero', async () => {
+  it('fetches native and ERC20 balances in one multicall and retries failed calls with the per-coin resolver', async () => {
     const multicall = vi.fn().mockResolvedValue([
       { status: 'success', result: 10n },
       { status: 'success', result: 20n },
@@ -35,6 +36,7 @@ describe('getEvmChainBalances', () => {
       },
       multicall,
     } as any)
+    vi.mocked(getEvmCoinBalance).mockResolvedValueOnce(30n)
 
     const balances = await getEvmChainBalances({
       chain: EvmChain.Ethereum,
@@ -69,10 +71,16 @@ describe('getEvmChainBalances', () => {
         ],
       })
     )
+    expect(getEvmCoinBalance).toHaveBeenCalledTimes(1)
+    expect(getEvmCoinBalance).toHaveBeenCalledWith({
+      chain: EvmChain.Ethereum,
+      address,
+      id: badToken,
+    })
     expect(balances).toEqual({
       [`${EvmChain.Ethereum}:${address}`]: 10n,
       [`${EvmChain.Ethereum}:${usdc}:${address}`]: 20n,
-      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 0n,
+      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 30n,
     })
   })
 
@@ -80,7 +88,7 @@ describe('getEvmChainBalances', () => {
     vi.mocked(getEvmClient).mockReturnValue({
       chain: { contracts: {} },
     } as any)
-    vi.mocked(getEvmCoinBalance).mockResolvedValueOnce(11n).mockRejectedValueOnce(new Error('bad token'))
+    vi.mocked(getEvmCoinBalance).mockResolvedValueOnce(11n).mockResolvedValueOnce(22n)
 
     const balances = await getEvmChainBalances({
       chain: EvmChain.Hyperliquid,
@@ -94,7 +102,7 @@ describe('getEvmChainBalances', () => {
     expect(getEvmCoinBalance).toHaveBeenCalledTimes(2)
     expect(balances).toEqual({
       [`${EvmChain.Hyperliquid}:${address}`]: 11n,
-      [`${EvmChain.Hyperliquid}:${badToken}:${address}`]: 0n,
+      [`${EvmChain.Hyperliquid}:${badToken}:${address}`]: 22n,
     })
   })
 
@@ -107,7 +115,7 @@ describe('getEvmChainBalances', () => {
       },
       multicall: vi.fn().mockRejectedValue(new Error('multicall unavailable')),
     } as any)
-    vi.mocked(getEvmCoinBalance).mockResolvedValueOnce(12n).mockRejectedValueOnce(new Error('bad token'))
+    vi.mocked(getEvmCoinBalance).mockResolvedValueOnce(12n).mockResolvedValueOnce(24n)
 
     const balances = await getEvmChainBalances({
       chain: EvmChain.Ethereum,
@@ -121,7 +129,27 @@ describe('getEvmChainBalances', () => {
     expect(getEvmCoinBalance).toHaveBeenCalledTimes(2)
     expect(balances).toEqual({
       [`${EvmChain.Ethereum}:${address}`]: 12n,
-      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 0n,
+      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 24n,
     })
+  })
+
+  it('propagates unresolved balance failures instead of returning a false zero', async () => {
+    vi.mocked(getEvmClient).mockReturnValue({
+      chain: {
+        contracts: {
+          multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
+        },
+      },
+      multicall: vi.fn().mockResolvedValue([{ status: 'failure', error: new Error('rpc timeout') }]),
+    } as any)
+    vi.mocked(getEvmCoinBalance).mockRejectedValueOnce(new Error('rpc timeout'))
+
+    await expect(
+      getEvmChainBalances({
+        chain: EvmChain.Ethereum,
+        address,
+        coins: [{ chain: EvmChain.Ethereum, address }],
+      })
+    ).rejects.toThrow('rpc timeout')
   })
 })

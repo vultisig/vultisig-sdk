@@ -21,11 +21,7 @@ const getFallbackBalances = async ({ chain, address, coins }: GetEvmChainBalance
     coins.map(async coin => {
       const input = { ...coin, chain, address }
 
-      try {
-        return [accountCoinKeyToString(input), await getEvmCoinBalance(input)] as const
-      } catch {
-        return [accountCoinKeyToString(input), 0n] as const
-      }
+      return [accountCoinKeyToString(input), await getEvmCoinBalance(input)] as const
     })
   )
 
@@ -74,11 +70,14 @@ export const getEvmChainBalances = async (input: GetEvmChainBalancesInput): Prom
   }
 
   return Object.fromEntries(
-    coins.map((coin, index) => {
-      const result = results[index]
-      const amount = result?.status === 'success' ? BigInt(result.result as bigint) : 0n
+    await Promise.all(
+      coins.map(async (coin, index) => {
+        const input = { ...coin, chain, address }
+        const result = results[index]
+        const amount = result?.status === 'success' ? BigInt(result.result as bigint) : await getEvmCoinBalance(input)
 
-      return [accountCoinKeyToString({ ...coin, chain, address }), amount] as const
-    })
+        return [accountCoinKeyToString(input), amount] as const
+      })
+    )
   )
 }
