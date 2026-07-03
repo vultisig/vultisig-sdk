@@ -353,8 +353,11 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Multi-Chain Coverage (Production)
       console.log(`🌐 Environment: Production (mainnet RPCs)`)
       console.log('='.repeat(60) + '\n')
 
-      // This test always passes - it's just for logging
-      expect(true).toBe(true)
+      expect(vault.name.length).toBeGreaterThan(0)
+      expect(['fast', 'secure']).toContain(vault.type)
+      expect(publicKeys.ecdsa.length).toBeGreaterThan(0)
+      expect(publicKeys.eddsa.length).toBeGreaterThan(0)
+      expect(TEST_VAULT_CONFIG.testChains.length).toBeGreaterThan(0)
     })
   })
 })
