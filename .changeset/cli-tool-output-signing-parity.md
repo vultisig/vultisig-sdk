@@ -28,14 +28,17 @@ plus the approve→main split), and cross-checks it against the backend `tx_read
 - First-wins per turn: a second signable frame can never silently overwrite the
   first; the deferral is reported.
 - Fail-closed on parity divergence: a flat tool-output candidate is enqueued as a
-  sign source only when there is no `tx_ready`, when the same-turn `tx_ready` is a
-  DIFFERENT tool call, or when its twin `tx_ready` matched parity. A client-derived
-  candidate that DIVERGES from its structurally-unsignable twin `tx_ready` is never
-  signed — the turn falls closed to the `tx_ready` path (a hard error at sign time)
-  instead of signing the client-enriched bytes.
-- Parity pairing: the two channels are diffed only when they are the SAME tool call
-  (paired by tool-call id — the `tx_ready` inherits the id of its wire-adjacent
-  tool-output twin), so an unrelated same-turn `tool_output` + `tx_ready` pair no
-  longer emits a false `[DIVERGENCE]`.
+  sign source only when there is no `tx_ready` at all, or when the same-turn
+  `tx_ready` matched parity. A client-derived candidate that is not proven equal to
+  a present `tx_ready` (diverged, or unpaired) is never signed — the turn falls
+  closed to the `tx_ready` path (a hard error at sign time) instead of signing the
+  client-enriched bytes.
+- Parity pairing (telemetry only): the two channels are diffed only when they are
+  the SAME tool call (paired by tool-call id — the `tx_ready` inherits the id of
+  its wire-adjacent tool-output twin), so an unrelated same-turn `tool_output` +
+  `tx_ready` pair no longer emits a false `[DIVERGENCE]`. This pairing affects only
+  the divergence log; the sign decision above is deliberately independent of it, so
+  the fund-safety guarantee rests on parity equality alone, not on the wire-ordering
+  invariant.
 
 Zero agent-backend / mcp-ts change; entirely within `clients/cli`.

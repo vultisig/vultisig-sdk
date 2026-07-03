@@ -29,13 +29,7 @@ const APPROVE_B = '0x095ea7b3' + '1'.repeat(120)
  */
 type Frame =
   | { channel: 'tx_ready'; payload: unknown; callId?: string }
-  | {
-      channel: 'tool_output'
-      payload: unknown
-      toolName: string
-      source?: 'flat' | 'prep'
-      callId?: string
-    }
+  | { channel: 'tool_output'; payload: unknown; toolName: string; source?: 'flat' | 'prep'; callId?: string }
 
 function makeHarness(frames: Frame[], storeImpl: (payload: any) => boolean = () => true) {
   const storeServerTransaction = vi.fn(storeImpl)
@@ -44,11 +38,7 @@ function makeHarness(frames: Frame[], storeImpl: (payload: any) => boolean = () 
       ({
         tool: 'sign_tx',
         success: true,
-        data: {
-          tx_hash: '0xfeed',
-          chain: 'Polygon',
-          explorer_url: 'https://x/1',
-        },
+        data: { tx_hash: '0xfeed', chain: 'Polygon', explorer_url: 'https://x/1' },
       }) as RecentAction
   )
   const client = {
@@ -59,12 +49,7 @@ function makeHarness(frames: Frame[], storeImpl: (payload: any) => boolean = () 
           else callbacks.onToolOutputTx(f.payload, f.toolName, f.source ?? 'flat', f.callId)
         }
       }
-      return {
-        message: { content: 'ok' },
-        fullText: '',
-        transactions: [],
-        disconnected: false,
-      }
+      return { message: { content: 'ok' }, fullText: '', transactions: [], disconnected: false }
     }),
   }
   const executor = {
@@ -349,20 +334,17 @@ describe('processMessageLoop — dual-read candidate selection', () => {
     expect(h.storeServerTransaction).toHaveBeenCalledWith(divergentUnsignableTwin)
   })
 
-  it('UNRELATED same-turn pair (different tool calls) produces NO divergence telemetry and does not gate the flat (review: gomesalexandre)', async () => {
-    // Pairing telemetry LOW: a flat tool-output (polymarket, its OWN action, no
-    // tx_ready) arrives in the same turn as an UNRELATED, structurally divergent
-    // tx_ready from a different tool call. Without pairing, diffing them would emit
-    // a loud false [DIVERGENCE]. With pairing (different callIds → definitely
-    // unpaired), the diff is SKIPPED — no divergence telemetry — and the flat is a
-    // valid independent sign source (its twin tx_ready is unsignable/unrelated).
+  it('UNRELATED same-turn pair (different tool calls) produces NO false divergence telemetry (review: gomesalexandre — pairing is telemetry-only)', async () => {
+    // Pairing telemetry LOW: a flat tool-output (polymarket) arrives in the same
+    // turn as an UNRELATED, structurally divergent SIGNABLE tx_ready from a
+    // different tool call. WITHOUT pairing, diffing them would emit a loud false
+    // [DIVERGENCE]. WITH pairing (different callIds → definitely unpaired), the
+    // diff is SKIPPED — no divergence telemetry. The tx_ready (authoritative,
+    // signable) signs; the distinct flat is DEFERRED (never silently dropped).
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     try {
-      const unrelatedUnsignable = {
-        chain: 'Polygon',
-        chain_id: '137',
-        tx: { to_address: ROUTER, calldata: APPROVE_B, value: '0' },
-      }
+      const unrelatedSignable = { chain: 'Polygon', chain_id: '137', tx: { to: ROUTER, value: '0', data: APPROVE_B } }
+      expect(payloadLooksSignable(unrelatedSignable)).toBe(true)
       const h = makeHarness([
         {
           channel: 'tool_output',
@@ -372,21 +354,73 @@ describe('processMessageLoop — dual-read candidate selection', () => {
         },
         {
           channel: 'tx_ready',
-          payload: unrelatedUnsignable,
+          payload: unrelatedSignable,
           callId: 'call-other',
         },
       ])
       await h.run()
-      // No false divergence telemetry for an unrelated pair.
+      // No false divergence telemetry for an unrelated pair (pairing skipped the diff).
       const wroteDivergence = stderrSpy.mock.calls.some(c => String(c[0]).includes('[DIVERGENCE]'))
       expect(wroteDivergence).toBe(false)
-      // The flat candidate is its own independent, guarded action → it signs;
-      // the unrelated unsignable tx_ready never pre-empts it.
-      expect(h.storeServerTransaction).toHaveBeenCalledWith(TX_A)
-      expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+      // tx_ready (authoritative) signs; the distinct flat is deferred, not dropped.
+      expect(h.storeServerTransaction).toHaveBeenCalledWith(unrelatedSignable)
+      expect(h.storeServerTransaction).not.toHaveBeenCalledWith(TX_A)
+      expect(h.ui.onNotification).toHaveBeenCalledTimes(1)
     } finally {
       stderrSpy.mockRestore()
     }
+  })
+
+  it('the sign gate NEVER relies on pairing: a "definitely-unpaired" flat with a coexisting UNSIGNABLE tx_ready is still fail-closed (security + Codex convergence)', async () => {
+    // Locks the hardening: pairing is TELEMETRY-ONLY, so even a pair the code
+    // reads as unrelated (different callIds) does NOT let the flat sign when a
+    // tx_ready is present. If the wire-adjacency pairing were ever wrong (backend
+    // batched two tool-outputs before a tx_ready → twin id mis-attributed to the
+    // wrong tool call), a diverging flat still cannot be signed: the sign gate is
+    // `no tx_ready || parityMatched`, and parity is skipped for a definitely-
+    // unpaired pair, so parityMatched is false → the flat is never enqueued.
+    const unsignableOther = {
+      chain: 'Polygon',
+      chain_id: '137',
+      tx: { to_address: ROUTER, calldata: APPROVE_B, value: '0' },
+    }
+    expect(payloadLooksSignable(unsignableOther)).toBe(false)
+    const h = makeHarness(
+      [
+        { channel: 'tool_output', payload: TX_A, toolName: POLYMARKET_SETUP_TRADING_TOOL, callId: 'call-flat' },
+        { channel: 'tx_ready', payload: unsignableOther, callId: 'call-other' },
+      ],
+      (payload: any) => payloadLooksSignable(payload)
+    )
+    await h.run()
+    // Fail-closed: the flat is never buffered; nothing signable results.
+    expect(h.storeServerTransaction).not.toHaveBeenCalledWith(TX_A)
+    expect(h.signTxFromBuffer).not.toHaveBeenCalled()
+  })
+
+  it('AMBIGUOUS pairing (no callIds) + diverging flat + unsignable tx_ready → still fail-closed (missing-id falls back to running the diff)', async () => {
+    // Coverage for the missing-id branch where it changes the outcome (tests-lane
+    // MEDIUM): when neither channel carries a tool-call id, `definitelyUnpaired`
+    // is false → parity RUNS → the diverging flat is caught → parityMatched false
+    // → flat not enqueued. The ambiguity fallback ("run the diff") is the safe
+    // direction: it never lets an unproven flat through when a tx_ready is present.
+    const divergentUnsignable = {
+      chain: 'Polygon',
+      chain_id: '137',
+      tx: { to_address: ROUTER, calldata: APPROVE_A, value: '0' },
+    }
+    expect(payloadLooksSignable(divergentUnsignable)).toBe(false)
+    const h = makeHarness(
+      [
+        // No callId on either frame → ambiguous → parity runs.
+        { channel: 'tx_ready', payload: divergentUnsignable },
+        { channel: 'tool_output', payload: TX_A, toolName: 'build_custom_credit_topup' },
+      ],
+      (payload: any) => payloadLooksSignable(payload)
+    )
+    await h.run()
+    expect(h.storeServerTransaction).not.toHaveBeenCalledWith(TX_A)
+    expect(h.signTxFromBuffer).not.toHaveBeenCalled()
   })
 
   it('signs a tx_ready-only turn (no tool-output) — unchanged legacy behavior', async () => {

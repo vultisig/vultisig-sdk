@@ -720,20 +720,27 @@ export class AgentSession {
    * tool-output candidate.
    *
    * FAIL-CLOSED on divergence (review — gomesalexandre): a flat tool-output is a
-   * sign source ONLY when (a) there is NO `tx_ready` at all, (b) the `tx_ready`
-   * is NOT its twin (a different, independent tool call — its own action, its own
-   * guards), or (c) it IS the twin and parity MATCHED. When the flat and its twin
-   * `tx_ready` DIVERGE, we do NOT sign the client-enriched candidate — we fall
+   * sign source ONLY when (a) there is NO `tx_ready` at all, or (b) the same-turn
+   * `tx_ready` MATCHED parity. Whenever a `tx_ready` is present and the flat did
+   * not prove equal to it, we do NOT sign the client-enriched candidate — we fall
    * closed to the `tx_ready` path (which, when unsignable, errors at sign time).
-   * A diverging client candidate whose paired `tx_ready` is structurally
-   * unsignable must never become the tx that gets signed.
    *
-   * Pairing (review — gomesalexandre): the two channels are the SAME tool call
-   * iff their tool-call ids match (`txReadyTwinCallId` is the id of the
-   * tool-output frame this `tx_ready` was emitted next to — client.ts). Only a
-   * DEFINITELY-unpaired pair (both ids present AND different) is treated as
-   * unrelated; a missing id falls back to "paired" so ambiguity never opens the
-   * divergence hole above and never suppresses a real divergence signal.
+   * This sign gate is DELIBERATELY INDEPENDENT of the pairing heuristic below:
+   * whether the two same-turn candidates are "the same tool call" affects only
+   * divergence TELEMETRY, never the sign decision. So even if the pairing were
+   * wrong (e.g. the backend batched two tool-output frames before a `tx_ready`
+   * against the documented per-pending order — agent-backend agent.go:6397), a
+   * diverging flat still cannot be signed: it is gated by `parityMatched`, not by
+   * pairing. The fund-safety guarantee therefore rests on parity equality alone,
+   * not on a cross-repo wire-ordering invariant (security + Codex convergence).
+   *
+   * Pairing (review — gomesalexandre) — TELEMETRY ONLY: the two channels are the
+   * SAME tool call iff their tool-call ids match (`txReadyTwinCallId` is the id of
+   * the tool-output frame this `tx_ready` was emitted next to — client.ts). A
+   * DEFINITELY-unpaired pair (both ids present AND different) skips the parity
+   * diff so an unrelated same-turn pair does not emit a false `[DIVERGENCE]`; a
+   * missing id falls back to running the diff so a real divergence is never
+   * suppressed. This gate never enqueues a sign source — it only silences noise.
    */
   private selectAndBufferSignable(
     txReadyCandidate: TxReadyPayload | null,
@@ -746,9 +753,10 @@ export class AgentSession {
     } | null,
     ui: UICallbacks
   ): boolean {
-    // Pair the two channels by tool-call id BEFORE diffing. An unrelated
-    // same-turn pair (different tools) is NOT the same transaction, so it must
-    // neither produce divergence telemetry nor gate the flat candidate.
+    // Pair the two channels by tool-call id — for TELEMETRY ONLY (see the
+    // method doc). An unrelated same-turn pair (different tools) is NOT the same
+    // transaction, so it must not produce a false divergence signal. This never
+    // affects the sign decision below (which fails closed on parity alone).
     const toolOutputCallId = toolOutputCandidate?.callId ?? null
     const definitelyUnpaired =
       txReadyCandidate !== null &&
@@ -777,12 +785,12 @@ export class AgentSession {
     // tx_encoding; this is the load-bearing second guard.)
     //
     // FAIL-CLOSED gate: a flat candidate is enqueued only when there is no
-    // tx_ready, when the tx_ready is a DIFFERENT tool call (independent action),
-    // or when its TWIN tx_ready matched parity. A paired-but-diverging flat is
-    // NOT enqueued → we fall through to the tx_ready path below (never sign the
-    // client-enriched bytes when they disagree with the backend's).
-    const flatIsSignSource =
-      toolOutputCandidate?.source === 'flat' && (txReadyCandidate === null || definitelyUnpaired || parityMatched)
+    // tx_ready at all, or when the same-turn tx_ready MATCHED parity. Any other
+    // state (a present tx_ready the flat did not prove equal to — diverged, or
+    // parity-skipped) does NOT enqueue the flat → we fall through to the tx_ready
+    // path below (never sign the client-enriched bytes when they are not proven
+    // equal to the backend's). Independent of pairing on purpose (see method doc).
+    const flatIsSignSource = toolOutputCandidate?.source === 'flat' && (txReadyCandidate === null || parityMatched)
     if (toolOutputCandidate && flatIsSignSource) {
       ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
     }
