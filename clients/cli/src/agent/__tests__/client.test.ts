@@ -395,11 +395,103 @@ describe('AgentClient.sendMessageStream', () => {
       expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
     })
 
+    it('pairs a tx_ready with its wire-adjacent tool-output frame — onTxReady carries the twin tool-call id', async () => {
+      // The backend flushes each pending tool call as [tool-output-available,
+      // tx_ready] back-to-back (agent.go:6397). The client remembers the last
+      // SIGNABLE tool-output frame's id and hands it to onTxReady as the twin id
+      // so the session pairs the two channels before diffing.
+      const onToolOutputTx = vi.fn()
+      const onTxReady = vi.fn()
+      globalThis.fetch = mockFetchSSE([
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-send', toolName: 'execute_send' })}\n\n`,
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'tc-send',
+          output: {
+            txArgs: {
+              chain: 'Base',
+              chain_id: '8453',
+              tx_encoding: 'evm-tx',
+              tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+            },
+            stepperConfig: {},
+            resolved: {},
+          },
+        })}\n\n`,
+        `data: ${JSON.stringify({ type: 'data-tx_ready', data: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } } })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx, onTxReady })
+
+      // The tool-output candidate carries its own id...
+      expect(onToolOutputTx.mock.calls[0][3]).toBe('tc-send')
+      // ...and the following tx_ready carries the SAME id as its twin.
+      expect(onTxReady).toHaveBeenCalledTimes(1)
+      expect(onTxReady.mock.calls[0][1]).toBe('tc-send')
+    })
+
+    it('does NOT mis-pair: a tx_ready following an UNRELATED tool call carries that later id, not an earlier flat tool-output id', async () => {
+      // Turn carries a flat polymarket tool-output (its OWN action, no tx_ready)
+      // THEN an execute_send tool-output + its tx_ready. The tx_ready must pair
+      // with execute_send (tc-send), NOT the earlier polymarket frame (tc-pm) —
+      // so the session sees the flat + tx_ready as DIFFERENT tool calls and skips
+      // the false-divergence diff.
+      const onToolOutputTx = vi.fn()
+      const onTxReady = vi.fn()
+      globalThis.fetch = mockFetchSSE([
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-pm', toolName: 'polymarket_setup_trading' })}\n\n`,
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'tc-pm',
+          output: {
+            chain: 'Polygon',
+            chain_id: '137',
+            to: USDC_E,
+            value: '0',
+            data: APPROVE_DATA,
+            action: 'approve',
+          },
+        })}\n\n`,
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-send', toolName: 'execute_send' })}\n\n`,
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'tc-send',
+          output: {
+            txArgs: {
+              chain: 'Base',
+              chain_id: '8453',
+              tx_encoding: 'evm-tx',
+              tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+            },
+            stepperConfig: {},
+            resolved: {},
+          },
+        })}\n\n`,
+        `data: ${JSON.stringify({ type: 'data-tx_ready', data: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } } })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      const client = new AgentClient('http://example.com')
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'do both' }, { onToolOutputTx, onTxReady })
+
+      // First tool-output candidate captured is the flat polymarket one (tc-pm)...
+      expect(onToolOutputTx.mock.calls[0][3]).toBe('tc-pm')
+      // ...but the tx_ready's twin is execute_send (tc-send) — different id, so the
+      // session treats the polymarket flat and this tx_ready as unrelated.
+      expect(onTxReady.mock.calls[0][1]).toBe('tc-send')
+    })
+
     it('does NOT fire onToolOutputTx for an execute_* prep envelope MISSING tx_encoding (backend phantom-card guard)', async () => {
       const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('execute_send', {
-          txArgs: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+          txArgs: {
+            chain: 'Base',
+            chain_id: '8453',
+            tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+          },
           stepperConfig: {},
         })
       )
@@ -455,7 +547,13 @@ describe('AgentClient.sendMessageStream', () => {
 
     const envelope = {
       surface: 'balance_summary',
-      accounts: [{ chainId: 'Ethereum', address: '0xabc', tokens: [{ symbol: 'ETH', amountDecimal: '1.0' }] }],
+      accounts: [
+        {
+          chainId: 'Ethereum',
+          address: '0xabc',
+          tokens: [{ symbol: 'ETH', amountDecimal: '1.0' }],
+        },
+      ],
     }
 
     globalThis.fetch = mockFetchSSE([
@@ -613,7 +711,9 @@ function mockHangingFetch(): typeof fetch {
           reject(signal.reason)
           return
         }
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        })
       })
   ) as typeof fetch
 }
@@ -625,7 +725,12 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     vi.restoreAllMocks()
   })
 
-  const authReq = { public_key: 'pk', chain_code_hex: 'cc', message: 'm', signature: 's' }
+  const authReq = {
+    public_key: 'pk',
+    chain_code_hex: 'cc',
+    message: 'm',
+    signature: 's',
+  }
 
   it('healthCheck resolves false when the request hangs past the timeout', async () => {
     globalThis.fetch = mockHangingFetch()
@@ -736,7 +841,11 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
       },
     })
     globalThis.fetch = vi.fn(
-      async () => new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+      async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
     ) as typeof fetch
 
     const client = new AgentClient('http://example.com', 15)

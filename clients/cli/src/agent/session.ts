@@ -495,7 +495,17 @@ export class AgentSession {
     // Phase-1 parity deliverable) and prefer the safe source without depending on
     // wire arrival order.
     let txReadyCandidate: TxReadyPayload | null = null
-    let toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null = null
+    // Tool-call id of the tool-output frame this tx_ready is the wire-adjacent
+    // twin of (client.ts pairs it). `null` when no signable tool-output preceded
+    // it. Compared against `toolOutputCandidate.callId` to decide whether the two
+    // captured candidates are the SAME tool call before diffing them.
+    let txReadyTwinCallId: string | null = null
+    let toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -540,7 +550,7 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onTxReady: (tx: any) => {
+      onTxReady: (tx: any, toolCallId?: string) => {
         // Capture the FIRST `tx_ready` this turn (do NOT store yet — selection is
         // deferred to `selectAndBufferSignable` after the stream so the parity
         // cross-check can compare both channels). A SECOND frame is deferred: the
@@ -552,8 +562,11 @@ export class AgentSession {
           return
         }
         txReadyCandidate = tx as TxReadyPayload
+        // Id of the signable tool-output frame this tx_ready was emitted next to
+        // (its twin) — lets selectAndBufferSignable pair the channels before diffing.
+        txReadyTwinCallId = toolCallId ?? null
       },
-      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => {
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep', toolCallId?: string) => {
         // Client-side candidate enriched from a `tool-output-available` frame.
         // First-wins per turn; used by `selectAndBufferSignable` as the parity
         // reference (and the sign source only when no usable `tx_ready` arrives).
@@ -561,7 +574,7 @@ export class AgentSession {
           this.reportDeferredSignable(ui)
           return
         }
-        toolOutputCandidate = { payload, toolName, source }
+        toolOutputCandidate = { payload, toolName, source, callId: toolCallId ?? null }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -638,7 +651,7 @@ export class AgentSession {
     // `tx_ready` is authoritative; else the client tool-output candidate). One
     // signable tx per turn — multi-leg approve→main runs within signMultiLeg;
     // multi-step flows advance across turns via the recursion below.
-    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, toolOutputCandidate, ui)
+    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, txReadyTwinCallId, toolOutputCandidate, ui)
     if (bufferedSignable) {
       if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
@@ -691,8 +704,8 @@ export class AgentSession {
 
   /**
    * Phase-1 dual-read reconciliation. Given the two per-turn candidates, run the
-   * parity cross-check (when both are present) and buffer the SAFE sign source
-   * into the executor. Returns true when something was buffered to sign.
+   * parity cross-check (when both are the SAME tool call) and buffer the SAFE
+   * sign source into the executor. Returns true when something was buffered.
    *
    * Selection order (fund-safety):
    *  1. a SIGNABLE `tx_ready` — AUTHORITATIVE, unchanged from today's behavior;
@@ -705,16 +718,50 @@ export class AgentSession {
    * structurally-present-but-unsignable `tx_ready` (which `storeServerTransaction`
    * would still buffer, only to throw at sign time) doesn't pre-empt a good
    * tool-output candidate.
+   *
+   * FAIL-CLOSED on divergence (review — gomesalexandre): a flat tool-output is a
+   * sign source ONLY when (a) there is NO `tx_ready` at all, (b) the `tx_ready`
+   * is NOT its twin (a different, independent tool call — its own action, its own
+   * guards), or (c) it IS the twin and parity MATCHED. When the flat and its twin
+   * `tx_ready` DIVERGE, we do NOT sign the client-enriched candidate — we fall
+   * closed to the `tx_ready` path (which, when unsignable, errors at sign time).
+   * A diverging client candidate whose paired `tx_ready` is structurally
+   * unsignable must never become the tx that gets signed.
+   *
+   * Pairing (review — gomesalexandre): the two channels are the SAME tool call
+   * iff their tool-call ids match (`txReadyTwinCallId` is the id of the
+   * tool-output frame this `tx_ready` was emitted next to — client.ts). Only a
+   * DEFINITELY-unpaired pair (both ids present AND different) is treated as
+   * unrelated; a missing id falls back to "paired" so ambiguity never opens the
+   * divergence hole above and never suppresses a real divergence signal.
    */
   private selectAndBufferSignable(
     txReadyCandidate: TxReadyPayload | null,
-    toolOutputCandidate: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' } | null,
+    txReadyTwinCallId: string | null,
+    toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null,
     ui: UICallbacks
   ): boolean {
-    // Parity cross-check (Phase-1 deliverable): both channels produced a payload
-    // for this turn — prove the client-side port against the live backend.
+    // Pair the two channels by tool-call id BEFORE diffing. An unrelated
+    // same-turn pair (different tools) is NOT the same transaction, so it must
+    // neither produce divergence telemetry nor gate the flat candidate.
+    const toolOutputCallId = toolOutputCandidate?.callId ?? null
+    const definitelyUnpaired =
+      txReadyCandidate !== null &&
+      toolOutputCandidate !== null &&
+      toolOutputCallId !== null &&
+      txReadyTwinCallId !== null &&
+      toolOutputCallId !== txReadyTwinCallId
+
+    // Parity cross-check (Phase-1 deliverable): the two channels are the SAME
+    // tool call — prove the client-side port against the live backend. Skipped
+    // for a definitely-unrelated pair (no false [DIVERGENCE] noise).
     let parityMatched = false
-    if (txReadyCandidate && toolOutputCandidate) {
+    if (txReadyCandidate && toolOutputCandidate && !definitelyUnpaired) {
       parityMatched = this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
     }
 
@@ -728,7 +775,15 @@ export class AgentSession {
     // and signing the prep tool-output in that case would defeat that suppression.
     // (`deriveToolOutputCandidate` already refuses a prep envelope without
     // tx_encoding; this is the load-bearing second guard.)
-    if (toolOutputCandidate && toolOutputCandidate.source === 'flat') {
+    //
+    // FAIL-CLOSED gate: a flat candidate is enqueued only when there is no
+    // tx_ready, when the tx_ready is a DIFFERENT tool call (independent action),
+    // or when its TWIN tx_ready matched parity. A paired-but-diverging flat is
+    // NOT enqueued → we fall through to the tx_ready path below (never sign the
+    // client-enriched bytes when they disagree with the backend's).
+    const flatIsSignSource =
+      toolOutputCandidate?.source === 'flat' && (txReadyCandidate === null || definitelyUnpaired || parityMatched)
+    if (toolOutputCandidate && flatIsSignSource) {
       ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
     }
     if (txReadyCandidate && !payloadLooksSignable(txReadyCandidate)) {
