@@ -30,12 +30,26 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
 
   const networkFee = maxBigInt(computedFee, minProtocolFee)
 
-  const getAccountActivationFee = () => {
-    if ('error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')) {
-      return BigInt(reserve_base)
-    }
+  // XRPL base reserve is a requirement on the Payment AMOUNT (the drops that
+  // fund/activate the destination account), NOT on the Fee. The Fee is BURNED
+  // by the network — it never reaches the recipient. The previous code added
+  // reserve_base to `gas` (which becomes TW.Ripple SigningInput.fee), so every
+  // send to a not-yet-activated XRP address burned ~1 XRP (the reserve) for
+  // nothing, on top of the actual send amount. Reserve spec:
+  // https://xrpl.org/docs/concepts/accounts/reserves
+  const destinationUnfunded =
+    'error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')
 
-    return 0n
+  if (destinationUnfunded) {
+    const toAmount = BigInt(shouldBePresent(keysignPayload.toAmount))
+    if (toAmount < BigInt(reserve_base)) {
+      throw new Error(
+        `Cannot send to XRP account ${toAddress}: it is not yet activated, and XRPL requires the ` +
+          `Payment amount to be at least the base reserve (${reserve_base} drops) to create a new ` +
+          `account. The send amount is ${toAmount.toString()} drops. Increase the amount to at least ` +
+          `the reserve, or send to an already-activated account.`
+      )
+    }
   }
 
   const { account_data, ledger_current_index } = senderAccount
@@ -43,6 +57,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
     lastLedgerSequence: BigInt((ledger_current_index ?? 0) + 60),
-    gas: networkFee + getAccountActivationFee(),
+    // Fee is the network fee only — the reserve rides on the Payment amount.
+    gas: networkFee,
   })
 }
