@@ -386,6 +386,18 @@ const PAIR_QUERY = `
   }
 `
 
+type FinPairNode = {
+  address: string
+  assetBase: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
+  assetQuote: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
+}
+
+type FinPairEdge = {
+  node: FinPairNode
+}
+
+const PAIR_LIST_CACHE_TTL_MS = 5 * 60 * 1000
+
 type FinRangeRaw = {
   idx: string
   base: string
@@ -445,6 +457,8 @@ function mapRange(r: FinRangeRaw): RangePosition {
  */
 export class RujiraRange {
   private readonly client: RujiraClient
+  private pairListCache: { expiresAt: number; edges: FinPairEdge[] } | null = null
+  private pairListInflight: Promise<FinPairEdge[]> | null = null
 
   constructor(client: RujiraClient) {
     this.client = client
@@ -546,6 +560,38 @@ export class RujiraRange {
 
   // ------------------- Queries -------------------
 
+  private async getCachedPairEdges(): Promise<FinPairEdge[]> {
+    const now = Date.now()
+    if (this.pairListCache && now < this.pairListCache.expiresAt) {
+      return this.pairListCache.edges
+    }
+
+    if (this.pairListInflight) {
+      return this.pairListInflight
+    }
+
+    this.pairListInflight = gqlFetch<{
+      finV3: {
+        pairs: {
+          edges: FinPairEdge[]
+        }
+      }
+    }>(PAIR_QUERY, {})
+      .then(data => {
+        const edges = data?.finV3?.pairs?.edges ?? []
+        this.pairListCache = {
+          edges,
+          expiresAt: Date.now() + PAIR_LIST_CACHE_TTL_MS,
+        }
+        return edges
+      })
+      .finally(() => {
+        this.pairListInflight = null
+      })
+
+    return this.pairListInflight
+  }
+
   /**
    * List open range positions for a THORChain address.
    * Returns [] when the account has no positions.
@@ -591,20 +637,7 @@ export class RujiraRange {
       throw new RujiraError(RujiraErrorCode.INVALID_PARAMS, 'base and quote are required')
     }
     try {
-      const data = await gqlFetch<{
-        finV3: {
-          pairs: {
-            edges: Array<{
-              node: {
-                address: string
-                assetBase: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
-                assetQuote: { metadata?: { symbol?: string }; variants?: { native?: { denom?: string } } }
-              }
-            }>
-          }
-        }
-      }>(PAIR_QUERY, {})
-      const edges = data?.finV3?.pairs?.edges ?? []
+      const edges = await this.getCachedPairEdges()
       // Accept tickers, bank denoms, FIN-pair denoms ("thor.rune"), and
       // LLM-mangled forms ("xruji" from "x/ruji", "thorrune" from "thor.rune")
       // by normalising separators out and matching with suffix tolerance
@@ -623,7 +656,7 @@ export class RujiraRange {
         if (a.endsWith(b) || b.endsWith(a)) return 'fuzzy'
         return null
       }
-      type Node = (typeof edges)[number]['node']
+      type Node = FinPairNode
       const scoreNode = (n: Node): 'exact' | 'fuzzy' | null => {
         const bs = n.assetBase.metadata?.symbol ?? ''
         const qs = n.assetQuote.metadata?.symbol ?? ''
