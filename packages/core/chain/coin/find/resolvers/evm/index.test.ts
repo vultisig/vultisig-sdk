@@ -101,6 +101,30 @@ describe('findEvmCoins', () => {
     })
   })
 
+  it('discovers tokens on Zksync (1inch-supported) instead of short-circuiting to []', async () => {
+    const address = '0xaaaAAAaaAAAAaaAAAAaAaaAaaAAaaaAaAAaAaAaA'
+    const tokenAddress = '0xbBBbbBBbBbBBBBBbbBBbBbbBBbBbbbBBBBbBbBBB'
+
+    queryOneInchMock.mockResolvedValueOnce({ [tokenAddress]: '1000000' }).mockResolvedValueOnce({
+      [tokenAddress]: {
+        address: tokenAddress,
+        symbol: 'USDC',
+        decimals: 6,
+        name: 'USD Coin',
+        eip2612: false,
+        tags: [],
+        providers: [],
+      },
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Zksync, address })).resolves.toEqual([
+      { chain: EvmChain.Zksync, id: tokenAddress, decimals: 6, logo: undefined, ticker: 'USDC', address },
+    ])
+    // Regression: previously findEvmCoins returned [] for Zksync WITHOUT any
+    // network call because it wasn't in oneInchSupportedChains.
+    expect(queryOneInchMock).toHaveBeenCalled()
+  })
+
   it('propagates non-NoDataError from on-chain metadata fallback', async () => {
     const address = '0x5555555555555555555555555555555555555555'
     const tokenAddress = '0x6666666666666666666666666666666666666666'
