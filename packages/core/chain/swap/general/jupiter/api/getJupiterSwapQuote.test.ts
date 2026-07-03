@@ -170,7 +170,9 @@ describe('getJupiterSwapQuote', () => {
     expect(prependJupiterFeeAta).not.toHaveBeenCalled()
 
     const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
-    expect(JSON.parse(swapCall.init!.body as string)).not.toHaveProperty('feeAccount')
+    const swapBody = JSON.parse(swapCall.init!.body as string)
+    expect(swapBody).not.toHaveProperty('feeAccount')
+    expect(swapBody.quoteResponse).not.toHaveProperty('platformFee')
 
     // Untouched Jupiter transaction flows through verbatim.
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
@@ -214,7 +216,9 @@ describe('getJupiterSwapQuote', () => {
     expect(prependJupiterFeeAta).not.toHaveBeenCalled()
 
     const swapCall = calls.find(c => c.url.includes('/swap/v1/swap'))!
-    expect(JSON.parse(swapCall.init!.body as string)).not.toHaveProperty('feeAccount')
+    const swapBody = JSON.parse(swapCall.init!.body as string)
+    expect(swapBody).not.toHaveProperty('feeAccount')
+    expect(swapBody.quoteResponse).not.toHaveProperty('platformFee')
 
     // Untouched Jupiter transaction flows through verbatim and the swap fee is 0.
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')

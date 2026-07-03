@@ -29,6 +29,11 @@
 
 import { PublicKey } from '@solana/web3.js'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
+import {
+  deriveJupiterFeeAccount,
+  type JupiterFeeAccount,
+  prependJupiterFeeAta,
+} from '@vultisig/core-chain/swap/general/jupiter/api/jupiterFeeAta'
 import { jupiterFeeOwnerAddress } from '@vultisig/core-chain/swap/general/jupiter/config'
 import {
   assertJupiterPriceImpactWithinCeiling,
@@ -81,36 +86,22 @@ export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
 
-/**
- * Pre-created SPL Token ATAs owned by `JUPITER_AFFILIATE_FEE_OWNER`, keyed
- * by output mint. Each value MUST be the canonical associated-token-account
- * for that mint+owner pair AND must already exist on-chain (Jupiter's
- * post-swap transfer reverts with SPL Token program error 0x17
- * InvalidAccountData if the destination ATA is not initialised).
- *
- * Empty today: no ATAs created at the treasury yet, so the affiliate fee is
- * OFF on every Solana output until at least one entry lands here. Solana →
- * Solana swaps still route through Jupiter direct; they just do not collect
- * the 50 bps fee yet. Add an entry only after `spl-token create-account
- * <mint>` lands against the treasury keypair and the on-chain ATA is
- * verified (mint + owner match).
- */
+/** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
 
 /**
- * Resolve the affiliate fee account for a given output mint. Returns the
- * pre-configured ATA when one exists for that mint, or `null` when the
- * affiliate path is not yet wired for that mint (treasury ATA not created).
- *
- * Callers MUST treat `null` as "skip affiliate fee on this swap" — that
- * means omitting BOTH `platformFeeBps` from the /quote request AND
- * `feeAccount` from the /swap request body. Passing `platformFeeBps`
- * without a valid `feeAccount` would have Jupiter quote a route the user
- * cannot actually execute (the route accounting includes a fee transfer
- * with nowhere to go).
+ * Resolve the affiliate fee account for a given output mint.
+ * The fee ATA is derived for `(JUPITER_AFFILIATE_FEE_OWNER, outputMint)` and
+ * later prepended as an idempotent create instruction, so callers do not need
+ * a pre-created treasury ATA.
  */
-export const resolveJupiterFeeAccount = (outputMint: string): string | null =>
-  JUPITER_AFFILIATE_FEE_ATAS[outputMint] ?? null
+export const resolveJupiterFeeAccount = (outputMint: string): Promise<JupiterFeeAccount> =>
+  deriveJupiterFeeAccount({
+    outputMint,
+    feeOwner: JUPITER_AFFILIATE_FEE_OWNER,
+  })
+
+type JupiterFeeAccountResult = string | JupiterFeeAccount | null | undefined
 
 /** Jupiter /quote response (subset we consume). */
 export type JupiterQuoteResponse = {
@@ -212,14 +203,14 @@ export type JupiterSwapParams = {
    * canonical ATA map stays empty. A returned `null` keeps the affiliate fee
    * OFF (both fields omitted); a non-null ATA wires BOTH fields together.
    */
-  resolveFeeAccount?: (outputMint: string) => string | null
+  resolveFeeAccount?: (outputMint: string) => JupiterFeeAccountResult | Promise<JupiterFeeAccountResult>
 }
 
 /**
  * Fetch a Jupiter quote and build the UNSIGNED swap transaction for a
  * Solana → Solana swap, with the Vultisig affiliate fee wired in when a
- * treasury ATA is configured for the output mint. Returns a fully-serialized
- * VersionedTransaction (base64) plus route + amount metadata.
+ * derived treasury ATA is available for the output mint. Returns a
+ * fully-serialized VersionedTransaction (base64) plus route + amount metadata.
  *
  * Vault-free. Quotes + builds-unsigned only — never signs, never broadcasts.
  *
@@ -256,11 +247,11 @@ export const buildJupiterSwapTx = async ({
 
   const base = apiBaseUrl.replace(/\/+$/, '')
 
-  // Resolve the per-output-mint affiliate fee account. When no pre-created
-  // ATA is configured for the output mint we SKIP the affiliate fee on this
-  // swap (omit BOTH platformFeeBps AND feeAccount) — passing one without the
-  // other would have Jupiter quote a route the user cannot execute.
-  const feeAccount = resolveFeeAccount(outputMint)
+  // Resolve the per-output-mint affiliate fee account. Production resolves the
+  // ATA and prepends an idempotent create instruction below; test callers may
+  // return a string to exercise quote/body symmetry without serializing a real tx.
+  const feeAccountResult = await resolveFeeAccount(outputMint)
+  const feeAccount = typeof feeAccountResult === 'string' ? feeAccountResult : feeAccountResult?.feeAccount
 
   // Step 1: Get a quote. Pass platformFeeBps ONLY when we have a valid
   // feeAccount for the output mint.
@@ -291,13 +282,14 @@ export const buildJupiterSwapTx = async ({
   // result as fee-OFF, otherwise this direct SDK tool drifts from the shared
   // swap path and can misreport affiliate-fee state.
   const swapFeeAmount = BigInt(quote.platformFee?.amount ?? '0')
-  const chargesFee = feeAccount !== null && swapFeeAmount > 0n
+  const chargesFee = Boolean(feeAccount) && swapFeeAmount > 0n
+  const quoteForSwap = chargesFee ? quote : { ...quote, platformFee: undefined }
 
   // Step 2: Build the (unsigned) swap transaction. Include feeAccount only
   // when the quoted route actually charges the affiliate fee.
   const swapBody: Record<string, unknown> = {
     userPublicKey,
-    quoteResponse: quote,
+    quoteResponse: quoteForSwap,
     wrapAndUnwrapSol: true,
     useSharedAccounts: true,
     asLegacyTransaction: false,
@@ -321,15 +313,27 @@ export const buildJupiterSwapTx = async ({
     throw new Error('Jupiter swap response missing swapTransaction')
   }
 
+  const swapTransaction =
+    chargesFee && feeAccountResult && typeof feeAccountResult !== 'string'
+      ? await prependJupiterFeeAta({
+          txData: swapResp.swapTransaction,
+          feeAccount: feeAccountResult.feeAccount,
+          mintPubkey: feeAccountResult.mintPubkey,
+          ownerPubkey: feeAccountResult.ownerPubkey,
+          tokenProgramId: feeAccountResult.tokenProgramId,
+          userWallet: new PublicKey(userPublicKey),
+        })
+      : swapResp.swapTransaction
+
   // Fund-safety guard (audit finding SOL-01, vultisig/vultisig-sdk#1056): this
   // is a second, independent Jupiter integration (bypasses the recipes/
-  // getJupiterSwapQuote.ts path entirely) — the proxy-supplied transaction
-  // must be validated here too before it's handed back to the caller as
-  // signable.
-  await assertSafeSolanaSwapTransactionBase64(swapResp.swapTransaction, new PublicKey(userPublicKey))
+  // getJupiterSwapQuote.ts path entirely) — the final transaction, including
+  // any prepended idempotent fee-ATA instruction, must be validated before it
+  // is handed back to the caller as signable.
+  await assertSafeSolanaSwapTransactionBase64(swapTransaction, new PublicKey(userPublicKey))
 
   return {
-    swapTransaction: swapResp.swapTransaction,
+    swapTransaction,
     outAmount: quote.outAmount,
     minOutAmount: quote.otherAmountThreshold,
     priceImpactPct: quote.priceImpactPct,

@@ -2,6 +2,14 @@ import { PublicKey } from '@solana/web3.js'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const deriveJupiterFeeAccountMock = vi.hoisted(() => vi.fn())
+const prependJupiterFeeAtaMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@vultisig/core-chain/swap/general/jupiter/api/jupiterFeeAta', () => ({
+  deriveJupiterFeeAccount: (...args: unknown[]) => deriveJupiterFeeAccountMock(...args),
+  prependJupiterFeeAta: (...args: unknown[]) => prependJupiterFeeAtaMock(...args),
+}))
+
 import {
   buildJupiterSwapTx,
   JUPITER_AFFILIATE_FEE_OWNER,
@@ -22,6 +30,13 @@ vi.mock('@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions', (
 
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const USER = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
+const FAKE_ATA = 'CRz7ucCE6ZFhN297AC56ihUBbdDuZNzN3D7MVw2cYPna'
+const fakeFeeAccountInfo = {
+  feeAccount: FAKE_ATA,
+  mintPubkey: {} as never,
+  ownerPubkey: {} as never,
+  tokenProgramId: {} as never,
+}
 
 const fakeQuote = {
   inputMint: SOL_NATIVE_MINT,
@@ -53,8 +68,16 @@ const fakeQuote = {
 const fakeSwap = { swapTransaction: 'BASE64_UNSIGNED_TX==' }
 
 describe('resolveJupiterFeeAccount', () => {
-  it('returns null when no treasury ATA is configured for the output mint (default OFF)', () => {
-    expect(resolveJupiterFeeAccount(USDC_MINT)).toBeNull()
+  beforeEach(() => {
+    deriveJupiterFeeAccountMock.mockReset().mockResolvedValue(fakeFeeAccountInfo)
+  })
+
+  it('derives the treasury ATA for the output mint', async () => {
+    await expect(resolveJupiterFeeAccount(USDC_MINT)).resolves.toBe(fakeFeeAccountInfo)
+    expect(deriveJupiterFeeAccountMock).toHaveBeenCalledWith({
+      outputMint: USDC_MINT,
+      feeOwner: JUPITER_AFFILIATE_FEE_OWNER,
+    })
   })
 
   it('exposes the treasury owner and bps as source-of-truth constants', () => {
@@ -71,10 +94,15 @@ describe('buildJupiterSwapTx', () => {
 
   beforeEach(() => {
     vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
+    deriveJupiterFeeAccountMock.mockReset().mockResolvedValue(fakeFeeAccountInfo)
+    prependJupiterFeeAtaMock.mockReset().mockResolvedValue('PREPENDED_UNSIGNED_TX==')
     fetchSpy = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? fakeQuote : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
     vi.stubGlobal('fetch', fetchSpy)
   })
@@ -92,7 +120,7 @@ describe('buildJupiterSwapTx', () => {
       amountBaseUnits: 100_000_000n,
     })
 
-    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+    expect(res.swapTransaction).toBe('PREPENDED_UNSIGNED_TX==')
     expect(res.outAmount).toBe('14230000')
     expect(res.minOutAmount).toBe('14087700')
     expect(res.priceImpactPct).toBe('0.0011')
@@ -101,7 +129,49 @@ describe('buildJupiterSwapTx', () => {
     expect(res.outputMint).toBe(USDC_MINT)
   })
 
-  it('omits platformFeeBps + feeAccount when no treasury ATA exists (affiliate OFF, safe default)', async () => {
+  it('includes platformFeeBps + feeAccount and prepends the fee ATA for the default affiliate path', async () => {
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+
+    expect(res.affiliateFeeApplied).toBe(true)
+
+    const quoteUrl = fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0]
+    expect(String(quoteUrl)).toContain(`platformFeeBps=${JUPITER_PLATFORM_FEE_BPS}`)
+
+    const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
+    const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
+    expect(swapBody.feeAccount).toBe(FAKE_ATA)
+    expect(prependJupiterFeeAtaMock).toHaveBeenCalledWith({
+      txData: fakeSwap.swapTransaction,
+      feeAccount: FAKE_ATA,
+      mintPubkey: fakeFeeAccountInfo.mintPubkey,
+      ownerPubkey: fakeFeeAccountInfo.ownerPubkey,
+      tokenProgramId: fakeFeeAccountInfo.tokenProgramId,
+      userWallet: expect.any(PublicKey),
+    })
+    // unsigned-only contract: never wraps anything resembling a signed tx
+    expect(swapBody).not.toHaveProperty('signature')
+  })
+
+  it('does not prepend the derived fee ATA when the quote floors the platform fee to zero', async () => {
+    fetchSpy = vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = url.includes('/quote')
+        ? {
+            ...fakeQuote,
+            platformFee: { amount: '0', feeBps: JUPITER_PLATFORM_FEE_BPS },
+          }
+        : fakeSwap
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
     const res = await buildJupiterSwapTx({
       userPublicKey: USER,
       toContractAddress: USDC_MINT,
@@ -109,15 +179,14 @@ describe('buildJupiterSwapTx', () => {
     })
 
     expect(res.affiliateFeeApplied).toBe(false)
-
-    const quoteUrl = fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0]
-    expect(String(quoteUrl)).not.toContain('platformFeeBps')
+    expect(res.swapTransaction).toBe(fakeSwap.swapTransaction)
+    expect(prependJupiterFeeAtaMock).not.toHaveBeenCalled()
 
     const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
-    // unsigned-only contract: never wraps anything resembling a signed tx
-    expect(swapBody).not.toHaveProperty('signature')
+    expect(swapBody.quoteResponse).not.toHaveProperty('platformFee')
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith(fakeSwap.swapTransaction, expect.any(PublicKey))
   })
 
   it('defaults the native mint when no contract addresses are provided', async () => {
@@ -132,7 +201,11 @@ describe('buildJupiterSwapTx', () => {
 
   it('rejects a non-positive amount', async () => {
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 0n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 0n,
+      })
     ).rejects.toThrow(/greater than zero/)
     expect(fetchSpy).not.toHaveBeenCalled()
   })
@@ -143,9 +216,17 @@ describe('buildJupiterSwapTx', () => {
   })
 
   it('throws a descriptive error on a non-ok Jupiter response', async () => {
-    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Could not find any route' }), { status: 400 }))
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Could not find any route' }), {
+        status: 400,
+      })
+    )
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 1n,
+      })
     ).rejects.toThrow(/Jupiter API error \(400\): Could not find any route/)
   })
 
@@ -153,13 +234,20 @@ describe('buildJupiterSwapTx', () => {
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('/quote')) {
-        return new Response(JSON.stringify(fakeQuote), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        return new Response(JSON.stringify(fakeQuote), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       }
       // /swap returns non-ok -> fetchJupiter must surface it as an API error, not a missing-tx error
       return new Response(JSON.stringify({ error: 'Slippage tolerance exceeded' }), { status: 422 })
     })
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 1n,
+      })
     ).rejects.toThrow(/Jupiter API error \(422\): Slippage tolerance exceeded/)
   })
 
@@ -167,7 +255,10 @@ describe('buildJupiterSwapTx', () => {
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       if (url.includes('/quote')) {
-        return new Response(JSON.stringify(fakeQuote), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        return new Response(JSON.stringify(fakeQuote), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
       }
       // 200 OK but body carries an error AND no swapTransaction -> must throw, not silently succeed
       return new Response(JSON.stringify({ error: 'No route found at build time' }), {
@@ -176,7 +267,11 @@ describe('buildJupiterSwapTx', () => {
       })
     })
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 1n,
+      })
     ).rejects.toThrow(/Jupiter swap error: No route found at build time/)
   })
 
@@ -185,11 +280,18 @@ describe('buildJupiterSwapTx', () => {
       const url = typeof input === 'string' ? input : input.toString()
       // Jupiter's priceImpactPct is a FRACTION: "0.5" == 50% impact.
       const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.5' } : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
 
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      })
     ).rejects.toThrow(PriceImpactTooHighError)
 
     // Refused before the /swap build call was ever made.
@@ -200,7 +302,10 @@ describe('buildJupiterSwapTx', () => {
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.0999' } : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
 
     const res = await buildJupiterSwapTx({
@@ -208,14 +313,17 @@ describe('buildJupiterSwapTx', () => {
       toContractAddress: USDC_MINT,
       amountBaseUnits: 100_000_000n,
     })
-    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+    expect(res.swapTransaction).toBe('PREPENDED_UNSIGNED_TX==')
   })
 
   it('builds at exactly 10% price impact (ceiling itself passes, only strictly-above rejects)', async () => {
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.10' } : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
 
     const res = await buildJupiterSwapTx({
@@ -223,18 +331,25 @@ describe('buildJupiterSwapTx', () => {
       toContractAddress: USDC_MINT,
       amountBaseUnits: 100_000_000n,
     })
-    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+    expect(res.swapTransaction).toBe('PREPENDED_UNSIGNED_TX==')
   })
 
   it('refuses to build just above the 10% price impact ceiling', async () => {
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.1001' } : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
 
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      })
     ).rejects.toThrow(PriceImpactTooHighError)
   })
 
@@ -245,8 +360,8 @@ describe('buildJupiterSwapTx', () => {
       amountBaseUnits: 100_000_000n,
     })
 
-    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('BASE64_UNSIGNED_TX==', expect.any(PublicKey))
-    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('PREPENDED_UNSIGNED_TX==', expect.any(PublicKey))
+    expect(res.swapTransaction).toBe('PREPENDED_UNSIGNED_TX==')
   })
 
   it('propagates a refusal from the instruction allow-list guard instead of returning a signable tx', async () => {
@@ -255,7 +370,11 @@ describe('buildJupiterSwapTx', () => {
     )
 
     await expect(
-      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      })
     ).rejects.toThrow(/SOL_SWAP_UNEXPECTED_PROGRAM/)
   })
 
@@ -272,24 +391,24 @@ describe('buildJupiterSwapTx', () => {
   })
 })
 
-// Affiliate-ON invariant: when a treasury ATA DOES resolve for the output mint,
+// Affiliate override invariant: when a resolver returns an ATA string directly,
 // BOTH platformFeeBps (on /quote) AND feeAccount (on /swap) MUST be sent
-// together. Omitting one without the other is the fund-unsafe failure mode
-// (Jupiter quotes a route whose fee transfer has nowhere to land -> the user's
-// broadcast reverts with SPL Token 0x17 InvalidAccountData). The empty ATA map
-// means the production OFF path is the only one exercised above; these cases
-// drive the resolver test-seam to lock the symmetric ON path so a future
-// regression that moves one `if (feeAccount)` guard but not the other is caught.
+// together. Omitting one without the other is the fund-unsafe failure mode.
+// The default resolver returns full fee-account metadata and is covered above.
 describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
-  const FAKE_ATA = 'CRz7ucCE6ZFhN297AC56ihUBbdDuZNzN3D7MVw2cYPna'
   let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
+    deriveJupiterFeeAccountMock.mockReset().mockResolvedValue(fakeFeeAccountInfo)
+    prependJupiterFeeAtaMock.mockReset().mockResolvedValue('PREPENDED_UNSIGNED_TX==')
     fetchSpy = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? fakeQuote : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
     vi.stubGlobal('fetch', fetchSpy)
   })
@@ -315,6 +434,7 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody.feeAccount).toBe(FAKE_ATA)
+    expect(prependJupiterFeeAtaMock).not.toHaveBeenCalled()
   })
 
   it('keeps the affiliate fee OFF when the quote floors platformFee.amount to zero', async () => {
@@ -326,7 +446,10 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
             platformFee: { amount: '0', feeBps: JUPITER_PLATFORM_FEE_BPS },
           }
         : fakeSwap
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     })
     vi.stubGlobal('fetch', fetchSpy)
 
@@ -345,6 +468,7 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
+    expect(swapBody.quoteResponse).not.toHaveProperty('platformFee')
   })
 
   it('keeps the affiliate fee OFF (both fields omitted) when the resolver returns null', async () => {
