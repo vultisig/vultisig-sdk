@@ -80,8 +80,14 @@ export const CLI_SIGNABLE_FLAT_TOOLS: ReadonlySet<string> = new Set([
 /**
  * Flat tools whose top-level leg uses the DIVERGENT `to_address`/`calldata`
  * field names (mcp-ts payments "signing card"; `build-custom-credit-topup.ts:165`).
- * Their nested `approval_tx` still uses `to`/`data`/`value`. A bounded per-tool
- * add: each new flat tool that ships new field names extends this set.
+ * Their nested `approval_tx` still uses `to`/`data`/`value`.
+ *
+ * DOCUMENTATION / reference only — NOT a runtime gate. `extractLeg` tolerates
+ * BOTH `to`/`to_address` and `data`/`calldata` unconditionally for every flat
+ * tool, so accepting a divergent-field leg does not depend on membership here.
+ * This set records WHICH tools are known to ship the divergent shape (for the
+ * per-tool test fixtures and future readers); each new flat tool with new field
+ * names is a bounded add to `extractLeg`'s tolerated names, mirrored here.
  */
 export const DIVERGENT_FIELD_TOOLS: ReadonlySet<string> = new Set([
   'build_custom_credit_topup',
@@ -361,6 +367,29 @@ function nestedSource(legObj: Record<string, unknown>): Record<string, unknown> 
   return nested
 }
 
+/** Canonicalize a `gas_limit` for PARITY comparison ONLY. Unlike the
+ *  signing-path `normalizeGasLimit` (which deliberately DROPS a hex value — the
+ *  SDK is never fed hex), parity must still SEE a hex gas so a hex-vs-decimal
+ *  divergence between the two channels is caught. Accepts decimal OR 0x-hex and
+ *  reduces both to a canonical decimal string, so `0x5208` and `21000` compare
+ *  EQUAL (no false divergence) while `0x5208` vs `30000` is caught. Malformed →
+ *  undefined (absent on both sides is not a divergence). */
+function canonGasLimit(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return String(value)
+  if (typeof value === 'string') {
+    const t = value.trim()
+    if (/^\d+$/.test(t) || /^0x[0-9a-fA-F]+$/.test(t)) {
+      try {
+        const n = BigInt(t)
+        return n > 0n ? n.toString() : undefined
+      } catch {
+        return undefined
+      }
+    }
+  }
+  return undefined
+}
+
 function canonLeg(legObj: Record<string, unknown>): CanonicalLeg {
   const src = nestedSource(legObj)
   // Chain can live at the envelope top level (flat/enriched), on `txArgs`
@@ -373,7 +402,7 @@ function canonLeg(legObj: Record<string, unknown>): CanonicalLeg {
     to: toRaw ? toRaw.toLowerCase() : undefined,
     value: normalizeValue(src.value),
     data: dataRaw ? dataRaw.toLowerCase() : undefined,
-    gasLimit: normalizeGasLimit(src.gas_limit),
+    gasLimit: canonGasLimit(src.gas_limit),
     chain: str(legObj.chain) ?? str(txArgs?.chain) ?? str(src.chain),
     chainId: str(legObj.chain_id) ?? str(txArgs?.chain_id) ?? str(src.chain_id),
     txEncoding: str(src.tx_encoding) ?? str(txArgs?.tx_encoding),

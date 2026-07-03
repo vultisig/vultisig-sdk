@@ -135,6 +135,24 @@ describe('processMessageLoop — dual-read candidate selection', () => {
     expect(h.ui.onNotification).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the FIRST tx_ready frame, drops + REPORTS the second in one turn (symmetric to tool-output first-wins)', async () => {
+    // The onTxReady callback is first-wins with a reported deferral, exactly like
+    // onToolOutputTx: two data-tx_ready frames in ONE stream turn must buffer the
+    // FIRST and defer (never overwrite/double-sign) the second. This guards the
+    // session.ts onTxReady branch (`txReadyCandidate !== null → reportDeferredSignable`).
+    const txReadyA = { chain: 'Polygon', chain_id: '137', tx: { to: USDC_E, value: '0', data: APPROVE_A } }
+    const txReadyB = { chain: 'Polygon', chain_id: '137', tx: { to: SPENDER, value: '0', data: APPROVE_B } }
+    const h = makeHarness([
+      { channel: 'tx_ready', payload: txReadyA },
+      { channel: 'tx_ready', payload: txReadyB },
+    ])
+    await h.run()
+    expect(h.storeServerTransaction).toHaveBeenCalledTimes(1)
+    expect(h.storeServerTransaction).toHaveBeenCalledWith(txReadyA)
+    expect(h.signTxFromBuffer).toHaveBeenCalledTimes(1)
+    expect(h.ui.onNotification).toHaveBeenCalledTimes(1)
+  })
+
   it('a signable tx_ready is AUTHORITATIVE — the tool-output twin is NOT double-stored (parity-only)', async () => {
     const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: USDC_E, value: '0', data: APPROVE_A } }
     expect(payloadLooksSignable(txReady)).toBe(true)

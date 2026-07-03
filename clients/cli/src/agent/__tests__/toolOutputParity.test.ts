@@ -87,6 +87,24 @@ describe('diffToolOutputParity — matching payloads', () => {
     expect(diffToolOutputParity(mk(), mk()).match).toBe(true)
   })
 
+  it('hex-encoded gas_limit equal to a decimal gas_limit → match (canonicalized, no false divergence)', () => {
+    // One channel may express gas_limit as 0x-hex, the other as decimal. Parity
+    // canonicalizes both to a decimal magnitude, so 0x5208 == 21000 is a MATCH.
+    const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '0x5208' } }
+    const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '21000' } }
+    expect(diffToolOutputParity(enriched, txReady).match).toBe(true)
+  })
+
+  it('hex gas_limit differing in magnitude from decimal → divergence caught (no blind spot)', () => {
+    // Regression for the parity gas blind spot: hex used to canonicalize to
+    // undefined on BOTH sides, masking a real hex-vs-decimal magnitude divergence.
+    const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '0x5208' } } // 21000
+    const txReady = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA, gas_limit: '30000' } }
+    const r = diffToolOutputParity(enriched, txReady)
+    expect(r.match).toBe(false)
+    expect(r.divergences.some(d => d.includes('gasLimit'))).toBe(true)
+  })
+
   it('reports tx_ready-exclusive fields (typed_confirm, sequence_id) without breaking match', () => {
     const enriched = { chain: 'Polygon', chain_id: '137', tx: { to: TO, data: DATA } }
     const txReady = {
