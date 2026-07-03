@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.8.16",
+  "version": "1.8.17",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -1024,7 +1024,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.22.2",
+    "@vultisig/core-chain": "2.23.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",
