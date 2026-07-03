@@ -36,6 +36,7 @@ const {
   mockCosmosGetTx,
   mockExecuteSuiTx,
   mockRippleRequest,
+  mockGetBittensorTxHash,
 } = vi.hoisted(() => ({
   mockQueryUrl: vi.fn(),
   mockGetEvmClient: vi.fn(),
@@ -47,6 +48,7 @@ const {
   mockCosmosGetTx: vi.fn(),
   mockExecuteSuiTx: vi.fn(),
   mockRippleRequest: vi.fn(),
+  mockGetBittensorTxHash: vi.fn(),
 }))
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
@@ -84,6 +86,10 @@ vi.mock('@vultisig/core-chain/chains/ripple/client', () => ({
   })),
 }))
 
+vi.mock('@vultisig/core-chain/tx/hash/resolvers/bittensor', () => ({
+  getBittensorTxHash: (...args: unknown[]) => mockGetBittensorTxHash(...args),
+}))
+
 describe('RawBroadcastService', () => {
   const service = new RawBroadcastService()
 
@@ -113,6 +119,7 @@ describe('RawBroadcastService', () => {
         tx_json: { hash: 'xrp-hash' },
       },
     })
+    mockGetBittensorTxHash.mockReturnValue('0xbittensorhash')
   })
 
   it('throws UnsupportedChain for chains without a raw broadcast path', async () => {
@@ -581,6 +588,56 @@ describe('RawBroadcastService', () => {
         rawTx: 'beef',
       })
     ).rejects.toThrow(/missing extrinsic hash/)
+  })
+
+  it('returns Bittensor raw tx hash when the extrinsic was already imported', async () => {
+    mockQueryUrl.mockResolvedValue({
+      error: {
+        message: 'Already Imported',
+      },
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: 'beef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+  })
+
+  it('returns Bittensor raw tx hash for timeout-style JSON-RPC errors', async () => {
+    mockQueryUrl.mockResolvedValue({
+      error: {
+        message: 'request timed out',
+      },
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
+  })
+
+  it('returns Bittensor raw tx hash for timeout-style submit failures', async () => {
+    mockQueryUrl.mockRejectedValue(new Error('request timed out'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Bittensor,
+      rawTx: '0xbeef',
+    })
+
+    expect(hash).toBe('0xbittensorhash')
+    expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
+      encoded: Buffer.from('beef', 'hex'),
+    })
   })
 
   it('broadcasts Tron transaction JSON', async () => {

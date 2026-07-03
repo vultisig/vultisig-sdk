@@ -16,6 +16,7 @@ import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
+import { getBittensorTxHash } from '@vultisig/core-chain/tx/hash/resolvers/bittensor'
 import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -453,6 +454,7 @@ export class RawBroadcastService {
    */
   private async broadcastBittensorRawTx(rawTx: string): Promise<string> {
     const hexWithPrefix = ensureHexPrefix(rawTx)
+    const rawTxHash = () => this.getBittensorRawTxHash(hexWithPrefix)
 
     const { data: response, error } = await attempt(
       queryUrl<{ result: string; error?: { message: string } }>(bittensorRpcUrl, {
@@ -466,6 +468,9 @@ export class RawBroadcastService {
     )
 
     if (error) {
+      if (isInError(error, 'Already Imported', 'already imported', 'timed out', 'timeout')) {
+        return rawTxHash()
+      }
       throw error
     }
 
@@ -474,6 +479,9 @@ export class RawBroadcastService {
     }
 
     if (response.error) {
+      if (isInError(response.error.message, 'Already Imported', 'already imported', 'timed out', 'timeout')) {
+        return rawTxHash()
+      }
       throw new Error(`Bittensor broadcast failed: ${response.error.message}`)
     }
 
@@ -484,6 +492,14 @@ export class RawBroadcastService {
     }
 
     return response.result
+  }
+
+  private async getBittensorRawTxHash(rawTx: string): Promise<string> {
+    const hexWithoutPrefix = ensureHexPrefix(rawTx).slice(2)
+    type BittensorHashInput = Parameters<typeof getBittensorTxHash>[0]
+    return getBittensorTxHash({
+      encoded: Buffer.from(hexWithoutPrefix, 'hex'),
+    } as unknown as BittensorHashInput)
   }
 
   /**
