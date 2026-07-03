@@ -12,6 +12,10 @@ export enum ExitCode {
   RESOURCE_NOT_FOUND = 5,
   EXTERNAL_SERVICE = 6,
   UNKNOWN = 7,
+  // Broadcast succeeded on-chain but the post-broadcast acknowledgement/report
+  // back to the backend failed. The emitted tx hash IS VALID — do NOT blindly
+  // retry (that risks a double-spend); track/confirm the hash instead.
+  ACK_FAILED = 8,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -23,6 +27,7 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.RESOURCE_NOT_FOUND]: 'Resource not found (token, route)',
   [ExitCode.EXTERNAL_SERVICE]: 'External service error (retryable)',
   [ExitCode.UNKNOWN]: 'Unknown/unexpected error',
+  [ExitCode.ACK_FAILED]: 'Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry',
 }
 
 export abstract class VsigError extends Error {

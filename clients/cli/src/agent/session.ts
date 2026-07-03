@@ -18,6 +18,7 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import { recordResolution } from './broadcastJournal'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
@@ -151,6 +152,8 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+    // `--force` bypasses the persistent broadcast-journal duplicate guard.
+    this.executor.setForceBroadcast(!!config.force)
   }
 
   /**
@@ -621,6 +624,14 @@ export class AgentSession {
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
+      // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
+      // broadcast anything — surface it as a hard error so a headless caller
+      // exits non-zero with a clear, actionable signal instead of reading a
+      // success envelope that hides a silently-failed sign. The failed result is
+      // still queued+recursed above so the backend/LLM learns the sign refused.
+      if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
+        ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
       // learns confirmed/failed/timeout instead of treating broadcast as success.
@@ -831,10 +842,16 @@ export class AgentSession {
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          // Resolve the broadcast-journal record: a confirmed tx stays guarded
+          // (re-sending would double-spend), but the terminal status is logged.
+          recordResolution(txHash, 'confirmed')
           return
         }
         if (result.status === 'error') {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          // A definitive on-chain failure is the ONE resolution that clears the
+          // journal guard so an automatic retry of the same intent is allowed.
+          recordResolution(txHash, 'failed')
           return
         }
       } catch (err: any) {
@@ -855,6 +872,9 @@ export class AgentSession {
       )
     }
     ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+    // Timeout is NOT a definitive failure — the tx may still land later — so the
+    // journal keeps the intent guarded. Log the terminal poll status all the same.
+    recordResolution(txHash, 'timeout')
   }
 
   /** Sleep between confirmation polls. Separate method so tests can stub it out. */

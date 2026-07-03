@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../../agent/agentErrors'
 import type { UICallbacks } from '../../agent/types'
+import { ExitCode } from '../../core/errors'
 import { resetOutput } from '../../lib/output'
 
 // Mutable driver shared with the hoisted AgentSession mock below.
@@ -126,7 +127,9 @@ describe('agent ask --json output contract', () => {
     }
 
     const { exitCode } = await runAsk()
-    expect(exitCode).not.toBe(0)
+    // The backend/stream error code maps onto the ExitCode taxonomy (F3) rather
+    // than a blanket 1 — TRANSACTION_FAILED → EXTERNAL_SERVICE (retryable).
+    expect(exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
@@ -186,11 +189,16 @@ describe('agent ask --json output contract', () => {
     }
 
     const { exitCode } = await runAsk()
-    expect(exitCode).not.toBe(0)
+    // A throw AFTER a broadcast is the ACK-failure case (F1): the tx hash is
+    // valid but the follow-up report failed. Distinct exit code 8 (ACK_FAILED)
+    // tells a headless caller NOT to blindly retry (that would double-spend).
+    expect(exitCode).toBe(ExitCode.ACK_FAILED)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.v).toBe(1)
+    // Re-tagged to ACK_FAILED regardless of the underlying throw's code.
+    expect(envelope.error.code).toBe(AgentErrorCode.ACK_FAILED)
     // conversation_id recovered from the session even though ask() threw.
     expect(envelope.error.conversation_id).toBe('conv-abc')
     // The broadcast tx survives into the error envelope's data block.

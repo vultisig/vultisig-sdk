@@ -4,6 +4,8 @@
  */
 import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 
+import { ExitCode } from '../core/errors'
+
 export enum AgentErrorCode {
   BACKEND_UNREACHABLE = 'BACKEND_UNREACHABLE',
   AUTH_FAILED = 'AUTH_FAILED',
@@ -22,6 +24,16 @@ export enum AgentErrorCode {
   TIMEOUT = 'TIMEOUT',
   TRANSACTION_FAILED = 'TRANSACTION_FAILED',
   SIGNING_FAILED = 'SIGNING_FAILED',
+  // The tx signed + broadcast on-chain successfully, but the follow-up POST that
+  // reports the result back to the backend (recursive recent_actions) failed.
+  // The broadcast HASH IS VALID — a caller must NOT blindly retry (that would
+  // double-spend); it should track/confirm the emitted hash instead. Distinct
+  // from TRANSACTION_FAILED (the broadcast itself failed — safe to retry).
+  ACK_FAILED = 'ACK_FAILED',
+  // A local broadcast-journal hit: an identical intent was broadcast recently
+  // and hasn't definitively failed, so signing was refused to avoid a
+  // double-spend. Retry with --force to override. See broadcastJournal.ts.
+  DUPLICATE_BROADCAST = 'DUPLICATE_BROADCAST',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
   LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
   // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
@@ -159,6 +171,15 @@ function nodeErrCode(err: unknown): string | undefined {
  * Normalize any thrown value into a machine-readable code and human message.
  */
 export function normalizeAgentError(err: unknown): NormalizedAgentError {
+  // Errors that already carry a valid AgentErrorCode (e.g. DuplicateBroadcastError)
+  // keep it — don't re-infer a weaker code from the message string.
+  if (err && typeof err === 'object' && 'code' in err) {
+    const c = (err as { code: unknown }).code
+    if (typeof c === 'string' && isAgentErrorCode(c)) {
+      const message = err instanceof Error ? err.message : String(err)
+      return { code: c, message }
+    }
+  }
   if (err instanceof VaultError) {
     return { code: mapVaultError(err), message: err.message }
   }
@@ -180,4 +201,44 @@ export function normalizeAgentError(err: unknown): NormalizedAgentError {
   }
 
   return { code: inferAgentErrorCodeFromMessage(message), message }
+}
+
+/**
+ * Map an orchestrator-facing {@link AgentErrorCode} onto the process-level
+ * {@link ExitCode} taxonomy so `agent ask` exits with a meaningful, stable code
+ * instead of a blanket 0/1. Lets a headless caller branch on `$?` — e.g.
+ * distinguish a retryable network blip (3) from a definitive bad-input (4) or
+ * the fund-safety-critical ACK_FAILED (8, hash valid — do NOT retry).
+ */
+export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
+  switch (code) {
+    case AgentErrorCode.ACK_FAILED:
+      return ExitCode.ACK_FAILED
+    case AgentErrorCode.AUTH_FAILED:
+    case AgentErrorCode.VAULT_LOCKED:
+    case AgentErrorCode.PASSWORD_REQUIRED:
+      return ExitCode.AUTH_REQUIRED
+    case AgentErrorCode.BACKEND_UNREACHABLE:
+    case AgentErrorCode.NETWORK_ERROR:
+    case AgentErrorCode.TIMEOUT:
+      return ExitCode.NETWORK
+    case AgentErrorCode.INVALID_INPUT:
+    case AgentErrorCode.DUPLICATE_BROADCAST:
+      return ExitCode.INVALID_INPUT
+    case AgentErrorCode.SESSION_NOT_FOUND:
+      return ExitCode.RESOURCE_NOT_FOUND
+    case AgentErrorCode.TRANSACTION_FAILED:
+      return ExitCode.EXTERNAL_SERVICE
+    case AgentErrorCode.ACTION_NOT_IMPLEMENTED:
+    case AgentErrorCode.TOOL_UNSUPPORTED:
+    case AgentErrorCode.SESSION_NOT_INITIALIZED:
+    case AgentErrorCode.CONFIRMATION_REQUIRED:
+      return ExitCode.USAGE
+    case AgentErrorCode.SIGNING_FAILED:
+    case AgentErrorCode.LOOP_DEPTH_EXCEEDED:
+    case AgentErrorCode.UNKNOWN_ERROR:
+      return ExitCode.UNKNOWN
+    default:
+      return ExitCode.UNKNOWN
+  }
 }

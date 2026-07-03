@@ -32,6 +32,8 @@ export type AgentConfig = {
   /** Billing profile api_id slug — sent as X-Vultisig-Abe-Profile header.
    *  Empty falls back to the backend's default profile. */
   profile?: string
+  /** Bypass the persistent broadcast-journal duplicate guard (`--force`). */
+  force?: boolean
 }
 
 // ============================================================================

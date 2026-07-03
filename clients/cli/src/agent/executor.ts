@@ -14,6 +14,7 @@ import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
+import { assertNoRecentDuplicate, type BroadcastIntent, computeFingerprint, recordBroadcast } from './broadcastJournal'
 import type { RecentAction } from './types'
 
 /**
@@ -141,6 +142,10 @@ export class AgentExecutor {
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
   private evmLastBroadcast = new Map<string, number>()
+  // When true, bypass the persistent broadcast-journal duplicate guard (the
+  // `--force` escape hatch). Off by default: a fresh retry process must refuse
+  // to re-broadcast an intent a prior process already sent (double-spend).
+  private forceBroadcast = false
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
@@ -153,6 +158,37 @@ export class AgentExecutor {
 
   setPassword(password: string): void {
     this.password = password
+  }
+
+  /** Opt out of the persistent broadcast-journal duplicate guard (`--force`). */
+  setForceBroadcast(force: boolean): void {
+    this.forceBroadcast = force
+  }
+
+  /**
+   * Derive the chain-agnostic broadcast intent (fingerprint basis) from a
+   * buffered tx_ready payload. Prefers the nested EVM/`tx` shape; falls back to
+   * the non-EVM `txArgs.{to,amount,memo}` shape. `overrideTx` lets a multi-leg
+   * caller fingerprint a specific leg (e.g. the approve leg's `approvalTxArgs`).
+   */
+  private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
+    const source = overrideTx ?? payload
+    const nested = extractNestedTx(source)
+    if (nested && (nested.to || nested.value || nested.data)) {
+      return {
+        chain: chain.toString(),
+        to: nested.to != null ? String(nested.to) : undefined,
+        value: nested.value != null ? String(nested.value) : undefined,
+        data: nested.data != null ? String(nested.data) : undefined,
+      }
+    }
+    const txArgs = source?.txArgs ?? source
+    return {
+      chain: chain.toString(),
+      to: txArgs?.to != null ? String(txArgs.to) : undefined,
+      value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
+      data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+    }
   }
 
   /**
@@ -580,6 +616,23 @@ export class AgentExecutor {
         throw new Error('Pending transaction is not a server-built tx (no __serverTx flag).')
       }
 
+      // F1/F14 double-spend guard. Fingerprint the intent(s) BEFORE any signing
+      // and refuse if a prior (or sibling) process already broadcast the same
+      // intent recently and it hasn't definitively failed — the persistent
+      // journal is what survives the process death that the in-memory
+      // `evmLastBroadcast` guard can't. Multi-leg checks BOTH legs so a retry
+      // after the approve broadcast (but before the main) can't re-approve.
+      // `--force` (setForceBroadcast) bypasses.
+      const isMultiLeg = !!payload.__multiLeg
+      const primaryIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
+        : this.buildBroadcastIntent(payload, chain)
+      const approveIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        : undefined
+      assertNoRecentDuplicate(primaryIntent, { force: this.forceBroadcast })
+      if (approveIntent) assertNoRecentDuplicate(approveIntent, { force: this.forceBroadcast })
+
       // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
       // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
       // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
@@ -612,6 +665,17 @@ export class AgentExecutor {
         }
       }
       if (!result) result = await this.signServerTx(payload, chain, {})
+
+      // Record the broadcast(s) so a later retry recognises this intent and
+      // refuses to double-send. Multi-leg records the approve leg under its own
+      // fingerprint too (audit F14: prevents an approve re-broadcast on retry).
+      if (result?.tx_hash) {
+        recordBroadcast(computeFingerprint(primaryIntent), String(result.tx_hash), chain.toString())
+      }
+      if (approveIntent && result?.approval_tx_hash) {
+        recordBroadcast(computeFingerprint(approveIntent), String(result.approval_tx_hash), chain.toString())
+      }
+
       if (payload.sequence_id) result.sequence_id = payload.sequence_id
       return result
     })
