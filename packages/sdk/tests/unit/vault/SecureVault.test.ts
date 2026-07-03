@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { RelaySigningService } from '../../../src/services/RelaySigningService'
 import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -254,6 +255,37 @@ describe('SecureVault type safety', () => {
 })
 
 describe('SecureVault signing', () => {
+  const customRelayUrl = 'https://relay.example.test/router'
+
+  const makeSecureVault = () =>
+    new (SecureVault as any)(
+      'secure-vault-id',
+      'Secure Vault',
+      '',
+      {
+        storage: {} as any,
+        config: {},
+        serverManager: { messageRelay: customRelayUrl },
+        passwordCache: {} as any,
+        wasmProvider: {
+          getWalletCore: vi.fn().mockResolvedValue({}),
+        },
+        pushNotificationService: {} as any,
+      },
+      {
+        name: 'Secure Vault',
+        publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        signers: ['local-party-1', 'remote-party-2', 'remote-party-3'],
+        hexChainCode: 'b'.repeat(64),
+        localPartyId: 'local-party-1',
+        createdAt: Date.now(),
+        libType: 'DKLS',
+        isBackedUp: true,
+        order: 0,
+        keyShares: { ecdsa: 'ecdsa-key-share', eddsa: 'eddsa-key-share' },
+      }
+    ) as SecureVault
+
   describe('sign() method interface', () => {
     it('should accept SigningPayload with messageHashes', () => {
       const payload = {
@@ -297,6 +329,18 @@ describe('SecureVault signing', () => {
       const options = {}
       expect(options).toBeDefined()
     })
+
+    it('passes the configured relay URL to the relay signing service', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().sign({
+        chain: 'Ethereum',
+        transaction: { to: '0x123', value: '1000000000000000000' },
+        messageHashes: ['abc123def456'],
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
+    })
   })
 
   describe('signBytes() method interface', () => {
@@ -338,6 +382,17 @@ describe('SecureVault signing', () => {
 
       expect(typeof signingOptions.onQRCodeReady).toBe('function')
       expect(typeof signingOptions.onDeviceJoined).toBe('function')
+    })
+
+    it('passes the configured relay URL to raw-bytes relay signing', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().signBytes({
+        data: '0xabcdef123456',
+        chain: 'Ethereum',
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
     })
   })
 
