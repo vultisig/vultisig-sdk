@@ -1,12 +1,10 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
 import { DKLS } from '@vultisig/core-mpc/dkls/dkls'
-import { batchReshareWithServer } from '@vultisig/core-mpc/fast/api/batchReshareWithServer'
 import { createVaultWithServer } from '@vultisig/core-mpc/fast/api/createVaultWithServer'
 import { getVaultFromServer, type VaultFromServerResponse } from '@vultisig/core-mpc/fast/api/getVaultFromServer'
 import { mldsaWithServer } from '@vultisig/core-mpc/fast/api/mldsaWithServer'
 import { resendVaultShare } from '@vultisig/core-mpc/fast/api/resendVaultShare'
-import { reshareWithServer } from '@vultisig/core-mpc/fast/api/reshareWithServer'
 import { setupVaultWithServer } from '@vultisig/core-mpc/fast/api/setupVaultWithServer'
 import { signWithServer } from '@vultisig/core-mpc/fast/api/signWithServer'
 import { verifyVaultEmailCode } from '@vultisig/core-mpc/fast/api/verifyVaultEmailCode'
@@ -335,52 +333,23 @@ export class ServerManager {
   }
 
   /**
-   * Reshare vault participants
+   * Reshare vault participants.
+   *
+   * Disabled until this API runs the local DKLS + Schnorr reshare ceremony.
+   * Calling only the VultiServer reshare endpoint and returning the existing
+   * vault would report success while leaving local keyshares unchanged.
    */
   async reshareVault(
-    vault: CoreVault,
-    reshareOptions: ReshareOptions & {
+    _vault: CoreVault,
+    _reshareOptions: ReshareOptions & {
       password: string
       email?: string
       tssBatching?: boolean
     }
   ): Promise<CoreVault> {
-    if (reshareOptions.tssBatching) {
-      await batchReshareWithServer({
-        name: vault.name,
-        session_id: randomUUID(),
-        public_key: vault.publicKeys.ecdsa,
-        hex_encryption_key: vault.hexChainCode,
-        hex_chain_code: vault.hexChainCode,
-        local_party_id: vault.localPartyId,
-        old_parties: vault.signers,
-        old_reshare_prefix: vault.resharePrefix || '',
-        encryption_password: reshareOptions.password,
-        email: reshareOptions.email,
-        reshare_type: 1,
-        lib_type: 1,
-        protocols: ['ecdsa', 'eddsa'],
-        vaultBaseUrl: this.config.fastVault,
-      })
-    } else {
-      await reshareWithServer({
-        name: vault.name,
-        session_id: randomUUID(),
-        public_key: vault.publicKeys.ecdsa,
-        hex_encryption_key: vault.hexChainCode,
-        hex_chain_code: vault.hexChainCode,
-        local_party_id: vault.localPartyId,
-        old_parties: vault.signers,
-        old_reshare_prefix: vault.resharePrefix || '',
-        encryption_password: reshareOptions.password,
-        email: reshareOptions.email,
-        reshare_type: 1,
-        lib_type: 1,
-        vaultBaseUrl: this.config.fastVault,
-      })
-    }
-
-    return vault
+    throw new Error(
+      'ServerManager.reshareVault is disabled: use Vultisig.performReshare with an active local MPC ceremony.'
+    )
   }
 
   /**
