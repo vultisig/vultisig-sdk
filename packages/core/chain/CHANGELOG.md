@@ -1,5 +1,30 @@
 # @vultisig/core-chain
 
+## 2.23.0
+
+### Minor Changes
+
+- [#931](https://github.com/vultisig/vultisig-sdk/pull/931) [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a public `SwapAffiliateConfig.jupiter` fee-owner override for Jupiter affiliate fee account derivation.
+
+- [#930](https://github.com/vultisig/vultisig-sdk/pull/930) [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking APY resolver
+
+  Phase 6 of Solana native staking. Adds `resolveValidatorApy` under
+  `@vultisig/core-chain/chains/solana/staking/apyResolver`, which drives the
+  per-validator APY on the DeFi stake rows. Two sources, in order: the Stakewiz
+  `apy_estimate` passthrough (network-measured, commission-net) from the Phase 2
+  metadata seam, then an on-chain fallback derived from the network inflation rate
+  and the fraction of supply staked, net of the validator's commission, compounded
+  over the epochs-per-year. Returns `undefined` when neither yields a positive
+  value so the view hides the APY row.
+
+- [#887](https://github.com/vultisig/vultisig-sdk/pull/887) [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Jupiter as a same-chain Solana swap provider with VULT-scaled affiliate fee support.
+
+### Patch Changes
+
+- [#954](https://github.com/vultisig/vultisig-sdk/pull/954) [`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Terra Classic address explorer URLs so Terra Finder receives a single `classic` network segment.
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
 ## 2.22.2
 
 ### Patch Changes
