@@ -315,6 +315,26 @@ export class AgentExecutor {
     if (!stored) return null
     const p = stored.payload as any
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+
+    // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
+    // token labels, so the generic summaries below degrade to "send ? to ?".
+    // Summarize the destination contract + value (and the bundled approval leg)
+    // so the confirm gate / `--yes` log always shows what is being signed. Keyed
+    // on the bridge's `__buildTx` marker so existing swap/send summaries are
+    // untouched. These are always contract calls (approve / wrap calldata).
+    if (p?.__buildTx) {
+      const action = typeof p?.action === 'string' && p.action ? ` [${p.action}]` : ''
+      if (p?.__multiLeg) {
+        const wrapTo = (p?.txArgs?.tx?.to as string) || '?'
+        return `contract call on ${stored.chain} to ${wrapTo} (+ token approval — 2 transactions)${action}`
+      }
+      const flat = (p?.tx ?? {}) as Record<string, unknown>
+      const to = typeof flat.to === 'string' ? flat.to : '?'
+      const valueRaw = typeof flat.value === 'string' ? flat.value : '0'
+      const valuePart = valueRaw && valueRaw !== '0' ? ` value ${valueRaw}` : ''
+      return `contract call on ${stored.chain} to ${to}${valuePart}${action}`
+    }
+
     const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
@@ -2033,7 +2053,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
 /**
  * Resolve a Chain from a numeric EVM chain ID.
  */
-function resolveChainId(chainId: string | number): Chain | null {
+export function resolveChainId(chainId: string | number): Chain | null {
   const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
   if (isNaN(id)) return null
 

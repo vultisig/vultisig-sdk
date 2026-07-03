@@ -22,6 +22,7 @@ import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSumm
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import { CLI_SIGNABLE_FLAT_TOOLS, diffToolOutputParity, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -481,8 +482,30 @@ export class AgentSession {
       }
     }
 
-    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
-    let serverTxStoredFromStream = 0
+    // Phase-1 dual-read. Two signable candidates are captured per turn (first-wins
+    // by source) and reconciled AFTER the stream (see `selectAndBufferSignable`):
+    //  - `txReadyCandidate`: the backend-enriched payload off the `data-tx_ready`
+    //    channel — AUTHORITATIVE for signing whenever it is signable (today's
+    //    behavior, unchanged).
+    //  - `toolOutputCandidate`: a client-side candidate ENRICHED from a
+    //    `tool-output-available` frame — the PARITY reference, and the sign source
+    //    only when no usable `tx_ready` arrives (polymarket [no tx_ready];
+    //    `build_custom_*` [structurally-unsignable tx_ready]).
+    // Deferring selection to end-of-stream lets us compare both channels (the
+    // Phase-1 parity deliverable) and prefer the safe source without depending on
+    // wire arrival order.
+    let txReadyCandidate: TxReadyPayload | null = null
+    // Tool-call id of the tool-output frame this tx_ready is the wire-adjacent
+    // twin of (client.ts pairs it). `null` when no signable tool-output preceded
+    // it. Compared against `toolOutputCandidate.callId` to decide whether the two
+    // captured candidates are the SAME tool call before diffing them.
+    let txReadyTwinCallId: string | null = null
+    let toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -527,13 +550,31 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onTxReady: (tx: any) => {
-        if (this.executor.storeServerTransaction(tx)) {
-          serverTxStoredFromStream++
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
+      onTxReady: (tx: any, toolCallId?: string) => {
+        // Capture the FIRST `tx_ready` this turn (do NOT store yet — selection is
+        // deferred to `selectAndBufferSignable` after the stream so the parity
+        // cross-check can compare both channels). A SECOND frame is deferred: the
+        // executor signs one payload per turn; the dropped tool's output stays in
+        // the backend conversation and re-emerges next turn once its on-chain
+        // precondition still holds — fail-safe, never a partial/wrong sign.
+        if (txReadyCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
         }
+        txReadyCandidate = tx as TxReadyPayload
+        // Id of the signable tool-output frame this tx_ready was emitted next to
+        // (its twin) — lets selectAndBufferSignable pair the channels before diffing.
+        txReadyTwinCallId = toolCallId ?? null
+      },
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep', toolCallId?: string) => {
+        // Client-side candidate enriched from a `tool-output-available` frame.
+        // First-wins per turn; used by `selectAndBufferSignable` as the parity
+        // reference (and the sign source only when no usable `tx_ready` arrives).
+        if (toolOutputCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
+        }
+        toolOutputCandidate = { payload, toolName, source, callId: toolCallId ?? null }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -605,16 +646,14 @@ export class AgentSession {
     // Routed straight to the executor (no Action wrapper); result is
     // pushed onto pendingToolResults and recursed for the next turn.
     //
-    // Backend contract: the agent emits at most one tx_ready per stream
-    // turn. storeServerTransaction overwrites a single 'latest' buffer
-    // slot — if the backend ever emits two tx_ready events in one turn,
-    // only the last would be signed. That is not a currently supported
-    // flow; multi-leg sequences use separate turns via recursion.
-    if (serverTxStoredFromStream > 0) {
-      if (this.config.verbose)
-        process.stderr.write(
-          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
-        )
+    // Phase-1 dual-read reconciliation: cross-check the two channels (parity —
+    // logged loudly on divergence) and buffer the SAFE sign source (a signable
+    // `tx_ready` is authoritative; else the client tool-output candidate). One
+    // signable tx per turn — multi-leg approve→main runs within signMultiLeg;
+    // multi-step flows advance across turns via the recursion below.
+    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, txReadyTwinCallId, toolOutputCandidate, ui)
+    if (bufferedSignable) {
+      if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
       const signToolCallId = `tx_sign_${Date.now()}`
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
@@ -643,6 +682,173 @@ export class AgentSession {
     }
 
     ui.onDone()
+  }
+
+  /**
+   * Report that a second signable frame arrived in the same turn and was
+   * deferred (the executor signs one payload per turn). Never silent: the
+   * dropped tool's output stays in the backend conversation, so the frame
+   * re-emerges next turn if its on-chain precondition still holds. We neither
+   * fail the turn (risks a no-progress loop) nor overwrite the first (would drop
+   * it unsigned).
+   */
+  private reportDeferredSignable(ui: UICallbacks): void {
+    process.stderr.write(
+      '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+    )
+    ui.onNotification?.(
+      'Transaction deferred',
+      'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
+    )
+  }
+
+  /**
+   * Phase-1 dual-read reconciliation. Given the two per-turn candidates, run the
+   * parity cross-check (when both are the SAME tool call) and buffer the SAFE
+   * sign source into the executor. Returns true when something was buffered.
+   *
+   * Selection order (fund-safety):
+   *  1. a SIGNABLE `tx_ready` — AUTHORITATIVE, unchanged from today's behavior;
+   *  2. the client tool-output candidate — covers flat off-chain tools with no
+   *     `tx_ready` (polymarket) and flat tools whose `tx_ready` is structurally
+   *     unsignable (`build_custom_*`, divergent `to_address`/`calldata`);
+   *  3. an unsignable `tx_ready` as last resort — preserves today's behavior (it
+   *     surfaces its own error at sign time) rather than silently dropping it.
+   * `payloadLooksSignable` mirrors the executor's real requirements so a
+   * structurally-present-but-unsignable `tx_ready` (which `storeServerTransaction`
+   * would still buffer, only to throw at sign time) doesn't pre-empt a good
+   * tool-output candidate.
+   *
+   * FAIL-CLOSED on divergence (review — gomesalexandre): a flat tool-output is a
+   * sign source ONLY when (a) there is NO `tx_ready` at all, or (b) the same-turn
+   * `tx_ready` MATCHED parity. Whenever a `tx_ready` is present and the flat did
+   * not prove equal to it, we do NOT sign the client-enriched candidate — we fall
+   * closed to the `tx_ready` path (which, when unsignable, errors at sign time).
+   *
+   * This sign gate is DELIBERATELY INDEPENDENT of the pairing heuristic below:
+   * whether the two same-turn candidates are "the same tool call" affects only
+   * divergence TELEMETRY, never the sign decision. So even if the pairing were
+   * wrong (e.g. the backend batched two tool-output frames before a `tx_ready`
+   * against the documented per-pending order — agent-backend agent.go:6397), a
+   * diverging flat still cannot be signed: it is gated by `parityMatched`, not by
+   * pairing. The fund-safety guarantee therefore rests on parity equality alone,
+   * not on a cross-repo wire-ordering invariant (security + Codex convergence).
+   *
+   * Pairing (review — gomesalexandre) — TELEMETRY ONLY: the two channels are the
+   * SAME tool call iff their tool-call ids match (`txReadyTwinCallId` is the id of
+   * the tool-output frame this `tx_ready` was emitted next to — client.ts). A
+   * DEFINITELY-unpaired pair (both ids present AND different) skips the parity
+   * diff so an unrelated same-turn pair does not emit a false `[DIVERGENCE]`; a
+   * missing id falls back to running the diff so a real divergence is never
+   * suppressed. This gate never enqueues a sign source — it only silences noise.
+   */
+  private selectAndBufferSignable(
+    txReadyCandidate: TxReadyPayload | null,
+    txReadyTwinCallId: string | null,
+    toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null,
+    ui: UICallbacks
+  ): boolean {
+    // Pair the two channels by tool-call id — for TELEMETRY ONLY (see the
+    // method doc). An unrelated same-turn pair (different tools) is NOT the same
+    // transaction, so it must not produce a false divergence signal. This never
+    // affects the sign decision below (which fails closed on parity alone).
+    const toolOutputCallId = toolOutputCandidate?.callId ?? null
+    const definitelyUnpaired =
+      txReadyCandidate !== null &&
+      toolOutputCandidate !== null &&
+      toolOutputCallId !== null &&
+      txReadyTwinCallId !== null &&
+      toolOutputCallId !== txReadyTwinCallId
+
+    // Parity cross-check (Phase-1 deliverable): the two channels are the SAME
+    // tool call — prove the client-side port against the live backend. Skipped
+    // for a definitely-unrelated pair (no false [DIVERGENCE] noise).
+    let parityMatched = false
+    if (txReadyCandidate && toolOutputCandidate && !definitelyUnpaired) {
+      parityMatched = this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
+    }
+
+    const ordered: Array<{ surface: 'tx_ready' | 'tool_output'; payload: TxReadyPayload }> = []
+    if (txReadyCandidate && payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+    // ONLY a FLAT tool-output candidate is ever a sign source. `execute_*` PREP
+    // candidates are PARITY-ONLY: the backend suppresses `tx_ready` for a
+    // malformed prep envelope (phantom card, missing tx_encoding — agent.go:8294),
+    // and signing the prep tool-output in that case would defeat that suppression.
+    // (`deriveToolOutputCandidate` already refuses a prep envelope without
+    // tx_encoding; this is the load-bearing second guard.)
+    //
+    // FAIL-CLOSED gate: a flat candidate is enqueued only when there is no
+    // tx_ready at all, or when the same-turn tx_ready MATCHED parity. Any other
+    // state (a present tx_ready the flat did not prove equal to — diverged, or
+    // parity-skipped) does NOT enqueue the flat → we fall through to the tx_ready
+    // path below (never sign the client-enriched bytes when they are not proven
+    // equal to the backend's). Independent of pairing on purpose (see method doc).
+    const flatIsSignSource = toolOutputCandidate?.source === 'flat' && (txReadyCandidate === null || parityMatched)
+    if (toolOutputCandidate && flatIsSignSource) {
+      ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
+    }
+    if (txReadyCandidate && !payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+
+    for (const { surface, payload } of ordered) {
+      if (this.executor.storeServerTransaction(payload)) {
+        if (this.config.password) this.executor.setPassword(this.config.password)
+        if (this.config.verbose) {
+          const both = txReadyCandidate && toolOutputCandidate ? 'both channels' : 'single channel'
+          process.stderr.write(`[session] buffered signable from ${surface} (${both})\n`)
+        }
+        // Cross-channel first-wins gap: when we sign the `tx_ready` but a DISTINCT
+        // FLAT tool-output candidate is also present and did NOT match parity, the
+        // two are different transactions (e.g. an `execute_send` tx_ready alongside
+        // an unrelated `polymarket_deposit` flat output in one turn), NOT a twin.
+        // Only ONE payload signs per turn, so the flat candidate goes unsigned —
+        // report it as DEFERRED (never SILENTLY drop a user-requested fund action;
+        // it re-emerges next turn). A parity TWIN (erc20_approve: flat + its own
+        // tx_ready, parityMatched) is the SAME tx and is correctly dropped silently.
+        if (surface === 'tx_ready' && toolOutputCandidate?.source === 'flat' && !parityMatched) {
+          this.reportDeferredSignable(ui)
+        }
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Compare the client-enriched tool-output candidate to the backend `tx_ready`
+   * for the same turn and log the result. On a safety-relevant divergence this
+   * logs LOUDLY (always to stderr, not just under --verbose) — that divergence
+   * signal is exactly what Phase 1 exists to surface before Phase 2 makes
+   * tool-output the sole signing source.
+   */
+  private logToolOutputParity(
+    toolOutput: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' },
+    txReady: TxReadyPayload
+  ): boolean {
+    const result = diffToolOutputParity(toolOutput.payload, txReady)
+    const exclusive = result.txReadyExclusive.length
+      ? ` | tx_ready-exclusive: ${result.txReadyExclusive.join(',')}`
+      : ''
+    if (result.match) {
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[parity] ${toolOutput.toolName} (${toolOutput.source}): tool-output == tx_ready ✓${exclusive}\n`
+        )
+      }
+      return true
+    }
+    process.stderr.write(
+      `[parity][DIVERGENCE] ${toolOutput.toolName} (${toolOutput.source}): tool-output != tx_ready — ${result.divergences.join('; ')}${exclusive}\n`
+    )
+    return false
   }
 
   /**
@@ -881,6 +1087,8 @@ export class AgentSession {
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
+    let replayedTxReady = false
+    let signableFlatToolPart: string | undefined
     for (const part of msg.parts ?? []) {
       // Balance-summary cards are read-only display, so replay them
       // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
@@ -898,7 +1106,29 @@ export class AgentSession {
         const tx = part.data as TxReadyPayload
         streamResult.transactions.push(tx)
         onTxReady?.(tx)
+        replayedTxReady = true
       }
+      // Detect a persisted FLAT signable tool part (polymarket / build_custom_*).
+      // These emit NO `data-tx_ready` — their signable output rides the
+      // tool-output-available channel, which the recovery path does NOT
+      // reconstruct (only `data-tx_ready` is replayed). Track it so we can WARN.
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        const toolName = part.type.slice('tool-'.length)
+        if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) signableFlatToolPart = toolName
+      }
+    }
+    // Phase-1 limitation (widened here past polymarket to the build_custom_*
+    // tools): a mid-turn disconnect on a tool-output-only signable tool cannot
+    // have its client-side candidate reconstructed from the persisted parts, so
+    // the transaction is not signed this turn. Fail-CLOSED (never a wrong sign),
+    // but warn LOUDLY rather than drop it silently — full tool-output replay in
+    // recovery is a follow-up.
+    if (signableFlatToolPart && !replayedTxReady) {
+      process.stderr.write(
+        `[session][recovery] recovered turn ran signable tool '${signableFlatToolPart}', whose signable output ` +
+          `rides tool-output-available (no data-tx_ready). The recovery path does not reconstruct that candidate, ` +
+          `so NO transaction was signed this turn — re-run the request to sign. (Known Phase-1 limitation.)\n`
+      )
     }
   }
 
