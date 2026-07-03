@@ -22,6 +22,11 @@ const driver = vi.hoisted(() => ({
   // SESSION_NOT_FOUND)) BEFORE the first ask() runs.
   initRun: null as null | ((cb: UICallbacks) => void | Promise<void>),
   conversationId: 'conv-abc',
+  // Drives FakeSession.hasUnacknowledgedBroadcast(): the F1 gate the ACK_FAILED
+  // re-tag now consults. Default true so a throw-after-broadcast still exits 8;
+  // a test flips it false to model a broadcast that WAS acked before a later
+  // (unrelated) failure.
+  unacknowledgedBroadcast: true,
 }))
 
 vi.mock('../../agent', async importOriginal => {
@@ -38,6 +43,9 @@ vi.mock('../../agent', async importOriginal => {
     }
     async sendMessage(_message: string, callbacks: UICallbacks): Promise<void> {
       if (driver.run) await driver.run(callbacks)
+    }
+    hasUnacknowledgedBroadcast(): boolean {
+      return driver.unacknowledgedBroadcast
     }
   }
   return { ...actual, AgentSession: FakeSession }
@@ -71,6 +79,7 @@ describe('agent ask --json output contract', () => {
     driver.run = null
     driver.initRun = null
     driver.conversationId = 'conv-abc'
+    driver.unacknowledgedBroadcast = true
     vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new ExitError(code ?? 0)
     }) as never)
@@ -206,6 +215,33 @@ describe('agent ask --json output contract', () => {
     expect(envelope.data.transactions[0].hash).toBe('0xcafef00d')
     expect(envelope.data.transactions[0].status).toBe('broadcast')
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
+  })
+
+  it('broadcast that was ALREADY acked THEN a later retryable error → keeps retryable code, NOT ACK_FAILED (item 2)', async () => {
+    // The masking bug: an earlier tx broadcast + acked, then a LATER unrelated
+    // network error. The old `.some(t => t.status !== 'failed')` gate re-tagged
+    // it exit 8, telling a headless caller NOT to retry — wrong: retrying is safe
+    // (the journal blocks any re-broadcast of that intent) and desirable. The
+    // session reports the broadcast's follow-up WAS delivered (no unacked
+    // broadcast), so the error keeps its own retryable classification.
+    driver.unacknowledgedBroadcast = false
+    driver.run = cb => {
+      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onTxStatus('0xacked', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xacked')
+      // A later, independent step fails with a retryable network error.
+      throw new Error('fetch failed talking to backend')
+    }
+
+    const { exitCode } = await runAsk()
+    // NETWORK_ERROR → exit 3 (retryable), NOT 8 (ACK_FAILED).
+    expect(exitCode).toBe(ExitCode.NETWORK)
+    expect(exitCode).not.toBe(ExitCode.ACK_FAILED)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.NETWORK_ERROR)
+    // The already-broadcast hash is still carried for tracking/de-dup.
+    expect(envelope.data.transactions[0].hash).toBe('0xacked')
   })
 
   it('stale --session fallback (SESSION_NOT_FOUND at initialize) → exit non-zero + error envelope on first turn', async () => {

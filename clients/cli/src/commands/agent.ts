@@ -291,11 +291,20 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // failure IS the ack-failure case (F1): the tx hash is valid (carried in
     // partial.transactions) but the follow-up report to the backend failed.
     // Re-tag as ACK_FAILED so the caller gets the distinct fund-safety exit code
-    // (8 — do NOT blindly retry). Exclude txs already resolved 'failed': those
-    // reverted on-chain (post-broadcast polling runs before the follow-up POST),
-    // so a retry IS safe — the journal even clears its guard for them — and
-    // ACK_FAILED would wrongly discourage it.
-    if (partial && partial.transactions.some(t => t.status !== 'failed')) {
+    // (8 — do NOT blindly retry).
+    //
+    // Gate on TWO facts, not just "some non-failed tx exists":
+    //   1. an ACTUAL broadcast hash surfaced this turn that isn't resolved
+    //      'failed' (a reverted tx is safe to retry — the journal even clears
+    //      its guard — so ACK_FAILED would wrongly discourage it), AND
+    //   2. that broadcast's follow-up report was still UNDELIVERED when the turn
+    //      threw (session.hasUnacknowledgedBroadcast()).
+    // Without (2), a later independent retryable error — fired AFTER an earlier
+    // broadcast in the turn was already acked — would be masked as exit 8, when
+    // the caller should retry (the journal blocks any re-broadcast of that
+    // intent, so retrying can't double-spend). See session.ts.
+    const liveBroadcast = !!partial && partial.transactions.some(t => t.hash && t.status !== 'failed')
+    if (liveBroadcast && ask?.hasUnacknowledgedBroadcast()) {
       code = AgentErrorCode.ACK_FAILED
     }
     exitCode = agentErrorCodeToExitCode(code)

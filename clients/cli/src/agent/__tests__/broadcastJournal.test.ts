@@ -6,7 +6,7 @@
  * clears the guard), the --force bypass, and fail-open robustness against a
  * missing/corrupt journal.
  */
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -17,11 +17,16 @@ import {
   assertNoRecentDuplicate,
   type BroadcastIntent,
   computeFingerprint,
+  ConcurrentBroadcastError,
+  DEFAULT_BROADCAST_WINDOW_MS,
   DuplicateBroadcastError,
   findRecentDuplicate,
   journalPath,
+  pruneJournal,
   recordBroadcast,
   recordResolution,
+  RESERVATION_STALE_MS,
+  reserveBroadcast,
 } from '../broadcastJournal'
 
 const INTENT: BroadcastIntent = {
@@ -146,5 +151,112 @@ describe('assertNoRecentDuplicate', () => {
 
   it('does not throw for a fresh intent', () => {
     expect(() => assertNoRecentDuplicate(INTENT)).not.toThrow()
+  })
+})
+
+describe('reserveBroadcast (atomic cross-process reservation — TOCTOU guard)', () => {
+  const FP = computeFingerprint(INTENT)
+
+  /** Replicates the internal lock-file convention for direct manipulation. */
+  function lockPath(fp: string): string {
+    return join(journalPath() + '.locks', `${fp}.lock`)
+  }
+
+  it('two simulated contenders: the second is REFUSED while the first holds it', () => {
+    // Contender A wins the reservation (both processes already passed the
+    // duplicate check — neither has recorded a hash yet).
+    const a = reserveBroadcast(FP)
+    // Contender B builds the identical intent → must lose and refuse.
+    expect(() => reserveBroadcast(FP)).toThrow(ConcurrentBroadcastError)
+    try {
+      reserveBroadcast(FP)
+      throw new Error('expected a refusal')
+    } catch (err) {
+      expect((err as ConcurrentBroadcastError).code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    }
+    // Once A releases (after it recorded the broadcast), a retry can proceed.
+    a.release()
+    const c = reserveBroadcast(FP)
+    c.release()
+  })
+
+  it('a DIFFERENT intent is never blocked by a held reservation', () => {
+    const a = reserveBroadcast(FP)
+    const other = reserveBroadcast(computeFingerprint({ ...INTENT, to: '0xSomeoneElse' }))
+    other.release()
+    a.release()
+  })
+
+  it('steals a STALE reservation (crashed owner) so retries are not wedged forever', () => {
+    reserveBroadcast(FP) // held, but never released — simulate a crash
+    // Backdate the lock's mtime past the stale TTL.
+    const staleMtimeSec = (Date.now() - RESERVATION_STALE_MS - 60_000) / 1000
+    utimesSync(lockPath(FP), staleMtimeSec, staleMtimeSec)
+    // A fresh contender now steals it instead of refusing forever.
+    const stolen = reserveBroadcast(FP)
+    stolen.release()
+  })
+
+  it('a FRESH (non-stale) reservation is NOT stolen — the live owner keeps it', () => {
+    reserveBroadcast(FP)
+    expect(() => reserveBroadcast(FP)).toThrow(ConcurrentBroadcastError)
+  })
+
+  it('force bypasses the reservation entirely (no lock, releasable no-op)', () => {
+    const held = reserveBroadcast(FP)
+    // Even with a live reservation held, --force proceeds and its release is safe.
+    const forced = reserveBroadcast(FP, { force: true })
+    expect(() => forced.release()).not.toThrow()
+    held.release()
+  })
+})
+
+describe('pruneJournal (bounds append-only growth — item 4)', () => {
+  const FP = computeFingerprint(INTENT)
+
+  it('drops records older than the retention horizon but KEEPS everything inside the dedupe window', () => {
+    const now = Date.now()
+    // A recent broadcast (well inside the 10-min dedupe window) + an ancient one.
+    recordBroadcast(FP, '0xrecent', 'Ethereum')
+    writeBroadcastLine(FP, '0xancient', 'Ethereum', now - 2 * 60 * 60 * 1000) // 2h ago
+
+    const { pruned } = pruneJournal() // default 60-min retention
+    expect(pruned).toBe(1)
+
+    const raw = readFileSync(journalPath(), 'utf8')
+    expect(raw).toContain('0xrecent') // still inside the window — never dropped
+    expect(raw).not.toContain('0xancient') // strictly outside retention — pruned
+
+    // The in-window broadcast still trips the guard after pruning.
+    expect(findRecentDuplicate(FP)?.hash).toBe('0xrecent')
+  })
+
+  it('never prunes a record still inside the dedupe window even with a tight retention', () => {
+    const now = Date.now()
+    // ts is 9 min old — inside the 10-min dedupe window.
+    writeBroadcastLine(FP, '0xinwindow', 'Ethereum', now - 9 * 60 * 1000)
+    // Retention == the dedupe window: the 9-min-old record must survive.
+    const { pruned } = pruneJournal({ retentionMs: DEFAULT_BROADCAST_WINDOW_MS })
+    expect(pruned).toBe(0)
+    expect(findRecentDuplicate(FP)?.hash).toBe('0xinwindow')
+  })
+
+  it('is a no-op on a missing journal', () => {
+    rmSync(journalPath(), { force: true })
+    expect(() => pruneJournal()).not.toThrow()
+    expect(pruneJournal()).toEqual({ kept: 0, pruned: 0 })
+  })
+
+  it('keeps unparseable lines (a concurrent partial append must never be dropped)', () => {
+    const now = Date.now()
+    writeBroadcastLine(FP, '0xancient', 'Ethereum', now - 2 * 60 * 60 * 1000)
+    appendFileSync(journalPath(), '{partial-concurrent-write\n')
+    recordBroadcast(FP, '0xrecent', 'Ethereum')
+
+    pruneJournal()
+    const raw = readFileSync(journalPath(), 'utf8')
+    expect(raw).toContain('{partial-concurrent-write') // preserved
+    expect(raw).toContain('0xrecent')
+    expect(raw).not.toContain('0xancient')
   })
 })

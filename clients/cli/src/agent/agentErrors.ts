@@ -223,8 +223,12 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
     case AgentErrorCode.TIMEOUT:
       return ExitCode.NETWORK
     case AgentErrorCode.INVALID_INPUT:
-    case AgentErrorCode.DUPLICATE_BROADCAST:
       return ExitCode.INVALID_INPUT
+    case AgentErrorCode.DUPLICATE_BROADCAST:
+      // Dedicated code (9): a fund-safety refusal where NOTHING broadcast, so a
+      // headless caller can branch on `$?` alone instead of conflating it with
+      // generic bad input (4). --force overrides.
+      return ExitCode.DUPLICATE_BROADCAST
     case AgentErrorCode.SESSION_NOT_FOUND:
       return ExitCode.RESOURCE_NOT_FOUND
     case AgentErrorCode.TRANSACTION_FAILED:

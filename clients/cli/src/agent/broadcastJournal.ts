@@ -26,7 +26,19 @@
  * inability to record it). The refusal itself is the only hard gate.
  */
 import { createHash } from 'node:crypto'
-import { appendFileSync, chmodSync, mkdirSync, readFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  chmodSync,
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -34,6 +46,33 @@ import { AgentErrorCode } from './agentErrors'
 
 /** Default lookback window for treating a prior broadcast as a live duplicate. */
 export const DEFAULT_BROADCAST_WINDOW_MS = 10 * 60 * 1000
+
+/**
+ * How long an in-flight reservation (see {@link reserveBroadcast}) is honoured
+ * before it's treated as abandoned by a crashed process and stolen. Must
+ * comfortably exceed the worst-case legitimate sign+broadcast duration — the
+ * slowest path is a multi-leg approve whose receipt-wait alone budgets 90s —
+ * so a genuinely-still-working process is never stolen from. 5 min gives ample
+ * headroom while still unwedging retries reasonably fast after a real crash.
+ */
+export const RESERVATION_STALE_MS = 5 * 60 * 1000
+
+/**
+ * Retention horizon for on-write journal pruning. A record older than this is
+ * strictly irrelevant to the dedupe check (its ts is far outside the 10-min
+ * {@link DEFAULT_BROADCAST_WINDOW_MS} lookback, and a resolution's ts is always
+ * ≥ its broadcast's, so no in-window broadcast can depend on a pruned record).
+ * window × 6 = 60 min: generous slack over the window so clock jitter or a
+ * long-lived process can never prune a still-live record.
+ */
+export const PRUNE_RETENTION_MS = DEFAULT_BROADCAST_WINDOW_MS * 6
+
+/**
+ * Only compact the journal once it crosses this on-disk size. Keeps the write
+ * path a single cheap `statSync` in the common (small-journal) case and bounds
+ * how large `broadcasts.jsonl` can grow before a rewrite reclaims it.
+ */
+export const PRUNE_TRIGGER_BYTES = 128 * 1024
 
 /**
  * The minimal, chain-agnostic description of what is about to be broadcast.
@@ -102,6 +141,29 @@ export class DuplicateBroadcastError extends Error {
   }
 }
 
+/**
+ * Refusal thrown when a SIBLING PROCESS currently holds the atomic reservation
+ * for this intent (see {@link reserveBroadcast}) — it has passed the duplicate
+ * check and is mid sign+broadcast but hasn't recorded a hash yet, so there's no
+ * prior hash to report. Shares the {@link AgentErrorCode.DUPLICATE_BROADCAST}
+ * code (and thus exit code) with {@link DuplicateBroadcastError}: from the
+ * loser's perspective both mean "an identical broadcast is already in play,
+ * don't send". Closes the check-then-record TOCTOU window that the journal's
+ * committed-record guard alone cannot.
+ */
+export class ConcurrentBroadcastError extends Error {
+  readonly code = AgentErrorCode.DUPLICATE_BROADCAST
+
+  constructor() {
+    super(
+      'Refusing to broadcast: another process is concurrently signing an identical transaction ' +
+        '(it holds the broadcast reservation). Re-sending now risks a double-spend. Wait for it to ' +
+        'finish and check the result; pass --force to broadcast anyway.'
+    )
+    this.name = 'ConcurrentBroadcastError'
+  }
+}
+
 function nowMs(): number {
   return Date.now()
 }
@@ -157,6 +219,9 @@ function appendRecord(record: JournalRecord): void {
     } catch {
       // Non-POSIX FS (e.g. Windows) — best-effort.
     }
+    // Prune-on-write: bound the append-only journal so a later sign doesn't
+    // parse an ever-growing file. Size-gated so the common path is one statSync.
+    maybePruneJournal(path)
   } catch (err) {
     // Best-effort: never let a journal-write failure block/abort a broadcast.
     process.stderr.write(`[broadcast-journal] failed to record ${record.t}: ${(err as Error)?.message ?? err}\n`)
@@ -244,4 +309,177 @@ export function assertNoRecentDuplicate(intent: BroadcastIntent, options: Duplic
   const fingerprint = computeFingerprint(intent)
   const prior = findRecentDuplicate(fingerprint, options)
   if (prior) throw new DuplicateBroadcastError(prior)
+}
+
+// ============================================================================
+// Atomic cross-process reservation (closes the check-then-record TOCTOU)
+// ============================================================================
+
+/** A held reservation; call {@link BroadcastReservation.release} once done. */
+export type BroadcastReservation = { release: () => void }
+
+/** Directory holding one lock file per in-flight broadcast fingerprint. */
+function reservationDir(): string {
+  return journalPath() + '.locks'
+}
+
+function reservationPath(fingerprint: string): string {
+  return join(reservationDir(), `${fingerprint}.lock`)
+}
+
+/**
+ * A reservation lock is stale once its file mtime is older than
+ * {@link RESERVATION_STALE_MS} — the owning process either crashed or wedged.
+ * mtime (not the file's recorded ts) is used deliberately: it's set atomically
+ * at create time by the OS, so a lock observed between exclusive-create and its
+ * content write is never mis-read as stale. A vanished file is "not stale" here
+ * (the caller's create retry will handle re-acquisition).
+ */
+function isStaleReservation(path: string): boolean {
+  try {
+    return nowMs() - statSync(path).mtimeMs > RESERVATION_STALE_MS
+  } catch {
+    return false
+  }
+}
+
+function releaseReservation(path: string): void {
+  try {
+    rmSync(path, { force: true })
+  } catch {
+    // Best-effort: the stale-TTL sweep reclaims a lock we somehow can't unlink.
+  }
+}
+
+/**
+ * Atomically reserve the exclusive right to sign+broadcast `fingerprint` before
+ * signing. Two sibling processes can BOTH pass {@link assertNoRecentDuplicate}
+ * (neither has recorded a hash yet), then both broadcast — the classic
+ * check-then-record TOCTOU. An exclusive-create (`wx`) lock file keyed by the
+ * fingerprint lets exactly one win; the loser gets {@link ConcurrentBroadcastError}
+ * and must refuse. The winner releases after it has recorded the broadcast, at
+ * which point the durable journal record takes over as the guard.
+ *
+ * A lock whose mtime is older than {@link RESERVATION_STALE_MS} is treated as
+ * abandoned (crashed owner) and stolen so retries aren't wedged forever.
+ *
+ * No-op when `force` is set (the `--force` escape hatch). Best-effort on the
+ * reservation LAYER only: if the lock dir/file can't be created (perms, exotic
+ * FS) we proceed WITHOUT the extra concurrency guard rather than brick a
+ * broadcast — the journal check+record still guards committed broadcasts.
+ */
+export function reserveBroadcast(fingerprint: string, options: DuplicateCheckOptions = {}): BroadcastReservation {
+  const noop: BroadcastReservation = { release: () => {} }
+  if (options.force) return noop
+
+  const path = reservationPath(fingerprint)
+  try {
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  } catch {
+    return noop // can't even make the lock dir → skip the reservation layer
+  }
+
+  // At most two attempts: acquire, or (on EEXIST-but-stale) steal once.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let fd: number
+    try {
+      fd = openSync(path, 'wx', 0o600)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return noop // FS/perms → fail open
+      if (isStaleReservation(path)) {
+        releaseReservation(path) // crashed owner — steal and retry the create
+        continue
+      }
+      throw new ConcurrentBroadcastError() // a live sibling holds it → loser refuses
+    }
+    try {
+      writeSync(fd, JSON.stringify({ pid: process.pid, ts: nowMs() }))
+    } catch {
+      // Content is debug-only; the lock's existence (+ mtime) is what matters.
+    } finally {
+      closeSync(fd)
+    }
+    return { release: () => releaseReservation(path) }
+  }
+  // Lost the steal race to another contender within the same instant.
+  throw new ConcurrentBroadcastError()
+}
+
+// ============================================================================
+// On-write pruning (bounds the append-only journal's growth)
+// ============================================================================
+
+/**
+ * Compact the journal in place, dropping every record older than
+ * `retentionMs` (default {@link PRUNE_RETENTION_MS}). Kept records: anything
+ * whose ts is within retention, PLUS any line we can't parse (which may be a
+ * concurrent in-flight append — never drop it). Corrupt/old lines are the only
+ * thing removed. Writes to a temp file then atomically renames, so a reader
+ * never sees a half-written journal. Best-effort and self-contained; a failure
+ * leaves the original journal untouched. Returns the kept/pruned counts.
+ */
+export function pruneJournal(options: { retentionMs?: number } = {}): { kept: number; pruned: number } {
+  const retentionMs = options.retentionMs ?? PRUNE_RETENTION_MS
+  const path = journalPath()
+  const cutoff = nowMs() - retentionMs
+
+  let raw: string
+  try {
+    raw = readFileSync(path, 'utf8')
+  } catch {
+    return { kept: 0, pruned: 0 } // nothing to prune
+  }
+
+  const kept: string[] = []
+  let pruned = 0
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue
+    let ts: number | undefined
+    try {
+      const rec = JSON.parse(line) as Partial<JournalRecord>
+      ts = typeof rec?.ts === 'number' ? rec.ts : undefined
+    } catch {
+      // Unparseable — could be a concurrent partial append; keep it to be safe.
+      kept.push(line)
+      continue
+    }
+    if (ts !== undefined && ts < cutoff) {
+      pruned++ // strictly outside the dedupe window — safe to drop
+      continue
+    }
+    kept.push(line)
+  }
+
+  if (pruned === 0) return { kept: kept.length, pruned: 0 }
+
+  const tmp = `${path}.prune.${process.pid}.tmp`
+  try {
+    writeFileSync(tmp, kept.length ? kept.join('\n') + '\n' : '', { encoding: 'utf8', mode: 0o600 })
+    renameSync(tmp, path)
+    try {
+      chmodSync(path, 0o600)
+    } catch {
+      // Non-POSIX FS — best-effort.
+    }
+  } catch (err) {
+    try {
+      rmSync(tmp, { force: true })
+    } catch {
+      // leave it; a later prune overwrites the same-pid temp name
+    }
+    if (process.env.VULTISIG_DEBUG)
+      process.stderr.write(`[broadcast-journal] prune skipped: ${(err as Error)?.message ?? err}\n`)
+    return { kept: 0, pruned: 0 }
+  }
+  return { kept: kept.length, pruned }
+}
+
+/** Size-gated prune for the write path: read+rewrite only once the file is large. */
+function maybePruneJournal(path: string): void {
+  try {
+    if (statSync(path).size <= PRUNE_TRIGGER_BYTES) return
+  } catch {
+    return // no file / can't stat → nothing to prune
+  }
+  pruneJournal()
 }

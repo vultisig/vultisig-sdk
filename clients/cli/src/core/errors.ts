@@ -16,6 +16,12 @@ export enum ExitCode {
   // back to the backend failed. The emitted tx hash IS VALID — do NOT blindly
   // retry (that risks a double-spend); track/confirm the hash instead.
   ACK_FAILED = 8,
+  // A signing attempt was refused by the local broadcast-journal duplicate guard
+  // (an identical intent was broadcast recently and hasn't definitively failed,
+  // or a sibling process holds the reservation). NOTHING was broadcast. Distinct
+  // from generic invalid input (4) so `$?` alone can branch the fund-safety
+  // refusal. Retry with --force to override. See broadcastJournal.ts.
+  DUPLICATE_BROADCAST = 9,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -28,6 +34,7 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.EXTERNAL_SERVICE]: 'External service error (retryable)',
   [ExitCode.UNKNOWN]: 'Unknown/unexpected error',
   [ExitCode.ACK_FAILED]: 'Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry',
+  [ExitCode.DUPLICATE_BROADCAST]: 'Duplicate broadcast refused (nothing sent) — retry with --force to override',
 }
 
 export abstract class VsigError extends Error {

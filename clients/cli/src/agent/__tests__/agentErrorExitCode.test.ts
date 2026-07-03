@@ -3,7 +3,8 @@
  *
  * Pins the AgentErrorCode → ExitCode taxonomy a headless caller branches on via
  * `$?`, so a change to a mapping is a conscious, reviewed edit rather than a
- * silent regression. DUPLICATE_BROADCAST → 4 and ACK_FAILED → 8 are the
+ * silent regression. DUPLICATE_BROADCAST → 9 (its own dedicated code, no longer
+ * sharing 4 with generic invalid input) and ACK_FAILED → 8 are the
  * fund-safety-relevant ones the --help text advertises.
  */
 import { describe, expect, it } from 'vitest'
@@ -14,7 +15,7 @@ import { AgentErrorCode, agentErrorCodeToExitCode } from '../agentErrors'
 describe('agentErrorCodeToExitCode', () => {
   const cases: Array<[AgentErrorCode, ExitCode]> = [
     [AgentErrorCode.ACK_FAILED, ExitCode.ACK_FAILED],
-    [AgentErrorCode.DUPLICATE_BROADCAST, ExitCode.INVALID_INPUT],
+    [AgentErrorCode.DUPLICATE_BROADCAST, ExitCode.DUPLICATE_BROADCAST],
     [AgentErrorCode.INVALID_INPUT, ExitCode.INVALID_INPUT],
     [AgentErrorCode.AUTH_FAILED, ExitCode.AUTH_REQUIRED],
     [AgentErrorCode.VAULT_LOCKED, ExitCode.AUTH_REQUIRED],

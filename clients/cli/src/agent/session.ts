@@ -108,6 +108,23 @@ const RECOVERY_MAX_POLLS = 90
 const TX_CONFIRM_POLL_INTERVAL_MS = 3000
 const TX_CONFIRM_MAX_POLLS = 40
 
+/**
+ * Does this batch of queued (not-yet-delivered) tool results contain a
+ * SUCCESSFUL broadcast — a result carrying a real `tx_hash`? When such a result
+ * is still in the queue at error time, the broadcast happened on-chain but its
+ * follow-up `recent_actions` report to the backend never landed: the true
+ * ACK_FAILED case. A broadcast already delivered in an earlier turn is gone from
+ * the queue, so a later unrelated failure is NOT mis-tagged. Exported for direct
+ * unit testing of the discriminating logic.
+ */
+export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boolean {
+  return results.some(r => {
+    if (!r.success || !r.data) return false
+    const hash = (r.data as { tx_hash?: unknown }).tx_hash
+    return typeof hash === 'string' && hash.length > 0
+  })
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -121,6 +138,14 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
+  // queue), of whether an already-broadcast tx result was still UNDELIVERED to
+  // the backend. This is the true "ack failed" signal: a successful broadcast
+  // whose follow-up recent_actions report never landed. A later independent
+  // retryable error (after an earlier broadcast WAS acked) leaves an empty/
+  // broadcast-free queue here, so `agent ask` keeps the retryable classification
+  // instead of masking it as ACK_FAILED. See executeAgentAsk's catch (F1).
+  private unacknowledgedBroadcastAtError = false
   // Disconnect-recovery poll cadence — instance fields so tests can drive the
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
@@ -369,6 +394,16 @@ export class AgentSession {
     return this.conversationId
   }
 
+  /**
+   * Whether the most recent failed turn threw with a broadcast whose
+   * follow-up report was still undelivered — the F1 ACK_FAILED signal. False
+   * after a clean turn, or when the failure was unrelated to an unacked
+   * broadcast (so the caller keeps the error's retryable classification).
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.unacknowledgedBroadcastAtError
+  }
+
   getHistoryMessages(): ConversationMessage[] {
     return this.historyMessages
   }
@@ -393,6 +428,8 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    // Fresh turn — clear the prior turn's ack snapshot.
+    this.unacknowledgedBroadcastAtError = false
 
     // Refresh context before each message — skip balance fetches in agent modes
     try {
@@ -407,6 +444,12 @@ export class AgentSession {
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
+      // Snapshot BEFORE clearing: if a just-broadcast tx result is still queued
+      // (its follow-up recent_actions report never landed), this is the F1
+      // ack-failure case and executeAgentAsk will surface exit 8. Capturing here
+      // — rather than after the throw reaches the command — is essential because
+      // the very next line wipes the queue.
+      this.unacknowledgedBroadcastAtError = hasUnacknowledgedBroadcastResult(this.pendingToolResults)
       // SF: any failure that escaped processMessageLoop's internal 401
       // retry — clear the queue so the next user turn doesn't silently
       // inherit stale tool results and trigger phantom auto-submit or

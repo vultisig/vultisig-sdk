@@ -1397,7 +1397,7 @@ Signing safety:
 
   A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
   identical transaction intent was broadcast in the last 10 min and hasn't
-  definitively failed, a re-send is refused (exit 4) to prevent a double-spend
+  definitively failed, a re-send is refused (exit 9) to prevent a double-spend
   on a retry. Pass --force to override.
 
 Exit codes:
@@ -1405,12 +1405,13 @@ Exit codes:
   1  usage error (bad arguments)
   2  authentication required / vault locked
   3  network error (retryable)
-  4  invalid input, or duplicate-broadcast refused (--force to override)
+  4  invalid input (bad chain, address, amount)
   5  resource not found (e.g. stale --session)
   6  external service error (retryable)
   7  unknown/unexpected error
   8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
-     emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)`
+     emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
+  9  duplicate-broadcast refused — nothing was sent; retry with --force`
   )
   .action(
     async (

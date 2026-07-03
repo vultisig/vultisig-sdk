@@ -16,6 +16,7 @@ import { Chain } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AgentErrorCode } from '../agentErrors'
+import { computeFingerprint, reserveBroadcast } from '../broadcastJournal'
 import { AgentExecutor } from '../executor'
 
 function createMockVault(): VaultBase {
@@ -170,6 +171,43 @@ describe('AgentExecutor — broadcast idempotency guard', () => {
     expect(retry.success).toBe(false)
     expect(retry.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
     expect(signB).not.toHaveBeenCalled() // never re-broadcast the approve
+  })
+
+  it('refuses when a SIBLING process holds the atomic reservation (TOCTOU — item 1)', async () => {
+    // Simulate the cross-process race: contender A has passed the duplicate check
+    // and is mid sign+broadcast (holds the reservation) but hasn't recorded a
+    // hash yet, so the journal is still empty. Contender B (this executor) must
+    // lose the reservation and refuse WITHOUT signing — closing the window where
+    // both siblings would otherwise pass the check and both broadcast.
+    const executor = new AgentExecutor(createMockVault())
+    const signSpy = vi
+      .spyOn(executor as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> }, 'signServerTx')
+      .mockResolvedValue({ tx_hash: '0xshouldnothappen', chain: 'Ethereum', status: 'pending' })
+
+    // The fingerprint executor.buildBroadcastIntent derives for sendEnvelope():
+    // owner '' (mock vault has no ecdsa key / vaultId), nested send_tx fields.
+    const heldByA = reserveBroadcast(
+      computeFingerprint({
+        owner: '',
+        chain: 'Ethereum',
+        to: '0xrecipient',
+        value: '1000000000000000000',
+        data: '0x',
+      })
+    )
+
+    executor.storeServerTransaction(sendEnvelope())
+    const refused = await executor.signTxFromBuffer('call-contended')
+    expect(refused.success).toBe(false)
+    expect(refused.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    expect(signSpy).not.toHaveBeenCalled() // never signed — no double-send
+
+    // Once A finishes and releases, a retry proceeds normally.
+    heldByA.release()
+    executor.storeServerTransaction(sendEnvelope())
+    const after = await executor.signTxFromBuffer('call-after')
+    expect(after.success).toBe(true)
+    expect(signSpy).toHaveBeenCalledTimes(1)
   })
 
   it('namespaces by owner — the same intent from a DIFFERENT vault is not refused', async () => {
