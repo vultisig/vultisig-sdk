@@ -3,7 +3,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Signature } from '@/types'
-import { BroadcastService } from '@/vault/services/BroadcastService'
+import { BroadcastPartialFailureError, BroadcastService } from '@/vault/services/BroadcastService'
 import { VaultErrorCode } from '@/vault/VaultError'
 
 const {
@@ -156,6 +156,23 @@ describe('BroadcastService', () => {
     expect(hash).toBe('swap-node-hash')
     // Only the first (void-resolver) iteration needed the local fallback.
     expect(mockGetTxHash).toHaveBeenCalledOnce()
+  })
+
+  it('carries already-broadcast hashes when a later input fails', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('swap rejected'))
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
+
+    const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+
+    await expect(promise).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['approve-local-hash'],
+        failedInputIndex: 1,
+      }),
+    })
+    await expect(promise).rejects.toHaveProperty('originalError', expect.any(BroadcastPartialFailureError))
   })
 
   it('wraps a broadcast failure in a BroadcastFailed VaultError', async () => {
