@@ -26,13 +26,13 @@ describe('getTonChainSpecific — seqno on an uninitialized wallet', () => {
     // wallet that received funds but never sent — the pre-fix direct
     // `account_state.seqno` crashed here.
     mockGetTonAccountInfo.mockResolvedValueOnce({ balance: '1000000000' })
-    const res = await getTonChainSpecific({ keysignPayload: payload })
+    const res = await getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never })
     expect(res.sequenceNumber).toBe(0n)
   })
 
   it('reads the seqno from account_state for an initialized wallet', async () => {
     mockGetTonAccountInfo.mockResolvedValueOnce({ account_state: { wallet_id: 'w', seqno: 7 } })
-    const res = await getTonChainSpecific({ keysignPayload: payload })
+    const res = await getTonChainSpecific({ keysignPayload: payload, walletCore: {} as never })
     expect(res.sequenceNumber).toBe(7n)
   })
 })
