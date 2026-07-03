@@ -48,7 +48,14 @@ export const assertNativeSwapReadyForBroadcast = async ({
   const { native } = swapPayload
   const currentSeconds = BigInt(Math.floor(now() / 1000))
 
-  if (native.expirationTime > 0n && native.expirationTime <= currentSeconds) {
+  if (native.expirationTime <= 0n) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'Native swap quote is missing an expiration; refresh the quote before broadcasting'
+    )
+  }
+
+  if (native.expirationTime <= currentSeconds) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
       'Native swap quote is expired; refresh the quote before broadcasting'

@@ -69,6 +69,23 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
+  it('rejects native swap payloads with missing expiration before fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload: makeThorchainSwapPayload({
+          expirationTime: 0n,
+        }),
+        getInboundAddresses,
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/missing an expiration/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
   it('passes when the MayaChain inbound vault still matches the source chain', async () => {
     await expect(
       assertNativeSwapReadyForBroadcast({
