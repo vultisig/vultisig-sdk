@@ -39,6 +39,33 @@ function sendEnvelope() {
   }
 }
 
+function multiLegVault(): VaultBase {
+  return {
+    name: 'mock-vault',
+    id: 'vault-mock-1',
+    type: 'secure',
+    chains: [Chain.Ethereum, Chain.BSC],
+    isEncrypted: false,
+    address: vi.fn().mockResolvedValue('0xsender'),
+    balance: vi.fn().mockResolvedValue({ decimals: 18, symbol: 'BNB' }),
+    getTxStatus: vi.fn().mockResolvedValue({ status: 'success' }),
+  } as unknown as VaultBase
+}
+
+function multiLegEnvelope() {
+  return {
+    chain: 'BSC',
+    from_chain: 'BSC',
+    approvalTxArgs: {
+      chain: 'BSC',
+      chain_id: '56',
+      from: '0xsender',
+      tx: { to: '0xUSDC', value: '0', data: '0x095ea7b3' },
+    },
+    txArgs: { chain: 'BSC', chain_id: '56', from: '0xsender', tx: { to: '0xRouter', value: '5', data: '0xdeadbeef' } },
+  }
+}
+
 let home: string
 let savedHome: string | undefined
 
@@ -111,5 +138,62 @@ describe('AgentExecutor — broadcast idempotency guard', () => {
     const second = await executor.signTxFromBuffer('call-2')
     expect(second.success).toBe(true)
     expect(signSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('multi-leg: an approve broadcast whose receipt-wait times out is still journaled, so a retry refuses to re-approve (F14)', async () => {
+    // Process A: approve broadcasts, then the 90s receipt-wait times out → the
+    // whole sign throws. The approve leg must already be journaled so a fresh
+    // retry process can recognise it and NOT re-broadcast the approval.
+    const execA = new AgentExecutor(multiLegVault())
+    const signA = vi
+      .spyOn(execA as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> }, 'signServerTx')
+      .mockResolvedValue({ tx_hash: '0xapprovehash', chain: 'BSC', status: 'pending' })
+    vi.spyOn(
+      execA as unknown as { waitForEvmReceipt: (...a: unknown[]) => Promise<void> },
+      'waitForEvmReceipt'
+    ).mockRejectedValue(new Error('receipt timeout'))
+
+    execA.storeServerTransaction(multiLegEnvelope())
+    const first = await execA.signTxFromBuffer('call-A')
+    expect(first.success).toBe(false) // sign failed on the receipt timeout
+    expect(signA).toHaveBeenCalledTimes(1) // only the approve leg broadcast
+
+    // Process B (fresh executor, same vault/owner): the approve intent is now in
+    // the journal, so the guard refuses before signing anything.
+    const execB = new AgentExecutor(multiLegVault())
+    const signB = vi
+      .spyOn(execB as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> }, 'signServerTx')
+      .mockResolvedValue({ tx_hash: '0xshouldnothappen', chain: 'BSC', status: 'pending' })
+
+    execB.storeServerTransaction(multiLegEnvelope())
+    const retry = await execB.signTxFromBuffer('call-B')
+    expect(retry.success).toBe(false)
+    expect(retry.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    expect(signB).not.toHaveBeenCalled() // never re-broadcast the approve
+  })
+
+  it('namespaces by owner — the same intent from a DIFFERENT vault is not refused', async () => {
+    const vaultA = new AgentExecutor(createMockVault(), false, 'pubkey-A')
+    vi.spyOn(
+      vaultA as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> },
+      'signServerTx'
+    ).mockResolvedValue({
+      tx_hash: '0xa',
+      chain: 'Ethereum',
+      status: 'pending',
+    })
+    vaultA.storeServerTransaction(sendEnvelope())
+    expect((await vaultA.signTxFromBuffer('call-A')).success).toBe(true)
+
+    // Different vault (different pubkey → different owner) sending the identical
+    // intent must NOT be blocked by vault A's broadcast.
+    const vaultB = new AgentExecutor(createMockVault(), false, 'pubkey-B')
+    const signB = vi
+      .spyOn(vaultB as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> }, 'signServerTx')
+      .mockResolvedValue({ tx_hash: '0xb', chain: 'Ethereum', status: 'pending' })
+    vaultB.storeServerTransaction(sendEnvelope())
+    const bResult = await vaultB.signTxFromBuffer('call-B')
+    expect(bResult.success).toBe(true)
+    expect(signB).toHaveBeenCalledTimes(1)
   })
 })

@@ -26,7 +26,7 @@
  * inability to record it). The refusal itself is the only hard gate.
  */
 import { createHash } from 'node:crypto'
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -44,12 +44,27 @@ export const DEFAULT_BROADCAST_WINDOW_MS = 10 * 60 * 1000
  */
 export type BroadcastIntent = {
   chain: string
+  /**
+   * Owner discriminator — the sending vault's public key. The journal is a
+   * single global file, so without this two DIFFERENT vaults sending an
+   * identical (chain, to, value) tx within the window would collide and the
+   * second would be wrongly refused. Namespacing by owner keeps each vault's
+   * guard independent.
+   */
+  owner?: string
   /** Recipient / contract address. */
   to?: string
   /** Native value or token amount, stringified. */
   value?: string
   /** EVM calldata or cosmos/UTXO memo. */
   data?: string
+  /**
+   * Asset/denom discriminator for non-EVM sends, where the token identity is
+   * NOT encoded in `to`/`data` (unlike EVM, whose contract address + calldata
+   * already distinguish tokens). Without it, two same-amount sends of different
+   * assets to the same address would share a fingerprint.
+   */
+  asset?: string
 }
 
 type BroadcastRecord = { t: 'broadcast'; fp: string; hash: string; chain: string; ts: number }
@@ -116,10 +131,12 @@ function normalize(v: string | undefined): string {
 /** Stable fingerprint for a broadcast intent (sha256 → short hex). */
 export function computeFingerprint(intent: BroadcastIntent): string {
   const canonical = [
+    normalize(intent.owner),
     normalize(intent.chain),
     normalize(intent.to),
     normalize(intent.value),
     normalize(intent.data),
+    normalize(intent.asset),
   ].join('|')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
 }
@@ -127,8 +144,19 @@ export function computeFingerprint(intent: BroadcastIntent): string {
 function appendRecord(record: JournalRecord): void {
   const path = journalPath()
   try {
-    mkdirSync(dirname(path), { recursive: true })
-    appendFileSync(path, JSON.stringify(record) + '\n', 'utf8')
+    // Owner-only dir (0o700) + file (0o600), mirroring the credential/token
+    // store: the journal links a vault's tx hashes to broadcast times, so it
+    // must not be world-readable if it (rather than the token store) is the
+    // first writer to create ~/.vultisig, or if it's redirected to a shared dir.
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    appendFileSync(path, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 })
+    // appendFileSync's `mode` only applies when it CREATES the file; chmod every
+    // write so an already-existing file with looser perms is tightened too.
+    try {
+      chmodSync(path, 0o600)
+    } catch {
+      // Non-POSIX FS (e.g. Windows) — best-effort.
+    }
   } catch (err) {
     // Best-effort: never let a journal-write failure block/abort a broadcast.
     process.stderr.write(`[broadcast-journal] failed to record ${record.t}: ${(err as Error)?.message ?? err}\n`)

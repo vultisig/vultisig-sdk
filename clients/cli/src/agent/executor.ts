@@ -146,11 +146,16 @@ export class AgentExecutor {
   // `--force` escape hatch). Off by default: a fresh retry process must refuse
   // to re-broadcast an intent a prior process already sent (double-spend).
   private forceBroadcast = false
+  // The owning vault's ecdsa public key — namespaces broadcast-journal
+  // fingerprints so two different vaults sending an identical tx don't collide
+  // in the single global journal (see BroadcastIntent.owner).
+  private readonly vaultPublicKey: string
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
     this.verbose = verbose
     this.vultisig = vultisig
+    this.vaultPublicKey = vaultId ?? vault.publicKeys?.ecdsa ?? ''
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
@@ -170,12 +175,15 @@ export class AgentExecutor {
    * buffered tx_ready payload. Prefers the nested EVM/`tx` shape; falls back to
    * the non-EVM `txArgs.{to,amount,memo}` shape. `overrideTx` lets a multi-leg
    * caller fingerprint a specific leg (e.g. the approve leg's `approvalTxArgs`).
+   * Always namespaced by the owning vault (owner) so a shared journal can't
+   * cross-match two vaults' transactions.
    */
   private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
     const source = overrideTx ?? payload
     const nested = extractNestedTx(source)
     if (nested && (nested.to || nested.value || nested.data)) {
       return {
+        owner: this.vaultPublicKey,
         chain: chain.toString(),
         to: nested.to != null ? String(nested.to) : undefined,
         value: nested.value != null ? String(nested.value) : undefined,
@@ -183,11 +191,36 @@ export class AgentExecutor {
       }
     }
     const txArgs = source?.txArgs ?? source
+    // Non-EVM: the token identity isn't in `to`/`data`, so fold in whatever
+    // asset/denom discriminator the envelope carries to avoid conflating two
+    // same-amount sends of different assets.
+    const asset =
+      txArgs?.denom ?? txArgs?.ticker ?? txArgs?.symbol ?? txArgs?.asset ?? txArgs?.coin ?? txArgs?.contract_address
     return {
+      owner: this.vaultPublicKey,
       chain: chain.toString(),
       to: txArgs?.to != null ? String(txArgs.to) : undefined,
       value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
       data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      asset: asset != null ? String(asset) : undefined,
+    }
+  }
+
+  /**
+   * Journal a broadcast the instant it lands, computing the fingerprint from the
+   * same intent basis the pre-sign duplicate check uses. Called at each signer's
+   * broadcast chokepoint (not at signTxFromBuffer's return) so a post-broadcast
+   * step that throws — e.g. a multi-leg approve receipt timeout — can't strand an
+   * already-broadcast tx unrecorded and let a retry re-send it. Best-effort:
+   * never throw back into a completed broadcast.
+   */
+  private recordBroadcastForTx(serverTxData: any, chain: Chain, txHash: string | undefined): void {
+    if (!txHash) return
+    try {
+      const intent = this.buildBroadcastIntent(serverTxData, chain)
+      recordBroadcast(computeFingerprint(intent), String(txHash), chain.toString())
+    } catch (err) {
+      if (this.verbose) process.stderr.write(`[broadcast-journal] record skipped: ${(err as Error)?.message ?? err}\n`)
     }
   }
 
@@ -666,14 +699,13 @@ export class AgentExecutor {
       }
       if (!result) result = await this.signServerTx(payload, chain, {})
 
-      // Record the broadcast(s) so a later retry recognises this intent and
-      // refuses to double-send. Multi-leg records the approve leg under its own
-      // fingerprint too (audit F14: prevents an approve re-broadcast on retry).
-      if (result?.tx_hash) {
+      // Journal the single-leg broadcast so a later retry recognises this intent
+      // and refuses to double-send. Multi-leg legs are journaled INSIDE
+      // signMultiLeg at each leg's broadcast point (so an approve whose 90s
+      // receipt-wait times out is still recorded and can't be re-broadcast on
+      // retry — audit F14); recording them here would miss that window.
+      if (!isMultiLeg && result?.tx_hash) {
         recordBroadcast(computeFingerprint(primaryIntent), String(result.tx_hash), chain.toString())
-      }
-      if (approveIntent && result?.approval_tx_hash) {
-        recordBroadcast(computeFingerprint(approveIntent), String(result.approval_tx_hash), chain.toString())
       }
 
       if (payload.sequence_id) result.sequence_id = payload.sequence_id
@@ -1159,6 +1191,11 @@ export class AgentExecutor {
         throw new VaultError(VaultErrorCode.BroadcastFailed, 'signMultiLeg: approve leg returned no tx_hash')
       }
 
+      // Journal the approve BEFORE the receipt-wait (audit F14). If waitForEvmReceipt
+      // times out or the main leg later throws, this record still stops a retry
+      // from re-broadcasting an approve that already hit the chain.
+      this.recordBroadcastForTx(approveEnvelope, chain, approveTxHash)
+
       if (this.verbose)
         process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
 
@@ -1190,6 +1227,10 @@ export class AgentExecutor {
         tx: undefined,
       }
       const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+      // Journal the main leg at its broadcast point too (symmetry with the
+      // approve leg; the top-level signTxFromBuffer record skips multi-leg).
+      this.recordBroadcastForTx(mainEnvelope, chain, mainResult.tx_hash as string | undefined)
 
       return {
         tx_hash: mainResult.tx_hash,

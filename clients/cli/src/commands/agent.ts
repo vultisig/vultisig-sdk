@@ -287,12 +287,15 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // stranding the funds with exit-1 and an empty record.
     const partial = ask?.partialResult()
     if (partial && !conversationId) conversationId = partial.sessionId
-    // A throw AFTER a broadcast this turn IS the ack-failure case (F1): the tx
-    // hash is valid (carried in partial.transactions) but the follow-up report
-    // to the backend failed. Re-tag as ACK_FAILED so the caller gets the
-    // distinct fund-safety exit code (8 — do NOT blindly retry) rather than a
-    // generic error, while the hash still reaches the envelope below.
-    if (partial && partial.transactions.length > 0) {
+    // A throw AFTER a broadcast whose outcome is NOT a definitive on-chain
+    // failure IS the ack-failure case (F1): the tx hash is valid (carried in
+    // partial.transactions) but the follow-up report to the backend failed.
+    // Re-tag as ACK_FAILED so the caller gets the distinct fund-safety exit code
+    // (8 — do NOT blindly retry). Exclude txs already resolved 'failed': those
+    // reverted on-chain (post-broadcast polling runs before the follow-up POST),
+    // so a retry IS safe — the journal even clears its guard for them — and
+    // ACK_FAILED would wrongly discourage it.
+    if (partial && partial.transactions.some(t => t.status !== 'failed')) {
       code = AgentErrorCode.ACK_FAILED
     }
     exitCode = agentErrorCodeToExitCode(code)
