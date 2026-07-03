@@ -1,11 +1,17 @@
+import { sha256 } from '@noble/hashes/sha2'
+import { bytesToHex } from '@noble/hashes/utils'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import base58 from 'bs58'
+import { encode as xrplEncode } from 'ripple-binary-codec'
+import { keccak256 } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hashes as xrplHashes } from 'xrpl'
 
-import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
-import { VaultError, VaultErrorCode } from '@/vault/VaultError'
+import { RawBroadcastService } from '../../../../src/vault/services/RawBroadcastService'
+import { VaultError, VaultErrorCode } from '../../../../src/vault/VaultError'
 
 const {
   mockQueryUrl,
@@ -191,6 +197,19 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe('sol-signature')
   })
 
+  it('treats duplicate-style Solana broadcast errors as idempotent success', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
+    })
+
+    expect(hash).toBe(base58.encode(signature))
+  })
+
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
     const txB64 = Buffer.from([1, 2, 3]).toString('base64')
     const hash = await service.broadcastRawTx({
@@ -230,6 +249,19 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('execution failed'),
     })
+  })
+
+  it('treats duplicate-style Cosmos broadcast errors as idempotent success', async () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Cosmos,
+      rawTx,
+    })
+
+    expect(hash).toBe(bytesToHex(sha256(txBytes)).toUpperCase())
   })
 
   it('rejects Sui payload missing unsignedTx or signature', async () => {
@@ -320,6 +352,20 @@ describe('RawBroadcastService', () => {
       rawTx: '02f8',
     })
     expect(hash).toBe('0xevmhash')
+  })
+
+  it('treats duplicate-style EVM broadcast errors as idempotent success', async () => {
+    mockGetEvmClient.mockReturnValue({
+      sendRawTransaction: vi.fn().mockRejectedValue(new Error('already known')),
+    })
+
+    const rawTx = '0x01'
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Base,
+      rawTx,
+    })
+
+    expect(hash).toBe(keccak256(rawTx))
   })
 
   it('broadcasts Polkadot extrinsic via JSON-RPC', async () => {
@@ -422,6 +468,20 @@ describe('RawBroadcastService', () => {
     ).rejects.toThrow(/Tron broadcast failed/)
   })
 
+  it('returns the local Tron txID for duplicate transaction responses', async () => {
+    mockQueryUrl.mockResolvedValue({
+      code: 'ERROR',
+      message: 'DUPLICATE_TRANSACTION',
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Tron,
+      rawTx: JSON.stringify({ txID: 'tron-local-id', raw_data: {} }),
+    })
+
+    expect(hash).toBe('tron-local-id')
+  })
+
   it('broadcasts Ripple tx blob', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
@@ -432,5 +492,26 @@ describe('RawBroadcastService', () => {
       command: 'submit',
       tx_blob: '1200aa',
     })
+  })
+
+  it('treats duplicate-style Ripple broadcast errors as idempotent success', async () => {
+    const rawTx = xrplEncode({
+      TransactionType: 'Payment',
+      Account: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+      Destination: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+      Amount: '1',
+      Fee: '10',
+      Sequence: 1,
+      SigningPubKey: '',
+      TxnSignature: '',
+    })
+    mockRippleRequest.mockRejectedValue(new Error('tefALREADY'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Ripple,
+      rawTx,
+    })
+
+    expect(hash).toBe(xrplHashes.hashSignedTx(rawTx))
   })
 })

@@ -1,4 +1,6 @@
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { sha256 } from '@noble/hashes/sha2'
+import { bytesToHex } from '@noble/hashes/utils'
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
@@ -18,6 +20,8 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
+import { keccak256 } from 'viem'
+import { hashes as xrplHashes } from 'xrpl'
 
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -33,6 +37,43 @@ type BlockchairBroadcastResponse =
         error: string
       }
     }
+
+const deriveEvmRawTxHash = (rawTx: string): string => keccak256(ensureHexPrefix(rawTx) as `0x${string}`)
+
+const getCosmosRawTxBytes = (rawTx: string): Uint8Array => {
+  try {
+    const parsed = JSON.parse(rawTx)
+    return Buffer.from(parsed.tx_bytes, 'base64')
+  } catch {
+    return Buffer.from(rawTx, 'base64')
+  }
+}
+
+const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCosmosRawTxBytes(rawTx))).toUpperCase()
+
+const deriveSolanaRawTxSignature = (rawTx: string): string => {
+  const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
+  const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
+  let offset = 0
+  let signatureCount = 0
+  let shift = 0
+
+  while (offset < txBytes.length) {
+    const byte = txBytes[offset]
+    signatureCount |= (byte & 0x7f) << shift
+    offset += 1
+    if ((byte & 0x80) === 0) break
+    shift += 7
+  }
+
+  if (signatureCount < 1 || txBytes.length < offset + 64) {
+    throw new Error('Solana raw transaction does not contain a primary signature')
+  }
+
+  return base58.encode(txBytes.subarray(offset, offset + 64))
+}
+
+const deriveRippleRawTxHash = (rawTx: string): string => xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
 
 /**
  * RawBroadcastService
@@ -143,7 +184,6 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       // Ignore certain errors that indicate the tx was already submitted
       if (
         isInError(
@@ -157,13 +197,7 @@ export class RawBroadcastService {
           'tx already in mempool'
         )
       ) {
-        // For "already known" errors, we can't reliably get the tx hash
-        // The caller should compute it from the raw tx if needed
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+        return deriveEvmRawTxHash(rawTx)
       }
       throw error
     }
@@ -224,13 +258,8 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+        return deriveSolanaRawTxSignature(rawTx)
       }
       throw error
     }
@@ -269,27 +298,14 @@ export class RawBroadcastService {
     // Support both formats:
     // 1. JSON: { "tx_bytes": "base64..." }
     // 2. Raw base64 protobuf bytes
-    let txBytes: Uint8Array
-
-    try {
-      const parsed = JSON.parse(rawTx)
-      txBytes = Buffer.from(parsed.tx_bytes, 'base64')
-    } catch {
-      // Assume raw base64
-      txBytes = Buffer.from(rawTx, 'base64')
-    }
+    const txBytes = getCosmosRawTxBytes(rawTx)
 
     const client = await getCosmosClient(chain)
     const { data: result, error } = await attempt(client.broadcastTx(txBytes))
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       if (isInError(error, 'tx already exists in cache', 'account sequence mismatch')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+        return deriveCosmosRawTxHash(rawTx)
       }
       throw error
     }
@@ -440,13 +456,8 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       if (isInError(error, 'tefPAST_SEQ', 'tefALREADY')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+        return deriveRippleRawTxHash(rawTx)
       }
       throw error
     }
@@ -523,6 +534,9 @@ export class RawBroadcastService {
     if (response.result === false || (response.code && response.code !== 'SUCCESS')) {
       const errorMsg = response.message || response.code || 'Unknown error'
       if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
+        if (typeof txJson.txID === 'string' && txJson.txID.length > 0) {
+          return txJson.txID
+        }
         throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
       }
       throw new Error(`Tron broadcast failed: ${errorMsg}`)
