@@ -259,4 +259,25 @@ describe('pruneJournal (bounds append-only growth — item 4)', () => {
     expect(raw).toContain('0xrecent')
     expect(raw).not.toContain('0xancient')
   })
+
+  it('SKIPS (never clobbers) when another writer holds the journal lock', () => {
+    // The clobber hazard: a prune that rewrites+renames while a sibling process
+    // is mid-append would drop that append. The exclusive journal lock closes it
+    // — a prune that can't take the lock skips rather than rewriting a snapshot
+    // that's about to be stale. Simulate a live lock held by another writer.
+    const now = Date.now()
+    recordBroadcast(FP, '0xrecent', 'Ethereum')
+    writeBroadcastLine(FP, '0xancient', 'Ethereum', now - 2 * 60 * 60 * 1000)
+    const lock = journalPath() + '.wlock'
+    writeFileSync(lock, JSON.stringify({ pid: 999999, ts: now })) // fresh (not stale) → not stolen
+    try {
+      expect(pruneJournal()).toEqual({ kept: 0, pruned: 0 }) // skipped, not rewritten
+      // The journal is untouched — no record was dropped by a clobbering rewrite.
+      const raw = readFileSync(journalPath(), 'utf8')
+      expect(raw).toContain('0xrecent')
+      expect(raw).toContain('0xancient')
+    } finally {
+      rmSync(lock, { force: true })
+    }
+  })
 })

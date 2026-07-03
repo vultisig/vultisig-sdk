@@ -75,6 +75,18 @@ export const PRUNE_RETENTION_MS = DEFAULT_BROADCAST_WINDOW_MS * 6
 export const PRUNE_TRIGGER_BYTES = 128 * 1024
 
 /**
+ * Stale TTL for the journal read-modify-write lock (see {@link acquireJournalLock}).
+ * A compaction or an append is sub-second, so a lock older than this is a crashed
+ * holder and is stolen.
+ */
+export const JOURNAL_LOCK_STALE_MS = 30 * 1000
+
+/** Max time an append will wait for the compaction lock before proceeding unlocked. */
+const APPEND_LOCK_WAIT_MS = 2000
+/** Max time a prune will wait for the lock before skipping this round. */
+const PRUNE_LOCK_WAIT_MS = 500
+
+/**
  * The minimal, chain-agnostic description of what is about to be broadcast.
  * Fingerprinted so an identical intent produces an identical id across
  * processes. Everything is normalised (lowercased, trimmed) before hashing so
@@ -203,6 +215,81 @@ export function computeFingerprint(intent: BroadcastIntent): string {
   return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
 }
 
+/** Exclusive lock guarding journal read-modify-write (append vs compaction). */
+function journalLockPath(): string {
+  return journalPath() + '.wlock'
+}
+
+/** Synchronous sleep (bounded) — used only while spinning for the journal lock. */
+function sleepSyncMs(ms: number): void {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+  } catch {
+    // SharedArrayBuffer unavailable — cheap busy spin, still bounded by ms.
+    const end = nowMs() + ms
+    while (nowMs() < end) {
+      /* spin */
+    }
+  }
+}
+
+/**
+ * Acquire an exclusive lock serializing journal writes with the compactor. This
+ * is what makes {@link pruneJournal}'s read→rewrite→rename safe: without it, an
+ * append landing between the compactor's read and its rename would be dropped
+ * (the rename swaps in a snapshot taken before the append), silently losing a
+ * broadcast record and un-guarding that intent. Returns a release fn, or null if
+ * the lock couldn't be taken within `maxWaitMs` (caller decides how to degrade).
+ * A lock older than {@link JOURNAL_LOCK_STALE_MS} is stolen (crashed holder).
+ * Best-effort: an FS that can't create the lock returns null (proceed unlocked).
+ */
+function acquireJournalLock(maxWaitMs: number): (() => void) | null {
+  const path = journalLockPath()
+  try {
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  } catch {
+    return null
+  }
+  const deadline = nowMs() + maxWaitMs
+  for (;;) {
+    try {
+      const fd = openSync(path, 'wx', 0o600)
+      try {
+        writeSync(fd, JSON.stringify({ pid: process.pid, ts: nowMs() }))
+      } catch {
+        // content is debug-only; the lock's existence is what matters
+      } finally {
+        closeSync(fd)
+      }
+      return () => {
+        try {
+          rmSync(path, { force: true })
+        } catch {
+          // best-effort; the stale-TTL sweep reclaims a lock we can't unlink
+        }
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST') return null
+      let stale = false
+      try {
+        stale = nowMs() - statSync(path).mtimeMs > JOURNAL_LOCK_STALE_MS
+      } catch {
+        continue // vanished between EEXIST and stat — retry the create
+      }
+      if (stale) {
+        try {
+          rmSync(path, { force: true })
+        } catch {
+          // ignore
+        }
+        continue
+      }
+      if (nowMs() >= deadline) return null
+      sleepSyncMs(10)
+    }
+  }
+}
+
 function appendRecord(record: JournalRecord): void {
   const path = journalPath()
   try {
@@ -211,16 +298,27 @@ function appendRecord(record: JournalRecord): void {
     // must not be world-readable if it (rather than the token store) is the
     // first writer to create ~/.vultisig, or if it's redirected to a shared dir.
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-    appendFileSync(path, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 })
-    // appendFileSync's `mode` only applies when it CREATES the file; chmod every
-    // write so an already-existing file with looser perms is tightened too.
+    // Serialize the append with a concurrent compaction so a prune's rewrite
+    // can't clobber it (a lost broadcast record un-guards its intent — a
+    // double-spend hazard). The wait runs AFTER the broadcast, so a brief pause
+    // is harmless; if the lock is stuck we STILL append (never DROP a broadcast
+    // record — recording is the fund-safety-critical half).
+    const releaseLock = acquireJournalLock(APPEND_LOCK_WAIT_MS)
     try {
-      chmodSync(path, 0o600)
-    } catch {
-      // Non-POSIX FS (e.g. Windows) — best-effort.
+      appendFileSync(path, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 })
+      // appendFileSync's `mode` only applies when it CREATES the file; chmod every
+      // write so an already-existing file with looser perms is tightened too.
+      try {
+        chmodSync(path, 0o600)
+      } catch {
+        // Non-POSIX FS (e.g. Windows) — best-effort.
+      }
+    } finally {
+      releaseLock?.()
     }
     // Prune-on-write: bound the append-only journal so a later sign doesn't
     // parse an ever-growing file. Size-gated so the common path is one statSync.
+    // Runs AFTER releasing the lock above — pruneJournal re-acquires it itself.
     maybePruneJournal(path)
   } catch (err) {
     // Best-effort: never let a journal-write failure block/abort a broadcast.
@@ -332,8 +430,15 @@ function reservationPath(fingerprint: string): string {
  * {@link RESERVATION_STALE_MS} — the owning process either crashed or wedged.
  * mtime (not the file's recorded ts) is used deliberately: it's set atomically
  * at create time by the OS, so a lock observed between exclusive-create and its
- * content write is never mis-read as stale. A vanished file is "not stale" here
- * (the caller's create retry will handle re-acquisition).
+ * content write is never mis-read as stale.
+ *
+ * A vanished file (owner released in the instant between the caller's EEXIST and
+ * this stat) returns `false` → NOT stale → {@link reserveBroadcast} refuses with
+ * ConcurrentBroadcastError rather than stealing/retrying. That is the
+ * FUND-SAFE choice, not a retry: the loser already passed
+ * {@link assertNoRecentDuplicate} before the winner recorded its hash, so
+ * re-acquiring here would reopen the exact double-spend window the reservation
+ * exists to close. The caller simply re-runs the whole guard on its next attempt.
  */
 function isStaleReservation(path: string): boolean {
   try {
@@ -415,63 +520,77 @@ export function reserveBroadcast(fingerprint: string, options: DuplicateCheckOpt
  * whose ts is within retention, PLUS any line we can't parse (which may be a
  * concurrent in-flight append — never drop it). Corrupt/old lines are the only
  * thing removed. Writes to a temp file then atomically renames, so a reader
- * never sees a half-written journal. Best-effort and self-contained; a failure
- * leaves the original journal untouched. Returns the kept/pruned counts.
+ * never sees a half-written journal.
+ *
+ * The read→rewrite→rename runs UNDER the exclusive journal lock (which
+ * {@link appendRecord} also takes), so a concurrent append is never clobbered:
+ * it either landed before this read (and is preserved) or blocks until the
+ * rename completes (and appends to the new file). If the lock can't be taken
+ * (another writer holds it) the prune is skipped this round — correctness over
+ * compaction; the next append retries. Best-effort and self-contained; a
+ * failure leaves the original journal untouched. Returns the kept/pruned counts.
  */
 export function pruneJournal(options: { retentionMs?: number } = {}): { kept: number; pruned: number } {
   const retentionMs = options.retentionMs ?? PRUNE_RETENTION_MS
   const path = journalPath()
   const cutoff = nowMs() - retentionMs
 
-  let raw: string
+  // Hold the lock across the ENTIRE read→rename so no append interleaves.
+  const releaseLock = acquireJournalLock(PRUNE_LOCK_WAIT_MS)
+  if (!releaseLock) return { kept: 0, pruned: 0 } // a writer holds it — skip, retry next append
   try {
-    raw = readFileSync(path, 'utf8')
-  } catch {
-    return { kept: 0, pruned: 0 } // nothing to prune
-  }
-
-  const kept: string[] = []
-  let pruned = 0
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    let ts: number | undefined
+    let raw: string
     try {
-      const rec = JSON.parse(line) as Partial<JournalRecord>
-      ts = typeof rec?.ts === 'number' ? rec.ts : undefined
+      raw = readFileSync(path, 'utf8')
     } catch {
-      // Unparseable — could be a concurrent partial append; keep it to be safe.
+      return { kept: 0, pruned: 0 } // nothing to prune
+    }
+
+    const kept: string[] = []
+    let pruned = 0
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue
+      let ts: number | undefined
+      try {
+        const rec = JSON.parse(line) as Partial<JournalRecord>
+        ts = typeof rec?.ts === 'number' ? rec.ts : undefined
+      } catch {
+        // Unparseable — could be a concurrent partial append; keep it to be safe.
+        kept.push(line)
+        continue
+      }
+      if (ts !== undefined && ts < cutoff) {
+        pruned++ // strictly outside the dedupe window — safe to drop
+        continue
+      }
       kept.push(line)
-      continue
     }
-    if (ts !== undefined && ts < cutoff) {
-      pruned++ // strictly outside the dedupe window — safe to drop
-      continue
-    }
-    kept.push(line)
-  }
 
-  if (pruned === 0) return { kept: kept.length, pruned: 0 }
+    if (pruned === 0) return { kept: kept.length, pruned: 0 }
 
-  const tmp = `${path}.prune.${process.pid}.tmp`
-  try {
-    writeFileSync(tmp, kept.length ? kept.join('\n') + '\n' : '', { encoding: 'utf8', mode: 0o600 })
-    renameSync(tmp, path)
+    const tmp = `${path}.prune.${process.pid}.tmp`
     try {
-      chmodSync(path, 0o600)
-    } catch {
-      // Non-POSIX FS — best-effort.
+      writeFileSync(tmp, kept.length ? kept.join('\n') + '\n' : '', { encoding: 'utf8', mode: 0o600 })
+      renameSync(tmp, path)
+      try {
+        chmodSync(path, 0o600)
+      } catch {
+        // Non-POSIX FS — best-effort.
+      }
+    } catch (err) {
+      try {
+        rmSync(tmp, { force: true })
+      } catch {
+        // leave it; a later prune overwrites the same-pid temp name
+      }
+      if (process.env.VULTISIG_DEBUG)
+        process.stderr.write(`[broadcast-journal] prune skipped: ${(err as Error)?.message ?? err}\n`)
+      return { kept: 0, pruned: 0 }
     }
-  } catch (err) {
-    try {
-      rmSync(tmp, { force: true })
-    } catch {
-      // leave it; a later prune overwrites the same-pid temp name
-    }
-    if (process.env.VULTISIG_DEBUG)
-      process.stderr.write(`[broadcast-journal] prune skipped: ${(err as Error)?.message ?? err}\n`)
-    return { kept: 0, pruned: 0 }
+    return { kept: kept.length, pruned }
+  } finally {
+    releaseLock()
   }
-  return { kept: kept.length, pruned }
 }
 
 /** Size-gated prune for the write path: read+rewrite only once the file is large. */
