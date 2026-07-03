@@ -25,11 +25,25 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   const { address } = coin
   const client = getSuiClient()
 
-  const { data } = await client.getAllCoins({
-    owner: address,
-  })
+  // `getAllCoins` is paginated (~50 objects/page). Sui's object-per-coin model
+  // makes >50 coin objects realistic for an active wallet (dust, partial fills,
+  // repeated small transfers, staking rewards), so reading only the first page
+  // silently truncates the coin set. That set feeds both `gasCoins` (native SUI
+  // objects for the Pay/PaySui gas payment) and `inputCoins` (the coinType being
+  // sent) downstream, so a truncated page produces a broken send ("insufficient
+  // balance" despite adequate holdings, or an empty inputCoins array if none of
+  // the sent coinType's objects land on page 1) even though the getBalance-based
+  // display path shows the correct aggregate total. Follow the cursor to
+  // completion, mirroring the Solana SPL pagination fix (sdk#962).
+  const rawCoins: CoinStruct[] = []
+  let cursor: string | null | undefined = undefined
+  do {
+    const page = await client.getAllCoins({ owner: address, cursor })
+    rawCoins.push(...page.data)
+    cursor = page.hasNextPage ? page.nextCursor : null
+  } while (cursor)
 
-  const coins = data.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
+  const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
 
   const referenceGasPrice = await client.getReferenceGasPrice()
 
