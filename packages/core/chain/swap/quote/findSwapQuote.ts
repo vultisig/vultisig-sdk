@@ -6,6 +6,7 @@ import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
+import type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
@@ -58,6 +59,7 @@ export type SwapAffiliateConfig = {
   oneInch?: OneInchAffiliateConfig
   kyber?: KyberSwapBaseAffiliateConfig
   lifi?: LifiAffiliateConfig
+  jupiter?: JupiterAffiliateConfig
 }
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -536,6 +538,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            jupiterConfig: affiliateConfig?.jupiter,
             slippageBps: jupiterSlippageBps,
           })
 

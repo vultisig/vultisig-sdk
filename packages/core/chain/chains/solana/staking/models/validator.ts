@@ -47,6 +47,17 @@ export type SolanaValidator = {
 }
 
 /**
+ * Network-wide total activated stake (lamports), summed across the validator
+ * set — the `fractionStaked` numerator for the on-chain APY fallback. This is
+ * the value `resolveValidatorApy` expects as `totalActivatedStake`; passing a
+ * single validator's `activatedStake` would collapse the fraction and explode
+ * the APY. Sums current and delinquent validators alike (all carry stake), so
+ * pass the full set returned by `fetchSolanaValidators`.
+ */
+export const networkActivatedStake = (validators: SolanaValidator[]): number =>
+  validators.reduce((sum, validator) => sum + validator.activatedStake, 0)
+
+/**
  * `prefix…suffix` form of a base58 pubkey for compact display. Returns the
  * input unchanged when it is too short to truncate meaningfully.
  */

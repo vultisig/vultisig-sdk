@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.22.2",
+  "version": "2.23.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -679,6 +679,11 @@
       "types": "./dist/chains/solana/spl/getSplAssociatedAccount.d.ts",
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
+    },
+    "./chains/solana/staking/apyResolver": {
+      "types": "./dist/chains/solana/staking/apyResolver.d.ts",
+      "import": "./dist/chains/solana/staking/apyResolver.js",
+      "default": "./dist/chains/solana/staking/apyResolver.js"
     },
     "./chains/solana/staking/config": {
       "types": "./dist/chains/solana/staking/config.d.ts",

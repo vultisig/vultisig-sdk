@@ -26,6 +26,8 @@ import fs from 'fs/promises'
 
 import type { Signature } from '@/types'
 
+import { formatSignature } from '../../../src/adapters/formatSignature'
+
 /**
  * Vault share data extracted from a .vult file
  */
@@ -197,6 +199,10 @@ export async function coordinateMultiPartySigning(
     throw new Error('No message hashes provided for signing')
   }
 
+  if (signatureAlgorithm === 'mldsa') {
+    throw new Error('SecureVault multi-party signing helper does not support ML-DSA key shares')
+  }
+
   // All participating party IDs
   const allPartyIds = shares.map(s => s.localPartyId)
 
@@ -278,13 +284,12 @@ export async function coordinateMultiPartySigning(
 
   console.log('✅ Multi-party signing complete!')
 
-  // Convert KeysignSignature to SDK Signature format
-  const firstSig = allSignatures[0]
-  return {
-    signature: firstSig.der_signature,
-    recovery: firstSig.recovery_id ? parseInt(firstSig.recovery_id, 16) : undefined,
-    format: signatureAlgorithm === 'ecdsa' ? 'ECDSA' : 'EdDSA',
+  const signatureResults: Record<string, KeysignSignature> = {}
+  for (let i = 0; i < messageHashes.length; i++) {
+    signatureResults[messageHashes[i]] = allSignatures[i]
   }
+
+  return formatSignature(signatureResults, messageHashes, signatureAlgorithm)
 }
 
 /**
