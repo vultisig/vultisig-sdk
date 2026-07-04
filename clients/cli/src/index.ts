@@ -143,6 +143,7 @@ program
       '  VULTISIG_VAULT          Default vault name or ID\n' +
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
+      '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
@@ -1313,7 +1314,10 @@ const agentCmd = program
   .option('--via-agent', 'Use NDJSON pipe mode for agent-to-agent communication')
   .option('--verbose', 'Show detailed tool call parameters and debug output')
   .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
-  .option('--password <password>', 'Vault password for signing operations')
+  .option(
+    '--password <password>',
+    'Vault password (fallback; prefer the OS keyring via `vsig auth setup` or the VAULT_PASSWORD env var — --password is exposed to `ps`/shell history)'
+  )
   .option('--password-ttl <ms>', 'Password cache TTL in milliseconds (default: 300000, 86400000/24h for --via-agent)')
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
@@ -1363,7 +1367,10 @@ agentCmd
   .description('Send a single message and get the response (for AI agent integration)')
   .option('--session <id>', 'Continue an existing conversation')
   .option('--backend-url <url>', 'Agent backend URL (default: https://abe.vultisig.com)')
-  .option('--password <password>', 'Vault password for signing operations')
+  .option(
+    '--password <password>',
+    'Vault password (fallback; prefer the OS keyring via `vsig auth setup` or the VAULT_PASSWORD env var — --password is exposed to `ps`/shell history)'
+  )
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')

@@ -1,5 +1,130 @@
 # @vultisig/core-mpc
 
+## 1.8.17
+
+### Patch Changes
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
+- Updated dependencies [[`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc), [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5), [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37), [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81), [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5)]:
+  - @vultisig/core-chain@2.23.0
+
+## 1.8.16
+
+### Patch Changes
+
+- [#921](https://github.com/vultisig/vultisig-sdk/pull/921) [`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - refactor(cardano): attach CIP-20 memo via WalletCore native auxiliary_data
+
+  Bumps `@trustwallet/wallet-core` to `4.7.0`, which adds the Cardano
+  `SigningInput.auxiliary_data` field. The Cardano memo path now hands the
+  CIP-20 CBOR straight to WalletCore, which commits its Blake2b-256 hash into
+  tx body key 7 and embeds the bytes in the signed transaction — replacing the
+  client-side body patching and re-hashing in TypeScript. The chain-specific
+  fee estimator prices the WalletCore body as-is (it already carries key 7),
+  and the now-unused `patchTxBodyWithAuxHash` helper is removed.
+
+- Updated dependencies [[`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e), [`d08a476`](https://github.com/vultisig/vultisig-sdk/commit/d08a47696d0cb1c8dbcb50d41830b9eae16b6d8c)]:
+  - @vultisig/core-chain@2.22.2
+
+## 1.8.15
+
+### Patch Changes
+
+- Updated dependencies [[`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a)]:
+  - @vultisig/lib-utils@0.10.4
+  - @vultisig/core-chain@2.22.1
+
+## 1.8.14
+
+### Patch Changes
+
+- Updated dependencies [[`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31), [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a)]:
+  - @vultisig/core-chain@2.22.0
+
+## 1.8.13
+
+### Patch Changes
+
+- Updated dependencies [[`403d5d5`](https://github.com/vultisig/vultisig-sdk/commit/403d5d5f7c7dba3e45cb818899db00f765541ecf)]:
+  - @vultisig/core-chain@2.21.0
+
+## 1.8.12
+
+### Patch Changes
+
+- Updated dependencies [[`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1)]:
+  - @vultisig/core-chain@2.20.0
+
+## 1.8.11
+
+### Patch Changes
+
+- [#893](https://github.com/vultisig/vultisig-sdk/pull/893) [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add TON nominator-pool staking support. `@vultisig/core-chain` gains a tonapi staking client (`chains/ton/staking`) — pool list, computed pool info, and account nominator positions — plus per-implementation deposit/withdraw comment resolution (`whales` → `Deposit`/`Withdraw`, `tf` → `d`/`w`), pool eligibility/capacity filters, and a `tonAddressToBounceable` helper that normalizes raw `0:` pool addresses to the bounceable `EQ…` form. `@vultisig/core-mpc` now forces TON transfers bounceable for any staking comment (via `isTonStakingComment`), so a rejected pool deposit/withdraw bounces back instead of being absorbed.
+
+- Updated dependencies [[`baedd96`](https://github.com/vultisig/vultisig-sdk/commit/baedd96e9d75a9d73880a59503f95b527d692428), [`605fbba`](https://github.com/vultisig/vultisig-sdk/commit/605fbbaf107c553898f11f4f7eb6b56a59c01b9e), [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9)]:
+  - @vultisig/core-chain@2.19.0
+
+## 1.8.10
+
+### Patch Changes
+
+- Updated dependencies [[`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c)]:
+  - @vultisig/core-chain@2.18.0
+
+## 1.8.9
+
+### Patch Changes
+
+- Updated dependencies [[`33e663c`](https://github.com/vultisig/vultisig-sdk/commit/33e663ce6ba519cacb7dae5befebe9e3e530b4d7)]:
+  - @vultisig/core-chain@2.17.11
+
+## 1.8.8
+
+### Patch Changes
+
+- Updated dependencies [[`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/core-chain@2.17.10
+
+## 1.8.7
+
+### Patch Changes
+
+- Updated dependencies [[`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e)]:
+  - @vultisig/lib-utils@0.10.3
+  - @vultisig/core-chain@2.17.9
+
+## 1.8.6
+
+### Patch Changes
+
+- [#764](https://github.com/vultisig/vultisig-sdk/pull/764) [`0dc1620`](https://github.com/vultisig/vultisig-sdk/commit/0dc16206bedcdde8832a068b15383565a6b98896) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add QBTC claim transaction helper utilities for MLDSA claim signing.
+
+## 1.8.5
+
+### Patch Changes
+
+- Updated dependencies [[`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03)]:
+  - @vultisig/core-chain@2.17.8
+
+## 1.8.4
+
+### Patch Changes
+
+- [#809](https://github.com/vultisig/vultisig-sdk/pull/809) [`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor native swap quote expiry and validate THORChain inbound vault addresses before broadcasting stale signed swaps.
+
+- [#808](https://github.com/vultisig/vultisig-sdk/pull/808) [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply native THORChain/Maya swap slippage tolerance to quote requests and signed payload limits so native swaps no longer use a zero minimum-output floor.
+
+- Updated dependencies [[`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4), [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13)]:
+  - @vultisig/core-chain@2.17.7
+
+## 1.8.3
+
+### Patch Changes
+
+- Updated dependencies [[`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37), [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21), [`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607)]:
+  - @vultisig/core-chain@2.17.6
+  - @vultisig/lib-utils@0.10.2
+
 ## 1.8.2
 
 ### Patch Changes

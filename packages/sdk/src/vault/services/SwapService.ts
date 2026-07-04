@@ -17,6 +17,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 import { chainsWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/token/metadata/chains'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
+import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { findSwapQuote, FindSwapQuoteInput } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { swapEnabledChains } from '@vultisig/core-chain/swap/swapEnabledChains'
@@ -359,9 +360,10 @@ export class SwapService {
     const expiresIn = isNative ? quoteData.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
     const expiresAt = Date.now() + Math.min(expiresIn, DEFAULT_QUOTE_EXPIRY_MS)
 
-    // Extract estimated output as bigint
+    // Native swap APIs report output in their protocol precision. SDK consumers
+    // expect the destination coin's base units, matching general provider quotes.
     const estimatedOutput = isNative
-      ? BigInt(quoteData.native.expected_amount_out)
+      ? nativeSwapAmountToCoinBaseUnit(BigInt(quoteData.native.expected_amount_out), toCoin)
       : BigInt(quoteData.general.dstAmount)
 
     // Extract provider name

@@ -1,5 +1,207 @@
 # @vultisig/core-chain
 
+## 2.23.0
+
+### Minor Changes
+
+- [#931](https://github.com/vultisig/vultisig-sdk/pull/931) [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a public `SwapAffiliateConfig.jupiter` fee-owner override for Jupiter affiliate fee account derivation.
+
+- [#930](https://github.com/vultisig/vultisig-sdk/pull/930) [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking APY resolver
+
+  Phase 6 of Solana native staking. Adds `resolveValidatorApy` under
+  `@vultisig/core-chain/chains/solana/staking/apyResolver`, which drives the
+  per-validator APY on the DeFi stake rows. Two sources, in order: the Stakewiz
+  `apy_estimate` passthrough (network-measured, commission-net) from the Phase 2
+  metadata seam, then an on-chain fallback derived from the network inflation rate
+  and the fraction of supply staked, net of the validator's commission, compounded
+  over the epochs-per-year. Returns `undefined` when neither yields a positive
+  value so the view hides the APY row.
+
+- [#887](https://github.com/vultisig/vultisig-sdk/pull/887) [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Jupiter as a same-chain Solana swap provider with VULT-scaled affiliate fee support.
+
+### Patch Changes
+
+- [#954](https://github.com/vultisig/vultisig-sdk/pull/954) [`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Terra Classic address explorer URLs so Terra Finder receives a single `classic` network segment.
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
+## 2.22.2
+
+### Patch Changes
+
+- [#921](https://github.com/vultisig/vultisig-sdk/pull/921) [`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - refactor(cardano): attach CIP-20 memo via WalletCore native auxiliary_data
+
+  Bumps `@trustwallet/wallet-core` to `4.7.0`, which adds the Cardano
+  `SigningInput.auxiliary_data` field. The Cardano memo path now hands the
+  CIP-20 CBOR straight to WalletCore, which commits its Blake2b-256 hash into
+  tx body key 7 and embeds the bytes in the signed transaction — replacing the
+  client-side body patching and re-hashing in TypeScript. The chain-specific
+  fee estimator prices the WalletCore body as-is (it already carries key 7),
+  and the now-unused `patchTxBodyWithAuxHash` helper is removed.
+
+- [#924](https://github.com/vultisig/vultisig-sdk/pull/924) [`d08a476`](https://github.com/vultisig/vultisig-sdk/commit/d08a47696d0cb1c8dbcb50d41830b9eae16b6d8c) Thanks [@johnnyluo](https://github.com/johnnyluo)! - fix(terra-classic): align send gas limit with iOS/Android for cross-device co-signing
+
+  Corrects the Terra Classic send gas limit in `cosmosGasLimitRecord` so it matches
+  the values used by the iOS and Android clients. When co-signing across devices, a
+  mismatched gas limit produces a different transaction hash and the signing session
+  fails; aligning the record keeps the payload identical across platforms.
+
+## 2.22.1
+
+### Patch Changes
+
+- Updated dependencies [[`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a)]:
+  - @vultisig/lib-utils@0.10.4
+
+## 2.22.0
+
+### Minor Changes
+
+- [#915](https://github.com/vultisig/vultisig-sdk/pull/915) [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): native-staking transaction builder (byte-parity)
+
+  Phase 3 of Solana native staking. Adds the signing core for the delegate flow
+  (and the proto for the later unstake / withdraw / move-stake ops) under
+  `@vultisig/core-chain/chains/solana/staking/tx`:
+
+  - `stakingPayload` — discriminated staking-op intent (delegate / unstake /
+    withdraw / move-stake deactivate + redelegate sub-steps).
+  - `buildUnsignedStakingTx` — maps a payload to the wallet-core Solana stake
+    proto (`delegateStakeTransaction` derives the stake account; move-redelegate
+    sets it explicitly), compiles a zero-signature envelope via
+    `TransactionCompiler`, and returns it base64-encoded. This is the MPC
+    byte-parity contract: the initiating device builds these bytes once (pinning
+    the recent blockhash + the derived stake-account address) and relays them via
+    `signSolana.rawTransactions`, so every co-signer signs the identical message.
+
+  Adds `long` to core-chain deps (Long-typed proto amount fields). Byte-parity
+  tests build delegate / deactivate / withdraw / move-redelegate txs against real
+  wallet-core, decode them back, and assert determinism.
+
+### Patch Changes
+
+- [#916](https://github.com/vultisig/vultisig-sdk/pull/916) [`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Solana broadcast: surface the on-chain rejection reason. When `sendTransaction` is rejected at preflight, the RPC returns the actionable detail in `data.err` / `data.logs` (the program logs), which web3.js exposes via `SendTransactionError.logs` while leaving the bare `.message` ("failed to send transaction") uninformative. The broadcast resolver now folds those program logs into the thrown error's message (preserving the original error as `cause`), so consumers reading the top-level message see _why_ the network rejected the transaction — "insufficient lamports", a custom program error, a failed instruction — instead of just that it failed.
+
+## 2.21.0
+
+### Minor Changes
+
+- [#912](https://github.com/vultisig/vultisig-sdk/pull/912) [`403d5d5`](https://github.com/vultisig/vultisig-sdk/commit/403d5d5f7c7dba3e45cb818899db00f765541ecf) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): validator-metadata seam (Stakewiz, swappable)
+
+  Phase 2 of Solana native staking. Adds a swappable off-chain enrichment seam for
+  validator display metadata (name / logo / APY estimate / score) on top of the
+  Phase 1 on-chain `getVoteAccounts` rows, under
+  `@vultisig/core-chain/chains/solana/staking/metadata`:
+
+  - `ValidatorMetadataProvider` — provider interface; contract: never throws.
+  - `stakewizProvider` — concrete impl over api.stakewiz.com (`apy_estimate`
+    percent→fraction, `image`→logo, `wiz_score`→score). Degrades to an empty map
+    on any outage / non-OK / parse error so callers fall back to on-chain-only.
+  - `enrichValidators` — merges the metadata map onto the validator rows; the
+    provider is injectable for tests.
+
+## 2.20.0
+
+### Minor Changes
+
+- [#900](https://github.com/vultisig/vultisig-sdk/pull/900) [`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking foundation — models + RPC read layer
+
+  Phase 1 of Solana native staking. Adds the chain-layer read foundation under
+  `@vultisig/core-chain/chains/solana/staking`: config, stake-account/validator
+  models (jsonParsed parsing + activation-state derivation), the RPC read layer
+  (getVoteAccounts / stake-account scan / epoch / rent / inflation / supply), and
+  the withdraw cooldown gate. No UI, no signing, no validator-metadata source.
+
+## 2.19.0
+
+### Minor Changes
+
+- [#894](https://github.com/vultisig/vultisig-sdk/pull/894) [`605fbba`](https://github.com/vultisig/vultisig-sdk/commit/605fbbaf107c553898f11f4f7eb6b56a59c01b9e) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(swap): add Jupiter as a Solana same-chain swap provider with a VULT-scaled affiliate fee
+
+  `findSwapQuote` now offers Jupiter for on-Solana token pairs (SOL↔SPL, SPL↔SPL),
+  preferred over SwapKit/LiFi on a near-tie. Jupiter is Solana-only and same-chain
+  — it is never offered for any cross-chain route, and native SOL cross-chain swaps
+  stay on THORChain.
+
+  The Jupiter quote sends `platformFeeBps` = `max(0, 50 − vultTierDiscountBps)`
+  (the existing `getSwapAffiliateBps` value, shared with every other provider), and
+  the swap request sends `feeAccount` = the Associated Token Account of
+  `(owner = Vultisig fee wallet, mint = output mint)`. An idempotent
+  `createAssociatedTokenAccount` instruction for that fee ATA is prepended to the
+  returned transaction (Jupiter does not auto-create it). When the affiliate bps
+  floors to 0 (Ultimate-tier VULT holder), no platform fee or fee account is used.
+
+  New public surface: `swap/general/jupiter/*` (`getJupiterSwapQuote`,
+  `configureJupiter`, `jupiterSwapEnabledChains`) and `jupiter` added to
+  `generalSwapProviders` and the swap explorer providers.
+
+- [#893](https://github.com/vultisig/vultisig-sdk/pull/893) [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add TON nominator-pool staking support. `@vultisig/core-chain` gains a tonapi staking client (`chains/ton/staking`) — pool list, computed pool info, and account nominator positions — plus per-implementation deposit/withdraw comment resolution (`whales` → `Deposit`/`Withdraw`, `tf` → `d`/`w`), pool eligibility/capacity filters, and a `tonAddressToBounceable` helper that normalizes raw `0:` pool addresses to the bounceable `EQ…` form. `@vultisig/core-mpc` now forces TON transfers bounceable for any staking comment (via `isTonStakingComment`), so a rejected pool deposit/withdraw bounces back instead of being absorbed.
+
+### Patch Changes
+
+- [#886](https://github.com/vultisig/vultisig-sdk/pull/886) [`baedd96`](https://github.com/vultisig/vultisig-sdk/commit/baedd96e9d75a9d73880a59503f95b527d692428) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add an EVM chain balance batching helper backed by Multicall3.
+
+## 2.18.0
+
+### Minor Changes
+
+- [#888](https://github.com/vultisig/vultisig-sdk/pull/888) [`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add QBTC governance support under `chains/cosmos/qbtc/governance/`: REST clients for the Cosmos `x/gov v1` proposals, tally, votes and params endpoints, plus the domain types and wire parsers. Mirrors the existing `qbtc/claim` split and is consumed by the wallet's QBTC governance UI.
+
+## 2.17.11
+
+### Patch Changes
+
+- [#884](https://github.com/vultisig/vultisig-sdk/pull/884) [`33e663c`](https://github.com/vultisig/vultisig-sdk/commit/33e663ce6ba519cacb7dae5befebe9e3e530b4d7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Lower `cosmosGasRecord[TerraClassic]` from 100 LUNC to 20 LUNC.
+
+  Real on-chain MsgSend cost on columbus-5: ~400k gas x 28.325 uluna/gas ~ 11.33 LUNC.
+  The 100 LUNC floor was blocking sends from wallets with 20-100 LUNC balance even when
+  the transaction would have succeeded. The new 20 LUNC floor gives a ~1.77x buffer.
+
+  Companion to vultisig/agent-backend#1409 and vultisig/mcp-ts#594.
+
+## 2.17.10
+
+### Patch Changes
+
+- [#874](https://github.com/vultisig/vultisig-sdk/pull/874) [`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c) Thanks [@neavra](https://github.com/neavra)! - fix(core-chain): treat duplicate-signature Solana broadcast errors as idempotent success
+
+  `broadcastSolanaTx` now classifies "already been processed" / `AlreadyProcessed`
+  rejections from `sendRawTransaction` as an idempotent success (returns instead
+  of routing to `verifyBroadcastByHash`), mirroring the TON/UTXO/Cosmos dedupe
+  guards. This stops a headless retry after an ambiguous broadcast from blindly
+  re-submitting an already-accepted Solana transaction.
+
+## 2.17.9
+
+### Patch Changes
+
+- Updated dependencies [[`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e)]:
+  - @vultisig/lib-utils@0.10.3
+
+## 2.17.8
+
+### Patch Changes
+
+- [#870](https://github.com/vultisig/vultisig-sdk/pull/870) [`59e66c8`](https://github.com/vultisig/vultisig-sdk/commit/59e66c89858f90222a1d2d74eff9e71b69dd2f03) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Normalize native THORChain and MayaChain swap quote output amounts to destination coin base units before SDK quote formatting and near-zero validation.
+
+## 2.17.7
+
+### Patch Changes
+
+- [#809](https://github.com/vultisig/vultisig-sdk/pull/809) [`e53230e`](https://github.com/vultisig/vultisig-sdk/commit/e53230efd2bb8a4e68f85f74c24655190af405d4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor native swap quote expiry and validate THORChain inbound vault addresses before broadcasting stale signed swaps.
+
+- [#808](https://github.com/vultisig/vultisig-sdk/pull/808) [`ab9cc91`](https://github.com/vultisig/vultisig-sdk/commit/ab9cc91c48588e9ecd96ec7eb50fd8138b88ba13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply native THORChain/Maya swap slippage tolerance to quote requests and signed payload limits so native swaps no longer use a zero minimum-output floor.
+
+## 2.17.6
+
+### Patch Changes
+
+- [#774](https://github.com/vultisig/vultisig-sdk/pull/774) [`0f350ff`](https://github.com/vultisig/vultisig-sdk/commit/0f350ff128a42764950e71b4c156907ec59a3c37) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Add scanAddress method for Blockaid EVM address reputation scanning
+
+- [#790](https://github.com/vultisig/vultisig-sdk/pull/790) [`6f53d2c`](https://github.com/vultisig/vultisig-sdk/commit/6f53d2cb3d1a56ff9377cc32c7c6f4e750fe8f21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Align Dogecoin Blockchair fee estimation with the app clients by using 25% of the reported baseline.
+
+- Updated dependencies [[`b51902b`](https://github.com/vultisig/vultisig-sdk/commit/b51902bc08045e3977116565e430c1454d0ba607)]:
+  - @vultisig/lib-utils@0.10.2
+
 ## 2.17.5
 
 ### Patch Changes

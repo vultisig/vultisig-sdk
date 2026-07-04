@@ -1,23 +1,44 @@
-// EIP-712 hash correctness for sign_typed_data.
+// EIP-712 signing correctness for sign_typed_data.
 //
-// Regression coverage for the ClobAuthDomain bug: the executor's EIP-712
-// implementation hardcoded the EIP712Domain type to all four standard
-// fields, while the data encoder silently skipped absent ones. Domains
-// that omit verifyingContract (Polymarket's ClobAuthDomain) produced a
-// typeHash/data mismatch — a hash no verifier could reproduce, surfacing
-// as CLOB `401 Invalid L1 Request headers` on every auto-submit.
+// The executor used to hand-roll the EIP-712 struct encoder, the DER→r||s
+// parse, and the 65-byte signature assembly. Three independent defects lived
+// there: a hardcoded EIP712Domain field set (wrong domainSeparator for
+// Polymarket's ClobAuthDomain / salted domains), no low-S canonicalization
+// (malleable, OZ-ECDSA-rejected signatures), and no recover-verify gate (a
+// wrong v / digest mismatch returned as success). This suite pins the fix:
 //
-// Canonical hashes are computed with viem's hashTypedData (same library
-// the rest of the ecosystem verifies against), so these tests fail if the
-// executor's hand-rolled encoder ever drifts from EIP-712 again.
+//   - the digest now comes from viem's `hashTypedData` and is pinned against
+//     BOTH viem AND ethers `TypedDataEncoder.hash` (the app's reference
+//     encoder, vultiagent-app/src/services/eip712Signing.ts) for a flat
+//     ERC-2612 permit and the Polymarket Order + ClobAuth payload-array;
+//   - `toCanonicalEvmSignature` folds a high-S value into the low half and
+//     flips the recovery parity;
+//   - `signSingleTypedData` recover-verifies the assembled signature against
+//     the vault's EVM address and throws SIGNATURE_RECOVERY_MISMATCH otherwise.
 import type { VaultBase } from '@vultisig/sdk'
-import { hashTypedData } from 'viem'
+import { TypedDataEncoder } from 'ethers'
+import { hashTypedData, recoverAddress } from 'viem'
+import { privateKeyToAddress, sign } from 'viem/accounts'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentExecutor } from '../executor'
+import { AgentExecutor, toCanonicalEvmSignature } from '../executor'
 
-// Raw r||s (128 hex chars) — parseDERSignature passes it through unchanged.
-const MOCK_RS_SIGNATURE = '0x' + 'ab'.repeat(32) + 'cd'.repeat(32)
+// secp256k1 group order — duplicated here (the impl constant is module-private)
+// so the low-S test pins the fold against an independent literal.
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n
+
+// Deterministic test keyshare. The mock vault "signs" each digest with this
+// key (viem's `sign` is RFC-6979 deterministic and already low-S), and
+// reports its address — so the executor's recover-verify gate passes for
+// every well-formed payload below.
+const TEST_PRIVATE_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'
+const TEST_ADDRESS = privateKeyToAddress(TEST_PRIVATE_KEY)
+
+// signBytes shape returned by the SDK: raw r||s (128 hex) + recovery id.
+async function mockSign(hash: string): Promise<{ signature: string; format: string; recovery: number }> {
+  const sig = await sign({ hash: hash as `0x${string}`, privateKey: TEST_PRIVATE_KEY })
+  return { signature: '0x' + sig.r.slice(2) + sig.s.slice(2), format: 'ECDSA', recovery: sig.yParity }
+}
 
 function createSigningMockVault(): VaultBase {
   return {
@@ -26,13 +47,53 @@ function createSigningMockVault(): VaultBase {
     type: 'fast',
     chains: [],
     isEncrypted: false,
-    address: vi.fn().mockResolvedValue('0xsender'),
-    signBytes: vi.fn().mockResolvedValue({
-      signature: MOCK_RS_SIGNATURE,
-      format: 'ECDSA',
-      recovery: 0,
-    }),
+    address: vi.fn().mockResolvedValue(TEST_ADDRESS),
+    signBytes: vi.fn(async ({ data }: { data: string }) => mockSign(data)),
   } as unknown as VaultBase
+}
+
+// Pin a digest against the two independent reference encoders — viem (what
+// the executor now uses) and ethers (what the app uses). Agreement between
+// two distinct implementations is the canonical-correctness guarantee.
+function expectCanonicalHash(
+  actual: unknown,
+  domain: Record<string, unknown>,
+  types: Record<string, Array<{ name: string; type: string }>>,
+  primaryType: string,
+  message: Record<string, unknown>
+): void {
+  const viemHash = hashTypedData({ domain, types, primaryType, message } as Parameters<typeof hashTypedData>[0])
+  const ethersHash = TypedDataEncoder.hash(domain, types, message)
+  expect(viemHash).toBe(ethersHash)
+  expect(actual).toBe(viemHash)
+}
+
+// ---------------------------------------------------------------------------
+// Vectors
+// ---------------------------------------------------------------------------
+
+// Flat ERC-2612 permit (USDC mainnet domain).
+const PERMIT_DOMAIN = {
+  name: 'USD Coin',
+  version: '2',
+  chainId: 1,
+  verifyingContract: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+}
+const PERMIT_TYPES = {
+  Permit: [
+    { name: 'owner', type: 'address' },
+    { name: 'spender', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'nonce', type: 'uint256' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+}
+const PERMIT_MESSAGE = {
+  owner: '0x98e34Fc9C1dc67E980C62125b2e3a1535657fd32',
+  spender: '0x1111111254EEB25477B68fb85Ed929f73A960582',
+  value: '115792089237316195423570985008687907853269984665640564039457584007913129639935',
+  nonce: '0',
+  deadline: '1781158537',
 }
 
 const ORDER_TYPES = {
@@ -92,38 +153,7 @@ const CLOB_AUTH_MESSAGE = {
   message: 'This message attests that I control the given wallet',
 }
 
-function canonicalOrderHash(): string {
-  return hashTypedData({
-    domain: ORDER_DOMAIN as never,
-    types: ORDER_TYPES,
-    primaryType: 'Order',
-    message: {
-      ...ORDER_MESSAGE,
-      salt: BigInt(ORDER_MESSAGE.salt),
-      tokenId: BigInt(ORDER_MESSAGE.tokenId),
-      makerAmount: BigInt(ORDER_MESSAGE.makerAmount),
-      takerAmount: BigInt(ORDER_MESSAGE.takerAmount),
-      expiration: BigInt(ORDER_MESSAGE.expiration),
-      nonce: BigInt(ORDER_MESSAGE.nonce),
-      feeRateBps: BigInt(ORDER_MESSAGE.feeRateBps),
-    } as never,
-  })
-}
-
-function canonicalClobAuthHash(): string {
-  return hashTypedData({
-    domain: CLOB_AUTH_DOMAIN as never,
-    types: CLOB_AUTH_TYPES,
-    primaryType: 'ClobAuth',
-    message: {
-      ...CLOB_AUTH_MESSAGE,
-      nonce: BigInt(CLOB_AUTH_MESSAGE.nonce),
-    } as never,
-  })
-}
-
-// 5-field domain exercising the `salt` (bytes32) path — Polymarket doesn't
-// use salt, but it's in EIP712_DOMAIN_FIELDS and was otherwise untested.
+// 5-field domain exercising the `salt` (bytes32) path.
 const SALT_DOMAIN = {
   name: 'Salted',
   version: '2',
@@ -131,22 +161,139 @@ const SALT_DOMAIN = {
   verifyingContract: '0x1111111111111111111111111111111111111111',
   salt: '0x' + '00'.repeat(31) + '2a',
 }
-const SALT_TYPES = {
-  Mail: [{ name: 'contents', type: 'string' }],
-}
+const SALT_TYPES = { Mail: [{ name: 'contents', type: 'string' }] }
 const SALT_MESSAGE = { contents: 'hello salt' }
 
-function canonicalSaltHash(): string {
-  return hashTypedData({
-    domain: SALT_DOMAIN as never,
-    types: SALT_TYPES,
-    primaryType: 'Mail',
-    message: SALT_MESSAGE as never,
-  })
+// Nested struct + array-of-struct (the canonical EIP-712 Mail example) — the
+// removed hand-rolled encoder had its own recursive struct / array path; this
+// pins viem's handling of `Person[]` and a nested `Person` member vs ethers.
+const NESTED_DOMAIN = {
+  name: 'Ether Mail',
+  version: '1',
+  chainId: 1,
+  verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
+}
+const NESTED_TYPES = {
+  Person: [
+    { name: 'name', type: 'string' },
+    { name: 'wallets', type: 'address[]' },
+  ],
+  Mail: [
+    { name: 'from', type: 'Person' },
+    { name: 'to', type: 'Person[]' },
+    { name: 'contents', type: 'string' },
+  ],
+}
+const NESTED_MESSAGE = {
+  from: {
+    name: 'Cow',
+    wallets: ['0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826', '0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF'],
+  },
+  to: [
+    {
+      name: 'Bob',
+      wallets: [
+        '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
+        '0xB0BdaBea57B0BDABeA57b0bdABEA57b0BDabEa57',
+        '0xB0B0b0b0b0b0B000000000000000000000000000',
+      ],
+    },
+  ],
+  contents: 'Hello, Bob!',
 }
 
-describe('signTypedData — EIP-712 hash correctness vs viem', () => {
-  it('full 4-field domain (Polymarket Order) matches canonical hash', async () => {
+describe('signTypedData — EIP-712 digest pinned vs viem AND ethers', () => {
+  it('flat ERC-2612 permit matches both reference encoders', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-permit', {
+      domain: PERMIT_DOMAIN,
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    expectCanonicalHash(recent.data?.hash, PERMIT_DOMAIN, PERMIT_TYPES, 'Permit', PERMIT_MESSAGE)
+  })
+
+  it('string chainId hashes identically to the numeric form (matches ethers/on-chain)', async () => {
+    // The JSON wire occasionally double-stringifies chainId. viem hashes a
+    // string chainId to a DIFFERENT digest than the numeric form, but ethers
+    // (the app encoder + on-chain DOMAIN_SEPARATOR) coerces both to the same
+    // value. The executor must coerce so its digest matches the contract's.
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-permit-strchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: String(PERMIT_DOMAIN.chainId) },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    // Pin against the NUMERIC-chainId canonical hash (viem == ethers).
+    expectCanonicalHash(recent.data?.hash, PERMIT_DOMAIN, PERMIT_TYPES, 'Permit', PERMIT_MESSAGE)
+  })
+
+  it('oversized decimal chainId hashes as an exact bigint, not a rounded Number()', async () => {
+    // A chainId just above Number.MAX_SAFE_INTEGER would round under Number()
+    // (9007199254740993 → ...992), producing a DIFFERENT EIP-712 digest. The
+    // recover-verify gate cannot catch this — the signature is self-consistent
+    // over the wrong digest. coerceChainId must parse it as a bigint so viem
+    // hashes the exact value.
+    const executor = new AgentExecutor(createSigningMockVault())
+    const bigChainId = BigInt(Number.MAX_SAFE_INTEGER) + 2n // 9007199254740993
+
+    const recent = await executor.signTypedData('call-permit-bigchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: bigChainId.toString() },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    const hashFor = (chainId: number | bigint): string =>
+      hashTypedData({
+        domain: { ...PERMIT_DOMAIN, chainId },
+        types: PERMIT_TYPES,
+        primaryType: 'Permit',
+        message: PERMIT_MESSAGE,
+      } as Parameters<typeof hashTypedData>[0])
+    const correctHash = hashFor(bigChainId)
+    const roundedHash = hashFor(Number(bigChainId.toString())) // what Number() would have produced
+    expect(correctHash).not.toBe(roundedHash) // sanity: the two genuinely diverge
+    expect(recent.data?.hash).toBe(correctHash)
+    expect(recent.data?.hash).not.toBe(roundedHash)
+  })
+
+  it('oversized hex chainId hashes as an exact bigint, not a rounded Number()', async () => {
+    // 0x20000000000001 = 9007199254740993 (> MAX_SAFE_INTEGER) — same rounding
+    // trap via the hex branch of coerceChainId.
+    const executor = new AgentExecutor(createSigningMockVault())
+    const hexChainId = '0x20000000000001'
+    const bigChainId = BigInt(hexChainId)
+
+    const recent = await executor.signTypedData('call-permit-hexchainid', {
+      domain: { ...PERMIT_DOMAIN, chainId: hexChainId },
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    const hashFor = (chainId: number | bigint): string =>
+      hashTypedData({
+        domain: { ...PERMIT_DOMAIN, chainId },
+        types: PERMIT_TYPES,
+        primaryType: 'Permit',
+        message: PERMIT_MESSAGE,
+      } as Parameters<typeof hashTypedData>[0])
+    expect(recent.data?.hash).toBe(hashFor(bigChainId))
+    expect(recent.data?.hash).not.toBe(hashFor(Number(hexChainId)))
+  })
+
+  it('full 4-field domain (Polymarket Order) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
     const recent = await executor.signTypedData('call-712-1', {
@@ -157,10 +304,10 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     })
 
     expect(recent.success).toBe(true)
-    expect(recent.data?.hash).toBe(canonicalOrderHash())
+    expectCanonicalHash(recent.data?.hash, ORDER_DOMAIN, ORDER_TYPES, 'Order', ORDER_MESSAGE)
   })
 
-  it('3-field domain without verifyingContract (ClobAuthDomain) matches canonical hash', async () => {
+  it('3-field domain without verifyingContract (ClobAuthDomain) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
     const recent = await executor.signTypedData('call-712-2', {
@@ -171,7 +318,7 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     })
 
     expect(recent.success).toBe(true)
-    expect(recent.data?.hash).toBe(canonicalClobAuthHash())
+    expectCanonicalHash(recent.data?.hash, CLOB_AUTH_DOMAIN, CLOB_AUTH_TYPES, 'ClobAuth', CLOB_AUTH_MESSAGE)
   })
 
   it('payloads[] mode (Polymarket Order + ClobAuth) signs both with canonical hashes and echoes markers', async () => {
@@ -209,9 +356,9 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
       const signatures = recent.data?.signatures as Array<Record<string, unknown>>
       expect(signatures).toHaveLength(2)
       expect(signatures[0].id).toBe('order')
-      expect(signatures[0].hash).toBe(canonicalOrderHash())
+      expectCanonicalHash(signatures[0].hash, ORDER_DOMAIN, ORDER_TYPES, 'Order', ORDER_MESSAGE)
       expect(signatures[1].id).toBe('auth')
-      expect(signatures[1].hash).toBe(canonicalClobAuthHash())
+      expectCanonicalHash(signatures[1].hash, CLOB_AUTH_DOMAIN, CLOB_AUTH_TYPES, 'ClobAuth', CLOB_AUTH_MESSAGE)
       // 65-byte signature: r||s||v
       expect(signatures[0].signature).toMatch(/^0x[0-9a-f]{130}$/)
 
@@ -222,7 +369,102 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     }
   })
 
-  it('5-field domain with salt (bytes32) matches canonical hash', async () => {
+  it('payloads[] mode (Polymarket BATCH) returns pm_batch_ref so the backend can auto-submit the batch', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-batch', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_batch_ref: 'batch-ref-789',
+        __pm_auto_submit_batch: true,
+      })
+      // Skip the 5s inter-MPC-session sleep between the two payloads.
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // Without pm_batch_ref in the return, agent-backend's batch auto-submit
+      // (submit_deposit_wallet_batch) never fires — BATCH approvals sign but
+      // never auto-submit. The __pm_auto_submit_batch flag rides through the
+      // session echo loop (it's __-prefixed), not this return's auto_submit
+      // (which stays order-scoped via __pm_auto_submit, intentionally untouched).
+      expect(recent.data?.pm_batch_ref).toBe('batch-ref-789')
+      // Invariant lock: the order-scoped auto_submit must NOT be flipped by the
+      // batch flag. Input carries __pm_auto_submit_batch but no __pm_auto_submit,
+      // so the return's auto_submit stays false — the batch flag reaches the
+      // backend only via the session echo loop, never this derivation.
+      expect(recent.data?.auto_submit).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('single-order payloads[] (no batch) emits no spurious pm_batch_ref key', async () => {
+    vi.useFakeTimers()
+    try {
+      const executor = new AgentExecutor(createSigningMockVault())
+
+      const promise = executor.signTypedData('call-712-single', {
+        payloads: [
+          {
+            id: 'order',
+            primaryType: 'Order',
+            domain: ORDER_DOMAIN,
+            types: ORDER_TYPES,
+            message: ORDER_MESSAGE,
+            chain: 'Polygon',
+          },
+          {
+            id: 'auth',
+            primaryType: 'ClobAuth',
+            domain: CLOB_AUTH_DOMAIN,
+            types: CLOB_AUTH_TYPES,
+            message: CLOB_AUTH_MESSAGE,
+            chain: 'Ethereum',
+          },
+        ],
+        pm_order_ref: 'order-ref-123',
+        __pm_auto_submit: true,
+        // NB: no pm_batch_ref — this is the single-order flow.
+      })
+      await vi.advanceTimersByTimeAsync(5000)
+      const recent = await promise
+
+      expect(recent.success).toBe(true)
+      // The return literal sets pm_batch_ref: input.pm_batch_ref, which is
+      // undefined for single-order flows. Confirm gomes's concern is moot:
+      // JSON.stringify (how recent_actions ship to the backend) drops the
+      // undefined-valued key entirely, so downstream never sees a spurious
+      // pm_batch_ref that could confuse an existence check.
+      expect(recent.data?.pm_batch_ref).toBeUndefined()
+      const wireData = JSON.parse(JSON.stringify(recent.data))
+      expect('pm_batch_ref' in wireData).toBe(false)
+      // The order ref still rides along untouched.
+      expect(recent.data?.pm_order_ref).toBe('order-ref-123')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('5-field domain with salt (bytes32) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
     const recent = await executor.signTypedData('call-712-salt', {
@@ -233,51 +475,28 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     })
 
     expect(recent.success).toBe(true)
-    expect(recent.data?.hash).toBe(canonicalSaltHash())
+    expectCanonicalHash(recent.data?.hash, SALT_DOMAIN, SALT_TYPES, 'Mail', SALT_MESSAGE)
   })
 
-  it('fails loud (no silent wrong hash) when a declared struct field is missing', async () => {
+  it('nested struct + array-of-struct (Ether Mail) matches both reference encoders', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
-    // Drop a declared Order field. The old encoder silently skipped it and
-    // produced a digest no verifier could reproduce; the guard must turn
-    // that into a visible tool failure instead of a signed bad hash.
-    const orderMissingTaker: Record<string, unknown> = { ...ORDER_MESSAGE }
-    delete orderMissingTaker.taker
-    const recent = await executor.signTypedData('call-712-missing', {
-      domain: ORDER_DOMAIN,
-      types: ORDER_TYPES,
-      primaryType: 'Order',
-      message: orderMissingTaker,
+    const recent = await executor.signTypedData('call-712-nested', {
+      domain: NESTED_DOMAIN,
+      types: NESTED_TYPES,
+      primaryType: 'Mail',
+      message: NESTED_MESSAGE,
     })
 
-    expect(recent.success).toBe(false)
-    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/missing value for declared field "taker"/)
+    expect(recent.success).toBe(true)
+    expectCanonicalHash(recent.data?.hash, NESTED_DOMAIN, NESTED_TYPES, 'Mail', NESTED_MESSAGE)
   })
 
-  it('fails loud when primaryType has no type definition (no empty-struct hash)', async () => {
-    const executor = new AgentExecutor(createSigningMockVault())
-
-    // primaryType says Order but `types` doesn't declare it. The old
-    // getTypeFields returned undefined and callers encoded an empty
-    // struct — hashing and signing a digest no verifier can reproduce.
-    const recent = await executor.signTypedData('call-712-no-typedef', {
-      domain: ORDER_DOMAIN,
-      types: { NotOrder: ORDER_TYPES.Order },
-      primaryType: 'Order',
-      message: ORDER_MESSAGE,
-    })
-
-    expect(recent.success).toBe(false)
-    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/missing type definition for struct "Order"/)
-  })
-
-  it('caller-supplied explicit types.EIP712Domain matches canonical hash', async () => {
+  it('caller-supplied explicit types.EIP712Domain is stripped and matches canonical hash', async () => {
     const executor = new AgentExecutor(createSigningMockVault())
 
     // Typed-data builders in this repo emit an explicit EIP712Domain entry;
-    // computeEIP712Hash must use it verbatim (separate branch from the
-    // synthesized-domain path the tests above pin).
+    // viem rejects `primaryType` if it survives, so the executor must strip it.
     const typesWithDomain = {
       EIP712Domain: [
         { name: 'name', type: 'string' },
@@ -295,8 +514,160 @@ describe('signTypedData — EIP-712 hash correctness vs viem', () => {
     })
 
     expect(recent.success).toBe(true)
-    // viem ignores/synthesizes the domain type identically for the standard
-    // 4-field domain, so the canonical Order hash is the same fixture.
-    expect(recent.data?.hash).toBe(canonicalOrderHash())
+    expectCanonicalHash(recent.data?.hash, ORDER_DOMAIN, ORDER_TYPES, 'Order', ORDER_MESSAGE)
+  })
+})
+
+describe('signTypedData — fail-loud on malformed payloads (viem validation)', () => {
+  it('fails when a declared struct field is missing (no silent wrong hash)', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    // Drop a declared Order field. The old encoder silently skipped it and
+    // produced a digest no verifier could reproduce; viem throws instead.
+    const orderMissingTaker: Record<string, unknown> = { ...ORDER_MESSAGE }
+    delete orderMissingTaker.taker
+    const recent = await executor.signTypedData('call-712-missing', {
+      domain: ORDER_DOMAIN,
+      types: ORDER_TYPES,
+      primaryType: 'Order',
+      message: orderMissingTaker,
+    })
+
+    expect(recent.success).toBe(false)
+    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/invalid|undefined/i)
+  })
+
+  it('fails when primaryType has no type definition (no empty-struct hash)', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+
+    const recent = await executor.signTypedData('call-712-no-typedef', {
+      domain: ORDER_DOMAIN,
+      types: { NotOrder: ORDER_TYPES.Order },
+      primaryType: 'Order',
+      message: ORDER_MESSAGE,
+    })
+
+    expect(recent.success).toBe(false)
+    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/Invalid primary type|Order/i)
+  })
+})
+
+describe('toCanonicalEvmSignature — low-S (EIP-2)', () => {
+  const R = 'aa'.repeat(32)
+
+  it('folds a high-S value into the low half and flips the recovery parity', () => {
+    const sHigh = (SECP256K1_N - 1n).toString(16).padStart(64, '0')
+    const out = toCanonicalEvmSignature('0x' + R + sHigh, 0)
+
+    // n - (n - 1) = 1
+    expect(out.s).toBe('1'.padStart(64, '0'))
+    expect(BigInt('0x' + out.s) <= SECP256K1_N >> 1n).toBe(true)
+    expect(out.recovery).toBe(1)
+    expect(out.r).toBe(R)
+  })
+
+  it('passes a canonical low-S value through unchanged', () => {
+    const sLow = 2n.toString(16).padStart(64, '0')
+    const out = toCanonicalEvmSignature('0x' + R + sLow, 1)
+
+    expect(out.s).toBe(sLow)
+    expect(out.recovery).toBe(1)
+  })
+})
+
+describe('signSingleTypedData — recover-verify gate', () => {
+  it('throws SIGNATURE_RECOVERY_MISMATCH when the assembled signature does not recover to the vault address', async () => {
+    // signBytes returns a valid r/s but the WRONG recovery parity, so the
+    // assembled v recovers to a different address than the vault's.
+    const vault = {
+      name: 'mock-vault',
+      id: 'vault-mock-eip712-bad',
+      type: 'fast',
+      chains: [],
+      isEncrypted: false,
+      address: vi.fn().mockResolvedValue(TEST_ADDRESS),
+      signBytes: vi.fn(async ({ data }: { data: string }) => {
+        const ok = await mockSign(data)
+        return { ...ok, recovery: ok.recovery ^ 1 }
+      }),
+    } as unknown as VaultBase
+
+    const executor = new AgentExecutor(vault)
+    const recent = await executor.signTypedData('call-712-badrec', {
+      domain: PERMIT_DOMAIN,
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(false)
+    expect(String((recent.data as Record<string, unknown>).error)).toMatch(/SIGNATURE_RECOVERY_MISMATCH/)
+  })
+
+  it('surfaces an actionable, non-retryable vault-context error on recover-verify mismatch', async () => {
+    // Wrong-vault-context path: the vault loaded into the executor reports an
+    // EVM address that the recovered signer can never match (e.g. the wrong
+    // vault/keyshare is loaded). The failure must point at vault context and
+    // read as deterministic, not retryable — per the PR #852 review follow-up.
+    const WRONG_VAULT_ADDRESS = '0x000000000000000000000000000000000000dEaD'
+    const vault = {
+      name: 'mock-vault',
+      id: 'vault-mock-eip712-wrongctx',
+      type: 'fast',
+      chains: [],
+      isEncrypted: false,
+      // address() reports a vault address the real signer can never recover to.
+      address: vi.fn().mockResolvedValue(WRONG_VAULT_ADDRESS),
+      // signBytes signs correctly with TEST_PRIVATE_KEY (→ TEST_ADDRESS).
+      signBytes: vi.fn(async ({ data }: { data: string }) => mockSign(data)),
+    } as unknown as VaultBase
+
+    const executor = new AgentExecutor(vault)
+    const recent = await executor.signTypedData('call-712-wrongctx', {
+      domain: PERMIT_DOMAIN,
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(false)
+    const error = String((recent.data as Record<string, unknown>).error)
+    // Stable machine-readable prefix that callers key off.
+    expect(error).toMatch(/SIGNATURE_RECOVERY_MISMATCH/)
+    // Names vault context as the cause, not a generic signing failure.
+    expect(error).toMatch(/vault context/i)
+    // Names the concrete loaded vault (name + id) so the operator can tell
+    // which vault is in context.
+    expect(error).toContain('mock-vault')
+    expect(error).toContain('vault-mock-eip712-wrongctx')
+    // Signals it is deterministic and retrying will not help.
+    expect(error).toMatch(/retrying will not help/i)
+    // Surfaces both addresses so the mismatch is debuggable.
+    expect(error).toContain(WRONG_VAULT_ADDRESS)
+    expect(error).toContain(TEST_ADDRESS)
+  })
+
+  it('returns a signature that recovers to the vault EVM address', async () => {
+    const executor = new AgentExecutor(createSigningMockVault())
+    const recent = await executor.signTypedData('call-712-goodrec', {
+      domain: PERMIT_DOMAIN,
+      types: PERMIT_TYPES,
+      primaryType: 'Permit',
+      message: PERMIT_MESSAGE,
+    })
+
+    expect(recent.success).toBe(true)
+    // Pin the contract directly: the returned signature must recover to the
+    // vault EVM address over the returned digest (matches this test's title and
+    // mirrors the executor's own recover-verify gate).
+    const recovered = await recoverAddress({
+      hash: recent.data?.hash as `0x${string}`,
+      signature: recent.data?.signature as `0x${string}`,
+    })
+    expect(recovered.toLowerCase()).toBe(TEST_ADDRESS.toLowerCase())
+    // Low-S invariant on the returned signature.
+    const s = BigInt(recent.data?.s as string)
+    expect(s <= SECP256K1_N >> 1n).toBe(true)
+    expect(recent.data?.signature).toMatch(/^0x[0-9a-f]{130}$/)
   })
 })

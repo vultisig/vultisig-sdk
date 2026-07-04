@@ -5,6 +5,7 @@
  * Supports both JSON and SSE streaming responses.
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
+import { CLI_PARITY_PREP_TOOLS, CLI_SIGNABLE_FLAT_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
 import type {
   AuthTokenRequest,
   AuthTokenResponse,
@@ -23,6 +24,20 @@ import type {
 } from './types'
 
 type JsonErrorBody = { error?: string; code?: string }
+
+/** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
+ *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
+const DEFAULT_HTTP_TIMEOUT_MS = 30_000
+
+/** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
+ *  to the default. Non-positive / non-numeric values are ignored so a typo
+ *  can't disable the timeout. Exported for direct unit testing of the contract. */
+export function resolveHttpTimeoutMs(): number {
+  const raw = process.env.VULTISIG_HTTP_TIMEOUT_MS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
+}
 
 type StreamCallbacks = {
   onTextDelta?: (delta: string) => void
@@ -44,7 +59,23 @@ type StreamCallbacks = {
   onClientSideToolCall?: (toolCallId: string, toolName: string, input: Record<string, unknown>) => void
   onTitle?: (title: string) => void
   onSuggestions?: (suggestions: Suggestion[]) => void
-  onTxReady?: (tx: TxReadyPayload) => void
+  // `toolCallId` is the id of the produces_calldata tool-output frame this
+  // tx_ready was emitted alongside (agent-backend agent.go:6397 flushes each
+  // pending's tool-output frame immediately BEFORE its twin tx_ready, so the
+  // twin's id = the last signable tool-output frame's id). The session uses it
+  // to pair the two channels before running the parity diff — an unrelated
+  // tool_output + tx_ready pair (different ids) must NOT produce divergence
+  // telemetry. Undefined when no signable tool-output preceded this tx_ready.
+  onTxReady?: (tx: TxReadyPayload, toolCallId?: string) => void
+  // Phase-1 dual-read: a client-side signable candidate ENRICHED from a
+  // `tool-output-available` frame (distinct from the backend `tx_ready`
+  // channel). The session captures this separately so it can keep `tx_ready`
+  // authoritative when signable and use the tool-output candidate as the parity
+  // reference (and as the sign source only when no usable `tx_ready` arrives).
+  // `source` distinguishes a flat enrichment from an `execute_*` prep passthrough.
+  // `toolCallId` identifies the originating tool call so the session can pair it
+  // with a same-turn tx_ready before diffing (see `onTxReady` above).
+  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep', toolCallId?: string) => void
   // Fired for the `data-balance_summary` SSE part the backend emits when the
   // client advertised "balance_summary" in supported_surfaces. Carries the raw
   // card envelope; the consumer validates + renders it. Replaces the legacy
@@ -152,9 +183,62 @@ export class AgentClient {
   // dispatch iff its `toolName` is in this set. Empty by default (no
   // client-side dispatch) until the session injects the registry.
   private clientSideToolNames: Set<string> = new Set()
+  // Per-request timeout (ms) applied to every agent-backend fetch. Bounds a
+  // stalled connection so a headless run can't hang indefinitely. Overridable
+  // via the constructor (tests pass a tiny value) or VULTISIG_HTTP_TIMEOUT_MS.
+  private readonly timeoutMs: number
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, timeoutMs?: number) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
+    this.timeoutMs = timeoutMs ?? resolveHttpTimeoutMs()
+  }
+
+  /** Build the AbortSignal for a unary request: a fresh timeout, combined with
+   *  an optional caller signal so caller-initiated cancellation still works. */
+  private timeoutSignal(extra?: AbortSignal): AbortSignal {
+    const timeout = AbortSignal.timeout(this.timeoutMs)
+    return extra ? AbortSignal.any([extra, timeout]) : timeout
+  }
+
+  /** Translate an aborted-fetch rejection into a deterministic error. A
+   *  caller-initiated abort is preserved verbatim (it's a deliberate cancel);
+   *  a timeout abort (DOMException 'TimeoutError') becomes a clear, catchable
+   *  Error so headless callers exit non-zero instead of hanging. */
+  private asRequestError(err: unknown, extra?: AbortSignal): unknown {
+    if (extra?.aborted) return err
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      return new Error(`request timed out after ${this.timeoutMs}ms`)
+    }
+    return err
+  }
+
+  /** Read a successful JSON body, routing a body-read failure through the same
+   *  normalization as the fetch() itself. If the backend sends headers then
+   *  stalls the body, fetch() has already resolved and the timeout surfaces
+   *  here during res.json() — so success paths keep the "request timed out
+   *  after Nms" behavior end-to-end instead of leaking the raw abort. */
+  private async readJson<T>(res: Response): Promise<T> {
+    try {
+      return (await res.json()) as T
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
+  }
+
+  /** Read a non-OK response's JSON error body. A genuinely malformed/empty body
+   *  falls back to the status text so callers still get a useful message, but a
+   *  timeout abort that strikes during the body read is re-thrown via
+   *  asRequestError rather than masked as the statusText fallback — keeping the
+   *  "request timed out after Nms" signal end-to-end on the error path too. */
+  private async readErrorBody(res: Response): Promise<JsonErrorBody> {
+    try {
+      return (await res.json()) as JsonErrorBody
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'TimeoutError') {
+        throw this.asRequestError(err)
+      }
+      return { error: res.statusText }
+    }
   }
 
   setAuthToken(token: string): void {
@@ -183,16 +267,22 @@ export class AgentClient {
   // ============================================================================
 
   async authenticate(req: AuthTokenRequest): Promise<AuthTokenResponse> {
-    const res = await fetch(`${this.baseUrl}/auth/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
-      body: JSON.stringify(req),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
+        body: JSON.stringify(req),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const body = await this.readErrorBody(res)
       throw new Error(`Auth failed (${res.status}): ${body.error || res.statusText}`)
     }
-    const data = (await res.json()) as AuthTokenResponse
+    const data = await this.readJson<AuthTokenResponse>(res)
     this.authToken = data.token
     return data
   }
@@ -203,7 +293,9 @@ export class AgentClient {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/healthz`)
+      // A timeout aborts the fetch → caught here → reported unhealthy, so a
+      // hung backend never blocks init indefinitely.
+      const res = await fetch(`${this.baseUrl}/healthz`, { signal: this.timeoutSignal() })
       return res.ok
     } catch {
       return false
@@ -275,17 +367,52 @@ export class AgentClient {
     callbacks: StreamCallbacks,
     signal?: AbortSignal
   ): Promise<SSEStreamResult> {
-    const res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(req),
-      signal,
-    })
+    // Bound only the initial connect, not the (intentionally unbounded)
+    // long-lived SSE body read — an idle stream sends keep-alive pings, so a
+    // body-level timeout would kill healthy turns. A dedicated controller fires
+    // the connect deadline; it's cleared once headers arrive. The caller signal
+    // (Ctrl+C) is combined in so cancellation still aborts the whole request.
+    const connectController = new AbortController()
+    let connectTimedOut = false
+    // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
+    // (in the finally) already prevents the callback from running after that — JS
+    // is single-threaded and the finally drains as a microtask before the next
+    // timers phase — but the guard makes a late/queued firing a definitive no-op,
+    // so the connect deadline can never abort the live SSE body read.
+    let settled = false
+    const connectTimer = setTimeout(() => {
+      if (settled) return
+      connectTimedOut = true
+      connectController.abort()
+    }, this.timeoutMs)
+    const combinedSignal = signal ? AbortSignal.any([signal, connectController.signal]) : connectController.signal
+
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}/agent/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(req),
+        signal: combinedSignal,
+      })
+    } catch (err) {
+      // A caller abort during connect is a deliberate cancel — re-throw as-is.
+      // Our own connect-deadline abort becomes a clear timeout error.
+      if (connectTimedOut && !signal?.aborted) {
+        throw new Error(`request timed out after ${this.timeoutMs}ms`)
+      }
+      throw err
+    } finally {
+      // Headers received (or fetch failed) — stop bounding; the body read below
+      // runs against `signal` only, so SSE streaming is not time-limited.
+      settled = true
+      clearTimeout(connectTimer)
+    }
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
@@ -316,6 +443,13 @@ export class AgentClient {
     // terminal 'done' callback still carries the tool name.
     const toolNameByCallId = new Map<string, string>()
 
+    // Per-stream parity pairing: remember the tool-call id of the most recent
+    // SIGNABLE tool-output frame so a following `tx_ready` (its wire-adjacent
+    // twin — agent-backend agent.go:6397 emits tool-output then tx_ready per
+    // pending) can be paired with the right tool call before the session diffs
+    // the two channels. A mutable holder (ref-passed like `toolNameByCallId`).
+    const parity: { lastSignableToolCallId: string | null } = { lastSignableToolCallId: null }
+
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -335,7 +469,7 @@ export class AgentClient {
         // Empty line = end of event
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
-          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId, parity)
         }
         currentEvent = ''
         currentData = ''
@@ -367,7 +501,7 @@ export class AgentClient {
           if (trailing) processLine(trailing)
           // Flush any pending event (stream ended without final blank line)
           if (currentData) {
-            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId, parity)
           }
           break
         }
@@ -397,7 +531,8 @@ export class AgentClient {
     data: string,
     result: SSEStreamResult,
     callbacks: StreamCallbacks,
-    toolNameByCallId: Map<string, string>
+    toolNameByCallId: Map<string, string>,
+    parity: { lastSignableToolCallId: string | null }
   ): void {
     try {
       const parsed = JSON.parse(data)
@@ -417,7 +552,7 @@ export class AgentClient {
           this.handleTextDelta(parsed, result, callbacks)
           break
         case 'tool_progress':
-          this.handleToolProgress(parsed, data, callbacks, toolNameByCallId, v1Type)
+          this.handleToolProgress(parsed, data, callbacks, toolNameByCallId, v1Type, parity)
           break
         case 'title': {
           const title = v1Data?.title ?? parsed.title
@@ -435,7 +570,11 @@ export class AgentClient {
           {
             const txReady = (v1Data ?? parsed) as TxReadyPayload
             result.transactions.push(txReady)
-            callbacks.onTxReady?.(txReady)
+            // Pair with the wire-adjacent signable tool-output frame (its twin)
+            // so the session diffs the two channels only when they're the same
+            // tool call. `?? undefined` keeps the id absent (not null) on the
+            // callback so an unpaired tx_ready stays cleanly "no twin".
+            callbacks.onTxReady?.(txReady, parity.lastSignableToolCallId ?? undefined)
           }
           break
         case 'balance_summary': {
@@ -480,7 +619,8 @@ export class AgentClient {
     data: string,
     callbacks: StreamCallbacks,
     toolNameByCallId: Map<string, string>,
-    v1Type: string | null
+    v1Type: string | null,
+    parity: { lastSignableToolCallId: string | null }
   ): void {
     if (this.verbose) process.stderr.write(`[SSE:tool_progress] raw: ${data.slice(0, 1000)}\n`)
 
@@ -496,7 +636,42 @@ export class AgentClient {
 
     const ok = deriveToolDoneOk(status, parsed.output)
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
+    this.maybeSignToolOutput(status, toolName, parsed.output, callbacks, callId, parity)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
+  }
+
+  /**
+   * Phase-1 dual-read: derive a client-side signable candidate from a signable
+   * tool's raw `tool-output-available` output — the same envelope mobile reads —
+   * and hand it to the session via `onToolOutputTx` (SEPARATE from the backend
+   * `tx_ready` channel). The session decides how to use it:
+   *  - flat off-chain tools with NO `tx_ready` (polymarket) → the sign source
+   *    (unchanged from #922);
+   *  - `produces_calldata` tools that also emit `tx_ready` (`execute_*`,
+   *    `erc20_approve`, `build_custom_*`) → the PARITY reference; `tx_ready`
+   *    stays authoritative when signable.
+   * The bridge guards against non-tx results (`no_op` / `insufficient_*` /
+   * errors) so those never reach the signer. Zero backend change.
+   */
+  private maybeSignToolOutput(
+    status: 'running' | 'done' | undefined,
+    toolName: string | undefined,
+    output: unknown,
+    callbacks: StreamCallbacks,
+    callId: string | null,
+    parity: { lastSignableToolCallId: string | null }
+  ): void {
+    if (status !== 'done' || !toolName || !callbacks.onToolOutputTx) return
+    if (!CLI_SIGNABLE_FLAT_TOOLS.has(toolName) && !CLI_PARITY_PREP_TOOLS.has(toolName)) return
+    const candidate = deriveToolOutputCandidate(toolName, output)
+    if (!candidate) return
+    // Remember this signable tool-output's id: a `tx_ready` emitted next on the
+    // wire is its twin (agent.go:6397). Used to pair the two channels before the
+    // session diffs them, so an unrelated same-turn pair skips divergence telemetry.
+    if (callId) parity.lastSignableToolCallId = callId
+    if (this.verbose)
+      process.stderr.write(`[SSE:tool_output] ${toolName} → onToolOutputTx (${candidate.source} candidate)\n`)
+    callbacks.onToolOutputTx(candidate.payload, toolName, candidate.source, callId ?? undefined)
   }
 
   private maybeEmitClientSideToolCall(
@@ -572,54 +747,76 @@ export class AgentClient {
   // ============================================================================
 
   private async get<T>(path: string): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'GET',
-      headers: {
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'GET',
+        headers: {
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        // ok: unary, body is always small — the timeout covers the full
+        // request including the body read, but these JSON responses are tiny.
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
-    return (await res.json()) as T
+    return this.readJson<T>(res)
   }
 
   private async delete(path: string, body: unknown): Promise<void> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
-        ...this.profileHeader(),
-      },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
+          ...this.profileHeader(),
+        },
+        body: JSON.stringify(body),
+        signal: this.timeoutSignal(),
+      })
+    } catch (err) {
+      throw this.asRequestError(err)
+    }
 
     if (!res.ok) {
-      const errorBody = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      const errorBody = await this.readErrorBody(res)
       throw new Error(`Delete failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
   }

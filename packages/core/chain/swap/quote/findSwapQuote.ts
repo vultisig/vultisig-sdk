@@ -5,6 +5,9 @@ import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
+import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
+import type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
+import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
 import { KyberSwapBaseAffiliateConfig } from '@vultisig/core-chain/swap/general/kyber/config'
@@ -34,7 +37,7 @@ import {
   nativeSwapChains,
   nativeSwapEnabledChainsRecord,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
+import { nativeSwapAmountToCoinBaseUnit } from '@vultisig/core-chain/swap/native/utils/nativeSwapAmountToCoinBaseUnit'
 import { NoSwapRoutesError } from '@vultisig/core-chain/swap/NoSwapRoutesError'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
@@ -56,6 +59,7 @@ export type SwapAffiliateConfig = {
   oneInch?: OneInchAffiliateConfig
   kyber?: KyberSwapBaseAffiliateConfig
   lifi?: LifiAffiliateConfig
+  jupiter?: JupiterAffiliateConfig
 }
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -82,7 +86,15 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
   slippageTolerance?: number
 }
 
-type SwapQuoteProviderName = 'CowSwap' | 'KyberSwap' | '1inch' | 'LiFi' | 'SwapKit' | 'THORChain' | 'MayaChain'
+type SwapQuoteProviderName =
+  | 'CowSwap'
+  | 'KyberSwap'
+  | '1inch'
+  | 'LiFi'
+  | 'SwapKit'
+  | 'Jupiter'
+  | 'THORChain'
+  | 'MayaChain'
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -125,6 +137,11 @@ export const providerPreferenceOrder: readonly SwapQuoteProviderName[] = [
   'CowSwap',
   'THORChain',
   'MayaChain',
+  // Jupiter is slotted ahead of the EVM/multi-chain aggregators: it only enters
+  // the candidate set for same-chain Solana pairs (see fetcher registration
+  // below), where it has no aggregator markup and carries our own affiliate fee,
+  // so on a near-tie it is preferred over SwapKit/LiFi for those pairs.
+  'Jupiter',
   'SwapKit',
   'KyberSwap',
   '1inch',
@@ -209,7 +226,13 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
   const { tx } = general
   const explicitFee = 'evm' in tx ? tx.evm.affiliateFee : 'solana' in tx ? tx.solana.swapFee : undefined
 
-  const providerAlreadyNet = general.provider === 'kyber' || general.provider === '1inch'
+  const providerAlreadyNet =
+    general.provider === '1inch' ||
+    general.provider === 'li.fi' ||
+    general.provider === 'kyber' ||
+    general.provider === 'swapkit' ||
+    general.provider === 'jupiter' ||
+    general.provider === 'cowswap'
   if (!providerAlreadyNet && explicitFee && isSameCoinKey(explicitFee, to)) {
     return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
   }
@@ -222,16 +245,13 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
  *
  * Native swap APIs report `expected_amount_out` in chain-specific precision
  * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
- * Native THOR/Maya, CowSwap, 1inch, and Kyber amounts are already net.
- * Aggregator quotes are adjusted only when the SDK has destination-token fee
- * evidence; 1inch and Kyber are excluded because their SDK `dstAmount` values
- * are already post-fee build amounts.
+ * Native THOR/Maya and all current general providers report user-receive
+ * amounts. Explicit fee fields are display/receipt metadata for those providers,
+ * so subtract them only for a future provider that reports gross output.
  */
 function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
   if ('native' in q.quote) {
-    const nativePrecision = getNativeSwapDecimals(to)
-    const raw = BigInt(q.quote.native.expected_amount_out)
-    return rebaseDecimals(raw, nativePrecision, to.decimals)
+    return nativeSwapAmountToCoinBaseUnit(BigInt(q.quote.native.expected_amount_out), to)
   }
   const grossOutput = BigInt(q.quote.general.dstAmount)
   return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to }))
@@ -248,6 +268,8 @@ const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: Acco
 
   const { tx } = q.quote.general
   if ('evm' in tx) {
+    // Missing gas stays non-comparable. Treating it as 0 would incorrectly make
+    // incomplete EVM quotes dominate the final tie-break.
     return tx.evm.gasLimit
   }
   if ('cowswap_order' in tx) {
@@ -278,7 +300,6 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
 
   let selected: RankedSwapQuote | null = null
   let selectedPreferenceRank = Number.POSITIVE_INFINITY
-  let selectedGasUnits: bigint | undefined
 
   for (const candidate of candidates) {
     if (!isWithinPreferenceBand(candidate.outputAmount, bestOutputAmount)) {
@@ -286,35 +307,35 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     }
 
     const candidatePreferenceRank = getProviderPreferenceRank(candidate.providerName)
-    const hasComparableGas =
-      selected !== null &&
-      candidate.sourceGasUnits !== undefined &&
-      selectedGasUnits !== undefined &&
-      candidate.sourceGasUnits !== selectedGasUnits
 
     if (selected === null) {
       selected = candidate
       selectedPreferenceRank = candidatePreferenceRank
-      selectedGasUnits = candidate.sourceGasUnits
       continue
     }
 
-    if (hasComparableGas) {
-      if (candidate.sourceGasUnits! < selectedGasUnits!) {
-        selected = candidate
-        selectedPreferenceRank = candidatePreferenceRank
-        selectedGasUnits = candidate.sourceGasUnits
-      }
-      continue
-    }
-
-    if (
-      candidatePreferenceRank < selectedPreferenceRank ||
-      (candidatePreferenceRank === selectedPreferenceRank && candidate.outputAmount > selected.outputAmount)
-    ) {
+    if (candidatePreferenceRank < selectedPreferenceRank) {
       selected = candidate
       selectedPreferenceRank = candidatePreferenceRank
-      selectedGasUnits = candidate.sourceGasUnits
+      continue
+    }
+
+    if (candidatePreferenceRank !== selectedPreferenceRank) {
+      continue
+    }
+
+    const hasComparableGas =
+      candidate.sourceGasUnits !== undefined &&
+      selected.sourceGasUnits !== undefined &&
+      candidate.sourceGasUnits !== selected.sourceGasUnits
+
+    if (hasComparableGas && candidate.sourceGasUnits! < selected.sourceGasUnits!) {
+      selected = candidate
+      continue
+    }
+
+    if (!hasComparableGas && candidate.outputAmount > selected.outputAmount) {
+      selected = candidate
     }
   }
 
@@ -372,17 +393,25 @@ const assertValidCustomRecipient = (recipient: string | undefined, from: Account
 // native unit. `undefined` leaves every provider on its own default (no behaviour
 // change). Extracted from findSwapQuote to keep its cognitive complexity in budget.
 type ProviderSlippage = {
+  nativeBps: number | undefined
   oneInchPercent: number | undefined
   swapKitPercent: number | undefined
   lifiFraction: number | undefined
   kyberBps: number | undefined
+  jupiterBps: number | undefined
 }
-const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => ({
-  oneInchPercent: slippageTolerance,
-  swapKitPercent: slippageTolerance,
-  lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
-  kyberBps: slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined,
-})
+const toProviderSlippage = (slippageTolerance: number | undefined): ProviderSlippage => {
+  const bps = slippageTolerance !== undefined ? Math.round(slippageTolerance * 100) : undefined
+
+  return {
+    nativeBps: bps,
+    oneInchPercent: slippageTolerance,
+    swapKitPercent: slippageTolerance,
+    lifiFraction: slippageTolerance !== undefined ? slippageTolerance / 100 : undefined,
+    kyberBps: bps,
+    jupiterBps: bps,
+  }
+}
 
 export const findSwapQuote = async ({
   from,
@@ -442,6 +471,8 @@ export const findSwapQuote = async ({
     swapKitPercent: swapKitSlippagePercent,
     lifiFraction: lifiSlippageFraction,
     kyberBps: kyberSlippageBps,
+    jupiterBps: jupiterSlippageBps,
+    nativeBps: nativeSlippageBps,
   } = toProviderSlippage(slippageTolerance)
 
   const involvedChains = [from.chain, to.chain]
@@ -464,6 +495,7 @@ export const findSwapQuote = async ({
           from,
           to,
           amount: amountNumber,
+          slippageToleranceBps: nativeSlippageBps,
           referral,
           affiliateBps,
           nativeAffiliateConfig: affiliateConfig?.native,
@@ -564,6 +596,32 @@ export const findSwapQuote = async ({
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
             slippage: oneInchSlippagePercent,
+          })
+
+          return { quote: { general }, discounts: vultDiscount }
+        },
+      })
+    }
+
+    // Jupiter — Solana-only, same-chain (SOL↔SPL, SPL↔SPL). It cannot route any
+    // cross-chain pair, so it is offered only when both legs are on Solana.
+    if (!hasCustomRecipient && isOneOf(fromChain, jupiterSwapEnabledChains) && fromChain === toChain) {
+      result.push({
+        providerName: 'Jupiter',
+        fetch: async (): Promise<SwapQuote> => {
+          const general = await getJupiterSwapQuote({
+            from: {
+              ...from,
+              chain: fromChain,
+            },
+            to: {
+              ...to,
+              chain: fromChain,
+            },
+            amount: chainAmount,
+            affiliateBps,
+            jupiterConfig: affiliateConfig?.jupiter,
+            slippageBps: jupiterSlippageBps,
           })
 
           return { quote: { general }, discounts: vultDiscount }
@@ -698,6 +756,7 @@ export const findSwapQuote = async ({
     'CowSwap',
     'KyberSwap',
     '1inch',
+    'Jupiter',
     'LiFi',
     'SwapKit',
     'THORChain',

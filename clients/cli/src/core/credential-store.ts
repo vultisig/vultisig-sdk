@@ -2,6 +2,7 @@
 export {
   _resetAll,
   clearCredentials,
+  getCredentialsPath,
   getDecryptionPassword,
   getServerPassword,
   getStoredServerPassword,

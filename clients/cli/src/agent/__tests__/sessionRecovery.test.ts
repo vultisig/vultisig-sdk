@@ -56,7 +56,11 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
       config: { verbose: false },
       recoveryMaxPolls: 5,
       recoveryPollIntervalMs: 0,
-      client: { messagesSince },
+      client: { messagesSince, setAuthToken: vi.fn() },
+      // The recovery poll now routes through withAuthRetry (M1). These cases
+      // never throw an auth error, so the helper just passes the call through;
+      // its revoked-token behaviour is covered in sessionAuthRetry.test.ts.
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
     }
@@ -214,6 +218,76 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
   })
 })
 
+describe('applyRecoveredMessage — flat signable tool fail-closed (Phase-1 recovery limitation)', () => {
+  const applyRecovered = (AgentSession.prototype as any).applyRecoveredMessage
+
+  it('warns LOUDLY and signs NOTHING when a recovered turn ran a flat signable tool (no data-tx_ready to replay)', () => {
+    // A flat signable tool (polymarket / build_custom_*) emits its signable output
+    // on tool-output-available, NOT data-tx_ready — and the recovery path only
+    // replays data-tx_ready parts. So a mid-turn disconnect on such a tool cannot
+    // reconstruct the client-side candidate: it must FAIL CLOSED (sign nothing) and
+    // warn, never silently drop. If this branch were reverted, no other test catches it.
+    const streamResult = makeStreamResult({ disconnected: true })
+    const onTxReady = vi.fn()
+    const onBalanceSummary = vi.fn()
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+    const msg = recoveredAssistant({
+      content: 'Deposited into Polymarket',
+      parts: [
+        { type: 'text', text: 'Deposited into Polymarket' },
+        { type: 'tool-polymarket_deposit', data: { chain: 'Polygon' } },
+      ],
+    })
+
+    // replaySignableCards=true so the branch is NOT gated out by the stale-anchor
+    // guard — the fail-closed warning must still fire because no tx_ready rode along.
+    applyRecovered.call({}, msg, streamResult, onTxReady, true, onBalanceSummary)
+    writeSpy.mockRestore()
+
+    // Fail-closed: no signable card → the sign gate is never invoked.
+    expect(onTxReady).not.toHaveBeenCalled()
+    expect(streamResult.transactions).toHaveLength(0)
+    // …but the drop is announced LOUDLY (not silent).
+    const warned = writes.some(w => w.includes('[session][recovery]') && w.includes('polymarket_deposit'))
+    expect(warned).toBe(true)
+  })
+
+  it('does NOT warn when the recovered flat tool DID replay a tx_ready (erc20_approve — no reconstruction gap)', () => {
+    // erc20_approve is in CLI_SIGNABLE_FLAT_TOOLS but DOES emit a data-tx_ready.
+    // When that card is replayed, replayedTxReady=true, so there is no gap to warn
+    // about — the warning must NOT fire (else every recovered approve turn nags).
+    const streamResult = makeStreamResult({ disconnected: true })
+    const onTxReady = vi.fn()
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+    const txReadyData = { chain: 'Ethereum', action: 'approve', tx: { to: '0xabc', value: '0', data: '0x095ea7b3' } }
+    const msg = recoveredAssistant({
+      content: 'Approved',
+      parts: [
+        { type: 'text', text: 'Approved' },
+        { type: 'tool-erc20_approve', data: {} },
+        { type: 'data-tx_ready', id: 'tx1', data: txReadyData },
+      ],
+    })
+
+    applyRecovered.call({}, msg, streamResult, onTxReady, true, undefined)
+    writeSpy.mockRestore()
+
+    // The card WAS replayed through the sign gate…
+    expect(onTxReady).toHaveBeenCalledExactlyOnceWith(txReadyData)
+    // …so no fail-closed recovery warning.
+    const warned = writes.some(w => w.includes('[session][recovery]'))
+    expect(warned).toBe(false)
+  })
+})
+
 describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () => {
   function makeHarness(opts: { recover: boolean }) {
     const txReadyData = {
@@ -289,12 +363,20 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       client,
       executor,
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
+      reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      // No `vault` here, so confirmBroadcastedTx early-returns — the recovered
+      // tx still only emits the `pending` status this harness asserts.
+      confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
+      emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'whats my balance', ui, 0)
     return { run, ui, client, executor }
@@ -353,6 +435,10 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
         setPassword: vi.fn(),
       },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
+      reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       recoverDisconnectedTurn: (AgentSession.prototype as any).recoverDisconnectedTurn,

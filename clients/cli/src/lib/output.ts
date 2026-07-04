@@ -169,14 +169,20 @@ function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? value.toString() : value
 }
 
+// Write the JSON envelope straight to the real stdout rather than via
+// console.log. `agent ask` redirects console.log → stderr for the duration of
+// a turn (so SDK/MPC chatter can't pollute the structured channel), and that
+// redirect was diverting the success envelope to stderr, leaving stdout empty
+// in --json mode. Writing to process.stdout directly keeps the envelope on the
+// machine-readable channel regardless of any console.log override.
 export function outputJson(data: unknown): void {
   const transformed = applyOutputTransforms(data)
-  console.log(JSON.stringify({ success: true, v: 1, data: transformed }, bigIntReplacer, 2))
+  process.stdout.write(JSON.stringify({ success: true, v: 1, data: transformed }, bigIntReplacer, 2) + '\n')
 }
 
 export function outputErrorJson(errJson: unknown): void {
   const transformed = applyOutputTransforms(errJson)
-  console.log(JSON.stringify(transformed, bigIntReplacer, 2))
+  process.stdout.write(JSON.stringify(transformed, bigIntReplacer, 2) + '\n')
 }
 
 // ============================================================================

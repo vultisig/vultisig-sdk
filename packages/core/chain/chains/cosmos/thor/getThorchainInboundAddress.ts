@@ -3,7 +3,7 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import { Chain } from '../../../Chain'
 import { cosmosRpcUrl } from '../cosmosRpcUrl'
 
-type ChainInfo = {
+export type ThorchainInboundAddress = {
   address: string
   chain: string
   chain_lp_actions_paused: boolean
@@ -22,4 +22,4 @@ type ChainInfo = {
 
 const thorchainInboundAddressApi = `${cosmosRpcUrl[Chain.THORChain]}/thorchain/inbound_addresses`
 
-export const getThorchainInboundAddress = (): Promise<ChainInfo[]> => queryUrl(thorchainInboundAddressApi)
+export const getThorchainInboundAddress = (): Promise<ThorchainInboundAddress[]> => queryUrl(thorchainInboundAddressApi)

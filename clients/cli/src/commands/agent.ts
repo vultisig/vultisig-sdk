@@ -16,11 +16,20 @@ import chalk from 'chalk'
 import Table from 'cli-table3'
 
 import type { AgentConfig } from '../agent'
-import { AgentClient, AgentSession, AskInterface, authenticateVault, ChatTUI, PipeInterface } from '../agent'
+import {
+  AgentClient,
+  AgentSession,
+  AskInterface,
+  authenticateVault,
+  ChatTUI,
+  isAuthError,
+  PipeInterface,
+} from '../agent'
 import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
+import type { AskResult } from '../agent/ask'
 import { renderBalanceSummaryCard } from '../agent/cards'
 import type { CommandContext } from '../core'
-import { isJsonOutput, outputJson, printResult, setSilentMode } from '../lib/output'
+import { isJsonOutput, outputErrorJson, outputJson, printResult, setSilentMode } from '../lib/output'
 
 export type AgentCommandOptions = {
   backendUrl?: string
@@ -104,19 +113,129 @@ export type AgentAskOptions = {
  *   <blank line>
  *   <response text>
  *
- * Output format (--json):
- *   {"session_id":"...","response":"...","tool_calls":[...],"transactions":[...]}
+ * Output format (--json): a single v1 envelope on stdout for both success and
+ * error.
+ *   success: {"success":true,"v":1,"data":{"conversation_id":"...","response":"...",...}}
+ *   error:   {"success":false,"v":1,"error":{"message":"...","code":"...","conversation_id":"..."}}
  */
+/**
+ * Write the structured error envelope to stdout (JSON mode) or a human line to
+ * stderr. Shared by the mid-turn `error`-frame path and the catch path so both
+ * surface the same shape and a headless caller can branch on it identically.
+ *
+ * When a `result` is supplied (the mid-turn `error`-frame path), any tx records
+ * already broadcast this turn — plus the partial response/tool_calls — are
+ * carried in a `data` block alongside the error. A turn can broadcast a tx and
+ * THEN hit an `error` frame (e.g. an indexer/confirmation failure); dropping the
+ * hash there would strand funds a headless caller just moved, leaving exit-1 with
+ * no identifier to track/recover/de-dupe the send. The block is only attached
+ * when non-empty, so the catch path (auth/init failure, no broadcast) keeps the
+ * lean `{message,code,conversation_id}` error shape.
+ */
+function outputAskError(
+  wantsJson: boolean,
+  message: string,
+  code: AgentErrorCode,
+  conversationId: string,
+  result?: AskResult
+): void {
+  if (wantsJson) {
+    const data: Record<string, unknown> = {}
+    if (result?.transactions.length) data.transactions = result.transactions
+    if (result?.toolCalls.length) data.tool_calls = result.toolCalls
+    if (result?.response) data.response = result.response
+    outputErrorJson({
+      success: false,
+      v: 1,
+      error: { message, code, conversation_id: conversationId },
+      ...(Object.keys(data).length > 0 ? { data } : {}),
+    })
+  } else {
+    process.stderr.write(`Error: ${message} [${code}]\n`)
+  }
+}
+
+/**
+ * Render a human-readable (non-JSON) ask result to stdout: session line, optional
+ * confirmation/proposed lines, balance cards, response text, and tx hashes.
+ */
+function outputAskHuman(result: AskResult, confirmationRequired: boolean, proposed: string | undefined): void {
+  // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
+  process.stdout.write(`session:${result.sessionId}\n`)
+  if (confirmationRequired) {
+    process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
+    if (proposed) {
+      process.stdout.write(`proposed:${proposed}\n`)
+    }
+  }
+  // Balance cards (rendered as a table instead of raw JSON)
+  for (const card of result.cards) {
+    process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
+  }
+  // Response text
+  if (result.response) {
+    process.stdout.write(`\n${result.response}\n`)
+  }
+  // Transaction hashes
+  for (const tx of result.transactions) {
+    process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
+    if (tx.explorerUrl) {
+      process.stdout.write(`explorer:${tx.explorerUrl}\n`)
+    }
+  }
+}
+
+/**
+ * Emit a successful ask turn — the structured JSON envelope (JSON mode) or the
+ * human rendering. Computes the confirmation-required / proposed signals once.
+ */
+function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId: string): void {
+  // Machine-detectable signal that a signing step was proposed but denied (no
+  // --yes): callers expecting a broadcast must check this, not infer from exit 0.
+  const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
+  // The same summary the gate showed the user (or would have, in --yes mode).
+  const proposedCall = result.toolCalls.find(
+    tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
+  )
+  const proposed = proposedCall?.data?.proposed as string | undefined
+
+  if (wantsJson) {
+    outputJson({
+      conversation_id: conversationId,
+      session_id: result.sessionId,
+      response: result.response,
+      tool_calls: result.toolCalls,
+      transactions: result.transactions,
+      ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+      ...(confirmationRequired ? { confirmation_required: true } : {}),
+      ...(proposed ? { proposed } : {}),
+    })
+    return
+  }
+  outputAskHuman(result, confirmationRequired, proposed)
+}
+
 export async function executeAgentAsk(ctx: CommandContext, message: string, options: AgentAskOptions): Promise<void> {
   // Suppress info/warn/success messages — only our structured output goes to stdout
   setSilentMode(true)
 
   // Redirect console.log to stderr so that SDK internals (MPC signing progress,
-  // balance updates, etc.) don't pollute our structured stdout output.
+  // balance updates, etc.) don't pollute our structured stdout output. The
+  // structured envelope itself is written via outputJson/outputErrorJson, which
+  // go straight to process.stdout and so survive this redirect.
   const originalConsoleLog = console.log
   console.log = (...args: unknown[]) => {
     process.stderr.write(args.map(String).join(' ') + '\n')
   }
+
+  const wantsJson = !!options.json || isJsonOutput()
+  // Captured after ask() so both the success and error paths can attach it; the
+  // catch may run before it's set (auth/init failure), leaving it empty.
+  let conversationId = ''
+  let exitCode = 0
+  // Hoisted so the catch can recover partial turn state (already-broadcast tx
+  // hashes) when ask() throws AFTER a broadcast — see the catch block below.
+  let ask: AskInterface | undefined
 
   try {
     const vault = await ctx.ensureActiveVault()
@@ -133,79 +252,43 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     }
 
     const session = new AgentSession(vault, config)
-    const ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
+    ask = new AskInterface(session, !!config.verbose, !!options.autoApprove)
     const callbacks = ask.getCallbacks()
 
     await session.initialize(callbacks)
     const result = await ask.ask(message)
+    conversationId = result.sessionId
 
-    // Machine-detectable signal that a signing step was proposed but denied
-    // (no --yes): callers that expect a broadcast must check this instead of
-    // inferring success from exit code 0. Exit stays 0 deliberately — a
-    // misrouted read-only prompt (the #679 scenario) is still a successful
-    // query, just not a broadcast.
-    const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
-    // The same summary the gate showed the user (or would have, in --yes mode).
-    // Surfacing it on stdout lets a script see what `--yes` would authorize
-    // without scraping stderr or the backend narration in `response`.
-    const proposedCall = result.toolCalls.find(
-      tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED && typeof tc.data?.proposed === 'string'
-    )
-    const proposed = proposedCall?.data?.proposed as string | undefined
-
-    if (options.json || isJsonOutput()) {
-      outputJson({
-        session_id: result.sessionId,
-        response: result.response,
-        tool_calls: result.toolCalls,
-        transactions: result.transactions,
-        ...(result.cards.length > 0 ? { cards: result.cards } : {}),
-        ...(confirmationRequired ? { confirmation_required: true } : {}),
-        ...(proposed ? { proposed } : {}),
-      })
+    // A backend/stream `error` frame mid-turn resolves the turn normally (the
+    // SSE handler only calls onError), so without this check a headless caller
+    // branching on exit code would see false success. Surface it as the error
+    // envelope on stdout and exit non-zero; otherwise emit the success turn.
+    if (result.error) {
+      exitCode = 1
+      outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
     } else {
-      // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
-      process.stdout.write(`session:${result.sessionId}\n`)
-      if (confirmationRequired) {
-        process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
-        if (proposed) {
-          process.stdout.write(`proposed:${proposed}\n`)
-        }
-      }
-
-      // Balance cards (rendered as a table instead of raw JSON)
-      for (const card of result.cards) {
-        process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
-      }
-
-      // Response text
-      if (result.response) {
-        process.stdout.write(`\n${result.response}\n`)
-      }
-
-      // Transaction hashes
-      for (const tx of result.transactions) {
-        process.stdout.write(`\ntx:${tx.chain}:${tx.hash}\n`)
-        if (tx.explorerUrl) {
-          process.stdout.write(`explorer:${tx.explorerUrl}\n`)
-        }
-      }
+      outputAskSuccess(wantsJson, result, conversationId)
     }
   } catch (err: unknown) {
     const { code, message } = normalizeAgentError(err)
-    if (options.json) {
-      process.stdout.write(JSON.stringify({ error: message, code }) + '\n')
-    } else {
-      process.stderr.write(`Error: ${message} [${code}]\n`)
-    }
-    process.exit(1)
+    exitCode = 1
+    // ask() can throw AFTER a tx already broadcast: a successful sign always
+    // triggers a recursive follow-up request to report recent_actions, and an
+    // HTTP/timeout/5xx failure there rejects sendMessage. Recover the partial
+    // turn so the broadcast hash still reaches the error envelope (and use the
+    // session's conversation id, already assigned during initialize) instead of
+    // stranding the funds with exit-1 and an empty record.
+    const partial = ask?.partialResult()
+    if (partial && !conversationId) conversationId = partial.sessionId
+    outputAskError(wantsJson, message, code, conversationId, partial)
   } finally {
     console.log = originalConsoleLog
     setSilentMode(false)
   }
 
-  // Clean exit — don't leave dangling handles
-  process.exit(0)
+  // Clean exit — don't leave dangling handles. Non-zero on a backend/stream
+  // error so headless callers can branch on exit code.
+  process.exit(exitCode)
 }
 
 // ============================================================================
@@ -231,7 +314,9 @@ export async function executeAgentSessionsList(ctx: CommandContext, options: Age
   let skip = 0
 
   while (true) {
-    const page = await client.listConversations(publicKey, skip, PAGE_SIZE)
+    const page = await withClientAuthRetry(client, vault, options.password, () =>
+      client.listConversations(publicKey, skip, PAGE_SIZE)
+    )
     totalCount = page.total_count
     allConversations.push(...page.conversations)
     if (allConversations.length >= totalCount || page.conversations.length < PAGE_SIZE) break
@@ -288,7 +373,7 @@ export async function executeAgentSessionsDelete(
   const client = await createAuthenticatedClient(backendUrl, vault, options.password)
 
   const publicKey = vault.publicKeys.ecdsa
-  await client.deleteConversation(sessionId, publicKey)
+  await withClientAuthRetry(client, vault, options.password, () => client.deleteConversation(sessionId, publicKey))
 
   if (isJsonOutput()) {
     outputJson({ deleted: sessionId })
@@ -311,6 +396,28 @@ async function createAuthenticatedClient(
   const auth = await authenticateVault(client, vault, password)
   client.setAuthToken(auth.token)
   return client
+}
+
+/**
+ * Run an authenticated request and, on a 401/403, re-auth + retry once. Mirrors
+ * AgentSession.withAuthRetry for the cache-free `agent sessions` commands so a
+ * token revoked between createAuthenticatedClient and the list/delete call
+ * recovers instead of surfacing a raw auth error.
+ */
+export async function withClientAuthRetry<T>(
+  client: AgentClient,
+  vault: VaultBase,
+  password: string | undefined,
+  request: () => Promise<T>
+): Promise<T> {
+  try {
+    return await request()
+  } catch (err) {
+    if (!isAuthError(err)) throw err
+    const auth = await authenticateVault(client, vault, password)
+    client.setAuthToken(auth.token)
+    return await request()
+  }
 }
 
 function formatDate(iso: string): string {

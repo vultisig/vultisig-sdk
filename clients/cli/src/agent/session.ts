@@ -9,18 +9,20 @@
  *   tx_ready synthesis (server-built transactions buffered then signed)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
+import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
-import { AgentExecutor } from './executor'
+import { AgentExecutor, resolveChain } from './executor'
+import { CLI_SIGNABLE_FLAT_TOOLS, diffToolOutputParity, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -35,14 +37,17 @@ import type {
 // same gate via `runPasswordGatedTool('sign_tx', …)` below.
 const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
 
-// Client-side tool dispatch table. Each entry maps an inbound
-// `tool-input-available` toolName to the matching per-tool executor method.
-// The factory is invoked lazily so the executor pointer is captured at
-// dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
+// Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
+// entry maps an inbound `tool-input-available` toolName to the matching per-tool
+// executor method. The factory is invoked lazily so the executor pointer is
+// captured at dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
 //
-// Must stay aligned with backend's `clientSideToolNames`. `sign_tx` uses
-// the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only. The CRUD trio
+// This is a SUBSET of the backend's client-side contract
+// (`BACKEND_CLIENT_SIDE_TOOL_NAMES`): `sign_tx` uses the tx_ready channel
+// instead; create_vault / plugin_install / create_policy / delete_policy are
+// mobile-only; the Polymarket bet/batch tools arrive rewritten as
+// `sign_typed_data`. Backend client-side tools NOT in this table dispatch to the
+// `TOOL_UNSUPPORTED` path (see `dispatchClientSideTool`). The CRUD trio
 // (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
 // discriminator that each wrapper method switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<
@@ -55,6 +60,37 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<
   address_book: (ex, id, input) => ex.addressBook(id, input),
 }
 
+// The agent-backend's client-side tool contract — `clientSideToolNames`
+// (agent-backend internal/service/agent/tools.go:549-559). These are the tools
+// the backend hands to the CLIENT to execute: it emits a `tool-input-available`
+// SSE frame and expects the outcome back via `recent_actions`.
+export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
+  'vault_coin',
+  'vault_chain',
+  'create_vault',
+  'plugin_install',
+  'create_policy',
+  'delete_policy',
+  'sign_typed_data',
+  'polymarket_sign_bet',
+  'polymarket_sign_batch',
+]
+
+// Every tool name the SSE layer intercepts for local dispatch: the backend's
+// client-side contract PLUS `address_book` (which the CLI implements and the
+// backend treats as a client-side action via AddressBookTool/tools.go:423,
+// though it's currently omitted from the clientSideToolNames map). Routing on
+// this SUPERSET of the implemented registry — rather than on the registry keys
+// alone — is what makes the `TOOL_UNSUPPORTED` signal reachable: a backend
+// client-side tool the CLI doesn't implement (create_vault, plugin_install, …)
+// now reaches `dispatchClientSideTool` and gets a structured failure
+// RecentAction, instead of silently degrading to display-only tool progress and
+// leaving the backend/LLM waiting on an action that will never report.
+export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  ...BACKEND_CLIENT_SIDE_TOOL_NAMES,
+  ...Object.keys(CLIENT_SIDE_TOOL_DISPATCH),
+])
+
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
@@ -63,6 +99,14 @@ const MAX_MESSAGE_LOOP_DEPTH = 16
 // this far apart, for the assistant message the detached backend persisted.
 const RECOVERY_POLL_INTERVAL_MS = 2000
 const RECOVERY_MAX_POLLS = 90
+
+// Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+// means "broadcast accepted" — the tx can still revert, expire, or be dropped.
+// After broadcast the session polls vault.getTxStatus until the tx reaches a
+// final state, then emits `confirmed`/`failed` (or `timeout` when the budget is
+// exhausted). Ceiling ≈ interval × (maxPolls − 1) ≈ 3s × 39 ≈ 117s.
+const TX_CONFIRM_POLL_INTERVAL_MS = 3000
+const TX_CONFIRM_MAX_POLLS = 40
 
 export class AgentSession {
   private client: AgentClient
@@ -81,6 +125,10 @@ export class AgentSession {
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
   private recoveryMaxPolls = RECOVERY_MAX_POLLS
+  // Post-broadcast confirmation poll cadence — instance fields so tests can
+  // drive the loop without real waits.
+  private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
+  private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
@@ -88,10 +136,13 @@ export class AgentSession {
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
     // Registry-based client-side tool identification: tell the client which
-    // tools the CLI executes locally so a `tool-input-available` frame is
-    // dispatched on toolName membership (mirroring the app's toolUIRegistry),
-    // not on a `clientExecuted` wire flag the backend no longer sends.
-    this.client.setClientSideToolNames(new Set(Object.keys(CLIENT_SIDE_TOOL_DISPATCH)))
+    // tool names to dispatch locally so a `tool-input-available` frame is routed
+    // on toolName membership (mirroring the app's toolUIRegistry), not on a
+    // `clientExecuted` wire flag the backend no longer sends. This is the
+    // backend's full client-side contract (a superset of the implemented
+    // registry), so an unimplemented tool still reaches dispatch and reports a
+    // structured TOOL_UNSUPPORTED rather than vanishing as display-only progress.
+    this.client.setClientSideToolNames(new Set(CLIENT_SIDE_DISPATCH_TOOL_NAMES))
     if (config.profile) {
       this.client.setProfile(config.profile)
     }
@@ -101,6 +152,75 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+  }
+
+  /**
+   * Unlock the vault before auth when it's encrypted. Resolve the password from
+   * the keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
+   * VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up the
+   * keyring or env never has to put a funds-controlling secret on argv. argv
+   * `--password` (config.password) still works but is de-emphasized: it lands
+   * the secret in `ps`/shell history, so its use warns. Only when the chain
+   * resolves nothing do we fall back to the mode's own interactive prompt (TUI
+   * readline / via-agent protocol; ask-mode throws). A stale stored password is
+   * cleared and re-prompted in interactive modes rather than stranding init.
+   */
+  private async unlockEncryptedVault(ui: UICallbacks): Promise<void> {
+    if (!this.vault.isEncrypted) {
+      return
+    }
+    let password: string
+    // Whether `password` came from the non-interactive keyring/env chain — a
+    // stale stored value gets cleared and re-prompted; an argv/typed value does
+    // not (it was the caller's explicit choice).
+    let fromStoredChain = false
+    if (this.config.password) {
+      process.stderr.write(
+        'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
+          'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
+      )
+      password = this.config.password
+    } else {
+      const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+      if (resolved !== null) {
+        password = resolved
+        fromStoredChain = true
+      } else {
+        password = await ui.requestPassword()
+      }
+    }
+    try {
+      await (this.vault as any).unlock?.(password)
+    } catch (unlockErr) {
+      if (!fromStoredChain) throw unlockErr
+      password = await this.recoverFromStaleStoredPassword(ui)
+    }
+    this.executor.setPassword(password)
+  }
+
+  /**
+   * The stored (keyring/env) password was rejected by unlock. Drop it so it
+   * isn't reused, then recover: ask mode has no interactive prompt (its
+   * requestPassword throws the misleading "use --password flag"), so surface the
+   * real cause; interactive modes (TUI / via-agent) re-prompt once and cache the
+   * winner. Returns the password that successfully unlocked the vault.
+   */
+  private async recoverFromStaleStoredPassword(ui: UICallbacks): Promise<string> {
+    // Guard the name delete — clearCachedPassword('') would wipe the WHOLE cache
+    // (every other vault loaded this process), and name is typed `string`.
+    clearCachedPassword(this.vault.id)
+    if (this.vault.name) clearCachedPassword(this.vault.name)
+    if (this.config.askMode) {
+      throw new Error(
+        `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
+          'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
+      )
+    }
+    const password = await ui.requestPassword()
+    await (this.vault as any).unlock?.(password)
+    cachePassword(this.vault.id, password)
+    if (this.vault.name) cachePassword(this.vault.name, password)
+    return password
   }
 
   /**
@@ -115,12 +235,7 @@ export class AgentSession {
 
     // Authenticate - use cached token if valid, otherwise sign a new one
     try {
-      // Unlock vault first if encrypted
-      if (this.vault.isEncrypted) {
-        const password = this.config.password || (await ui.requestPassword())
-        await (this.vault as any).unlock?.(password)
-        this.executor.setPassword(password)
-      }
+      await this.unlockEncryptedVault(ui)
 
       const cached = loadCachedToken(this.publicKey)
       if (cached) {
@@ -128,38 +243,41 @@ export class AgentSession {
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
 
-    // Create or resume conversation
+    // Create or resume conversation. Every conversation request routes through
+    // withAuthRetry so a revoked-but-unexpired cached token recovers uniformly
+    // (clear → re-auth → retry once) on EVERY path — the fresh-convo create
+    // used to skip this and hard-throw `Authentication failed` (finding a).
     if (this.config.sessionId) {
       this.conversationId = this.config.sessionId
-      // Fetch historical messages for resumed sessions
+      // Fetch historical messages for resumed sessions.
       try {
-        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
-        // Re-authenticate on 401/403 and retry once
-        if (err.message?.includes('401') || err.message?.includes('403')) {
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
-          this.historyMessages = conv.messages || []
-        } else {
-          // Session not found or other error — reset to new conversation
-          this.conversationId = null
-          this.historyMessages = []
-          const conv = await this.client.createConversation(this.publicKey)
-          this.conversationId = conv.id
-        }
+        // Resume failed: a stale/typo'd --session-id, a persistent backend
+        // error, or an auth failure that survived the single retry. Fall back
+        // to a fresh conversation rather than hard-failing (finding b — the old
+        // 401 branch retried getConversation once with no fallback and threw
+        // uncaught on a second failure), but surface a typed, NON-FATAL signal
+        // so a headless caller knows prior context was dropped and can persist
+        // the NEW conversation id (finding c — the fallback used to be silent).
+        this.conversationId = null
+        this.historyMessages = []
+        const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
+        this.conversationId = conv.id
+        ui.onError(
+          `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); started a new conversation ${conv.id}`,
+          AgentErrorCode.SESSION_NOT_FOUND
+        )
       }
     } else {
-      const conv = await this.client.createConversation(this.publicKey)
+      const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
       this.conversationId = conv.id
     }
 
@@ -204,6 +322,44 @@ export class AgentSession {
           process.stderr.write(`[session] push notification setup failed: ${err}\n`)
         }
       }
+    }
+  }
+
+  /**
+   * Run an authenticated backend request and, on a 401/403, do a single
+   * clear → re-auth → retry. This is the ONE chokepoint every conversation
+   * request shares (resume fetch, fresh-convo create, error-fallback create,
+   * and the send-message stream) so a revoked-but-unexpired cached token
+   * recovers identically everywhere instead of throwing on some paths.
+   *
+   * The retry replays the EXACT same `request` closure, which matters for the
+   * send-message path: the replayed body must carry the same content +
+   * recent_actions or the LLM re-emits tool calls (runaway loop). Re-auth is a
+   * full MPC re-sign via authenticateVault — the backend also exposes
+   * POST /auth/refresh, but exchanging the refresh token is a future
+   * enhancement (see auth.ts); the re-sign is always available.
+   *
+   * `onReauth` (optional) fires the instant a re-auth is committed to — BEFORE
+   * authenticateVault runs — so a caller in a retry loop (recoverDisconnectedTurn)
+   * can record that its single re-auth has been spent even if the MPC re-sign
+   * itself then throws. Without this hook a re-auth that fails with a non-auth
+   * error would let the caller re-enter and re-sign on every iteration.
+   */
+  private async withAuthRetry<T>(request: () => Promise<T>, onReauth?: () => void): Promise<T> {
+    try {
+      return await request()
+    } catch (err) {
+      if (!isAuthError(err)) throw err
+      onReauth?.()
+      // authenticateVault (MPC re-sign) may not return a refreshToken; capture
+      // the previously cached one before clearing so it survives the re-auth and
+      // the later /auth/refresh path stays available.
+      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
+      clearCachedToken(this.publicKey)
+      const auth = await authenticateVault(this.client, this.vault, this.config.password)
+      this.client.setAuthToken(auth.token)
+      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
+      return await request()
     }
   }
 
@@ -272,6 +428,23 @@ export class AgentSession {
         `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
       this.pendingToolResults = [] // don't leak into next sendMessage
+      // A depth-capped abort truncates the conversation mid-flight and drops the
+      // queued results above — it is NOT a clean finish. Emit a distinct typed
+      // error FIRST so headless callers can detect the truncation (ask --json
+      // surfaces it in the error envelope and exits non-zero; pipe gets a typed
+      // `error` frame) instead of reading a bare `done` as success. onDone()
+      // still fires after, purely as the turn terminator (pipe consumers read
+      // frames until `done`). This error-then-done shape matches the precedent in
+      // pipe.ts handleCommand, whose sendMessage catch emits an `error` frame then
+      // `done`. It is deliberately NOT the requestPassword/requestConfirmation
+      // shape: those emit NON-terminal `error` frames and keep the turn alive
+      // awaiting a reply. Pipe-consumer contract: inspect for an `error` frame
+      // before treating `done` as success — the error code, not onDone, is the
+      // signal.
+      ui.onError(
+        `agent message loop exceeded ${MAX_MESSAGE_LOOP_DEPTH} turns; conversation truncated`,
+        AgentErrorCode.LOOP_DEPTH_EXCEEDED
+      )
       ui.onDone()
       return
     }
@@ -309,8 +482,30 @@ export class AgentSession {
       }
     }
 
-    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
-    let serverTxStoredFromStream = 0
+    // Phase-1 dual-read. Two signable candidates are captured per turn (first-wins
+    // by source) and reconciled AFTER the stream (see `selectAndBufferSignable`):
+    //  - `txReadyCandidate`: the backend-enriched payload off the `data-tx_ready`
+    //    channel — AUTHORITATIVE for signing whenever it is signable (today's
+    //    behavior, unchanged).
+    //  - `toolOutputCandidate`: a client-side candidate ENRICHED from a
+    //    `tool-output-available` frame — the PARITY reference, and the sign source
+    //    only when no usable `tx_ready` arrives (polymarket [no tx_ready];
+    //    `build_custom_*` [structurally-unsignable tx_ready]).
+    // Deferring selection to end-of-stream lets us compare both channels (the
+    // Phase-1 parity deliverable) and prefer the safe source without depending on
+    // wire arrival order.
+    let txReadyCandidate: TxReadyPayload | null = null
+    // Tool-call id of the tool-output frame this tx_ready is the wire-adjacent
+    // twin of (client.ts pairs it). `null` when no signable tool-output preceded
+    // it. Compared against `toolOutputCandidate.callId` to decide whether the two
+    // captured candidates are the SAME tool call before diffing them.
+    let txReadyTwinCallId: string | null = null
+    let toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -355,13 +550,31 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onTxReady: (tx: any) => {
-        if (this.executor.storeServerTransaction(tx)) {
-          serverTxStoredFromStream++
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
+      onTxReady: (tx: any, toolCallId?: string) => {
+        // Capture the FIRST `tx_ready` this turn (do NOT store yet — selection is
+        // deferred to `selectAndBufferSignable` after the stream so the parity
+        // cross-check can compare both channels). A SECOND frame is deferred: the
+        // executor signs one payload per turn; the dropped tool's output stays in
+        // the backend conversation and re-emerges next turn once its on-chain
+        // precondition still holds — fail-safe, never a partial/wrong sign.
+        if (txReadyCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
         }
+        txReadyCandidate = tx as TxReadyPayload
+        // Id of the signable tool-output frame this tx_ready was emitted next to
+        // (its twin) — lets selectAndBufferSignable pair the channels before diffing.
+        txReadyTwinCallId = toolCallId ?? null
+      },
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep', toolCallId?: string) => {
+        // Client-side candidate enriched from a `tool-output-available` frame.
+        // First-wins per turn; used by `selectAndBufferSignable` as the parity
+        // reference (and the sign source only when no usable `tx_ready` arrives).
+        if (toolOutputCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
+        }
+        toolOutputCandidate = { payload, toolName, source, callId: toolCallId ?? null }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -382,37 +595,21 @@ export class AgentSession {
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
     // message and trigger an LLM-loop where it re-emits the same tool
-    // calls forever.
+    // calls forever. withAuthRetry replays this exact closure once on auth
+    // failure; a non-auth error (or a persistent auth failure) rethrows here.
     let streamResult
-    let authRetried = false
-    while (true) {
-      try {
-        streamResult = await this.client.sendMessageStream(
-          this.conversationId,
-          request,
-          callbacks,
-          this.abortController?.signal
-        )
-        break
-      } catch (err: any) {
-        const isAuthErr = err.message?.includes('401') || err.message?.includes('403')
-        if (isAuthErr && !authRetried) {
-          authRetried = true
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          continue
-        }
-        // Non-401 or already retried: restore the spliced batch so the
-        // caller (or next user turn) can resume from the same queue
-        // state. SF in sendMessage's catch will clear if the user
-        // doesn't retry.
-        if (flushedThisCall.length > 0) {
-          this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
-        }
-        throw err
+    try {
+      streamResult = await this.withAuthRetry(() =>
+        this.client.sendMessageStream(this.conversationId!, request, callbacks, this.abortController?.signal)
+      )
+    } catch (err) {
+      // Non-401 or already-retried auth failure: restore the spliced batch so
+      // the caller (or next user turn) can resume from the same queue state.
+      // SF in sendMessage's catch will clear if the user doesn't retry.
+      if (flushedThisCall.length > 0) {
+        this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
       }
+      throw err
     }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
@@ -429,7 +626,7 @@ export class AgentSession {
     // the identical confirm/sign gate below.
     if (streamResult.disconnected && !streamResult.message) {
       ui.onReconnecting?.()
-      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady)
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
     }
 
     // Final message event wins over streamed deltas (which may be partial).
@@ -449,28 +646,30 @@ export class AgentSession {
     // Routed straight to the executor (no Action wrapper); result is
     // pushed onto pendingToolResults and recursed for the next turn.
     //
-    // Backend contract: the agent emits at most one tx_ready per stream
-    // turn. storeServerTransaction overwrites a single 'latest' buffer
-    // slot — if the backend ever emits two tx_ready events in one turn,
-    // only the last would be signed. That is not a currently supported
-    // flow; multi-leg sequences use separate turns via recursion.
-    if (serverTxStoredFromStream > 0) {
-      if (this.config.verbose)
-        process.stderr.write(
-          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
-        )
+    // Phase-1 dual-read reconciliation: cross-check the two channels (parity —
+    // logged loudly on divergence) and buffer the SAFE sign source (a signable
+    // `tx_ready` is authoritative; else the client tool-output candidate). One
+    // signable tx per turn — multi-leg approve→main runs within signMultiLeg;
+    // multi-step flows advance across turns via the recursion below.
+    const bufferedSignable = this.selectAndBufferSignable(txReadyCandidate, txReadyTwinCallId, toolOutputCandidate, ui)
+    if (bufferedSignable) {
+      if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
       const signToolCallId = `tx_sign_${Date.now()}`
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
-      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it.
+      // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
+      // then poll for the final on-chain outcome (audit F1) so a headless caller
+      // learns confirmed/failed/timeout instead of treating broadcast as success.
       if (recent.success && recent.data) {
         const txHash = recent.data.tx_hash as string | undefined
         const chain = recent.data.chain as string | undefined
         const explorerUrl = recent.data.explorer_url as string | undefined
-        if (txHash) ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+        if (txHash) {
+          await this.emitAndConfirmTx(txHash, chain, explorerUrl, depth, ui)
+        }
       }
       await this.processMessageLoop(null, ui, depth + 1)
       return
@@ -486,6 +685,173 @@ export class AgentSession {
   }
 
   /**
+   * Report that a second signable frame arrived in the same turn and was
+   * deferred (the executor signs one payload per turn). Never silent: the
+   * dropped tool's output stays in the backend conversation, so the frame
+   * re-emerges next turn if its on-chain precondition still holds. We neither
+   * fail the turn (risks a no-progress loop) nor overwrite the first (would drop
+   * it unsigned).
+   */
+  private reportDeferredSignable(ui: UICallbacks): void {
+    process.stderr.write(
+      '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+    )
+    ui.onNotification?.(
+      'Transaction deferred',
+      'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
+    )
+  }
+
+  /**
+   * Phase-1 dual-read reconciliation. Given the two per-turn candidates, run the
+   * parity cross-check (when both are the SAME tool call) and buffer the SAFE
+   * sign source into the executor. Returns true when something was buffered.
+   *
+   * Selection order (fund-safety):
+   *  1. a SIGNABLE `tx_ready` — AUTHORITATIVE, unchanged from today's behavior;
+   *  2. the client tool-output candidate — covers flat off-chain tools with no
+   *     `tx_ready` (polymarket) and flat tools whose `tx_ready` is structurally
+   *     unsignable (`build_custom_*`, divergent `to_address`/`calldata`);
+   *  3. an unsignable `tx_ready` as last resort — preserves today's behavior (it
+   *     surfaces its own error at sign time) rather than silently dropping it.
+   * `payloadLooksSignable` mirrors the executor's real requirements so a
+   * structurally-present-but-unsignable `tx_ready` (which `storeServerTransaction`
+   * would still buffer, only to throw at sign time) doesn't pre-empt a good
+   * tool-output candidate.
+   *
+   * FAIL-CLOSED on divergence (review — gomesalexandre): a flat tool-output is a
+   * sign source ONLY when (a) there is NO `tx_ready` at all, or (b) the same-turn
+   * `tx_ready` MATCHED parity. Whenever a `tx_ready` is present and the flat did
+   * not prove equal to it, we do NOT sign the client-enriched candidate — we fall
+   * closed to the `tx_ready` path (which, when unsignable, errors at sign time).
+   *
+   * This sign gate is DELIBERATELY INDEPENDENT of the pairing heuristic below:
+   * whether the two same-turn candidates are "the same tool call" affects only
+   * divergence TELEMETRY, never the sign decision. So even if the pairing were
+   * wrong (e.g. the backend batched two tool-output frames before a `tx_ready`
+   * against the documented per-pending order — agent-backend agent.go:6397), a
+   * diverging flat still cannot be signed: it is gated by `parityMatched`, not by
+   * pairing. The fund-safety guarantee therefore rests on parity equality alone,
+   * not on a cross-repo wire-ordering invariant (security + Codex convergence).
+   *
+   * Pairing (review — gomesalexandre) — TELEMETRY ONLY: the two channels are the
+   * SAME tool call iff their tool-call ids match (`txReadyTwinCallId` is the id of
+   * the tool-output frame this `tx_ready` was emitted next to — client.ts). A
+   * DEFINITELY-unpaired pair (both ids present AND different) skips the parity
+   * diff so an unrelated same-turn pair does not emit a false `[DIVERGENCE]`; a
+   * missing id falls back to running the diff so a real divergence is never
+   * suppressed. This gate never enqueues a sign source — it only silences noise.
+   */
+  private selectAndBufferSignable(
+    txReadyCandidate: TxReadyPayload | null,
+    txReadyTwinCallId: string | null,
+    toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+      callId: string | null
+    } | null,
+    ui: UICallbacks
+  ): boolean {
+    // Pair the two channels by tool-call id — for TELEMETRY ONLY (see the
+    // method doc). An unrelated same-turn pair (different tools) is NOT the same
+    // transaction, so it must not produce a false divergence signal. This never
+    // affects the sign decision below (which fails closed on parity alone).
+    const toolOutputCallId = toolOutputCandidate?.callId ?? null
+    const definitelyUnpaired =
+      txReadyCandidate !== null &&
+      toolOutputCandidate !== null &&
+      toolOutputCallId !== null &&
+      txReadyTwinCallId !== null &&
+      toolOutputCallId !== txReadyTwinCallId
+
+    // Parity cross-check (Phase-1 deliverable): the two channels are the SAME
+    // tool call — prove the client-side port against the live backend. Skipped
+    // for a definitely-unrelated pair (no false [DIVERGENCE] noise).
+    let parityMatched = false
+    if (txReadyCandidate && toolOutputCandidate && !definitelyUnpaired) {
+      parityMatched = this.logToolOutputParity(toolOutputCandidate, txReadyCandidate)
+    }
+
+    const ordered: Array<{ surface: 'tx_ready' | 'tool_output'; payload: TxReadyPayload }> = []
+    if (txReadyCandidate && payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+    // ONLY a FLAT tool-output candidate is ever a sign source. `execute_*` PREP
+    // candidates are PARITY-ONLY: the backend suppresses `tx_ready` for a
+    // malformed prep envelope (phantom card, missing tx_encoding — agent.go:8294),
+    // and signing the prep tool-output in that case would defeat that suppression.
+    // (`deriveToolOutputCandidate` already refuses a prep envelope without
+    // tx_encoding; this is the load-bearing second guard.)
+    //
+    // FAIL-CLOSED gate: a flat candidate is enqueued only when there is no
+    // tx_ready at all, or when the same-turn tx_ready MATCHED parity. Any other
+    // state (a present tx_ready the flat did not prove equal to — diverged, or
+    // parity-skipped) does NOT enqueue the flat → we fall through to the tx_ready
+    // path below (never sign the client-enriched bytes when they are not proven
+    // equal to the backend's). Independent of pairing on purpose (see method doc).
+    const flatIsSignSource = toolOutputCandidate?.source === 'flat' && (txReadyCandidate === null || parityMatched)
+    if (toolOutputCandidate && flatIsSignSource) {
+      ordered.push({ surface: 'tool_output', payload: toolOutputCandidate.payload })
+    }
+    if (txReadyCandidate && !payloadLooksSignable(txReadyCandidate)) {
+      ordered.push({ surface: 'tx_ready', payload: txReadyCandidate })
+    }
+
+    for (const { surface, payload } of ordered) {
+      if (this.executor.storeServerTransaction(payload)) {
+        if (this.config.password) this.executor.setPassword(this.config.password)
+        if (this.config.verbose) {
+          const both = txReadyCandidate && toolOutputCandidate ? 'both channels' : 'single channel'
+          process.stderr.write(`[session] buffered signable from ${surface} (${both})\n`)
+        }
+        // Cross-channel first-wins gap: when we sign the `tx_ready` but a DISTINCT
+        // FLAT tool-output candidate is also present and did NOT match parity, the
+        // two are different transactions (e.g. an `execute_send` tx_ready alongside
+        // an unrelated `polymarket_deposit` flat output in one turn), NOT a twin.
+        // Only ONE payload signs per turn, so the flat candidate goes unsigned —
+        // report it as DEFERRED (never SILENTLY drop a user-requested fund action;
+        // it re-emerges next turn). A parity TWIN (erc20_approve: flat + its own
+        // tx_ready, parityMatched) is the SAME tx and is correctly dropped silently.
+        if (surface === 'tx_ready' && toolOutputCandidate?.source === 'flat' && !parityMatched) {
+          this.reportDeferredSignable(ui)
+        }
+        return true
+      }
+    }
+    return false
+  }
+
+  /**
+   * Compare the client-enriched tool-output candidate to the backend `tx_ready`
+   * for the same turn and log the result. On a safety-relevant divergence this
+   * logs LOUDLY (always to stderr, not just under --verbose) — that divergence
+   * signal is exactly what Phase 1 exists to surface before Phase 2 makes
+   * tool-output the sole signing source.
+   */
+  private logToolOutputParity(
+    toolOutput: { payload: TxReadyPayload; toolName: string; source: 'flat' | 'prep' },
+    txReady: TxReadyPayload
+  ): boolean {
+    const result = diffToolOutputParity(toolOutput.payload, txReady)
+    const exclusive = result.txReadyExclusive.length
+      ? ` | tx_ready-exclusive: ${result.txReadyExclusive.join(',')}`
+      : ''
+    if (result.match) {
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[parity] ${toolOutput.toolName} (${toolOutput.source}): tool-output == tx_ready ✓${exclusive}\n`
+        )
+      }
+      return true
+    }
+    process.stderr.write(
+      `[parity][DIVERGENCE] ${toolOutput.toolName} (${toolOutput.source}): tool-output != tx_ready — ${result.divergences.join('; ')}${exclusive}\n`
+    )
+    return false
+  }
+
+  /**
    * Recover a turn whose SSE stream dropped before delivering the final
    * assistant message. Polls /messages/since (server-clock anchored via
    * X-Server-Now) until the persisted assistant message lands or the bounded
@@ -496,7 +862,8 @@ export class AgentSession {
    */
   private async recoverDisconnectedTurn(
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined
+    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): Promise<void> {
     if (!this.conversationId) return
 
@@ -518,10 +885,30 @@ export class AgentSession {
     const replaySignableCards = serverAnchor !== null
     let cursor: string | undefined
 
+    // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
+    // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
+    // poll routes through withAuthRetry (clear→reauth→retry once); its onReauth
+    // hook flips authRecovered the instant the re-sign is committed to, so even a
+    // re-auth that itself fails (MPC error, auth endpoint down) can't re-arm. Once
+    // spent, later polls call messagesSince directly with the (best-effort)
+    // refreshed token, so a *persistent* 401 can't trigger an MPC re-sign on every
+    // poll (bounded re-sign work, no key-share amplification). Later polls still
+    // recover the turn if the refreshed token starts working; otherwise the loop
+    // exhausts as before. Without the wrap a revoked token would spin through
+    // recoveryMaxPolls and silently lose the assistant reply / tx_ready (M1).
+    let authRecovered = false
+
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+        resp = authRecovered
+          ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(
+              () => this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since }),
+              () => {
+                authRecovered = true
+              }
+            )
       } catch (err: any) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
@@ -556,7 +943,7 @@ export class AgentSession {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards)
+        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
         return
       }
 
@@ -574,6 +961,114 @@ export class AgentSession {
   }
 
   /**
+   * Post-broadcast confirmation polling (audit F1). A bare `pending` status only
+   * means "broadcast accepted"; the tx can still revert, expire, or be dropped,
+   * so a headless caller that stops at `pending` may mark a later-reverted
+   * operation complete. Poll vault.getTxStatus until the tx reaches a final
+   * state and emit the matching lifecycle status (`confirmed`/`failed`), or
+   * `timeout` when the bounded poll budget is exhausted (the tx may still
+   * confirm later — callers can re-check with `vultisig tx-status`).
+   *
+   * Transient RPC/network errors are treated as "not final yet" and retried
+   * until the budget is spent. Best-effort and non-fatal: if the chain can't be
+   * resolved or the vault doesn't expose getTxStatus, the caller's already-
+   * emitted `pending` status stands and this returns quietly.
+   *
+   * Scoped to headless callers (ask/pipe) that need machine-readable finality.
+   * The interactive TUI already shows `pending` + an explorer link immediately
+   * and has the dedicated `vultisig tx-status` command, so blocking its prompt
+   * for the full poll budget would be a UX regression the audit didn't scope.
+   * The poll also bails on cancel (Ctrl-C aborts the controller) so a long wait
+   * is interruptible.
+   *
+   * The caller only invokes this at message-loop depth 0 (see the call site):
+   * inside a multi-turn tool loop the broadcast result already drives the next
+   * turn, so blocking here would stack the poll budget per leg without feeding
+   * the server any extra signal. Those deeper legs keep their honest `pending`.
+   */
+  private async emitAndConfirmTx(
+    txHash: string,
+    chain: string | undefined,
+    explorerUrl: string | undefined,
+    depth: number,
+    ui: UICallbacks
+  ): Promise<void> {
+    ui.onTxStatus(txHash, chain || '', 'pending', explorerUrl)
+    // Only block on confirmation at the top of the loop (depth 0) — the
+    // common headless ask/pipe single-tx case, where the command should
+    // wait for finality before returning. Inside a multi-turn tool loop
+    // (depth > 0) the broadcast result is already queued on
+    // pendingToolResults (pushed above) and is what drives the server's
+    // next turn; the confirmation status is never fed back to the server,
+    // so blocking the recursion here buys no correctness — it would only
+    // stack up to the full poll budget (~117s) per leg, a latency cliff
+    // for back-to-back/batched txs. Those legs still emit an honest
+    // `pending` (re-checkable later via `vultisig tx-status`).
+    if (depth === 0) {
+      await this.confirmBroadcastedTx(txHash, chain, explorerUrl, ui)
+    }
+  }
+
+  private async confirmBroadcastedTx(
+    txHash: string,
+    chainName: string | undefined,
+    explorerUrl: string | undefined,
+    ui: UICallbacks
+  ): Promise<void> {
+    if (!this.config.askMode && !this.config.viaAgent) return
+
+    const chain = resolveChain(chainName ?? '')
+    // Call the SDK's typed `VaultBase.getTxStatus` directly (no `as any`) so a
+    // rename or signature drift on it fails this build — the cast previously
+    // swallowed that. The `typeof` guard stays runtime-meaningful: the unit-test
+    // harness passes a minimal `this` whose vault may omit getTxStatus, and we
+    // also skip chains the SDK can't resolve. (`?.` is redundant at the type
+    // level since `this.vault: VaultBase`, but guards that stub at runtime.)
+    if (!chain || typeof this.vault?.getTxStatus !== 'function') return
+
+    for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
+      if (this.abortController?.signal?.aborted) return
+      try {
+        // TxStatusResult.status is the SDK's exhaustive union
+        // `'pending' | 'success' | 'error'`. Only the two terminal states
+        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // polling until the budget is spent and we emit `timeout` below — a safe
+        // default since the tx may still confirm later.
+        const result = await this.vault.getTxStatus({ chain, txHash })
+        if (result.status === 'success') {
+          ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          return
+        }
+        if (result.status === 'error') {
+          ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          return
+        }
+      } catch (err: any) {
+        // Transient (network/RPC) — keep polling until the budget is spent.
+        if (this.config.verbose) {
+          process.stderr.write(`[session] tx confirm poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
+        }
+      }
+      // No sleep after the final poll — emit timeout without an extra interval.
+      if (attempt < this.txConfirmMaxPolls - 1) await this.txConfirmSleep()
+    }
+
+    if (this.abortController?.signal?.aborted) return
+
+    if (this.config.verbose) {
+      process.stderr.write(
+        `[session] tx ${txHash} not confirmed within ${this.txConfirmMaxPolls} polls; emitting timeout\n`
+      )
+    }
+    ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+  }
+
+  /** Sleep between confirmation polls. Separate method so tests can stub it out. */
+  private txConfirmSleep(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, this.txConfirmPollIntervalMs))
+  }
+
+  /**
    * Fold a recovered assistant message back into the live stream result: the
    * authoritative message wins over any partial deltas, and any persisted
    * `data-tx_ready` part is replayed through the live tx_ready callback so the
@@ -588,16 +1083,52 @@ export class AgentSession {
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
     onTxReady: ((tx: TxReadyPayload) => void) | undefined,
-    replaySignableCards: boolean
+    replaySignableCards: boolean,
+    onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
-    if (!replaySignableCards) return
+    let replayedTxReady = false
+    let signableFlatToolPart: string | undefined
     for (const part of msg.parts ?? []) {
-      if (part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
+      // Balance-summary cards are read-only display, so replay them
+      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // recovered balance card is at worst cosmetic (the live path renders the
+      // same data); only a stale tx_ready is a fund-safety concern. Without this
+      // a balance query whose stream dropped mid-turn recovers the text answer
+      // but silently loses the card.
+      if (part.type === 'data-balance_summary' && part.data) {
+        onBalanceSummary?.(part.data)
+        continue
+      }
+      // Signable cards stay gated: a stale tx_ready must never reach the signer
+      // (see recoverDisconnectedTurn's server-anchor rationale).
+      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
         const tx = part.data as TxReadyPayload
         streamResult.transactions.push(tx)
         onTxReady?.(tx)
+        replayedTxReady = true
       }
+      // Detect a persisted FLAT signable tool part (polymarket / build_custom_*).
+      // These emit NO `data-tx_ready` — their signable output rides the
+      // tool-output-available channel, which the recovery path does NOT
+      // reconstruct (only `data-tx_ready` is replayed). Track it so we can WARN.
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        const toolName = part.type.slice('tool-'.length)
+        if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) signableFlatToolPart = toolName
+      }
+    }
+    // Phase-1 limitation (widened here past polymarket to the build_custom_*
+    // tools): a mid-turn disconnect on a tool-output-only signable tool cannot
+    // have its client-side candidate reconstructed from the persisted parts, so
+    // the transaction is not signed this turn. Fail-CLOSED (never a wrong sign),
+    // but warn LOUDLY rather than drop it silently — full tool-output replay in
+    // recovery is a follow-up.
+    if (signableFlatToolPart && !replayedTxReady) {
+      process.stderr.write(
+        `[session][recovery] recovered turn ran signable tool '${signableFlatToolPart}', whose signable output ` +
+          `rides tool-output-available (no data-tx_ready). The recovery path does not reconstruct that candidate, ` +
+          `so NO transaction was signed this turn — re-run the request to sign. (Known Phase-1 limitation.)\n`
+      )
     }
   }
 
@@ -738,10 +1269,15 @@ export class AgentSession {
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
+      // Carry a structured code (not just prose) so the backend/LLM can branch:
+      // TOOL_UNSUPPORTED means this client can't run the tool at all, so retry
+      // is pointless — pick an alternative. This early return pushes straight to
+      // pendingToolResults (bypassing runPasswordGatedTool / ui.onToolResult);
+      // the code reaches the backend on the next flush into context.recent_actions.
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { error: `unimplemented in CLI: ${toolName}` },
+        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
       })
       return
     }
@@ -762,11 +1298,14 @@ export class AgentSession {
       recent = { tool: toolName, success: false, data: { error: message } }
     }
 
-    // Echo protocol markers (__*, pm_order_ref) back so server-side
-    // handlers like autoSubmitPolymarketOrder can find them.
+    // Echo protocol markers (__*, pm_order_ref, pm_batch_ref) back so
+    // server-side handlers like autoSubmitPolymarketOrder and the batch
+    // auto-submit (submit_deposit_wallet_batch) can find them. pm_batch_ref
+    // has no __ prefix and isn't the order ref, so it must be named here or
+    // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
     for (const key of Object.keys(input)) {
-      if (key.startsWith('__') || key === 'pm_order_ref') {
+      if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
     }
@@ -850,6 +1389,21 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
   return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
 }
 
+/**
+ * Classify a thrown backend error as an auth failure (401/403). The AgentClient
+ * surfaces HTTP status by embedding it in the Error message (e.g.
+ * "Request failed (401): ..."). A word-boundary match keeps every real status
+ * format (`(401)`, `HTTP 401`, bare `401`) while avoiding false positives on
+ * digits embedded in a larger number (a `1401` amount, a `4034` port). We do
+ * NOT tighten to a parens-only shape: a false NEGATIVE silently breaks auth
+ * recovery (the point of this helper), whereas a false positive only costs one
+ * wasted re-auth + an idempotent replay of the exact same request.
+ */
+export function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /\b(401|403)\b/.test(msg)
+}
+
 // ============================================================================
 // Agent Token Cache
 //
@@ -857,7 +1411,7 @@ function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
 // Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
 // ============================================================================
 
-type TokenEntry = { token: string; expiresAt: number }
+type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
 type TokenStore = Record<string, TokenEntry>
 
 function getTokenCachePath(): string {
@@ -878,8 +1432,26 @@ function readTokenStore(): TokenStore {
 function writeTokenStore(store: TokenStore): void {
   const path = getTokenCachePath()
   const dir = join(path, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
+  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
+  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
+  // every write so it can't retain looser perms now that refresh tokens live here.
+  try {
+    chmodSync(dir, 0o700)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
   writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
+  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
+  // file keeps its old perms. chmod every write so a pre-existing (or
+  // out-of-band) agent-tokens.json can't retain looser perms now that a
+  // longer-lived refresh token lives here.
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
+  }
 }
 
 /**
@@ -907,9 +1479,18 @@ function loadCachedToken(publicKey: string): string | null {
   return entry.token
 }
 
-function saveCachedToken(publicKey: string, token: string, expiresAt: number): void {
+// Persists the access token (and optional refresh token) under 0o600 perms.
+// The refresh token is captured for a future POST /auth/refresh exchange. A
+// prior entry's refreshToken is preserved when this call doesn't carry one
+// (e.g. a backend that stops returning refresh_token shouldn't drop the
+// still-valid token we already hold).
+function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
   const store = readTokenStore()
-  store[publicKey] = { token, expiresAt }
+  store[publicKey] = {
+    token,
+    expiresAt,
+    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
+  }
   try {
     writeTokenStore(store)
   } catch {

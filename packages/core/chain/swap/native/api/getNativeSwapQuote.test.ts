@@ -71,7 +71,44 @@ describe('getNativeSwapQuote', () => {
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
     const url = String(queryUrlMock.mock.calls[0][0])
     expect(url).toContain('streaming_interval=0')
+    expect(url).toContain('liquidity_tolerance_bps=100')
     expect(url).not.toContain('streaming_quantity')
+    expect(quote.liquidity_tolerance_bps).toBe(100)
+  })
+
+  it('THORChain: forwards custom slippage tolerance bps to the quote request', async () => {
+    queryUrlMock.mockResolvedValueOnce({
+      ...baseOkBody,
+      fees: { ...baseOkBody.fees, total_bps: THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS },
+    })
+
+    const quote = await getNativeSwapQuote({
+      swapChain: Chain.THORChain,
+      destination: ethTo.address,
+      from: btcFrom,
+      to: ethTo,
+      amount: 1,
+      slippageToleranceBps: 250,
+    })
+
+    const url = String(queryUrlMock.mock.calls[0][0])
+    expect(url).toContain('liquidity_tolerance_bps=250')
+    expect(quote.liquidity_tolerance_bps).toBe(250)
+  })
+
+  it('rejects invalid slippage tolerance bps before requesting a quote', async () => {
+    await expect(
+      getNativeSwapQuote({
+        swapChain: Chain.THORChain,
+        destination: ethTo.address,
+        from: btcFrom,
+        to: ethTo,
+        amount: 1,
+        slippageToleranceBps: -1,
+      })
+    ).rejects.toThrow(/slippageToleranceBps/)
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
   })
 
   it('THORChain: skips streaming when total_bps is missing', async () => {
@@ -120,6 +157,7 @@ describe('getNativeSwapQuote', () => {
 
     const streamUrl = String(queryUrlMock.mock.calls[1][0])
     expect(streamUrl).toContain('streaming_interval=1')
+    expect(streamUrl).toContain('liquidity_tolerance_bps=100')
     expect(streamUrl).not.toContain('streaming_quantity')
   })
 

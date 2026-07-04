@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getSwapAffiliateBps } from '@vultisig/core-chain/swap/affiliate'
+import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
@@ -8,6 +9,10 @@ import { getNativeSwapQuote } from '@vultisig/core-chain/swap/native/api/getNati
 import { describe, expect, it, vi } from 'vitest'
 
 import { findSwapQuote } from './findSwapQuote'
+
+vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
+  getCowSwapQuote: vi.fn(),
+}))
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
@@ -42,6 +47,7 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
 describe('findSwapQuote Kyber affiliate fee', () => {
   it('passes effective affiliate BPS after VULT discount', async () => {
     const expectedBps = getSwapAffiliateBps('gold')
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))

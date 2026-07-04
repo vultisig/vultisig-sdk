@@ -14,15 +14,14 @@ import { concatBytes, protoBytes, protoString, protoVarint } from '@vultisig/cor
 import { KeysignSignature } from '../../../keysign/KeysignSignature'
 import { CosmosSpecific } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { KeysignPayload } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
+import { buildQBTCAuthInfo, buildQBTCSignDocFromComponents, buildQBTCTxRaw } from './QBTCTx'
 
-const pubKeyTypeURL = '/cosmos.crypto.mldsa.PubKey'
 const msgSendTypeURL = '/cosmos.bank.v1beta1.MsgSend'
 const msgTransferTypeURL = '/ibc.applications.transfer.v1.MsgTransfer'
 const msgVoteTypeURL = '/cosmos.gov.v1beta1.MsgVote'
 
 /** QBTC fee denom and chain ID (Cosmos SDK). */
 const denom = 'qbtc'
-const chainID = 'qbtc'
 
 type QBTCKeysignInput = {
   keysignPayload: KeysignPayload
@@ -53,7 +52,7 @@ export const getQBTCSignedTransaction = ({
     cosmosSpecific,
   })
 
-  const signDoc = buildSignDocFromComponents({
+  const signDoc = buildQBTCSignDocFromComponents({
     bodyBytes,
     authInfoBytes,
     accountNumber: cosmosSpecific.accountNumber,
@@ -63,7 +62,11 @@ export const getQBTCSignedTransaction = ({
   const sig = shouldBePresent(signatures[hashHex], `QBTC signature for hash ${hashHex}`)
   const sigData = Buffer.from(sig.der_signature, 'hex')
 
-  const txRaw = buildTxRaw({ bodyBytes, authInfoBytes, signature: sigData })
+  const txRaw = buildQBTCTxRaw({
+    bodyBytes,
+    authInfoBytes,
+    signature: sigData,
+  })
   const txBytesBase64 = Buffer.from(txRaw).toString('base64')
   const serialized = JSON.stringify({
     tx_bytes: txBytesBase64,
@@ -79,7 +82,7 @@ const buildSignDoc = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput) => {
     keysignPayload,
     cosmosSpecific,
   })
-  return buildSignDocFromComponents({
+  return buildQBTCSignDocFromComponents({
     bodyBytes,
     authInfoBytes,
     accountNumber: cosmosSpecific.accountNumber,
@@ -114,27 +117,16 @@ const buildTxComponents = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput)
   const pubKeyData = Buffer.from(coin.hexPublicKey, 'hex')
 
   const bodyBytes = buildTxBody({ keysignPayload, cosmosSpecific })
-  const authInfoBytes = buildAuthInfo({
+  const authInfoBytes = buildQBTCAuthInfo({
     pubKeyData,
     sequence: cosmosSpecific.sequence,
-    gas: cosmosSpecific.gas,
+    fee: {
+      denom,
+      amount: cosmosSpecific.gas.toString(),
+    },
   })
   return { bodyBytes, authInfoBytes }
 }
-
-type BuildSignDocFromComponentsInput = {
-  bodyBytes: Uint8Array
-  authInfoBytes: Uint8Array
-  accountNumber: bigint
-}
-
-const buildSignDocFromComponents = ({ bodyBytes, authInfoBytes, accountNumber }: BuildSignDocFromComponentsInput) =>
-  concatBytes(
-    protoBytes(1, bodyBytes),
-    protoBytes(2, authInfoBytes),
-    protoString(3, chainID),
-    protoVarint(4, accountNumber)
-  )
 
 const buildTxBody = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput): Uint8Array => {
   const { transactionType, ibcDenomTraces } = cosmosSpecific
@@ -241,38 +233,3 @@ const buildMsgVote = (keysignPayload: KeysignPayload): Uint8Array => {
 
   return concatBytes(protoVarint(1, proposalId), protoString(2, coin.address), protoVarint(3, option))
 }
-
-type BuildAuthInfoInput = {
-  pubKeyData: Uint8Array
-  sequence: bigint
-  gas: bigint
-}
-
-const buildAuthInfo = ({ pubKeyData, sequence, gas }: BuildAuthInfoInput): Uint8Array => {
-  const pubKeyMsg = protoBytes(1, pubKeyData)
-
-  const pubKeyAny = concatBytes(protoString(1, pubKeyTypeURL), protoBytes(2, pubKeyMsg))
-
-  const singleMode = protoVarint(1, 1n)
-
-  const modeInfo = protoBytes(1, singleMode)
-
-  const signerInfo = concatBytes(protoBytes(1, pubKeyAny), protoBytes(2, modeInfo), protoVarint(3, sequence))
-
-  const feeCoin = concatBytes(protoString(1, denom), protoString(2, gas.toString()))
-
-  const gasLimit = 300000n
-
-  const fee = concatBytes(protoBytes(1, feeCoin), protoVarint(2, gasLimit))
-
-  return concatBytes(protoBytes(1, signerInfo), protoBytes(2, fee))
-}
-
-type BuildTxRawInput = {
-  bodyBytes: Uint8Array
-  authInfoBytes: Uint8Array
-  signature: Uint8Array
-}
-
-const buildTxRaw = ({ bodyBytes, authInfoBytes, signature }: BuildTxRawInput): Uint8Array =>
-  concatBytes(protoBytes(1, bodyBytes), protoBytes(2, authInfoBytes), protoBytes(3, signature))

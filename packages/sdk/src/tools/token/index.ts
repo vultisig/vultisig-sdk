@@ -1,3 +1,5 @@
+export type { ResolveContractResult, TokenStandard } from './resolveContract'
+export { resolveContract } from './resolveContract'
 export { searchToken } from './searchToken'
 export { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 export type { Coin, CoinKey, CoinMetadata, KnownCoin, KnownCoinMetadata } from '@vultisig/core-chain/coin/Coin'

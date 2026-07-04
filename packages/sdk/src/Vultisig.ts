@@ -46,6 +46,7 @@ import type { PushNotificationService } from './services/PushNotificationService
 import { type PerformReshareParams, SecureVaultCreationService } from './services/SecureVaultCreationService'
 import { SecureVaultFromSeedphraseService } from './services/SecureVaultFromSeedphraseService'
 import type { Storage } from './storage/types'
+import { type Defi, defi } from './tools/defi'
 import {
   AddressBook,
   AddressBookEntry,
@@ -159,6 +160,15 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   public get notifications(): PushNotificationService {
     return this.context.pushNotificationService
+  }
+
+  /**
+   * DeFi protocol primitives (`sdk.defi.*`).
+   *
+   * Pure unsigned-calldata builders — nothing here signs or broadcasts; the wallet/MPC layer signs the returned tx.
+   */
+  get defi(): Defi {
+    return defi
   }
 
   /**
