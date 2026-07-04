@@ -18,6 +18,7 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import { recordResolution } from './broadcastJournal'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
@@ -108,6 +109,23 @@ const RECOVERY_MAX_POLLS = 90
 const TX_CONFIRM_POLL_INTERVAL_MS = 3000
 const TX_CONFIRM_MAX_POLLS = 40
 
+/**
+ * Does this batch of queued (not-yet-delivered) tool results contain a
+ * SUCCESSFUL broadcast — a result carrying a real `tx_hash`? When such a result
+ * is still in the queue at error time, the broadcast happened on-chain but its
+ * follow-up `recent_actions` report to the backend never landed: the true
+ * ACK_FAILED case. A broadcast already delivered in an earlier turn is gone from
+ * the queue, so a later unrelated failure is NOT mis-tagged. Exported for direct
+ * unit testing of the discriminating logic.
+ */
+export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boolean {
+  return results.some(r => {
+    if (!r.success || !r.data) return false
+    const hash = (r.data as { tx_hash?: unknown }).tx_hash
+    return typeof hash === 'string' && hash.length > 0
+  })
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -121,6 +139,14 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
+  // queue), of whether an already-broadcast tx result was still UNDELIVERED to
+  // the backend. This is the true "ack failed" signal: a successful broadcast
+  // whose follow-up recent_actions report never landed. A later independent
+  // retryable error (after an earlier broadcast WAS acked) leaves an empty/
+  // broadcast-free queue here, so `agent ask` keeps the retryable classification
+  // instead of masking it as ACK_FAILED. See executeAgentAsk's catch (F1).
+  private unacknowledgedBroadcastAtError = false
   // Disconnect-recovery poll cadence — instance fields so tests can drive the
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
@@ -152,6 +178,8 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+    // `--force` bypasses the persistent broadcast-journal duplicate guard.
+    this.executor.setForceBroadcast(!!config.force)
   }
 
   /**
@@ -367,6 +395,16 @@ export class AgentSession {
     return this.conversationId
   }
 
+  /**
+   * Whether the most recent failed turn threw with a broadcast whose
+   * follow-up report was still undelivered — the F1 ACK_FAILED signal. False
+   * after a clean turn, or when the failure was unrelated to an unacked
+   * broadcast (so the caller keeps the error's retryable classification).
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.unacknowledgedBroadcastAtError
+  }
+
   getHistoryMessages(): ConversationMessage[] {
     return this.historyMessages
   }
@@ -391,6 +429,8 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    // Fresh turn — clear the prior turn's ack snapshot.
+    this.unacknowledgedBroadcastAtError = false
 
     // Refresh context before each message — skip balance fetches in agent modes
     try {
@@ -405,6 +445,12 @@ export class AgentSession {
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
+      // Snapshot BEFORE clearing: if a just-broadcast tx result is still queued
+      // (its follow-up recent_actions report never landed), this is the F1
+      // ack-failure case and executeAgentAsk will surface exit 8. Capturing here
+      // — rather than after the throw reaches the command — is essential because
+      // the very next line wipes the queue.
+      this.unacknowledgedBroadcastAtError = hasUnacknowledgedBroadcastResult(this.pendingToolResults)
       // SF: any failure that escaped processMessageLoop's internal 401
       // retry — clear the queue so the next user turn doesn't silently
       // inherit stale tool results and trigger phantom auto-submit or
@@ -660,6 +706,14 @@ export class AgentSession {
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
+      // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
+      // broadcast anything — surface it as a hard error so a headless caller
+      // exits non-zero with a clear, actionable signal instead of reading a
+      // success envelope that hides a silently-failed sign. The failed result is
+      // still queued+recursed above so the backend/LLM learns the sign refused.
+      if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
+        ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
       // learns confirmed/failed/timeout instead of treating broadcast as success.
@@ -1037,10 +1091,16 @@ export class AgentSession {
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          // Resolve the broadcast-journal record: a confirmed tx stays guarded
+          // (re-sending would double-spend), but the terminal status is logged.
+          recordResolution(txHash, 'confirmed')
           return
         }
         if (result.status === 'error') {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          // A definitive on-chain failure is the ONE resolution that clears the
+          // journal guard so an automatic retry of the same intent is allowed.
+          recordResolution(txHash, 'failed')
           return
         }
       } catch (err: any) {
@@ -1061,6 +1121,9 @@ export class AgentSession {
       )
     }
     ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+    // Timeout is NOT a definitive failure — the tx may still land later — so the
+    // journal keeps the intent guarded. Log the terminal poll status all the same.
+    recordResolution(txHash, 'timeout')
   }
 
   /** Sleep between confirmation polls. Separate method so tests can stub it out. */
