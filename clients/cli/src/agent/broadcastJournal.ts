@@ -254,6 +254,45 @@ function sleepSyncMs(ms: number): void {
  * A lock older than {@link JOURNAL_LOCK_STALE_MS} is stolen (crashed holder).
  * Best-effort: an FS that can't create the lock returns null (proceed unlocked).
  */
+/**
+ * CAS-safe steal of a stale lock file. Unlink-then-create lets two contenders
+ * interleave (A unlinks, A creates, B unlinks A's FRESH lock, B creates → both
+ * "hold" the lock). rename(2) is atomic — exactly one contender's rename of the
+ * stale path succeeds; the loser gets ENOENT and retries the exclusive create,
+ * where it sees the winner's fresh lock.
+ *
+ * Returns 'held' when what we renamed turned out to be FRESH (a contender
+ * recreated the lock between the caller's stat and our rename) — the lock is
+ * restored to its live holder and the caller must wait. Returns 'stolen' when
+ * the stale lock is gone and the caller should retry the create.
+ */
+function stealStaleLock(path: string): 'stolen' | 'held' {
+  const stolen = `${path}.stale.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
+  try {
+    renameSync(path, stolen)
+  } catch {
+    return 'stolen' // lost the steal race (or lock vanished) — retry create
+  }
+  try {
+    if (nowMs() - statSync(stolen).mtimeMs <= JOURNAL_LOCK_STALE_MS) {
+      try {
+        renameSync(stolen, path)
+      } catch {
+        // restore failed (holder released meanwhile) — nothing left to hold
+      }
+      return 'held'
+    }
+  } catch {
+    return 'stolen' // stolen file vanished — nothing to verify
+  }
+  try {
+    rmSync(stolen, { force: true })
+  } catch {
+    // best-effort residue cleanup
+  }
+  return 'stolen'
+}
+
 function acquireJournalLock(maxWaitMs: number): (() => void) | null {
   const path = journalLockPath()
   try {
@@ -287,42 +326,10 @@ function acquireJournalLock(maxWaitMs: number): (() => void) | null {
       } catch {
         continue // vanished between EEXIST and stat — retry the create
       }
-      if (stale) {
-        // CAS-safe steal: unlink-then-create lets two contenders interleave
-        // (A unlinks, A creates, B unlinks A's FRESH lock, B creates → both
-        // "hold" the lock). rename(2) is atomic — exactly one contender's
-        // rename of the stale path succeeds; the loser gets ENOENT and loops
-        // back to the exclusive create, where it sees the winner's fresh lock.
-        const stolen = `${path}.stale.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
-        try {
-          renameSync(path, stolen)
-        } catch {
-          continue // lost the steal race (or lock vanished) — retry create
-        }
-        // Post-verify: if what we renamed was actually FRESH (a contender
-        // recreated the lock between our stat and our rename), restore it so
-        // the live holder keeps its lock, and treat it as held.
-        try {
-          if (nowMs() - statSync(stolen).mtimeMs <= JOURNAL_LOCK_STALE_MS) {
-            try {
-              renameSync(stolen, path)
-            } catch {
-              // restore failed (holder released meanwhile) — nothing to hold
-            }
-            if (nowMs() >= deadline) return null
-            sleepSyncMs(10)
-            continue
-          }
-        } catch {
-          // stolen file vanished — nothing to verify, fall through to cleanup
-        }
-        try {
-          rmSync(stolen, { force: true })
-        } catch {
-          // best-effort residue cleanup
-        }
-        continue
+      if (stale && stealStaleLock(path) === 'stolen') {
+        continue // stale lock cleared — retry the exclusive create
       }
+      // Lock is held by a live process (fresh, or restored mid-steal) — wait.
       if (nowMs() >= deadline) return null
       sleepSyncMs(10)
     }
