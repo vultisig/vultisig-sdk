@@ -14,6 +14,14 @@ import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
+import {
+  assertNoRecentDuplicate,
+  type BroadcastIntent,
+  type BroadcastReservation,
+  computeFingerprint,
+  recordBroadcast,
+  reserveBroadcast,
+} from './broadcastJournal'
 import type { RecentAction } from './types'
 
 /**
@@ -141,11 +149,20 @@ export class AgentExecutor {
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
   private evmLastBroadcast = new Map<string, number>()
+  // When true, bypass the persistent broadcast-journal duplicate guard (the
+  // `--force` escape hatch). Off by default: a fresh retry process must refuse
+  // to re-broadcast an intent a prior process already sent (double-spend).
+  private forceBroadcast = false
+  // The owning vault's ecdsa public key — namespaces broadcast-journal
+  // fingerprints so two different vaults sending an identical tx don't collide
+  // in the single global journal (see BroadcastIntent.owner).
+  private readonly vaultPublicKey: string
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
     this.verbose = verbose
     this.vultisig = vultisig
+    this.vaultPublicKey = vaultId ?? vault.publicKeys?.ecdsa ?? ''
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
@@ -153,6 +170,65 @@ export class AgentExecutor {
 
   setPassword(password: string): void {
     this.password = password
+  }
+
+  /** Opt out of the persistent broadcast-journal duplicate guard (`--force`). */
+  setForceBroadcast(force: boolean): void {
+    this.forceBroadcast = force
+  }
+
+  /**
+   * Derive the chain-agnostic broadcast intent (fingerprint basis) from a
+   * buffered tx_ready payload. Prefers the nested EVM/`tx` shape; falls back to
+   * the non-EVM `txArgs.{to,amount,memo}` shape. `overrideTx` lets a multi-leg
+   * caller fingerprint a specific leg (e.g. the approve leg's `approvalTxArgs`).
+   * Always namespaced by the owning vault (owner) so a shared journal can't
+   * cross-match two vaults' transactions.
+   */
+  private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
+    const source = overrideTx ?? payload
+    const nested = extractNestedTx(source)
+    if (nested && (nested.to || nested.value || nested.data)) {
+      return {
+        owner: this.vaultPublicKey,
+        chain: chain.toString(),
+        to: nested.to != null ? String(nested.to) : undefined,
+        value: nested.value != null ? String(nested.value) : undefined,
+        data: nested.data != null ? String(nested.data) : undefined,
+      }
+    }
+    const txArgs = source?.txArgs ?? source
+    // Non-EVM: the token identity isn't in `to`/`data`, so fold in whatever
+    // asset/denom discriminator the envelope carries to avoid conflating two
+    // same-amount sends of different assets.
+    const asset =
+      txArgs?.denom ?? txArgs?.ticker ?? txArgs?.symbol ?? txArgs?.asset ?? txArgs?.coin ?? txArgs?.contract_address
+    return {
+      owner: this.vaultPublicKey,
+      chain: chain.toString(),
+      to: txArgs?.to != null ? String(txArgs.to) : undefined,
+      value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
+      data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      asset: asset != null ? String(asset) : undefined,
+    }
+  }
+
+  /**
+   * Journal a broadcast the instant it lands, computing the fingerprint from the
+   * same intent basis the pre-sign duplicate check uses. Called at each signer's
+   * broadcast chokepoint (not at signTxFromBuffer's return) so a post-broadcast
+   * step that throws — e.g. a multi-leg approve receipt timeout — can't strand an
+   * already-broadcast tx unrecorded and let a retry re-send it. Best-effort:
+   * never throw back into a completed broadcast.
+   */
+  private recordBroadcastForTx(serverTxData: any, chain: Chain, txHash: string | undefined): void {
+    if (!txHash) return
+    try {
+      const intent = this.buildBroadcastIntent(serverTxData, chain)
+      recordBroadcast(computeFingerprint(intent), String(txHash), chain.toString())
+    } catch (err) {
+      if (this.verbose) process.stderr.write(`[broadcast-journal] record skipped: ${(err as Error)?.message ?? err}\n`)
+    }
   }
 
   /**
@@ -600,40 +676,90 @@ export class AgentExecutor {
         throw new Error('Pending transaction is not a server-built tx (no __serverTx flag).')
       }
 
-      // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
-      // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
-      // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
-      // chain that's a programming error, not a missing branch.
-      let result: Record<string, unknown> | undefined
-      if (payload.__multiLeg) {
-        if (this.pendingLegs.length !== 2) {
-          throw new VaultError(
-            VaultErrorCode.InvalidConfig,
-            `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
-          )
-        }
-        result = await this.signMultiLeg(payload, chain, {})
-      }
+      // F1/F14 double-spend guard. Fingerprint the intent(s) BEFORE any signing
+      // and refuse if a prior (or sibling) process already broadcast the same
+      // intent recently and it hasn't definitively failed — the persistent
+      // journal is what survives the process death that the in-memory
+      // `evmLastBroadcast` guard can't. Multi-leg checks BOTH legs so a retry
+      // after the approve broadcast (but before the main) can't re-approve.
+      // `--force` (setForceBroadcast) bypasses.
+      const isMultiLeg = !!payload.__multiLeg
+      const primaryIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
+        : this.buildBroadcastIntent(payload, chain)
+      const approveIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        : undefined
+      const primaryFp = computeFingerprint(primaryIntent)
+      const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
+      assertNoRecentDuplicate(primaryIntent, { force: this.forceBroadcast })
+      if (approveIntent) assertNoRecentDuplicate(approveIntent, { force: this.forceBroadcast })
 
-      // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
-      // since the server-built tx format doesn't match signServerTx's EVM assumptions.
-      // Only the quote/prepare phase falls back to signServerTx — once signing starts,
-      // failures must propagate to avoid double-submitting a broadcast transaction.
-      if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
-        try {
-          result = await this.buildAndSignSolanaSwapLocally(payload)
-        } catch (e: any) {
-          if (e._phase === 'prepare') {
-            if (this.verbose)
-              process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
-          } else {
-            throw e
+      // Atomic reservation (closes the check-then-record TOCTOU): the journal
+      // check above only sees COMMITTED broadcasts, so two sibling processes can
+      // both pass it before either records. Take an exclusive lock per intent
+      // BEFORE signing so exactly one wins; the loser throws
+      // ConcurrentBroadcastError (→ DUPLICATE_BROADCAST) and never signs. Held
+      // across the whole sign+broadcast+record, released in the finally once the
+      // durable journal record has taken over as the guard. `--force` no-ops it.
+      const reservations: BroadcastReservation[] = []
+      try {
+        reservations.push(reserveBroadcast(primaryFp, { force: this.forceBroadcast }))
+        if (approveFp) reservations.push(reserveBroadcast(approveFp, { force: this.forceBroadcast }))
+
+        // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
+        // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
+        // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
+        // chain that's a programming error, not a missing branch.
+        let result: Record<string, unknown> | undefined
+        if (payload.__multiLeg) {
+          if (this.pendingLegs.length !== 2) {
+            throw new VaultError(
+              VaultErrorCode.InvalidConfig,
+              `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
+            )
+          }
+          result = await this.signMultiLeg(payload, chain, {})
+        }
+
+        // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
+        // since the server-built tx format doesn't match signServerTx's EVM assumptions.
+        // Only the quote/prepare phase falls back to signServerTx — once signing starts,
+        // failures must propagate to avoid double-submitting a broadcast transaction.
+        if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
+          try {
+            result = await this.buildAndSignSolanaSwapLocally(payload)
+          } catch (e: any) {
+            if (e._phase === 'prepare') {
+              if (this.verbose)
+                process.stderr.write(
+                  `[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`
+                )
+            } else {
+              throw e
+            }
           }
         }
+        if (!result) result = await this.signServerTx(payload, chain, {})
+
+        // Journal the single-leg broadcast so a later retry recognises this intent
+        // and refuses to double-send. Multi-leg legs are journaled INSIDE
+        // signMultiLeg at each leg's broadcast point (so an approve whose 90s
+        // receipt-wait times out is still recorded and can't be re-broadcast on
+        // retry — audit F14); recording them here would miss that window.
+        if (!isMultiLeg && result?.tx_hash) {
+          recordBroadcast(primaryFp, String(result.tx_hash), chain.toString())
+        }
+
+        if (payload.sequence_id) result.sequence_id = payload.sequence_id
+        return result
+      } finally {
+        // Release AFTER the broadcast has been recorded above: the durable
+        // journal record is now the guard, so dropping the in-flight lock can't
+        // reopen the double-send window. On a throw (e.g. multi-leg receipt
+        // timeout) the leg-level record inside signMultiLeg has already landed.
+        for (const reservation of reservations) reservation.release()
       }
-      if (!result) result = await this.signServerTx(payload, chain, {})
-      if (payload.sequence_id) result.sequence_id = payload.sequence_id
-      return result
     })
   }
 
@@ -1115,6 +1241,11 @@ export class AgentExecutor {
         throw new VaultError(VaultErrorCode.BroadcastFailed, 'signMultiLeg: approve leg returned no tx_hash')
       }
 
+      // Journal the approve BEFORE the receipt-wait (audit F14). If waitForEvmReceipt
+      // times out or the main leg later throws, this record still stops a retry
+      // from re-broadcasting an approve that already hit the chain.
+      this.recordBroadcastForTx(approveEnvelope, chain, approveTxHash)
+
       if (this.verbose)
         process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
 
@@ -1146,6 +1277,10 @@ export class AgentExecutor {
         tx: undefined,
       }
       const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+      // Journal the main leg at its broadcast point too (symmetry with the
+      // approve leg; the top-level signTxFromBuffer record skips multi-leg).
+      this.recordBroadcastForTx(mainEnvelope, chain, mainResult.tx_hash as string | undefined)
 
       return {
         tx_hash: mainResult.tx_hash,

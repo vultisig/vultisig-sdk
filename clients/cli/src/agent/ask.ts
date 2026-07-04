@@ -82,6 +82,16 @@ export class AskInterface {
   }
 
   /**
+   * Whether the turn threw with a still-unacknowledged broadcast (the F1
+   * ack-failure case). The command's catch uses this to gate the ACK_FAILED
+   * re-tag so a later, unrelated retryable error after an already-acked
+   * broadcast keeps its own (retryable) classification instead of exit 8.
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.session.hasUnacknowledgedBroadcast()
+  }
+
+  /**
    * Get UI callbacks that silently collect results.
    * Tool progress is logged to stderr in verbose mode.
    */
