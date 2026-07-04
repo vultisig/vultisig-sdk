@@ -6,9 +6,9 @@
  * clears the guard), the --force bypass, and fail-open robustness against a
  * missing/corrupt journal.
  */
-import { appendFileSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -279,5 +279,91 @@ describe('pruneJournal (bounds append-only growth — item 4)', () => {
     } finally {
       rmSync(lock, { force: true })
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Review hardening (CodeRabbit round): record-shape validation, resolution
+// timestamp scoping, and CAS-safe stale-lock stealing.
+// ---------------------------------------------------------------------------
+describe('readRecords shape validation (malformed lines are skipped, not half-parsed)', () => {
+  it('ignores a resolved line with a non-string status', () => {
+    const fp = computeFingerprint(INTENT)
+    writeBroadcastLine(fp, '0xhash1', 'Polygon', Date.now())
+    // Structurally invalid resolution: status is an object. Must NOT be
+    // treated as a resolution at all — the broadcast stays blocking.
+    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xhash1', status: { s: 'failed' }, ts: Date.now() }) + '\n')
+    expect(findRecentDuplicate(fp)).not.toBeNull()
+  })
+
+  it('ignores a truncated broadcast line missing its fingerprint', () => {
+    appendFileSync(journalPath(), JSON.stringify({ t: 'broadcast', hash: '0xhash2', chain: 'Polygon', ts: Date.now() }) + '\n')
+    // A valid broadcast for a DIFFERENT intent — the malformed line must not
+    // block anything (it has no fp to match).
+    expect(findRecentDuplicate(computeFingerprint(INTENT))).toBeNull()
+  })
+
+  it('ignores records with a non-numeric ts', () => {
+    const fp = computeFingerprint(INTENT)
+    appendFileSync(journalPath(), JSON.stringify({ t: 'broadcast', fp, hash: '0xhash3', chain: 'Polygon', ts: 'now' }) + '\n')
+    expect(findRecentDuplicate(fp)).toBeNull()
+  })
+})
+
+describe('resolution timestamp scoping (an old failure cannot unblock a newer same-hash broadcast)', () => {
+  it('a failed resolution BEFORE a re-broadcast of the same hash does not unblock it', () => {
+    const fp = computeFingerprint(INTENT)
+    const t0 = Date.now() - 60_000
+    // attempt 1: broadcast + definitive failure (retry legitimately allowed)
+    writeBroadcastLine(fp, '0xsamehash', 'Polygon', t0)
+    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xsamehash', status: 'failed', ts: t0 + 1_000 }) + '\n')
+    // attempt 2 (e.g. --force): same hash re-broadcast AFTER the failure.
+    writeBroadcastLine(fp, '0xsamehash', 'Polygon', t0 + 10_000)
+    // The old failure must not retroactively mark attempt 2 as failed.
+    const blocking = findRecentDuplicate(fp)
+    expect(blocking).not.toBeNull()
+    expect(blocking!.ts).toBe(t0 + 10_000)
+  })
+
+  it('a failed resolution AFTER the broadcast still unblocks it', () => {
+    const fp = computeFingerprint(INTENT)
+    const t0 = Date.now() - 60_000
+    writeBroadcastLine(fp, '0xfailedhash', 'Polygon', t0)
+    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xfailedhash', status: 'failed', ts: t0 + 1_000 }) + '\n')
+    expect(findRecentDuplicate(fp)).toBeNull()
+  })
+})
+
+describe('stale-lock steal is rename-based (CAS-safe)', () => {
+  it('steals a genuinely stale journal lock, appends, and leaves no residue', () => {
+    const lockPath = journalPath() + '.wlock'
+    mkdirSync(dirname(lockPath), { recursive: true })
+    writeFileSync(lockPath, JSON.stringify({ pid: 99999, ts: 0 }))
+    // Age the lock file well past the stale TTL so the writer must steal it.
+    const old = Date.now() / 1000 - 3600
+    utimesSync(lockPath, old, old)
+    const fp = computeFingerprint(INTENT)
+    recordBroadcast(fp, '0xstealhash', 'Polygon')
+    // The broadcast was recorded (steal succeeded, no deadlock)...
+    expect(findRecentDuplicate(fp)).not.toBeNull()
+    // ...the stolen lock was released, and no rename residue remains.
+    const residue = readdirSync(dirname(lockPath)).filter((f) => f.includes('.stale.'))
+    expect(residue).toEqual([])
+    expect(existsSync(lockPath)).toBe(false)
+  })
+
+  it('leaves a FRESH lock untouched (concurrent holder keeps it; append still lands)', () => {
+    const lockPath = journalPath() + '.wlock'
+    mkdirSync(dirname(lockPath), { recursive: true })
+    const content = JSON.stringify({ pid: process.pid, ts: Date.now() })
+    writeFileSync(lockPath, content)
+    const fp = computeFingerprint(INTENT)
+    recordBroadcast(fp, '0xfreshhash', 'Polygon')
+    // append-after-timeout still records (never DROP a broadcast record)...
+    expect(findRecentDuplicate(fp)).not.toBeNull()
+    // ...but the live holder's lock file was neither stolen nor renamed.
+    expect(existsSync(lockPath)).toBe(true)
+    expect(readFileSync(lockPath, 'utf8')).toBe(content)
+    rmSync(lockPath, { force: true })
   })
 })

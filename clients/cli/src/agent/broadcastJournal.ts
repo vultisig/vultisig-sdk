@@ -277,10 +277,38 @@ function acquireJournalLock(maxWaitMs: number): (() => void) | null {
         continue // vanished between EEXIST and stat — retry the create
       }
       if (stale) {
+        // CAS-safe steal: unlink-then-create lets two contenders interleave
+        // (A unlinks, A creates, B unlinks A's FRESH lock, B creates → both
+        // "hold" the lock). rename(2) is atomic — exactly one contender's
+        // rename of the stale path succeeds; the loser gets ENOENT and loops
+        // back to the exclusive create, where it sees the winner's fresh lock.
+        const stolen = `${path}.stale.${process.pid}.${Math.random().toString(36).slice(2, 8)}`
         try {
-          rmSync(path, { force: true })
+          renameSync(path, stolen)
         } catch {
-          // ignore
+          continue // lost the steal race (or lock vanished) — retry create
+        }
+        // Post-verify: if what we renamed was actually FRESH (a contender
+        // recreated the lock between our stat and our rename), restore it so
+        // the live holder keeps its lock, and treat it as held.
+        try {
+          if (nowMs() - statSync(stolen).mtimeMs <= JOURNAL_LOCK_STALE_MS) {
+            try {
+              renameSync(stolen, path)
+            } catch {
+              // restore failed (holder released meanwhile) — nothing to hold
+            }
+            if (nowMs() >= deadline) return null
+            sleepSyncMs(10)
+            continue
+          }
+        } catch {
+          // stolen file vanished — nothing to verify, fall through to cleanup
+        }
+        try {
+          rmSync(stolen, { force: true })
+        } catch {
+          // best-effort residue cleanup
         }
         continue
       }
@@ -326,6 +354,20 @@ function appendRecord(record: JournalRecord): void {
   }
 }
 
+/** Structural validation for a parsed journal line — see readRecords. */
+function isValidRecord(r: unknown): r is JournalRecord {
+  if (r === null || typeof r !== 'object') return false
+  const o = r as Record<string, unknown>
+  if (typeof o.ts !== 'number' || !Number.isFinite(o.ts)) return false
+  if (o.t === 'broadcast') {
+    return typeof o.fp === 'string' && o.fp.length > 0 && typeof o.hash === 'string' && o.hash.length > 0 && typeof o.chain === 'string'
+  }
+  if (o.t === 'resolved') {
+    return typeof o.hash === 'string' && o.hash.length > 0 && typeof o.status === 'string' && o.status.length > 0
+  }
+  return false
+}
+
 function readRecords(): JournalRecord[] {
   const path = journalPath()
   let raw: string
@@ -341,7 +383,11 @@ function readRecords(): JournalRecord[] {
     if (!trimmed) continue
     try {
       const parsed = JSON.parse(trimmed) as JournalRecord
-      if (parsed && (parsed.t === 'broadcast' || parsed.t === 'resolved')) records.push(parsed)
+      // Shape-validate before accepting: a structurally-wrong line (e.g. a
+      // `resolved` with a non-string status, or a truncated `broadcast`
+      // missing its fp) must be SKIPPED like a corrupt line, not half-parsed
+      // into the guard's decision inputs.
+      if (isValidRecord(parsed)) records.push(parsed)
     } catch {
       // Skip a corrupt/partial line rather than bricking the whole read.
     }
@@ -378,10 +424,14 @@ export function findRecentDuplicate(fingerprint: string, options: DuplicateCheck
   const cutoff = nowMs() - windowMs
   const records = readRecords()
 
-  // Latest resolution status per hash (last write wins — append-only).
-  const latestResolution = new Map<string, string>()
+  // Latest resolution per hash (last write wins — append-only). The timestamp
+  // is kept so a resolution can only be applied to broadcasts that happened
+  // BEFORE it: a `--force` re-broadcast can reuse the same hash, and an OLD
+  // "failed" resolution from the prior attempt must not retroactively unblock
+  // the newer broadcast (that would let a third identical send through).
+  const latestResolution = new Map<string, { status: string; ts: number }>()
   for (const r of records) {
-    if (r.t === 'resolved') latestResolution.set(r.hash, r.status)
+    if (r.t === 'resolved') latestResolution.set(r.hash, { status: r.status, ts: r.ts })
   }
 
   let blocking: BroadcastRecord | null = null
@@ -390,7 +440,8 @@ export function findRecentDuplicate(fingerprint: string, options: DuplicateCheck
     if (r.fp !== fingerprint) continue
     if (r.ts < cutoff) continue
     const resolution = latestResolution.get(r.hash)
-    if (resolution && isRetryableResolution(resolution)) continue // definitively failed → retry allowed
+    // definitively failed AFTER this broadcast → retry allowed
+    if (resolution && resolution.ts >= r.ts && isRetryableResolution(resolution.status)) continue
     if (!blocking || r.ts > blocking.ts) blocking = r
   }
   return blocking

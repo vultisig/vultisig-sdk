@@ -28,6 +28,7 @@ describe('agentErrorCodeToExitCode', () => {
     [AgentErrorCode.ACTION_NOT_IMPLEMENTED, ExitCode.USAGE],
     [AgentErrorCode.TOOL_UNSUPPORTED, ExitCode.USAGE],
     [AgentErrorCode.SESSION_NOT_INITIALIZED, ExitCode.USAGE],
+    [AgentErrorCode.CONFIRMATION_REQUIRED, ExitCode.USAGE],
     [AgentErrorCode.SIGNING_FAILED, ExitCode.UNKNOWN],
     [AgentErrorCode.LOOP_DEPTH_EXCEEDED, ExitCode.UNKNOWN],
     [AgentErrorCode.UNKNOWN_ERROR, ExitCode.UNKNOWN],
