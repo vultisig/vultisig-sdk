@@ -49,7 +49,7 @@ const payload = (toAddress: string, toAmount: string) =>
 
 describe('getRippleChainSpecific — reserve belongs on Amount, not the burned Fee', () => {
   it('funded destination: gas is the network fee only (no reserve added)', async () => {
-    const res = await getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000') })
+    const res = await getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
     expect(res.gas).toBe(EXPECTED_NETWORK_FEE)
   })
 
@@ -57,14 +57,15 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     // The old bug inflated gas to networkFee + reserve_base (~1 XRP burned).
     const res = await getRippleChainSpecific({
       keysignPayload: payload(DEST_UNFUNDED, String(RESERVE_BASE)),
+      walletCore: {} as never,
     })
     expect(res.gas).toBe(EXPECTED_NETWORK_FEE)
     expect(res.gas).toBeLessThan(BigInt(RESERVE_BASE))
   })
 
   it('unfunded destination with amount < reserve: rejects instead of building a doomed/wasteful tx', async () => {
-    await expect(getRippleChainSpecific({ keysignPayload: payload(DEST_UNFUNDED, '500000') })).rejects.toThrow(
-      /not yet activated|base reserve/i
-    )
+    await expect(
+      getRippleChainSpecific({ keysignPayload: payload(DEST_UNFUNDED, '500000'), walletCore: {} as never })
+    ).rejects.toThrow(/not yet activated|base reserve/i)
   })
 })
