@@ -118,8 +118,19 @@ export type BroadcastIntent = {
   asset?: string
 }
 
-type BroadcastRecord = { t: 'broadcast'; fp: string; hash: string; chain: string; ts: number }
-type ResolutionRecord = { t: 'resolved'; hash: string; status: string; ts: number }
+type BroadcastRecord = {
+  t: 'broadcast'
+  fp: string
+  hash: string
+  chain: string
+  ts: number
+}
+type ResolutionRecord = {
+  t: 'resolved'
+  hash: string
+  status: string
+  ts: number
+}
 type JournalRecord = BroadcastRecord | ResolutionRecord
 
 /** A terminal status that clears the way for an automatic retry of the intent. */
@@ -333,7 +344,10 @@ function appendRecord(record: JournalRecord): void {
     // record — recording is the fund-safety-critical half).
     const releaseLock = acquireJournalLock(APPEND_LOCK_WAIT_MS)
     try {
-      appendFileSync(path, JSON.stringify(record) + '\n', { encoding: 'utf8', mode: 0o600 })
+      appendFileSync(path, JSON.stringify(record) + '\n', {
+        encoding: 'utf8',
+        mode: 0o600,
+      })
       // appendFileSync's `mode` only applies when it CREATES the file; chmod every
       // write so an already-existing file with looser perms is tightened too.
       try {
@@ -360,7 +374,13 @@ function isValidRecord(r: unknown): r is JournalRecord {
   const o = r as Record<string, unknown>
   if (typeof o.ts !== 'number' || !Number.isFinite(o.ts)) return false
   if (o.t === 'broadcast') {
-    return typeof o.fp === 'string' && o.fp.length > 0 && typeof o.hash === 'string' && o.hash.length > 0 && typeof o.chain === 'string'
+    return (
+      typeof o.fp === 'string' &&
+      o.fp.length > 0 &&
+      typeof o.hash === 'string' &&
+      o.hash.length > 0 &&
+      typeof o.chain === 'string'
+    )
   }
   if (o.t === 'resolved') {
     return typeof o.hash === 'string' && o.hash.length > 0 && typeof o.status === 'string' && o.status.length > 0
@@ -581,7 +601,10 @@ export function reserveBroadcast(fingerprint: string, options: DuplicateCheckOpt
  * compaction; the next append retries. Best-effort and self-contained; a
  * failure leaves the original journal untouched. Returns the kept/pruned counts.
  */
-export function pruneJournal(options: { retentionMs?: number } = {}): { kept: number; pruned: number } {
+export function pruneJournal(options: { retentionMs?: number } = {}): {
+  kept: number
+  pruned: number
+} {
   const retentionMs = options.retentionMs ?? PRUNE_RETENTION_MS
   const path = journalPath()
   const cutoff = nowMs() - retentionMs
@@ -621,7 +644,10 @@ export function pruneJournal(options: { retentionMs?: number } = {}): { kept: nu
 
     const tmp = `${path}.prune.${process.pid}.tmp`
     try {
-      writeFileSync(tmp, kept.length ? kept.join('\n') + '\n' : '', { encoding: 'utf8', mode: 0o600 })
+      writeFileSync(tmp, kept.length ? kept.join('\n') + '\n' : '', {
+        encoding: 'utf8',
+        mode: 0o600,
+      })
       renameSync(tmp, path)
       try {
         chmodSync(path, 0o600)

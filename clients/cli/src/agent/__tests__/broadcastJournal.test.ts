@@ -6,7 +6,17 @@
  * clears the guard), the --force bypass, and fail-open robustness against a
  * missing/corrupt journal.
  */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -62,8 +72,18 @@ describe('computeFingerprint', () => {
   })
 
   it('normalises case + whitespace so cosmetic differences still match', () => {
-    const a = computeFingerprint({ chain: 'Ethereum', to: '0xABC', value: '1', data: '0xFF' })
-    const b = computeFingerprint({ chain: ' ethereum ', to: '0xabc', value: '1', data: '0xff' })
+    const a = computeFingerprint({
+      chain: 'Ethereum',
+      to: '0xABC',
+      value: '1',
+      data: '0xFF',
+    })
+    const b = computeFingerprint({
+      chain: ' ethereum ',
+      to: '0xabc',
+      value: '1',
+      data: '0xff',
+    })
     expect(a).toBe(b)
   })
 
@@ -124,7 +144,13 @@ describe('findRecentDuplicate', () => {
     writeFileSync(
       journalPath(),
       '{not valid json\n' +
-        JSON.stringify({ t: 'broadcast', fp, hash: '0xgood', chain: 'Ethereum', ts: Date.now() }) +
+        JSON.stringify({
+          t: 'broadcast',
+          fp,
+          hash: '0xgood',
+          chain: 'Ethereum',
+          ts: Date.now(),
+        }) +
         '\n'
     )
     expect(findRecentDuplicate(fp)?.hash).toBe('0xgood')
@@ -236,7 +262,9 @@ describe('pruneJournal (bounds append-only growth — item 4)', () => {
     // ts is 9 min old — inside the 10-min dedupe window.
     writeBroadcastLine(FP, '0xinwindow', 'Ethereum', now - 9 * 60 * 1000)
     // Retention == the dedupe window: the 9-min-old record must survive.
-    const { pruned } = pruneJournal({ retentionMs: DEFAULT_BROADCAST_WINDOW_MS })
+    const { pruned } = pruneJournal({
+      retentionMs: DEFAULT_BROADCAST_WINDOW_MS,
+    })
     expect(pruned).toBe(0)
     expect(findRecentDuplicate(FP)?.hash).toBe('0xinwindow')
   })
@@ -292,12 +320,28 @@ describe('readRecords shape validation (malformed lines are skipped, not half-pa
     writeBroadcastLine(fp, '0xhash1', 'Polygon', Date.now())
     // Structurally invalid resolution: status is an object. Must NOT be
     // treated as a resolution at all — the broadcast stays blocking.
-    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xhash1', status: { s: 'failed' }, ts: Date.now() }) + '\n')
+    appendFileSync(
+      journalPath(),
+      JSON.stringify({
+        t: 'resolved',
+        hash: '0xhash1',
+        status: { s: 'failed' },
+        ts: Date.now(),
+      }) + '\n'
+    )
     expect(findRecentDuplicate(fp)).not.toBeNull()
   })
 
   it('ignores a truncated broadcast line missing its fingerprint', () => {
-    appendFileSync(journalPath(), JSON.stringify({ t: 'broadcast', hash: '0xhash2', chain: 'Polygon', ts: Date.now() }) + '\n')
+    appendFileSync(
+      journalPath(),
+      JSON.stringify({
+        t: 'broadcast',
+        hash: '0xhash2',
+        chain: 'Polygon',
+        ts: Date.now(),
+      }) + '\n'
+    )
     // A valid broadcast for a DIFFERENT intent — the malformed line must not
     // block anything (it has no fp to match).
     expect(findRecentDuplicate(computeFingerprint(INTENT))).toBeNull()
@@ -305,7 +349,16 @@ describe('readRecords shape validation (malformed lines are skipped, not half-pa
 
   it('ignores records with a non-numeric ts', () => {
     const fp = computeFingerprint(INTENT)
-    appendFileSync(journalPath(), JSON.stringify({ t: 'broadcast', fp, hash: '0xhash3', chain: 'Polygon', ts: 'now' }) + '\n')
+    appendFileSync(
+      journalPath(),
+      JSON.stringify({
+        t: 'broadcast',
+        fp,
+        hash: '0xhash3',
+        chain: 'Polygon',
+        ts: 'now',
+      }) + '\n'
+    )
     expect(findRecentDuplicate(fp)).toBeNull()
   })
 })
@@ -316,7 +369,15 @@ describe('resolution timestamp scoping (an old failure cannot unblock a newer sa
     const t0 = Date.now() - 60_000
     // attempt 1: broadcast + definitive failure (retry legitimately allowed)
     writeBroadcastLine(fp, '0xsamehash', 'Polygon', t0)
-    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xsamehash', status: 'failed', ts: t0 + 1_000 }) + '\n')
+    appendFileSync(
+      journalPath(),
+      JSON.stringify({
+        t: 'resolved',
+        hash: '0xsamehash',
+        status: 'failed',
+        ts: t0 + 1_000,
+      }) + '\n'
+    )
     // attempt 2 (e.g. --force): same hash re-broadcast AFTER the failure.
     writeBroadcastLine(fp, '0xsamehash', 'Polygon', t0 + 10_000)
     // The old failure must not retroactively mark attempt 2 as failed.
@@ -329,7 +390,15 @@ describe('resolution timestamp scoping (an old failure cannot unblock a newer sa
     const fp = computeFingerprint(INTENT)
     const t0 = Date.now() - 60_000
     writeBroadcastLine(fp, '0xfailedhash', 'Polygon', t0)
-    appendFileSync(journalPath(), JSON.stringify({ t: 'resolved', hash: '0xfailedhash', status: 'failed', ts: t0 + 1_000 }) + '\n')
+    appendFileSync(
+      journalPath(),
+      JSON.stringify({
+        t: 'resolved',
+        hash: '0xfailedhash',
+        status: 'failed',
+        ts: t0 + 1_000,
+      }) + '\n'
+    )
     expect(findRecentDuplicate(fp)).toBeNull()
   })
 })
@@ -347,7 +416,7 @@ describe('stale-lock steal is rename-based (CAS-safe)', () => {
     // The broadcast was recorded (steal succeeded, no deadlock)...
     expect(findRecentDuplicate(fp)).not.toBeNull()
     // ...the stolen lock was released, and no rename residue remains.
-    const residue = readdirSync(dirname(lockPath)).filter((f) => f.includes('.stale.'))
+    const residue = readdirSync(dirname(lockPath)).filter(f => f.includes('.stale.'))
     expect(residue).toEqual([])
     expect(existsSync(lockPath)).toBe(false)
   })
