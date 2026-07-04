@@ -47,6 +47,9 @@ describe('processMessageLoop — loop-depth cap truncation signal', () => {
       abortController: null,
       client: { sendMessageStream },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
+      reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
     }
 
     // Any depth above the cap (16) trips the guard at the very top of the loop,
