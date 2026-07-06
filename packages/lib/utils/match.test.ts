@@ -61,4 +61,23 @@ describe('match', () => {
     expect(caught?.message).toMatch(/no handler/)
     expect(caught?.message).not.toMatch(/is not a function/)
   })
+
+  // Fund-safety: a runtime value that collides with an Object.prototype member name resolves to an
+  // INHERITED function (`handlers['constructor']` === Object, `handlers['toString']` === the proto
+  // method, …). Without an own-property check those pass `typeof handler === 'function'` and silently
+  // dispatch to the WRONG handler (e.g. getCoinType('constructor') → {} instead of throwing). Every
+  // prototype-name key must fail closed with the clean 'no handler' error.
+  it('fails closed on a prototype-chain key — never dispatches to an inherited method', () => {
+    for (const key of ['constructor', 'toString', 'valueOf', 'isPrototypeOf', 'hasOwnProperty', 'toLocaleString']) {
+      let caught: unknown
+      try {
+        match(key as unknown as 'a', { a: () => 0 })
+      } catch (e) {
+        caught = e
+      }
+      expect(caught, `key ${key} must throw`).toBeInstanceOf(Error)
+      expect((caught as Error).message).toMatch(/no handler/)
+      expect((caught as Error).message).not.toMatch(/is not a function|Cannot read properties|called on/)
+    }
+  })
 })
