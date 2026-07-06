@@ -16,8 +16,10 @@ import { getPolkadotSigningInputs } from './polkadot'
 
 // Polkadot Asset Hub genesis hash (statemint)
 const GENESIS_HASH = '0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f'
-// Arbitrary valid SS58-0 Polkadot address
-const TO_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Srd'
+// A real, checksum-valid SS58-0 Polkadot address (the //Alice account). Must be a
+// genuinely valid destination now that resolvePolkadotToAddress throws on an invalid
+// one instead of silently falling back to the sender (#966).
+const TO_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5'
 const FROM_ADDRESS = '14E5nqKAp3oAJcmzgs25fyAmgeNL66XceFLiTqAZkdVH5T38'
 const BLOCK_HASH = '0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
 const EDDSA_PRIVATE_KEY = new Uint8Array(32).fill(1)
