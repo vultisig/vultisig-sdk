@@ -555,6 +555,16 @@ const MAX_OP_RETURN_DATA = 80
  * Throws for len > 80 (non-standard).
  */
 function buildOpReturnScript(data: Uint8Array): Uint8Array {
+  if (data.length === 0) {
+    // Fail loud: an empty memo (e.g. from an upstream `opReturnData: ''` bug)
+    // would otherwise build a useless `6a 00` output and ship a THORChain
+    // deposit with NO routing data — the funds land at the inbound vault
+    // unroutable/stuck. Skipping the output is equally unsafe for a swap (a
+    // memo-less deposit is still unroutable), so we reject rather than skip.
+    throw new Error(
+      'OP_RETURN data is empty: a UTXO THORChain swap needs a non-empty memo to route the deposit. Refusing to build a memo-less (unroutable) transaction.'
+    )
+  }
   if (data.length > MAX_OP_RETURN_DATA) {
     throw new Error(
       `OP_RETURN data too large: ${data.length} bytes (max ${MAX_OP_RETURN_DATA}). THORChain swap memos fit within this cap.`

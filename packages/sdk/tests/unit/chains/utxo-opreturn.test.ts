@@ -135,4 +135,11 @@ describe('buildUtxoSendTx — OP_RETURN memo', () => {
   it('rejects memos larger than the 80-byte standard-relay cap', () => {
     expect(() => buildUtxoSendTx({ ...DOGE_OPTS, opReturnData: 'A'.repeat(81) })).toThrow(/OP_RETURN data too large/)
   })
+
+  it('rejects an empty memo (fail loud, not a useless 6a00 output) so a swap never ships memo-less/unroutable', () => {
+    // An upstream `opReturnData: ''` bug must fail at build time, never broadcast
+    // a THORChain deposit with no routing data (funds would stick at the vault).
+    // The omitted/undefined memo-less path stays valid — covered above.
+    expect(() => buildUtxoSendTx({ ...DOGE_OPTS, opReturnData: '' })).toThrow(/OP_RETURN data is empty/)
+  })
 })
