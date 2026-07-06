@@ -118,6 +118,26 @@ describe('buildUtxoSendTx — OP_RETURN memo', () => {
     for (const o of outs) expect(o.script[0]).not.toBe(0x6a)
   })
 
+  it('EXACT 75/76 boundary: 75 bytes uses a DIRECT push (0x6a <75>), 76 bytes switches to OP_PUSHDATA1', async () => {
+    // The crux of correct OP_RETURN encoding: direct-push opcodes cover 1..75
+    // bytes (the opcode IS the length, 0x01..0x4b), so 75 must be a direct push
+    // and 76 must be OP_PUSHDATA1. An off-by-one here (`< 75`) produces an
+    // invalid/misparsed script. bitcoinjs-lib is the decode oracle.
+    const at75 = buildUtxoSendTx({ ...DOGE_OPTS, opReturnData: 'A'.repeat(75) }).finalize([DUMMY_SIG])
+    const s75 = (await outputs(at75.rawTxHex))[2]!.script
+    expect(s75[0]).toBe(0x6a)
+    expect(s75[1]).toBe(75) // direct-push opcode == length (0x4b), NOT OP_PUSHDATA1
+    expect(s75[1]).not.toBe(0x4c)
+    expect(Buffer.from(s75.subarray(2)).toString('utf8')).toBe('A'.repeat(75))
+
+    const at76 = buildUtxoSendTx({ ...DOGE_OPTS, opReturnData: 'A'.repeat(76) }).finalize([DUMMY_SIG])
+    const s76 = (await outputs(at76.rawTxHex))[2]!.script
+    expect(s76[0]).toBe(0x6a)
+    expect(s76[1]).toBe(0x4c) // OP_PUSHDATA1
+    expect(s76[2]).toBe(76)
+    expect(Buffer.from(s76.subarray(3)).toString('utf8')).toBe('A'.repeat(76))
+  })
+
   it('uses OP_PUSHDATA1 for memos of 76..80 bytes', async () => {
     const memo = 'A'.repeat(78)
     const built = buildUtxoSendTx({ ...DOGE_OPTS, opReturnData: memo }).finalize([DUMMY_SIG])
