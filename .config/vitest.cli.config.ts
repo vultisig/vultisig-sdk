@@ -28,5 +28,6 @@ export default defineConfig({
     include: ['clients/cli/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     pool: 'forks',
+    setupFiles: ['clients/cli/tests/setup/cliTestEnv.ts'],
   },
 })
