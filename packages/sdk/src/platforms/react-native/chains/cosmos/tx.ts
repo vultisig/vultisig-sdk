@@ -425,7 +425,12 @@ export type BuildThorchainDepositOptions = {
 }
 
 export function buildThorchainDepositTx(opts: BuildThorchainDepositOptions): CosmosTxBuilderResult {
-  const msgDeposit = buildThorMsgDeposit(opts.fromAddress, opts.amountBaseUnits, opts.memo, opts.asset ?? THOR_RUNE_ASSET)
+  const msgDeposit = buildThorMsgDeposit(
+    opts.fromAddress,
+    opts.amountBaseUnits,
+    opts.memo,
+    opts.asset ?? THOR_RUNE_ASSET
+  )
   const msgAny = wrapAny('/types.MsgDeposit', msgDeposit)
   const txBodyBytes = buildTxBody(msgAny, '')
   const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)

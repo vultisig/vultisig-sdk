@@ -1,5 +1,5 @@
 ---
-"@vultisig/sdk": minor
+'@vultisig/sdk': minor
 ---
 
 feat(cosmos): parameterize the THORChain-family MsgDeposit asset (THOR.RUNE / MAYA.CACAO)
