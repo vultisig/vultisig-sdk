@@ -150,15 +150,25 @@ function buildThorMsgSend(fromAddress: string, toAddress: string, amount: string
   return concat(field(1, 2, fromBytes), field(2, 2, toBytes), field(3, 2, encodeCoin(denom, amount)))
 }
 
-function buildThorMsgDeposit(signerAddress: string, runeAmountBaseUnits: string, memo: string): Uint8Array {
+/** THORChain-family MsgDeposit Asset { chain, symbol, ticker } — THOR.RUNE / MAYA.CACAO. */
+export type ThorchainDepositAsset = { chain: string; symbol: string; ticker: string }
+
+const THOR_RUNE_ASSET: ThorchainDepositAsset = { chain: 'THOR', symbol: 'RUNE', ticker: 'RUNE' }
+
+function buildThorMsgDeposit(
+  signerAddress: string,
+  amountBaseUnits: string,
+  memo: string,
+  asset: ThorchainDepositAsset
+): Uint8Array {
   const signerBytes = new Uint8Array(bech32.fromWords(bech32.decode(signerAddress as `${string}1${string}`).words))
-  const runeAsset = concat(
-    field(1, 2, encodeString('THOR')),
-    field(2, 2, encodeString('RUNE')),
-    field(3, 2, encodeString('RUNE'))
+  const assetProto = concat(
+    field(1, 2, encodeString(asset.chain)),
+    field(2, 2, encodeString(asset.symbol)),
+    field(3, 2, encodeString(asset.ticker))
   )
-  const runeCoin = concat(field(1, 2, runeAsset), field(2, 2, encodeString(runeAmountBaseUnits)))
-  return concat(field(1, 2, runeCoin), field(2, 2, encodeString(memo)), field(3, 2, signerBytes))
+  const coin = concat(field(1, 2, assetProto), field(2, 2, encodeString(amountBaseUnits)))
+  return concat(field(1, 2, coin), field(2, 2, encodeString(memo)), field(3, 2, signerBytes))
 }
 
 function buildMsgExecuteContract(
@@ -410,10 +420,12 @@ export type BuildThorchainDepositOptions = {
   gasLimit: number
   feeDenom: string
   feeAmount: string
+  /** Native asset for the MsgDeposit Coin. Defaults to THOR.RUNE. MayaChain callers pass { chain: 'MAYA', symbol: 'CACAO', ticker: 'CACAO' }. */
+  asset?: ThorchainDepositAsset
 }
 
 export function buildThorchainDepositTx(opts: BuildThorchainDepositOptions): CosmosTxBuilderResult {
-  const msgDeposit = buildThorMsgDeposit(opts.fromAddress, opts.amountBaseUnits, opts.memo)
+  const msgDeposit = buildThorMsgDeposit(opts.fromAddress, opts.amountBaseUnits, opts.memo, opts.asset ?? THOR_RUNE_ASSET)
   const msgAny = wrapAny('/types.MsgDeposit', msgDeposit)
   const txBodyBytes = buildTxBody(msgAny, '')
   const authInfoBytes = buildAuthInfo(opts.pubKeyBytes, opts.sequence, opts.gasLimit, opts.feeDenom, opts.feeAmount)
