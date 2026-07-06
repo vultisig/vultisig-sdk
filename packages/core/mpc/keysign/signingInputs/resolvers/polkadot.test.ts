@@ -74,6 +74,39 @@ describe('getPolkadotSigningInputs', () => {
     expect(callIndices?.moduleIndex).toBe(10)
   })
 
+  // #966 fund-safety: exercise the REAL isValidAddress (not the mocked resolver unit test) so a future
+  // loosening of the production SS58 validator can't silently reintroduce a wrong-chain destination.
+  it('rejects a wrong-network SS58 destination (Kusama prefix 2) via the production validator', async () => {
+    // The //Alice account encoded for Kusama (prefix 2) — a valid SS58 checksum but the WRONG chain.
+    const KUSAMA_ADDRESS = 'HNZata7iMYWmk5RvZRTiAsSDhV8366zq2YGb3tLH5Upf74F'
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Polkadot,
+        ticker: 'DOT',
+        address: FROM_ADDRESS,
+        decimals: 10,
+        isNativeToken: true,
+      }),
+      toAddress: KUSAMA_ADDRESS,
+      toAmount: '10000000000',
+      blockchainSpecific: {
+        case: 'polkadotSpecific',
+        value: create(PolkadotSpecificSchema, {
+          recentBlockHash: BLOCK_HASH,
+          nonce: 0n,
+          currentBlockNumber: '20000000',
+          specVersion: 1003004,
+          transactionVersion: 26,
+          genesisHash: GENESIS_HASH,
+        }),
+      },
+    })
+
+    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
+      /refusing to fall back/
+    )
+  })
+
   it('pins the compiled SCALE call indices for transfer_keep_alive', async () => {
     const privateKey = walletCore.PrivateKey.createWithData(EDDSA_PRIVATE_KEY)
     const publicKey = privateKey.getPublicKeyEd25519()
