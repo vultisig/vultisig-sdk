@@ -1,4 +1,4 @@
-import { decode } from 'cbor-x'
+import { cardanoCborEncoder } from './cborEncoder'
 
 const ttlBodyKey = 3
 
@@ -31,9 +31,14 @@ const toTtl = (value: unknown): bigint => {
  *
  * Cardano transaction bodies are CBOR maps; key 3 is `ttl`. We only decode for
  * inspection and never re-encode, so this cannot perturb the tx hash.
+ *
+ * Must decode via `cardanoCborEncoder` (maps stay `Map`): token-carrying txs
+ * have multiasset output values keyed by byte strings, and cbor-x's default
+ * decode-to-object throws "Invalid property name type object" on those keys —
+ * aborting the broadcast of any tx with a token-bundle change output.
  */
 export const getCardanoTxTtl = (txCbor: Uint8Array): bigint => {
-  const decoded = decode(txCbor)
+  const decoded = cardanoCborEncoder.decode(txCbor)
 
   if (!Array.isArray(decoded) || decoded.length < 1) {
     throw new Error('Invalid Cardano transaction CBOR: expected array')
