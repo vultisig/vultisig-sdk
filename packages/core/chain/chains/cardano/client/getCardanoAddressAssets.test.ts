@@ -51,4 +51,16 @@ describe('getCardanoAddressAssets pagination', () => {
 
     expect(res[0]?.decimals).toBe(0)
   })
+
+  it('caps the page walk so an offset-ignoring Koios that never returns a short page cannot loop forever', async () => {
+    // A misbehaving Koios (or a caching proxy) that returns a FULL 1000-row page
+    // for every offset would loop forever without a cap. MAX_PAGES = 100 bounds it.
+    const fullPage = Array.from({ length: 1000 }, (_, i) => asset(i))
+    vi.mocked(queryUrl).mockResolvedValue(fullPage as never)
+
+    const res = await getCardanoAddressAssets('addr1')
+
+    expect(vi.mocked(queryUrl)).toHaveBeenCalledTimes(100)
+    expect(res).toHaveLength(100_000)
+  })
 })

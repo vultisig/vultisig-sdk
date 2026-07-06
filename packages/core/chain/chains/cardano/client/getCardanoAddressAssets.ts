@@ -29,22 +29,30 @@ type CardanoAddressAssetResponse = Array<{
 // actually holds. Page through offsets until a short page proves the end,
 // mirroring getUtxoAddressInfo's blockchair pagination.
 const KOIOS_PAGE_SIZE = 1000
+// Runaway guard: the loop only stops on a short page, so a misbehaving or
+// offset-ignoring Koios that keeps returning a full 1000-row page would loop
+// forever and grow `rows` unboundedly. Cap the walk far past any real wallet
+// (100 * 1000 = 100k native assets), mirroring the MAX_PAGES guard in the
+// sibling sui/cosmos pagination fixes (#965/#968). The cap is a safety valve,
+// not a truncation limit — no real Cardano wallet holds 100k native assets.
+const MAX_PAGES = 100
 
 /** Fetches all native tokens held at a Cardano address via the Koios `address_assets` endpoint. */
 export const getCardanoAddressAssets = async (address: string): Promise<CardanoAddressAsset[]> => {
   const rows: CardanoAddressAssetResponse = []
 
-  for (let offset = 0; ; offset += KOIOS_PAGE_SIZE) {
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const offset = page * KOIOS_PAGE_SIZE
     const url = `${cardanoApiUrl}/address_assets?limit=${KOIOS_PAGE_SIZE}&offset=${offset}`
-    const page = await queryUrl<CardanoAddressAssetResponse>(url, {
+    const pageRows = await queryUrl<CardanoAddressAssetResponse>(url, {
       body: {
         _addresses: [address],
       },
     })
 
-    rows.push(...page)
+    rows.push(...pageRows)
 
-    if (page.length < KOIOS_PAGE_SIZE) {
+    if (pageRows.length < KOIOS_PAGE_SIZE) {
       break
     }
   }
