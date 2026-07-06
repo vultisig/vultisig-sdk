@@ -35,12 +35,24 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   // the sent coinType's objects land on page 1) even though the getBalance-based
   // display path shows the correct aggregate total. Follow the cursor to
   // completion, mirroring the Solana SPL pagination fix (sdk#962).
+  // Bound the cursor loop: a buggy/misbehaving RPC that keeps returning
+  // hasNextPage=true with a non-advancing cursor would otherwise spin forever.
+  // 200 pages ≈ 10k coin objects — far beyond any real wallet — so hitting the
+  // cap means the cursor is stuck; fail CLOSED (throw) rather than hang or
+  // silently truncate the coin set and under-fund the send.
+  const MAX_COIN_PAGES = 200
   const rawCoins: CoinStruct[] = []
   let cursor: string | null | undefined = undefined
+  let pages = 0
   do {
     const page = await client.getAllCoins({ owner: address, cursor })
     rawCoins.push(...page.data)
     cursor = page.hasNextPage ? page.nextCursor : null
+    if (++pages >= MAX_COIN_PAGES && cursor) {
+      throw new Error(
+        `getSuiChainSpecific: getAllCoins exceeded ${MAX_COIN_PAGES} pages for ${address} — refusing to build a send from a possibly-truncated or looping coin set`
+      )
+    }
   } while (cursor)
 
   const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))

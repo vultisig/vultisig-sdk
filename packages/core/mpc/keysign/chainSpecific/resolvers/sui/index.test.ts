@@ -70,6 +70,23 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
     expect(mockGetAllCoins.mock.calls[2]?.[0]).toMatchObject({ cursor: 'cur2' })
   })
 
+  it('fails closed (throws, no infinite loop) when the RPC cursor never advances', async () => {
+    // A misbehaving RPC that keeps claiming hasNextPage=true with a stuck cursor
+    // must not spin forever — the resolver caps the loop and throws.
+    mockGetAllCoins.mockReset()
+    mockGetAllCoins.mockResolvedValue({
+      data: [makeCoin(0)],
+      hasNextPage: true,
+      nextCursor: 'stuck-cursor',
+    })
+
+    await expect(getSuiChainSpecific({ keysignPayload: payload, walletCore: {} as never })).rejects.toThrow(
+      /exceeded \d+ pages/
+    )
+    // Bounded, not unbounded: called exactly the cap number of times.
+    expect(mockGetAllCoins).toHaveBeenCalledTimes(200)
+  })
+
   it('terminates on a single page (hasNextPage false)', async () => {
     mockGetAllCoins.mockReset()
     mockGetAllCoins.mockResolvedValueOnce({
