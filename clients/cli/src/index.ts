@@ -1378,6 +1378,10 @@ agentCmd
     '--yes',
     'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
   )
+  .option(
+    '--force',
+    'Bypass the duplicate-broadcast guard. By default a tx whose identical intent was broadcast in the last 10 min (and has not definitively failed) is refused to avoid a double-spend; --force sends it anyway.'
+  )
   .addHelpText(
     'after',
     `
@@ -1389,7 +1393,25 @@ Examples:
 Signing safety:
   Without --yes, ask mode never signs or broadcasts — it reports the proposed
   transaction so a read-only prompt can't move funds. Pass --yes to opt in to
-  unattended signing.`
+  unattended signing.
+
+  A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
+  identical transaction intent was broadcast in the last 10 min and hasn't
+  definitively failed, a re-send is refused (exit 9) to prevent a double-spend
+  on a retry. Pass --force to override.
+
+Exit codes:
+  0  success
+  1  usage error (bad arguments)
+  2  authentication required / vault locked
+  3  network error (retryable)
+  4  invalid input (bad chain, address, amount)
+  5  resource not found (e.g. stale --session)
+  6  external service error (retryable)
+  7  unknown/unexpected error
+  8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
+     emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
+  9  duplicate-broadcast refused — nothing was sent; retry with --force`
   )
   .action(
     async (
@@ -1402,6 +1424,7 @@ Signing safety:
         json?: boolean
         profile?: string
         yes?: boolean
+        force?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1413,6 +1436,7 @@ Signing safety:
         verbose: options.verbose || parentOpts.verbose,
         profile: options.profile ?? parentOpts.profile,
         autoApprove: options.yes,
+        force: options.force,
       })
     }
   )
