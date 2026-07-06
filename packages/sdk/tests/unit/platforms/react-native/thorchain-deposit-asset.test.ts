@@ -100,4 +100,34 @@ describe('buildThorchainDepositTx / asset parametrization', () => {
     // deposit Coin's own asset is still MAYA.CACAO, not THOR.RUNE
     expect(hex).toContain('4d415941')
   })
+
+  // Byte-identity regression: pins the FULL default (omit-asset) txBody encoding.
+  // This value is exactly what the pre-PR hardcoded-THOR.RUNE builder produced
+  // (THOR_RUNE_ASSET = { chain:'THOR', symbol:'RUNE', ticker:'RUNE' } encoded in
+  // the same field order), so it guards every existing THORChain LP/swap caller
+  // against silent drift — a substring assertion alone can't catch a field-order
+  // or length-prefix regression. Decodes as:
+  //   Coin{ asset{ THOR, RUNE, RUNE }, amount "100000000" } · memo "+:pool1:1000000" · signer(20B)
+  it('default (omit asset) is byte-identical to the pre-PR THOR.RUNE encoding', () => {
+    const GOLDEN_THOR_RUNE_TXBODY =
+      '0a5d0a112f74797065732e4d73674465706f73697412480a1f0a120a0454484f52120452554e451a0452554e451209313030303030303030120f2b3a706f6f6c313a313030303030301a14414f824665dee430cdf036e7a8fc4bcff23ec7d3'
+    const built = buildThorchainDepositTx(baseOpts())
+    expect(toHex(built.txBodyBytes)).toBe(GOLDEN_THOR_RUNE_TXBODY)
+  })
+
+  // Fail closed: a malformed asset (empty/blank chain, symbol, or ticker) must
+  // throw before signing rather than encode a garbage Coin.asset. Asset-family
+  // *correctness* (right asset per chain) is the caller's job, but an empty
+  // triplet is never valid on any THORChain-family chain.
+  it('rejects a malformed asset (empty triplet) before signing', () => {
+    expect(() => buildThorchainDepositTx(baseOpts({ asset: { chain: '', symbol: '', ticker: '' } }))).toThrow(
+      /non-empty/
+    )
+  })
+
+  it('rejects a partially-empty asset (blank symbol) before signing', () => {
+    expect(() =>
+      buildThorchainDepositTx(baseOpts({ asset: { chain: 'MAYA', symbol: '   ', ticker: 'CACAO' } }))
+    ).toThrow(/non-empty/)
+  })
 })

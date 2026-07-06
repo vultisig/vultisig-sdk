@@ -151,9 +151,33 @@ function buildThorMsgSend(fromAddress: string, toAddress: string, amount: string
 }
 
 /** THORChain-family MsgDeposit Asset { chain, symbol, ticker } — THOR.RUNE / MAYA.CACAO. */
-export type ThorchainDepositAsset = { chain: string; symbol: string; ticker: string }
+export type ThorchainDepositAsset = {
+  chain: string
+  symbol: string
+  ticker: string
+}
 
-const THOR_RUNE_ASSET: ThorchainDepositAsset = { chain: 'THOR', symbol: 'RUNE', ticker: 'RUNE' }
+const THOR_RUNE_ASSET: ThorchainDepositAsset = {
+  chain: 'THOR',
+  symbol: 'RUNE',
+  ticker: 'RUNE',
+}
+
+/**
+ * Fail closed on a malformed MsgDeposit asset. An empty/blank chain, symbol, or
+ * ticker serializes an empty protobuf field and would sign a garbage Coin.asset;
+ * refuse before producing a signature. Asset-family *correctness* (THOR.RUNE for
+ * THORChain vs MAYA.CACAO for MayaChain) remains the caller's responsibility —
+ * this builder only encodes the triplet it is given and cannot map a raw chainId
+ * string to a family without brittle heuristics.
+ */
+function assertValidDepositAsset(asset: ThorchainDepositAsset): void {
+  if (!asset.chain?.trim() || !asset.symbol?.trim() || !asset.ticker?.trim()) {
+    throw new Error(
+      `Invalid THORChain-family MsgDeposit asset: chain/symbol/ticker must all be non-empty (got ${JSON.stringify(asset)}).`
+    )
+  }
+}
 
 function buildThorMsgDeposit(
   signerAddress: string,
@@ -161,6 +185,7 @@ function buildThorMsgDeposit(
   memo: string,
   asset: ThorchainDepositAsset
 ): Uint8Array {
+  assertValidDepositAsset(asset)
   const signerBytes = new Uint8Array(bech32.fromWords(bech32.decode(signerAddress as `${string}1${string}`).words))
   const assetProto = concat(
     field(1, 2, encodeString(asset.chain)),
