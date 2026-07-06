@@ -123,6 +123,12 @@ describe('findEvmCoins', () => {
     // Regression: previously findEvmCoins returned [] for Zksync WITHOUT any
     // network call because it wasn't in oneInchSupportedChains.
     expect(queryOneInchMock).toHaveBeenCalled()
+    // Lock the chainId mapping: Zksync MUST resolve to 1inch chain 324 (viem zksync.id). Asserting only
+    // "a 1inch call happened" would stay green if Zksync were later remapped to the wrong chain's endpoint
+    // (wrong-chain token contracts). Pin the actual /324/ balance + token-custom URLs.
+    const urls = queryOneInchMock.mock.calls.map((c) => String(c[0]))
+    expect(urls.some((u) => u.includes('/balance/v1.2/324/'))).toBe(true)
+    expect(urls.some((u) => u.includes('/token/v1.2/324/custom'))).toBe(true)
   })
 
   it('propagates non-NoDataError from on-chain metadata fallback', async () => {
