@@ -425,8 +425,17 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const getResolvedGasLimit = () => {
+      if (chainKind !== 'ibcEnabled') {
+        return getCosmosGasLimit(coin)
+      }
+
+      const { gasLimit } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      return gasLimit && gasLimit > 0n ? gasLimit : getCosmosGasLimit(coin)
+    }
+
     return TW.Cosmos.Proto.Fee.create({
-      gas: Long.fromBigInt(getCosmosGasLimit(coin)),
+      gas: Long.fromBigInt(getResolvedGasLimit()),
       amounts: getFeeAmounts(),
     })
   }
