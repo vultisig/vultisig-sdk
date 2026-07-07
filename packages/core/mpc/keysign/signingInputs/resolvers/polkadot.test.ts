@@ -102,9 +102,7 @@ describe('getPolkadotSigningInputs', () => {
       },
     })
 
-    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(
-      /refusing to fall back/
-    )
+    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/refusing to fall back/)
   })
 
   it('pins the compiled SCALE call indices for transfer_keep_alive', async () => {
