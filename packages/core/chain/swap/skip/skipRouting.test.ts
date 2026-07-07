@@ -55,10 +55,19 @@ describe('willRouteViaSkip', () => {
     expect(willRouteViaSkip(Chain.Terra, Chain.THORChain)).toBe(true)
   })
 
-  it('routes a Skip-routable-cosmos <-> Skip-supported-EVM cross pair (the #384-class bug: this branch was MISSING from abts list_swap_routes while execute_swap already had it)', () => {
-    expect(willRouteViaSkip(Chain.Cosmos, Chain.Ethereum)).toBe(true)
-    expect(willRouteViaSkip(Chain.Arbitrum, Chain.Osmosis)).toBe(true)
-    expect(willRouteViaSkip(Chain.Kujira, Chain.Base)).toBe(true)
+  it('routes a Skip-routable-cosmos <-> Skip-supported-EVM cross pair for every allowlisted EVM chain (the #384-class bug: this branch was MISSING from abts list_swap_routes while execute_swap already had it)', () => {
+    for (const evmChain of [
+      Chain.Ethereum,
+      Chain.Arbitrum,
+      Chain.Optimism,
+      Chain.Base,
+      Chain.Polygon,
+      Chain.Avalanche,
+      Chain.BSC,
+    ]) {
+      expect(willRouteViaSkip(Chain.Cosmos, evmChain)).toBe(true)
+      expect(willRouteViaSkip(evmChain, Chain.Kujira)).toBe(true)
+    }
   })
 
   it('does NOT route a cosmos <-> EVM pair when the EVM chain is not Skip-supported', () => {
