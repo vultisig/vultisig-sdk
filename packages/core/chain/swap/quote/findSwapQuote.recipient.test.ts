@@ -158,23 +158,23 @@ describe('findSwapQuote external recipient', () => {
     expect(getCowSwapQuote).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['0x0000000000000000000000000000000000000000'],
-    ['0x000000000000000000000000000000000000dEaD'],
-  ])('throws InvalidConfig for a zero/burn recipient %s before any provider (the swap output would be unrecoverable)', async (burn) => {
-    await expect(
-      findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, recipient: burn })
-    ).rejects.toMatchObject({
-      code: SwapErrorCode.InvalidConfig,
-      message: expect.stringContaining('zero/burn address'),
-    })
-    expect(getCowSwapQuote).not.toHaveBeenCalled()
-    expect(getNativeSwapQuote).not.toHaveBeenCalled()
-    expect(getKyberSwapQuote).not.toHaveBeenCalled()
-    expect(getOneInchSwapQuote).not.toHaveBeenCalled()
-    expect(getLifiSwapQuote).not.toHaveBeenCalled()
-    expect(getSwapKitQuote).not.toHaveBeenCalled()
-  })
+  it.each([['0x0000000000000000000000000000000000000000'], ['0x000000000000000000000000000000000000dEaD']])(
+    'throws InvalidConfig for a zero/burn recipient %s before any provider (the swap output would be unrecoverable)',
+    async burn => {
+      await expect(
+        findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, recipient: burn })
+      ).rejects.toMatchObject({
+        code: SwapErrorCode.InvalidConfig,
+        message: expect.stringContaining('zero/burn address'),
+      })
+      expect(getCowSwapQuote).not.toHaveBeenCalled()
+      expect(getNativeSwapQuote).not.toHaveBeenCalled()
+      expect(getKyberSwapQuote).not.toHaveBeenCalled()
+      expect(getOneInchSwapQuote).not.toHaveBeenCalled()
+      expect(getLifiSwapQuote).not.toHaveBeenCalled()
+      expect(getSwapKitQuote).not.toHaveBeenCalled()
+    }
+  )
 
   it('accepts a valid 40-hex EVM address and forwards it to CowSwap as receiver', async () => {
     vi.mocked(getCowSwapQuote).mockResolvedValue(generalQuote)
