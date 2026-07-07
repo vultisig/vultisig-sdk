@@ -410,6 +410,51 @@ describe('findSwapQuote parallel selection', () => {
     )
   })
 
+  it('when all providers fail transiently (network/timeout/5xx), reports a transient error instead of a hard no-route', async () => {
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('fetch failed'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('ETIMEDOUT'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('socket hang up'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('HTTP 502 Bad Gateway'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('the operation was aborted'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('request timed out'))
+
+    let thrown: Error | undefined
+    try {
+      await findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown!.message.toLowerCase()).not.toMatch(/\bno (?:swap )?routes? (?:found|available)\b/)
+    expect(thrown!.message).toContain('transient network/timeout error')
+    expect(thrown!.message).toContain('CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain')
+  })
+
+  it('when only SOME providers fail transiently, still reports the definitive no-route message', async () => {
+    // Mixed failure: one provider gave a genuine structural decline (no route), the
+    // rest were transient. A single positive "no route" answer is authoritative —
+    // it must NOT be masked by the other providers' unrelated network blips.
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('fetch failed'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('ETIMEDOUT'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('no routes found'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('HTTP 502 Bad Gateway'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('the operation was aborted'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('request timed out'))
+
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    ).rejects.toThrow(
+      'No swap route found after trying CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain.'
+    )
+  })
+
   it('surfaces a trading-halted message when a native protocol reports a halt', async () => {
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('cowswap fail'))
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('kyber fail'))
