@@ -50,6 +50,14 @@ export const nativeSwapEnabledChainsRecord = {
     Chain.Bitcoin,
     Chain.Arbitrum,
     Chain.Zcash,
+    // Live Available ADA.ADA pool confirmed on mayanode (~4,795 ADA,
+    // mayanode.mayachain.info/mayachain/pools). getNativeSwapQuote is a pure
+    // rate/fee GET (no tx bytes built here), so enabling this corridor for
+    // quote lookups carries no fund-handling risk on its own. The signable
+    // Cardano send-with-memo transaction is built downstream (outside this
+    // swap/ module, in the generic Cardano send-tx compiler) — NOT traced or
+    // verified as part of this change. See PR description for what remains.
+    Chain.Cardano,
   ],
 } as const
 
@@ -79,6 +87,7 @@ export const nativeSwapChainIds = {
   [Chain.Solana]: 'SOL',
   [Chain.Tron]: 'TRON',
   [Chain.Noble]: 'NOBLE',
+  [Chain.Cardano]: 'ADA',
 } satisfies Record<NativeSwapEnabledChain, string>
 export type NativeSwapChainId = (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
 
