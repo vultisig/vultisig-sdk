@@ -61,9 +61,20 @@ describe('isCosmosMemoWithinCap', () => {
     expect(isCosmosMemoWithinCap(CosmosChain.Cosmos, memo300)).toBe(true)
   })
 
-  it('counts UTF-8 bytes, not JS string length (multi-byte characters)', () => {
+  it('is exact at the 512-byte override boundary too (Terra v2 / Cosmos Hub), not just the 256 default', () => {
+    const exactly512 = 'a'.repeat(512)
+    const over512 = 'a'.repeat(513)
+    expect(isCosmosMemoWithinCap(CosmosChain.Terra, exactly512)).toBe(true)
+    expect(isCosmosMemoWithinCap(CosmosChain.Terra, over512)).toBe(false)
+    expect(isCosmosMemoWithinCap(CosmosChain.Cosmos, exactly512)).toBe(true)
+    expect(isCosmosMemoWithinCap(CosmosChain.Cosmos, over512)).toBe(false)
+  })
+
+  it('counts UTF-8 bytes, not JS string length (multi-byte characters), exact at the boundary', () => {
     // Each '🚀' is 4 UTF-8 bytes but 2 UTF-16 code units (.length counts as 2) -
     // a naive .length check would under-count and let an over-cap memo through.
+    const exactly256Emoji = '🚀'.repeat(64) // exactly 256 bytes
+    expect(isCosmosMemoWithinCap(CosmosChain.TerraClassic, exactly256Emoji)).toBe(true)
     const emojiMemo = '🚀'.repeat(65) // 260 bytes, over TerraClassic's 256 cap
     expect(emojiMemo.length).toBeLessThan(260)
     expect(isCosmosMemoWithinCap(CosmosChain.TerraClassic, emojiMemo)).toBe(false)
