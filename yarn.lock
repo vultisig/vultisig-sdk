@@ -987,10 +987,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@balancer-labs/balancer-maths@npm:0.0.40, @balancer-labs/balancer-maths@npm:^0.0.40":
+"@balancer-labs/balancer-maths@npm:0.0.40":
   version: 0.0.40
   resolution: "@balancer-labs/balancer-maths@npm:0.0.40"
   checksum: 10c0/93825190a2d071651570fb64af7a77c7117f8c741bac847fbac0cfbcd46ea489e68d423be674f3cd680a3304ccf0a3921a4ab01777f3de4f540811f365f2af44
+  languageName: node
+  linkType: hard
+
+"@balancer-labs/balancer-maths@npm:^0.0.41":
+  version: 0.0.41
+  resolution: "@balancer-labs/balancer-maths@npm:0.0.41"
+  checksum: 10c0/16047da9886aec33ab5f3998f82c9d82baa115dcc95d0a6a5163b1188d2e65655d020905630e6454d9521879109f2087542c194ad8c5304d92dd9edbb89e2946
   languageName: node
   linkType: hard
 
@@ -7343,7 +7350,7 @@ __metadata:
   resolution: "@vultisig/sdk@workspace:packages/sdk"
   dependencies:
     7z-wasm: "npm:^1.2.0"
-    "@balancer-labs/balancer-maths": "npm:^0.0.40"
+    "@balancer-labs/balancer-maths": "npm:^0.0.41"
     "@balancer/sdk": "npm:6.1.1"
     "@bufbuild/protobuf": "npm:^2.12.0"
     "@coral-xyz/anchor": "npm:^0.32.1"
