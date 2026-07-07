@@ -23,6 +23,26 @@ export type FindSwapQuoteParams = {
   referral?: string
   vultDiscountTier?: VultDiscountTier | null
   affiliateConfig?: SwapAffiliateConfig
+
+  /**
+   * Optional external recipient for the swapped output. When omitted the swap
+   * output goes to the initiator (`fromAddress` / vault-derived receiver).
+   * Forwarded to the core resolver, which validates it and skips any provider
+   * that would silently pay the wrong address.
+   */
+  recipient?: string
+
+  /**
+   * Optional max slippage tolerance in PERCENT (e.g. `0.5` = 0.5%, `3` = 3%).
+   * When omitted each provider keeps its own default. Applied to the general
+   * aggregators that accept an override (1inch, KyberSwap, LiFi) and to
+   * THORChain/MayaChain native quotes (nativeBps); other native protocols use
+   * their own protection and ignore it. The core resolver rejects out-of-range
+   * values. Previously the public wrapper dropped this field entirely, so
+   * `execute_swap.slippage_tolerance_percent` was silently ignored on every
+   * THORChain/Maya + EVM-aggregator swap.
+   */
+  slippageTolerance?: number
 }
 
 export type { SwapQuote }
@@ -70,5 +90,7 @@ export const findSwapQuote = async (params: FindSwapQuoteParams): Promise<SwapQu
     referral: params.referral,
     vultDiscountTier: params.vultDiscountTier,
     affiliateConfig: params.affiliateConfig,
+    recipient: params.recipient,
+    slippageTolerance: params.slippageTolerance,
   })
 }
