@@ -340,6 +340,11 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/resolveCosmosGasFee": {
+      "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
+      "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
+      "default": "./dist/chains/cosmos/resolveCosmosGasFee.js"
+    },
     "./chains/cosmos/staking/lcdQueries": {
       "types": "./dist/chains/cosmos/staking/lcdQueries.d.ts",
       "import": "./dist/chains/cosmos/staking/lcdQueries.js",
