@@ -66,22 +66,34 @@ describe('getCosmosSigningInputs gas limit', () => {
       },
     })
 
-  const feeGasFor = async (gasLimit?: bigint) => {
+  const feeFor = async (gasLimit?: bigint) => {
     const [input] = await getCosmosSigningInputs({
       keysignPayload: buildPayload({ gasLimit }),
       walletCore,
     })
 
-    return input.fee?.gas.toString()
+    return {
+      amount: input.fee?.amounts?.[0]?.amount,
+      gas: input.fee?.gas.toString(),
+    }
   }
 
   it('honors a positive relayed CosmosSpecific gas limit', async () => {
-    await expect(feeGasFor(345_678n)).resolves.toBe('345678')
+    await expect(feeFor(345_678n)).resolves.toEqual({
+      amount: '345678',
+      gas: '345678',
+    })
   })
 
   it('falls back to the static per-chain gas limit when the relayed value is missing or zero', async () => {
-    await expect(feeGasFor()).resolves.toBe('200000')
-    await expect(feeGasFor(0n)).resolves.toBe('200000')
+    await expect(feeFor()).resolves.toEqual({
+      amount: '200000',
+      gas: '200000',
+    })
+    await expect(feeFor(0n)).resolves.toEqual({
+      amount: '200000',
+      gas: '200000',
+    })
   })
 
   it('keeps vault-based Cosmos chains on their static gas limit', async () => {
