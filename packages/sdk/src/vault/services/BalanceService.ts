@@ -91,22 +91,31 @@ export class BalanceService {
     const result: Record<string, Balance> = {}
     const chainsList = Array.isArray(chains) ? chains : [chains]
 
-    for (const chain of chainsList) {
-      try {
-        // Native balance
-        result[chain] = await this.getBalance(chain)
+    await Promise.all(
+      chainsList.map(async chain => {
+        try {
+          const balanceRequests: Array<Promise<readonly [string, Balance]>> = [
+            this.getBalance(chain).then(balance => [chain, balance] as const),
+          ]
 
-        // Token balances
-        if (includeTokens) {
-          const tokens = this.getTokens(chain)
-          for (const token of tokens) {
-            result[`${chain}:${token.id}`] = await this.getBalance(chain, token.id)
+          if (includeTokens) {
+            const tokens = this.getTokens(chain)
+            for (const token of tokens) {
+              balanceRequests.push(
+                this.getBalance(chain, token.id).then(balance => [`${chain}:${token.id}`, balance] as const)
+              )
+            }
           }
+
+          const entries = await Promise.all(balanceRequests)
+          for (const [key, balance] of entries) {
+            result[key] = balance
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch balance for ${chain}:`, error)
         }
-      } catch (error) {
-        console.warn(`Failed to fetch balance for ${chain}:`, error)
-      }
-    }
+      })
+    )
 
     return result
   }
