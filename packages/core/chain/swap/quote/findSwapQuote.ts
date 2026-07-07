@@ -85,9 +85,21 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * protocols use their own protection mechanisms and ignore this value.
    */
   slippageTolerance?: number
+  /**
+   * Optional list of providers to never select, even if one would otherwise
+   * win the best-quote comparison. Additive opt-out for a consumer that
+   * cannot yet build/sign a given provider's tx shape — e.g. a consumer with
+   * no CowSwap `cowswap_order` (EIP-712 order) signing flow wired should pass
+   * `['CowSwap']` so a same-chain EVM ERC-20 swap falls through to the next-
+   * best BUILDABLE provider (KyberSwap/1inch/LiFi) instead of CowSwap winning
+   * the quote and then failing to build. Omitted/empty is a no-op — every
+   * provider stays eligible, matching existing behavior for every other
+   * consumer.
+   */
+  excludeProviders?: SwapQuoteProviderName[]
 }
 
-type SwapQuoteProviderName =
+export type SwapQuoteProviderName =
   | 'CowSwap'
   | 'KyberSwap'
   | '1inch'
@@ -547,6 +559,7 @@ export const findSwapQuote = async ({
   affiliateConfig,
   recipient,
   slippageTolerance,
+  excludeProviders,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -811,8 +824,20 @@ export const findSwapQuote = async ({
   const shouldPreferGeneralSwap =
     [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) && [from.id, to.id].some(v => v)
 
-  const generalFetchers = getGeneralFetchers()
-  const nativeFetchers = getNativeFetchers()
+  // excludeProviders: additive, opt-in exclusion for a consumer that can't yet
+  // build/sign a given provider's tx shape (e.g. agent-backend-ts doesn't wire
+  // CowSwap's `cowswap_order` EIP-712 signing flow — see execute_swap.ts).
+  // Filtered here, before the sole-THORChain-route check below (so excluding
+  // the only general fetcher correctly falls through to a native route when
+  // one exists) rather than at the call site, so every caller of findSwapQuote
+  // gets identical exclusion semantics regardless of which fetcher list a
+  // provider happens to register in. Default (omitted/empty) is a no-op —
+  // every other consumer's behavior is unchanged.
+  const excludeProviderSet = new Set(excludeProviders ?? [])
+  const notExcluded = (fetcher: SwapQuoteFetcher) => !excludeProviderSet.has(fetcher.providerName)
+
+  const generalFetchers = getGeneralFetchers().filter(notExcluded)
+  const nativeFetchers = getNativeFetchers().filter(notExcluded)
 
   const fetchers = shouldPreferGeneralSwap
     ? [...generalFetchers, ...nativeFetchers]
