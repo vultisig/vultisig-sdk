@@ -68,6 +68,13 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
         index: numberOrUndefined(u.index),
         script: u.script,
         path: u.path,
+        cardanoTokens: Array.isArray(u.cardano_tokens ?? u.cardanoTokens)
+          ? (u.cardano_tokens ?? u.cardanoTokens).map((token: any) => ({
+              policyId: token.policy_id ?? token.policyId,
+              assetNameHex: token.asset_name_hex ?? token.assetNameHex,
+              amount: bigishToString(token.amount),
+            }))
+          : [],
       }))
     : []
 
