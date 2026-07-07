@@ -21,7 +21,39 @@
 import chalk from 'chalk'
 
 /** Surface keys the CLI declares it can render. Sent as `supported_surfaces`. */
-export const CLI_SUPPORTED_SURFACES = ['balance_summary'] as const
+export const CLI_SUPPORTED_SURFACES = ['balance_summary', 'turn_outcome'] as const
+
+/**
+ * Typed turn-outcome discriminator (agent-backend a2a-02). The backend emits a
+ * single `data-turn_outcome` SSE part once at turn end WHEN the client advertises
+ * the `turn_outcome` surface. It lets a headless `agent ask` caller tell four
+ * endings apart WITHOUT parsing prose: a genuine success, a fund-safety guardrail
+ * deliberately blocking the action, the model refusing / asking a clarifying
+ * question, or an infrastructure error. `code` is a machine code (guardrail
+ * category / error class); `detail` is a short, safe human hint (never a prose dump).
+ */
+export type TurnOutcomeKind = 'success' | 'blocked' | 'refusal' | 'error'
+export type TurnOutcome = {
+  kind: TurnOutcomeKind
+  code?: string
+  detail?: string
+}
+
+/** Narrowing parser for a raw `data-turn_outcome` payload off the wire. Returns
+ *  null for anything that isn't a well-formed outcome so a malformed frame can't
+ *  flip an exit code — the caller then falls back to its default classification. */
+export function parseTurnOutcome(raw: unknown): TurnOutcome | null {
+  if (!raw || typeof raw !== 'object') return null
+  const kind = (raw as { kind?: unknown }).kind
+  if (kind !== 'success' && kind !== 'blocked' && kind !== 'refusal' && kind !== 'error') return null
+  const code = (raw as { code?: unknown }).code
+  const detail = (raw as { detail?: unknown }).detail
+  return {
+    kind,
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof detail === 'string' ? { detail } : {}),
+  }
+}
 
 export type BalanceSummaryToken = {
   symbol: string

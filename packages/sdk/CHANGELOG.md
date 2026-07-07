@@ -1,5 +1,16 @@
 # @vultisig/sdk
 
+## 2.17.1
+
+### Patch Changes
+
+- [#1005](https://github.com/vultisig/vultisig-sdk/pull/1005) [`889380e`](https://github.com/vultisig/vultisig-sdk/commit/889380ec1571d6385ce688c4b49af04bfe8f5b55) Thanks [@rcoderdev](https://github.com/rcoderdev)! - test(mpc): add golden keysign fixtures for 71 mobile cases across 23 chains
+
+  Regression harness for mobile keysign flows. Fixture JSON files under
+  `packages/core/mpc/keysign/tests/fixtures/mobile/` cover arb, bsc,
+  cardano, cosmos, dot, evm, kujira, maya, pol, solana, sui, terra,
+  thorchain, ton, tron, utxo, and xrp chains. No production source changes.
+
 ## 2.17.0
 
 ### Minor Changes
