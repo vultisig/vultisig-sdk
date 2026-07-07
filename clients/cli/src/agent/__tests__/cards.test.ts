@@ -4,6 +4,7 @@ import {
   CLI_SUPPORTED_SURFACES,
   extractBalanceSummaryFromText,
   parseBalanceSummaryEnvelope,
+  parseTurnOutcome,
   renderBalanceSummaryCard,
 } from '../cards'
 
@@ -29,6 +30,33 @@ const VALID_ENVELOPE = {
 describe('CLI_SUPPORTED_SURFACES', () => {
   it('advertises balance_summary', () => {
     expect(CLI_SUPPORTED_SURFACES).toContain('balance_summary')
+  })
+  it('advertises turn_outcome (a2a-02)', () => {
+    expect(CLI_SUPPORTED_SURFACES).toContain('turn_outcome')
+  })
+})
+
+describe('parseTurnOutcome (a2a-02)', () => {
+  it('accepts each valid kind and keeps code/detail', () => {
+    expect(parseTurnOutcome({ kind: 'success' })).toEqual({ kind: 'success' })
+    expect(parseTurnOutcome({ kind: 'blocked', code: 'broadcast-claim', detail: 'nope' })).toEqual({
+      kind: 'blocked',
+      code: 'broadcast-claim',
+      detail: 'nope',
+    })
+    expect(parseTurnOutcome({ kind: 'refusal' })?.kind).toBe('refusal')
+    expect(parseTurnOutcome({ kind: 'error', code: 'no_output' })?.kind).toBe('error')
+  })
+
+  it('drops non-string code/detail but keeps a valid kind', () => {
+    expect(parseTurnOutcome({ kind: 'success', code: 42, detail: {} })).toEqual({ kind: 'success' })
+  })
+
+  it('returns null for a malformed / unknown payload (so it can never flip an exit code)', () => {
+    expect(parseTurnOutcome({ kind: 'weird' })).toBeNull()
+    expect(parseTurnOutcome({})).toBeNull()
+    expect(parseTurnOutcome(null)).toBeNull()
+    expect(parseTurnOutcome('success')).toBeNull()
   })
 })
 
