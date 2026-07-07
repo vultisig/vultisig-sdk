@@ -44,6 +44,7 @@ import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -825,7 +826,8 @@ export const findSwapQuote = async ({
   // where EVERY provider failed transiently, so the generic `AllProvidersFailed`
   // fallback doesn't collapse a genuine outage into a "no route" hard-negative that
   // downstream classifiers (and `isTransientQuoteError` itself) cannot un-collapse.
-  const isTransientProviderFailure = (msg: string): boolean => {
+  const isTransientProviderFailure = (reason: unknown): boolean => {
+    const msg = reason instanceof Error ? reason.message : String(reason)
     const lower = msg.toLowerCase()
     if (
       lower.includes('no swap routes found') ||
@@ -839,6 +841,12 @@ export const findSwapQuote = async ({
       lower.includes('does not meet requirements')
     ) {
       return false
+    }
+    // Structured status takes precedence over message-sniffing where available
+    // (HttpResponseError.status) — a 429/5xx is unambiguously a transient
+    // infra signal regardless of how the provider worded the body.
+    if (reason instanceof HttpResponseError && (reason.status === 429 || reason.status >= 500)) {
+      return true
     }
     return (
       lower.includes('fetch failed') ||
@@ -977,7 +985,7 @@ export const findSwapQuote = async ({
   // upstream internals.
   const rejectedReasons = settled
     .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-    .map(result => (result.reason instanceof Error ? result.reason.message : String(result.reason)))
+    .map(result => result.reason)
   const allProvidersTransient = rejectedReasons.length > 0 && rejectedReasons.every(isTransientProviderFailure)
 
   if (allProvidersTransient) {

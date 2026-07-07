@@ -14,6 +14,7 @@ import {
   NativeSwapMinAmountIn,
 } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { findSwapQuote } from './findSwapQuote'
@@ -432,6 +433,39 @@ describe('findSwapQuote parallel selection', () => {
     expect(thrown!.message.toLowerCase()).not.toMatch(/\bno (?:swap )?routes? (?:found|available)\b/)
     expect(thrown!.message).toContain('transient network/timeout error')
     expect(thrown!.message).toContain('CowSwap, KyberSwap, 1inch, LiFi, SwapKit, THORChain, MayaChain')
+  })
+
+  it('classifies an HttpResponseError by its structured status even when the message body has no transient keyword (codex review follow-up)', async () => {
+    // A provider's body text is opaque/oddly-worded ("Upstream unavailable") but the
+    // HTTP status itself (503) is an unambiguous transient signal — HttpResponseError
+    // carries `status` for exactly this reason (see its own doc comment: "so callers
+    // can branch cleanly on it... instead of regex-matching the message string").
+    const opaqueTransient = new HttpResponseError({
+      message: 'Upstream unavailable',
+      status: 503,
+      statusText: 'Service Unavailable',
+      url: 'https://example.test/quote',
+      body: undefined,
+    })
+    vi.mocked(getCowSwapQuote).mockRejectedValue(opaqueTransient)
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(opaqueTransient)
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(opaqueTransient)
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(opaqueTransient)
+    vi.mocked(getSwapKitQuote).mockRejectedValue(opaqueTransient)
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(opaqueTransient)
+
+    let thrown: Error | undefined
+    try {
+      await findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+      })
+    } catch (error) {
+      thrown = error as Error
+    }
+
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown!.message).toContain('transient network/timeout error')
   })
 
   it('when only SOME providers fail transiently, still reports the definitive no-route message', async () => {
