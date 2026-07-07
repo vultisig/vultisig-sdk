@@ -80,6 +80,11 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
     EvmChain.Optimism,
     EvmChain.BSC,
     EvmChain.Avalanche,
+    // 1inch (via the api.vultisig.com proxy) also serves zkSync Era (chainId
+    // 324) — its /balance/v1.2/324/... and /token/v1.2/324/custom endpoints both
+    // return 200. Zksync was missing here, so token discovery silently returned
+    // [] on it (a false "you have no tokens"). Verified live 2026-07-03.
+    EvmChain.Zksync,
   ]
 
   if (!oneInchSupportedChains.includes(chain)) {

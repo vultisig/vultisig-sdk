@@ -154,6 +154,36 @@ describe('findEvmCoins', () => {
     expect(getEvmTokenMetadataMock).not.toHaveBeenCalled()
   })
 
+  it('discovers tokens on Zksync (1inch-supported) instead of short-circuiting to []', async () => {
+    const address = '0xaaaAAAaaAAAAaaAAAAaAaaAaaAAaaaAaAAaAaAaA'
+    const tokenAddress = '0xbBBbbBBbBbBBBBBbbBBbBbbBBbBbbbBBBBbBbBBB'
+
+    queryOneInchMock.mockResolvedValueOnce({ [tokenAddress]: '1000000' }).mockResolvedValueOnce({
+      [tokenAddress]: {
+        address: tokenAddress,
+        symbol: 'USDC',
+        decimals: 6,
+        name: 'USD Coin',
+        eip2612: false,
+        tags: [],
+        providers: [],
+      },
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Zksync, address })).resolves.toEqual([
+      { chain: EvmChain.Zksync, id: tokenAddress, decimals: 6, logo: undefined, ticker: 'USDC', address },
+    ])
+    // Regression: previously findEvmCoins returned [] for Zksync WITHOUT any
+    // network call because it wasn't in oneInchSupportedChains.
+    expect(queryOneInchMock).toHaveBeenCalled()
+    // Lock the chainId mapping: Zksync MUST resolve to 1inch chain 324 (viem zksync.id). Asserting only
+    // "a 1inch call happened" would stay green if Zksync were later remapped to the wrong chain's endpoint
+    // (wrong-chain token contracts). Pin the actual /324/ balance + token-custom URLs.
+    const urls = queryOneInchMock.mock.calls.map(c => String(c[0]))
+    expect(urls.some(u => u.includes('/balance/v1.2/324/'))).toBe(true)
+    expect(urls.some(u => u.includes('/token/v1.2/324/custom'))).toBe(true)
+  })
+
   it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {
     // Both tokens hold a balance and neither is in the 1inch metadata response,
     // so both fall to the on-chain getEvmTokenMetadata path. One RPC read fails
