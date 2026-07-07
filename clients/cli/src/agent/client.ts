@@ -5,6 +5,7 @@
  * Supports both JSON and SSE streaming responses.
  */
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
+import { parseTurnOutcome, type TurnOutcome } from './cards'
 import { CLI_PARITY_PREP_TOOLS, CLI_SIGNABLE_FLAT_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
 import type {
   AuthTokenRequest,
@@ -81,6 +82,11 @@ type StreamCallbacks = {
   // card envelope; the consumer validates + renders it. Replaces the legacy
   // verbatim-echo path where the card arrived as raw JSON in message content.
   onBalanceSummary?: (card: unknown) => void
+  // Fired for the `data-turn_outcome` SSE part the backend emits at turn end when
+  // the client advertised "turn_outcome" in supported_surfaces (a2a-02). Carries
+  // the typed { kind, code?, detail? } discriminator so a headless caller can tell
+  // success / block / refusal / error apart without parsing prose.
+  onTurnOutcome?: (outcome: TurnOutcome) => void
   onMessage?: (msg: ConversationMessage) => void
   onError?: (error: string, code: AgentErrorCode) => void
 }
@@ -584,6 +590,14 @@ export class AgentClient {
           callbacks.onBalanceSummary?.(card)
           break
         }
+        case 'turn_outcome': {
+          // a2a-02: typed turn-outcome discriminator (envelope under `.data`).
+          // parseTurnOutcome drops a malformed payload so it can never flip an
+          // exit code — the caller keeps its default classification instead.
+          const outcome = parseTurnOutcome(v1Data ?? parsed.data ?? parsed)
+          if (outcome) callbacks.onTurnOutcome?.(outcome)
+          break
+        }
         case 'message': {
           const msg = v1Data?.message ?? parsed.message ?? parsed
           result.message = msg
@@ -731,6 +745,8 @@ export class AgentClient {
         return 'tx_ready'
       case 'data-balance_summary':
         return 'balance_summary'
+      case 'data-turn_outcome':
+        return 'turn_outcome'
       case 'data-message':
         return 'message'
       case 'error':

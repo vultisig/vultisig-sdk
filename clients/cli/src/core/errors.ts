@@ -22,6 +22,17 @@ export enum ExitCode {
   // from generic invalid input (4) so `$?` alone can branch the fund-safety
   // refusal. Retry with --force to override. See broadcastJournal.ts.
   DUPLICATE_BROADCAST = 9,
+  // `agent ask` only: the backend deliberately BLOCKED the requested action via a
+  // fund-safety guardrail (turn_outcome kind='blocked'). The turn completed but the
+  // action did not happen and won't on retry without changing the request. Distinct
+  // from a generic error (1) so a headless caller can branch a safety block from a
+  // transient failure. Requires a backend that emits data-turn_outcome (a2a-02).
+  AGENT_TURN_BLOCKED = 10,
+  // `agent ask` only: the model REFUSED or asked a clarifying question with no
+  // actionable result (turn_outcome kind='refusal'). Not an error and not a safety
+  // block — the caller likely needs to refine the prompt. Requires a backend that
+  // emits data-turn_outcome (a2a-02).
+  AGENT_TURN_REFUSAL = 11,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -35,6 +46,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.UNKNOWN]: 'Unknown/unexpected error',
   [ExitCode.ACK_FAILED]: 'Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry',
   [ExitCode.DUPLICATE_BROADCAST]: 'Duplicate broadcast refused (nothing sent) — retry with --force to override',
+  [ExitCode.AGENT_TURN_BLOCKED]: 'agent ask: a fund-safety guardrail blocked the requested action',
+  [ExitCode.AGENT_TURN_REFUSAL]: 'agent ask: the model refused or asked a clarifying question (no action taken)',
 }
 
 export abstract class VsigError extends Error {
