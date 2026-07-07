@@ -100,7 +100,7 @@ describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
   it('excludes EIP-712 / non-flat tools (signed via sign_typed_data)', () => {
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
-    // execute_* are PREP (parity-only), NOT in the flat-enrichment allowlist.
+    // execute_* are PREP (their own allowlist), NOT in the flat-enrichment allowlist.
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('execute_swap')).toBe(false)
   })
 })
@@ -386,7 +386,7 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     expect(c?.payload).toMatchObject({ tx: { to: USDC_E, data: APPROVE_DATA } })
   })
 
-  it('execute_* prep WITH tx_encoding → candidate tagged source:prep (parity-only)', () => {
+  it('execute_* prep WITH tx_encoding → candidate tagged source:prep (sign source)', () => {
     const prep = {
       txArgs: {
         chain: 'Base',
