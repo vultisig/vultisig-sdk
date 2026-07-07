@@ -419,4 +419,37 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
   it('tool outside both allowlists → null', () => {
     expect(deriveToolOutputCandidate('get_balances', { txArgs: { tx_encoding: 'evm-tx' } })).toBeNull()
   })
+
+  it('FAILS CLOSED: prep with DISAGREEING chain⇄chain_id → null (never sign the name chain over the id)', () => {
+    // The signer resolves `chain` (name) BEFORE `chain_id`, so chain "Base" +
+    // chain_id "1" would silently sign on Base. Reject rather than pick one —
+    // parity with the flat path's resolveStrictEvmChain (#927 Phase 2 review).
+    const mismatched = {
+      txArgs: { chain: 'Base', chain_id: '1', tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', mismatched)).toBeNull()
+  })
+
+  it('FAILS CLOSED: prep with NO resolvable chain → null (never default to Ethereum at sign time)', () => {
+    // A single-leg prep envelope whose txArgs carries no chain/chain_id would let
+    // the executor default to Chain.Ethereum and broadcast on the wrong chain.
+    const chainless = {
+      txArgs: { tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', chainless)).toBeNull()
+  })
+
+  it('accepts prep resolvable by chain NAME alone (non-EVM: chain_id absent) — not EVM-only', () => {
+    // Non-EVM sends (Cosmos/Solana) may omit a resolvable numeric chain_id; a chain
+    // that resolves by NAME alone is accepted (only a present-and-disagreeing pair,
+    // or total non-resolution, fails closed).
+    const cosmos = {
+      txArgs: { chain: 'THORChain', tx_encoding: 'cosmos', to: 'thor1xyz', amount: '1' },
+      stepperConfig: {},
+    }
+    const c = deriveToolOutputCandidate('execute_send', cosmos)
+    expect(c?.source).toBe('prep')
+  })
 })

@@ -208,6 +208,32 @@ function asChainIdString(value: unknown): string | undefined {
   return undefined
 }
 
+/**
+ * Resolve an `execute_*` prep envelope's `txArgs` chain to a KNOWN, self-consistent
+ * chain, or null when it can't be trusted. This is the prep-path analogue of
+ * `resolveStrictEvmChain` (#927 Phase 2 — the reviewers' converged fund-safety
+ * finding): prep now signs from tool-output, so it needs the same fail-closed
+ * chain guard the flat path already has. Two failure modes it closes:
+ *  - NO resolvable chain (`txArgs` omits/garbles both `chain` and `chain_id`) —
+ *    the executor's single-leg branch would otherwise DEFAULT to Ethereum
+ *    (`resolveChainFromTxReady(...) || Chain.Ethereum`) and broadcast on the wrong
+ *    chain. Fail closed instead.
+ *  - DISAGREEING `chain` vs `chain_id` — the executor resolves `chain` (name)
+ *    BEFORE `chain_id`, so a mismatch (e.g. chain "Base" + chain_id 1) would
+ *    silently sign on the name's chain. Reject rather than pick one.
+ * Unlike the flat guard this is NOT EVM-only: prep also carries non-EVM sends
+ * (Cosmos/Solana), whose `chain_id` may be absent or non-numeric — so a chain that
+ * resolves by NAME alone (no resolvable `chain_id`) is accepted; only a
+ * present-and-disagreeing pair, or a total non-resolution, fails closed.
+ */
+function resolvePrepChain(txArgs: Record<string, unknown>): Chain | null {
+  const byName = asChainString(txArgs.chain) ? resolveChain(asChainString(txArgs.chain)!) : null
+  const byId = asChainIdString(txArgs.chain_id) ? resolveChainId(asChainIdString(txArgs.chain_id)!) : null
+  if (!byName && !byId) return null
+  if (byName && byId && byName !== byId) return null
+  return byName ?? byId
+}
+
 // ============================================================================
 // Flat-tool enrichment (the port) — enrichBuildResult + flat approval split
 // ============================================================================
@@ -308,6 +334,12 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
     // candidate for it — this is the load-bearing fail-closed gate for prep signing
     // (a phantom card yields no candidate → nothing signs).
     if (typeof txArgs.tx_encoding !== 'string' || txArgs.tx_encoding === '') return null
+    // Fail-closed chain guard (parity with the flat path's resolveStrictEvmChain):
+    // reject a prep envelope with no resolvable chain (would default to Ethereum at
+    // sign time) or a disagreeing chain⇄chain_id (would silently sign on the name's
+    // chain). For a multi-leg envelope `env.txArgs` is the MAIN leg; the executor
+    // separately enforces approval⇄main⇄parent chain agreement.
+    if (!resolvePrepChain(txArgs)) return null
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
   return null
