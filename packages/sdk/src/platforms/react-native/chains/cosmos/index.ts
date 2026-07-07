@@ -6,6 +6,7 @@ export type {
   BuildThorchainDepositOptions,
   CosmosStakingMsg,
   CosmosTxBuilderResult,
+  ThorchainDepositAsset,
 } from './tx'
 export {
   buildCosmosSendTx,
