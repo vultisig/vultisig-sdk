@@ -36,7 +36,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/terraClassicTax', async importOrigin
   }
 })
 
-import { getCosmosChainSpecific } from './cosmos.js'
+import { getCosmosChainSpecific } from './index.js'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,6 +49,8 @@ const mockWalletCore = {} as any
 function makeUstcPayload(toAmount: string) {
   return {
     toAmount,
+    // Unset oneof — real protobuf payloads always carry the wrapper.
+    signData: { case: undefined },
     coin: {
       chain: Chain.TerraClassic,
       contractAddress: 'uusd', // this becomes AccountCoin.id
@@ -62,6 +64,7 @@ function makeUstcPayload(toAmount: string) {
 function makeLuncPayload(toAmount: string) {
   return {
     toAmount,
+    signData: { case: undefined },
     coin: {
       chain: Chain.TerraClassic,
       contractAddress: '', // native LUNC — id will be undefined
