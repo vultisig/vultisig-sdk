@@ -73,20 +73,47 @@ const evmSameChainCoins = {
 
 function minimalGeneralQuote(
   dstAmount: string,
-  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi' | 'jupiter'
+  provider: 'kyber' | '1inch' | 'swapkit' | 'li.fi' | 'jupiter',
+  tx: GeneralSwapQuote['tx'] = {
+    evm: {
+      from: '0xsender',
+      to: '0xrouter',
+      data: '0x',
+      value: '0',
+    },
+  }
 ): GeneralSwapQuote {
   const base = {
     dstAmount,
+    tx,
+  }
+  return { ...base, provider }
+}
+
+function minimalCowSwapQuote(dstAmount: string, sellAmount = '1000000000000000000'): GeneralSwapQuote {
+  return {
+    dstAmount,
+    provider: 'cowswap',
     tx: {
-      evm: {
-        from: '0xsender',
-        to: '0xrouter',
-        data: '0x',
-        value: '0',
+      cowswap_order: {
+        sellToken: '0xsrc',
+        buyToken: '0xdst',
+        receiver: '0xsender',
+        sellAmount,
+        buyAmount: dstAmount,
+        validTo: 1,
+        appData: '0x',
+        appDataHash: '0x',
+        feeAmount: '0',
+        kind: 'sell',
+        partiallyFillable: false,
+        sellTokenBalance: 'erc20',
+        buyTokenBalance: 'erc20',
+        chainId: 1,
+        apiBase: 'https://api.cow.fi/mainnet',
       },
     },
   }
-  return { ...base, provider }
 }
 
 function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
@@ -705,7 +732,7 @@ describe('findSwapQuote parallel selection', () => {
   })
 })
 
-describe('findSwapQuote banded provider preference (issue #605)', () => {
+describe('findSwapQuote net-output provider selection (issues #605/#804)', () => {
   beforeEach(() => {
     vi.mocked(getCowSwapQuote).mockReset()
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
@@ -726,7 +753,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
   // value = raw / 10^(8 - 6) = raw / 100. So to make THOR comparable-output ≈ X
   // (in 6 decimals), set native expected_amount_out = X * 100.
 
-  it('same-chain ERC20 route picks SwapKit over THORChain when SwapKit is more than 1% better', async () => {
+  it('same-chain ERC20 route picks SwapKit over THORChain when SwapKit is more than 50 bps better', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
@@ -759,7 +786,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     // under the old rule, THORChain won even when SwapKit was 10% better.
     // SwapKit: gross output 1_100_000 (10% higher than THORChain).
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1100000', 'swapkit'))
-    // THORChain native: comparable 1_000_000. SwapKit is outside the 1% band, so rate wins.
+    // THORChain native: comparable 1_000_000. SwapKit is outside the 50 bps band, so rate wins.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
       if (swapChain === Chain.THORChain) {
         return minimalNativeQuote(swapChain, '100000000')
@@ -877,7 +904,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     expect(quote.quote.native.expected_amount_out).toBe('120000000')
   })
 
-  it('near-tie: MayaChain wins when SwapKit is within the 1% band', async () => {
+  it('near-tie: MayaChain wins when SwapKit is within the 50 bps band', async () => {
     // Use Arbitrum ↔ Arbitrum: Maya supports Arbitrum (per nativeSwapEnabledChainsRecord),
     // SwapKit supports Arbitrum as well. THORChain does NOT support Arbitrum.
     const arbCoins = {
@@ -900,7 +927,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
-    // SwapKit better by 0.5%, within the 1% band.
+    // SwapKit better by 0.5%, within the 50 bps band.
     vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1005000', 'swapkit'))
     // Maya native: 8-dec canonical → 1_000_000 comparable.
     vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => {
@@ -921,7 +948,7 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     expect(quote.quote.native.swapChain).toBe(Chain.MayaChain)
   })
 
-  it('near-tie: SwapKit beats LiFi when within the 1% band', async () => {
+  it('near-tie: SwapKit beats LiFi when within the 50 bps band', async () => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
@@ -939,10 +966,280 @@ describe('findSwapQuote banded provider preference (issue #605)', () => {
     }
     expect(quote.quote.general.provider).toBe('swapkit')
   })
+
+  it('outside 50 bps band: LiFi beats preferred SwapKit on net output', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(minimalGeneralQuote('1006000', 'li.fi'))
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('li.fi')
+  })
+
+  it('does not double-subtract 1inch affiliate fee because 1inch dstAmount is already net', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'kyber'))
+    // The 1inch API already lowers dstAmount when the affiliate fee is supplied.
+    // If we subtracted the default 50 bps again, this would fall back into the
+    // preference band and incorrectly pick Kyber.
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1006000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xdst',
+            decimals: 6,
+            amount: 5030n,
+          },
+        },
+      })
+    )
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('1inch')
+  })
+
+  it('does not double-subtract Kyber affiliate fee because Kyber dstAmount is already net', async () => {
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'kyber', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xdst',
+            decimals: 6,
+            amount: 5025n,
+          },
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('994000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('does not double-subtract LiFi affiliate fee because LiFi dstAmount is already net', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1006000', 'li.fi', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xdst',
+            decimals: 6,
+            amount: 5030n,
+          },
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('li.fi')
+  })
+
+  it('does not subtract a LiFi source-token affiliate fee from destination output', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getLifiSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1006000', 'li.fi', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          affiliateFee: {
+            chain: Chain.Ethereum,
+            id: '0xsrc',
+            decimals: 18,
+            amount: 1_000_000_000_000_000n,
+          },
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('li.fi')
+  })
+
+  it('does not let same-chain EVM gas override provider preference', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'kyber', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 250_000n,
+        },
+      })
+    )
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 100_000n,
+        },
+      })
+    )
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('lets later higher-preference SwapKit beat lower-gas 1inch inside the band', async () => {
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 100_000n,
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'swapkit', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 250_000n,
+        },
+      })
+    )
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('swapkit')
+  })
+
+  it('keeps CowSwap first on equal same-chain EVM output', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getCowSwapQuote).mockResolvedValue(minimalCowSwapQuote('1000000'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', 'kyber', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 100_000n,
+        },
+      })
+    )
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(
+      minimalGeneralQuote('1000000', '1inch', {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: '0x',
+          value: '0',
+          gasLimit: 90_000n,
+        },
+      })
+    )
+    vi.mocked(getSwapKitQuote).mockResolvedValue(minimalGeneralQuote('1000000', 'swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(quote.quote.general.provider).toBe('cowswap')
+  })
 })
 
 describe('findSwapQuote per-fetcher timeout guard (issue #412)', () => {
   beforeEach(() => {
+    vi.mocked(getCowSwapQuote).mockReset()
+    vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
     vi.mocked(getKyberSwapQuote).mockReset()
     vi.mocked(getOneInchSwapQuote).mockReset()
     vi.mocked(getLifiSwapQuote).mockReset()
