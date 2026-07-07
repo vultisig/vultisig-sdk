@@ -69,15 +69,27 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
     return res
   }
 
-  if (spRaw.ThorchainSwapPayload || spRaw.thorchainSwapPayload) {
-    const t = spRaw.ThorchainSwapPayload ?? spRaw.thorchainSwapPayload
+  if (
+    spRaw.ThorchainSwapPayload ||
+    spRaw.thorchainSwapPayload ||
+    spRaw.MayachainSwapPayload ||
+    spRaw.mayachainSwapPayload ||
+    spRaw.MayaChainSwapPayload
+  ) {
+    const isMayachain = !!(spRaw.MayachainSwapPayload || spRaw.mayachainSwapPayload || spRaw.MayaChainSwapPayload)
+    const t =
+      spRaw.ThorchainSwapPayload ??
+      spRaw.thorchainSwapPayload ??
+      spRaw.MayachainSwapPayload ??
+      spRaw.mayachainSwapPayload ??
+      spRaw.MayaChainSwapPayload
 
     const fromAddr = t.from_address ?? t.fromAddress ?? ''
     const vaultAddressIn = t.vault_address ?? t.vaultAddress ?? ''
     const feeIn = t.fee // iOS keeps "" in fixtures
 
     const res: KeysignPayload['swapPayload'] = {
-      case: 'thorchainSwapPayload',
+      case: isMayachain ? 'mayachainSwapPayload' : 'thorchainSwapPayload',
       value: {
         $typeName: 'vultisig.keysign.v1.THORChainSwapPayload',
         fromAddress: fromAddr,

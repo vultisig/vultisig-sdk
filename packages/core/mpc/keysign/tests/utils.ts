@@ -19,6 +19,11 @@ export const numberOrUndefined = (v: any): number | undefined => {
   return Number.isFinite(n) ? n : undefined
 }
 
+export const bigIntOrUndefined = (v: any): bigint | undefined => {
+  if (v === null || v === undefined || v === '') return undefined
+  return BigInt(v)
+}
+
 export const booleanOrUndefined = (v: any): boolean | undefined => {
   if (v === null || v === undefined) return undefined
   if (typeof v === 'boolean') return v
