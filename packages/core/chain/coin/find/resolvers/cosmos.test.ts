@@ -14,6 +14,14 @@ vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
   }),
 }))
 
+// This suite pins the cosmjs-sourced discovery behavior (ticker fallback,
+// hidden flags). Force the LCD path to reject so the resolver falls back to the
+// getAllBalances mock these tests were written against. The LCD pagination path
+// itself is covered in chains/cosmos/account/getAllCosmosBalances.test.ts.
+vi.mock('@vultisig/core-chain/chains/cosmos/account/getAllCosmosBalances', () => ({
+  getAllCosmosBalances: vi.fn().mockRejectedValue(new Error('lcd disabled in this suite')),
+}))
+
 vi.mock('@vultisig/core-chain/coin/token/metadata/resolvers/cosmos', () => ({
   getCosmosTokenMetadata: (...args: unknown[]) => getCosmosTokenMetadataMock(...args),
 }))
