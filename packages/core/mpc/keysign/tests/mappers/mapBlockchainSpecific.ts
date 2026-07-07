@@ -1,4 +1,4 @@
-import { bigishToString, booleanOrUndefined, numberOrUndefined } from '../utils'
+import { bigIntOrUndefined, bigishToString, booleanOrUndefined, numberOrUndefined } from '../utils'
 
 export const mapBlockchainSpecific = (bsRaw: any) => {
   if (!bsRaw) return undefined
@@ -24,6 +24,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
       cosmosSpecific: {
         accountNumber: numberOrUndefined(c.account_number ?? c.accountNumber),
         gas: numberOrUndefined(c.gas),
+        gasLimit: bigIntOrUndefined(c.gas_limit ?? c.gasLimit),
         sequence: numberOrUndefined(c.sequence),
         transactionType: numberOrUndefined(c.transaction_type ?? c.transactionType),
         ibcDenomTrace: ibc
