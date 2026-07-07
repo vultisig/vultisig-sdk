@@ -180,7 +180,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     const c = bsRaw.CardanoSpecific ?? bsRaw.cardanoSpecific ?? bsRaw.Cardano ?? bsRaw.cardano
     return {
       cardano: {
-        byteFee: numberOrUndefined(c.byte_fee ?? c.byteFee),
+        byteFee: bigishToString(c.byte_fee ?? c.byteFee),
         sendMaxAmount: booleanOrUndefined(c.send_max_amount ?? c.sendMaxAmount),
         ttl: numberOrUndefined(c.ttl),
       },
