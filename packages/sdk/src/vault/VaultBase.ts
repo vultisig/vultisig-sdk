@@ -64,6 +64,7 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
+import { toBaseUnits } from '../utils/convertAmount'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -1909,10 +1910,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   private parseAmount(amount: string, decimals: number): bigint {
     const trimmed = amount?.trim()
     if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
-    if (isNaN(Number(trimmed)) || Number(trimmed) <= 0)
+    let chainAmount: bigint
+    try {
+      chainAmount = BigInt(toBaseUnits(trimmed, decimals))
+    } catch {
       throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
-    const [whole, fraction = ''] = trimmed.split('.')
-    return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
+    }
+    if (chainAmount <= 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    }
+    return chainAmount
   }
 
   /** Same conversion as swap quote / prepare (`toChainAmount` → `parseUnits`); returns trimmed decimal string for quote/prepare. */
