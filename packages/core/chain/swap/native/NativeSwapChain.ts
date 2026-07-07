@@ -51,12 +51,16 @@ export const nativeSwapEnabledChainsRecord = {
     Chain.Arbitrum,
     Chain.Zcash,
     // Live Available ADA.ADA pool confirmed on mayanode (~4,795 ADA,
-    // mayanode.mayachain.info/mayachain/pools). getNativeSwapQuote is a pure
-    // rate/fee GET (no tx bytes built here), so enabling this corridor for
-    // quote lookups carries no fund-handling risk on its own. The signable
-    // Cardano send-with-memo transaction is built downstream (outside this
-    // swap/ module, in the generic Cardano send-tx compiler) — NOT traced or
-    // verified as part of this change. See PR description for what remains.
+    // mayanode.mayachain.info/mayachain/pools). Review follow-up (fund-safety
+    // pass): unlike SwapKit's Sui/Cardano corridors, the SDK's own
+    // buildSwapKeysignPayload -> getCardanoSigningInputs path IS already
+    // wired end-to-end for a signable Cardano deposit (memo -> CIP-20 aux
+    // data), so this is NOT inert groundwork the way the comment here
+    // originally implied. getNativeSwapQuote (api/getNativeSwapQuote.ts) now
+    // rejects Cardano as a source BEFORE the network call, mirroring
+    // getSwapKitQuote's guard, until a real deposit confirms MayaChain's
+    // Cardano bifrost observer actually reads the CIP-20 label as the
+    // routing memo.
     Chain.Cardano,
   ],
 } as const
