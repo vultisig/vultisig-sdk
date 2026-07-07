@@ -112,6 +112,25 @@ describe('getCosmosCoinBalance', () => {
     expect(queryUrl).not.toHaveBeenCalled()
   })
 
+  it('throws a clean typed error when id is empty string - not a raw TypeError', async () => {
+    let caught: unknown
+    try {
+      await getCosmosCoinBalance({
+        chain: CosmosChain.TerraClassic,
+        address: 'terra1abc',
+        id: '',
+      })
+    } catch (e) {
+      caught = e
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    const msg = (caught as Error).message
+    expect(msg).toMatch(/required|non-empty/)
+    expect(msg).not.toMatch(/is not a function/)
+    expect(msg).not.toMatch(/Cannot read properties/)
+  })
+
   it('URL-encodes the denom query parameter (factory/, ibc/ denoms)', async () => {
     const client = {
       getBalance: vi.fn().mockResolvedValue({ denom: 'factory/x/y', amount: '0' }),

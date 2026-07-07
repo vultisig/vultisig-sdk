@@ -45,6 +45,10 @@ const fetchBalanceViaLcd = async (chain: CosmosChain, address: string, denom: st
 }
 
 export const getCosmosCoinBalance: CoinBalanceResolver<CosmosChain> = async input => {
+  if (input.id !== undefined && !input.id) {
+    throw new Error('getCosmosCoinBalance: coin id must be non-empty when provided')
+  }
+
   if (isCosmosWasmTokenId(input.id)) {
     const url = getCosmosWasmTokenBalanceUrl(input)
     const { data } = await queryUrl<WasmQueryResponse>(url)
