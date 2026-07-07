@@ -3322,19 +3322,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lifi/sdk@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "@lifi/sdk@npm:4.0.0"
+"@lifi/sdk@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "@lifi/sdk@npm:4.1.0"
   dependencies:
-    "@lifi/types": "npm:17.82.1"
-  checksum: 10c0/7a7310c5ecb2cb33b262a633676418191f305386e823a69dd15725d39b91a100a5ec78bc82a8d4cc132af4a5351a435f9f90c529eb1119c424bbd5afd77edec4
+    "@lifi/types": "npm:17.85.0"
+  checksum: 10c0/296a8ea414bf2748782d96a5a8f902ffd5397a04a2fd403c31aaf908377bc23bf2798c77e70d54865b1111b77b9df7ab704c29069f59e8c2e126e632c09b985d
   languageName: node
   linkType: hard
 
-"@lifi/types@npm:17.82.1":
-  version: 17.82.1
-  resolution: "@lifi/types@npm:17.82.1"
-  checksum: 10c0/756489d8308849d1ed86dd441defa19567122fab1699a98df7a6952cde47697ce330bc15091882a6ec3010f1d8d42506cd2b1de5d67a48bb26bd96bb664df8fe
+"@lifi/types@npm:17.85.0":
+  version: 17.85.0
+  resolution: "@lifi/types@npm:17.85.0"
+  checksum: 10c0/56259b44a55302acce4d1c01290dea0ce4c5078dbcb498d8e9767abad973b24a8d621d39f5bb0e089a4775ff958dd743f4635bdda55f23b0ebcb7479e216c930
   languageName: node
   linkType: hard
 
@@ -7114,7 +7114,7 @@ __metadata:
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
-    "@lifi/sdk": "npm:^4.0.0"
+    "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
@@ -7360,7 +7360,7 @@ __metadata:
     "@formatjs/intl-locale": "npm:^5.3.9"
     "@formatjs/intl-numberformat": "npm:^9.3.11"
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
-    "@lifi/sdk": "npm:^4.0.0"
+    "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
     "@polkadot/api": "npm:^16.5.6"
