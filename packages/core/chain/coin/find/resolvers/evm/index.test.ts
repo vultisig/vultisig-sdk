@@ -101,22 +101,31 @@ describe('findEvmCoins', () => {
     })
   })
 
-  it('propagates non-NoDataError from on-chain metadata fallback', async () => {
+  it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {
+    // Both tokens hold a balance and neither is in the 1inch metadata response,
+    // so both fall to the on-chain getEvmTokenMetadata path. One RPC read fails
+    // transiently; discovery must still return the other token rather than
+    // rejecting the whole batch (which would surface as "unable to retrieve
+    // your balances" for every token on the chain).
     const address = '0x5555555555555555555555555555555555555555'
-    const tokenAddress = '0x6666666666666666666666666666666666666666'
+    const failing = '0x6666666666666666666666666666666666666666'
+    const surviving = '0x7777777777777777777777777777777777777777'
 
     queryOneInchMock
       .mockResolvedValueOnce({
-        [tokenAddress]: '1',
+        [failing]: '1',
+        [surviving]: '2',
       })
       .mockResolvedValueOnce({})
-    getEvmTokenMetadataMock.mockRejectedValueOnce(new Error('rpc down'))
+    getEvmTokenMetadataMock.mockImplementation(async ({ id }: { id: string }) => {
+      if (id === failing) throw new Error('rpc down')
+      return { decimals: 18, ticker: 'OK', logo: undefined }
+    })
 
-    await expect(
-      findEvmCoins({
-        chain: EvmChain.Optimism,
-        address,
-      })
-    ).rejects.toThrow('rpc down')
+    const result = await findEvmCoins({ chain: EvmChain.Optimism, address })
+
+    expect(result).toEqual([
+      { chain: EvmChain.Optimism, id: surviving, address, decimals: 18, ticker: 'OK', logo: undefined },
+    ])
   })
 })
