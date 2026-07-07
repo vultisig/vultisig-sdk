@@ -16,8 +16,10 @@ import { getPolkadotSigningInputs } from './polkadot'
 
 // Polkadot Asset Hub genesis hash (statemint)
 const GENESIS_HASH = '0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f'
-// Arbitrary valid SS58-0 Polkadot address
-const TO_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Srd'
+// A real, checksum-valid SS58-0 Polkadot address (the //Alice account). Must be a
+// genuinely valid destination now that resolvePolkadotToAddress throws on an invalid
+// one instead of silently falling back to the sender (#966).
+const TO_ADDRESS = '15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5'
 const FROM_ADDRESS = '14E5nqKAp3oAJcmzgs25fyAmgeNL66XceFLiTqAZkdVH5T38'
 const BLOCK_HASH = '0xaabbccddeeff00112233445566778899aabbccddeeff00112233445566778899'
 const EDDSA_PRIVATE_KEY = new Uint8Array(32).fill(1)
@@ -70,6 +72,37 @@ describe('getPolkadotSigningInputs', () => {
 
     const callIndices = input.balanceCall?.assetTransfer?.callIndices?.custom
     expect(callIndices?.moduleIndex).toBe(10)
+  })
+
+  // #966 fund-safety: exercise the REAL isValidAddress (not the mocked resolver unit test) so a future
+  // loosening of the production SS58 validator can't silently reintroduce a wrong-chain destination.
+  it('rejects a wrong-network SS58 destination (Kusama prefix 2) via the production validator', async () => {
+    // The //Alice account encoded for Kusama (prefix 2) — a valid SS58 checksum but the WRONG chain.
+    const KUSAMA_ADDRESS = 'HNZata7iMYWmk5RvZRTiAsSDhV8366zq2YGb3tLH5Upf74F'
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Polkadot,
+        ticker: 'DOT',
+        address: FROM_ADDRESS,
+        decimals: 10,
+        isNativeToken: true,
+      }),
+      toAddress: KUSAMA_ADDRESS,
+      toAmount: '10000000000',
+      blockchainSpecific: {
+        case: 'polkadotSpecific',
+        value: create(PolkadotSpecificSchema, {
+          recentBlockHash: BLOCK_HASH,
+          nonce: 0n,
+          currentBlockNumber: '20000000',
+          specVersion: 1003004,
+          transactionVersion: 26,
+          genesisHash: GENESIS_HASH,
+        }),
+      },
+    })
+
+    expect(() => getPolkadotSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/refusing to fall back/)
   })
 
   it('pins the compiled SCALE call indices for transfer_keep_alive', async () => {
