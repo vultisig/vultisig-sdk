@@ -1,5 +1,16 @@
 # @vultisig/sdk
 
+## 2.18.1
+
+### Patch Changes
+
+- [#926](https://github.com/vultisig/vultisig-sdk/pull/926) [`e0eaf83`](https://github.com/vultisig/vultisig-sdk/commit/e0eaf83b0a6d79fd99d7d7d697eea04387834338) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): harden chain/denom/id dispatch against undefined inputs
+
+  Guards cosmos balance resolvers, token metadata resolvers, and public-key
+  lookup against undefined chain, denom, or address inputs that would otherwise
+  throw at runtime or return stale data. Defensive undefined checks added across
+  the cosmos resolver layer.
+
 ## 2.18.0
 
 ### Patch Changes
