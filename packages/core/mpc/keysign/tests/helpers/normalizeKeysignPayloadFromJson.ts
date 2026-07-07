@@ -89,7 +89,7 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
 
   const wasmPayload = src.wasm_execute_contract_payload
   const tronTransferPayload = src.tron_transfer_contract_payload
-  const tronTriggerPayload = src.tron_trigger_smart_contract_payload
+  const tronTriggerPayload = src.tron_trigger_smart_contract_payload ?? src.trigger_smart_contract_payload
 
   if (wasmPayload) {
     contractPayload = {
@@ -118,17 +118,23 @@ export const normalizeKeysignPayloadFromJson = (input: any) => {
     contractPayload = {
       case: 'tronTriggerSmartContractPayload',
       value: create(TronTriggerSmartContractPayloadSchema, {
-        ownerAddress: tronTriggerPayload.owner_address,
-        contractAddress: tronTriggerPayload.contract_address,
+        ownerAddress: tronTriggerPayload.owner_address ?? tronTriggerPayload.ownerAddress,
+        contractAddress: tronTriggerPayload.contract_address ?? tronTriggerPayload.contractAddress,
         callValue:
           tronTriggerPayload.call_value !== null && tronTriggerPayload.call_value !== undefined
             ? String(tronTriggerPayload.call_value)
-            : undefined,
+            : tronTriggerPayload.callValue !== null && tronTriggerPayload.callValue !== undefined
+              ? String(tronTriggerPayload.callValue)
+              : undefined,
         callTokenValue:
           tronTriggerPayload.call_token_value !== null && tronTriggerPayload.call_token_value !== undefined
             ? String(tronTriggerPayload.call_token_value)
-            : undefined,
-        tokenId: tronTriggerPayload.token_id,
+            : tronTriggerPayload.callDataValue !== null && tronTriggerPayload.callDataValue !== undefined
+              ? String(tronTriggerPayload.callDataValue)
+              : tronTriggerPayload.callTokenValue !== null && tronTriggerPayload.callTokenValue !== undefined
+                ? String(tronTriggerPayload.callTokenValue)
+                : undefined,
+        tokenId: tronTriggerPayload.token_id ?? tronTriggerPayload.tokenId,
         data: tronTriggerPayload.data,
       }),
     }

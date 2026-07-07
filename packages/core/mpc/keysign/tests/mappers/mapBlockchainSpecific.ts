@@ -59,6 +59,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         fromTokenAssociatedAddress: s.from_token_associated_address,
         toTokenAssociatedAddress: s.to_token_associated_address,
         hasProgramId: booleanOrUndefined(s.has_program_id ?? s.hasProgramId),
+        computeLimit: bigishToString(s.compute_limit ?? s.computeLimit),
       },
     }
   }
@@ -106,6 +107,8 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         sequenceNumber: numberOrUndefined(t.sequence_number ?? t.sequenceNumber),
         expireAt: numberOrUndefined(t.expire_at ?? t.expireAt),
         bounceable: booleanOrUndefined(t.bounceable),
+        jettonAddress: t.jetton_address ?? t.jettonAddress ?? t.jettons_address,
+        isActiveDestination: booleanOrUndefined(t.is_active_destination ?? t.isActiveDestination ?? t.is_active),
       },
     }
   }
@@ -160,6 +163,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
     return {
       suicheSpecific: {
         referenceGasPrice: s.reference_gas_price,
+        gasBudget: s.gas_budget,
         coins: s.coins.map((coin: any) => ({
           coinType: coin.coin_type,
           coinObjectId: coin.coin_object_id,
@@ -168,6 +172,17 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
           balance: coin.balance,
           previousTransaction: coin.previous_transaction,
         })),
+      },
+    }
+  }
+
+  if (bsRaw.CardanoSpecific || bsRaw.cardanoSpecific || bsRaw.Cardano || bsRaw.cardano) {
+    const c = bsRaw.CardanoSpecific ?? bsRaw.cardanoSpecific ?? bsRaw.Cardano ?? bsRaw.cardano
+    return {
+      cardano: {
+        byteFee: numberOrUndefined(c.byte_fee ?? c.byteFee),
+        sendMaxAmount: booleanOrUndefined(c.send_max_amount ?? c.sendMaxAmount),
+        ttl: numberOrUndefined(c.ttl),
       },
     }
   }
