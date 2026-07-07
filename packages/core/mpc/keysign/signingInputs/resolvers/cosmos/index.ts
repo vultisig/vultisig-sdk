@@ -394,14 +394,17 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return fee
     }
 
-    const getFeeAmounts = () => {
+    const getFeeAmounts = (resolvedGasLimit: bigint) => {
       if (chainKind !== 'ibcEnabled') return
 
       const { gas, ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      const staticGasLimit = getCosmosGasLimit(coin)
+      const feeAmount =
+        resolvedGasLimit > staticGasLimit ? (gas * resolvedGasLimit + staticGasLimit - 1n) / staticGasLimit : gas
 
       const amounts: TW.Cosmos.Proto.Amount[] = [
         TW.Cosmos.Proto.Amount.create({
-          amount: gas.toString(),
+          amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
@@ -425,9 +428,20 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const getResolvedGasLimit = () => {
+      if (chainKind !== 'ibcEnabled') {
+        return getCosmosGasLimit(coin)
+      }
+
+      const { gasLimit } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      return gasLimit && gasLimit > 0n ? gasLimit : getCosmosGasLimit(coin)
+    }
+
+    const resolvedGasLimit = getResolvedGasLimit()
+
     return TW.Cosmos.Proto.Fee.create({
-      gas: Long.fromBigInt(getCosmosGasLimit(coin)),
-      amounts: getFeeAmounts(),
+      gas: Long.fromBigInt(resolvedGasLimit),
+      amounts: getFeeAmounts(resolvedGasLimit),
     })
   }
 
