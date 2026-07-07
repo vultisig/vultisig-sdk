@@ -1717,6 +1717,11 @@
       "import": "./dist/swap/quote/SwapQuote.js",
       "default": "./dist/swap/quote/SwapQuote.js"
     },
+    "./swap/skip/skipRouting": {
+      "types": "./dist/swap/skip/skipRouting.d.ts",
+      "import": "./dist/swap/skip/skipRouting.js",
+      "default": "./dist/swap/skip/skipRouting.js"
+    },
     "./swap/swapEnabledChains": {
       "types": "./dist/swap/swapEnabledChains.d.ts",
       "import": "./dist/swap/swapEnabledChains.js",
