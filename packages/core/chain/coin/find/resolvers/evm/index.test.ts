@@ -126,27 +126,36 @@ describe('findEvmCoins', () => {
     // Lock the chainId mapping: Zksync MUST resolve to 1inch chain 324 (viem zksync.id). Asserting only
     // "a 1inch call happened" would stay green if Zksync were later remapped to the wrong chain's endpoint
     // (wrong-chain token contracts). Pin the actual /324/ balance + token-custom URLs.
-    const urls = queryOneInchMock.mock.calls.map((c) => String(c[0]))
-    expect(urls.some((u) => u.includes('/balance/v1.2/324/'))).toBe(true)
-    expect(urls.some((u) => u.includes('/token/v1.2/324/custom'))).toBe(true)
+    const urls = queryOneInchMock.mock.calls.map(c => String(c[0]))
+    expect(urls.some(u => u.includes('/balance/v1.2/324/'))).toBe(true)
+    expect(urls.some(u => u.includes('/token/v1.2/324/custom'))).toBe(true)
   })
 
-  it('propagates non-NoDataError from on-chain metadata fallback', async () => {
+  it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {
+    // Both tokens hold a balance and neither is in the 1inch metadata response,
+    // so both fall to the on-chain getEvmTokenMetadata path. One RPC read fails
+    // transiently; discovery must still return the other token rather than
+    // rejecting the whole batch (which would surface as "unable to retrieve
+    // your balances" for every token on the chain).
     const address = '0x5555555555555555555555555555555555555555'
-    const tokenAddress = '0x6666666666666666666666666666666666666666'
+    const failing = '0x6666666666666666666666666666666666666666'
+    const surviving = '0x7777777777777777777777777777777777777777'
 
     queryOneInchMock
       .mockResolvedValueOnce({
-        [tokenAddress]: '1',
+        [failing]: '1',
+        [surviving]: '2',
       })
       .mockResolvedValueOnce({})
-    getEvmTokenMetadataMock.mockRejectedValueOnce(new Error('rpc down'))
+    getEvmTokenMetadataMock.mockImplementation(async ({ id }: { id: string }) => {
+      if (id === failing) throw new Error('rpc down')
+      return { decimals: 18, ticker: 'OK', logo: undefined }
+    })
 
-    await expect(
-      findEvmCoins({
-        chain: EvmChain.Optimism,
-        address,
-      })
-    ).rejects.toThrow('rpc down')
+    const result = await findEvmCoins({ chain: EvmChain.Optimism, address })
+
+    expect(result).toEqual([
+      { chain: EvmChain.Optimism, id: surviving, address, decimals: 18, ticker: 'OK', logo: undefined },
+    ])
   })
 })
