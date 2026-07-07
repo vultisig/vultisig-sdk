@@ -7,7 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import type { BalanceSummaryCard, TurnOutcome } from './cards'
 
 // ============================================================================
 // Configuration
@@ -457,6 +457,9 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
+   *  once at turn end when the client advertised the `turn_outcome` surface. */
+  onTurnOutcome?: (outcome: TurnOutcome) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void
