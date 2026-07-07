@@ -74,9 +74,16 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   // token/IBC/contract/staking txs (non-UNSPECIFIED transactionType, or a
   // relayed dapp signData) keep the static limit. Fails closed: any simulation
   // error returns undefined and the field stays unset.
+  // Optional chaining is deliberate: this gate runs at initiator build time on
+  // payloads that can be shaped by external callers (dapp / inpage-provider),
+  // and it sits outside the fail-closed estimator below — a payload missing the
+  // `signData` oneof wrapper must be treated as "no relayed sign data" rather
+  // than throw here.
+  const hasRelayedSignData = keysignPayload.signData?.case !== undefined
+
   const isNativeSend =
     transactionType === TransactionType.UNSPECIFIED &&
-    keysignPayload.signData.case === undefined &&
+    !hasRelayedSignData &&
     isFeeCoin(coin) &&
     !!keysignPayload.toAddress &&
     /^[0-9]+$/.test(keysignPayload.toAmount) &&
