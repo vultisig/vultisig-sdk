@@ -67,7 +67,7 @@ export type MultiPartySigningParams = {
 /**
  * Relay server URL for MPC coordination
  */
-export const RELAY_URL = 'https://api.vultisig.com/router'
+export const RELAY_URL = process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router'
 
 /**
  * Load and decrypt a vault share from a .vult file
