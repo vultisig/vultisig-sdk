@@ -69,7 +69,18 @@ const compareHashesAsSet = ({ chain, fixtureFile }: { chain: Chain; fixtureFile:
 // makes each difference explicit instead of silently rewriting mobile fixtures.
 const sdkExpectedHashOverrides: Record<string, string[]> = {
   'cardano.json::Send ADA - max amount': ['d681b85a798708c5d0e3cfd491363527889c72c6812419c2de246773a31fc120'],
-  'terra.json::Send USTC on terra classic': ['0122eb10508372f69c521d7206a8d06aa6c569b1d4a9e449d4de5f32853dc6f8'],
+  'cosmos.json::Send ATOM': ['0de5ac614a75e5a29dd87843b1063e8173b284e5369cbe9c34ed208787c0ab4f'],
+  'cosmos.json::Send ATOM with memo': ['46fad18bf1c0781f84a21cb89bf4910aed5bbca6ea834bd9bb70d6d84f7e0eea'],
+  'cosmos.json::Send KUJI on Atom': ['21548dbc004af4d6c24f11e3c57099b38317b044a7b0500634a2578a7bdc9795'],
+  'cosmos.json::Switch KUJI on Gaia': ['0f23670f586a3377f662f55584f38ad7121191059432bc6227111c7dd2c6e90e'],
+  'kujira.json::Send KUJIRA': ['865d601a33344124ee0222ba2aa6d00ca5c97cc4a2cf081377477ea429d9d96d'],
+  'kujira.json::Send KUJIRA IBC': ['4b5d8a13dad5e59f6405b50d7e2f6a4984481e32122064ad64850d67ca2c753a'],
+  'kujira.json::Send KUJIRA with memo': ['a0d88eebab16a1d3c92a71ac1e373b163eaa983801f7ea4f19ee42349e08b827'],
+  'terra.json::Send Terra Luna': ['f5294b3fcf59de32f6dc346ec427f1183cc713019269c42f4afc3842b7c7344c'],
+  'terra.json::Send Terra Luna with memo': ['e46e488086802a03fb355e21c26c010e3eb904d03881551dbde1cf9f70bee1bb'],
+  'terra.json::Send Terra class': ['3fdd69afd4441c9c7aa09b93a2cd8191470617043f718665d87182e066ce8d72'],
+  'terra.json::Send Terra class with memo': ['5ed77ac9fcacd343f6c29377d76983ac1d245dac2fb41a9bdf8ba3453a5fa401'],
+  'terra.json::Send USTC on terra classic': ['dc6c2f841041173864306737f887316cbea1a9f29fde807302aa959da52428dc'],
 }
 
 describe('mobile keysign pre-image hash golden fixtures', () => {
