@@ -8,11 +8,17 @@ import { queryOneInch } from '@vultisig/core-chain/coin/find/resolvers/evm/query
 import { vult } from '@vultisig/core-chain/coin/knownTokens'
 import { OneInchToken } from '@vultisig/core-chain/coin/oneInch/token'
 import { getEvmTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/evm'
+import { toBatches } from '@vultisig/lib-utils/array/toBatches'
 import { without } from '@vultisig/lib-utils/array/without'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { NoDataError } from '@vultisig/lib-utils/error/NoDataError'
 import { hexToNumber } from '@vultisig/lib-utils/hex/hexToNumber'
 import { Address } from 'viem'
+
+// Max token addresses per /token/.../custom request. Each EVM address is ~42
+// chars + a comma; 50 keeps the query string ~2.2 KB, far under the ~8 KB URI
+// limit that produced HTTP 414 on token-rich wallets.
+const ONE_INCH_TOKENS_PER_REQUEST = 50
 
 type GetDiscoveredEvmCoinInput = {
   address: string
@@ -41,10 +47,20 @@ const getDiscoveredEvmCoin = async ({
   const metadataResult = await attempt(() => getEvmTokenMetadata({ chain, id: tokenAddress }))
 
   if ('error' in metadataResult) {
-    if (metadataResult.error instanceof NoDataError) {
-      return undefined
+    // Skip just this token rather than rejecting the whole Promise.all in
+    // findEvmCoins. A NoDataError means the token genuinely has no metadata;
+    // any other error is a transient on-chain/RPC hiccup. Either way, dropping
+    // one token must NOT wipe out discovery of every other token on the chain
+    // (USDC included) — that turns a single flaky metadata read into a
+    // full "unable to retrieve your balances" failure. This path is hit for
+    // every held token whenever the 1inch metadata call returns no data.
+    if (!(metadataResult.error instanceof NoDataError)) {
+      console.warn(
+        `[findEvmCoins] metadata lookup failed for ${chain}:${tokenAddress}; skipping this token`,
+        metadataResult.error
+      )
     }
-    throw metadataResult.error
+    return undefined
   }
 
   return {
@@ -64,6 +80,11 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
     EvmChain.Optimism,
     EvmChain.BSC,
     EvmChain.Avalanche,
+    // 1inch (via the api.vultisig.com proxy) also serves zkSync Era (chainId
+    // 324) — its /balance/v1.2/324/... and /token/v1.2/324/custom endpoints both
+    // return 200. Zksync was missing here, so token discovery silently returned
+    // [] on it (a false "you have no tokens"). Verified live 2026-07-03.
+    EvmChain.Zksync,
   ]
 
   if (!oneInchSupportedChains.includes(chain)) {
@@ -91,17 +112,26 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
 
   let discoveredCoins: AccountCoin[] = []
   if (nonZeroBalanceTokenAddresses.length > 0) {
-    const tokenInfoResult = await attempt(
-      queryOneInch<Record<string, OneInchToken>>(
-        `/token/v1.2/${oneInchChainId}/custom?addresses=${nonZeroBalanceTokenAddresses.join(',')}`
+    // Batch the /token/.../custom metadata lookup. Putting every held-token
+    // address into a single `?addresses=a,b,c,...` query string overflows the
+    // proxy's URI length limit on wallets with many tokens (Ethereum especially)
+    // -> HTTP 414 URI Too Long, which previously threw and killed the ENTIRE
+    // chain's token discovery (e.g. a USDC balance would come back "unable to
+    // retrieve"). ONE_INCH_TOKENS_PER_REQUEST keeps each URI well under any
+    // gateway limit (~42 chars/address). This call is only a metadata
+    // optimization anyway — getDiscoveredEvmCoin falls back to per-token
+    // on-chain metadata when a token is absent from tokenInfoData — so a failed
+    // batch must degrade gracefully, never abort discovery.
+    const tokenInfoData: Record<string, OneInchToken> = {}
+    for (const batch of toBatches(nonZeroBalanceTokenAddresses, ONE_INCH_TOKENS_PER_REQUEST)) {
+      const tokenInfoResult = await attempt(
+        queryOneInch<Record<string, OneInchToken>>(`/token/v1.2/${oneInchChainId}/custom?addresses=${batch.join(',')}`)
       )
-    )
-
-    let tokenInfoData: Record<string, OneInchToken> = {}
-    if ('data' in tokenInfoResult) {
-      tokenInfoData = tokenInfoResult.data ?? {}
-    } else if (!(tokenInfoResult.error instanceof NoDataError)) {
-      throw tokenInfoResult.error
+      if ('data' in tokenInfoResult) {
+        Object.assign(tokenInfoData, tokenInfoResult.data ?? {})
+      }
+      // On any batch error (414, transient 5xx, NoDataError) we simply skip its
+      // metadata and let the per-token on-chain fallback fill the gap. Non-fatal.
     }
 
     discoveredCoins = without(
