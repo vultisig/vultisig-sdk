@@ -185,6 +185,11 @@
       "import": "./dist/chains/cardano/utxo/getCardanoUtxos.js",
       "default": "./dist/chains/cardano/utxo/getCardanoUtxos.js"
     },
+    "./chains/cosmos/account/getAllCosmosBalances": {
+      "types": "./dist/chains/cosmos/account/getAllCosmosBalances.d.ts",
+      "import": "./dist/chains/cosmos/account/getAllCosmosBalances.js",
+      "default": "./dist/chains/cosmos/account/getAllCosmosBalances.js"
+    },
     "./chains/cosmos/account/getCosmosAccountInfo": {
       "types": "./dist/chains/cosmos/account/getCosmosAccountInfo.d.ts",
       "import": "./dist/chains/cosmos/account/getCosmosAccountInfo.js",

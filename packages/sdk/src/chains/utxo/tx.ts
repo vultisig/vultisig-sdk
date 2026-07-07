@@ -541,19 +541,64 @@ function getSighashZcash(
 // Output serialization
 // ---------------------------------------------------------------------------
 
+const OP_RETURN = 0x6a
+const OP_PUSHDATA1 = 0x4c
+// Standard-relay cap on OP_RETURN payload size. THORChain swap-quote memos fit
+// comfortably within this; anything larger would be non-standard and rejected
+// by relaying nodes, so we fail loud instead of building an unbroadcastable tx.
+const MAX_OP_RETURN_DATA = 80
+
+/**
+ * Build an OP_RETURN scriptPubKey embedding `data` (e.g. a THORChain swap memo):
+ *   len <= 75      -> OP_RETURN <len> <data>            (direct push)
+ *   76 <= len <= 80 -> OP_RETURN OP_PUSHDATA1 <len> <data>
+ * Throws for len > 80 (non-standard).
+ */
+function buildOpReturnScript(data: Uint8Array): Uint8Array {
+  if (data.length === 0) {
+    // Fail loud: an empty memo (e.g. from an upstream `opReturnData: ''` bug)
+    // would otherwise build a useless `6a 00` output and ship a THORChain
+    // deposit with NO routing data — the funds land at the inbound vault
+    // unroutable/stuck. Skipping the output is equally unsafe for a swap (a
+    // memo-less deposit is still unroutable), so we reject rather than skip.
+    throw new Error(
+      'OP_RETURN data is empty: a UTXO THORChain swap needs a non-empty memo to route the deposit. Refusing to build a memo-less (unroutable) transaction.'
+    )
+  }
+  if (data.length > MAX_OP_RETURN_DATA) {
+    throw new Error(
+      `OP_RETURN data too large: ${data.length} bytes (max ${MAX_OP_RETURN_DATA}). THORChain swap memos fit within this cap.`
+    )
+  }
+  if (data.length <= 75) {
+    return concat(new Uint8Array([OP_RETURN, data.length]), data)
+  }
+  return concat(new Uint8Array([OP_RETURN, OP_PUSHDATA1, data.length]), data)
+}
+
 function serializeOutputs(
   toScriptPubKey: Uint8Array,
   amount: bigint,
   changeScriptPubKey: Uint8Array | null,
   change: bigint,
-  dustLimit: bigint
+  dustLimit: bigint,
+  opReturnScript?: Uint8Array
 ): { outputsWithCount: Uint8Array; outputsRaw: Uint8Array } {
   const hasChange = changeScriptPubKey && change > dustLimit
-  const numOutputs = hasChange ? 2 : 1
+  let numOutputs = 1
+  if (hasChange) numOutputs++
+  if (opReturnScript) numOutputs++
   const parts: Uint8Array[] = []
   parts.push(writeU64LE(amount), writeVarInt(toScriptPubKey.length), toScriptPubKey)
   if (hasChange && changeScriptPubKey) {
     parts.push(writeU64LE(change), writeVarInt(changeScriptPubKey.length), changeScriptPubKey)
+  }
+  // OP_RETURN is a separate 0-value output appended LAST — the recipient (vault)
+  // output keeps the full amount; the fee comes from inputs/change, never by
+  // shaving the vault output. It sits in outputsRaw + outputsWithCount so every
+  // sighash variant commits to the memo (see call sites below).
+  if (opReturnScript) {
+    parts.push(writeU64LE(0n), writeVarInt(opReturnScript.length), opReturnScript)
   }
   const outputsRaw = concat(...parts)
   const outputsWithCount = concat(writeVarInt(numOutputs), outputsRaw)
@@ -725,6 +770,15 @@ export type BuildUtxoSendOptions = {
    * stale compiled fallback.
    */
   zcashBranchId?: number
+  /**
+   * Optional UTF-8 data (typically a THORChain swap memo) embedded on-chain as
+   * a trailing 0-value OP_RETURN output. Standard-relay policy caps this at 80
+   * bytes; longer memos throw. The memo feeds the sighash outputs digest, so
+   * every input signature commits to it — the signed tx cannot be rebroadcast
+   * with the memo stripped or altered. Required for UTXO THORChain swaps
+   * (DOGE/BTC/LTC/BCH): without it THORChain can't route the deposit.
+   */
+  opReturnData?: string
 }
 
 export type UtxoTxBuilderResult = {
@@ -768,9 +822,16 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const inputTotal = inputs.reduce((s, u) => s + u.value, 0n)
 
+  // Build the OP_RETURN script up front (throws early on >80 bytes) so its size
+  // feeds fee calc and its bytes feed serializeOutputs / the sighash digest.
+  const opReturnScript =
+    opts.opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opts.opReturnData)) : undefined
+
   // Approximate tx size for fee calc — matches app's heuristic.
   const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
-  const txSize = inputs.length * bytesPerInput + 2 * 34 + 10
+  // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
+  const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
+  const txSize = inputs.length * bytesPerInput + 2 * 34 + 10 + opReturnBytes
   const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
   const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
   const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
@@ -811,7 +872,14 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 
-  const { outputsWithCount, outputsRaw } = serializeOutputs(toScript, opts.amount, fromScript, change, spec.dustLimit)
+  const { outputsWithCount, outputsRaw } = serializeOutputs(
+    toScript,
+    opts.amount,
+    fromScript,
+    change,
+    spec.dustLimit,
+    opReturnScript
+  )
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'
