@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 2.18.0
+
+### Patch Changes
+
+- [#1010](https://github.com/vultisig/vultisig-sdk/pull/1010) [`31814c4`](https://github.com/vultisig/vultisig-sdk/commit/31814c4b452ef5b2628dc12bc46e427fcf0b7237) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch portfolio native and token balances in parallel across chains.
+
+- [#1006](https://github.com/vultisig/vultisig-sdk/pull/1006) [`b37dc3c`](https://github.com/vultisig/vultisig-sdk/commit/b37dc3c31d6f93af982cd1e082e0b4d1382dc19d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor positive relayed Cosmos gas limits when building signing inputs.
+
+- [#1009](https://github.com/vultisig/vultisig-sdk/pull/1009) [`01c5630`](https://github.com/vultisig/vultisig-sdk/commit/01c56303d0b872a76de07da9685331106f586c80) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Batch native portfolio price fetches and price portfolio entries concurrently.
+
 ## 2.17.1
 
 ### Patch Changes

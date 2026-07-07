@@ -1,6 +1,7 @@
 ---
 "@vultisig/core-chain": patch
 "@vultisig/core-mpc": patch
+"@vultisig/sdk": patch
 ---
 
 feat(cosmos): initiator-side dynamic gas — simulate native sends and relay `CosmosSpecific.gas_limit`
