@@ -41,10 +41,20 @@ const getDiscoveredEvmCoin = async ({
   const metadataResult = await attempt(() => getEvmTokenMetadata({ chain, id: tokenAddress }))
 
   if ('error' in metadataResult) {
-    if (metadataResult.error instanceof NoDataError) {
-      return undefined
+    // Skip just this token rather than rejecting the whole Promise.all in
+    // findEvmCoins. A NoDataError means the token genuinely has no metadata;
+    // any other error is a transient on-chain/RPC hiccup. Either way, dropping
+    // one token must NOT wipe out discovery of every other token on the chain
+    // (USDC included) — that turns a single flaky metadata read into a
+    // full "unable to retrieve your balances" failure. This path is hit for
+    // every held token whenever the 1inch metadata call returns no data.
+    if (!(metadataResult.error instanceof NoDataError)) {
+      console.warn(
+        `[findEvmCoins] metadata lookup failed for ${chain}:${tokenAddress}; skipping this token`,
+        metadataResult.error
+      )
     }
-    throw metadataResult.error
+    return undefined
   }
 
   return {
