@@ -13,7 +13,7 @@
  */
 import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import type { BalanceSummaryCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
 import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -47,6 +47,15 @@ export type AskResult = {
    * to exit non-zero instead of reporting false success.
    */
   error?: { message: string; code: AgentErrorCode }
+  /**
+   * Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Present
+   * only when the backend honored the advertised `turn_outcome` surface (a current
+   * backend); absent against an older backend, in which case the caller falls back
+   * to its `error`-frame / exit-0 classification. Lets a headless caller tell a
+   * genuine success from a fund-safety block, a model refusal/clarifying-question,
+   * or an infra error without parsing prose.
+   */
+  outcome?: TurnOutcome
 }
 
 export class AskInterface {
@@ -57,6 +66,7 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private outcome: TurnOutcome | undefined
   private error: AskResult['error']
   // Initialize-time error, kept SEPARATE from the turn error so it stays the
   // LOWEST-priority signal. initialize() drives getCallbacks() BEFORE the first
@@ -79,6 +89,16 @@ export class AskInterface {
     this.session = session
     this.verbose = verbose
     this.autoApprove = autoApprove
+  }
+
+  /**
+   * Whether the turn threw with a still-unacknowledged broadcast (the F1
+   * ack-failure case). The command's catch uses this to gate the ACK_FAILED
+   * re-tag so a later, unrelated retryable error after an already-acked
+   * broadcast keeps its own (retryable) classification instead of exit 8.
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.session.hasUnacknowledgedBroadcast()
   }
 
   /**
@@ -123,6 +143,14 @@ export class AskInterface {
 
       onBalanceSummary: (card: BalanceSummaryCard) => {
         this.cards.push(card)
+      },
+
+      onTurnOutcome: (outcome: TurnOutcome) => {
+        // Latch the LAST outcome of the turn. The backend emits exactly one at turn
+        // end, but a multi-request action loop (a sign that triggers a follow-up
+        // recent_actions turn) can produce more than one across requests — the last
+        // reflects the turn's true ending.
+        this.outcome = outcome
       },
 
       onSuggestions: (_suggestions: Suggestion[]) => {
@@ -196,6 +224,7 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.outcome = undefined
     // Each turn's error is turn-local — reset it every turn. The initialize-time
     // signal lives separately in initError (see partialResult's `?? initError`),
     // so clearing error here can't drop it. initError carries ONLY into the first
@@ -231,6 +260,7 @@ export class AskInterface {
       // A real turn error wins; fall back to the init-time signal (e.g. stale
       // --session SESSION_NOT_FOUND) only when the turn produced no error.
       error: this.error ?? this.initError,
+      ...(this.outcome ? { outcome: this.outcome } : {}),
     }
   }
 }

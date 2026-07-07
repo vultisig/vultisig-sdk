@@ -1,5 +1,43 @@
 # @vultisig/core-mpc
 
+## 1.8.18
+
+### Patch Changes
+
+- [#956](https://github.com/vultisig/vultisig-sdk/pull/956) [`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6) Thanks [@gastonm5](https://github.com/gastonm5)! - fix(cardano): attach and plan per-UTXO native-token data for MPC keysign parity
+
+  Adopts commondata's `UtxoInfo.cardano_tokens` across all three missing
+  layers, mirroring the mainnet-tested iOS implementation byte-for-byte:
+
+  - Regenerates `utxo_info_pb.ts` so `CardanoTokenAsset` /
+    `UtxoInfo.cardanoTokens` exist and can be decoded off the keysign wire.
+  - The keysign initiator fetches Cardano UTXOs with Koios `_extended` and
+    attaches per-UTXO native assets (UTXOs ordered by `(hash, index)`, assets
+    by `(policyId, assetNameHex)`, hex lowercased) so co-signers see
+    deterministic, token-aware payload bytes.
+  - The Cardano signing-inputs resolver maps `cardanoTokens` onto WalletCore
+    `TxInput.token_amount` (minimal big-endian amount bytes), letting the
+    planner reconcile input tokens into the change output.
+
+  Fixes MPC co-signing for any Cardano address holding native tokens:
+  iOS/macOS-initiated sends no longer fail keysign with a pre-image hash
+  mismatch, and SDK-initiated sends no longer build token-dropping bodies
+  that the node rejects at broadcast (Ogmios 3123 "value not conserved").
+
+- [#985](https://github.com/vultisig/vultisig-sdk/pull/985) [`2f23526`](https://github.com/vultisig/vultisig-sdk/commit/2f23526e39d22f8f13aea1310ba4106137f3484c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Regenerate keysign protobuf types from latest commondata: add `CosmosSpecific.gasLimit` (field 7) and the `TransactionType.QBTC_CLAIM_WITH_PROOF` enum value.
+
+- Updated dependencies [[`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6), [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244)]:
+  - @vultisig/core-chain@2.23.1
+
+## 1.8.17
+
+### Patch Changes
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
+- Updated dependencies [[`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc), [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5), [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37), [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81), [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5)]:
+  - @vultisig/core-chain@2.23.0
+
 ## 1.8.16
 
 ### Patch Changes

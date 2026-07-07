@@ -7,7 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import type { BalanceSummaryCard, TurnOutcome } from './cards'
 
 // ============================================================================
 // Configuration
@@ -32,6 +32,8 @@ export type AgentConfig = {
   /** Billing profile api_id slug — sent as X-Vultisig-Abe-Profile header.
    *  Empty falls back to the backend's default profile. */
   profile?: string
+  /** Bypass the persistent broadcast-journal duplicate guard (`--force`). */
+  force?: boolean
 }
 
 // ============================================================================
@@ -302,6 +304,23 @@ export type TxReadyPayload = {
   swap_tx?: Record<string, unknown>
   send_tx?: Record<string, unknown>
   tx?: Record<string, unknown>
+  /**
+   * Multi-leg (approve + main) envelope legs. The executor's
+   * `storeServerTransaction` buffers both legs and `signMultiLeg` signs the
+   * approve, waits for its receipt, then signs the main leg. Each leg nests its
+   * own flat tx under `.tx`. Populated by the client-side tool-output enrichment
+   * for a bundled approve→main (see `toolOutputSigning.ts`) and by mcp-ts
+   * `execute_*` envelopes.
+   */
+  approvalTxArgs?: Record<string, unknown>
+  txArgs?: Record<string, unknown>
+  /**
+   * Internal marker: this signable envelope was synthesized client-side by
+   * `toolOutputSigning.ts` from a `tool-output-available` frame, not received on
+   * the `tx_ready` channel. Used only to render an accurate confirm-gate summary
+   * (`AgentExecutor.getPendingSummary`); inert to signing.
+   */
+  __buildTx?: boolean
 }
 
 export type TokenSearchResult = {
@@ -438,6 +457,9 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
+   *  once at turn end when the client advertised the `turn_outcome` surface. */
+  onTurnOutcome?: (outcome: TurnOutcome) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void

@@ -43,6 +43,7 @@ vi.mock('@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn', () 
 }))
 
 const solUsdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+const customJupiterFeeOwner = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
 
 const solNative = {
   chain: Chain.Solana,
@@ -135,6 +136,29 @@ describe('findSwapQuote — Jupiter routing', () => {
     expect(getJupiterSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ affiliateBps: 50 }))
   })
 
+  it('passes the Jupiter affiliate config to same-chain Solana Jupiter routes', async () => {
+    vi.mocked(getJupiterSwapQuote).mockResolvedValue(jupiterSolanaQuote('1000000'))
+
+    await findSwapQuote({
+      from: solUsdc,
+      to: solNative,
+      amount: 1_000_000n,
+      affiliateConfig: { jupiter: { feeOwner: customJupiterFeeOwner } },
+    })
+
+    expect(getJupiterSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ jupiterConfig: { feeOwner: customJupiterFeeOwner } })
+    )
+  })
+
+  it('passes undefined Jupiter affiliate config when no override is supplied', async () => {
+    vi.mocked(getJupiterSwapQuote).mockResolvedValue(jupiterSolanaQuote('1000000'))
+
+    await findSwapQuote({ from: solUsdc, to: solNative, amount: 1_000_000n })
+
+    expect(getJupiterSwapQuote).toHaveBeenCalledWith(expect.objectContaining({ jupiterConfig: undefined }))
+  })
+
   it('floors the affiliate bps at 0 for an Ultimate-tier VULT holder', async () => {
     vi.mocked(getJupiterSwapQuote).mockResolvedValue(jupiterSolanaQuote('1000000'))
 
@@ -155,7 +179,12 @@ describe('findSwapQuote — Jupiter routing', () => {
   it('never offers Jupiter for a cross-chain (out-of-Solana) pair', async () => {
     vi.mocked(getNativeSwapQuote).mockResolvedValue(minimalNativeQuote(Chain.THORChain, '100000000'))
 
-    const result = await findSwapQuote({ from: solNative, to: ethNative, amount: 1_000_000_000n })
+    const result = await findSwapQuote({
+      from: solNative,
+      to: ethNative,
+      amount: 1_000_000_000n,
+      affiliateConfig: { jupiter: { feeOwner: customJupiterFeeOwner } },
+    })
 
     expect(getJupiterSwapQuote).not.toHaveBeenCalled()
     expect('native' in result.quote).toBe(true)

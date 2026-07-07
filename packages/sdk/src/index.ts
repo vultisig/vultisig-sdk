@@ -356,6 +356,7 @@ export {
   vultDiscountTierMinBalances,
   vultDiscountTiers,
 } from '@vultisig/core-chain/swap/affiliate/config'
+export type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 export type { LifiAffiliateConfig, LifiBootstrapConfig } from '@vultisig/core-chain/swap/general/lifi/config'
 export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'

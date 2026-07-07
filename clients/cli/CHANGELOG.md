@@ -1,5 +1,95 @@
 # @vultisig/cli
 
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [[`2585dc1`](https://github.com/vultisig/vultisig-sdk/commit/2585dc1830dd7b28694edd411991b24c3fad1538), [`152bb4a`](https://github.com/vultisig/vultisig-sdk/commit/152bb4a2b717efa2f1edb14b7e19cdeba87450c7), [`4a58c6c`](https://github.com/vultisig/vultisig-sdk/commit/4a58c6c1294c88e5d937c3dde24e50edd3fdf2a0), [`ed46385`](https://github.com/vultisig/vultisig-sdk/commit/ed46385358883ed5277f8771ba73000afec9859e), [`72082a6`](https://github.com/vultisig/vultisig-sdk/commit/72082a65eab226cebf562863bcb99346b81ca831), [`a9266a1`](https://github.com/vultisig/vultisig-sdk/commit/a9266a1753ca474b3f337f8a605900acdd7508b0), [`2791af8`](https://github.com/vultisig/vultisig-sdk/commit/2791af8a1e539103678ba71b774d62d2e7691a29), [`b68ddad`](https://github.com/vultisig/vultisig-sdk/commit/b68ddadbc6295957cbb4b37c365a4062b0a2576f), [`ab5e413`](https://github.com/vultisig/vultisig-sdk/commit/ab5e413ead62da47dc144e591ac310d1d4328a56), [`90f6ae5`](https://github.com/vultisig/vultisig-sdk/commit/90f6ae5a1865321e08bf6f03c17e23ed11006649), [`7cfa332`](https://github.com/vultisig/vultisig-sdk/commit/7cfa332787f7646e049813a9f3b15613454f19d1), [`c60d7c6`](https://github.com/vultisig/vultisig-sdk/commit/c60d7c6ecdf46e46bf1098cc57342d5fb79d2194), [`99db752`](https://github.com/vultisig/vultisig-sdk/commit/99db752f093575f90b99b30674ec9be8af49fed9)]:
+  - @vultisig/sdk@2.17.0
+  - @vultisig/rujira@50.0.0
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [[`0147158`](https://github.com/vultisig/vultisig-sdk/commit/0147158ac6955aa420cdad2da704cba998e4a5f1)]:
+  - @vultisig/sdk@2.16.0
+  - @vultisig/rujira@49.0.0
+
+## 2.15.0
+
+### Minor Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`4c31be8`](https://github.com/vultisig/vultisig-sdk/commit/4c31be8f66f40bff4c544aecf635c36d417930d8) Thanks [@neavra](https://github.com/neavra)! - Make the `agent ask` process truthful and idempotent around broadcast (fund-safety, audit F1/F3/F14).
+
+  - **Broadcast-before-ack truthfulness (F1):** a throw AFTER a tx broadcast (the follow-up `recent_actions` report failing) now exits with a distinct `ACK_FAILED` code (8) instead of a generic error — the emitted tx hash is valid and carried in the envelope, so a headless caller knows NOT to blindly retry (which would double-spend).
+  - **Persistent broadcast journal (F1/F14):** every broadcast is recorded to `~/.vultisig/broadcasts.jsonl` (intent fingerprint, hash, chain, ts). If an identical intent was broadcast in the last 10 minutes and hasn't definitively failed, signing is refused (exit 9, `DUPLICATE_BROADCAST`) to prevent a double-broadcast on a retry in a fresh process. Multi-leg approve legs are journaled too. Pass `--force` to override.
+  - **Exit-code taxonomy (F3):** SSE/backend `error` frames and thrown errors now map onto the typed `ExitCode` taxonomy (network/auth/invalid-input/…) instead of a blanket `0`/`1`, and the codes are documented in `agent ask --help`.
+
+### Patch Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`db9bb38`](https://github.com/vultisig/vultisig-sdk/commit/db9bb38691dac0e5ff63e02b3d357cde83606f64) Thanks [@neavra](https://github.com/neavra)! - Harden the `agent ask` broadcast dedupe guard per PR review (fund-safety, audit F1/F3/F14):
+
+  - **Cross-process TOCTOU:** an atomic reservation (exclusive-create lock keyed by the broadcast fingerprint) is now taken BEFORE signing, so two sibling processes can't both pass the duplicate check and both broadcast. The loser refuses with `DUPLICATE_BROADCAST`; a stale reservation (crashed owner) is stolen after a TTL so retries aren't wedged.
+  - **ACK_FAILED no longer masks retryable errors:** exit 8 is now gated on an actual still-unacknowledged broadcast (a broadcast whose follow-up report was undelivered when the turn threw), not merely "some non-failed tx exists". A later independent retryable error after an already-acked broadcast keeps its retryable classification.
+  - **Dedicated exit code for `DUPLICATE_BROADCAST` (9):** no longer shares 4 with generic invalid input, so `$?` alone can branch the fund-safety refusal. Documented in the CLI exit-code taxonomy and `agent ask --help`; the JSON error `code` is unchanged.
+  - **Journal growth bounded:** `broadcasts.jsonl` is pruned on write (size-gated compaction dropping records strictly outside the dedupe window), so a later sign no longer parses an ever-growing file.
+
+- [#927](https://github.com/vultisig/vultisig-sdk/pull/927) [`576d7c4`](https://github.com/vultisig/vultisig-sdk/commit/576d7c49439b767ef424d64133d1426751b22180) Thanks [@neavra](https://github.com/neavra)! - feat(cli): read signable tool outputs off `tool-output-available` with a tx_ready parity cross-check
+
+  Generalizes the Polymarket flat-tx-builder bridge into a client-side tool-output
+  signing + parity layer, the same mechanism the mobile app uses: the CLI derives
+  a signable candidate from the raw `tool-output-available` envelope (client-side
+  enrichment — a 1:1 port of the backend's `enrichBuildResult` flat→nested wrap
+  plus the approve→main split), and cross-checks it against the backend `tx_ready`.
+
+  - The backend `tx_ready` stays authoritative for signing whenever it is signable
+    (unchanged behavior). The client-side candidate is the parity reference, and
+    the sign source only when no usable `tx_ready` arrives — flat off-chain tools
+    that emit no `tx_ready` (`polymarket_deposit`, `polymarket_setup_trading`), and
+    flat tools whose `tx_ready` is structurally unsignable (`build_custom_*`, which
+    use divergent `to_address`/`calldata` field names normalized client-side).
+  - Parity cross-check: when both channels produce a payload for a turn, their
+    `{to, value, data, chain, chain_id, tx_encoding, amount, memo}` leg tuples are
+    compared and any divergence is logged loudly (`[parity][DIVERGENCE] …`).
+  - Guards every non-transaction result (`no_op`, `insufficient_*`, errors,
+    missing/disagreeing chain) so only a real tx is ever signed; the chain guard is
+    generalized past Polygon to any supported EVM chain (fail-closed on a
+    missing/inconsistent chain — never defaults to a chain).
+  - Maps a bundled approve→main envelope onto the executor's existing two-leg
+    machinery so the approve is confirmed (receipt-wait) before the main tx.
+  - First-wins per turn: a second signable frame can never silently overwrite the
+    first; the deferral is reported.
+  - Fail-closed on parity divergence: a flat tool-output candidate is enqueued as a
+    sign source only when there is no `tx_ready` at all, or when the same-turn
+    `tx_ready` matched parity. A client-derived candidate that is not proven equal to
+    a present `tx_ready` (diverged, or unpaired) is never signed — the turn falls
+    closed to the `tx_ready` path (a hard error at sign time) instead of signing the
+    client-enriched bytes.
+  - Parity pairing (telemetry only): the two channels are diffed only when they are
+    the SAME tool call (paired by tool-call id — the `tx_ready` inherits the id of
+    its wire-adjacent tool-output twin), so an unrelated same-turn `tool_output` +
+    `tx_ready` pair no longer emits a false `[DIVERGENCE]`. This pairing affects only
+    the divergence log; the sign decision above is deliberately independent of it, so
+    the fund-safety guarantee rests on parity equality alone, not on the wire-ordering
+    invariant.
+
+  Zero agent-backend / mcp-ts change; entirely within `clients/cli`.
+
+- Updated dependencies [[`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6), [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244)]:
+  - @vultisig/core-chain@2.23.1
+  - @vultisig/sdk@2.15.0
+  - @vultisig/rujira@48.0.0
+
+## 2.14.0
+
+### Patch Changes
+
+- Updated dependencies [[`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc), [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5), [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37), [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81), [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5)]:
+  - @vultisig/core-chain@2.23.0
+  - @vultisig/sdk@2.14.0
+  - @vultisig/rujira@47.0.0
+
 ## 2.13.0
 
 ### Patch Changes
