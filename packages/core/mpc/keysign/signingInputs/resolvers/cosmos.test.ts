@@ -80,18 +80,18 @@ describe('getCosmosSigningInputs gas limit', () => {
 
   it('honors a positive relayed CosmosSpecific gas limit', async () => {
     await expect(feeFor(345_678n)).resolves.toEqual({
-      amount: '345678',
+      amount: '4321',
       gas: '345678',
     })
   })
 
   it('falls back to the static per-chain gas limit when the relayed value is missing or zero', async () => {
     await expect(feeFor()).resolves.toEqual({
-      amount: '200000',
+      amount: '2500',
       gas: '200000',
     })
     await expect(feeFor(0n)).resolves.toEqual({
-      amount: '200000',
+      amount: '2500',
       gas: '200000',
     })
   })
