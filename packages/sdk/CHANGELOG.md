@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 2.19.4
+
+### Patch Changes
+
+- [#1083](https://github.com/vultisig/vultisig-sdk/pull/1083) [`d3a372d`](https://github.com/vultisig/vultisig-sdk/commit/d3a372d48683b69ba6626f1b077b95088ff6a12b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): refuse to sign a no-timeout IBC transfer and validate the source channel
+
+  The Cosmos `IBC_TRANSFER` signing-input resolver built a `MsgTransfer` with an all-zero timeout (`timeoutTimestamp=0` and `timeoutHeight={0,0}`) whenever the IBC denom trace was missing. Relayers accept a no-timeout packet, but it never expires, so a failed transfer can leave funds stuck indefinitely instead of unwinding. The resolver now fails closed and refuses to build when neither timeout is usable (COSMOS-01). It also validates that the source channel parsed out of the memo (`<prefix>:channel-<n>[:...]`) is well-formed, refusing to sign with an undefined/empty/malformed channel instead of dispatching a broken `MsgTransfer` (COSMOS-03).
+
 ## 2.19.3
 
 ### Patch Changes
