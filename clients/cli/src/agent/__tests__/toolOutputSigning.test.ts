@@ -449,6 +449,78 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     expect(deriveToolOutputCandidate('execute_contract_call', parentMismatch)).toBeNull()
   })
 
+  it('FAILS CLOSED: multi-leg prep whose approval leg is SELF-CONFLICTING → null (never sign the approval on the wrong chain)', () => {
+    // rcoderdev #1003 review: a multi-leg prep envelope's `approvalTxArgs` carries its
+    // own chain metadata. The executor resolves that leg's `chain` (name) BEFORE
+    // `chain_id`, so `chain: Base` + `chain_id: 1` resolves to Base and can pass the
+    // approval⇄main comparison (main is also Base) even though the leg's own metadata
+    // disagrees — signing the APPROVAL tx on the wrong chain. Reject it.
+    const approvalSelfConflict = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Base',
+        chain_id: '1', // disagrees with its own `chain: Base` (8453)
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_swap', approvalSelfConflict)).toBeNull()
+  })
+
+  it('FAILS CLOSED: multi-leg prep whose approval leg is a DIFFERENT chain than the main leg → null', () => {
+    // A self-consistent but cross-chain approval leg (Ethereum) against a Base main
+    // leg must not derive — the approval would sign on a chain the main tx never uses.
+    const approvalCrossChain = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Ethereum',
+        chain_id: '1',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_swap', approvalCrossChain)).toBeNull()
+  })
+
+  it('accepts multi-leg prep whose approval leg matches the main prep chain', () => {
+    // The happy path the guard must not over-reject: approval + main both on Base.
+    const consistent = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    const c = deriveToolOutputCandidate('execute_swap', consistent)
+    expect(c?.source).toBe('prep')
+  })
+
   it('FAILS CLOSED: prep with NO resolvable chain → null (never default to Ethereum at sign time)', () => {
     // A single-leg prep envelope whose txArgs carries no chain/chain_id would let
     // the executor default to Chain.Ethereum and broadcast on the wrong chain.

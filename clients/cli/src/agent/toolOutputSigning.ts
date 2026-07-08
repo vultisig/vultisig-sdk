@@ -367,6 +367,17 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
       const parentChain = resolvePrepParentChain(env)
       if (!parentChain || parentChain !== prepChain) return null
     }
+    // Multi-leg guard: a prep envelope's approval leg (`approvalTxArgs`) carries its
+    // own chain metadata. The executor resolves that leg's `chain` BEFORE `chain_id`,
+    // so a self-conflicting approval leg (e.g. `chain: Base, chain_id: 1`) resolves to
+    // Base and can pass the approval⇄main comparison while its own metadata disagrees
+    // — signing the APPROVAL on the wrong chain. Run the same fail-closed
+    // self-consistency check and require the approval leg to match the main prep chain.
+    const approvalTxArgs = asRecord(env.approvalTxArgs)
+    if (approvalTxArgs) {
+      const approvalChain = resolvePrepChain(approvalTxArgs)
+      if (!approvalChain || approvalChain !== prepChain) return null
+    }
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
   return null
