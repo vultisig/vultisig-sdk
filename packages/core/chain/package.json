@@ -1632,6 +1632,11 @@
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
     },
+    "./swap/general/priceImpactGuard": {
+      "types": "./dist/swap/general/priceImpactGuard.d.ts",
+      "import": "./dist/swap/general/priceImpactGuard.js",
+      "default": "./dist/swap/general/priceImpactGuard.js"
+    },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
       "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
