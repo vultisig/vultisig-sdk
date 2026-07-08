@@ -210,6 +210,11 @@
       "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
       "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
     },
+    "./chains/cosmos/cosmosDecimal": {
+      "types": "./dist/chains/cosmos/cosmosDecimal.d.ts",
+      "import": "./dist/chains/cosmos/cosmosDecimal.js",
+      "default": "./dist/chains/cosmos/cosmosDecimal.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
@@ -249,6 +254,11 @@
       "types": "./dist/chains/cosmos/getCosmosRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
       "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
+    },
+    "./chains/cosmos/osmosisDynamicFee": {
+      "types": "./dist/chains/cosmos/osmosisDynamicFee.d.ts",
+      "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
+      "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
     },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
