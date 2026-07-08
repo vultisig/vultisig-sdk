@@ -1,5 +1,61 @@
 # @vultisig/sdk
 
+## 2.19.2
+
+### Patch Changes
+
+- [#1046](https://github.com/vultisig/vultisig-sdk/pull/1046) [`8d36421`](https://github.com/vultisig/vultisig-sdk/commit/8d364215cdca70f0df12f08d6676d65e352cf235) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: UTXO/Cardano broadcast no longer reports false success on a genuine failure
+
+  `broadcastCardanoTx`/`broadcastUtxoTx` bucketed `BadInputsUTxO` (a genuine failure — spent/invalid inputs)
+  together with benign MPC-race duplicates (`txn-mempool-conflict`/`already known`) and returned success
+  unconditionally for all three, bypassing the on-chain hash verification safety net. Every ambiguous submit
+  error now routes through `verifyBroadcastByHash`, and `getUtxoTxStatus` now sets `isKnown: false` when the
+  hash is genuinely not found (matching the existing convention already used by the cosmos/evm/polkadot/
+  ripple/solana resolvers) so a real failure correctly rethrows instead of being swallowed as success.
+
+- [#1073](https://github.com/vultisig/vultisig-sdk/pull/1073) [`0013d0d`](https://github.com/vultisig/vultisig-sdk/commit/0013d0d4c7c9249bb0fb64705b726e85fc7a50e0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): reject a limit-swap LIM that floors to zero (THOR-02). A tiny target price could floor the computed limit amount to 0, and THORChain treats a zero trade target as an unprotected MARKET swap with no minimum-output floor — silently discarding the price protection the user configured for their limit order. Fail closed with a clear error instead of building a memo that reinterprets as a market swap.
+
+## 2.19.1
+
+### Patch Changes
+
+- [#1035](https://github.com/vultisig/vultisig-sdk/pull/1035) [`989ec59`](https://github.com/vultisig/vultisig-sdk/commit/989ec593ac5c8782f731b43696b32c18edb54599) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `getCosmosFeeAmount` (canonical cosmos gas resolver, used by the CLI/browser/electron keysign pipeline) to query Osmosis's own EIP-1559 dynamic base-fee endpoint (`/osmosis/txfees/v1beta1/cur_eip_base_fee`) as an additional floor. Previously this resolver only queried the generic `/cosmos/base/node/v1beta1/config` node config for every ibc-enabled chain, which does not track Osmosis's protocol-level dynamic fee and can be clamped away by the anomaly guard during a genuine base-fee spike — leading to a broadcast rejection (sdk error code 13, "insufficient fees"). This mirrors a fix already live in vultiagent-app.
+
+## 2.19.0
+
+### Minor Changes
+
+- [#1042](https://github.com/vultisig/vultisig-sdk/pull/1042) [`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): XRP trust-line (TrustSet) support for issued tokens
+
+  Add support for opening/modifying an XRPL trust line so a vault can hold issued
+  currencies (e.g. RLUSD). `getRippleSigningInputs` now emits a WalletCore
+  `OperationTrustSet` (LimitAmount = { currency, issuer, value }) when the keysign
+  coin is an issued currency, and falls through to the existing Payment path for
+  native XRP. New `chains/ripple/issuedCurrency` helpers encode the composite
+  `currency.issuer` token id, normalise human tickers to on-ledger currency codes,
+  format issued-currency values, and expose the 0.2 XRP owner-reserve delta
+  (`rippleOwnerReserveDrops`). `isValidTokenId` validates XRPL `currency.issuer`
+  ids.
+
+## 2.18.8
+
+### Patch Changes
+
+- [#1037](https://github.com/vultisig/vultisig-sdk/pull/1037) [`f879364`](https://github.com/vultisig/vultisig-sdk/commit/f8793648823d0016baa1a9375c179bc578d2a952) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `runSkipSwap`'s cosmos memo-length preflight to check every leg of a Skip route, not just the first leg of single-tx routes. Previously the check only ran when the route required a single signature and only inspected the first cosmos leg's memo — a multi-tx route (`allowMultiTx: true`) with an over-cap memo on a later leg sailed through undetected and would fail at broadcast (sdk error code 12, "memo too long") after signing, burning the MPC ceremony. This mirrors a check already present and more thorough in agent-backend-ts's own Skip integration.
+
+## 2.18.6
+
+### Patch Changes
+
+- [#1026](https://github.com/vultisig/vultisig-sdk/pull/1026) [`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add cosmos per-chain fee-denom allowlist helpers (`getCosmosAllowedFeeDenoms`, `isCosmosFeeDenomAllowed`) as the single source of truth for which denoms a cosmos chain's ante handler accepts as a gas fee, consolidating copies previously maintained independently in agent-backend-ts (execute_send.ts, astroport-classic-swap.ts, cosmos-staking.ts).
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
 ## 2.18.5
 
 ### Patch Changes

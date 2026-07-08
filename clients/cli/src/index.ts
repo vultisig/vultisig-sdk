@@ -58,7 +58,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
-import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
+import { EXIT_CODE_DESCRIPTIONS, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -768,20 +768,29 @@ program
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
+  .option('--timeout <seconds>', 'Max seconds to poll before giving up (default 120)')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
+  vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
   vultisig tx-status --chain Bitcoin --tx-hash abc... --no-wait --output json`
   )
   .action(
-    withExit(async (options: { chain: string; txHash: string; wait: boolean }) => {
+    withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
       const context = await init(program.opts().vault)
+      const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
+      if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
+        throw new InvalidInputError(
+          `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
+        )
+      }
       await executeTxStatus(context, {
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
+        timeoutSec,
       })
     })
   )

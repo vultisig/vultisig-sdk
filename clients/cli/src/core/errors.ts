@@ -152,6 +152,28 @@ export class TokenNotFoundError extends VsigError {
   }
 }
 
+export class TxNotFoundError extends VsigError {
+  readonly exitCode = ExitCode.RESOURCE_NOT_FOUND
+  readonly code = 'TX_NOT_FOUND'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
+// A bounded status poll gave up while the tx was still (plausibly) in-flight.
+// Retryable: the tx may confirm later, so re-checking / waiting longer is valid —
+// distinct from TxNotFoundError, where the node affirmatively has no record.
+export class TxStatusTimeoutError extends VsigError {
+  readonly exitCode = ExitCode.NETWORK
+  readonly code = 'TX_STATUS_TIMEOUT'
+  override readonly retryable = true
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
 export class ExternalServiceError extends VsigError {
   readonly exitCode = ExitCode.EXTERNAL_SERVICE
   readonly code = 'EXTERNAL_SERVICE'
