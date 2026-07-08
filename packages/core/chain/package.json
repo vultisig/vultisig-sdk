@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.23.0",
+  "version": "2.23.2",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -185,6 +185,11 @@
       "import": "./dist/chains/cardano/utxo/getCardanoUtxos.js",
       "default": "./dist/chains/cardano/utxo/getCardanoUtxos.js"
     },
+    "./chains/cosmos/account/getAllCosmosBalances": {
+      "types": "./dist/chains/cosmos/account/getAllCosmosBalances.d.ts",
+      "import": "./dist/chains/cosmos/account/getAllCosmosBalances.js",
+      "default": "./dist/chains/cosmos/account/getAllCosmosBalances.js"
+    },
     "./chains/cosmos/account/getCosmosAccountInfo": {
       "types": "./dist/chains/cosmos/account/getCosmosAccountInfo.d.ts",
       "import": "./dist/chains/cosmos/account/getCosmosAccountInfo.js",
@@ -334,6 +339,11 @@
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
+    },
+    "./chains/cosmos/resolveCosmosGasFee": {
+      "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
+      "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
+      "default": "./dist/chains/cosmos/resolveCosmosGasFee.js"
     },
     "./chains/cosmos/staking/lcdQueries": {
       "types": "./dist/chains/cosmos/staking/lcdQueries.d.ts",
@@ -1707,6 +1717,11 @@
       "import": "./dist/swap/quote/SwapQuote.js",
       "default": "./dist/swap/quote/SwapQuote.js"
     },
+    "./swap/skip/skipRouting": {
+      "types": "./dist/swap/skip/skipRouting.d.ts",
+      "import": "./dist/swap/skip/skipRouting.js",
+      "default": "./dist/swap/skip/skipRouting.js"
+    },
     "./swap/swapEnabledChains": {
       "types": "./dist/swap/swapEnabledChains.d.ts",
       "import": "./dist/swap/swapEnabledChains.js",
@@ -2023,7 +2038,7 @@
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@lifi/sdk": "^4.0.0",
+    "@lifi/sdk": "^4.1.0",
     "@mysten/sui": "^2.20.1",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",

@@ -568,6 +568,38 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onBalanceSummary).toHaveBeenCalledWith(envelope)
   })
 
+  // a2a-02: the backend emits data-turn_outcome at turn end when the client
+  // advertised the `turn_outcome` surface. Route it to onTurnOutcome so a headless
+  // caller learns the typed ending without parsing prose.
+  it('routes data-turn_outcome to onTurnOutcome with the typed payload', async () => {
+    const onTurnOutcome = vi.fn()
+    const outcome = { kind: 'blocked', code: 'broadcast-claim', detail: 'I cannot confirm that broadcast' }
+
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-turn_outcome', id: 'turn-outcome', data: outcome })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onTurnOutcome })
+
+    expect(onTurnOutcome).toHaveBeenCalledTimes(1)
+    expect(onTurnOutcome).toHaveBeenCalledWith(outcome)
+  })
+
+  it('drops a malformed data-turn_outcome (unknown kind) instead of firing onTurnOutcome', async () => {
+    const onTurnOutcome = vi.fn()
+    globalThis.fetch = mockFetchSSE([
+      `data: ${JSON.stringify({ type: 'data-turn_outcome', data: { kind: 'weird' } })}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onTurnOutcome })
+
+    expect(onTurnOutcome).not.toHaveBeenCalled()
+  })
+
   it('handles v1 error events via errorText', async () => {
     const onError = vi.fn()
     globalThis.fetch = mockFetchSSE(['data: {"type":"error","errorText":"boom"}\n\n'])

@@ -55,7 +55,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     ttl: Long.fromString(ttl.toString()),
     auxiliaryData,
 
-    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index }) =>
+    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index, cardanoTokens }) =>
       TW.Cardano.Proto.TxInput.create({
         outPoint: TW.Cardano.Proto.OutPoint.create({
           txHash: walletCore.HexCoding.decode(stripHexPrefix(hash)),
@@ -63,6 +63,24 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
         }),
         amount: Long.fromString(amount.toString()),
         address: coin.address,
+        // Per-UTXO native assets, read verbatim off the keysign wire (the
+        // initiator attached them). Without these WalletCore's planner cannot
+        // reconcile input tokens into the change output: co-signing an
+        // iOS-initiated send diverges on the pre-image hash, and an
+        // SDK-initiated send builds a body that drops the input tokens (node
+        // rejects it as value-not-conserved). Amounts are minimal big-endian
+        // unsigned bytes — byte-identical to the iOS signer. Left unset for
+        // token-free UTXOs, matching iOS.
+        tokenAmount:
+          cardanoTokens.length > 0
+            ? cardanoTokens.map(token =>
+                TW.Cardano.Proto.TokenAmount.create({
+                  policyId: token.policyId,
+                  assetNameHex: token.assetNameHex,
+                  amount: amountToBytes(BigInt(token.amount)),
+                })
+              )
+            : undefined,
       })
     ),
   })

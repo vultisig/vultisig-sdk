@@ -548,6 +548,24 @@ const buildTransferTx = (
   }
 }
 
+// Sui + Cardano are eligible SwapKit SOURCE chains for quote-dispatch purposes
+// (see SwapKitEnabledChains.ts) but have no wired tx-build path here yet:
+//   - Sui: SwapKit returns the tx as a base64 string (`encodeSwapKitTxPayload`'s
+//     dormant `normalizedTxType === 'SUI'` branch decodes it), but there is no
+//     `GeneralSwapTx` variant a Sui signer can consume — it is neither `evm`
+//     (no `to`/`data` fields) nor a plain `transfer` (a Sui PTB isn't a simple
+//     send). Falling through to `buildEvmTx` would either throw an unrelated
+//     "not a transaction object" error, or worse, silently build a nonsense
+//     `{evm: {...}}` shape if the response ever coincidentally looks
+//     record-like.
+//   - Cardano: `encodeSwapKitTxPayload` explicitly returns an EMPTY byte array
+//     for `normalizedTxType === 'CARDANO'` — there is no decode implementation
+//     at all, so any tx built from it would be silently wrong.
+// Rejected in `getSwapKitQuote` BEFORE the network round-trip (no route/swap
+// API calls wasted on a request that can never produce a signable tx).
+// Signing support for these two as a SwapKit source is separate follow-on work.
+const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Set([Chain.Sui, Chain.Cardano])
+
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
@@ -705,6 +723,13 @@ export const getSwapKitQuote = async ({
   affiliateBps,
   slippage = 3,
 }: Input): Promise<GeneralSwapQuote> => {
+  if (SWAP_SOURCE_TX_BUILD_UNSUPPORTED.has(from.chain)) {
+    throw new Error(
+      `SwapKit ${from.chain} source swaps are not yet supported for signing (quote-only for now). ` +
+        'Try a different source chain, or swap the other direction.'
+    )
+  }
+
   const quoteBody = {
     sellAsset: toSwapKitAsset(from),
     buyAsset: toSwapKitAsset(to),
