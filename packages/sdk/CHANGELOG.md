@@ -1,5 +1,17 @@
 # @vultisig/sdk
 
+## 2.18.5
+
+### Patch Changes
+
+- [#1022](https://github.com/vultisig/vultisig-sdk/pull/1022) [`3f5883a`](https://github.com/vultisig/vultisig-sdk/commit/3f5883a3328340c969577593746185103bc9970e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add cosmos `x/auth.MaxMemoCharacters` cap helpers (`getCosmosMemoMaxBytes`, `getCosmosMemoMaxBytesByChainId`, `isCosmosMemoWithinCap`, `COSMOS_MEMO_DEFAULT_MAX_BYTES`) as the single source of truth for cosmos memo-length limits, consolidating copies previously maintained in agent-backend-ts and mcp-ts. Bundled into `@vultisig/sdk` so consumers receive a new tarball.
+
+  Also points the Skip Go swap tool (`skipSwap.ts`) at `getCosmosMemoMaxBytesByChainId` instead of its own divergent memo-cap table, which under-capped `phoenix-1` and `cosmoshub-4` at 256 bytes instead of the correct 512.
+
+- [#971](https://github.com/vultisig/vultisig-sdk/pull/971) [`4b7e249`](https://github.com/vultisig/vultisig-sdk/commit/4b7e249fc4d51cb6c2f5fd55a53867575756f5b7) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Validate MayaChain native swap inbound vault addresses before broadcasting.
+
+- [#1012](https://github.com/vultisig/vultisig-sdk/pull/1012) [`50736c5`](https://github.com/vultisig/vultisig-sdk/commit/50736c525d45040b1533bc6d8ab175541c00762f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Classify transient swap quote provider failures from structured status data.
+
 ## 2.18.4
 
 ### Patch Changes
