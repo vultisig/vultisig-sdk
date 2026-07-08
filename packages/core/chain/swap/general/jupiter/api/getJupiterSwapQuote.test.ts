@@ -209,6 +209,108 @@ describe('getJupiterSwapQuote', () => {
     expect('solana' in quote.tx && quote.tx.solana.swapFee.amount).toBe(0n)
   })
 
+  it('refuses to build when the quoted price impact exceeds the 10% ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              // Jupiter's priceImpactPct is a FRACTION: "0.5" == 50% impact.
+              priceImpactPct: '0.5',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/price impact/i)
+
+    // Refused before the /swap build call was ever made.
+    expect(calls.some(c => c.url.includes('/swap/v1/swap'))).toBe(false)
+  })
+
+  it('builds normally at a price impact just under the 10% ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.0999',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+  })
+
+  it('builds at exactly 10% price impact (ceiling itself passes, only strictly-above rejects)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.10',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+  })
+
+  it('refuses to build just above the 10% price impact ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.1001',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/price impact/i)
+  })
+
   it('throws when Jupiter returns no serialized transaction', async () => {
     vi.stubGlobal(
       'fetch',
