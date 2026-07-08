@@ -33,6 +33,23 @@ const FX = {
   signingPubKey: '0286E56770CE9B95253CCB48D22DCE4EAE1CA3606A9DA6D4CDA3AA5C6D0A9DBEE',
 }
 
+function encodeDerInteger(hex: string): Buffer {
+  let bytes = Buffer.from(hex, 'hex')
+  while (bytes.length > 1 && bytes[0] === 0x00 && (bytes[1] & 0x80) === 0) {
+    bytes = bytes.subarray(1)
+  }
+  if ((bytes[0] & 0x80) !== 0) {
+    bytes = Buffer.concat([Buffer.from([0x00]), bytes])
+  }
+  return Buffer.concat([Buffer.from([0x02, bytes.length]), bytes])
+}
+
+function buildReferenceDerSignature(rHex: string, sHex: string): Buffer {
+  const rDer = encodeDerInteger(rHex)
+  const sDer = encodeDerInteger(sHex)
+  return Buffer.concat([Buffer.from([0x30, rDer.length + sDer.length]), rDer, sDer])
+}
+
 describe('Ripple / buildXrpSendTx golden vectors', () => {
   it('matches an independently-built Payment tx serialized via xrpl.encodeForSigning', () => {
     const result = buildXrpSendTx({
@@ -106,22 +123,17 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
       signingPubKey: FX.signingPubKey,
     })
 
-    // Fixed low-S-normalized r||s (64 bytes) — arbitrary but deterministic.
-    const rHex = '1'.repeat(64)
+    // Fixed deterministic r||s that exercises both finalize branches:
+    // - high-bit r triggers strict-DER 0x00 padding
+    // - 130-hex input verifies the optional recovery-byte strip
+    const rHex = `ff${'0'.repeat(62)}`
     const sHex = '2'.repeat(64) // well below secp256k1 half-order, no normalization needed
     const finalized = result.finalize(rHex + sHex)
+    const finalizedWithRecovery = result.finalize(rHex + sHex + '01')
 
     // DER-encode the same r/s independently (per BIP-62 SEQUENCE{INTEGER r, INTEGER s})
     // to build the reference signed tx, then hand it to xrpl's own encoder.
-    const rBytes = Buffer.from(rHex, 'hex')
-    const sBytes = Buffer.from(sHex, 'hex')
-    const der = Buffer.concat([
-      Buffer.from([0x30, rBytes.length + sBytes.length + 4]),
-      Buffer.from([0x02, rBytes.length]),
-      rBytes,
-      Buffer.from([0x02, sBytes.length]),
-      sBytes,
-    ])
+    const der = buildReferenceDerSignature(rHex, sHex)
 
     const referenceSignedTx: Payment = {
       TransactionType: 'Payment',
@@ -135,6 +147,7 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
       TxnSignature: der.toString('hex').toUpperCase(),
     }
 
+    expect(finalizedWithRecovery).toEqual(finalized)
     expect(finalized.signedTx).toEqual(referenceSignedTx)
     expect(finalized.signedBlobHex).toBe(xrplEncode(referenceSignedTx))
   })
