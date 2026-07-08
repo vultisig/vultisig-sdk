@@ -2,7 +2,11 @@ import { create } from '@bufbuild/protobuf'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import { getBlockchainSpecificValue } from '@vultisig/core-mpc/keysign/chainSpecific/KeysignChainSpecific'
+import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
+import { KeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/KeysignSwapPayload'
 import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
+import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { describe, expect, it, vi } from 'vitest'
 
 // AGG-02 (round-2 spec-level fund-safety audit): the aggregator-returned tx.to used to be
@@ -96,5 +100,22 @@ describe('buildSwapKeysignPayload — AGG-02: both downstream router consumers a
     expect(mocks.getErc20Allowance).toHaveBeenCalledWith(
       expect.objectContaining({ chain: Chain.Ethereum, address: '0xsender', spender: ONE_INCH_V6_ROUTER })
     )
+
+    // Codex review (PR #1079): don't just assert on the payload's field path — replicate
+    // the EXACT resolution signingInputs/resolvers/evm/index.ts:60-66's getToAddress()
+    // performs, using the SAME real helper functions it imports (getKeysignSwapPayload,
+    // matchRecordUnion, shouldBePresent — none mocked here), so this proves what the
+    // WalletCore SigningInput.toAddress will actually be built from, not just what this
+    // test assumes the resolver reads.
+    const swapPayload = shouldBePresent(getKeysignSwapPayload(payload))
+    const toAddressTheEvmResolverWouldUse = matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {
+      // Not exercised by this test (a 1inch general quote never takes this arm) —
+      // present only because matchRecordUnion requires exhaustive handling.
+      native: () => {
+        throw new Error('unreachable in this test — quote is a general/1inch swap')
+      },
+      general: ({ quote }) => shouldBePresent(quote?.tx?.to),
+    })
+    expect(toAddressTheEvmResolverWouldUse).toBe(ONE_INCH_V6_ROUTER)
   })
 })

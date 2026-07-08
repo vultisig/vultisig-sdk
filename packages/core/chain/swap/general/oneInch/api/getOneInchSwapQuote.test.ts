@@ -56,4 +56,47 @@ describe('getOneInchSwapQuote — AGG-02 router allowlist', () => {
 
     expect('evm' in quote.tx ? quote.tx.evm.to : undefined).toBe('0x111111125421ca6dc452d289314280a0f8842a65')
   })
+
+  // codex review (PR #1079): 1inch's router differs on zkSync Era — confirmed live. The
+  // allowlist is chain-scoped; prove the real function threads account.chain through
+  // correctly rather than just trusting the allowlist unit tests in isolation.
+  describe('zkSync Era — a genuinely different router (chain-scoped allowlist)', () => {
+    const zksyncAccount = { chain: Chain.Zksync, address: '0xsender' }
+    const ZKSYNC_ROUTER = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
+    const STANDARD_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+
+    it('accepts the zkSync-specific router when account.chain is Zksync', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce({
+        dstAmount: '1000000',
+        tx: { from: '0xsender', to: ZKSYNC_ROUTER, data: '0xswap', value: '0', gasPrice: '1000000000', gas: 210000 },
+      })
+
+      const quote = await getOneInchSwapQuote({
+        account: zksyncAccount,
+        fromCoinId: '0xsrc',
+        toCoinId: '0xdst',
+        amount: 1_000_000n,
+      })
+
+      expect('evm' in quote.tx ? quote.tx.evm.to : undefined).toBe(ZKSYNC_ROUTER)
+    })
+
+    it('REJECTS the standard V6 router when account.chain is Zksync (the exact bug this fixes)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce({
+        dstAmount: '1000000',
+        tx: {
+          from: '0xsender',
+          to: STANDARD_V6_ROUTER,
+          data: '0xswap',
+          value: '0',
+          gasPrice: '1000000000',
+          gas: 210000,
+        },
+      })
+
+      await expect(
+        getOneInchSwapQuote({ account: zksyncAccount, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
+      ).rejects.toThrow(/unrecognized router address/)
+    })
+  })
 })

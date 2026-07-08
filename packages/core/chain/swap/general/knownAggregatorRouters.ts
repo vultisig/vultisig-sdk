@@ -1,3 +1,5 @@
+import { Chain } from '../../Chain'
+
 /**
  * Fund-safety allowlist for the general-purpose EVM swap aggregators (AGG-02, round-2
  * spec-level fund-safety audit, 2026-07-08).
@@ -14,9 +16,16 @@
  * already-verified address by construction, instead of needing its own check.
  *
  * 1inch and Kyber can be enforced (fail closed / throw) because their router is a small,
- * stable, deterministically-deployed constant — verified against each provider's OWN live
- * quote API (not just docs/explorers) on Ethereum, Arbitrum, BSC, Base (1inch) and Ethereum,
- * BSC, Arbitrum (Kyber) on 2026-07-08, matching byte-for-byte.
+ * stable, deterministically-deployed constant on almost every chain — verified against each
+ * provider's OWN live quote API (not just docs/explorers), chain by chain, on 2026-07-08.
+ *
+ * CHAIN-SCOPING MATTERS (codex review, PR #1079): 1inch's V6 router is NOT the same address
+ * on zkSync Era — confirmed live (a real 200 response from a real quote request returned a
+ * DIFFERENT contract there). This is exactly the caveat chains/evm/contract/knownContracts.ts
+ * already documents for 1inch V5 ("not zkSync Era — different V5 router"); it turns out to
+ * also hold for V6. A flat, chain-agnostic allowlist would have hard-blocked every legitimate
+ * zkSync 1inch swap. Kyber showed no such variance on every chain that returned a live
+ * response (see the per-chain notes below) — its allowlist stays flat.
  *
  * LiFi and SwapKit CANNOT be enforced the same way — they route through many different
  * bridge/DEX contracts by design (diamond routing, multi-hop, chain-specific deployments),
@@ -25,38 +34,50 @@
  * allowlist has real usage data to build from if a pattern emerges.
  */
 
-// 1inch Aggregation Router — V5 (legacy) + V6 (current). Same addresses as the display-only
-// registry in chains/evm/contract/knownContracts.ts; kept as an explicit, separate list here
-// since THIS one gates signing (throw on mismatch), not just UI labeling — the two lists are
-// allowed to drift independently (e.g. a future display-only addition shouldn't silently
-// widen what this allowlist accepts).
-export const ONE_INCH_ROUTER_ADDRESSES: ReadonlySet<string> = new Set([
-  '0x1111111254eeb25477b68fb85ed929f73a960582', // V5
-  '0x111111125421ca6dc452d289314280a0f8842a65', // V6 — live-confirmed 2026-07-08 (Ethereum/Arbitrum/BSC/Base)
-])
+// 1inch Aggregation Router — V5 (legacy, unscoped) + V6 (current, chain-scoped). V5's
+// address is the same as chains/evm/contract/knownContracts.ts's display-only registry;
+// kept separate here since THIS one gates signing, not just UI labeling. V5 is unscoped
+// even though it likely has the same zkSync quirk as V6 (per knownContracts.ts's existing
+// comment) — getOneInchSwapQuote.ts only calls the v6.0 API today, so a V5 address is never
+// actually seen through this path; harmless defense-in-depth.
+const ONE_INCH_V5_ROUTER = '0x1111111254eeb25477b68fb85ed929f73a960582'
 
-// KyberSwap MetaAggregationRouterV2 — same address on every EVM chain KyberSwap supports
-// (deterministic CREATE2 deploy). Live-confirmed 2026-07-08 (Ethereum/BSC/Arbitrum) against
-// aggregator-api.kyberswap.com's own /routes response, not just docs/explorers.
-export const KYBER_ROUTER_ADDRESSES: ReadonlySet<string> = new Set(['0x6131b5fae19ea4f9d964eac0408e4408b66337b5'])
+// V6's standard address — live-confirmed 2026-07-08 on Ethereum, Arbitrum, BSC, Base,
+// Optimism, Avalanche, Polygon (7 of 8 oneInchSwapEnabledChains chains).
+const ONE_INCH_V6_STANDARD_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 
-/** Providers whose router is validated against a fund-safety allowlist (fail closed). */
-export const ENFORCED_ROUTER_PROVIDERS = ['1inch', 'kyber'] as const
-export type EnforcedRouterProvider = (typeof ENFORCED_ROUTER_PROVIDERS)[number]
+// V6 on zkSync Era ONLY — live-confirmed 2026-07-08 via a real api.vultisig.com/1inch
+// v6.0 quote request returning this address (NOT the standard one above).
+const ONE_INCH_V6_ZKSYNC_ROUTER = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
 
-const ALLOWLIST_BY_PROVIDER: Record<EnforcedRouterProvider, ReadonlySet<string>> = {
-  '1inch': ONE_INCH_ROUTER_ADDRESSES,
-  kyber: KYBER_ROUTER_ADDRESSES,
-}
+// KyberSwap MetaAggregationRouterV2 — same address confirmed live 2026-07-08 on every chain
+// that returned a response through aggregator-api.kyberswap.com's /routes (Ethereum, BSC,
+// Arbitrum, Optimism, Avalanche, Base, Polygon — 7 of 9 kyberSwapEnabledChains chains).
+// zkSync/Blast 404'd on this exact API path during verification — that looks like those two
+// chains aren't actually live through this aggregator endpoint today (a pre-existing,
+// separate question from this fix — kyberSwapEnabledChains may be ahead of what the live API
+// serves), not evidence of a differing router address. No chain-scoping needed unless that
+// changes.
+const KYBER_STANDARD_ROUTER = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
+
+export type EnforcedRouterProvider = '1inch' | 'kyber'
 
 /**
- * Throws if `address` isn't the known router for `provider`. Call this at quote construction,
- * before a GeneralSwapQuote carrying `address` as `tx.evm.to` can exist.
+ * Throws if `address` isn't the known router for `provider` on `chain`. Call this at quote
+ * construction, before a GeneralSwapQuote carrying `address` as `tx.evm.to` can exist.
  */
-export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, address: string): void {
-  if (!ALLOWLIST_BY_PROVIDER[provider].has(address.toLowerCase())) {
+export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, address: string, chain: Chain): void {
+  const normalized = address.toLowerCase()
+  const isKnown =
+    provider === 'kyber'
+      ? normalized === KYBER_STANDARD_ROUTER
+      : chain === Chain.Zksync
+        ? normalized === ONE_INCH_V6_ZKSYNC_ROUTER
+        : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER
+
+  if (!isKnown) {
     throw new Error(
-      `${provider} swap quote returned an unrecognized router address (${address}) — refusing to build a signable transaction against it.`
+      `${provider} swap quote returned an unrecognized router address (${address}) on ${chain} — refusing to build a signable transaction against it.`
     )
   }
 }

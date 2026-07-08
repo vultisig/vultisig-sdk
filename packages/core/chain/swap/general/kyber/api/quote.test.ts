@@ -251,5 +251,33 @@ describe('getKyberSwapQuote', () => {
 
       expect('evm' in quote.tx ? quote.tx.evm.to : undefined).toBe(realRouter)
     })
+
+    it("REJECTS when /route/build's OWN routerAddress differs from /routes' (API drift — calldata may target a different router than tx.to claims), even though /routes returned the real one", async () => {
+      const realRouter = '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5'
+      vi.mocked(queryUrl)
+        .mockResolvedValueOnce({
+          data: {
+            routeSummary: { amountOut: '10000000' },
+            routerAddress: realRouter,
+          },
+        })
+        .mockResolvedValueOnce({
+          code: 0,
+          data: {
+            amountOut: '10000000',
+            data: '0xswap',
+            gas: '210000',
+            routerAddress: '0x000000000000000000000000000000deadbeef',
+          },
+        })
+
+      await expect(
+        getKyberSwapQuote({
+          from: { chain: Chain.Ethereum, address: '0xsender', id: '0xsrc', decimals: 18, ticker: 'SRC' },
+          to: { chain: Chain.Ethereum, address: '0xsender', id: '0xdst', decimals: 6, ticker: 'DST' },
+          amount: 1_000_000n,
+        })
+      ).rejects.toThrow(/unrecognized router address/)
+    })
   })
 })

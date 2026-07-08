@@ -61,8 +61,9 @@ export const getOneInchSwapQuote = async ({
   const { dstAmount, tx }: OneInchSwapQuoteResponse = await queryUrl<OneInchSwapQuoteResponse>(url)
 
   // AGG-02 fund-safety fix: verify tx.to is 1inch's actual router before this untrusted
-  // response can become a signable GeneralSwapQuote. See knownAggregatorRouters.ts.
-  assertKnownAggregatorRouter('1inch', tx.to)
+  // response can become a signable GeneralSwapQuote. Chain-scoped: 1inch's router differs
+  // on zkSync Era. See knownAggregatorRouters.ts.
+  assertKnownAggregatorRouter('1inch', tx.to, chain)
 
   return {
     dstAmount,
