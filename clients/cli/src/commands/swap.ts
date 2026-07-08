@@ -4,7 +4,7 @@
 import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
-import { ensureVaultUnlocked } from '../core'
+import { buildSwapBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult, formatBigintAmount } from '../ui'
 
@@ -113,6 +113,7 @@ export type SwapOptions = {
   slippage?: number
   yes?: boolean
   dryRun?: boolean
+  force?: boolean // Bypass the broadcast-journal duplicate guard
   password?: string
   signal?: AbortSignal
 } & SwapQuoteOptions
@@ -235,19 +236,33 @@ export async function executeSwap(
   // 4. Unlock and execute via compound method
   await ensureVaultUnlocked(vault, options.password)
 
-  const signSpinner = createSpinner('Signing swap transaction...')
-
-  vault.on('signingProgress', ({ step }: any) => {
-    signSpinner.text = `${step.message} (${step.progress}%)`
+  // Refuse a double-spend: fingerprint the swap intent (from/to chain + token +
+  // resolved amount) and check it against the persistent broadcast journal
+  // (shared with the `agent ask` path) BEFORE signing. A retry of an identical
+  // swap that hasn't definitively failed is refused (exit 9) unless --force is
+  // passed. The spinner starts INSIDE the guarded callback so a refusal
+  // short-circuits before any misleading "Signing..." UI.
+  const intent = buildSwapBroadcastIntent(vault, {
+    fromChain: options.fromChain,
+    toChain: options.toChain,
+    fromToken: options.fromToken,
+    toToken: options.toToken,
+    amount: fromAmountRaw,
   })
+  let signSpinner: ReturnType<typeof createSpinner> | undefined
 
   try {
-    const result = await vault.swap(toSwapRequest(options, amountStr))
+    const broadcast = await guardedBroadcast(intent, options.force ?? false, async () => {
+      signSpinner = createSpinner('Signing swap transaction...')
+      vault.on('signingProgress', ({ step }: any) => {
+        if (signSpinner) signSpinner.text = `${step.message} (${step.progress}%)`
+      })
+      const result = await vault.swap(toSwapRequest(options, amountStr))
+      if (result.dryRun) throw new Error('unreachable')
+      return result as Extract<typeof result, { dryRun: false }>
+    })
 
-    if (result.dryRun) throw new Error('unreachable')
-    const broadcast = result as Extract<typeof result, { dryRun: false }>
-
-    signSpinner.succeed(`Swap broadcast: ${broadcast.txHash}`)
+    signSpinner?.succeed(`Swap broadcast: ${broadcast.txHash}`)
 
     if (isJsonOutput()) {
       outputJson({
@@ -261,6 +276,9 @@ export async function executeSwap(
     }
 
     return { txHash: broadcast.txHash, quote }
+  } catch (err) {
+    signSpinner?.stop()
+    throw err
   } finally {
     vault.removeAllListeners('signingProgress')
   }

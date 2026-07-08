@@ -621,6 +621,7 @@ program
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
+  .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
@@ -649,6 +650,7 @@ See also: balance, tx-status`
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
+          force?: boolean
           password?: string
         }
       ) => {
@@ -664,6 +666,7 @@ See also: balance, tx-status`
             memo: options.memo,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
+            force: options.force,
             password: options.password,
           })
         } catch (err: any) {
@@ -1103,6 +1106,7 @@ program
   .option('--dry-run', 'Preview swap without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
+  .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
@@ -1128,6 +1132,7 @@ See also: swap-quote, swap-chains, balance`
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
+          force?: boolean
           password?: string
         }
       ) => {
@@ -1144,6 +1149,7 @@ See also: swap-quote, swap-chains, balance`
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
+            force: options.force,
             password: options.password,
           })
         } catch (err: any) {

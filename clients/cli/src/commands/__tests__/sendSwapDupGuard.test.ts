@@ -1,0 +1,287 @@
+/**
+ * Broadcast dedupe guard on the direct `send` / `swap` commands (audit P5-1, HIGH).
+ *
+ * Before this fix the `send` / `swap` verbs called `vault.send()` / `vault.swap()`
+ * straight through and never touched the persistent broadcast journal, so a retry
+ * double-spent (two identical `send --confirm` both broadcast). These tests drive
+ * `sendTransaction` / `executeSwap` against a real on-disk journal
+ * (VULTISIG_BROADCAST_JOURNAL_PATH → temp file) and assert:
+ *   - an identical second send/swap is REFUSED (no second broadcast), exit 9,
+ *   - `--force` overrides,
+ *   - a genuinely distinct intent is NOT blocked,
+ *   - the guard is cross-process (the journal is file-backed) and cross-PATH: a
+ *     `send` and an identical `agent ask` intent dedupe against the SAME journal.
+ */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
+import { Chain } from '@vultisig/sdk'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Keep the command output/UI silent and deterministic (JSON path, no spinners).
+vi.mock('../../lib/output', () => ({
+  createSpinner: () => ({ succeed: vi.fn(), stop: vi.fn(), fail: vi.fn(), text: '' }),
+  info: vi.fn(),
+  warn: vi.fn(),
+  isNonInteractive: () => true,
+  isJsonOutput: () => true,
+  outputJson: vi.fn(),
+}))
+vi.mock('../../ui', () => ({
+  confirmTransaction: vi.fn().mockResolvedValue(true),
+  displayTransactionPreview: vi.fn(),
+  displayTransactionResult: vi.fn(),
+  confirmSwap: vi.fn().mockResolvedValue(true),
+  displaySwapChains: vi.fn(),
+  displaySwapPreview: vi.fn(),
+  displaySwapResult: vi.fn(),
+  formatBigintAmount: (v: bigint) => String(v),
+}))
+
+import { AgentErrorCode } from '../../agent/agentErrors'
+import { AgentExecutor } from '../../agent/executor'
+import { classifyError, ExitCode } from '../../core/errors'
+import { executeSwap } from '../swap'
+import { sendTransaction } from '../transaction'
+
+// ---- Fixtures --------------------------------------------------------------
+
+const OWNER = '0xEcdsaOwnerPubKey'
+
+function nativeSendPayload(to: string, amountBaseUnits: string): KeysignPayload {
+  return {
+    coin: { isNativeToken: true, ticker: 'ETH', contractAddress: '', chain: 'Ethereum', address: '0xsender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo: undefined,
+  } as unknown as KeysignPayload
+}
+
+/** A vault whose `send` returns a dry-run payload, then a broadcast hash. */
+function makeSendVault(opts: {
+  ecdsa?: string
+  payload: KeysignPayload
+  txHash: string
+  realSends: { count: number }
+}): VaultBase {
+  const send = vi.fn(async (p: { dryRun?: boolean; chain: Chain }) => {
+    if (p.dryRun) return { dryRun: true, fee: '0.001', total: '1.001', keysignPayload: opts.payload }
+    opts.realSends.count += 1
+    return { dryRun: false, txHash: opts.txHash, chain: p.chain }
+  })
+  return {
+    type: 'fast',
+    isEncrypted: false,
+    isUnlocked: () => true,
+    unlock: vi.fn(),
+    id: 'vault-send',
+    name: 'vault-send',
+    publicKeys: { ecdsa: opts.ecdsa ?? OWNER, eddsa: '' },
+    send,
+    gas: vi.fn().mockRejectedValue(new Error('no gas')),
+    balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18, formattedAmount: '10' }),
+    address: vi.fn().mockResolvedValue('0xsender'),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
+  } as unknown as VaultBase
+}
+
+function makeSwapQuote() {
+  return {
+    fromCoin: { decimals: 18, ticker: 'ETH' },
+    toCoin: { decimals: 8, ticker: 'BTC' },
+    estimatedOutput: 100n,
+    maxSwapable: 0n,
+    provider: 'thorchain',
+  }
+}
+
+function makeSwapVault(opts: { txHash: string; realSwaps: { count: number } }): VaultBase {
+  const quote = makeSwapQuote()
+  const swap = vi.fn(async (p: { dryRun?: boolean; fromChain?: Chain }) => {
+    if (p.dryRun) return { dryRun: true, quote }
+    opts.realSwaps.count += 1
+    return { dryRun: false, txHash: opts.txHash, chain: Chain.Ethereum, quote }
+  })
+  return {
+    type: 'fast',
+    isEncrypted: false,
+    isUnlocked: () => true,
+    unlock: vi.fn(),
+    id: 'vault-swap',
+    name: 'vault-swap',
+    publicKeys: { ecdsa: OWNER, eddsa: '' },
+    swap,
+    balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18 }),
+    getDiscountTier: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
+  } as unknown as VaultBase
+}
+
+/** A minimal vault for the agent executor cross-path check. */
+function execVault(): VaultBase {
+  return {
+    name: 'vault-exec',
+    id: 'vault-exec',
+    type: 'secure',
+    chains: [Chain.Ethereum],
+    isEncrypted: false,
+    address: vi.fn().mockResolvedValue('0xsender'),
+    balance: vi.fn().mockResolvedValue({ decimals: 18, symbol: 'ETH' }),
+    getTxStatus: vi.fn().mockResolvedValue({ status: 'success' }),
+  } as unknown as VaultBase
+}
+
+// ---- Journal isolation -----------------------------------------------------
+
+let home: string
+let saved: string | undefined
+
+beforeEach(() => {
+  saved = process.env.VULTISIG_BROADCAST_JOURNAL_PATH
+  home = mkdtempSync(join(tmpdir(), 'vultisig-sendguard-'))
+  process.env.VULTISIG_BROADCAST_JOURNAL_PATH = join(home, 'broadcasts.jsonl')
+})
+
+afterEach(() => {
+  if (saved === undefined) delete process.env.VULTISIG_BROADCAST_JOURNAL_PATH
+  else process.env.VULTISIG_BROADCAST_JOURNAL_PATH = saved
+  rmSync(home, { recursive: true, force: true })
+  vi.clearAllMocks()
+})
+
+// ---- send ------------------------------------------------------------------
+
+describe('send — broadcast dedupe guard', () => {
+  const params = { chain: Chain.Ethereum, to: '0xrecipient', amount: '1', yes: true } as const
+
+  it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+      txHash: '0xfirst',
+      realSends,
+    })
+
+    // First send broadcasts and journals.
+    const first = await sendTransaction(vault, { ...params })
+    expect((first as { txHash: string }).txHash).toBe('0xfirst')
+    expect(realSends.count).toBe(1)
+
+    // Second identical send is refused BEFORE signing — nothing broadcast.
+    await expect(sendTransaction(vault, { ...params })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSends.count).toBe(1) // still 1 — the duplicate never broadcast
+
+    // And the refusal maps to the dedicated exit code 9.
+    const err = await sendTransaction(vault, { ...params }).catch(e => e)
+    expect(classifyError(err).exitCode).toBe(ExitCode.DUPLICATE_BROADCAST)
+  })
+
+  it('--force overrides the guard', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+      txHash: '0xforced',
+      realSends,
+    })
+
+    await sendTransaction(vault, { ...params })
+    await sendTransaction(vault, { ...params, force: true })
+    expect(realSends.count).toBe(2) // forced through
+  })
+
+  it('does not block a genuinely distinct intent', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+      txHash: '0xa',
+      realSends,
+    })
+    await sendTransaction(vault, { ...params })
+
+    // Different recipient → different resolved payload → allowed. Repoint the
+    // dry-run payload to the new recipient the second call would resolve.
+    ;(vault.send as unknown as { mockImplementation: (f: unknown) => void }).mockImplementation(
+      async (p: { dryRun?: boolean; chain: Chain }) => {
+        if (p.dryRun)
+          return {
+            dryRun: true,
+            fee: '0.001',
+            total: '1.001',
+            keysignPayload: nativeSendPayload('0xother', '1000000000000000000'),
+          }
+        realSends.count += 1
+        return { dryRun: false, txHash: '0xb', chain: p.chain }
+      }
+    )
+    await sendTransaction(vault, { chain: Chain.Ethereum, to: '0xother', amount: '1', yes: true })
+    expect(realSends.count).toBe(2)
+  })
+
+  it('cross-PATH: a send then an identical agent-ask intent dedupe against the shared journal', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      ecdsa: OWNER,
+      payload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+      txHash: '0xsend',
+      realSends,
+    })
+    // 1. Direct `send` records a broadcast in the journal.
+    await sendTransaction(vault, { ...params })
+
+    // 2. The agent path (same owner, identical intent) must refuse before signing.
+    const executor = new AgentExecutor(execVault(), false, OWNER)
+    const signSpy = vi
+      .spyOn(executor as unknown as { signServerTx: (...a: unknown[]) => Promise<unknown> }, 'signServerTx')
+      .mockResolvedValue({ tx_hash: '0xshouldnothappen', chain: 'Ethereum', status: 'pending' })
+
+    executor.storeServerTransaction({
+      chain: 'Ethereum',
+      from_chain: 'Ethereum',
+      send_tx: { to: '0xrecipient', value: '1000000000000000000' },
+    })
+    const agentResult = await executor.signTxFromBuffer('call-cross')
+    expect(agentResult.success).toBe(false)
+    expect(agentResult.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    expect(signSpy).not.toHaveBeenCalled() // never double-signed across paths
+  })
+})
+
+// ---- swap ------------------------------------------------------------------
+
+describe('swap — broadcast dedupe guard', () => {
+  const ctxFor = (vault: VaultBase) => ({ ensureActiveVault: async () => vault }) as never
+  const opts = { fromChain: Chain.Ethereum, toChain: Chain.Bitcoin, amount: 0.1, yes: true } as const
+
+  it('refuses an identical second swap (no second broadcast)', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xswap1', realSwaps })
+
+    const first = await executeSwap(ctxFor(vault), { ...opts })
+    expect((first as { txHash: string }).txHash).toBe('0xswap1')
+    expect(realSwaps.count).toBe(1)
+
+    await expect(executeSwap(ctxFor(vault), { ...opts })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSwaps.count).toBe(1)
+  })
+
+  it('--force overrides and distinct swaps are allowed', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xswap', realSwaps })
+
+    await executeSwap(ctxFor(vault), { ...opts })
+    await executeSwap(ctxFor(vault), { ...opts, force: true }) // forced
+    expect(realSwaps.count).toBe(2)
+
+    // A distinct amount is a distinct intent → allowed without --force.
+    await executeSwap(ctxFor(vault), { ...opts, amount: 0.2 })
+    expect(realSwaps.count).toBe(3)
+  })
+})
