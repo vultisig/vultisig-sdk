@@ -19,7 +19,7 @@ describe('getCosmosAllowedFeeDenoms', () => {
     expect(getCosmosAllowedFeeDenoms(CosmosChain.TerraClassic)).toEqual(['uluna', 'uusd'])
   })
 
-  it('includes the whitelisted IBC fee tokens for Osmosis alongside native uosmo', () => {
+  it('includes the curated IBC fee tokens for Osmosis alongside native uosmo (not the full 173+ on-chain txfees whitelist)', () => {
     const allowed = getCosmosAllowedFeeDenoms(CosmosChain.Osmosis)
     expect(allowed[0]).toBe('uosmo')
     expect(allowed).toHaveLength(4)

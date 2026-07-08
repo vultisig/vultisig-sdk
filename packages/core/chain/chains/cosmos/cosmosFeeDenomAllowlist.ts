@@ -33,15 +33,20 @@ const COSMOS_ALTERNATE_FEE_DENOMS: Partial<Record<CosmosChain, readonly string[]
 }
 
 /**
- * Full allowlist of denoms a chain's ante handler accepts as a gas fee: the
- * chain's own native denom plus any live-verified alternates. A `fee_denom`
- * outside this list is rejected at broadcast by the chain itself.
+ * Denoms this SDK will build a tx fee in for `chain`: the chain's own native
+ * denom plus the curated alternates above. This is NOT the exhaustive list of
+ * every denom the chain's ante handler would accept (Osmosis's real
+ * `/osmosis/txfees/v1beta1/fee_tokens` whitelist has 173+ entries) — it's the
+ * deliberately-curated subset we support without a live LCD query. Rejecting
+ * a `fee_denom` outside this list is a fail-closed product choice (ask the
+ * user to pick a supported denom), not a claim that the chain itself would
+ * reject it.
  */
 export const getCosmosAllowedFeeDenoms = (chain: CosmosChain): readonly string[] => [
   cosmosFeeCoinDenom[chain],
   ...(COSMOS_ALTERNATE_FEE_DENOMS[chain] ?? []),
 ]
 
-/** True when `feeDenom` is an accepted gas-fee denom for `chain`. */
+/** True when `feeDenom` is one of this SDK's supported gas-fee denoms for `chain` (see {@link getCosmosAllowedFeeDenoms}). */
 export const isCosmosFeeDenomAllowed = (chain: CosmosChain, feeDenom: string): boolean =>
   getCosmosAllowedFeeDenoms(chain).includes(feeDenom)
