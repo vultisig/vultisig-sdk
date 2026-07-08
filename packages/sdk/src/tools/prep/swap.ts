@@ -23,26 +23,30 @@ export type PrepareSwapTxFromKeysParams = {
 //
 // Native-quote expiry (`quote.native.expiry`) is a REAL absolute deadline sourced from the
 // THORChain/Maya quote API — mirrors core's own `assertQuoteNotExpired`
-// (nativeSwapQuoteToSwapPayload.ts). General quotes carry NO expiry field at this layer at all:
-// the `expiresAt` `SwapService.prepareSwapTx` checks is an artificial SDK-wrapper clock computed
-// fresh at fetch time (`Date.now() + DEFAULT_QUOTE_EXPIRY_MS`), not data the quote itself carries
-// — there's nothing meaningful to enforce here for general quotes, so this only covers native.
+// (nativeSwapQuoteToSwapPayload.ts).
+// CoW-swap expiry (`cowswap_order.validTo`) is a Unix-second deadline on the EIP-712 order itself.
+// Other general-quote routes carry no expiry field the SDK can assert here.
 const assertNativeQuoteNotExpired = (expirySeconds: number): void => {
   if (expirySeconds <= Math.floor(Date.now() / 1000)) {
     throw new Error('prepareSwapTxFromKeys: native swap quote has expired; refresh the quote before signing')
   }
 }
 
-// Cross-checks the caller's `amount` against the quote's own committed sell amount, but ONLY
-// where the quote confidently commits to one independent of the caller's input:
-// - `general.transfer` (UTXO/Cosmos deposit-channel routes): `tx.transfer.amount` is exactly what
-//   gets signed (`build.ts`'s `transferTx?.amount ?? toChainAmount(amount, ...)` prefers it).
-// - `general.cowswap_order`: `tx.cowswap_order.sellAmount` is the EIP-712 order's actual signed
-//   sell amount — the caller's `amount` never reaches the signed order for CoW at all.
-// Native quotes carry no committed-sell-amount field anywhere (checked the type + the live
-// THORChain/Maya quote response shape); `evm`/`solana` general quotes encode the amount inside
-// opaque aggregator calldata. Both fail OPEN here — do not invent a comparison that could
-// false-reject a legitimate swap just because we can't confidently verify it.
+const assertCowQuoteNotExpired = (validTo: number): void => {
+  if (validTo <= Math.floor(Date.now() / 1000)) {
+    throw new Error(
+      'prepareSwapTxFromKeys: CoW swap order has expired (validTo in the past); refresh the quote before signing'
+    )
+  }
+}
+
+// Cross-checks the caller's `amount` against the quote's CoW gross sell amount only.
+// `general.transfer` amount is provider-committed and legitimately diverges from the caller's
+// input by small fee adjustments (e.g. request 100_000n → committed 99_999n), so an exact
+// comparison would false-reject every UTXO/Cosmos SwapKit route. For CoW the gross value
+// (sellAmount + feeAmount) is what gets committed to the EIP-712 order the caller must sign,
+// and the caller's amount is expected to match it exactly.
+// Native/evm/solana fail open — no confidently-comparable committed sell field is available.
 const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysParams): void => {
   const { quote } = params.swapQuote
   if (!('general' in quote)) return
@@ -50,15 +54,15 @@ const assertAmountMatchesCommittedSellAmount = (params: PrepareSwapTxFromKeysPar
   const committed = matchRecordUnion(quote.general.tx, {
     evm: () => undefined,
     solana: () => undefined,
-    transfer: tx => tx.amount,
-    cowswap_order: order => BigInt(order.sellAmount),
+    transfer: () => undefined,
+    cowswap_order: order => BigInt(order.sellAmount) + BigInt(order.feeAmount),
   })
   if (committed === undefined) return
 
   const requested = toChainAmount(params.amount, params.fromCoin.decimals)
   if (requested !== committed) {
     throw new Error(
-      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the quote's committed sell amount (${committed} base units) — the quote may be stale or for a different request`
+      `prepareSwapTxFromKeys: requested amount (${requested} base units) does not match the CoW order's committed gross sell amount (${committed} base units) — the quote may be stale or for a different request`
     )
   }
 }
@@ -97,6 +101,9 @@ export const prepareSwapTxFromKeys = async (
   const { quote } = params.swapQuote
   if ('native' in quote) {
     assertNativeQuoteNotExpired(quote.native.expiry)
+  }
+  if ('general' in quote && 'cowswap_order' in quote.general.tx) {
+    assertCowQuoteNotExpired(quote.general.tx.cowswap_order.validTo)
   }
   assertAmountMatchesCommittedSellAmount(params)
 

@@ -206,9 +206,8 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
     ).resolves.toBeDefined()
   })
 
-  it('does NOT enforce expiry on a general quote (no expiry field exists at this layer)', async () => {
+  it('does NOT enforce expiry on a non-CoW general quote (evm/solana/transfer carry no expiry field here)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    // general quotes carry no expiry info in the core SwapQuote shape at all — nothing to check.
     const generalQuote = { quote: { general: { tx: { evm: {} } } } } as any
 
     await expect(
@@ -217,6 +216,60 @@ describe('prepareSwapTxFromKeys — quote expiry (native only, ABTS/plan 005)', 
         toCoin: btcCoin,
         amount: '1',
         swapQuote: generalQuote,
+      })
+    ).resolves.toBeDefined()
+  })
+
+  it('throws on an expired CoW order (validTo in the past), before building any payload', async () => {
+    const expiredCowQuote = {
+      quote: {
+        general: {
+          tx: {
+            cowswap_order: {
+              sellAmount: '1000000000000000000',
+              feeAmount: '0',
+              validTo: Math.floor(Date.now() / 1000) - 1,
+            },
+          },
+        },
+      },
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: expiredCowQuote,
+      })
+    ).rejects.toThrow(/expired/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
+    expect(mockGetWalletCore).not.toHaveBeenCalled()
+  })
+
+  it('does NOT throw on a fresh CoW order (validTo in the future)', async () => {
+    mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
+    const freshCowQuote = {
+      quote: {
+        general: {
+          tx: {
+            cowswap_order: {
+              sellAmount: '1000000000000000000',
+              feeAmount: '0',
+              validTo: Math.floor(Date.now() / 1000) + 600,
+            },
+          },
+        },
+      },
+    } as any
+
+    await expect(
+      prepareSwapTxFromKeys(baseIdentity, {
+        fromCoin: ethCoin,
+        toCoin: btcCoin,
+        amount: '1',
+        swapQuote: freshCowQuote,
       })
     ).resolves.toBeDefined()
   })
@@ -229,25 +282,11 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     mockGetPublicKey.mockReturnValueOnce(mockFromPublicKey).mockReturnValueOnce(mockToPublicKey)
   })
 
-  it('throws when the caller amount does not match a transfer-route committed amount', async () => {
-    // 1 ETH (18 decimals) requested, but the quote committed to a different base-unit amount.
-    const quote = { quote: { general: { tx: { transfer: { amount: 500000000000000000n } } } } } as any
-
-    await expect(
-      prepareSwapTxFromKeys(baseIdentity, {
-        fromCoin: ethCoin,
-        toCoin: btcCoin,
-        amount: '1',
-        swapQuote: quote,
-      })
-    ).rejects.toThrow(/does not match the quote's committed sell amount/)
-
-    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
-  })
-
-  it('builds when the caller amount matches the transfer-route committed amount', async () => {
+  it('does NOT throw for a transfer-route quote even when amount diverges (provider-committed, fee delta allowed)', async () => {
+    // transfer.amount is provider-committed and legitimately diverges from caller input (e.g. 100_000 -> 99_999).
+    // Exact comparison is excluded for the transfer variant.
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const quote = { quote: { general: { tx: { transfer: { amount: 1000000000000000000n } } } } } as any
+    const quote = { quote: { general: { tx: { transfer: { amount: 500000000000000000n } } } } } as any
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -259,8 +298,21 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     ).resolves.toBeDefined()
   })
 
-  it('throws when the caller amount does not match a cowswap_order committed sellAmount', async () => {
-    const quote = { quote: { general: { tx: { cowswap_order: { sellAmount: '500000000000000000' } } } } } as any
+  it('throws when the caller amount does not match the CoW gross sell amount (sellAmount + feeAmount)', async () => {
+    // gross = 600e15 + 100e15 = 700e15, but requested is 1e18 — mismatch
+    const quote = {
+      quote: {
+        general: {
+          tx: {
+            cowswap_order: {
+              sellAmount: '600000000000000000',
+              feeAmount: '100000000000000000',
+              validTo: Math.floor(Date.now() / 1000) + 600,
+            },
+          },
+        },
+      },
+    } as any
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -269,12 +321,27 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
         amount: '1',
         swapQuote: quote,
       })
-    ).rejects.toThrow(/does not match the quote's committed sell amount/)
+    ).rejects.toThrow(/does not match the CoW order's committed gross sell amount/)
+
+    expect(mockBuildSwapKeysignPayload).not.toHaveBeenCalled()
   })
 
-  it('builds when the caller amount matches the cowswap_order committed sellAmount', async () => {
+  it('builds when the caller amount matches the CoW gross sell amount (sellAmount + feeAmount == requested)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    const quote = { quote: { general: { tx: { cowswap_order: { sellAmount: '1000000000000000000' } } } } } as any
+    // gross = 900e15 + 100e15 = 1e18, matches amount '1'
+    const quote = {
+      quote: {
+        general: {
+          tx: {
+            cowswap_order: {
+              sellAmount: '900000000000000000',
+              feeAmount: '100000000000000000',
+              validTo: Math.floor(Date.now() / 1000) + 600,
+            },
+          },
+        },
+      },
+    } as any
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
@@ -314,10 +381,10 @@ describe('prepareSwapTxFromKeys — amount vs committed sell amount (ABTS/plan 0
     ).resolves.toBeDefined()
   })
 
-  it('matches a scientific-notation amount against a transfer-route committed amount (toChainAmount format handling)', async () => {
+  it('accepts a scientific-notation amount on a transfer-route quote (transfer excluded from amount check)', async () => {
     mockBuildSwapKeysignPayload.mockResolvedValue({ __mock: 'payload' })
-    // "1e-8" @ 8 decimals == 1 base unit — exercises toChainAmount's scientific-notation path.
-    const quote = { quote: { general: { tx: { transfer: { amount: 1n } } } } } as any
+    // "1e-8" @ 8 decimals == 1 base unit — transfer is excluded, so this should never throw.
+    const quote = { quote: { general: { tx: { transfer: { amount: 999n } } } } } as any
 
     await expect(
       prepareSwapTxFromKeys(baseIdentity, {
