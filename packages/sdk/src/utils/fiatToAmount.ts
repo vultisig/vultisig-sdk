@@ -39,15 +39,37 @@ const parseFiatValue = (v: number | string): number => {
   return n
 }
 
+const expandToPlainDecimal = (value: number): string => {
+  const raw = value.toString()
+  const match = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(raw)
+  if (!match) return raw
+
+  const [, sign, intPart, fracPart = '', expStr] = match
+  const exp = Number(expStr)
+  const digits = intPart + fracPart
+  const pointPos = intPart.length + exp
+
+  let result: string
+  if (pointPos <= 0) {
+    result = `0.${'0'.repeat(-pointPos)}${digits}`
+  } else if (pointPos >= digits.length) {
+    result = digits + '0'.repeat(pointPos - digits.length)
+  } else {
+    result = `${digits.slice(0, pointPos)}.${digits.slice(pointPos)}`
+  }
+
+  return `${sign}${result}`
+}
+
 // Prefer value.toString() — JS picks the shortest round-trip representation, so clean
 // values like 0.05 stay "0.05" instead of surfacing float artefacts ("0.050000000000000003").
-// Fall back to toFixed only to expand scientific notation (e.g. 1e-10). Then cap fractional
-// digits and trim trailing zeros.
+// Expand scientific notation before capping fractional digits because Number.toFixed()
+// still emits exponent notation for values at or above 1e21.
 const formatDecimalString = (value: number, decimals: number): string => {
   if (!Number.isFinite(value)) {
     throw new FiatToAmountError(`Non-finite amount computed: ${value}`)
   }
-  const str = /[eE]/.test(value.toString()) ? value.toFixed(decimals) : value.toString()
+  const str = expandToPlainDecimal(value)
   if (!str.includes('.')) return str
   const [whole, fraction] = str.split('.')
   const trimmed = fraction.slice(0, decimals).replace(/0+$/, '')

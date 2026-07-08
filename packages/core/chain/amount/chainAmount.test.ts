@@ -14,9 +14,25 @@ describe('toChainAmount', () => {
     expect(toChainAmount(0.1, 18)).toBe(100_000_000_000_000_000n)
   })
 
-  it('normalizes scientific notation via toFixed before parsing', () => {
+  it('normalizes scientific notation before parsing', () => {
     // 1e-8 tokens at 10^-10 resolution → 100 smallest units (matches viem parseUnits)
     expect(toChainAmount(1e-8, 10)).toBe(100n)
+  })
+
+  it('normalizes large scientific-notation numbers without leaking an exponent', () => {
+    expect(toChainAmount(1e21, 18)).toBe(1_000_000_000_000_000_000_000_000_000_000_000_000_000n)
+    expect(toChainAmount(1.5e21, 0)).toBe(1_500_000_000_000_000_000_000n)
+  })
+
+  it('keeps numeric rounding parity with decimal strings', () => {
+    expect(toChainAmount(1.55, 1)).toBe(toChainAmount('1.55', 1))
+    expect(toChainAmount(1.55, 1)).toBe(16n)
+    expect(toChainAmount(1.5, 0)).toBe(2n)
+  })
+
+  it('keeps parseUnits rounding after expanding small scientific-notation numbers', () => {
+    expect(toChainAmount(1.99e-8, 8)).toBe(toChainAmount('0.0000000199', 8))
+    expect(toChainAmount(1.99e-8, 8)).toBe(2n)
   })
 
   it('parses scientific-notation strings without floating-point mantissa loss', () => {

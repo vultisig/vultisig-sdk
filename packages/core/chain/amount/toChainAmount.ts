@@ -86,6 +86,11 @@ const expandScientificNotationToDecimalString = (s: string): string => {
   return absResult
 }
 
+const formatNumberAmount = (amount: number): string => {
+  const str = amount.toString()
+  return /[eE]/.test(str) ? expandScientificNotationToDecimalString(str) : str
+}
+
 export const toChainAmount = (amount: string | number, decimals: number) => {
   if (typeof amount === 'string') {
     const trimmed = amount.trim()
@@ -98,7 +103,5 @@ export const toChainAmount = (amount: string | number, decimals: number) => {
     }
     return parseUnits(trimmed, decimals)
   }
-  const str = amount.toString()
-  const value = /[eE]/.test(str) ? amount.toFixed(decimals) : str
-  return parseUnits(value, decimals)
+  return parseUnits(formatNumberAmount(amount), decimals)
 }
