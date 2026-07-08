@@ -1,9 +1,12 @@
 import { Chain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
+import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from './cosmosGasLimitRecord'
 import { getCosmosRpcUrl } from './getCosmosRpcUrl'
 import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
+
+export { getFeeAmountFromGasPrice } from './cosmosDecimal'
 
 const defaultGas = 7500n
 
@@ -27,24 +30,9 @@ type CosmosNodeConfigResponse = {
   minimum_gas_price?: string
 }
 
-type ParsedDecimal = {
-  numerator: bigint
-  denominator: bigint
-}
-
 const minGasPriceConfigPath = '/cosmos/base/node/v1beta1/config'
 const minGasPriceFetchTimeoutMs = 3_000
 const maxLiveFeeMultiplier = 10n
-
-const parseDecimal = (value: string): ParsedDecimal | undefined => {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) return undefined
-
-  const [whole, fraction = ''] = value.split('.')
-  const denominator = 10n ** BigInt(fraction.length)
-  const numerator = BigInt(`${whole}${fraction}`)
-
-  return { numerator, denominator }
-}
 
 const parseMinGasPriceEntry = (entry: string) => {
   const match = entry.trim().match(/^(\d+(?:\.\d+)?)([a-zA-Z][a-zA-Z0-9/._:-]*)$/)
@@ -55,12 +43,6 @@ const parseMinGasPriceEntry = (entry: string) => {
   if (!decimal) return undefined
 
   return { ...decimal, denom }
-}
-
-export const getFeeAmountFromGasPrice = (gasLimit: bigint, gasPrice: ParsedDecimal): bigint => {
-  const total = gasLimit * gasPrice.numerator
-
-  return (total + gasPrice.denominator - 1n) / gasPrice.denominator
 }
 
 export const getMinGasPriceForDenom = (minimumGasPrice: string, targetDenom: string): ParsedDecimal | undefined => {

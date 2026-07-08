@@ -204,5 +204,23 @@ describe('getCosmosFeeAmount', () => {
 
       expect(fee).toBe(cosmosGasRecord[Chain.Cosmos])
     })
+
+    it('falls back to the generic-config result when the dynamic floor exceeds its own sanity ceiling', async () => {
+      // A pathological base_fee ("1000") would compute a ~375 OSMO dynamic
+      // floor - getOsmosisDynamicFeeFloor discards it (returns null) rather
+      // than feed it into the signable fee, so the generic-config result
+      // (itself already computed and clamped) is used as-is.
+      const fee = await getCosmosFeeAmount(
+        { chain: Chain.Osmosis },
+        {
+          fetchImpl: routedFetch([
+            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.100000000000000000uosmo' } },
+            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: '1000' } },
+          ]),
+        }
+      )
+
+      expect(fee).toBe(30_000n) // generic path only: 300_000 * 0.1
+    })
   })
 })

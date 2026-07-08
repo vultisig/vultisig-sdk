@@ -124,4 +124,41 @@ describe('getOsmosisDynamicFeeFloor', () => {
 
     await expect(promise).resolves.toBeNull()
   })
+
+  describe('sanity ceiling on the computed floor (review finding: trust boundary on the LCD response)', () => {
+    it('returns null (fail-open) when a regex-valid base_fee computes an implausibly high fee', async () => {
+      // 300_000 * 1000 * 1.25 = 375_000_000 uosmo (375 OSMO) - a compromised/
+      // buggy LCD value, not a realistic base-fee spike. Must not feed this
+      // into the signable fee.
+      const floor = await getOsmosisDynamicFeeFloor(300_000n, {
+        fetchImpl: mockFetch({ base_fee: '1000' }),
+      })
+
+      expect(floor).toBeNull()
+    })
+
+    it('does not throw (and fails open) on a pathologically large base_fee that would overflow Number to Infinity', async () => {
+      // A naive `Number(base_fee)` on a huge-but-regex-valid decimal string
+      // overflows to Infinity, and `BigInt(Infinity)` throws a RangeError -
+      // which previously propagated out of Promise.all and crashed the whole
+      // fee resolution (contradicting the documented fail-open contract).
+      // Exact rational arithmetic has no such overflow path.
+      const hugeButValid = '9'.repeat(400)
+
+      await expect(
+        getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: hugeButValid }) })
+      ).resolves.toBeNull()
+    })
+
+    it('still accepts a realistic spike well above the static floor but under the sanity ceiling', async () => {
+      // Osmosis gas limit is 300_000n; a base_fee of "3" is far above any
+      // observed real spike but still 27x under the 9_000_000n ceiling.
+      const floor = await getOsmosisDynamicFeeFloor(300_000n, {
+        fetchImpl: mockFetch({ base_fee: '3' }),
+      })
+
+      // 300_000 * 3 * 1.25 = 1_125_000
+      expect(floor).toBe(1_125_000n)
+    })
+  })
 })

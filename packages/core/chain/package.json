@@ -210,6 +210,11 @@
       "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
       "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
     },
+    "./chains/cosmos/cosmosDecimal": {
+      "types": "./dist/chains/cosmos/cosmosDecimal.d.ts",
+      "import": "./dist/chains/cosmos/cosmosDecimal.js",
+      "default": "./dist/chains/cosmos/cosmosDecimal.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
