@@ -44,6 +44,7 @@ import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -109,6 +110,13 @@ type RankedSwapQuote = {
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
+
+// Node/undici network-layer error codes — mirrors agent-backend-ts's
+// `TRANSIENT_QUOTE_CODE_RE` (execute_swap.ts) for the same reason: a provider's raw
+// rejection surfaces these as bare codes (e.g. "ETIMEDOUT"), which don't contain the
+// substrings "timeout" or "timed out" checked elsewhere.
+const TRANSIENT_PROVIDER_CODE_RE =
+  /\b(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ECONNABORTED|EPIPE|ENOTFOUND|EAI_AGAIN|UND_ERR_\w+)\b/i
 
 const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -190,6 +198,93 @@ const assertNativeTradingOpen = async (input: {
 
 const asTradingHaltedSwapError = (reason: unknown): SwapError | null =>
   reason instanceof SwapError && reason.code === SwapErrorCode.TradingHalted ? reason : null
+
+const isBelowMinimumMsg = (msg: string) => {
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('below minimum') ||
+    lower.includes('minimum amount') ||
+    lower.includes('min amount') ||
+    lower.includes('amount too small') ||
+    lower.includes('below the minimum')
+  )
+}
+
+// Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
+// pool ragnarok, churn). The quote API then rejects EVERY amount with
+// "trading is halted" — an operational state, not an amount problem. Detect it
+// so we surface a "temporarily unavailable" message instead of the misleading
+// generic "no route" (which reads like the pair is unsupported). Also match the
+// "trading paused" wordings emitted by the THOR halt helpers in
+// `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
+// `<chain> chain trading paused`). (#604, CodeRabbit)
+const isTradingHaltedMsg = (msg: string) => {
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('halted') ||
+    lower.includes('trading halt') ||
+    lower.includes('trading paused') ||
+    lower.includes('trading is paused')
+  )
+}
+
+// A provider's raw rejection is a transient infra failure (network/timeout/5xx),
+// not a genuine structural decline. Bails to false on the same "no route" /
+// dust-threshold / halted substrings checked above so a provider that positively
+// answered is never misclassified as transient. Mirrors (deliberately duplicated,
+// not imported — separate repo/package) agent-backend-ts's execute_swap.ts
+// `isTransientQuoteError`, which classifies the SAME kind of raw single-provider
+// error for the native asyncFallbackChain path. Used below to detect the case
+// where EVERY provider failed transiently, so the generic `AllProvidersFailed`
+// fallback doesn't collapse a genuine outage into a "no route" hard-negative that
+// downstream classifiers (and `isTransientQuoteError` itself) cannot un-collapse.
+// Hoisted to module scope (rather than nested in findSwapQuote) since it closes
+// over no local state — only the module-level regex and the two helpers above.
+const isTransientProviderFailure = (reason: unknown): boolean => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  const lower = msg.toLowerCase()
+  if (
+    lower.includes('no swap routes found') ||
+    lower.includes('no swap route found') ||
+    lower.includes('no routes found') ||
+    lower.includes('no route found') ||
+    lower.includes('amount less than min swap amount') ||
+    isBelowMinimumMsg(msg) ||
+    isTradingHaltedMsg(msg) ||
+    lower.includes('dust threshold') ||
+    lower.includes('does not meet requirements')
+  ) {
+    return false
+  }
+  // Structured status takes precedence over message-sniffing where available
+  // (HttpResponseError.status) — a 429/5xx is unambiguously a transient
+  // infra signal regardless of how the provider worded the body.
+  if (reason instanceof HttpResponseError && (reason.status === 429 || reason.status >= 500)) {
+    return true
+  }
+  return (
+    lower.includes('fetch failed') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('network error') ||
+    lower.includes('socket hang up') ||
+    lower.includes('connection refused') ||
+    lower.includes('econnrefused') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('deadline exceeded') ||
+    lower.includes('the operation was aborted') ||
+    /\bhttp\s+5\d{2}\b/.test(lower) ||
+    lower.includes('bad gateway') ||
+    lower.includes('service unavailable') ||
+    lower.includes('gateway timeout') ||
+    lower.includes('internal server error') ||
+    lower.includes('rate limit') ||
+    lower.includes('too many requests') ||
+    /\b429\b/.test(lower) ||
+    lower.includes('skip api network error') ||
+    TRANSIENT_PROVIDER_CODE_RE.test(msg)
+  )
+}
 
 /**
  * Tuning point for issue #605's banded routing rule. 50 bps = 0.5%.
@@ -779,35 +874,6 @@ export const findSwapQuote = async ({
     'MayaChain',
   ]
 
-  const isBelowMinimumMsg = (msg: string) => {
-    const lower = msg.toLowerCase()
-    return (
-      lower.includes('below minimum') ||
-      lower.includes('minimum amount') ||
-      lower.includes('min amount') ||
-      lower.includes('amount too small') ||
-      lower.includes('below the minimum')
-    )
-  }
-
-  // Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
-  // pool ragnarok, churn). The quote API then rejects EVERY amount with
-  // "trading is halted" — an operational state, not an amount problem. Detect it
-  // so we surface a "temporarily unavailable" message instead of the misleading
-  // generic "no route" (which reads like the pair is unsupported). Also match the
-  // "trading paused" wordings emitted by the THOR halt helpers in
-  // `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
-  // `<chain> chain trading paused`). (#604, CodeRabbit)
-  const isTradingHaltedMsg = (msg: string) => {
-    const lower = msg.toLowerCase()
-    return (
-      lower.includes('halted') ||
-      lower.includes('trading halt') ||
-      lower.includes('trading paused') ||
-      lower.includes('trading is paused')
-    )
-  }
-
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
   const haltedProviders = new Set<SwapQuoteProviderName>()
   let proactiveTradingHalt: SwapError | null = null
@@ -833,11 +899,8 @@ export const findSwapQuote = async ({
       throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
 
-    if (isBelowMinimumMsg(msg)) {
-      const providerName = fetchers[i].providerName
-      if (!belowMinimumByProvider.has(providerName)) {
-        belowMinimumByProvider.set(providerName, msg)
-      }
+    if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {
+      belowMinimumByProvider.set(fetchers[i].providerName, msg)
     }
 
     if (isTradingHaltedMsg(msg)) {
@@ -905,6 +968,33 @@ export const findSwapQuote = async ({
   console.warn(
     `[findSwapQuote] no route for ${from.ticker} -> ${to.ticker}; raw provider errors: ${rawProviderErrors.join(' | ')}`
   )
+
+  // If EVERY provider failed transiently (network/timeout/5xx — never a genuine
+  // structural decline), say so explicitly instead of the generic "no route"
+  // wording. The generic message below is deliberately noise-free (never embeds
+  // raw provider text — see "omits noisy provider errors" test) and, worse,
+  // unconditionally contains "no route", which downstream consumers' transient-
+  // error classifiers (e.g. agent-backend-ts's `isTransientQuoteError`) bail out
+  // on BEFORE checking for network/timeout signals — so a real outage was always
+  // reported as a hard, definitive "this pair has no route" dead-end. This is the
+  // one case where that's wrong: nobody actually declined the route, every
+  // provider was simply unreachable. Kept just as noise-free as the generic
+  // fallback (no raw provider text), naming the detected category rather than the
+  // upstream body, so downstream classification is deterministic without leaking
+  // upstream internals.
+  const rejectedReasons = settled
+    .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    .map(result => result.reason)
+  const allProvidersTransient = rejectedReasons.length > 0 && rejectedReasons.every(isTransientProviderFailure)
+
+  if (allProvidersTransient) {
+    throw new SwapError(
+      SwapErrorCode.AllProvidersFailed,
+      `Swap quote lookup failed for all ${failedProviders.length} provider(s) tried ` +
+        `(${failedProviders.join(', ')}) due to a transient network/timeout error. ` +
+        `This is not a missing route — retry the same swap shortly.`
+    )
+  }
 
   throw new SwapError(
     SwapErrorCode.AllProvidersFailed,

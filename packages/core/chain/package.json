@@ -225,6 +225,11 @@
       "import": "./dist/chains/cosmos/cosmosGasLimitRecord.js",
       "default": "./dist/chains/cosmos/cosmosGasLimitRecord.js"
     },
+    "./chains/cosmos/cosmosMemoCap": {
+      "types": "./dist/chains/cosmos/cosmosMemoCap.d.ts",
+      "import": "./dist/chains/cosmos/cosmosMemoCap.js",
+      "default": "./dist/chains/cosmos/cosmosMemoCap.js"
+    },
     "./chains/cosmos/cosmosMsgTypes": {
       "types": "./dist/chains/cosmos/cosmosMsgTypes.d.ts",
       "import": "./dist/chains/cosmos/cosmosMsgTypes.js",
