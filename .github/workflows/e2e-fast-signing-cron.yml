@@ -56,19 +56,25 @@ jobs:
 
       # Vault file is a base64-encoded .vult export of a dedicated, disposable
       # fast test vault funded with dust ($5-10/chain max per SECURITY.md) -
-      # never a production vault. Not yet provisioned as of this workflow's
-      # introduction: this step soft-fails (warns, doesn't error) so the job
-      # stays green with all tests cleanly skipped, rather than failing CI on
-      # a missing secret.
+      # never a production vault. Split across 6 secrets (E2E_TEST_VAULT_FILE_B64_1..6)
+      # because a single base64 vault export exceeds GitHub Actions' per-secret
+      # size cap - concatenated back together here before decoding. If none are
+      # set, this step soft-fails (warns, doesn't error) so the job stays green
+      # with all tests cleanly skipped, rather than failing CI on a missing secret.
       - name: Write test vault fixture
         id: vault_setup
         env:
-          VAULT_B64: ${{ secrets.E2E_TEST_VAULT_FILE_BASE64 }}
+          VAULT_B64_1: ${{ secrets.E2E_TEST_VAULT_FILE_B64_1 }}
+          VAULT_B64_2: ${{ secrets.E2E_TEST_VAULT_FILE_B64_2 }}
+          VAULT_B64_3: ${{ secrets.E2E_TEST_VAULT_FILE_B64_3 }}
+          VAULT_B64_4: ${{ secrets.E2E_TEST_VAULT_FILE_B64_4 }}
+          VAULT_B64_5: ${{ secrets.E2E_TEST_VAULT_FILE_B64_5 }}
+          VAULT_B64_6: ${{ secrets.E2E_TEST_VAULT_FILE_B64_6 }}
         run: |
-          if [ -z "$VAULT_B64" ]; then
-            echo "::warning::E2E_TEST_VAULT_FILE_BASE64 secret is not set - fast-signing E2E suite will skip (no fixture). See packages/sdk/tests/e2e/SECURITY.md to provision a funded test vault."
+          if [ -z "$VAULT_B64_1" ]; then
+            echo "::warning::E2E_TEST_VAULT_FILE_B64_1 secret is not set - fast-signing E2E suite will skip (no fixture). See packages/sdk/tests/e2e/SECURITY.md to provision a funded test vault."
           else
-            echo "$VAULT_B64" | base64 -d > /tmp/e2e-test-vault.vult
+            printf '%s' "$VAULT_B64_1$VAULT_B64_2$VAULT_B64_3$VAULT_B64_4$VAULT_B64_5$VAULT_B64_6" | base64 -d > /tmp/e2e-test-vault.vult
           fi
 
       # Deliberately its OWN secret, not the existing TEST_VAULT_PASSWORD
