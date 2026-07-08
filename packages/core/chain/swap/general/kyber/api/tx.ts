@@ -141,7 +141,11 @@ export const getKyberSwapTx = async ({
     tx: {
       evm: {
         from: from.address,
-        to: routerAddress,
+        // AGG-04: bind tx.to to /route/build's OWN routerAddress — the router paired with
+        // `data` (the calldata this call just generated) — not the stale /routes param.
+        // The equality guard above already proves they match today (AGG-02 / #1079); this
+        // keeps tx.to authoritative-by-construction as defense-in-depth if that guard ever moves.
+        to: buildRouterAddress,
         data,
         value: isFeeCoin(from) ? amount.toString() : '0',
         gasLimit: gas ? BigInt(gas) : undefined,
