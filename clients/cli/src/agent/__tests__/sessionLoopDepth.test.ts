@@ -48,7 +48,6 @@ describe('processMessageLoop — loop-depth cap truncation signal', () => {
       client: { sendMessageStream },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
       selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
-      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
       reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
     }
 

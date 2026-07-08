@@ -61,12 +61,14 @@ function makeHarness(opts: {
   )
   const client = {
     sendMessageStream: vi.fn(async (_conv: string, _request: any, callbacks: any) => {
-      // Fire a server-built tx on the first turn only; later turns are plain text.
+      // Fire a signable tool-output candidate on the first turn only; later turns
+      // are plain text. (#927 Phase 2: tool-output is the sole sign source.)
       if (client.sendMessageStream.mock.calls.length === 1) {
-        callbacks.onTxReady({
-          chain,
-          txArgs: { tx: { to: '0xR', value: '1' } },
-        })
+        callbacks.onToolOutputTx(
+          { chain, txArgs: { tx: { to: '0x1111111111111111111111111111111111111111', value: '1' } } },
+          'execute_send',
+          'prep'
+        )
       }
       return { message: { content: 'ok' }, fullText: '', transactions: [] }
     }),
@@ -112,7 +114,6 @@ function makeHarness(opts: {
     txConfirmMaxPolls: opts.maxPolls ?? 5,
     processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
     selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
-    logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
     reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
     runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
     dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,

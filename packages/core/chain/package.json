@@ -215,10 +215,20 @@
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
       "default": "./dist/chains/cosmos/cosmosFeeCoinDenom.js"
     },
+    "./chains/cosmos/cosmosFeeDenomAllowlist": {
+      "types": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.d.ts",
+      "import": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.js",
+      "default": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.js"
+    },
     "./chains/cosmos/cosmosGasLimitRecord": {
       "types": "./dist/chains/cosmos/cosmosGasLimitRecord.d.ts",
       "import": "./dist/chains/cosmos/cosmosGasLimitRecord.js",
       "default": "./dist/chains/cosmos/cosmosGasLimitRecord.js"
+    },
+    "./chains/cosmos/cosmosMemoCap": {
+      "types": "./dist/chains/cosmos/cosmosMemoCap.d.ts",
+      "import": "./dist/chains/cosmos/cosmosMemoCap.js",
+      "default": "./dist/chains/cosmos/cosmosMemoCap.js"
     },
     "./chains/cosmos/cosmosMsgTypes": {
       "types": "./dist/chains/cosmos/cosmosMsgTypes.d.ts",
