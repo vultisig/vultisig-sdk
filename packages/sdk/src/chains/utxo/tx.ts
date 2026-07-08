@@ -55,7 +55,10 @@ type UtxoChainSpec = {
 
 const UTXO_SPECS: Record<UtxoChainName, UtxoChainSpec> = {
   Bitcoin: { scriptType: 'p2wpkh', dustLimit: 546n, slip44: 0, bipPurpose: 84 },
-  Litecoin: { scriptType: 'p2wpkh', dustLimit: 1_000n, slip44: 2, bipPurpose: 84 },
+  // UTXO-02 (audit r2): LTC's DUST_RELAY_TX_FEE is ~10x BTC's -> real P2WPKH dust ~2_940 litoshi, not 1_000.
+  // At 1_000 a 1_001..2_939 change output is non-standard dust that can stall the tx. KEEP IN SYNC with
+  // packages/core/chain/chains/utxo/minUtxo.ts (minUtxo[Chain.Litecoin]).
+  Litecoin: { scriptType: 'p2wpkh', dustLimit: 2_940n, slip44: 2, bipPurpose: 84 },
   Dogecoin: { scriptType: 'p2pkh', dustLimit: 1_000_000n, slip44: 3, bipPurpose: 44 },
   'Bitcoin-Cash': { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 145, bipPurpose: 44 },
   Dash: { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 5, bipPurpose: 44 },
