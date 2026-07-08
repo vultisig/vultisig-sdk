@@ -229,7 +229,7 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     } else {
       // Tolerate a corrupt active-vault pointer: fall back to no active vault
       // instead of bricking every command (including `vaults`).
-      vault = await loadActiveVaultSafely(sdk)
+      vault = (await loadActiveVaultSafely(sdk)).vault
     }
 
     if (vault) {
