@@ -37,6 +37,44 @@ const ERC20_TRANSFER_UNSIGNED_HEX =
   '0xf86a038509c765240082fde894444444444444444444444444444444444444444480b844a9059cbb00000000000000000000000055555555555555555555555555555555555555550000000000000000000000000000000000000000000000000db4da5f4415aa0081898080'
 const ERC20_TRANSFER_SIGNING_HASH = '0x6af2740817e7cf4c0980e77931a791952b11ec6416d203c3c9411d9c85d01720'
 
+// CROSS-ENCODER BINDING (Track B follow-up to VA-81's layer-1/layer-2 golden-vector
+// work): the buildSolanaSendTx suite below self-checks against @solana/web3.js (this
+// path's OWN reference) - but packages/core's compileTx.golden.test.ts independently
+// self-checks the SAME logical Solana transfer against WalletCore/WASM (the OTHER real
+// encoder the app can dispatch through). Until now the two suites never shared a single
+// fixture, so the two encoders could silently diverge with nothing catching it - each
+// path only proves itself internally consistent, not that they AGREE with each other.
+//
+// Uses the IDENTICAL private-key-derived sender (EDDSA privkey fill(1), same convention
+// compileTx.golden.test.ts already uses) and the SAME literal recipient/blockhash/
+// lamports as that suite's 'matches WalletCore for a Solana transfer transaction' test,
+// then asserts against the SAME pinned message bytes that suite ALSO pins. If either
+// encoder's output ever diverges, WHICHEVER suite's hardcoded expected value no longer
+// matches its own encoder's real output fails - that is the actual drift-killer, not
+// just each suite validating itself in isolation.
+//
+// MUST STAY IN SYNC with packages/core/mpc/tx/compile/compileTx.golden.test.ts's Solana
+// test - any fixture change here must be mirrored there (and vice versa).
+describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
+  it('produces the SAME message bytes as WalletCore for the identical Solana transfer', () => {
+    const tx = buildSolanaSendTx({
+      // derived from EDDSA privkey fill(1) via WalletCore, same as compileTx.golden.test.ts's sender
+      from: 'AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9',
+      // literal recipient hardcoded in compileTx.golden.test.ts's Solana test
+      to: 'GogodXVKU6KfeZiSR9oybanGGZXRuQ34ogb2i3f3WvYi',
+      lamports: 123_456_789n,
+      recentBlockhash: '44jzmJEahEFTHexSNLkLfXXXyKggtpT2jJuJ3hdCBbsB',
+    })
+
+    // Live cross-checked once (2026-07-08) against packages/core's actual
+    // walletCore.TransactionCompiler.preImageHashes output for this identical tx -
+    // confirmed byte-identical before pinning.
+    const WALLET_CORE_MESSAGE_HEX =
+      '010001038a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cead507107acfc90d38c835bfbbfa61879ff12ea1b1640abb08b90dcb2eb4320b00000000000000000000000000000000000000000000000000000000000000002d886b3a1d282bef2fd4ac76de74b2c9a4cf7b07c02121f68e2689698bf555e601020200010c0200000015cd5b0700000000'
+    expect(tx.signingHashHex).toBe(WALLET_CORE_MESSAGE_HEX)
+  })
+})
+
 describe('React Native transaction builder golden vectors', () => {
   describe('buildSolanaSendTx', () => {
     it('matches @solana/web3.js legacy SystemProgram.transfer bytes', async () => {

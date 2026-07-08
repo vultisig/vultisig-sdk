@@ -248,7 +248,7 @@ describe('compileTx golden vectors', () => {
       }),
     })
     const txInputData = TW.Solana.Proto.SigningInput.encode(signingInput).finish()
-    const { compiled } = compile({
+    const { compiled, hashes } = compile({
       walletCore,
       chain: Chain.Solana,
       txInputData,
@@ -270,6 +270,17 @@ describe('compileTx golden vectors', () => {
     )
 
     expect(compiledOutput.encoded).toEqual(signedByWalletCore.encoded)
+
+    // CROSS-ENCODER BINDING (Track B follow-up to VA-81): this fixture (sender derived
+    // from EDDSA_PRIVATE_KEY fill(1), literal recipient/blockhash/lamports above) is
+    // shared verbatim with packages/sdk/tests/unit/platforms/react-native/tx-builder-
+    // golden-vectors.test.ts's 'cross-encoder binding' describe, which independently
+    // builds the SAME transfer via the RN-JS path and asserts the SAME expected bytes.
+    // If this WalletCore path ever drifts from the RN-JS path, ONE of these two
+    // hardcoded assertions breaks. MUST STAY IN SYNC with that file.
+    expect(hex(hashes[0]!)).toBe(
+      '010001038a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cead507107acfc90d38c835bfbbfa61879ff12ea1b1640abb08b90dcb2eb4320b00000000000000000000000000000000000000000000000000000000000000002d886b3a1d282bef2fd4ac76de74b2c9a4cf7b07c02121f68e2689698bf555e601020200010c0200000015cd5b0700000000'
+    )
   })
 
   it('matches WalletCore for a Cosmos protobuf MsgSend', () => {
@@ -303,7 +314,7 @@ describe('compileTx golden vectors', () => {
       ],
     })
     const txInputData = TW.Cosmos.Proto.SigningInput.encode(signingInput).finish()
-    const { compiled } = compile({
+    const { compiled, hashes } = compile({
       walletCore,
       chain: Chain.Cosmos,
       txInputData,
@@ -325,6 +336,16 @@ describe('compileTx golden vectors', () => {
     )
 
     expect(compiledOutput.serialized).toBe(signedByWalletCore.serialized)
+
+    // CROSS-ENCODER BINDING (Track B follow-up to VA-81): this fixture (sender/recipient
+    // derived from ECDSA_PRIVATE_KEY fill(1)/fill(2), same chainId/accountNumber/
+    // sequence/memo/denom/amount/fee above) is shared verbatim with packages/sdk/tests/
+    // unit/platforms/react-native/cosmos-send-golden-vectors.test.ts's 'cross-encoder
+    // binding' describe, which independently builds the SAME MsgSend via the RN-JS/
+    // cosmjs-types path and asserts the SAME expected SignDoc hash. If this WalletCore
+    // path ever drifts from the RN-JS path, ONE of these two hardcoded assertions
+    // breaks. MUST STAY IN SYNC with that file.
+    expect(hex(hashes[0]!)).toBe('fd6f6f8d78322b881c8f9f4753272adb0143d6d9c6556b076b61d5a9b701a916')
   })
 
   it('pins the manual Cardano witness wrapper', () => {
