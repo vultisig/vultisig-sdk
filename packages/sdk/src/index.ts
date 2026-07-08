@@ -708,6 +708,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,

@@ -1922,6 +1922,11 @@
       "import": "./dist/tx/hash/resolvers/utxo.js",
       "default": "./dist/tx/hash/resolvers/utxo.js"
     },
+    "./tx/isValidTxHash": {
+      "types": "./dist/tx/isValidTxHash.d.ts",
+      "import": "./dist/tx/isValidTxHash.js",
+      "default": "./dist/tx/isValidTxHash.js"
+    },
     "./tx/status": {
       "types": "./dist/tx/status/index.d.ts",
       "import": "./dist/tx/status/index.js",
