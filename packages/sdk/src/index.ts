@@ -288,6 +288,13 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 
+// Skip Go routing-eligibility predicates. Single source of truth for "does this
+// from/to chain pair route through Skip Go?" — consolidated here so consumers
+// (execute/build tools, route discovery/listing, destination-format validation)
+// share one tested implementation instead of independently-maintained copies
+// that can drift from each other (the mcp-ts #384 bug class).
+export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {
