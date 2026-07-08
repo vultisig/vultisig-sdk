@@ -3,6 +3,7 @@ import type { CoinKey } from '../../coin/Coin'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from './cosmosGasLimitRecord'
 import { getCosmosRpcUrl } from './getCosmosRpcUrl'
+import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
 
 const defaultGas = 7500n
 
@@ -131,10 +132,7 @@ const fetchMinGasPrice = async (chain: IbcEnabledCosmosChain, { fetchImpl = fetc
   }
 }
 
-export const getCosmosFeeAmount = async (
-  coin: CoinKey<IbcEnabledCosmosChain>,
-  opts: FetchOpts = {}
-): Promise<bigint> => {
+const getGenericCosmosFeeAmount = async (coin: CoinKey<IbcEnabledCosmosChain>, opts: FetchOpts): Promise<bigint> => {
   const floor = cosmosGasRecord[coin.chain]
 
   try {
@@ -149,4 +147,22 @@ export const getCosmosFeeAmount = async (
   } catch {
     return floor
   }
+}
+
+export const getCosmosFeeAmount = async (
+  coin: CoinKey<IbcEnabledCosmosChain>,
+  opts: FetchOpts = {}
+): Promise<bigint> => {
+  const genericFee = await getGenericCosmosFeeAmount(coin, opts)
+
+  if (coin.chain !== Chain.Osmosis) return genericFee
+
+  // Osmosis's real fee floor is enforced by its EIP-1559 `x/txfees` module,
+  // NOT the generic node-config `minimum-gas-price` queried above (a
+  // per-node/operator-configurable value that doesn't track the live
+  // protocol floor, and can be clamped away by the anomaly guard above when
+  // it legitimately spikes). Query Osmosis's own dynamic floor directly and
+  // never pay less than what it currently requires - see osmosisDynamicFee.ts.
+  const dynamicFloor = await getOsmosisDynamicFeeFloor(getCosmosGasLimit(coin), opts)
+  return dynamicFloor !== null && dynamicFloor > genericFee ? dynamicFloor : genericFee
 }

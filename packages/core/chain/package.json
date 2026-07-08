@@ -250,6 +250,11 @@
       "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
       "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
     },
+    "./chains/cosmos/osmosisDynamicFee": {
+      "types": "./dist/chains/cosmos/osmosisDynamicFee.d.ts",
+      "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
+      "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
+    },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/protoEncoding.js",
