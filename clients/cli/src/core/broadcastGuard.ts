@@ -13,9 +13,20 @@
  *
  * The intent basis here is the resolved {@link KeysignPayload} (send) or the
  * swap request (swap), namespaced by the vault's ECDSA public key so a shared
- * journal can't cross-match two different vaults. For a native/EVM send this
- * lines up with the agent path's own basis (owner, chain, to, base-unit amount,
- * memo), so a `send` and an identical `agent ask` cross-dedupe.
+ * journal can't cross-match two different vaults.
+ *
+ * Cross-path parity: for a NATIVE / simple-EVM send the send-command basis
+ * (owner=ecdsa, chain, to=recipient, value=base-unit amount, data=memo) lines up
+ * field-for-field with the agent path's basis (executor.ts buildBroadcastIntent),
+ * so a direct `send` and an identical `agent ask` dedupe against the ONE shared
+ * journal. It does NOT line up for ERC-20 token sends (the agent path fingerprints
+ * the on-chain tx — to=token contract, value=0, data=transfer calldata — whereas
+ * the send command fingerprints the recipient + token amount) nor for swaps (the
+ * swap intent is deliberately a coarse, retry-stable request descriptor). Those
+ * cross-path cases are a MISSED dedup, not a double-spend: within each path token
+ * sends and swaps still dedupe correctly. Full cross-path parity would require the
+ * guard to move down into `vault.send()`/`vault.swap()` — see the residual note on
+ * {@link guardedBroadcast}.
  */
 import type { Chain, KeysignPayload, VaultBase } from '@vultisig/sdk'
 
@@ -27,23 +38,43 @@ import {
   reserveBroadcast,
 } from '../agent/broadcastJournal'
 
-/** The owning vault's ECDSA public key, used to namespace the journal. */
-function ownerOf(vault: VaultBase): string | undefined {
-  return vault.publicKeys?.ecdsa || undefined
+/**
+ * Stable, non-empty journal namespace for the vault. Prefer the ECDSA public key
+ * (what the agent path uses, so the two paths cross-dedupe), and fall back to the
+ * vault id if — defensively — the key is ever absent. Never returns empty: an
+ * empty owner would collapse two DIFFERENT vaults sending an identical (chain, to,
+ * value) tx into one fingerprint and wrongly refuse the second (a false lockout).
+ */
+function ownerOf(vault: VaultBase): string {
+  return vault.publicKeys?.ecdsa || vault.id
 }
+
+/**
+ * `--max` sends/swaps resolve their amount from live balance/fee state, which
+ * drifts between a first broadcast and a retry (fee estimate moves, or the swept
+ * balance changes) — so fingerprinting the resolved amount would let a `--max`
+ * retry slip past the guard with a slightly different amount and double-spend
+ * (the P5-1 hazard, narrowed to `--max`). Instead a `--max` intent fingerprints a
+ * stable `max` sentinel: any `--max` send/swap of the same asset to the same
+ * destination within the window dedupes regardless of the resolved amount. This
+ * intentionally over-blocks a legitimately-different `--max` within the window
+ * (the fund-safe direction) — `--force` overrides.
+ */
+const MAX_AMOUNT_SENTINEL = 'max'
 
 /**
  * Build the dedupe intent for a `send` from its resolved {@link KeysignPayload}.
  * `toAmount` is a base-unit integer string (wei / sats / lamports / …), matching
- * the base-unit `value` the agent path fingerprints, so identical sends across
- * the two paths collide. A non-native token folds its contract address in as the
- * asset discriminator; native sends leave `asset` undefined (the token identity
- * is already implied by the chain), mirroring the agent path.
+ * the base-unit `value` the agent path fingerprints, so identical native/EVM sends
+ * across the two paths collide. A non-native token folds its contract address in
+ * as the asset discriminator; native sends leave `asset` undefined (the token
+ * identity is already implied by the chain), mirroring the agent path.
  */
 export function buildSendBroadcastIntent(
   vault: VaultBase,
   chain: Chain,
-  keysignPayload: KeysignPayload
+  keysignPayload: KeysignPayload,
+  opts: { isMax?: boolean } = {}
 ): BroadcastIntent {
   const coin = keysignPayload.coin
   const isNative = coin?.isNativeToken ?? !coin?.contractAddress
@@ -51,7 +82,7 @@ export function buildSendBroadcastIntent(
     owner: ownerOf(vault),
     chain: chain.toString(),
     to: keysignPayload.toAddress || undefined,
-    value: keysignPayload.toAmount || undefined,
+    value: opts.isMax ? MAX_AMOUNT_SENTINEL : keysignPayload.toAmount || undefined,
     data: keysignPayload.memo || undefined,
     asset: isNative ? undefined : coin?.contractAddress || coin?.ticker || undefined,
   }
@@ -59,20 +90,21 @@ export function buildSendBroadcastIntent(
 
 /**
  * Build the dedupe intent for a `swap` from its request. Derived from the stable
- * request fields (from/to chain + token + human amount) rather than the live
+ * request fields (from/to chain + token + resolved amount) rather than the live
  * quote, so a retry of the SAME swap intent dedupes even when the best-route
- * quote (provider, exact output) shifts between attempts. `from`/`to`
- * descriptors and the amount fully identify the user's intent.
+ * quote (provider, exact output) shifts between attempts. `from`/`to` descriptors
+ * and the amount fully identify the user's intent. A `--max` swap fingerprints the
+ * stable {@link MAX_AMOUNT_SENTINEL} rather than the drift-prone resolved amount.
  */
 export function buildSwapBroadcastIntent(
   vault: VaultBase,
-  request: { fromChain: Chain; toChain: Chain; fromToken?: string; toToken?: string; amount: string }
+  request: { fromChain: Chain; toChain: Chain; fromToken?: string; toToken?: string; amount: string; isMax?: boolean }
 ): BroadcastIntent {
   return {
     owner: ownerOf(vault),
     chain: request.fromChain.toString(),
     to: request.toChain.toString(),
-    value: request.amount,
+    value: request.isMax ? MAX_AMOUNT_SENTINEL : request.amount,
     data: `swap:${request.fromToken || 'native'}->${request.toToken || 'native'}`,
     asset: request.fromToken || undefined,
   }
@@ -86,6 +118,18 @@ export function buildSwapBroadcastIntent(
  * failed, or if a sibling process holds the reservation — UNLESS `force` is set.
  * Otherwise reserves the intent, runs `broadcast()`, records the resulting hash
  * to the journal so a later retry recognises it, and releases the reservation.
+ *
+ * Residual window (known limitation of the CLI-level wire): `broadcast()` is the
+ * SDK's compound `vault.send()`/`vault.swap()`, which signs AND broadcasts on-chain
+ * internally before returning a hash. If it broadcasts and then throws before
+ * returning (a post-broadcast SDK step fails, or — for a multi-leg swap — the
+ * ERC-20 approval broadcasts but the main leg then fails), nothing is journaled
+ * and a fresh-process retry can re-broadcast. The reservation lock file survives a
+ * hard crash for RESERVATION_STALE_MS (5 min) and covers the crash case, but not a
+ * caught throw that exits cleanly. Closing this fully requires recording at each
+ * SDK broadcast chokepoint (as the agent path does via recordBroadcastForTx) —
+ * i.e. pushing the guard down into `vault.send()`/`vault.swap()`, a deliberately
+ * deferred larger change. Follow-up: 070726-sdkcli2-01 residual (swap compound leg).
  */
 export async function guardedBroadcast<T extends { txHash: string }>(
   intent: BroadcastIntent,

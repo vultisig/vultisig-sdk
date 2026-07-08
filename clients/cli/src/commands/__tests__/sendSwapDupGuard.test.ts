@@ -41,7 +41,9 @@ vi.mock('../../ui', () => ({
 }))
 
 import { AgentErrorCode } from '../../agent/agentErrors'
+import { computeFingerprint, reserveBroadcast } from '../../agent/broadcastJournal'
 import { AgentExecutor } from '../../agent/executor'
+import { buildSendBroadcastIntent } from '../../core/broadcastGuard'
 import { classifyError, ExitCode } from '../../core/errors'
 import { executeSwap } from '../swap'
 import { sendTransaction } from '../transaction'
@@ -57,6 +59,49 @@ function nativeSendPayload(to: string, amountBaseUnits: string): KeysignPayload 
     toAmount: amountBaseUnits,
     memo: undefined,
   } as unknown as KeysignPayload
+}
+
+function tokenSendPayload(to: string, amountBaseUnits: string, contract: string): KeysignPayload {
+  return {
+    coin: { isNativeToken: false, ticker: 'USDC', contractAddress: contract, chain: 'Ethereum', address: '0xsender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo: undefined,
+  } as unknown as KeysignPayload
+}
+
+/** A vault whose dry-run returns `payload`, but resolves a DIFFERENT amount each
+ * real broadcast — models `--max` fee/balance drift between attempts. */
+function makeDriftingMaxVault(opts: { payloads: KeysignPayload[]; txHash: string; realSends: { count: number } }): {
+  vault: VaultBase
+} {
+  let dry = 0
+  const send = vi.fn(async (p: { dryRun?: boolean; chain: Chain }) => {
+    if (p.dryRun) {
+      const payload = opts.payloads[Math.min(dry, opts.payloads.length - 1)]
+      dry += 1
+      return { dryRun: true, fee: '0.001', total: '1', keysignPayload: payload }
+    }
+    opts.realSends.count += 1
+    return { dryRun: false, txHash: opts.txHash, chain: p.chain }
+  })
+  return {
+    vault: {
+      type: 'fast',
+      isEncrypted: false,
+      isUnlocked: () => true,
+      unlock: vi.fn(),
+      id: 'vault-max',
+      name: 'vault-max',
+      publicKeys: { ecdsa: OWNER, eddsa: '' },
+      send,
+      gas: vi.fn().mockRejectedValue(new Error('no gas')),
+      balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18, formattedAmount: '10' }),
+      address: vi.fn().mockResolvedValue('0xsender'),
+      on: vi.fn(),
+      removeAllListeners: vi.fn(),
+    } as unknown as VaultBase,
+  }
 }
 
 /** A vault whose `send` returns a dry-run payload, then a broadcast hash. */
@@ -250,6 +295,127 @@ describe('send — broadcast dedupe guard', () => {
     expect(agentResult.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
     expect(signSpy).not.toHaveBeenCalled() // never double-signed across paths
   })
+
+  it('token (ERC-20) sends: identical refused, a different token to the same recipient allowed', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: tokenSendPayload('0xrecipient', '1000000', '0xTokenA'),
+      txHash: '0xtokenA',
+      realSends,
+    })
+    // First USDC(TokenA) send journals.
+    await sendTransaction(vault, { ...params })
+    // Identical TokenA send is refused (asset discriminator matches).
+    await expect(sendTransaction(vault, { ...params })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSends.count).toBe(1)
+
+    // A DIFFERENT token (same to/amount) has a distinct `asset` → distinct
+    // fingerprint → allowed. This is the fund-safety discriminator that stops two
+    // different tokens from being conflated.
+    ;(vault.send as unknown as { mockImplementation: (f: unknown) => void }).mockImplementation(
+      async (p: { dryRun?: boolean; chain: Chain }) => {
+        if (p.dryRun)
+          return {
+            dryRun: true,
+            fee: '0.001',
+            total: '1',
+            keysignPayload: tokenSendPayload('0xrecipient', '1000000', '0xTokenB'),
+          }
+        realSends.count += 1
+        return { dryRun: false, txHash: '0xtokenB', chain: p.chain }
+      }
+    )
+    await sendTransaction(vault, { ...params })
+    expect(realSends.count).toBe(2)
+  })
+
+  it('a broadcast that THROWS is not journaled, so a genuine retry is allowed', async () => {
+    const realSends = { count: 0 }
+    let fail = true
+    const send = vi.fn(async (p: { dryRun?: boolean; chain: Chain }) => {
+      if (p.dryRun)
+        return {
+          dryRun: true,
+          fee: '0.001',
+          total: '1',
+          keysignPayload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+        }
+      if (fail) throw new Error('broadcast RPC failed')
+      realSends.count += 1
+      return { dryRun: false, txHash: '0xafterfail', chain: p.chain }
+    })
+    const vault = {
+      type: 'fast',
+      isEncrypted: false,
+      isUnlocked: () => true,
+      unlock: vi.fn(),
+      id: 'v',
+      name: 'v',
+      publicKeys: { ecdsa: OWNER, eddsa: '' },
+      send,
+      gas: vi.fn().mockRejectedValue(new Error('no gas')),
+      balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18, formattedAmount: '10' }),
+      address: vi.fn().mockResolvedValue('0xsender'),
+      on: vi.fn(),
+      removeAllListeners: vi.fn(),
+    } as unknown as VaultBase
+
+    // First attempt broadcasts→throws: nothing journaled, reservation released.
+    await expect(sendTransaction(vault, { ...params })).rejects.toThrow('broadcast RPC failed')
+    // Retry must NOT be blocked by the failed attempt — the guard only records a
+    // real hash, so a genuine retry after a failure proceeds.
+    fail = false
+    const ok = await sendTransaction(vault, { ...params })
+    expect((ok as { txHash: string }).txHash).toBe('0xafterfail')
+    expect(realSends.count).toBe(1)
+  })
+
+  it('a sibling-held reservation (ConcurrentBroadcastError) refuses without signing, exit 9', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('0xrecipient', '1000000000000000000'),
+      txHash: '0xshouldnothappen',
+      realSends,
+    })
+    // A sibling process holds the atomic reservation for this exact intent.
+    const held = reserveBroadcast(
+      computeFingerprint(
+        buildSendBroadcastIntent(vault, Chain.Ethereum, nativeSendPayload('0xrecipient', '1000000000000000000'))
+      )
+    )
+
+    const err = await sendTransaction(vault, { ...params }).catch(e => e)
+    expect(err.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    expect(classifyError(err).exitCode).toBe(ExitCode.DUPLICATE_BROADCAST)
+    expect(realSends.count).toBe(0) // never signed while the sibling holds it
+
+    // Once the sibling releases, a send proceeds normally.
+    held.release()
+    await sendTransaction(vault, { ...params })
+    expect(realSends.count).toBe(1)
+  })
+
+  it('--max retries dedupe even when the resolved amount drifts (stable max fingerprint)', async () => {
+    const realSends = { count: 0 }
+    // First dry-run resolves 9.98 ETH; the retry's dry-run resolves 9.97 (fee
+    // drift). Without the stable `max` sentinel these fingerprint differently and
+    // the retry would double-spend.
+    const { vault } = makeDriftingMaxVault({
+      payloads: [
+        nativeSendPayload('0xrecipient', '9980000000000000000'),
+        nativeSendPayload('0xrecipient', '9970000000000000000'),
+      ],
+      txHash: '0xmax',
+      realSends,
+    })
+    await sendTransaction(vault, { chain: Chain.Ethereum, to: '0xrecipient', amount: 'max', yes: true })
+    await expect(
+      sendTransaction(vault, { chain: Chain.Ethereum, to: '0xrecipient', amount: 'max', yes: true })
+    ).rejects.toMatchObject({ code: AgentErrorCode.DUPLICATE_BROADCAST })
+    expect(realSends.count).toBe(1) // drift did NOT let the max retry through
+  })
 })
 
 // ---- swap ------------------------------------------------------------------
@@ -266,9 +432,9 @@ describe('swap — broadcast dedupe guard', () => {
     expect((first as { txHash: string }).txHash).toBe('0xswap1')
     expect(realSwaps.count).toBe(1)
 
-    await expect(executeSwap(ctxFor(vault), { ...opts })).rejects.toMatchObject({
-      code: AgentErrorCode.DUPLICATE_BROADCAST,
-    })
+    const err = await executeSwap(ctxFor(vault), { ...opts }).catch(e => e)
+    expect(err.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
+    expect(classifyError(err).exitCode).toBe(ExitCode.DUPLICATE_BROADCAST) // exit 9 parity with send
     expect(realSwaps.count).toBe(1)
   })
 

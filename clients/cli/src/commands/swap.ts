@@ -248,6 +248,7 @@ export async function executeSwap(
     fromToken: options.fromToken,
     toToken: options.toToken,
     amount: fromAmountRaw,
+    isMax: options.amount === 'max',
   })
   let signSpinner: ReturnType<typeof createSpinner> | undefined
 

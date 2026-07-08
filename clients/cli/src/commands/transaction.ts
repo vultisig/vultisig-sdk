@@ -117,7 +117,9 @@ export async function sendTransaction(
   // refused (exit 9) unless --force is passed. The spinner is created INSIDE the
   // guarded callback so a refusal short-circuits before any misleading
   // "Signing..." UI, and the broadcast hash is journaled the instant it returns.
-  const intent = buildSendBroadcastIntent(vault, params.chain, dryResult.keysignPayload)
+  const intent = buildSendBroadcastIntent(vault, params.chain, dryResult.keysignPayload, {
+    isMax: params.amount === 'max',
+  })
   let signSpinner: ReturnType<typeof createSpinner> | undefined
 
   try {
