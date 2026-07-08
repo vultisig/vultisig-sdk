@@ -2,6 +2,7 @@ import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { evmChainInfo } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { getEvmBaseFee } from '@vultisig/core-chain/tx/fee/evm/baseFee'
+import { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 import { getEvmMaxPriorityFeePerGas } from '@vultisig/core-chain/tx/fee/evm/maxPriorityFeePerGas'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
@@ -154,7 +155,7 @@ export const getEvmFeeQuote = async ({
           return {
             gasLimit: capGasLimit(gasLimit),
             baseFeePerGas: maxFeePerGas - maxPriorityFeePerGas,
-            maxPriorityFeePerGas,
+            maxPriorityFeePerGas: clampEvmPriorityFee(chain, maxPriorityFeePerGas),
           }
         }
       }
@@ -179,7 +180,7 @@ export const getEvmFeeQuote = async ({
 
     const baseFeePerGas = baseFeeMultiplier(await getEvmBaseFee(chain))
 
-    const maxPriorityFeePerGas = await getEvmMaxPriorityFeePerGas(chain)
+    const maxPriorityFeePerGas = clampEvmPriorityFee(chain, await getEvmMaxPriorityFeePerGas(chain))
 
     return {
       gasLimit,

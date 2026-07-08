@@ -185,4 +185,48 @@ describe('getEvmFeeQuote gas limit buffering', () => {
     expect(quote.maxPriorityFeePerGas).toBe(3n)
     expect(mocks.getEvmBaseFee).not.toHaveBeenCalled()
   })
+
+  it('passes a normal RPC-reported priority fee through unchanged (SDK2-01 legit-path guard)', async () => {
+    // 80 gwei — a realistic heavy-congestion Ethereum L1 tip, well under the 500 gwei ceiling.
+    mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(80n * 1_000_000_000n)
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: {} as never,
+      minimumGasLimit: 600_000n,
+    })
+
+    expect(quote.maxPriorityFeePerGas).toBe(80n * 1_000_000_000n)
+  })
+
+  it('clamps an absurdly inflated RPC-reported priority fee to the sanity ceiling (SDK2-01)', async () => {
+    // A compromised/anomalous RPC reporting 10,000 gwei — orders of magnitude above any
+    // legitimate Ethereum L1 congestion tip.
+    mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(10_000n * 1_000_000_000n)
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: {} as never,
+      minimumGasLimit: 600_000n,
+    })
+
+    expect(quote.maxPriorityFeePerGas).toBe(500n * 1_000_000_000n)
+  })
+
+  it('clamps an absurdly inflated ZkSync priority fee to the sanity ceiling (SDK2-01)', async () => {
+    mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Zksync))
+    mocks.zksyncFeeClient.estimateFee.mockResolvedValue({
+      gasLimit: 700_001n,
+      maxFeePerGas: 6_000n * 1_000_000_000n,
+      maxPriorityFeePerGas: 5_000n * 1_000_000_000n,
+    })
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: {} as never,
+      minimumGasLimit: 600_000n,
+    })
+
+    // Zksync's 50 gwei L2 ceiling still catches an order-of-magnitude inflation.
+    expect(quote.maxPriorityFeePerGas).toBe(50n * 1_000_000_000n)
+    // baseFeePerGas is still derived from the raw (unclamped) split.
+    expect(quote.baseFeePerGas).toBe(6_000n * 1_000_000_000n - 5_000n * 1_000_000_000n)
+  })
 })
