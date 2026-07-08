@@ -693,13 +693,23 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
       "success": true,
       "data": {
         "balances": [
-          { "chain": "Ethereum", "symbol": "ETH", "amount": "1.5", "decimals": 18, "raw_amount": "1500000000000000000" }
+          {
+            "chain": "Ethereum",
+            "symbol": "ETH",
+            "amount": "1.5",
+            "decimals": 18,
+            "raw_amount": "1500000000000000000"
+          }
         ]
       }
     }
   ],
   "transactions": [
-    { "hash": "0x9f8e7d6c...", "chain": "ethereum", "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..." }
+    {
+      "hash": "0x9f8e7d6c...",
+      "chain": "ethereum",
+      "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+    }
   ]
 }
 ```
@@ -707,7 +717,10 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 On failure, stdout is a single JSON object with both a human `error` string and a stable `code` (the `error` field is unchanged for older parsers):
 
 ```json
-{ "error": "Agent backend unreachable at https://example.invalid", "code": "BACKEND_UNREACHABLE" }
+{
+  "error": "Agent backend unreachable at https://example.invalid",
+  "code": "BACKEND_UNREACHABLE"
+}
 ```
 
 Each entry in `tool_calls` may include `code` when `success` is false (same values as below).
@@ -983,8 +996,18 @@ vultisig balance -o json
 ```json
 {
   "balances": [
-    { "chain": "ethereum", "native": "1.5", "symbol": "ETH", "usdValue": "3750.00" },
-    { "chain": "bitcoin", "native": "0.1", "symbol": "BTC", "usdValue": "6500.00" }
+    {
+      "chain": "ethereum",
+      "native": "1.5",
+      "symbol": "ETH",
+      "usdValue": "3750.00"
+    },
+    {
+      "chain": "bitcoin",
+      "native": "0.1",
+      "symbol": "BTC",
+      "usdValue": "6500.00"
+    }
   ]
 }
 ```
@@ -1061,8 +1084,8 @@ VULTISIG_CONFIG_DIR=/custom/path
 # Override FastVault and relay via a shared base URL
 VULTISIG_SERVER_URL=http://127.0.0.1:8080
 
-# Disable colored output
-VULTISIG_NO_COLOR=1
+# Disable colored output (NO_COLOR is the cross-tool standard; VULTISIG_NO_COLOR also works)
+NO_COLOR=1
 
 # Enable silent mode (suppress spinners and info messages)
 VULTISIG_SILENT=1
@@ -1111,16 +1134,24 @@ Configuration is stored in `~/.vultisig/`:
 
 ## Exit Codes
 
-| Code | Meaning              |
-| ---- | -------------------- |
-| 0    | Success              |
-| 1    | General error        |
-| 2    | Invalid usage        |
-| 3    | Configuration error  |
-| 4    | Authentication error |
-| 5    | Network error        |
-| 6    | Vault error          |
-| 7    | Transaction error    |
+| Code | Meaning                                                                            |
+| ---- | ---------------------------------------------------------------------------------- |
+| 0    | Success                                                                            |
+| 1    | Usage error (bad arguments, unknown command)                                       |
+| 2    | Authentication required                                                            |
+| 3    | Network error (retryable)                                                          |
+| 4    | Invalid input (bad chain, address, amount)                                         |
+| 5    | Resource not found (token, route)                                                  |
+| 6    | External service error (retryable)                                                 |
+| 7    | Unknown/unexpected error                                                           |
+| 8    | Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry |
+| 9    | Duplicate broadcast refused (nothing sent) — retry with --force to override        |
+| 10   | agent ask: a fund-safety guardrail blocked the requested action                    |
+| 11   | agent ask: the model refused or asked a clarifying question (no action taken)      |
+
+> These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
+> truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run
+> `vultisig --help` for the same list.
 
 ## Troubleshooting
 
