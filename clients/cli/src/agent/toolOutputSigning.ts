@@ -245,7 +245,7 @@ function resolvePrepParentChain(env: Record<string, unknown>): Chain | null {
   const byId = asChainIdString(env.chain_id) ? resolveChainId(asChainIdString(env.chain_id)!) : null
   const candidates = [byChain, byFromChain, byId].filter((c): c is Chain => c !== null)
   if (candidates.length === 0) return null
-  if (candidates.some((c) => c !== candidates[0])) return null
+  if (candidates.some(c => c !== candidates[0])) return null
   return candidates[0]
 }
 

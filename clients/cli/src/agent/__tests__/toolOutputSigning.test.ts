@@ -438,7 +438,12 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     // nested tx on the wrong chain unless we reject it here.
     const parentMismatch = {
       chain: 'Ethereum',
-      txArgs: { chain: 'Base', chain_id: '8453', tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
       stepperConfig: {},
     }
     expect(deriveToolOutputCandidate('execute_contract_call', parentMismatch)).toBeNull()
