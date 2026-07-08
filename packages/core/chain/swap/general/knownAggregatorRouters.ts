@@ -34,12 +34,12 @@ import { Chain } from '../../Chain'
  * allowlist has real usage data to build from if a pattern emerges.
  */
 
-// 1inch Aggregation Router — V5 (legacy, unscoped) + V6 (current, chain-scoped). V5's
-// address is the same as chains/evm/contract/knownContracts.ts's display-only registry;
-// kept separate here since THIS one gates signing, not just UI labeling. V5 is unscoped
-// even though it likely has the same zkSync quirk as V6 (per knownContracts.ts's existing
-// comment) — getOneInchSwapQuote.ts only calls the v6.0 API today, so a V5 address is never
-// actually seen through this path; harmless defense-in-depth.
+// 1inch Aggregation Router V5 (legacy). Same address as
+// chains/evm/contract/knownContracts.ts's display-only registry; kept separate here since
+// THIS one gates signing, not just UI labeling. NOTE: the implementation below only accepts
+// this on non-zkSync chains (same exclusive branch as V6) — getOneInchSwapQuote.ts only
+// calls the v6.0 API today, so a V5 address is never actually seen through this path
+// regardless; harmless defense-in-depth either way.
 const ONE_INCH_V5_ROUTER = '0x1111111254eeb25477b68fb85ed929f73a960582'
 
 // V6's standard address — live-confirmed 2026-07-08 on Ethereum, Arbitrum, BSC, Base,
