@@ -29,6 +29,7 @@ import { blake2b } from '@noble/hashes/blake2.js'
 import { hmac } from '@noble/hashes/hmac.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { bech32 } from '@scure/base'
+import { getZcashConventionalFee } from '@vultisig/core-chain/chains/utxo/fee/zip317'
 import bs58check from 'bs58check'
 
 import { CASHADDR_CHARSET, verifyCashAddrChecksum } from '../../utils/cashaddr'
@@ -63,6 +64,44 @@ const UTXO_SPECS: Record<UtxoChainName, UtxoChainSpec> = {
 }
 
 export const getUtxoChainSpec = (chain: UtxoChainName): UtxoChainSpec => UTXO_SPECS[chain]
+
+/**
+ * Per-chain minimum relay fee rate, in that chain's own base-unit per vByte
+ * (sat/vB, litoshi/vB, koinu/vB, duff/vB). A caller-supplied `feeRate` below
+ * this is silently non-standard/non-relayable on that chain's real network —
+ * BTC-reasonable rates are fine on BTC/LTC/BCH/Dash but drastically underpay
+ * Dogecoin, whose coin value is orders of magnitude lower. This is a FLOOR:
+ * it only raises a too-low feeRate, never lowers a normal/high one (no
+ * overpaying a legitimate rate).
+ *
+ * Sourced from each chain's own Core `DEFAULT_MIN_RELAY_TX_FEE` (expressed
+ * per kvB there; divided by 1000 for the per-byte value used here):
+ *   - Bitcoin:      1,000 sat/kvB   -> 1 sat/vB
+ *     (bitcoin/bitcoin src/policy/policy.h DEFAULT_MIN_RELAY_TX_FEE)
+ *   - Litecoin:     1,000 litoshi/kvB -> 1 litoshi/vB (same order as BTC —
+ *     LTC's DUST_RELAY_TX_FEE is ~10x BTC's, but its min RELAY fee is not)
+ *     (litecoin-project/litecoin src/validation.h DEFAULT_MIN_RELAY_TX_FEE)
+ *   - Dogecoin:     100,000 koinu/kvB -> 100 koinu/vB (~100x Bitcoin's,
+ *     because DOGE's RECOMMENDED_MIN_TX_FEE = COIN/100 and
+ *     DEFAULT_MIN_RELAY_TX_FEE = RECOMMENDED_MIN_TX_FEE/10)
+ *     (dogecoin/dogecoin src/validation.h + src/policy/policy.h)
+ *   - Bitcoin-Cash: 1,000 sat/kvB   -> 1 sat/vB
+ *     (Bitcoin-ABC / bitcoin-cash-node src/policy/policy.h
+ *     DEFAULT_MIN_RELAY_TX_FEE_PER_KB)
+ *   - Dash:         1,000 duff/kvB  -> 1 duff/vB
+ *     (dashpay/dash src/policy/policy.h DEFAULT_MIN_RELAY_TX_FEE)
+ *   - Zcash:        unused — Zcash's floor is the absolute ZIP-317
+ *     conventional fee compared against the size-based fee below, not a
+ *     per-byte relay minimum. Kept at 1 so indexing this map is total.
+ */
+const UTXO_MIN_FEE_RATE: Record<UtxoChainName, number> = {
+  Bitcoin: 1,
+  Litecoin: 1,
+  Dogecoin: 100,
+  'Bitcoin-Cash': 1,
+  Dash: 1,
+  Zcash: 1,
+}
 
 // ---------------------------------------------------------------------------
 // Hex / binary helpers — no Buffer, RN-safe.
@@ -424,26 +463,6 @@ export const ZCASH_BRANCH_ID_NU6_2 = 0x5437f330
 const ZCASH_V4_VERSION = 0x80000004 // overwintered v4
 const ZCASH_SAPLING_VERSION_GROUP_ID = 0x892f2085
 
-/**
- * ZIP-317 conventional-fee floor (https://zips.z.cash/zip-0317). Nodes relay
- * zero "unpaid actions", so a tx must pay 5,000 zats per logical action with
- * a 2-action grace window. This builder emits at most two P2PKH outputs
- * (ceil(68 / 34) = 2 actions), so actions reduce to
- * max(2, ceil(input bytes / 150)).
- * Canonical formula: packages/core/chain/chains/utxo/fee/zip317.ts.
- */
-const ZCASH_MARGINAL_FEE = 5000n
-const ZCASH_GRACE_ACTIONS = 2n
-const ZCASH_P2PKH_INPUT_SIZE = 148n
-const ZCASH_INPUT_ACTION_SIZE = 150n
-
-function zcashConventionalFee(inputCount: number): bigint {
-  const inputBytes = BigInt(inputCount) * ZCASH_P2PKH_INPUT_SIZE
-  const inputActions = (inputBytes + ZCASH_INPUT_ACTION_SIZE - 1n) / ZCASH_INPUT_ACTION_SIZE
-  const actions = inputActions > ZCASH_GRACE_ACTIONS ? inputActions : ZCASH_GRACE_ACTIONS
-  return ZCASH_MARGINAL_FEE * actions
-}
-
 function zcashPersonalization(prefix: string, branchId: number): Uint8Array {
   const prefixBytes = new TextEncoder().encode(prefix)
   if (prefixBytes.length === 16) {
@@ -800,8 +819,21 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
   const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
   const txSize = inputs.length * bytesPerInput + 2 * 34 + 10 + opReturnBytes
-  const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
-  const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
+  // UTXO-03: a caller-supplied feeRate below the chain's real min-relay-fee
+  // silently produces a stuck/non-relayable tx (most acute on Dogecoin, whose
+  // min relay fee is ~100x Bitcoin's). Raise — never lower — to the floor.
+  const effectiveFeeRate = Math.max(opts.feeRate, UTXO_MIN_FEE_RATE[opts.chain])
+  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate))
+  // UTXO-04: use the canonical ZIP-317 action-count formula (max of input vs
+  // output actions) instead of a local input-only count, so a large memo or
+  // extra outputs aren't under-counted. Output sizes mirror the same
+  // recipient + change P2PKH (34 bytes each) + optional OP_RETURN shape
+  // assumed by the txSize estimate above.
+  const zip317OutputSizes = opReturnScript ? [34n, 34n, BigInt(opReturnBytes)] : [34n, 34n]
+  const zip317Floor =
+    opts.chain === 'Zcash'
+      ? getZcashConventionalFee({ inputCount: inputs.length, outputSizes: zip317OutputSizes })
+      : 0n
   const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
