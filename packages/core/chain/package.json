@@ -660,11 +660,6 @@
       "import": "./dist/chains/ripple/client.js",
       "default": "./dist/chains/ripple/client.js"
     },
-    "./chains/ripple/issuedCurrency": {
-      "types": "./dist/chains/ripple/issuedCurrency.d.ts",
-      "import": "./dist/chains/ripple/issuedCurrency.js",
-      "default": "./dist/chains/ripple/issuedCurrency.js"
-    },
     "./chains/ripple/network/info": {
       "types": "./dist/chains/ripple/network/info.d.ts",
       "import": "./dist/chains/ripple/network/info.js",
