@@ -3,7 +3,7 @@ import type { ThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { describe, expect, it, vi } from 'vitest'
 
-import { assertNativeSwapReadyForBroadcast } from '@/vault/services/nativeSwapBroadcastGuard'
+import { assertNativeSwapReadyForBroadcast } from '../../../../src/vault/services/nativeSwapBroadcastGuard'
 
 const makeInbound = (chain: string, address: string): ThorchainInboundAddress =>
   ({
@@ -33,6 +33,7 @@ const makeMayachainSwapPayload = (expirationTime = 1_700_000_100n): KeysignPaylo
     swapPayload: {
       case: 'mayachainSwapPayload',
       value: {
+        vaultAddress: 'dash1active',
         expirationTime,
       },
     },
@@ -68,15 +69,45 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
-  it('checks Maya native swap expiry without fetching THORChain inbound addresses', async () => {
+  it('passes when the MayaChain inbound vault still matches the source chain', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Dash,
+        keysignPayload: makeMayachainSwapPayload(),
+        getInboundAddresses: async nativeChain => {
+          expect(nativeChain).toBe(Chain.MayaChain)
+          return [makeInbound('DASH', 'dash1active')]
+        },
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects stale MayaChain inbound vault addresses', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Dash,
+        keysignPayload: makeMayachainSwapPayload(),
+        getInboundAddresses: async nativeChain => {
+          expect(nativeChain).toBe(Chain.MayaChain)
+          return [makeInbound('DASH', 'dash1rotated')]
+        },
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/MayaChain inbound vault address changed/)
+  })
+
+  it('rejects expired Maya native swap payloads before fetching inbound addresses', async () => {
     const getInboundAddresses = vi.fn()
 
-    await assertNativeSwapReadyForBroadcast({
-      chain: Chain.MayaChain,
-      keysignPayload: makeMayachainSwapPayload(),
-      getInboundAddresses,
-      now: () => 1_700_000_000_000,
-    })
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.MayaChain,
+        keysignPayload: makeMayachainSwapPayload(1_700_000_000n),
+        getInboundAddresses,
+        now: () => 1_700_000_001_000,
+      })
+    ).rejects.toThrow(/expired/)
 
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })

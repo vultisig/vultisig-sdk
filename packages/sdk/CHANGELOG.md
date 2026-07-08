@@ -1,5 +1,27 @@
 # @vultisig/sdk
 
+## 2.18.4
+
+### Patch Changes
+
+- [#1020](https://github.com/vultisig/vultisig-sdk/pull/1020) [`74fec5a`](https://github.com/vultisig/vultisig-sdk/commit/74fec5a17942689fe8a05c0f145bfe552dbe5e87) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(swap): consolidate Skip Go routing-eligibility predicates into the SDK
+
+  Adds `isSkipRoutableChain`, `isTerraChain`, and `willRouteViaSkip` as tested
+  core functions under `@vultisig/core-chain/swap/skip/skipRouting`, re-exported
+  from the main `@vultisig/sdk` entry. Pure chain-topology predicates (no network
+  calls, no AI-specific logic) that give consumers one shared source of truth for
+  "does this from/to chain pair route through Skip Go?" instead of the
+  independently-maintained copies that can drift (the mcp-ts [#384](https://github.com/vultisig/vultisig-sdk/issues/384) bug class).
+  Purely additive — no existing export or behavior changed.
+
+## 2.18.3
+
+### Patch Changes
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Unblock Sui and Cardano as SwapKit/MayaChain swap sources
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add groundwork for Sui and Cardano swap source-chain handling while keeping unverified signing paths blocked.
+
 ## 2.18.2
 
 ### Patch Changes
