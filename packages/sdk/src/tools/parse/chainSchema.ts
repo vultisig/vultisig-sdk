@@ -1,5 +1,5 @@
-import { z } from 'zod'
 import type { Chain } from '@vultisig/core-chain/Chain'
+import { z } from 'zod'
 
 import { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 
@@ -34,9 +34,7 @@ export const chainSchema: z.ZodType<Chain> = z
       return normalizeChain(val)
     } catch (err) {
       const message =
-        err instanceof UnknownChainError
-          ? err.message
-          : `Unknown chain '${val == null ? String(val) : val}'.`
+        err instanceof UnknownChainError ? err.message : `Unknown chain '${val == null ? String(val) : val}'.`
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message,
