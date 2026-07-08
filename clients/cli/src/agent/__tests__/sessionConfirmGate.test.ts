@@ -120,11 +120,11 @@ describe('runPasswordGatedTool — confirmation gate', () => {
   })
 })
 
-// Integration-shaped wiring test: a tx_ready SSE event must reach the signer
-// ONLY through the confirmation gate. This is the test that fails if a
-// refactor ever routes tx_ready straight to executor.signTxFromBuffer —
-// the unit tests above can't catch that un-wiring.
-describe('processMessageLoop — tx_ready wiring through the gate', () => {
+// Integration-shaped wiring test: a signable tool-output candidate must reach
+// the signer ONLY through the confirmation gate. This is the test that fails if
+// a refactor ever routes the tool-output candidate straight to
+// executor.signTxFromBuffer — the unit tests above can't catch that un-wiring.
+describe('processMessageLoop — tool-output signing wiring through the gate', () => {
   function makeLoopHarness(opts: { approve: boolean }) {
     const signTxFromBuffer = vi.fn(
       async () => ({ tool: 'sign_tx', success: true, data: { tx_hash: '0xfeed', chain: 'Base' } }) as RecentAction
@@ -136,7 +136,11 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
         streamRequests.push(request)
         // First turn: backend proposes a server-built tx. Later turns: plain text.
         if (streamRequests.length === 1) {
-          callbacks.onTxReady({ chain: 'Base', txArgs: { tx: { to: '0xR', value: '1' } } })
+          callbacks.onToolOutputTx(
+            { chain: 'Base', txArgs: { tx: { to: '0x1111111111111111111111111111111111111111', value: '1' } } },
+            'execute_send',
+            'prep'
+          )
         }
         return { message: { content: 'ok' }, fullText: '', transactions: [] }
       }),
@@ -171,7 +175,6 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
       executor,
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
       selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
-      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
       reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
@@ -186,7 +189,7 @@ describe('processMessageLoop — tx_ready wiring through the gate', () => {
     return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction }
   }
 
-  it('denied: tx_ready never reaches signTxFromBuffer; CONFIRMATION_REQUIRED reported to backend', async () => {
+  it('denied: the tool-output candidate never reaches signTxFromBuffer; CONFIRMATION_REQUIRED reported to backend', async () => {
     const h = makeLoopHarness({ approve: false })
     await h.run()
     expect(h.ui.requestConfirmation).toHaveBeenCalledExactlyOnceWith('send 1 ETH on Base to 0xR')
@@ -258,7 +261,6 @@ describe('processMessageLoop — balance_summary card rendering', () => {
       executor: { storeServerTransaction: vi.fn(() => false), setPassword: vi.fn() },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
       selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
-      logToolOutputParity: (AgentSession.prototype as any).logToolOutputParity,
       reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
