@@ -42,12 +42,19 @@ export function isNonInteractive(): boolean {
 /**
  * Resolve whether the session is non-interactive.
  *
- * A piped/redirected stdout is the machine-output (JSON) channel — rendering an
- * inquirer prompt there corrupts it — so a non-TTY stdout implies non-interactive,
- * mirroring how `--output` already defaults to json when stdout is not a TTY.
+ * Two signals force non-interactive, both fail-closed:
+ * - a non-TTY **stdout** is the machine-output (JSON) channel — rendering an inquirer
+ *   prompt there corrupts it — mirroring how `--output` already defaults to json when
+ *   stdout is not a TTY;
+ * - a non-TTY **stdin** means there is no human to answer, and inquirer would otherwise
+ *   consume piped bytes as answers (e.g. a piped `y` silently confirming a send).
  */
-export function resolveNonInteractive(explicit: boolean, stdout: { isTTY?: boolean } = process.stdout): boolean {
-  return explicit || !stdout.isTTY
+export function resolveNonInteractive(
+  explicit: boolean,
+  stdout: { isTTY?: boolean } = process.stdout,
+  stdin: { isTTY?: boolean } = process.stdin
+): boolean {
+  return explicit || !stdout.isTTY || !stdin.isTTY
 }
 
 export function requireInteractive(hint: string): void {

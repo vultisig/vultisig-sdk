@@ -57,7 +57,7 @@ import {
   executeVerify,
 } from './commands'
 import { cachePassword, createPasswordCallback } from './core'
-import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
+import { EXIT_CODE_DESCRIPTIONS, ExitCode } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -1656,6 +1656,13 @@ process.on('SIGINT', () => {
 })
 
 if (isInteractiveMode) {
+  // The interactive shell drives a readline UI on stdin/stdout; it bypasses the
+  // preAction non-interactive gate. Refuse to start it when either stream is
+  // redirected — otherwise its prompts would land on a piped stdout.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    error('Interactive mode (-i/--interactive) requires a TTY on both stdin and stdout.')
+    process.exit(ExitCode.CONFIRMATION_REQUIRED)
+  }
   startInteractiveMode().catch(err => {
     error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)

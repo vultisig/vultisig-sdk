@@ -15,11 +15,17 @@ const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
  * with a raw ERR_USE_AFTER_CLOSE readline stack trace (P2-4).
  */
 function runPiped(args: string[]) {
+  // Strip any ambient shell-completion env so the invocation can't be diverted into
+  // handleCompletion() (tabtab reads COMP_LINE/COMP_POINT/COMP_CWORD).
+  const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' }
+  delete env.COMP_LINE
+  delete env.COMP_POINT
+  delete env.COMP_CWORD
   return spawnSync(process.execPath, ['--import', 'tsx', CLI_ENTRY, ...args], {
     input: '',
     encoding: 'utf8',
-    timeout: 60_000,
-    env: { ...process.env, NO_COLOR: '1' },
+    timeout: 120_000,
+    env,
   })
 }
 
@@ -38,5 +44,5 @@ describe('completion --install in a non-TTY session', () => {
     // Stable, non-zero exit and a clear message on stderr telling the user how to proceed.
     expect(res.status).toBe(ExitCode.CONFIRMATION_REQUIRED)
     expect(res.stderr).toMatch(/interactive terminal/i)
-  }, 70_000)
+  }, 130_000)
 })

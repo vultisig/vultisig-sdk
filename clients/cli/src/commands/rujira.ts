@@ -12,6 +12,7 @@ import {
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, warn } from '../lib/output'
 
 export type RujiraBaseOptions = {
@@ -204,9 +205,6 @@ export type RujiraSwapOptions = RujiraBaseOptions & {
 export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwapOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  // Pre-unlock vault before signing
-  await ensureVaultUnlocked(vault, options.password)
-
   const client = await createRujiraClient(ctx, options)
 
   const destination = options.destination ?? (await vault.address('THORChain'))
@@ -253,8 +251,15 @@ export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwap
 
   if (!options.yes) {
     warn('This command will execute a swap. Re-run with -y/--yes to skip this warning.')
-    throw new Error('Confirmation required (use --yes)')
+    throw new ConfirmationRequiredError(
+      'Swap requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
   }
+
+  // Unlock only after the confirmation gate — don't decrypt key shares for a swap
+  // the caller hasn't confirmed.
+  await ensureVaultUnlocked(vault, options.password)
 
   const execSpinner = createSpinner('Executing FIN swap...')
   const result = await client.swap.execute(quote, { slippageBps: options.slippageBps })
@@ -282,9 +287,6 @@ export type RujiraWithdrawOptions = RujiraBaseOptions & {
 
 export async function executeRujiraWithdraw(ctx: CommandContext, options: RujiraWithdrawOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
-
-  // Pre-unlock vault before signing
-  await ensureVaultUnlocked(vault, options.password)
 
   const client = await createRujiraClient(ctx, options)
 
@@ -323,8 +325,15 @@ export async function executeRujiraWithdraw(ctx: CommandContext, options: Rujira
 
   if (!options.yes) {
     warn('This command will broadcast a THORChain MsgDeposit withdrawal. Re-run with -y/--yes to proceed.')
-    throw new Error('Confirmation required (use --yes)')
+    throw new ConfirmationRequiredError(
+      'Withdrawal requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
   }
+
+  // Unlock only after the confirmation gate — don't decrypt key shares for a
+  // withdrawal the caller hasn't confirmed.
+  await ensureVaultUnlocked(vault, options.password)
 
   const execSpinner = createSpinner('Broadcasting withdrawal...')
   const result = await client.withdraw.execute(prepared)

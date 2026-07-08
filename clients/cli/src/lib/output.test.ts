@@ -8,19 +8,28 @@ afterEach(() => {
 })
 
 describe('resolveNonInteractive', () => {
-  it('returns true when the explicit flag is set, regardless of stdout', () => {
-    expect(resolveNonInteractive(true, { isTTY: true })).toBe(true)
-    expect(resolveNonInteractive(true, { isTTY: false })).toBe(true)
+  const tty = { isTTY: true }
+  const piped = { isTTY: false }
+
+  it('returns true when the explicit flag is set, regardless of streams', () => {
+    expect(resolveNonInteractive(true, tty, tty)).toBe(true)
+    expect(resolveNonInteractive(true, piped, piped)).toBe(true)
   })
 
-  it('stays interactive when stdout is a TTY and no flag is set', () => {
-    expect(resolveNonInteractive(false, { isTTY: true })).toBe(false)
+  it('stays interactive only when BOTH stdout and stdin are TTYs and no flag is set', () => {
+    expect(resolveNonInteractive(false, tty, tty)).toBe(false)
   })
 
-  it('becomes non-interactive when stdout is piped/redirected (non-TTY)', () => {
-    // A piped stdout is the machine-output channel — a prompt would corrupt it.
-    expect(resolveNonInteractive(false, { isTTY: false })).toBe(true)
-    expect(resolveNonInteractive(false, {})).toBe(true)
+  it('becomes non-interactive when stdout is piped/redirected (machine-output channel)', () => {
+    expect(resolveNonInteractive(false, piped, tty)).toBe(true)
+    expect(resolveNonInteractive(false, {}, tty)).toBe(true)
+  })
+
+  it('becomes non-interactive when stdin is piped/redirected (no human to answer)', () => {
+    // A piped stdin would otherwise let inquirer consume bytes as answers — a piped
+    // `y` silently confirming a send. Fail closed instead.
+    expect(resolveNonInteractive(false, tty, piped)).toBe(true)
+    expect(resolveNonInteractive(false, tty, {})).toBe(true)
   })
 })
 

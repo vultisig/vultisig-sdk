@@ -9,4 +9,8 @@
  */
 import inquirer from 'inquirer'
 
-export const prompt = inquirer.createPromptModule({ output: process.stderr })
+// Exported so a test can assert prompts are bound to stderr (never stdout). Input
+// stays process.stdin — only the rendered prompt UI is redirected off stdout.
+export const promptOutput: NodeJS.WritableStream = process.stderr
+
+export const prompt = inquirer.createPromptModule({ output: promptOutput })

@@ -10,9 +10,10 @@ afterEach(() => {
 })
 
 // The confirm prompts are the fund-safety gate. In a non-interactive session
-// (piped stdout, or --non-interactive/--ci) they must fail closed BEFORE rendering
-// any inquirer prompt: a stable CONFIRMATION_REQUIRED error, and — critically — not
-// a single byte written to stdout (the machine-output/JSON channel).
+// (piped output, or --non-interactive/--ci) they must fail closed with a stable
+// CONFIRMATION_REQUIRED error BEFORE any inquirer prompt is drawn. The stdout-spy
+// assertion documents that the throw happens ahead of any render; stderr-vs-stdout
+// routing of the prompt UI itself is covered in prompt.test.ts.
 describe('confirm prompts fail closed in non-interactive mode', () => {
   it('confirmTransaction rejects with ConfirmationRequiredError and never writes to stdout', async () => {
     setNonInteractive(true)

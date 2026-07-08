@@ -21,6 +21,7 @@ import {
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 /**
@@ -118,7 +119,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -156,7 +157,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       }
 
       // Offer retry options
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -282,7 +283,7 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
   let password = flagPassword || process.env.VAULT_PASSWORD || ''
   if (!password) {
-    const answers = await inquirer.prompt([
+    const answers = await prompt([
       {
         type: 'password',
         name: 'password',
@@ -327,7 +328,7 @@ export async function executeVerify(
 
     if (!email || !password) {
       info('Email and password are required to resend verification.')
-      const answers = await inquirer.prompt([
+      const answers = await prompt([
         ...(!email
           ? [
               {
@@ -369,7 +370,7 @@ export async function executeVerify(
   let code = options.code
 
   if (!code) {
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -485,7 +486,7 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
       exportPassword = options.password
     } else {
       // Prompt for export password
-      const answer = await inquirer.prompt([
+      const answer = await prompt([
         {
           type: 'password',
           name: 'exportPassword',
@@ -784,7 +785,7 @@ export async function executeCreateFromSeedphraseFast(
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -821,7 +822,7 @@ export async function executeCreateFromSeedphraseFast(
         throw err
       }
 
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -1130,7 +1131,7 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
     warn('Make sure you have a backup of your vault (.vult file) before proceeding.')
     info('')
 
-    const { confirmed } = await inquirer.prompt([
+    const { confirmed } = await prompt([
       {
         type: 'confirm',
         name: 'confirmed',
