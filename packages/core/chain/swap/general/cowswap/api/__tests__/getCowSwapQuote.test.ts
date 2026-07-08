@@ -25,6 +25,7 @@ function makeQuoteResponse(
     partiallyFillable?: boolean
     sellAmount?: string
     feeAmount?: string
+    validTo?: number
   } = {}
 ) {
   return {
@@ -37,7 +38,7 @@ function makeQuoteResponse(
       // 2026-07-08 against the real api.cow.fi/mainnet quote endpoint).
       sellAmount: overrides.sellAmount ?? '990000000000000000',
       buyAmount,
-      validTo: Math.floor(Date.now() / 1000) + 900,
+      validTo: overrides.validTo ?? Math.floor(Date.now() / 1000) + 900,
       appData: '{}',
       feeAmount: overrides.feeAmount ?? '10000000000000000',
       kind: overrides.kind ?? ('sell' as const),
@@ -345,6 +346,34 @@ describe('getCowSwapQuote', () => {
 
       if (!('cowswap_order' in quote.tx)) throw new Error('Expected cowswap_order')
       expect(quote.tx.cowswap_order.sellAmount).toBe('1000000000000000000')
+    })
+
+    // codex review (PR #1082): validTo is entirely server-determined (no request-side value to
+    // equality-check), so it's bounded to a sane multiple of the SDK's own intended TTL instead.
+    describe('validTo reasonableness (no request-side equality check possible, so bounded instead)', () => {
+      it('REJECTS a validTo unreasonably far in the future (order executable far beyond user intent)', async () => {
+        const farFuture = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 // 1 year out
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: farFuture }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+          /unreasonable validTo/
+        )
+      })
+
+      it('REJECTS a validTo already in the past (expired/garbage quote)', async () => {
+        const past = Math.floor(Date.now() / 1000) - 60
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: past }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+          /unreasonable validTo/
+        )
+      })
+
+      it('accepts a validTo within the normal ~15 minute quote window', async () => {
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
     })
 
     it('token comparison is case-insensitive (checksum vs lowercase is not a mismatch)', async () => {

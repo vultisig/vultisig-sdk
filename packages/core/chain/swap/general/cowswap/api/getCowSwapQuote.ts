@@ -4,6 +4,7 @@ import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import {
   COWSWAP_DEFAULT_AFFILIATE_BPS,
   COWSWAP_FEE_RECIPIENT,
+  COWSWAP_VALID_TO_SECONDS,
   CowSwapChainConfig,
   KNOWN_PERMIT_TOKENS,
 } from '../config'
@@ -33,6 +34,13 @@ type GetCowSwapQuoteInput = {
   affiliateBps?: number
 }
 
+// This SDK only ever requests a sell order that must fill completely — named here (rather than
+// inlined at both the request body below AND the AGG-01 response-echo checks) so the two stay
+// in lockstep if that ever changes; comparing against a variable is more robust than duplicating
+// the literal in two places (codex review, PR #1082).
+const REQUESTED_KIND = 'sell' as const
+const REQUESTED_PARTIALLY_FILLABLE = false as const
+
 export async function getCowSwapQuote({
   sellToken,
   buyToken,
@@ -52,9 +60,9 @@ export async function getCowSwapQuote({
     sellAmountBeforeFee: sellAmount.toString(),
     from: from.toLowerCase(),
     receiver: receiver.toLowerCase(),
-    kind: 'sell',
+    kind: REQUESTED_KIND,
     signingScheme: 'eip712',
-    partiallyFillable: false,
+    partiallyFillable: REQUESTED_PARTIALLY_FILLABLE,
     appData,
     appDataHash,
   }
@@ -88,12 +96,27 @@ export async function getCowSwapQuote({
       `CowSwap quote returned a mismatched buyToken (requested ${buyToken}, got ${quote.buyToken}) — refusing to sign.`
     )
   }
-  if (quote.kind !== 'sell') {
-    throw new Error(`CowSwap quote returned kind '${quote.kind}' (requested 'sell') — refusing to sign.`)
+  if (quote.kind !== REQUESTED_KIND) {
+    throw new Error(`CowSwap quote returned kind '${quote.kind}' (requested '${REQUESTED_KIND}') — refusing to sign.`)
   }
-  if (quote.partiallyFillable !== false) {
+  if (quote.partiallyFillable !== REQUESTED_PARTIALLY_FILLABLE) {
     throw new Error(
-      `CowSwap quote returned partiallyFillable=${quote.partiallyFillable} (requested false) — refusing to sign.`
+      `CowSwap quote returned partiallyFillable=${quote.partiallyFillable} (requested ${REQUESTED_PARTIALLY_FILLABLE}) — refusing to sign.`
+    )
+  }
+  // AGG-01 follow-up (codex review, PR #1082): validTo is entirely server-determined (the
+  // request sends no validTo of its own, so there is no request-side value to equality-check
+  // against — unlike the fields above). Still part of the signed Order struct, so bound it to a
+  // sane multiple of the SDK's own intended TTL (buildCowSwapOrder.ts's sibling implementation
+  // computes its OWN local validTo instead of trusting the response at all — this is the softer
+  // version of that same instinct): reject a response whose validTo is unreasonably far in the
+  // future (a malicious/malfunctioning response making the order executable far beyond user
+  // intent) or already in the past (an expired/garbage quote).
+  const nowSeconds = Math.floor(Date.now() / 1000)
+  const maxReasonableValidTo = nowSeconds + 2 * COWSWAP_VALID_TO_SECONDS
+  if (quote.validTo <= nowSeconds || quote.validTo > maxReasonableValidTo) {
+    throw new Error(
+      `CowSwap quote returned an unreasonable validTo (${quote.validTo}, now=${nowSeconds}, max=${maxReasonableValidTo}) — refusing to sign.`
     )
   }
 
