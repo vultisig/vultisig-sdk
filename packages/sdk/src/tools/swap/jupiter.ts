@@ -27,6 +27,13 @@
  * part of the mcp-ts/backend → SDK code-as-action consolidation.
  */
 
+import {
+  assertJupiterPriceImpactWithinCeiling,
+  PriceImpactTooHighError,
+} from '@vultisig/core-chain/swap/general/priceImpactGuard'
+
+export { PriceImpactTooHighError }
+
 /** SOL native mint address (used when no SPL token contract is specified). */
 export const SOL_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
 
@@ -255,6 +262,13 @@ export const buildJupiterSwapTx = async ({
   }
 
   const quote = await fetchJupiter<JupiterQuoteResponse>(`${base}/swap/v1/quote?${quoteParams.toString()}`)
+
+  // Price-impact ceiling (fund-safety, audit finding SOL-02). Jupiter's
+  // priceImpactPct is a FRACTION ("0.05" = 5%); refuse to build a signable
+  // swap transaction above the ceiling — a thin-pool / sandwich-bait quote
+  // that would lose most of the user's funds. Fail-safe: a missing /
+  // unparsable impact passes.
+  assertJupiterPriceImpactWithinCeiling(quote.priceImpactPct)
 
   // Step 2: Build the (unsigned) swap transaction. Include feeAccount only
   // when resolved.
