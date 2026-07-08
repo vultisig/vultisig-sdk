@@ -26,6 +26,8 @@
  * Skip's grpc-gateway returns structured `{code, message, details}` errors;
  * `SkipApiError` surfaces `code` (stable) rather than regexing messages.
  */
+import { getCosmosMemoMaxBytesByChainId } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+
 import { buildSkipAffiliates, type SkipChainIdsToAffiliates } from './affiliateConfig'
 import { skipChainIdToChainName } from './chainMapping'
 import { assertNotValidatorHrp } from './cosmosAddressGuard'
@@ -219,21 +221,6 @@ function firstUnsupportedCustodyChain(
     if (skipChainIdToChainName(chainId) === undefined) return chainId
   }
   return null
-}
-
-/**
- * Per-tx `MaxMemoCharacters` cap (bytes) from each chain's `x/auth` module. Skip
- * PFM routes encode the downstream flow in the source-leg memo, which can exceed
- * the cap (LUNC→USDC.eth observed at 1584 bytes vs columbus-5's 256-byte cap).
- * Values sourced from each chain's live `/cosmos/auth/v1beta1/params`.
- */
-const COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID: Readonly<Record<string, number>> = {
-  'columbus-5': 256,
-  'phoenix-1': 256,
-  'cosmoshub-4': 256,
-  'osmosis-1': 256,
-  'kaiyo-1': 256,
-  'noble-1': 256,
 }
 
 /**
@@ -943,7 +930,7 @@ function validateMsgsResponse(
 
   if (!isMultiTx) {
     const memoInfo = getSourceLegMemoByteLength(msgs.txs)
-    const cap = memoInfo ? COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID[memoInfo.sourceChainId] : undefined
+    const cap = memoInfo ? getCosmosMemoMaxBytesByChainId(memoInfo.sourceChainId) : undefined
     if (memoInfo && cap !== undefined && memoInfo.memoBytes > cap) {
       return {
         error: {
