@@ -89,7 +89,10 @@ describe('loadActiveVaultSafely', () => {
 
   it('tolerates a non-Error thrown value from the pointer read', async () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const sdk = makeSdk({ get: vi.fn().mockRejectedValue('boom'), setActiveVault: vi.fn().mockResolvedValue(undefined) })
+    const sdk = makeSdk({
+      get: vi.fn().mockRejectedValue('boom'),
+      setActiveVault: vi.fn().mockResolvedValue(undefined),
+    })
 
     await expect(loadActiveVaultSafely(sdk)).resolves.toEqual({ vault: null, corruptPointer: true })
   })
