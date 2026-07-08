@@ -49,7 +49,7 @@ import {
   executeTxStatus,
   executeVaults,
 } from '../commands'
-import { loadActiveVaultSafely } from '../core'
+import { loadActiveVaultSafely, shouldAutoSelectActiveVault } from '../core'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
@@ -952,8 +952,8 @@ export class ShellSession {
         // Set first vault as active if none set — but NOT when the stored
         // pointer was corrupt. Auto-selecting a vault off the back of a lost
         // selection would let a later send/sign run against a vault the user
-        // never chose; make them pick one explicitly (`switch <vault>`) instead.
-        if (!this.ctx.getActiveVault() && !corruptPointer && this.ctx.getVaults().size > 0) {
+        // never chose; make them pick one explicitly (`vault <name>`) instead.
+        if (shouldAutoSelectActiveVault(!!this.ctx.getActiveVault(), corruptPointer, this.ctx.getVaults().size)) {
           const firstVault = this.ctx.getVaults().values().next().value
           await this.ctx.setActiveVault(firstVault)
         }
@@ -969,7 +969,7 @@ export class ShellSession {
       // exist — tell the user so they can choose one deliberately.
       if (corruptPointer && !this.ctx.getActiveVault() && this.ctx.getVaults().size > 0) {
         console.log(
-          chalk.yellow('Active vault pointer was corrupt and has been reset. Use "switch <vault>" to pick one.')
+          chalk.yellow('Active vault pointer was corrupt and has been reset. Use "vault <name>" to pick one.')
         )
       }
     } catch (error) {

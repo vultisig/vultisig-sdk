@@ -2,7 +2,7 @@ import type { VaultBase, VaultStorage } from '@vultisig/sdk'
 import { StorageError, StorageErrorCode, Vultisig } from '@vultisig/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { loadActiveVaultSafely } from '../active-vault'
+import { loadActiveVaultSafely, shouldAutoSelectActiveVault } from '../active-vault'
 
 /**
  * Regression: a corrupt/unreadable `~/.vultisig/activeVaultId.json` used to make
@@ -102,6 +102,26 @@ describe('loadActiveVaultSafely', () => {
     })
 
     await expect(loadActiveVaultSafely(sdk)).resolves.toEqual({ vault: null, corruptPointer: true })
+  })
+})
+
+describe('shouldAutoSelectActiveVault', () => {
+  it('auto-selects on a fresh/normal "no active vault" state (not corrupt)', () => {
+    expect(shouldAutoSelectActiveVault(false, false, 2)).toBe(true)
+  })
+
+  it('does NOT auto-select when the pointer was corrupt (fund-safety guard)', () => {
+    // The security-relevant case: a corrupt pointer must not silently pick a
+    // vault a later send/sign would then run against.
+    expect(shouldAutoSelectActiveVault(false, true, 2)).toBe(false)
+  })
+
+  it('does not auto-select when a vault is already active', () => {
+    expect(shouldAutoSelectActiveVault(true, false, 2)).toBe(false)
+  })
+
+  it('does not auto-select when there are no vaults', () => {
+    expect(shouldAutoSelectActiveVault(false, false, 0)).toBe(false)
   })
 })
 

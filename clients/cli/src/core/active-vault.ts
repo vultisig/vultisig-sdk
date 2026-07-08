@@ -66,3 +66,19 @@ export async function loadActiveVaultSafely(sdk: Vultisig): Promise<SafeActiveVa
   // transient storage error here is a real failure that must surface.
   return { vault: await sdk.getVaultById(activeId), corruptPointer: false }
 }
+
+/**
+ * Whether the interactive shell should promote the first loaded vault to active
+ * when no active vault is set.
+ *
+ * Deliberately returns `false` when the stored pointer was corrupt: auto-selecting
+ * a vault off the back of a lost selection would let a later send/sign run against
+ * a vault the user never chose, so we make them pick one explicitly instead.
+ */
+export function shouldAutoSelectActiveVault(
+  hasActiveVault: boolean,
+  corruptPointer: boolean,
+  vaultCount: number
+): boolean {
+  return !hasActiveVault && !corruptPointer && vaultCount > 0
+}
