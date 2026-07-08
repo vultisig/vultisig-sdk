@@ -1,5 +1,20 @@
 # @vultisig/sdk
 
+## 2.19.2
+
+### Patch Changes
+
+- [#1046](https://github.com/vultisig/vultisig-sdk/pull/1046) [`8d36421`](https://github.com/vultisig/vultisig-sdk/commit/8d364215cdca70f0df12f08d6676d65e352cf235) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: UTXO/Cardano broadcast no longer reports false success on a genuine failure
+
+  `broadcastCardanoTx`/`broadcastUtxoTx` bucketed `BadInputsUTxO` (a genuine failure — spent/invalid inputs)
+  together with benign MPC-race duplicates (`txn-mempool-conflict`/`already known`) and returned success
+  unconditionally for all three, bypassing the on-chain hash verification safety net. Every ambiguous submit
+  error now routes through `verifyBroadcastByHash`, and `getUtxoTxStatus` now sets `isKnown: false` when the
+  hash is genuinely not found (matching the existing convention already used by the cosmos/evm/polkadot/
+  ripple/solana resolvers) so a real failure correctly rethrows instead of being swallowed as success.
+
+- [#1073](https://github.com/vultisig/vultisig-sdk/pull/1073) [`0013d0d`](https://github.com/vultisig/vultisig-sdk/commit/0013d0d4c7c9249bb0fb64705b726e85fc7a50e0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): reject a limit-swap LIM that floors to zero (THOR-02). A tiny target price could floor the computed limit amount to 0, and THORChain treats a zero trade target as an unprotected MARKET swap with no minimum-output floor — silently discarding the price protection the user configured for their limit order. Fail closed with a clear error instead of building a memo that reinterprets as a market swap.
+
 ## 2.19.1
 
 ### Patch Changes
