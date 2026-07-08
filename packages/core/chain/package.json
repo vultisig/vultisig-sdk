@@ -1562,6 +1562,11 @@
       "import": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js",
       "default": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js"
     },
+    "./swap/general/knownAggregatorRouters": {
+      "types": "./dist/swap/general/knownAggregatorRouters.d.ts",
+      "import": "./dist/swap/general/knownAggregatorRouters.js",
+      "default": "./dist/swap/general/knownAggregatorRouters.js"
+    },
     "./swap/general/kyber/api/baseUrl": {
       "types": "./dist/swap/general/kyber/api/baseUrl.d.ts",
       "import": "./dist/swap/general/kyber/api/baseUrl.js",

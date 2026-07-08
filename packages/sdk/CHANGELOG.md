@@ -1,5 +1,29 @@
 # @vultisig/sdk
 
+## 2.19.6
+
+### Patch Changes
+
+- [#1082](https://github.com/vultisig/vultisig-sdk/pull/1082) [`584bdb2`](https://github.com/vultisig/vultisig-sdk/commit/584bdb29b184fc01934645f745033208d42ea2e6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): validate CowSwap order fields against the request before signing (AGG-01). sellToken/buyToken/kind/partiallyFillable were taken straight from the untrusted CoW /quote response and signed as-is via the EIP-712 GPv2 Order struct — a compromised/buggy response could substitute a token address or flip kind from 'sell' to 'buy' (inverting GPv2's sell/buy semantics while the SDK's grossSellAmount math still assumes sell-order semantics), and the SDK would sign it. Now asserts each field matches what was actually requested and refuses to build a signable order on any mismatch.
+
+## 2.19.5
+
+### Patch Changes
+
+- [#1079](https://github.com/vultisig/vultisig-sdk/pull/1079) [`e33c4a8`](https://github.com/vultisig/vultisig-sdk/commit/e33c4a8cfdcae872506b0cdbbc11724b9e14cdf6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): validate aggregator router addresses at quote construction (AGG-02). 1inch/Kyber/LiFi/SwapKit's tx.to was trusted with no allowlist, and fed both the ERC-20 approval spender and the swap transaction's on-chain destination — a compromised/spoofed aggregator response could get both approved and swapped against. 1inch/Kyber now fail closed (throw) if the returned router isn't their live-confirmed address; LiFi/SwapKit log the destination (never throw, since they route through many different contracts by design) so a future allowlist has real usage data if a pattern emerges.
+
+- [#1081](https://github.com/vultisig/vultisig-sdk/pull/1081) [`709f0be`](https://github.com/vultisig/vultisig-sdk/commit/709f0bea7a3d9dfa1e7231d25bb3949072b77195) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(utxo): raise the Litecoin dust threshold to the real P2WPKH standard (~2_940 litoshi)
+
+  Litecoin's DUST_RELAY_TX_FEE is ~10x Bitcoin's, so LTC's real standard dust threshold is ~2_940 litoshi for a P2WPKH output, not the hardcoded 1_000n. At 1_000n a change output of 1_001..2_939 litoshi was treated as spendable but is non-standard dust, so the transaction could be rejected by relays or stall. Bumped in both dust maps (core `minUtxo` + sdk `UTXO_SPECS`) and kept in sync. LTC-scoped (UTXO-02); BCH/Dash/Zcash 1_000n already sits at/above their real dust.
+
+## 2.19.4
+
+### Patch Changes
+
+- [#1083](https://github.com/vultisig/vultisig-sdk/pull/1083) [`d3a372d`](https://github.com/vultisig/vultisig-sdk/commit/d3a372d48683b69ba6626f1b077b95088ff6a12b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): refuse to sign a no-timeout IBC transfer and validate the source channel
+
+  The Cosmos `IBC_TRANSFER` signing-input resolver built a `MsgTransfer` with an all-zero timeout (`timeoutTimestamp=0` and `timeoutHeight={0,0}`) whenever the IBC denom trace was missing. Relayers accept a no-timeout packet, but it never expires, so a failed transfer can leave funds stuck indefinitely instead of unwinding. The resolver now fails closed and refuses to build when neither timeout is usable (COSMOS-01). It also validates that the source channel parsed out of the memo (`<prefix>:channel-<n>[:...]`) is well-formed, refusing to sign with an undefined/empty/malformed channel instead of dispatching a broken `MsgTransfer` (COSMOS-03).
+
 ## 2.19.3
 
 ### Patch Changes
