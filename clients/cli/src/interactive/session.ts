@@ -49,6 +49,7 @@ import {
   executeTxStatus,
   executeVaults,
 } from '../commands'
+import { loadActiveVaultSafely } from '../core'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
@@ -929,8 +930,9 @@ export class ShellSession {
     const spinner = createSpinner('Loading vaults...').start()
 
     try {
-      // Load active vault first
-      const activeVault = await this.ctx.sdk.getActiveVault()
+      // Load active vault first (tolerating a corrupt pointer so a bad
+      // activeVaultId file doesn't stop the rest of the vaults from loading)
+      const activeVault = await loadActiveVaultSafely(this.ctx.sdk)
       if (activeVault) {
         this.ctx.addVault(activeVault)
         await this.ctx.setActiveVault(activeVault)
