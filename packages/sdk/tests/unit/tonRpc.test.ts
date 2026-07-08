@@ -6,7 +6,7 @@ function mockFetchByUrl(
   handlers: Record<string, { ok: boolean; status?: number; statusText?: string; json?: unknown }>
 ) {
   const fetchMock = vi.fn(async (url: string) => {
-    const match = Object.keys(handlers).find((key) => url.includes(key))
+    const match = Object.keys(handlers).find(key => url.includes(key))
     if (!match) throw new Error(`unexpected fetch url in test: ${url}`)
     const handler = handlers[match]
     return {
@@ -72,9 +72,7 @@ describe('getTonWalletInfo', () => {
       addressInformation: { ok: true, json: { status: 'active' } },
     })
 
-    await expect(getTonWalletInfo('EQflaky', 'https://gw.test')).rejects.toThrow(
-      /getExtendedAddressInformation failed/
-    )
+    await expect(getTonWalletInfo('EQflaky', 'https://gw.test')).rejects.toThrow(/getExtendedAddressInformation failed/)
   })
 
   it('throws (does not default to uninit/seqno 0) on a non-OK addressInformation response', async () => {
