@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 2.19.3
+
+### Patch Changes
+
+- [#1075](https://github.com/vultisig/vultisig-sdk/pull/1075) [`ac1a0f7`](https://github.com/vultisig/vultisig-sdk/commit/ac1a0f797e542868263cf31a26c2fe4e00e2ba78) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): enforce a 10% price-impact ceiling on both Jupiter swap-build paths (SOL-02). A thin-pool / sandwich-bait Jupiter quote at 50-90% price impact previously built a fully signable, MPC-ready transaction with zero protection. Both `getJupiterSwapQuote` (core) and `buildJupiterSwapTx` (SDK) now refuse to build above the ceiling, matching the guard already enforced on the production agent path.
+
 ## 2.19.2
 
 ### Patch Changes
