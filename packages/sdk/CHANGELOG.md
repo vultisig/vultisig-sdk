@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 2.18.3
+
+### Patch Changes
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Unblock Sui and Cardano as SwapKit/MayaChain swap sources
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add groundwork for Sui and Cardano swap source-chain handling while keeping unverified signing paths blocked.
+
 ## 2.18.2
 
 ### Patch Changes

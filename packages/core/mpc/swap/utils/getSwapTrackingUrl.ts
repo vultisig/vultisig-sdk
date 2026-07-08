@@ -21,10 +21,17 @@ type GetSwapTrackingUrlInput = {
 // natural txid representation (the byte-reversed, human-readable form that block
 // explorers display). Our signing flow produces hashes in that same display form,
 // so no additional byte reversal is needed here.
-// The `satisfies Record<SwapKitSourceChain, string>` below enforces compile-time
-// exhaustiveness -- adding a chain to SwapKitEnabledChains without updating this
-// map is a type error.
-const swapKitTrackerChainId = {
+// Typed as `Partial<Record<SwapKitSourceChain, string>>` (rather than
+// `satisfies Record<SwapKitSourceChain, string>`) so lookups below can safely
+// index by any `SwapKitSourceChain` and get `string | undefined` -- adding a
+// chain to SwapKitEnabledChains without updating this map is fine (see the
+// runtime fallback below), it just degrades to a block-explorer link.
+//
+// Sui + Cardano are intentionally OMITTED: `getSwapKitQuote` explicitly rejects
+// them as a SwapKit source (no tx-build path yet), so no swap can ever
+// complete and reach this tracker for either chain today. Add their real
+// track.swapkit.dev chain-id here once source-side signing lands.
+const swapKitTrackerChainId: Partial<Record<SwapKitSourceChain, string>> = {
   [Chain.Ethereum]: '1',
   [Chain.Arbitrum]: '42161',
   [Chain.Avalanche]: '43114',
@@ -41,7 +48,7 @@ const swapKitTrackerChainId = {
   [Chain.Ton]: 'ton',
   [Chain.Tron]: '728126428',
   [Chain.Zcash]: 'zcash',
-} satisfies Record<SwapKitSourceChain, string>
+}
 
 export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwapTrackingUrlInput): string => {
   return matchRecordUnion<KeysignSwapPayload, string>(swapPayload, {

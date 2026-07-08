@@ -61,6 +61,55 @@ for (const value of Object.values(Chain)) {
   aliasToChain[value.toLowerCase()] = value
 }
 
+/** Lowercase + strip spaces/underscores/hyphens, e.g. "Terra Classic" -> "terraclassic". */
+function stripSeparators(key: string): string {
+  return key.replace(/[\s_-]+/g, '')
+}
+
+/**
+ * Separator-stripped fallback table (LLM-tolerance layer, consolidated from
+ * agent-backend-ts's `zodHelpers.ts` `chainString()` — the fix for the
+ * LUNA<->LUNC "no route" bug: deepseek emits `to_chain: "Terra Classic"`
+ * (with a space) routinely, and the exact-match table above rejects it
+ * outright since neither `"terra classic"` nor any hand-curated alias
+ * carries a literal space).
+ *
+ * Derived automatically from every entry already in `aliasToChain` (so
+ * "Bitcoin Cash" / "Cronos Chain" / "THOR Chain" / "ZK Sync" all resolve via
+ * their EXISTING un-spaced aliases/canonical forms — no per-chain
+ * maintenance needed), PLUS a small hand-curated set of chain-id / marketing
+ * names that don't reduce from any existing key at all (`columbus-5`,
+ * `phoenix-1`, `"Terra V2"`).
+ *
+ * Same ownership-claim safety as the ticker table above: a stripped key that
+ * would resolve to more than one DISTINCT chain is dropped rather than
+ * guessing — fund-safety (a wrong collision could misroute a swap/send to
+ * the wrong chain), never silently pick a side.
+ */
+const strippedAliasToChain: Record<string, Chain> = {}
+const strippedOwnersByAlias = new Map<string, Set<Chain>>()
+const claimStripped = (alias: string, chain: Chain) => {
+  const key = stripSeparators(alias.toLowerCase())
+  const owners = strippedOwnersByAlias.get(key) ?? new Set<Chain>()
+  owners.add(chain)
+  strippedOwnersByAlias.set(key, owners)
+}
+for (const [alias, chain] of Object.entries(aliasToChain)) {
+  claimStripped(alias, chain)
+}
+// Chain-id / marketing-name aliases that carry no separator-free form anywhere above.
+// Kept in sync with agent-backend-ts's zodHelpers.ts CHAIN_ALIAS_TABLE.
+claimStripped('columbus-5', Chain.TerraClassic) // Terra Classic's chain-id
+claimStripped('phoenix-1', Chain.Terra) // Terra v2's chain-id
+claimStripped('terra v2', Chain.Terra) // common marketing name for post-fork Terra
+for (const [key, owners] of strippedOwnersByAlias) {
+  if (owners.size !== 1) continue
+  for (const only of owners) {
+    strippedAliasToChain[key] = only
+    break
+  }
+}
+
 /**
  * Resolve a case-insensitive chain string (canonical name, ticker, or common
  * alias) to the SDK's canonical Chain value.
@@ -69,10 +118,18 @@ for (const value of Object.values(Chain)) {
  * - Canonical Chain enum values (`"Ethereum"`, `"Bitcoin"`, `"Bitcoin-Cash"`, ...)
  * - Tickers (`"btc"`, `"eth"`, `"sol"`, ...)
  * - Common aliases (`"bitcoin"`, `"binance"`, `"thorchain"`, ...)
+ * - Space/underscore/hyphen-insensitive natural-language phrasings LLMs
+ *   routinely emit (`"Terra Classic"`, `"Bitcoin Cash"`, `"Cronos Chain"`,
+ *   `"THOR Chain"`, `"ZK Sync"`) and chain-id / marketing-name forms
+ *   (`"columbus-5"`, `"phoenix-1"`, `"Terra V2"`)
  *
  * Accepts nullish input because this utility is commonly called with
  * LLM-sourced strings that may be missing — such inputs throw
  * `UnknownChainError` with a blank input rather than a `TypeError`.
+ *
+ * This is the SINGLE canonical LLM-tolerant chain normalizer — callers
+ * needing chain-string tolerance should use this directly rather than
+ * layering their own separator-stripping / alias fallback on top of it.
  *
  * @throws {UnknownChainError} When the input cannot be resolved.
  */
@@ -80,6 +137,10 @@ export const normalizeChain = (input: string | null | undefined): Chain => {
   const key = input?.trim().toLowerCase() ?? ''
   const resolved = aliasToChain[key]
   if (resolved) return resolved
+
+  const stripped = stripSeparators(key)
+  const strippedResolved = strippedAliasToChain[stripped]
+  if (strippedResolved) return strippedResolved
 
   const known = Object.values(Chain).map(c => c.toLowerCase())
   throw new UnknownChainError(key, known)
