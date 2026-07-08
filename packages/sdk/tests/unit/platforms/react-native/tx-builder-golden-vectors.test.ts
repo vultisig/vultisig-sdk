@@ -1,8 +1,22 @@
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { encodeFunctionData, erc20Abi, keccak256, parseTransaction, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { buildErc20TransferTx, buildEvmSendTx } from '../../../../src/platforms/react-native/chains/evm/tx'
 import { buildSolanaSendTx } from '../../../../src/platforms/react-native/chains/solana/tx'
+
+type SolanaCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  recentBlockhash: string
+  lamports: string
+  expectedMessageHex: string
+}
+const loadSolanaCrossEncoderFixture = (): SolanaCrossEncoderFixture =>
+  JSON.parse(
+    readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/solana-transfer.json'), 'utf8')
+  ) as SolanaCrossEncoderFixture
 
 const SOLANA_FROM = '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw'
 const SOLANA_TO = '7ppk9w8NHnH6ehajvJyU31VcMafwZ3ybRtJWumSyD2wd'
@@ -45,33 +59,26 @@ const ERC20_TRANSFER_SIGNING_HASH = '0x6af2740817e7cf4c0980e77931a791952b11ec641
 // fixture, so the two encoders could silently diverge with nothing catching it - each
 // path only proves itself internally consistent, not that they AGREE with each other.
 //
-// Uses the IDENTICAL private-key-derived sender (EDDSA privkey fill(1), same convention
-// compileTx.golden.test.ts already uses) and the SAME literal recipient/blockhash/
-// lamports as that suite's 'matches WalletCore for a Solana transfer transaction' test,
-// then asserts against the SAME pinned message bytes that suite ALSO pins. If either
-// encoder's output ever diverges, WHICHEVER suite's hardcoded expected value no longer
-// matches its own encoder's real output fails - that is the actual drift-killer, not
-// just each suite validating itself in isolation.
-//
-// MUST STAY IN SYNC with packages/core/mpc/tx/compile/compileTx.golden.test.ts's Solana
-// test - any fixture change here must be mirrored there (and vice versa).
+// Reads testdata/cross-encoder-golden/solana-transfer.json - the SAME file packages/
+// core/mpc/tx/compile/compileTx.golden.test.ts's 'matches the shared cross-encoder
+// golden vector' test reads - via a plain readFileSync rather than an import
+// (packages/sdk doesn't depend on packages/core). Both suites assert against the SAME
+// fixture-provided expected message bytes, so editing the fixture file updates BOTH
+// suites' expectation at once - no "keep two literals in sync via a comment" drift
+// risk. senderAddress in the fixture is pre-derived from a private key via WalletCore
+// (packages/core's suite re-derives it fresh each run; this unit suite reads the
+// precomputed value directly to avoid adding a WASM wallet-core dependency here).
 describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
   it('produces the SAME message bytes as WalletCore for the identical Solana transfer', () => {
+    const fx = loadSolanaCrossEncoderFixture()
     const tx = buildSolanaSendTx({
-      // derived from EDDSA privkey fill(1) via WalletCore, same as compileTx.golden.test.ts's sender
-      from: 'AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9',
-      // literal recipient hardcoded in compileTx.golden.test.ts's Solana test
-      to: 'GogodXVKU6KfeZiSR9oybanGGZXRuQ34ogb2i3f3WvYi',
-      lamports: 123_456_789n,
-      recentBlockhash: '44jzmJEahEFTHexSNLkLfXXXyKggtpT2jJuJ3hdCBbsB',
+      from: fx.senderAddress,
+      to: fx.recipientAddress,
+      lamports: BigInt(fx.lamports),
+      recentBlockhash: fx.recentBlockhash,
     })
 
-    // Live cross-checked once (2026-07-08) against packages/core's actual
-    // walletCore.TransactionCompiler.preImageHashes output for this identical tx -
-    // confirmed byte-identical before pinning.
-    const WALLET_CORE_MESSAGE_HEX =
-      '010001038a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cead507107acfc90d38c835bfbbfa61879ff12ea1b1640abb08b90dcb2eb4320b00000000000000000000000000000000000000000000000000000000000000002d886b3a1d282bef2fd4ac76de74b2c9a4cf7b07c02121f68e2689698bf555e601020200010c0200000015cd5b0700000000'
-    expect(tx.signingHashHex).toBe(WALLET_CORE_MESSAGE_HEX)
+    expect(tx.signingHashHex).toBe(fx.expectedMessageHex)
   })
 })
 

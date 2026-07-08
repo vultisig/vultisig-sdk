@@ -29,6 +29,8 @@ import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { PubKey } from 'cosmjs-types/cosmos/crypto/secp256k1/keys'
 import { AuthInfo, Fee, ModeInfo, SignDoc, SignerInfo, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { Any } from 'cosmjs-types/google/protobuf/any'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 
 import { buildCosmosSendTx } from '../../../../src/platforms/react-native/chains/cosmos/tx'
@@ -36,6 +38,25 @@ import { buildCosmosSendTx } from '../../../../src/platforms/react-native/chains
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
+
+type CosmosCrossEncoderFixture = {
+  chainId: string
+  senderCosmosAddress: string
+  recipientCosmosAddress: string
+  senderPubKeyHex: string
+  accountNumber: number
+  sequence: number
+  memo: string
+  denom: string
+  amount: string
+  feeAmount: string
+  gasLimit: number
+  expectedSignDocSha256Hex: string
+}
+const loadCrossEncoderFixture = (): CosmosCrossEncoderFixture =>
+  JSON.parse(
+    readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/cosmos-msgsend.json'), 'utf8')
+  ) as CosmosCrossEncoderFixture
 
 const FX = {
   chainId: 'cosmoshub-4',
@@ -181,43 +202,36 @@ describe('cosmos / buildCosmosSendTx — MsgSend golden vectors', () => {
   // fixture, so the two encoders could silently diverge with nothing catching it - each
   // path only proves itself internally consistent, not that they AGREE with each other.
   //
-  // Uses the IDENTICAL private-key-derived sender/recipient/pubkey (ECDSA privkey
-  // fill(1)/fill(2), same convention compileTx.golden.test.ts already uses) and the SAME
-  // scalar values (chainId/accountNumber/sequence/memo/denom/amount/fee) as that suite's
-  // 'matches WalletCore for a Cosmos protobuf MsgSend' test, then asserts against the SAME
-  // pinned hash that suite ALSO pins. If either encoder's output ever diverges, WHICHEVER
-  // suite's hardcoded expected value no longer matches its own encoder's real output fails
-  // - that is the actual drift-killer, not just each suite validating itself in isolation.
-  //
-  // MUST STAY IN SYNC with packages/core/mpc/tx/compile/compileTx.golden.test.ts's Cosmos
-  // test - any fixture change here must be mirrored there (and vice versa).
+  // Reads testdata/cross-encoder-golden/cosmos-msgsend.json - the SAME file packages/
+  // core/mpc/tx/compile/compileTx.golden.test.ts's 'matches the shared cross-encoder
+  // golden vector' test reads - via a plain readFileSync rather than an import
+  // (packages/sdk doesn't depend on packages/core, so this sidesteps the workspace
+  // dependency graph). Both suites assert against the SAME fixture-provided expected
+  // hash, so editing the fixture file updates BOTH suites' expectation at once - no
+  // "keep two literals in sync via a comment" drift risk. The sender/recipient address
+  // + pubkey in the fixture are pre-derived from the private keys via WalletCore
+  // (packages/core's suite re-derives them fresh each run from the same keys; this
+  // unit suite reads the precomputed values directly to avoid adding a WASM
+  // wallet-core dependency here).
   describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
     it('produces the SAME SignDoc sha256 as WalletCore TransactionCompiler.preImageHashes for the identical MsgSend', () => {
-      const senderPubKeyHex = '031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f'
+      const fx = loadCrossEncoderFixture()
       const result = buildCosmosSendTx({
         chainName: 'Cosmos',
-        chainId: 'cosmoshub-4',
-        // derived from ECDSA privkey fill(1) via WalletCore, same as compileTx.golden.test.ts's sender
-        fromAddress: 'cosmos10xcqpzrky6eff2g52qdye53xkk9jxkvrpq6uqr',
-        // derived from ECDSA privkey fill(2) via WalletCore, same as compileTx.golden.test.ts's recipient
-        toAddress: 'cosmos1a0qwuze2h85zw7nqpsj3ga0z9geyrgwphl8j6w',
-        amount: '12345',
-        denom: 'uatom',
-        feeAmount: '2500',
-        gasLimit: 200_000,
-        sequence: 3,
-        accountNumber: 7,
-        pubKeyBytes: Uint8Array.from(Buffer.from(senderPubKeyHex, 'hex')),
-        memo: 'compileTx golden',
+        chainId: fx.chainId,
+        fromAddress: fx.senderCosmosAddress,
+        toAddress: fx.recipientCosmosAddress,
+        amount: fx.amount,
+        denom: fx.denom,
+        feeAmount: fx.feeAmount,
+        gasLimit: fx.gasLimit,
+        sequence: fx.sequence,
+        accountNumber: fx.accountNumber,
+        pubKeyBytes: Uint8Array.from(Buffer.from(fx.senderPubKeyHex, 'hex')),
+        memo: fx.memo,
       })
 
-      // Live cross-checked once (2026-07-08) against packages/core's actual
-      // walletCore.TransactionCompiler.preImageHashes output for this identical tx -
-      // confirmed byte-identical before pinning. Not re-derived at test time to avoid
-      // adding a cross-package @trustwallet/wallet-core-in-this-suite dependency just
-      // for this one assertion.
-      const WALLET_CORE_DATA_HASH = 'fd6f6f8d78322b881c8f9f4753272adb0143d6d9c6556b076b61d5a9b701a916'
-      expect(result.signingHashHex).toBe(WALLET_CORE_DATA_HASH)
+      expect(result.signingHashHex).toBe(fx.expectedSignDocSha256Hex)
     })
   })
 
