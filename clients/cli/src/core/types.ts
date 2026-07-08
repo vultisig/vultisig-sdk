@@ -14,6 +14,7 @@ export type SendParams = {
   memo?: string
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
+  force?: boolean // Bypass the broadcast-journal duplicate guard
   password?: string // Vault password for signing
   signal?: AbortSignal // Optional abort signal for cancellation
 }
