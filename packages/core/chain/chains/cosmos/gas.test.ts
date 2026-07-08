@@ -222,5 +222,24 @@ describe('getCosmosFeeAmount', () => {
 
       expect(fee).toBe(30_000n) // generic path only: 300_000 * 0.1
     })
+
+    it('does not throw through the public getCosmosFeeAmount/Promise.all surface on a pathologically large base_fee', async () => {
+      // Codex review: the ORIGINAL crash reproduction was at this public
+      // wrapper (Promise.all propagating a BigInt(Infinity) RangeError out
+      // of getCosmosFeeAmount), not just the internal dynamic-floor helper.
+      // Pin the fix at the surface the bug actually manifested on.
+      const hugeButValid = '9'.repeat(400)
+      const fee = await getCosmosFeeAmount(
+        { chain: Chain.Osmosis },
+        {
+          fetchImpl: routedFetch([
+            { urlMatches: /node\/v1beta1\/config/, body: { minimum_gas_price: '0.100000000000000000uosmo' } },
+            { urlMatches: /txfees\/v1beta1\/cur_eip_base_fee/, body: { base_fee: hugeButValid } },
+          ]),
+        }
+      )
+
+      expect(fee).toBe(30_000n) // dynamic floor discarded, generic path used
+    })
   })
 })
