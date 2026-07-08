@@ -1,5 +1,15 @@
 # @vultisig/sdk
 
+## 2.19.5
+
+### Patch Changes
+
+- [#1079](https://github.com/vultisig/vultisig-sdk/pull/1079) [`e33c4a8`](https://github.com/vultisig/vultisig-sdk/commit/e33c4a8cfdcae872506b0cdbbc11724b9e14cdf6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): validate aggregator router addresses at quote construction (AGG-02). 1inch/Kyber/LiFi/SwapKit's tx.to was trusted with no allowlist, and fed both the ERC-20 approval spender and the swap transaction's on-chain destination — a compromised/spoofed aggregator response could get both approved and swapped against. 1inch/Kyber now fail closed (throw) if the returned router isn't their live-confirmed address; LiFi/SwapKit log the destination (never throw, since they route through many different contracts by design) so a future allowlist has real usage data if a pattern emerges.
+
+- [#1081](https://github.com/vultisig/vultisig-sdk/pull/1081) [`709f0be`](https://github.com/vultisig/vultisig-sdk/commit/709f0bea7a3d9dfa1e7231d25bb3949072b77195) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(utxo): raise the Litecoin dust threshold to the real P2WPKH standard (~2_940 litoshi)
+
+  Litecoin's DUST_RELAY_TX_FEE is ~10x Bitcoin's, so LTC's real standard dust threshold is ~2_940 litoshi for a P2WPKH output, not the hardcoded 1_000n. At 1_000n a change output of 1_001..2_939 litoshi was treated as spendable but is non-standard dust, so the transaction could be rejected by relays or stall. Bumped in both dust maps (core `minUtxo` + sdk `UTXO_SPECS`) and kept in sync. LTC-scoped (UTXO-02); BCH/Dash/Zcash 1_000n already sits at/above their real dust.
+
 ## 2.19.4
 
 ### Patch Changes
