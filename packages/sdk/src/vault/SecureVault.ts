@@ -8,6 +8,7 @@ import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/v
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
+import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { RelaySigningService } from '../services/RelaySigningService'
 import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
 import type {
@@ -121,6 +122,10 @@ export class SecureVault extends VaultBase {
           action: 'keysign',
           sessionId: '',
         })
+        // ponytail: push the keysign QR to the vault's registered devices so
+        // co-signers get a native notification instead of having to watch for
+        // the QR. Best-effort — never blocks/fails the sign.
+        void this.notifyDevices(qrPayload)
         if (options.onQRCodeReady) {
           options.onQRCodeReady(qrPayload)
         }
@@ -137,6 +142,33 @@ export class SecureVault extends VaultBase {
     this.emit('transactionSigned', { signature, payload })
 
     return signature
+  }
+
+  /**
+   * ponytail: notify the vault's registered devices (mobile/laptop) that a
+   * keysign QR is ready, so a co-signer gets a native push instead of manually
+   * watching for the QR. The keysign path (RelaySigningService) never called
+   * this; it only generated the QR + polled the relay. Best-effort: swallows
+   * errors and no-ops when no push service / keys / registered devices.
+   * vault_id MUST be computeNotificationVaultId (SHA256(utf8(ecdsa+chainCode))),
+   * NOT the raw pubkey — that mismatch was why pushes never landed.
+   */
+  private async notifyDevices(qrPayload: string): Promise<void> {
+    try {
+      const push = this.context.pushNotificationService
+      const ecdsa = this.coreVault.publicKeys?.ecdsa
+      const chainCode = this.coreVault.hexChainCode
+      if (!push || !ecdsa || !chainCode) return
+      const vaultId = await computeNotificationVaultId(ecdsa, chainCode)
+      await push.notifyVaultMembers({
+        vaultId,
+        vaultName: this.coreVault.name,
+        localPartyId: this.coreVault.localPartyId,
+        qrCodeData: qrPayload,
+      })
+    } catch {
+      // push is a convenience layer — never let it break signing
+    }
   }
 
   /**
@@ -198,6 +230,8 @@ export class SecureVault extends VaultBase {
               action: 'keysign',
               sessionId: '',
             })
+            // ponytail: push the keysign QR to registered devices (see notifyDevices).
+            void this.notifyDevices(qrPayload)
             if (signingOptions.onQRCodeReady) {
               signingOptions.onQRCodeReady(qrPayload)
             }
