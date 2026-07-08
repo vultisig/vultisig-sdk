@@ -40,13 +40,22 @@ import {
 
 /**
  * Stable, non-empty journal namespace for the vault. Prefer the ECDSA public key
- * (what the agent path uses, so the two paths cross-dedupe), and fall back to the
- * vault id if — defensively — the key is ever absent. Never returns empty: an
- * empty owner would collapse two DIFFERENT vaults sending an identical (chain, to,
- * value) tx into one fingerprint and wrongly refuse the second (a false lockout).
+ * (what the agent path uses, so the two paths cross-dedupe); fall back to the
+ * vault id (which is itself the ECDSA pubkey for a real vault) if — defensively —
+ * the key is ever absent. FAIL-CLOSED if both are empty: an empty owner would
+ * collapse two DIFFERENT vaults sending an identical (chain, to, value) tx into
+ * one fingerprint, so rather than broadcast under an ambiguous namespace we refuse
+ * (a malformed/uninitialized vault can't reach a signable state anyway).
  */
 function ownerOf(vault: VaultBase): string {
-  return vault.publicKeys?.ecdsa || vault.id
+  const owner = vault.publicKeys?.ecdsa || vault.id
+  if (!owner) {
+    throw new Error(
+      'Refusing to broadcast: vault has no ECDSA public key or id to namespace the double-spend guard ' +
+        '(malformed/uninitialized vault).'
+    )
+  }
+  return owner
 }
 
 /**

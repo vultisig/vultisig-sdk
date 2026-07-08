@@ -61,6 +61,15 @@ function nativeSendPayload(to: string, amountBaseUnits: string): KeysignPayload 
   } as unknown as KeysignPayload
 }
 
+function memoSendPayload(to: string, amountBaseUnits: string, memo: string): KeysignPayload {
+  return {
+    coin: { isNativeToken: true, ticker: 'RUNE', contractAddress: '', chain: 'THORChain', address: 'thor1sender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo,
+  } as unknown as KeysignPayload
+}
+
 function tokenSendPayload(to: string, amountBaseUnits: string, contract: string): KeysignPayload {
   return {
     coin: { isNativeToken: false, ticker: 'USDC', contractAddress: contract, chain: 'Ethereum', address: '0xsender' },
@@ -157,6 +166,46 @@ function makeSwapVault(opts: { txHash: string; realSwaps: { count: number } }): 
     unlock: vi.fn(),
     id: 'vault-swap',
     name: 'vault-swap',
+    publicKeys: { ecdsa: OWNER, eddsa: '' },
+    swap,
+    balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18 }),
+    getDiscountTier: vi.fn().mockResolvedValue(undefined),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
+  } as unknown as VaultBase
+}
+
+/** A swap vault whose dry-run `maxSwapable` DRIFTS between attempts — models the
+ * fee/balance drift a `swap --max` retry sees. */
+function makeDriftingMaxSwapVault(opts: {
+  maxSwapables: bigint[]
+  txHash: string
+  realSwaps: { count: number }
+}): VaultBase {
+  let dry = 0
+  const quoteFor = (maxSwapable: bigint) => ({
+    fromCoin: { decimals: 18, ticker: 'ETH' },
+    toCoin: { decimals: 8, ticker: 'BTC' },
+    estimatedOutput: 100n,
+    maxSwapable,
+    provider: 'thorchain',
+  })
+  const swap = vi.fn(async (p: { dryRun?: boolean }) => {
+    if (p.dryRun) {
+      const maxSwapable = opts.maxSwapables[Math.min(dry, opts.maxSwapables.length - 1)]
+      dry += 1
+      return { dryRun: true, quote: quoteFor(maxSwapable) }
+    }
+    opts.realSwaps.count += 1
+    return { dryRun: false, txHash: opts.txHash, chain: Chain.Ethereum, quote: quoteFor(0n) }
+  })
+  return {
+    type: 'fast',
+    isEncrypted: false,
+    isUnlocked: () => true,
+    unlock: vi.fn(),
+    id: 'vault-swap-max',
+    name: 'vault-swap-max',
     publicKeys: { ecdsa: OWNER, eddsa: '' },
     swap,
     balance: vi.fn().mockResolvedValue({ symbol: 'ETH', decimals: 18 }),
@@ -416,6 +465,50 @@ describe('send — broadcast dedupe guard', () => {
     ).rejects.toMatchObject({ code: AgentErrorCode.DUPLICATE_BROADCAST })
     expect(realSends.count).toBe(1) // drift did NOT let the max retry through
   })
+
+  it('memo distinguishes otherwise-identical sends (data discriminator, no false lockout on memo chains)', async () => {
+    const realSends = { count: 0 }
+    const thorParams = { chain: Chain.THORChain, to: 'thor1recipient', amount: '1', yes: true } as const
+    const vault = makeSendVault({
+      payload: memoSendPayload('thor1recipient', '100000000', 'depositA'),
+      txHash: '0xmemoA',
+      realSends,
+    })
+
+    // Identical send + same memo → refused.
+    await sendTransaction(vault, { ...thorParams, memo: 'depositA' })
+    await expect(sendTransaction(vault, { ...thorParams, memo: 'depositA' })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSends.count).toBe(1)
+
+    // Same to/amount but a DIFFERENT memo is a genuinely different tx (memo-routed
+    // chains) → distinct `data` → distinct fingerprint → allowed (no false lockout).
+    ;(vault.send as unknown as { mockImplementation: (f: unknown) => void }).mockImplementation(
+      async (p: { dryRun?: boolean; chain: Chain }) => {
+        if (p.dryRun)
+          return {
+            dryRun: true,
+            fee: '0.001',
+            total: '1',
+            keysignPayload: memoSendPayload('thor1recipient', '100000000', 'depositB'),
+          }
+        realSends.count += 1
+        return { dryRun: false, txHash: '0xmemoB', chain: p.chain }
+      }
+    )
+    await sendTransaction(vault, { ...thorParams, memo: 'depositB' })
+    expect(realSends.count).toBe(2)
+  })
+
+  it('fails closed when the vault has no owner namespace (no ecdsa, no id)', () => {
+    // A malformed/uninitialized vault must NOT be namespaced under an empty owner
+    // (which would collapse distinct vaults into one fingerprint). Refuse instead.
+    const ownerless = { publicKeys: { ecdsa: '', eddsa: '' }, id: '' } as unknown as VaultBase
+    expect(() => buildSendBroadcastIntent(ownerless, Chain.Ethereum, nativeSendPayload('0xrecipient', '1'))).toThrow(
+      /no ECDSA public key or id/i
+    )
+  })
 })
 
 // ---- swap ------------------------------------------------------------------
@@ -449,5 +542,19 @@ describe('swap — broadcast dedupe guard', () => {
     // A distinct amount is a distinct intent → allowed without --force.
     await executeSwap(ctxFor(vault), { ...opts, amount: 0.2 })
     expect(realSwaps.count).toBe(3)
+  })
+
+  it('--max retries dedupe even when maxSwapable drifts (stable max fingerprint)', async () => {
+    const realSwaps = { count: 0 }
+    // The retry's dry-run resolves a slightly smaller max (fee/balance drift).
+    // Without the stable `max` sentinel these fingerprint differently and the
+    // retry double-broadcasts.
+    const vault = makeDriftingMaxSwapVault({ maxSwapables: [998n, 997n], txHash: '0xswapmax', realSwaps })
+
+    await executeSwap(ctxFor(vault), { ...opts, amount: 'max' })
+    await expect(executeSwap(ctxFor(vault), { ...opts, amount: 'max' })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSwaps.count).toBe(1) // drift did NOT let the max swap retry through
   })
 })
