@@ -8,9 +8,12 @@ name: E2E Fast Signing (scheduled)
 #
 # Safe-by-default: the suite itself does describe.skipIf(!HAS_TEST_VAULT_FIXTURE),
 # so this workflow cleanly no-ops (green, tests skipped) until a funded
-# multi-chain fast vault is wired via E2E_TEST_VAULT_FILE_BASE64 below - see
-# the "Write test vault fixture" step for exactly what's missing and
-# packages/sdk/tests/e2e/SECURITY.md for how to provision one.
+# multi-chain fast vault is wired via E2E_TEST_VAULT_FILE_BASE64 +
+# E2E_TEST_VAULT_PASSWORD below - see the "Write test vault fixture" step
+# for exactly what's missing and packages/sdk/tests/e2e/SECURITY.md for how
+# to provision one. E2E_TEST_VAULT_PASSWORD is intentionally separate from
+# the existing TEST_VAULT_PASSWORD secret (that one belongs to a different
+# fixture used by integration-test.yml).
 
 on:
   schedule:
@@ -68,10 +71,14 @@ jobs:
             echo "$VAULT_B64" | base64 -d > /tmp/e2e-test-vault.vult
           fi
 
+      # Deliberately its OWN secret, not the existing TEST_VAULT_PASSWORD
+      # (that one belongs to integration-test.yml's separate test-vault.json
+      # fixture - reusing the name would silently break that vault if the
+      # passwords differ).
       - name: Run fast-signing E2E (real 2-of-2 MPC, never broadcasts)
         env:
           TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
-          TEST_VAULT_PASSWORD: ${{ secrets.TEST_VAULT_PASSWORD }}
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: yarn workspace @vultisig/sdk test:e2e:fast-signing
 
       - name: Notify Discord on failure
