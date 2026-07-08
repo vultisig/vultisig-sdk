@@ -41,7 +41,11 @@ const buildZcashSend = ({
     fromAddress: ZCASH_ADDRESS,
     toAddress: ZCASH_ADDRESS,
     amount,
-    utxos: utxoValues.map((value, index) => ({ hash: 'ff'.repeat(32), index, value })),
+    utxos: utxoValues.map((value, index) => ({
+      hash: 'ff'.repeat(32),
+      index,
+      value,
+    })),
     feeRate,
     compressedPubKey: COMPRESSED_PUBKEY,
     zcashBranchId: ZCASH_BRANCH_ID_NU6_2,
@@ -66,11 +70,19 @@ describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)
     // charged the 2-action grace floor of 10,000 zats here — a 15,000 zat shortfall
     // that risks "tx unpaid action limit exceeded" at broadcast.
     const memo = 'A'.repeat(80)
-    expect(() => buildZcashSend({ utxoValues: [124_999n], amount: 100_000n, opReturnData: memo })).toThrowError(
-      /fee=25000\b/
-    )
     expect(() =>
-      buildZcashSend({ utxoValues: [125_000n], amount: 100_000n, opReturnData: memo })
+      buildZcashSend({
+        utxoValues: [124_999n],
+        amount: 100_000n,
+        opReturnData: memo,
+      })
+    ).toThrowError(/fee=25000\b/)
+    expect(() =>
+      buildZcashSend({
+        utxoValues: [125_000n],
+        amount: 100_000n,
+        opReturnData: memo,
+      })
     ).not.toThrowError()
   })
 
@@ -79,10 +91,20 @@ describe('Zcash — ZIP-317 conventional fee counts OUTPUT actions too (UTXO-04)
     // tx_out. Total outputs = 34+34+21=89 -> ceil(89/34)=3 output actions. 1 input
     // action. max(1,3)=3 -> above the 2-action grace window -> fee = 5,000*3=15,000.
     const memo = 'A'.repeat(10)
-    expect(() => buildZcashSend({ utxoValues: [114_999n], amount: 100_000n, opReturnData: memo })).toThrowError(
-      /fee=15000\b/
-    )
-    expect(() => buildZcashSend({ utxoValues: [115_000n], amount: 100_000n, opReturnData: memo })).not.toThrowError()
+    expect(() =>
+      buildZcashSend({
+        utxoValues: [114_999n],
+        amount: 100_000n,
+        opReturnData: memo,
+      })
+    ).toThrowError(/fee=15000\b/)
+    expect(() =>
+      buildZcashSend({
+        utxoValues: [115_000n],
+        amount: 100_000n,
+        opReturnData: memo,
+      })
+    ).not.toThrowError()
   })
 
   it('scales with both input count and a large memo together', () => {

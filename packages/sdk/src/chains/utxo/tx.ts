@@ -812,6 +812,39 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const inputTotal = inputs.reduce((s, u) => s + u.value, 0n)
 
+  // Validate the address types BEFORE any fee/funding math so an unsupported or
+  // mismatched `fromAddress` fails fast with the meaningful error (P2SH not
+  // supported / scriptType mismatch) rather than a misleading "insufficient
+  // funds" — a raised per-chain min-fee floor (UTXO-03, most acute on Dogecoin)
+  // can push the required fee above the inputs and mask the real problem.
+  const toDec = decodeAddressToPubKeyHash(opts.toAddress, opts.chain)
+  const fromDec = decodeAddressToPubKeyHash(opts.fromAddress, opts.chain)
+  // P2SH spending requires the redeem script in the sighash scriptCode and a
+  // matching scriptSig. Vultisig vaults derive P2PKH/P2WPKH addresses only, so
+  // `fromAddress` is never legitimately P2SH in production — but the decoder
+  // newly accepts BCH `bitcoincash:p...` and BTC/LTC/DOGE/DASH base58 P2SH
+  // (CR items #2 and #6). Without an explicit guard here the builder would
+  // emit a P2PKH-shaped sighash for a P2SH input, the user signs garbage,
+  // and the resulting tx fails at broadcast time. Throw fast instead.
+  if (fromDec.type === 'p2sh') {
+    throw new Error(
+      `buildUtxoSendTx: P2SH spending is not supported (fromAddress=${opts.fromAddress}). Vultisig vaults derive P2PKH/P2WPKH addresses only.`
+    )
+  }
+  // Cross-type guard: the address decoder is permissive (e.g. legacy `1...`
+  // BTC, segwit `bc1...`, BCH cashaddr, base58 P2SH) but the chain config
+  // pins exactly one `scriptType` per chain. If a caller passes an address
+  // whose decoded type doesn't match the chain's expected scriptType, the
+  // sighash branch chooses the WRONG sighash variant (legacy vs BIP143) and
+  // emits a hash that signs garbage. Throw fast so the caller fixes the
+  // address rather than silently producing an unspendable tx.
+  if (fromDec.type !== spec.scriptType) {
+    throw new Error(
+      `buildUtxoSendTx: fromAddress decodes to ${fromDec.type} but chain ${opts.chain} expects ${spec.scriptType} ` +
+        `(fromAddress=${opts.fromAddress}). Pass an address that matches the chain's scriptType.`
+    )
+  }
+
   // Build the OP_RETURN script up front (throws early on >80 bytes) so its size
   // feeds fee calc and its bytes feed serializeOutputs / the sighash digest.
   const opReturnScript =
@@ -843,33 +876,6 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
     )
   }
 
-  const toDec = decodeAddressToPubKeyHash(opts.toAddress, opts.chain)
-  const fromDec = decodeAddressToPubKeyHash(opts.fromAddress, opts.chain)
-  // P2SH spending requires the redeem script in the sighash scriptCode and a
-  // matching scriptSig. Vultisig vaults derive P2PKH/P2WPKH addresses only, so
-  // `fromAddress` is never legitimately P2SH in production — but the decoder
-  // newly accepts BCH `bitcoincash:p...` and BTC/LTC/DOGE/DASH base58 P2SH
-  // (CR items #2 and #6). Without an explicit guard here the builder would
-  // emit a P2PKH-shaped sighash for a P2SH input, the user signs garbage,
-  // and the resulting tx fails at broadcast time. Throw fast instead.
-  if (fromDec.type === 'p2sh') {
-    throw new Error(
-      `buildUtxoSendTx: P2SH spending is not supported (fromAddress=${opts.fromAddress}). Vultisig vaults derive P2PKH/P2WPKH addresses only.`
-    )
-  }
-  // Cross-type guard: the address decoder is permissive (e.g. legacy `1...`
-  // BTC, segwit `bc1...`, BCH cashaddr, base58 P2SH) but the chain config
-  // pins exactly one `scriptType` per chain. If a caller passes an address
-  // whose decoded type doesn't match the chain's expected scriptType, the
-  // sighash branch chooses the WRONG sighash variant (legacy vs BIP143) and
-  // emits a hash that signs garbage. Throw fast so the caller fixes the
-  // address rather than silently producing an unspendable tx.
-  if (fromDec.type !== spec.scriptType) {
-    throw new Error(
-      `buildUtxoSendTx: fromAddress decodes to ${fromDec.type} but chain ${opts.chain} expects ${spec.scriptType} ` +
-        `(fromAddress=${opts.fromAddress}). Pass an address that matches the chain's scriptType.`
-    )
-  }
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 
