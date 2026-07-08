@@ -155,7 +155,7 @@ describe('parseChain — malformed inputs return typed errors (not crash)', () =
     'testnet',
     '1',
     '42',
-  ])('parseChain("%s") → { success: false }', (input) => {
+  ])('parseChain("%s") → { success: false }', input => {
     const result = parseChain(input)
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -210,38 +210,32 @@ describe('parseChain — malformed inputs return typed errors (not crash)', () =
 describe('parseChain — no valid input is newly rejected (vs normalizeChain)', () => {
   // Every canonical Chain value must produce SUCCESS with the same canonical
   // value that normalizeChain returns. This proves zero-regression.
-  it.each(Object.values(Chain))(
-    'canonical Chain value %s round-trips byte-identically through parseChain',
-    (chain) => {
-      const expected = normalizeChain(chain) // normalizeChain is the source of truth
-      const result = parseChain(chain)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.chain).toBe(expected)
-      }
-    },
-  )
+  it.each(Object.values(Chain))('canonical Chain value %s round-trips byte-identically through parseChain', chain => {
+    const expected = normalizeChain(chain) // normalizeChain is the source of truth
+    const result = parseChain(chain)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.chain).toBe(expected)
+    }
+  })
 
   // Lower-case forms of all canonical Chain values
-  it.each(Object.values(Chain))(
-    'lowercase form of canonical Chain value %s is accepted',
-    (chain) => {
-      const lower = chain.toLowerCase()
-      // normalizeChain should accept it; if so, parseChain must too
-      let expected: Chain | undefined
-      try {
-        expected = normalizeChain(lower)
-      } catch {
-        // normalizeChain rejects — parseChain may also reject, that is fine
-        return
-      }
-      const result = parseChain(lower)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.chain).toBe(expected)
-      }
-    },
-  )
+  it.each(Object.values(Chain))('lowercase form of canonical Chain value %s is accepted', chain => {
+    const lower = chain.toLowerCase()
+    // normalizeChain should accept it; if so, parseChain must too
+    let expected: Chain | undefined
+    try {
+      expected = normalizeChain(lower)
+    } catch {
+      // normalizeChain rejects — parseChain may also reject, that is fine
+      return
+    }
+    const result = parseChain(lower)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.chain).toBe(expected)
+    }
+  })
 })
 
 // ── chainSchema Zod API surface ────────────────────────────────────────────────

@@ -45,45 +45,43 @@ const TICKER_RE = /^[a-zA-Z0-9._-]+$/
  * The schema trims leading/trailing whitespace before validation so that
  * `"  ETH  "` is treated identically to `"ETH"` (common LLM output artifact).
  */
-export const tickerSchema: z.ZodType<string> = z
-  .string()
-  .transform((val, ctx): string => {
-    const trimmed = val.trim()
+export const tickerSchema: z.ZodType<string> = z.string().transform((val, ctx): string => {
+  const trimmed = val.trim()
 
-    if (trimmed.length === 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'ticker is required (got empty or whitespace-only string).',
-        params: { code: 'blank_ticker' },
-      })
-      return z.NEVER
-    }
+  if (trimmed.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'ticker is required (got empty or whitespace-only string).',
+      params: { code: 'blank_ticker' },
+    })
+    return z.NEVER
+  }
 
-    if (trimmed.length > MAX_TICKER_LENGTH) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          `ticker '${trimmed.slice(0, 30)}…' is too long (${trimmed.length} chars); ` +
-          `expected a token symbol like "BTC", "USDC", or "wstETH" (max ${MAX_TICKER_LENGTH} chars).`,
-        params: { code: 'ticker_too_long' },
-      })
-      return z.NEVER
-    }
+  if (trimmed.length > MAX_TICKER_LENGTH) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        `ticker '${trimmed.slice(0, 30)}…' is too long (${trimmed.length} chars); ` +
+        `expected a token symbol like "BTC", "USDC", or "wstETH" (max ${MAX_TICKER_LENGTH} chars).`,
+      params: { code: 'ticker_too_long' },
+    })
+    return z.NEVER
+  }
 
-    if (!TICKER_RE.test(trimmed)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          `ticker '${trimmed}' contains invalid characters. ` +
-          `Expected a token symbol like "BTC", "USDC", "wstETH", or "USD.e" ` +
-          `(letters, digits, dots, hyphens, underscores only).`,
-        params: { code: 'invalid_ticker_chars' },
-      })
-      return z.NEVER
-    }
+  if (!TICKER_RE.test(trimmed)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        `ticker '${trimmed}' contains invalid characters. ` +
+        `Expected a token symbol like "BTC", "USDC", "wstETH", or "USD.e" ` +
+        `(letters, digits, dots, hyphens, underscores only).`,
+      params: { code: 'invalid_ticker_chars' },
+    })
+    return z.NEVER
+  }
 
-    return trimmed
-  })
+  return trimmed
+})
 
 /**
  * Result of `parseTicker`.

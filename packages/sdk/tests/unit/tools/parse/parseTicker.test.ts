@@ -61,7 +61,7 @@ describe('parseTicker — valid ticker forms pass', () => {
     'USD-T',
     // Underscore
     'USD_C',
-  ])('parseTicker("%s") → success', (ticker) => {
+  ])('parseTicker("%s") → success', ticker => {
     const result = parseTicker(ticker)
     expect(result.success).toBe(true)
     if (result.success) {
@@ -114,15 +114,15 @@ describe('parseTicker — malformed inputs return typed errors (not crash)', () 
   })
 
   it.each([
-    'USD COIN',     // space inside
-    'ETH/BTC',     // slash
-    'ETH@2',       // @
-    '$USDC',       // leading dollar
-    '<TICKER>',    // angle bracket
+    'USD COIN', // space inside
+    'ETH/BTC', // slash
+    'ETH@2', // @
+    '$USDC', // leading dollar
+    '<TICKER>', // angle bracket
     'USDC:Ethereum', // colon
-    'token name',  // space
-    'sol!',        // exclamation
-  ])('parseTicker("%s") → failure (invalid chars)', (ticker) => {
+    'token name', // space
+    'sol!', // exclamation
+  ])('parseTicker("%s") → failure (invalid chars)', ticker => {
     const result = parseTicker(ticker)
     expect(result.success).toBe(false)
     if (!result.success) {
