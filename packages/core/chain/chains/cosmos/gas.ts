@@ -153,16 +153,18 @@ export const getCosmosFeeAmount = async (
   coin: CoinKey<IbcEnabledCosmosChain>,
   opts: FetchOpts = {}
 ): Promise<bigint> => {
-  const genericFee = await getGenericCosmosFeeAmount(coin, opts)
-
-  if (coin.chain !== Chain.Osmosis) return genericFee
+  if (coin.chain !== Chain.Osmosis) return getGenericCosmosFeeAmount(coin, opts)
 
   // Osmosis's real fee floor is enforced by its EIP-1559 `x/txfees` module,
-  // NOT the generic node-config `minimum-gas-price` queried above (a
-  // per-node/operator-configurable value that doesn't track the live
-  // protocol floor, and can be clamped away by the anomaly guard above when
-  // it legitimately spikes). Query Osmosis's own dynamic floor directly and
-  // never pay less than what it currently requires - see osmosisDynamicFee.ts.
-  const dynamicFloor = await getOsmosisDynamicFeeFloor(getCosmosGasLimit(coin), opts)
+  // NOT the generic node-config `minimum-gas-price` (a per-node/operator-
+  // configurable value that doesn't track the live protocol floor, and can
+  // be clamped away by the anomaly guard above when it legitimately spikes).
+  // Run both lookups concurrently (each has its own timeout budget) rather
+  // than sequentially, and never pay less than the higher of the two -
+  // see osmosisDynamicFee.ts.
+  const [genericFee, dynamicFloor] = await Promise.all([
+    getGenericCosmosFeeAmount(coin, opts),
+    getOsmosisDynamicFeeFloor(getCosmosGasLimit(coin), opts),
+  ])
   return dynamicFloor !== null && dynamicFloor > genericFee ? dynamicFloor : genericFee
 }

@@ -172,8 +172,9 @@ describe('getCosmosFeeAmount', () => {
       )
 
       // generic path: 300_000 * 0.2 = 60_000 (above the 9000n static floor and
-      // above the anomaly-clamp threshold's own floor fallback, so it's used
-      // as-is), and above 300_000 * 0.001 * 1.25 = 375 from the dynamic floor.
+      // under the 90_000n (9000n * 10) anomaly-clamp threshold, so the live
+      // value is used as-is), and above 300_000 * 0.001 * 1.25 = 375 from the
+      // dynamic floor.
       expect(fee).toBe(60_000n)
     })
 

@@ -33,6 +33,12 @@ type FetchOpts = {
   signal?: AbortSignal
 }
 
+// Strict non-negative decimal (matches the shape Osmosis's LCD actually
+// returns, e.g. "0.030000000000000000") - rejects null/empty/non-numeric/
+// negative/exponential values rather than trusting `Number()`'s loose
+// coercion (which turns `null`/`""`/`[]` into `0` and `true` into `1`).
+const decimalPattern = /^\d+(?:\.\d+)?$/
+
 async function fetchOsmosisBaseFeePerGas({ fetchImpl = fetch, signal }: FetchOpts = {}): Promise<number | null> {
   const controller = new AbortController()
   const onAbort = () => controller.abort()
@@ -41,21 +47,36 @@ async function fetchOsmosisBaseFeePerGas({ fetchImpl = fetch, signal }: FetchOpt
   } else {
     signal?.addEventListener('abort', onAbort, { once: true })
   }
-  const timer = setTimeout(() => controller.abort(), OSMOSIS_BASE_FEE_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), OSMOSIS_BASE_FEE_TIMEOUT_MS)
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    const rejectTimeout = () => reject(new Error('Osmosis base-fee request timed out'))
+    if (controller.signal.aborted) {
+      rejectTimeout()
+      return
+    }
+    controller.signal.addEventListener('abort', rejectTimeout, { once: true })
+  })
 
   try {
-    const res = await fetchImpl(`${getCosmosRpcUrl(Chain.Osmosis)}/osmosis/txfees/v1beta1/cur_eip_base_fee`, {
-      signal: controller.signal,
-    })
-    if (!res.ok) return null
+    const body = await Promise.race([
+      (async () => {
+        const res = await fetchImpl(`${getCosmosRpcUrl(Chain.Osmosis)}/osmosis/txfees/v1beta1/cur_eip_base_fee`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) throw new Error(`Osmosis base-fee request failed: ${res.status}`)
+        return (await res.json()) as OsmosisBaseFeeResponse
+      })(),
+      timeoutPromise,
+    ])
 
-    const body = (await res.json()) as OsmosisBaseFeeResponse
-    const fee = Number(body?.base_fee)
-    return Number.isFinite(fee) && fee >= 0 ? fee : null
+    const baseFee = body?.base_fee
+    if (typeof baseFee !== 'string' || !decimalPattern.test(baseFee)) return null
+
+    return Number(baseFee)
   } catch {
     return null
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timeout)
     signal?.removeEventListener('abort', onAbort)
   }
 }

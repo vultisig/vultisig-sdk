@@ -54,6 +54,16 @@ describe('getOsmosisDynamicFeeFloor', () => {
     expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: '-1' }) })).toBeNull()
   })
 
+  it('returns null (fail-open) for non-string/loosely-coercible base_fee values, not Number()`s permissive coercion', async () => {
+    // Number(null) === 0, Number('') === 0, Number([]) === 0, Number(true) === 1 -
+    // a naive `Number(body.base_fee)` would silently accept all of these.
+    expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: null }) })).toBeNull()
+    expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: '' }) })).toBeNull()
+    expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: [] }) })).toBeNull()
+    expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: true }) })).toBeNull()
+    expect(await getOsmosisDynamicFeeFloor(300_000n, { fetchImpl: mockFetch({ base_fee: '1e5' }) })).toBeNull()
+  })
+
   it('returns null (fail-open) when the fetch throws', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('network error')
@@ -71,6 +81,25 @@ describe('getOsmosisDynamicFeeFloor', () => {
           init?.signal?.addEventListener('abort', () => reject(new Error('aborted')))
         })
       }) as unknown as typeof fetch
+
+      const promise = getOsmosisDynamicFeeFloor(300_000n, { fetchImpl })
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(promise).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns null (fail-open) at the timeout even when fetch completely ignores the abort signal', async () => {
+    vi.useFakeTimers()
+
+    try {
+      // A fetch impl that never settles and never listens for the abort
+      // signal at all - the timeout must still resolve independently via
+      // Promise.race, not rely on the fetch impl reacting to abort().
+      const fetchImpl = vi.fn(() => new Promise<Response>(() => undefined)) as unknown as typeof fetch
 
       const promise = getOsmosisDynamicFeeFloor(300_000n, { fetchImpl })
 
