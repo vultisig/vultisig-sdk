@@ -66,6 +66,37 @@ export async function getCowSwapQuote({
 
   const { quote } = response
 
+  // AGG-01 fund-safety fix (round-2 spec-level audit): sellToken/buyToken/kind/
+  // partiallyFillable were previously taken straight from this untrusted /quote response and
+  // signed as-is via the EIP-712 GPv2 Order struct (buildCowSwapOrderTypedData.ts). `receiver`
+  // just below already uses the caller-supplied local, not quote.receiver — the "don't trust
+  // the API for security-critical fields" pattern already existed here, just not applied to
+  // these 4 fields. A compromised/buggy apiBase response substituting a token address, or
+  // flipping `kind` from 'sell' to 'buy', would get signed: a `kind` flip specifically inverts
+  // GPv2's semantics (sell: sellAmount is authoritative post-fee; buy: buyAmount is the fixed
+  // target, sellAmount becomes a ceiling) while grossSellAmount below is computed assuming
+  // sell-order semantics — the SDK would sign a fundamentally different economic contract than
+  // the one it believes it built. This SDK only ever requests kind:'sell' + partiallyFillable:
+  // false (the request body above), so any other value in the response is definitionally wrong.
+  if (quote.sellToken.toLowerCase() !== sellToken.toLowerCase()) {
+    throw new Error(
+      `CowSwap quote returned a mismatched sellToken (requested ${sellToken}, got ${quote.sellToken}) — refusing to sign.`
+    )
+  }
+  if (quote.buyToken.toLowerCase() !== buyToken.toLowerCase()) {
+    throw new Error(
+      `CowSwap quote returned a mismatched buyToken (requested ${buyToken}, got ${quote.buyToken}) — refusing to sign.`
+    )
+  }
+  if (quote.kind !== 'sell') {
+    throw new Error(`CowSwap quote returned kind '${quote.kind}' (requested 'sell') — refusing to sign.`)
+  }
+  if (quote.partiallyFillable !== false) {
+    throw new Error(
+      `CowSwap quote returned partiallyFillable=${quote.partiallyFillable} (requested false) — refusing to sign.`
+    )
+  }
+
   const permitRequired = KNOWN_PERMIT_TOKENS[chainConfig.chainId]?.some(
     addr => addr.toLowerCase() === sellToken.toLowerCase()
   )
