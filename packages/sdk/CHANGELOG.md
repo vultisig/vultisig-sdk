@@ -1,5 +1,18 @@
 # @vultisig/sdk
 
+## 2.18.6
+
+### Patch Changes
+
+- [#1026](https://github.com/vultisig/vultisig-sdk/pull/1026) [`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add cosmos per-chain fee-denom allowlist helpers (`getCosmosAllowedFeeDenoms`, `isCosmosFeeDenomAllowed`) as the single source of truth for which denoms a cosmos chain's ante handler accepts as a gas fee, consolidating copies previously maintained independently in agent-backend-ts (execute_send.ts, astroport-classic-swap.ts, cosmos-staking.ts).
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
 ## 2.18.5
 
 ### Patch Changes
