@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // knownAggregatorRouters.ts's logUnenforcedAggregatorDestination. This proves that behavior:
 // an unrecognized `to` never blocks the quote, and gets logged for future analysis.
 
+// jscpd:ignore-start — the LiFi module-mock + fixture scaffolding below is intentionally
+// shared with getLifiSwapQuote.integrator.test.ts (same core module under test); the
+// meaningful assertions are the telemetry cases further down. Follows the repo's existing
+// convention for shared test mock boilerplate (cf. tests/integration/swap/swap-quote.test.ts).
 vi.mock('@lifi/sdk', () => ({
   ChainId: {},
   createClient: () => ({ config: {}, providers: [] }),
@@ -64,6 +68,7 @@ const baseInput = {
   amount: 1_000_000n,
   affiliateBps: 30,
 }
+// jscpd:ignore-end
 
 describe('getLifiSwapQuote — AGG-02 router telemetry (log-only, never enforced)', () => {
   let infoSpy: ReturnType<typeof vi.spyOn>
