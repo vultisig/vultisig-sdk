@@ -51,6 +51,16 @@ export const toXrplCurrencyCode = (currency: string): string => {
   return asciiToHexCurrencyCode(value)
 }
 
+/**
+ * True if `currency` is already a valid on-ledger XRPL currency code: either a
+ * 3-character standard code or the 40-char hex (160-bit) non-standard form.
+ * A human ticker like `RLUSD` is NOT valid here - it must first be normalised
+ * via {@link toXrplCurrencyCode} before being used in a token id or TrustSet.
+ */
+export const isValidXrplCurrencyCode = (currency: string): boolean =>
+  currency.length === standardCurrencyCodeLength ||
+  (currency.length === hexCurrencyCodeLength && hexCurrencyCodeRegex.test(currency))
+
 const tokenIdSeparator = '.'
 
 type RippleIssuedCurrency = {

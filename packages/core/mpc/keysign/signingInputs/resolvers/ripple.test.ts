@@ -81,6 +81,22 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     expect(limit?.value).toBe('1.5')
   })
 
+  it('normalizes an unencoded non-standard currency stored in contractAddress before signing', async () => {
+    // Defense-in-depth: a `contractAddress` built without going through
+    // `rippleTokenId()` (e.g. a raw "RLUSD.<issuer>" id) must still resolve to
+    // the on-ledger 40-char hex form rather than being forwarded verbatim.
+    const payload = buildTrustSetPayload('1000000000000000')
+    payload.coin!.contractAddress = `RLUSD.${RLUSD_ISSUER}`
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.opTrustSet?.limitAmount?.currency).toBe('524C555344000000000000000000000000000000')
+    expect(input.opTrustSet?.limitAmount?.issuer).toBe(RLUSD_ISSUER)
+  })
+
   it('formats whole-number limits without a fractional part', async () => {
     const [input] = await getRippleSigningInputs({
       keysignPayload: buildTrustSetPayload('1000000000000000'),

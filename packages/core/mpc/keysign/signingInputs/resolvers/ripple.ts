@@ -1,5 +1,9 @@
 import { Buffer } from 'buffer'
-import { formatIssuedCurrencyValue, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import {
+  formatIssuedCurrencyValue,
+  parseRippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -31,7 +35,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return {
       opTrustSet: TW.Ripple.Proto.OperationTrustSet.create({
         limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
-          currency,
+          currency: toXrplCurrencyCode(currency),
           issuer,
           value: formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals),
         }),

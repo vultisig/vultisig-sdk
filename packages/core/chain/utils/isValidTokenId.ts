@@ -1,7 +1,7 @@
 import { isValidStructTag } from '@mysten/sui/utils'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
-import { parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import { isValidXrplCurrencyCode, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { isValidAddress } from './isValidAddress'
@@ -33,7 +33,7 @@ export const isValidTokenId = ({ chain, id, walletCore }: Input) => {
     }
     const { currency, issuer } = parsed.data
 
-    return currency.length > 0 && isValidAddress({ chain, address: issuer, walletCore })
+    return isValidXrplCurrencyCode(currency) && isValidAddress({ chain, address: issuer, walletCore })
   }
 
   return isValidAddress({ chain, address: id, walletCore })
