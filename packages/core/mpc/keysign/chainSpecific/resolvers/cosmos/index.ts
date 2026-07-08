@@ -7,13 +7,15 @@ import {
   getTerraClassicTaxCap,
   getTerraClassicTaxRate,
 } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import {
   CosmosSpecificSchema,
   TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 
-import { getKeysignCoin } from '../../utils/getKeysignCoin'
-import { GetChainSpecificResolver } from '../resolver'
+import { getKeysignCoin } from '../../../utils/getKeysignCoin'
+import { GetChainSpecificResolver } from '../../resolver'
+import { estimateCosmosGasLimit } from './gasEstimation/estimateCosmosGasLimit'
 
 /**
  * Computes the Terra Classic stability-tax surcharge for a USTC (uusd) send.
@@ -38,6 +40,7 @@ async function computeUstcBurnTaxAmount(toAmount: string): Promise<string> {
 
 export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> = async ({
   keysignPayload,
+  walletCore,
   transactionType = TransactionType.UNSPECIFIED,
   timeoutTimestamp,
 }) => {
@@ -62,11 +65,45 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
     }
   }
 
+  // Initiator-side dynamic gas: simulate a native send via
+  // `/cosmos/tx/v1beta1/simulate` and relay the padded gas limit to co-signers
+  // in `CosmosSpecific.gas_limit`. The signing-inputs resolver honors this
+  // value (and scales the fee amount accordingly) when it is present and > 0,
+  // otherwise every device falls back to the static per-chain gas limit. Only
+  // native bank sends are simulated — the simulate tx models a `MsgSend`, so
+  // token/IBC/contract/staking txs (non-UNSPECIFIED transactionType, or a
+  // relayed dapp signData) keep the static limit. Fails closed: any simulation
+  // error returns undefined and the field stays unset.
+  // Optional chaining is deliberate: this gate runs at initiator build time on
+  // payloads that can be shaped by external callers (dapp / inpage-provider),
+  // and it sits outside the fail-closed estimator below — a payload missing the
+  // `signData` oneof wrapper must be treated as "no relayed sign data" rather
+  // than throw here.
+  const hasRelayedSignData = keysignPayload.signData?.case !== undefined
+
+  const isNativeSend =
+    transactionType === TransactionType.UNSPECIFIED &&
+    !hasRelayedSignData &&
+    isFeeCoin(coin) &&
+    !!keysignPayload.toAddress &&
+    /^[0-9]+$/.test(keysignPayload.toAmount) &&
+    BigInt(keysignPayload.toAmount) > 0n
+
+  const gasLimit = isNativeSend
+    ? await estimateCosmosGasLimit({
+        walletCore,
+        keysignPayload,
+        accountNumber: BigInt(accountNumber),
+        sequence: BigInt(sequence),
+      })
+    : undefined
+
   return create(CosmosSpecificSchema, {
     accountNumber: BigInt(accountNumber),
     sequence: BigInt(sequence),
     transactionType,
     gas: await getCosmosFeeAmount(coin),
+    gasLimit,
     ibcDenomTraces: {
       latestBlock: timeoutTimestamp ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}` : latestBlock,
       baseDenom: burnTaxBaseDenom,

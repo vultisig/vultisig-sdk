@@ -186,8 +186,25 @@ export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export {
+  getCosmosAllowedFeeDenoms,
+  isCosmosFeeDenomAllowed,
+} from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+
+// Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
+// "will this memo fit before broadcast rejects it with sdk code 12 (memo too
+// long) after the user has already signed?" Consolidated from independently-
+// maintained copies in agent-backend-ts (skip-swap.ts's full per-chain table,
+// execute_send.ts's TerraClassic-only hardcoded 256 check that missed every
+// other cosmos chain) and mcp-ts's own copy of the same table.
+export {
+  COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  getCosmosMemoMaxBytes,
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosMemoWithinCap,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -274,6 +291,13 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
+// Skip Go routing-eligibility predicates. Single source of truth for "does this
+// from/to chain pair route through Skip Go?" — consolidated here so consumers
+// (execute/build tools, route discovery/listing, destination-format validation)
+// share one tested implementation instead of independently-maintained copies
+// that can drift from each other (the mcp-ts #384 bug class).
+export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
@@ -701,6 +725,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,

@@ -1,5 +1,72 @@
 # @vultisig/cli
 
+## 2.18.7
+
+### Patch Changes
+
+- [#1033](https://github.com/vultisig/vultisig-sdk/pull/1033) [`f682eda`](https://github.com/vultisig/vultisig-sdk/commit/f682eda5607a8263e90b18d9ff7167eb2e0a7004) Thanks [@neavra](https://github.com/neavra)! - docs(cli): regenerate the README "Exit Codes" table from the `ExitCode` enum (the single source of truth in `src/core/errors.ts`). The shipped table was stale and mislabelled every non-zero code — e.g. it called `2` "invalid usage" and `3` "configuration error" when the CLI actually returns `2` for authentication-required and `3` for a retryable network error, so a script written to the README's codes misclassified every failure. Codes `8`–`11` (ACK_FAILED, DUPLICATE_BROADCAST, and the two `agent ask` turn-outcome codes) were also undocumented. Also corrects the "disable colored output" env var to `NO_COLOR` (the cross-tool standard the CLI honours; `VULTISIG_NO_COLOR` still works). Adds a doc-lint test that fails if the README table drifts from the enum. Docs-only, but the README ships in the npm package, so this is a patch.
+
+## 2.18.6
+
+### Patch Changes
+
+- [#1003](https://github.com/vultisig/vultisig-sdk/pull/1003) [`b27786d`](https://github.com/vultisig/vultisig-sdk/commit/b27786d8ac596ea3d2d4a13da958b266f589b73c) Thanks [@neavra](https://github.com/neavra)! - fix(agent): sign purely from the `tool-output-available` channel and remove the `tx_ready` signing path ([#927](https://github.com/vultisig/vultisig-sdk/issues/927) Phase 2). The client-enriched tool-output candidate (flat builders and `execute_*` prep) is now the sole signing source, matching what the production backend emits — it writes the signable payload on tool-output and emits `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI never consumed. Removes the Phase-1 dual-read + parity cross-check machinery, the tx_ready capture/selection, and the recovered-tx_ready replay. Fail-closed postures are preserved (a structurally-unsignable candidate is never buffered), and a disconnect that ran a signable tool now warns to re-run rather than signing. Patch: no CLI API change and the same real transactions still sign — this aligns the internal signing source with production.
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
+- Updated dependencies [[`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b), [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921)]:
+  - @vultisig/sdk@2.18.6
+  - @vultisig/core-chain@2.23.3
+
+## 2.18.0
+
+### Minor Changes
+
+- [#1004](https://github.com/vultisig/vultisig-sdk/pull/1004) [`42fe389`](https://github.com/vultisig/vultisig-sdk/commit/42fe3893196e7d8945f852695387828eb49bfb41) Thanks [@neavra](https://github.com/neavra)! - feat(cli): surface a typed turn-outcome for `agent ask` (success / blocked / refusal / error)
+
+  The CLI now advertises the `turn_outcome` surface and parses the backend's
+  `data-turn_outcome` SSE part, so a headless `agent ask` caller can tell four turn
+  endings apart WITHOUT parsing prose:
+
+  - **success** — the turn completed normally
+  - **blocked** — a fund-safety guardrail deliberately blocked the requested action
+  - **refusal** — the model refused or asked a clarifying question (no action taken)
+  - **error** — an infrastructure error ended the turn
+
+  Two additive surfaces:
+
+  - `agent ask --output json` gains a top-level `outcome` field
+    (`{ kind, code?, detail? }`) on both the success and error envelopes. Human
+    output prints a greppable `outcome:<kind>[:<code>]` line for non-success turns.
+  - New dedicated exit codes (additive; the 0–9 taxonomy is unchanged):
+    `10` = a fund-safety block, `11` = a refusal/clarifying question. A frame-less
+    infrastructure error now exits `1` instead of a false `0`. Success stays `0`.
+
+  Behavior change to note: a turn the backend BLOCKS or the model REFUSES previously
+  exited `0` (indistinguishable from success); it now exits `10`/`11`. Scripts that
+  treated every `agent ask` as success-on-0 should branch on `outcome.kind` (or the
+  exit code). Against an older backend that does not emit `data-turn_outcome`, the
+  `outcome` field is absent and exit codes are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`31814c4`](https://github.com/vultisig/vultisig-sdk/commit/31814c4b452ef5b2628dc12bc46e427fcf0b7237), [`b37dc3c`](https://github.com/vultisig/vultisig-sdk/commit/b37dc3c31d6f93af982cd1e082e0b4d1382dc19d), [`01c5630`](https://github.com/vultisig/vultisig-sdk/commit/01c56303d0b872a76de07da9685331106f586c80)]:
+  - @vultisig/sdk@2.18.0
+  - @vultisig/rujira@51.0.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [[`2585dc1`](https://github.com/vultisig/vultisig-sdk/commit/2585dc1830dd7b28694edd411991b24c3fad1538), [`152bb4a`](https://github.com/vultisig/vultisig-sdk/commit/152bb4a2b717efa2f1edb14b7e19cdeba87450c7), [`4a58c6c`](https://github.com/vultisig/vultisig-sdk/commit/4a58c6c1294c88e5d937c3dde24e50edd3fdf2a0), [`ed46385`](https://github.com/vultisig/vultisig-sdk/commit/ed46385358883ed5277f8771ba73000afec9859e), [`72082a6`](https://github.com/vultisig/vultisig-sdk/commit/72082a65eab226cebf562863bcb99346b81ca831), [`a9266a1`](https://github.com/vultisig/vultisig-sdk/commit/a9266a1753ca474b3f337f8a605900acdd7508b0), [`2791af8`](https://github.com/vultisig/vultisig-sdk/commit/2791af8a1e539103678ba71b774d62d2e7691a29), [`b68ddad`](https://github.com/vultisig/vultisig-sdk/commit/b68ddadbc6295957cbb4b37c365a4062b0a2576f), [`ab5e413`](https://github.com/vultisig/vultisig-sdk/commit/ab5e413ead62da47dc144e591ac310d1d4328a56), [`90f6ae5`](https://github.com/vultisig/vultisig-sdk/commit/90f6ae5a1865321e08bf6f03c17e23ed11006649), [`7cfa332`](https://github.com/vultisig/vultisig-sdk/commit/7cfa332787f7646e049813a9f3b15613454f19d1), [`c60d7c6`](https://github.com/vultisig/vultisig-sdk/commit/c60d7c6ecdf46e46bf1098cc57342d5fb79d2194), [`99db752`](https://github.com/vultisig/vultisig-sdk/commit/99db752f093575f90b99b30674ec9be8af49fed9)]:
+  - @vultisig/sdk@2.17.0
+  - @vultisig/rujira@50.0.0
+
 ## 2.16.0
 
 ### Patch Changes
