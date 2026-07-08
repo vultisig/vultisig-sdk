@@ -1,8 +1,12 @@
 import { Chain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
+import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from './cosmosGasLimitRecord'
 import { getCosmosRpcUrl } from './getCosmosRpcUrl'
+import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
+
+export { getFeeAmountFromGasPrice } from './cosmosDecimal'
 
 const defaultGas = 7500n
 
@@ -26,24 +30,9 @@ type CosmosNodeConfigResponse = {
   minimum_gas_price?: string
 }
 
-type ParsedDecimal = {
-  numerator: bigint
-  denominator: bigint
-}
-
 const minGasPriceConfigPath = '/cosmos/base/node/v1beta1/config'
 const minGasPriceFetchTimeoutMs = 3_000
 const maxLiveFeeMultiplier = 10n
-
-const parseDecimal = (value: string): ParsedDecimal | undefined => {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) return undefined
-
-  const [whole, fraction = ''] = value.split('.')
-  const denominator = 10n ** BigInt(fraction.length)
-  const numerator = BigInt(`${whole}${fraction}`)
-
-  return { numerator, denominator }
-}
 
 const parseMinGasPriceEntry = (entry: string) => {
   const match = entry.trim().match(/^(\d+(?:\.\d+)?)([a-zA-Z][a-zA-Z0-9/._:-]*)$/)
@@ -54,12 +43,6 @@ const parseMinGasPriceEntry = (entry: string) => {
   if (!decimal) return undefined
 
   return { ...decimal, denom }
-}
-
-export const getFeeAmountFromGasPrice = (gasLimit: bigint, gasPrice: ParsedDecimal): bigint => {
-  const total = gasLimit * gasPrice.numerator
-
-  return (total + gasPrice.denominator - 1n) / gasPrice.denominator
 }
 
 export const getMinGasPriceForDenom = (minimumGasPrice: string, targetDenom: string): ParsedDecimal | undefined => {
@@ -131,10 +114,7 @@ const fetchMinGasPrice = async (chain: IbcEnabledCosmosChain, { fetchImpl = fetc
   }
 }
 
-export const getCosmosFeeAmount = async (
-  coin: CoinKey<IbcEnabledCosmosChain>,
-  opts: FetchOpts = {}
-): Promise<bigint> => {
+const getGenericCosmosFeeAmount = async (coin: CoinKey<IbcEnabledCosmosChain>, opts: FetchOpts): Promise<bigint> => {
   const floor = cosmosGasRecord[coin.chain]
 
   try {
@@ -149,4 +129,24 @@ export const getCosmosFeeAmount = async (
   } catch {
     return floor
   }
+}
+
+export const getCosmosFeeAmount = async (
+  coin: CoinKey<IbcEnabledCosmosChain>,
+  opts: FetchOpts = {}
+): Promise<bigint> => {
+  if (coin.chain !== Chain.Osmosis) return getGenericCosmosFeeAmount(coin, opts)
+
+  // Osmosis's real fee floor is enforced by its EIP-1559 `x/txfees` module,
+  // NOT the generic node-config `minimum-gas-price` (a per-node/operator-
+  // configurable value that doesn't track the live protocol floor, and can
+  // be clamped away by the anomaly guard above when it legitimately spikes).
+  // Run both lookups concurrently (each has its own timeout budget) rather
+  // than sequentially, and never pay less than the higher of the two -
+  // see osmosisDynamicFee.ts.
+  const [genericFee, dynamicFloor] = await Promise.all([
+    getGenericCosmosFeeAmount(coin, opts),
+    getOsmosisDynamicFeeFloor(getCosmosGasLimit(coin), opts),
+  ])
+  return dynamicFloor !== null && dynamicFloor > genericFee ? dynamicFloor : genericFee
 }
