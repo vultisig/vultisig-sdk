@@ -1,8 +1,9 @@
 /**
  * UTXO-03 (audit r2): `buildUtxoSendTx` only enforced a fee floor for Zcash;
  * every other UTXO chain trusted the caller-supplied `feeRate` with no
- * chain-aware minimum. Dogecoin's real min-relay-fee (100 koinu/vB, sourced
- * from dogecoin/dogecoin's `DEFAULT_MIN_RELAY_TX_FEE`) is ~100x Bitcoin's (1
+ * chain-aware minimum. Dogecoin's block-inclusion min-fee (1000 koinu/vB, dogecoin/dogecoin's
+ * DEFAULT_BLOCK_MIN_TX_FEE=RECOMMENDED_MIN_TX_FEE=COIN/100; the lower DEFAULT_MIN_RELAY_TX_FEE of 100 only
+ * relays, may not mine) is ~1000x Bitcoin's (1
  * sat/vB), so a BTC-reasonable rate silently underpays DOGE below relay and
  * the tx gets stuck/non-relayable.
  *
@@ -60,26 +61,26 @@ const build = ({
   })
 
 describe('UTXO-03 — per-chain minimum relay fee floor', () => {
-  describe('Dogecoin (100 koinu/vB floor — 100x Bitcoin)', () => {
+  describe('Dogecoin (1000 koinu/vB floor — DEFAULT_BLOCK_MIN_TX_FEE, ensures mining not just relay)', () => {
     // txSize for a single p2pkh input, no memo: 1*150 + 2*34 + 10 = 228 bytes.
     const amount = 100_000_000n
 
-    it('raises a BTC-reasonable 1 koinu/vB rate to the 100 koinu/vB floor (fee=22800, not 228)', () => {
-      // At the buggy pre-fix behaviour the fee would be 228*1=228; funds here
-      // only cover the FLOORED fee minus one, so the error's reported fee
-      // proves which value was actually charged.
-      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 22_799n, amount, feeRate: 1 })).toThrowError(
-        /fee=22800\b/
+    it('raises a BTC-reasonable 1 koinu/vB rate to the 1000 koinu/vB floor (fee=228000, not 228)', () => {
+      // Floor is the miner block-INCLUSION min (1000), not the lower relay-min (100): a 100-floor tx would
+      // relay but could sit unmined. At the buggy pre-fix behaviour the fee would be 228*1=228; funds here
+      // cover the FLOORED fee minus one, so the error's reported fee proves which value was actually charged.
+      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 227_999n, amount, feeRate: 1 })).toThrowError(
+        /fee=228000\b/
       )
-      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 22_800n, amount, feeRate: 1 })).not.toThrowError()
+      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 228_000n, amount, feeRate: 1 })).not.toThrowError()
     })
 
     it('does not raise a feeRate already at or above the floor (no overpaying a legit rate)', () => {
-      // 200 koinu/vB > the 100 floor -> sizeFee 228*200=45600 passes through unchanged.
-      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 45_599n, amount, feeRate: 200 })).toThrowError(
-        /fee=45600\b/
+      // 2000 koinu/vB > the 1000 floor -> sizeFee 228*2000=456000 passes through unchanged.
+      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 455_999n, amount, feeRate: 2000 })).toThrowError(
+        /fee=456000\b/
       )
-      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 45_600n, amount, feeRate: 200 })).not.toThrowError()
+      expect(() => build({ chain: 'Dogecoin', utxoValue: amount + 456_000n, amount, feeRate: 2000 })).not.toThrowError()
     })
   })
 
@@ -93,17 +94,17 @@ describe('UTXO-03 — per-chain minimum relay fee floor', () => {
     for (const chain of ['Bitcoin', 'Litecoin', 'Bitcoin-Cash', 'Dash'] as const) {
       it(`${chain}: a sub-1 feeRate is raised to the 1/vB floor`, () => {
         const floored = txSizeFor(chain) * 1
-        expect(() =>
-          build({ chain, utxoValue: amount + BigInt(floored) - 1n, amount, feeRate: 0.5 })
-        ).toThrowError(new RegExp(`fee=${floored}\\b`))
+        expect(() => build({ chain, utxoValue: amount + BigInt(floored) - 1n, amount, feeRate: 0.5 })).toThrowError(
+          new RegExp(`fee=${floored}\\b`)
+        )
         expect(() => build({ chain, utxoValue: amount + BigInt(floored), amount, feeRate: 0.5 })).not.toThrowError()
       })
 
       it(`${chain}: a normal above-floor feeRate passes through unchanged (no overpay)`, () => {
         const expected = txSizeFor(chain) * 5
-        expect(() =>
-          build({ chain, utxoValue: amount + BigInt(expected) - 1n, amount, feeRate: 5 })
-        ).toThrowError(new RegExp(`fee=${expected}\\b`))
+        expect(() => build({ chain, utxoValue: amount + BigInt(expected) - 1n, amount, feeRate: 5 })).toThrowError(
+          new RegExp(`fee=${expected}\\b`)
+        )
         expect(() => build({ chain, utxoValue: amount + BigInt(expected), amount, feeRate: 5 })).not.toThrowError()
       })
     }

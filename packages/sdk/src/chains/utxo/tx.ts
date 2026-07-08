@@ -81,9 +81,12 @@ export const getUtxoChainSpec = (chain: UtxoChainName): UtxoChainSpec => UTXO_SP
  *   - Litecoin:     1,000 litoshi/kvB -> 1 litoshi/vB (same order as BTC —
  *     LTC's DUST_RELAY_TX_FEE is ~10x BTC's, but its min RELAY fee is not)
  *     (litecoin-project/litecoin src/validation.h DEFAULT_MIN_RELAY_TX_FEE)
- *   - Dogecoin:     100,000 koinu/kvB -> 100 koinu/vB (~100x Bitcoin's,
- *     because DOGE's RECOMMENDED_MIN_TX_FEE = COIN/100 and
- *     DEFAULT_MIN_RELAY_TX_FEE = RECOMMENDED_MIN_TX_FEE/10)
+ *   - Dogecoin:     1,000,000 koinu/kvB -> 1,000 koinu/vB. We floor at DOGE's
+ *     DEFAULT_BLOCK_MIN_TX_FEE (RECOMMENDED_MIN_TX_FEE = COIN/100 = 1,000
+ *     koinu/vB), the default MINER block-INCLUSION threshold — NOT the lower
+ *     DEFAULT_MIN_RELAY_TX_FEE (=RECOMMENDED/10 = 100 koinu/vB). A tx at the
+ *     relay-min RELAYS but can sit unmined under default miner config (the same
+ *     "stuck" symptom one layer down), so we floor at the inclusion minimum.
  *     (dogecoin/dogecoin src/validation.h + src/policy/policy.h)
  *   - Bitcoin-Cash: 1,000 sat/kvB   -> 1 sat/vB
  *     (Bitcoin-ABC / bitcoin-cash-node src/policy/policy.h
@@ -97,7 +100,7 @@ export const getUtxoChainSpec = (chain: UtxoChainName): UtxoChainSpec => UTXO_SP
 const UTXO_MIN_FEE_RATE: Record<UtxoChainName, number> = {
   Bitcoin: 1,
   Litecoin: 1,
-  Dogecoin: 100,
+  Dogecoin: 1000,
   'Bitcoin-Cash': 1,
   Dash: 1,
   Zcash: 1,
@@ -831,9 +834,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   // assumed by the txSize estimate above.
   const zip317OutputSizes = opReturnScript ? [34n, 34n, BigInt(opReturnBytes)] : [34n, 34n]
   const zip317Floor =
-    opts.chain === 'Zcash'
-      ? getZcashConventionalFee({ inputCount: inputs.length, outputSizes: zip317OutputSizes })
-      : 0n
+    opts.chain === 'Zcash' ? getZcashConventionalFee({ inputCount: inputs.length, outputSizes: zip317OutputSizes }) : 0n
   const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
