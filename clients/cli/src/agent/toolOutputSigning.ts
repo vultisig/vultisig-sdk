@@ -234,6 +234,21 @@ function resolvePrepChain(txArgs: Record<string, unknown>): Chain | null {
   return byName ?? byId
 }
 
+/**
+ * Resolve the parent chain metadata on an execute_* prep envelope the same way the
+ * executor does for single-leg payloads: `chain` → `from_chain` → `chain_id`.
+ * Returns null when present metadata is unresolved or self-conflicting.
+ */
+function resolvePrepParentChain(env: Record<string, unknown>): Chain | null {
+  const byChain = asChainString(env.chain) ? resolveChain(asChainString(env.chain)!) : null
+  const byFromChain = asChainString(env.from_chain) ? resolveChain(asChainString(env.from_chain)!) : null
+  const byId = asChainIdString(env.chain_id) ? resolveChainId(asChainIdString(env.chain_id)!) : null
+  const candidates = [byChain, byFromChain, byId].filter((c): c is Chain => c !== null)
+  if (candidates.length === 0) return null
+  if (candidates.some((c) => c !== candidates[0])) return null
+  return candidates[0]
+}
+
 // ============================================================================
 // Flat-tool enrichment (the port) — enrichBuildResult + flat approval split
 // ============================================================================
@@ -338,8 +353,20 @@ export function deriveToolOutputCandidate(toolName: string, output: unknown): To
     // reject a prep envelope with no resolvable chain (would default to Ethereum at
     // sign time) or a disagreeing chain⇄chain_id (would silently sign on the name's
     // chain). For a multi-leg envelope `env.txArgs` is the MAIN leg; the executor
-    // separately enforces approval⇄main⇄parent chain agreement.
-    if (!resolvePrepChain(txArgs)) return null
+    // separately enforces approval⇄main⇄parent chain agreement. For a single-leg
+    // prep envelope, guard the parent metadata too: the executor resolves top-level
+    // `chain` / `from_chain` / `chain_id` BEFORE `txArgs`, so a conflicting parent
+    // would otherwise sign the child tx on the wrong chain.
+    const prepChain = resolvePrepChain(txArgs)
+    if (!prepChain) return null
+    const hasParentChainMetadata =
+      asChainString(env.chain) !== undefined ||
+      asChainString(env.from_chain) !== undefined ||
+      asChainIdString(env.chain_id) !== undefined
+    if (hasParentChainMetadata) {
+      const parentChain = resolvePrepParentChain(env)
+      if (!parentChain || parentChain !== prepChain) return null
+    }
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
   return null

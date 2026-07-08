@@ -431,6 +431,19 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     expect(deriveToolOutputCandidate('execute_send', mismatched)).toBeNull()
   })
 
+  it('FAILS CLOSED: prep with PARENT metadata disagreeing with txArgs → null (never let top-level chain win)', () => {
+    // Single-leg prep envelopes are signed using the WHOLE parent payload, and the
+    // executor resolves top-level `chain` / `from_chain` / `chain_id` BEFORE
+    // `txArgs`. A parent `chain: Ethereum` over `txArgs.chain: Base` would sign the
+    // nested tx on the wrong chain unless we reject it here.
+    const parentMismatch = {
+      chain: 'Ethereum',
+      txArgs: { chain: 'Base', chain_id: '8453', tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_contract_call', parentMismatch)).toBeNull()
+  })
+
   it('FAILS CLOSED: prep with NO resolvable chain → null (never default to Ethereum at sign time)', () => {
     // A single-leg prep envelope whose txArgs carries no chain/chain_id would let
     // the executor default to Chain.Ethereum and broadcast on the wrong chain.
