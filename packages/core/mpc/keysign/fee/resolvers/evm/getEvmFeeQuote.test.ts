@@ -186,6 +186,32 @@ describe('getEvmFeeQuote gas limit buffering', () => {
     expect(mocks.getEvmBaseFee).not.toHaveBeenCalled()
   })
 
+  it('floors the ZkSync base fee at 0 for a malformed compromised-RPC tuple (maxFee < priority > ceiling) — SDK2-01 preferably-blocking', async () => {
+    // The exact clamp-attack case NeOMakinG flagged on #1078: a compromised RPC
+    // returns a malformed tuple where maxFeePerGas < maxPriorityFeePerGas and the
+    // priority fee exceeds the 50 gwei ZkSync ceiling. baseFeePerGas is derived
+    // from the RAW split (maxFee - priority), which would go negative; downstream
+    // maxFeePerGas = baseFeePerGas + clamp(priority) must NOT become negative.
+    mocks.getKeysignCoin.mockReturnValue(makeCoin(EvmChain.Zksync))
+    mocks.zksyncFeeClient.estimateFee.mockResolvedValue({
+      gasLimit: 700_001n,
+      maxFeePerGas: 1n, // 1 wei — absurdly below the tip (malformed)
+      maxPriorityFeePerGas: 200n * 1_000_000_000n, // 200 gwei, > 50 gwei ZkSync ceiling
+    })
+
+    const quote = await getEvmFeeQuote({
+      keysignPayload: {} as never,
+      minimumGasLimit: 600_000n,
+    })
+
+    // Raw split would be 1n - 200_000_000_000n (negative); floored to 0n.
+    expect(quote.baseFeePerGas).toBe(0n)
+    // Priority still clamped down to the 50 gwei ZkSync ceiling.
+    expect(quote.maxPriorityFeePerGas).toBe(50n * 1_000_000_000n)
+    // Rebuilt maxFeePerGas (base + clamped priority) is therefore non-negative.
+    expect(quote.baseFeePerGas + quote.maxPriorityFeePerGas).toBeGreaterThanOrEqual(0n)
+  })
+
   it('passes a normal RPC-reported priority fee through unchanged (SDK2-01 legit-path guard)', async () => {
     // 80 gwei — a realistic heavy-congestion Ethereum L1 tip, well under the 500 gwei ceiling.
     mocks.getEvmMaxPriorityFeePerGas.mockResolvedValue(80n * 1_000_000_000n)

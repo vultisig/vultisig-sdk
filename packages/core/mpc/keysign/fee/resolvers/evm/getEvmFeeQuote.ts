@@ -154,7 +154,15 @@ export const getEvmFeeQuote = async ({
           const { gasLimit, maxFeePerGas, maxPriorityFeePerGas } = result.data
           return {
             gasLimit: capGasLimit(gasLimit),
-            baseFeePerGas: maxFeePerGas - maxPriorityFeePerGas,
+            // Floor at 0: on the zkSync path baseFeePerGas is derived from the
+            // raw split, but downstream maxFeePerGas is rebuilt as
+            // baseFeePerGas + clamp(priority). A compromised RPC returning a
+            // malformed tuple (maxFee < priority, the exact clamp-attack case)
+            // would otherwise yield a negative baseFeePerGas and a negative
+            // signed maxFeePerGas. Flooring keeps the rebuilt maxFee >= the
+            // clamped tip and preserves the "never emits a malformed value"
+            // contract (NeOMakinG preferably-blocking on #1078 / SDK2-01).
+            baseFeePerGas: bigIntMax(0n, maxFeePerGas - maxPriorityFeePerGas),
             maxPriorityFeePerGas: clampEvmPriorityFee(chain, maxPriorityFeePerGas),
           }
         }
