@@ -1492,6 +1492,11 @@
       "import": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js",
       "default": "./dist/swap/general/cowswap/api/submitCowSwapOrder.js"
     },
+    "./swap/general/cowswap/api/validateCowSwapQuoteResponse": {
+      "types": "./dist/swap/general/cowswap/api/validateCowSwapQuoteResponse.d.ts",
+      "import": "./dist/swap/general/cowswap/api/validateCowSwapQuoteResponse.js",
+      "default": "./dist/swap/general/cowswap/api/validateCowSwapQuoteResponse.js"
+    },
     "./swap/general/cowswap/config": {
       "types": "./dist/swap/general/cowswap/config.d.ts",
       "import": "./dist/swap/general/cowswap/config.js",
