@@ -23,7 +23,11 @@ function parseExitCodeTable(markdown: string): Record<number, string> {
     // Match rows like: | 3 | Network error (retryable) |
     const match = line.match(/^\|\s*(\d+)\s*\|\s*(.+?)\s*\|\s*$/)
     if (!match) continue
-    table[Number(match[1])] = match[2].trim()
+    const code = Number(match[1])
+    // Fail on a duplicate row rather than silently overwriting — otherwise a
+    // stale earlier row for the same code would be masked by a correct later one.
+    if (code in table) throw new Error(`README exit-code table has a duplicate row for code ${code}`)
+    table[code] = match[2].trim()
   }
   return table
 }
