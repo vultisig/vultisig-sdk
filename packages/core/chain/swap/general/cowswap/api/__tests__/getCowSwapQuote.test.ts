@@ -18,18 +18,28 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
 function makeQuoteResponse(
   chainId: number,
   buyAmount = '990000000000000000',
-  overrides: { sellToken?: string; buyToken?: string; kind?: 'sell' | 'buy'; partiallyFillable?: boolean } = {}
+  overrides: {
+    sellToken?: string
+    buyToken?: string
+    kind?: 'sell' | 'buy'
+    partiallyFillable?: boolean
+    sellAmount?: string
+    feeAmount?: string
+  } = {}
 ) {
   return {
     quote: {
       sellToken: overrides.sellToken ?? '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
       buyToken: overrides.buyToken ?? '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       receiver: '0xreceiver',
-      sellAmount: '1000000000000000000',
+      // AGG-01: sellAmount + feeAmount must equal baseInput.sellAmount (1e18) exactly — CoW's
+      // sellAmountBeforeFee request param solves for that split precisely (live-verified
+      // 2026-07-08 against the real api.cow.fi/mainnet quote endpoint).
+      sellAmount: overrides.sellAmount ?? '990000000000000000',
       buyAmount,
       validTo: Math.floor(Date.now() / 1000) + 900,
       appData: '{}',
-      feeAmount: '10000000000000000',
+      feeAmount: overrides.feeAmount ?? '10000000000000000',
       kind: overrides.kind ?? ('sell' as const),
       partiallyFillable: overrides.partiallyFillable ?? false,
       sellTokenBalance: 'erc20',
@@ -103,9 +113,9 @@ describe('getCowSwapQuote', () => {
     if (!('cowswap_order' in quote.tx)) {
       throw new Error('Expected cowswap_order')
     }
-    // makeQuoteResponse: sellAmount 1e18 + feeAmount 1e16 = 1.01e18 gross.
+    // makeQuoteResponse: sellAmount 0.99e18 + feeAmount 1e16 = 1e18 gross (== baseInput.sellAmount).
     expect(quote.tx.cowswap_order.feeAmount).toBe('0')
-    expect(quote.tx.cowswap_order.sellAmount).toBe('1010000000000000000')
+    expect(quote.tx.cowswap_order.sellAmount).toBe('1000000000000000000')
   })
 
   it('appData hash varies with affiliateBps (50 bps vs 0 bps)', async () => {
@@ -295,6 +305,46 @@ describe('getCowSwapQuote', () => {
       await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
         /partiallyFillable=true/
       )
+    })
+
+    // codex review (PR #1082): grossSellAmount (sellAmount + feeAmount) becomes the signed
+    // Order's sellAmount — the authorized spend — and was just as untrusted as the 4 fields
+    // above. Live-verified against api.cow.fi/mainnet (2026-07-08, two pairs/amounts) that
+    // sellAmount + feeAmount === sellAmountBeforeFee holds exactly, so an exact-equality
+    // fail-closed check is safe (won't false-reject a real quote).
+    it('REJECTS a response whose sellAmount+feeAmount is INFLATED above what was requested (would authorize selling more than the user asked)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '1990000000000000000', feeAmount: '10000000000000000' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /does not match the requested sellAmountBeforeFee/
+      )
+    })
+
+    it('REJECTS a response whose sellAmount+feeAmount is UNDER what was requested too (any mismatch is refused, not just the dangerous direction)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '490000000000000000', feeAmount: '10000000000000000' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /does not match the requested sellAmountBeforeFee/
+      )
+    })
+
+    it('accepts a response whose sellAmount+feeAmount matches the requested amount exactly', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '999866862516704140', feeAmount: '133137483295860' })
+      )
+
+      const quote = await getCowSwapQuote({
+        ...baseInput,
+        sellAmount: 1_000_000_000_000_000_000n,
+        chainConfig: cowSwapChainConfig.Ethereum,
+      })
+
+      if (!('cowswap_order' in quote.tx)) throw new Error('Expected cowswap_order')
+      expect(quote.tx.cowswap_order.sellAmount).toBe('1000000000000000000')
     })
 
     it('token comparison is case-insensitive (checksum vs lowercase is not a mismatch)', async () => {

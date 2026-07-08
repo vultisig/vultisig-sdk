@@ -111,6 +111,22 @@ export async function getCowSwapQuote({
   // consistent.
   const grossSellAmount = (BigInt(quote.sellAmount) + BigInt(quote.feeAmount)).toString()
 
+  // AGG-01 follow-up (codex review, PR #1082): grossSellAmount becomes the signed Order's
+  // sellAmount — the SDK's authorized spend — and was, like the 4 fields above, taken entirely
+  // from the untrusted response with no check against what was actually requested. CoW's
+  // `sellAmountBeforeFee` request param is specifically designed so the API solves for
+  // `quote.sellAmount + quote.feeAmount === sellAmountBeforeFee` exactly — live-verified against
+  // the real api.cow.fi/mainnet quote endpoint on two different pairs/amounts on 2026-07-08,
+  // both matched byte-for-byte, not just approximately. A compromised/buggy response inflating
+  // sellAmount or feeAmount would sign authorization to sell MORE than the user requested —
+  // the most direct fund-safety consequence of any field in this struct. Same "refuse to sign
+  // on mismatch" treatment as the fields above.
+  if (grossSellAmount !== sellAmount.toString()) {
+    throw new Error(
+      `CowSwap quote's sellAmount+feeAmount (${grossSellAmount}) does not match the requested sellAmountBeforeFee (${sellAmount}) — refusing to sign.`
+    )
+  }
+
   return {
     dstAmount: quote.buyAmount,
     provider: 'cowswap',
