@@ -1,5 +1,11 @@
 # @vultisig/cli
 
+## 2.18.7
+
+### Patch Changes
+
+- [#1033](https://github.com/vultisig/vultisig-sdk/pull/1033) [`f682eda`](https://github.com/vultisig/vultisig-sdk/commit/f682eda5607a8263e90b18d9ff7167eb2e0a7004) Thanks [@neavra](https://github.com/neavra)! - docs(cli): regenerate the README "Exit Codes" table from the `ExitCode` enum (the single source of truth in `src/core/errors.ts`). The shipped table was stale and mislabelled every non-zero code — e.g. it called `2` "invalid usage" and `3` "configuration error" when the CLI actually returns `2` for authentication-required and `3` for a retryable network error, so a script written to the README's codes misclassified every failure. Codes `8`–`11` (ACK_FAILED, DUPLICATE_BROADCAST, and the two `agent ask` turn-outcome codes) were also undocumented. Also corrects the "disable colored output" env var to `NO_COLOR` (the cross-tool standard the CLI honours; `VULTISIG_NO_COLOR` still works). Adds a doc-lint test that fails if the README table drifts from the enum. Docs-only, but the README ships in the npm package, so this is a patch.
+
 ## 2.18.6
 
 ### Patch Changes
