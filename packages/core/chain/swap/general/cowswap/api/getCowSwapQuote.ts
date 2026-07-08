@@ -9,6 +9,7 @@ import {
 } from '../config'
 import { buildCowSwapAppData, keccak256Hex } from '../sign/buildCowSwapOrder'
 import { CowSwapQuoteApiResponse } from '../types'
+import { assertCowSwapQuoteMatchesRequest } from './validateCowSwapQuoteResponse'
 
 type CowSwapQuoteRequest = {
   sellToken: string
@@ -65,6 +66,15 @@ export async function getCowSwapQuote({
   })
 
   const { quote } = response
+
+  // AGG-01: validate the response against the request (using the exact values we POSTed in `body`) before the
+  // order is signed/submitted. sellToken/buyToken come from the caller; kind/partiallyFillable from `body`.
+  assertCowSwapQuoteMatchesRequest(quote, {
+    sellToken,
+    buyToken,
+    kind: body.kind,
+    partiallyFillable: body.partiallyFillable,
+  })
 
   const permitRequired = KNOWN_PERMIT_TOKENS[chainConfig.chainId]?.some(
     addr => addr.toLowerCase() === sellToken.toLowerCase()
