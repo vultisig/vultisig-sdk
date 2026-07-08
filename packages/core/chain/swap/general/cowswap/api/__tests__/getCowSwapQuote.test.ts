@@ -15,11 +15,19 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: vi.fn(),
 }))
 
-function makeQuoteResponse(chainId: number, buyAmount = '990000000000000000') {
+// AGG-01: the CoW /quote API echoes the requested sellToken/buyToken; getCowSwapQuote now asserts that
+// before signing. Mock the same — default to WETH->USDC, but let a test that requests a different sellToken
+// (the permit-token cases) have the mock echo it, so the fixture reflects real API behaviour.
+function makeQuoteResponse(
+  chainId: number,
+  buyAmount = '990000000000000000',
+  sellToken = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  buyToken = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+) {
   return {
     quote: {
-      sellToken: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-      buyToken: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      sellToken,
+      buyToken,
       receiver: '0xreceiver',
       sellAmount: '1000000000000000000',
       buyAmount,
@@ -160,7 +168,7 @@ describe('getCowSwapQuote', () => {
 
   it('sets permitRequired=true for USDC on Ethereum (known permit token)', async () => {
     const usdcEthereum = KNOWN_PERMIT_TOKENS[1][0]
-    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, usdcEthereum))
 
     const quote = await getCowSwapQuote({
       ...baseInput,
@@ -200,7 +208,7 @@ describe('getCowSwapQuote', () => {
     ['mainnet DAI (Maker-style permit, not EIP-2612)', '0x6B175474E89094C44Da98b954EedeAC495271d0F'],
     ['mainnet USDT (no EIP-2612 permit)', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
   ])('does not flag permitRequired for %s', async (_label, sellToken) => {
-    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, sellToken))
 
     const quote = await getCowSwapQuote({
       ...baseInput,
