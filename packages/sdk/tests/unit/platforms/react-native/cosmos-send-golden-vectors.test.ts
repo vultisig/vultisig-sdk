@@ -23,6 +23,7 @@
  */
 import { BinaryReader } from '@bufbuild/protobuf/wire'
 import { fromBech32 } from '@cosmjs/encoding'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { sha256 } from '@noble/hashes/sha2.js'
 import { Buffer } from 'buffer'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
@@ -33,13 +34,14 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 
-import { buildCosmosSendTx } from '../../../../src/platforms/react-native/chains/cosmos/tx'
+import { buildCosmosSendTx, deriveCosmosAddress } from '../../../../src/platforms/react-native/chains/cosmos/tx'
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
 
 type CosmosCrossEncoderFixture = {
+  senderPrivateKeyHex: string
   chainId: string
   senderCosmosAddress: string
   recipientCosmosAddress: string
@@ -232,6 +234,30 @@ describe('cosmos / buildCosmosSendTx — MsgSend golden vectors', () => {
       })
 
       expect(result.signingHashHex).toBe(fx.expectedSignDocSha256Hex)
+    })
+
+    // The test above binds the two ENCODERS (does buildCosmosSendTx produce the same
+    // SignDoc bytes as WalletCore, GIVEN the same address/pubkey) - but leaves the two
+    // DERIVATION paths uncrossed: it never checks that RN-JS's OWN privkey -> pubkey ->
+    // address path actually produces the fixture's precomputed values. A divergence
+    // there (wrong sender = funds sent from the wrong address) is a real fund-loss
+    // surface this suite wouldn't otherwise catch. Closes it at zero WASM cost: derives
+    // the pubkey from the fixture's raw private key via @noble/curves/secp256k1 (already
+    // a dependency of the very tx.ts module under test - it's how the module derives
+    // vault child keys), then feeds that into RN-JS's OWN deriveCosmosAddress (bech32
+    // encoding, no HD chain code) to get the address - both must match the fixture's
+    // precomputed values. Chained with the test above: WalletCore-derive (packages/core)
+    // == precomputed (this fixture) == RN-JS-derive (this test) - both derivation AND
+    // encoding are cross-bound.
+    it('derives the SAME sender pubkey/address from the raw private key as WalletCore (RN-JS derivation path)', () => {
+      const fx = loadCrossEncoderFixture()
+      const derivedPubKeyHex = Buffer.from(
+        secp256k1.getPublicKey(Buffer.from(fx.senderPrivateKeyHex, 'hex'), true)
+      ).toString('hex')
+      expect(derivedPubKeyHex).toBe(fx.senderPubKeyHex)
+
+      const derivedAddress = deriveCosmosAddress(derivedPubKeyHex, '', 'cosmos', 118)
+      expect(derivedAddress).toBe(fx.senderCosmosAddress)
     })
   })
 
