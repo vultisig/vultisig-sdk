@@ -27,7 +27,6 @@ import { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
  * set. Any form already accepted by `normalizeChain` must continue to pass
  * through this schema unchanged.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const chainSchema: z.ZodType<Chain> = z
   .union([z.string(), z.null(), z.undefined()])
   .transform((val, ctx): Chain => {
