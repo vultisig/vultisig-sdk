@@ -15,7 +15,7 @@ describe('getKyberSwapQuote', () => {
       .mockResolvedValueOnce({
         data: {
           routeSummary: { amountOut: '10000000' },
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
       .mockResolvedValueOnce({
@@ -24,7 +24,7 @@ describe('getKyberSwapQuote', () => {
           amountOut: '10000000',
           data: '0xswap',
           gas: '210000',
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
 
@@ -102,7 +102,7 @@ describe('getKyberSwapQuote', () => {
       .mockResolvedValueOnce({
         data: {
           routeSummary: { amountOut: rawAmountOut },
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
       .mockResolvedValueOnce({
@@ -111,7 +111,7 @@ describe('getKyberSwapQuote', () => {
           amountOut: rawAmountOut,
           data: '0xswap',
           gas: '456836',
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
 
@@ -151,7 +151,7 @@ describe('getKyberSwapQuote', () => {
       .mockResolvedValueOnce({
         data: {
           routeSummary: { amountOut: rawAmountOut },
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
       .mockResolvedValueOnce({
@@ -160,7 +160,7 @@ describe('getKyberSwapQuote', () => {
           amountOut: rawAmountOut,
           data: '0xswap',
           gas: '350000',
-          routerAddress: '0xrouter',
+          routerAddress: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5', // real KyberSwap MetaAggregationRouterV2 (AGG-02 allowlist)
         },
       })
 
@@ -191,5 +191,65 @@ describe('getKyberSwapQuote', () => {
     const amountOutHuman = Number(rawAmountOut) / 10 ** 6
     const impliedRate = amountOutHuman / amountInHuman
     expect(impliedRate).toBeGreaterThan(1.05) // >5% above 1:1 — implausible for USDC->USDT
+  })
+
+  // AGG-02 (round-2 spec-level fund-safety audit): Kyber's /routes response routerAddress
+  // was trusted with no allowlist, becoming both the swap tx destination and the ERC-20
+  // approval spender. See knownAggregatorRouters.ts for the fix + full rationale.
+  describe('AGG-02 router allowlist', () => {
+    it('REJECTS a routerAddress that is not the real Kyber MetaAggregationRouterV2 (spoofed/compromised aggregator)', async () => {
+      vi.mocked(queryUrl)
+        .mockResolvedValueOnce({
+          data: {
+            routeSummary: { amountOut: '10000000' },
+            routerAddress: '0x000000000000000000000000000000deadbeef', // NOT Kyber's router
+          },
+        })
+        .mockResolvedValueOnce({
+          code: 0,
+          data: {
+            amountOut: '10000000',
+            data: '0xswap',
+            gas: '210000',
+            routerAddress: '0x000000000000000000000000000000deadbeef',
+          },
+        })
+
+      await expect(
+        getKyberSwapQuote({
+          from: { chain: Chain.Ethereum, address: '0xsender', id: '0xsrc', decimals: 18, ticker: 'SRC' },
+          to: { chain: Chain.Ethereum, address: '0xsender', id: '0xdst', decimals: 6, ticker: 'DST' },
+          amount: 1_000_000n,
+        })
+      ).rejects.toThrow(/unrecognized router address/)
+    })
+
+    it('accepts the real Kyber MetaAggregationRouterV2', async () => {
+      const realRouter = '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5'
+      vi.mocked(queryUrl)
+        .mockResolvedValueOnce({
+          data: {
+            routeSummary: { amountOut: '10000000' },
+            routerAddress: realRouter,
+          },
+        })
+        .mockResolvedValueOnce({
+          code: 0,
+          data: {
+            amountOut: '10000000',
+            data: '0xswap',
+            gas: '210000',
+            routerAddress: realRouter,
+          },
+        })
+
+      const quote = await getKyberSwapQuote({
+        from: { chain: Chain.Ethereum, address: '0xsender', id: '0xsrc', decimals: 18, ticker: 'SRC' },
+        to: { chain: Chain.Ethereum, address: '0xsender', id: '0xdst', decimals: 6, ticker: 'DST' },
+        amount: 1_000_000n,
+      })
+
+      expect('evm' in quote.tx ? quote.tx.evm.to : undefined).toBe(realRouter)
+    })
   })
 })

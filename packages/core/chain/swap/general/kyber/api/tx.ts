@@ -8,6 +8,7 @@ import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { SwapFee } from '../../../SwapFee'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { assertKnownAggregatorRouter } from '../../knownAggregatorRouters'
 import { KyberSwapEnabledChain } from '../chains'
 import {
   getKyberSwapAffiliateParams,
@@ -118,6 +119,12 @@ export const getKyberSwapTx = async ({
   }
 
   const { amountOut, data, gas } = buildResponse.data
+
+  // AGG-02 fund-safety fix: verify routerAddress (sourced from Kyber's /routes response,
+  // route.ts) is Kyber's actual router before this untrusted value can become a signable
+  // GeneralSwapQuote. See knownAggregatorRouters.ts.
+  assertKnownAggregatorRouter('kyber', routerAddress)
+
   return {
     dstAmount: amountOut,
     provider: 'kyber',
