@@ -1,5 +1,22 @@
 # @vultisig/cli
 
+## 2.18.6
+
+### Patch Changes
+
+- [#1003](https://github.com/vultisig/vultisig-sdk/pull/1003) [`b27786d`](https://github.com/vultisig/vultisig-sdk/commit/b27786d8ac596ea3d2d4a13da958b266f589b73c) Thanks [@neavra](https://github.com/neavra)! - fix(agent): sign purely from the `tool-output-available` channel and remove the `tx_ready` signing path ([#927](https://github.com/vultisig/vultisig-sdk/issues/927) Phase 2). The client-enriched tool-output candidate (flat builders and `execute_*` prep) is now the sole signing source, matching what the production backend emits — it writes the signable payload on tool-output and emits `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI never consumed. Removes the Phase-1 dual-read + parity cross-check machinery, the tx_ready capture/selection, and the recovered-tx_ready replay. Fail-closed postures are preserved (a structurally-unsignable candidate is never buffered), and a disconnect that ran a signable tool now warns to re-run rather than signing. Patch: no CLI API change and the same real transactions still sign — this aligns the internal signing source with production.
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
+- Updated dependencies [[`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b), [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921)]:
+  - @vultisig/sdk@2.18.6
+  - @vultisig/core-chain@2.23.3
+
 ## 2.18.0
 
 ### Minor Changes
