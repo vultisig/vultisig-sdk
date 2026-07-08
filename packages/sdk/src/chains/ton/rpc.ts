@@ -68,30 +68,41 @@ export async function getTonBalance(address: string, gatewayUrl: string): Promis
  * `getExtendedAddressInformation` (the only endpoint that returns seqno)
  * and v3 `addressInformation` for the wallet status.
  *
- * Returns `{ seqno: 0, status: 'uninit' }` if either call fails — that
- * matches the observable on-chain state for a never-deployed wallet and
- * lets the caller attach a StateInit on the first transfer.
+ * A genuinely uninitialized wallet (received funds, never sent) still gets
+ * a 200 OK from both endpoints — it just carries no `account_state` /
+ * reports `status: 'uninit'`. That case legitimately resolves with
+ * `{ seqno: 0, status: 'uninit' }` so the caller can attach a StateInit on
+ * the first transfer.
+ *
+ * A transient RPC/network failure (fetch throw, non-OK response) is a
+ * DIFFERENT case and must not collapse into the same shape: doing so
+ * previously defeated the sender's stale-seqno guard (a failed lookup
+ * signed as if the wallet were fresh) and force-disabled the recipient's
+ * bounce-safety flag (a failed lookup looked "uninit", stripping the
+ * refund-on-failure net for what might be a live contract). Fail closed
+ * instead — mirrors `getTonAccountInfo`'s `ok`/`result` check.
  */
 export async function getTonWalletInfo(address: string, gatewayUrl: string): Promise<TonWalletInfo> {
   const [extRes, v3Res] = await Promise.all([
-    fetch(`${gatewayUrl}/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`).catch(() => null),
-    fetch(`${gatewayUrl}/v3/addressInformation?address=${encodeURIComponent(address)}&use_v2=false`).catch(() => null),
+    fetch(`${gatewayUrl}/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`),
+    fetch(`${gatewayUrl}/v3/addressInformation?address=${encodeURIComponent(address)}&use_v2=false`),
   ])
 
-  let seqno = 0
-  let balance = 0n
-  if (extRes && extRes.ok) {
-    const ext = (await extRes.json().catch(() => ({}))) as ToncenterExtendedInfo
-    seqno = ext.result?.account_state?.seqno ?? 0
-    if (ext.result?.balance !== undefined) balance = toBigInt(ext.result.balance)
+  if (!extRes.ok) {
+    throw new Error(
+      `toncenter getExtendedAddressInformation failed for ${address}: ${extRes.status} ${extRes.statusText}`
+    )
   }
+  const ext = (await extRes.json()) as ToncenterExtendedInfo
+  const seqno = ext.result?.account_state?.seqno ?? 0
+  let balance = ext.result?.balance !== undefined ? toBigInt(ext.result.balance) : 0n
 
-  let status: TonWalletStatus = 'uninit'
-  if (v3Res && v3Res.ok) {
-    const v3 = (await v3Res.json().catch(() => ({}))) as ToncenterV3AddressInfo
-    if (v3.status) status = v3.status
-    if (v3.balance !== undefined && balance === 0n) balance = toBigInt(v3.balance)
+  if (!v3Res.ok) {
+    throw new Error(`toncenter addressInformation failed for ${address}: ${v3Res.status} ${v3Res.statusText}`)
   }
+  const v3 = (await v3Res.json()) as ToncenterV3AddressInfo
+  const status: TonWalletStatus = v3.status ?? 'uninit'
+  if (v3.balance !== undefined && balance === 0n) balance = toBigInt(v3.balance)
 
   return { seqno, balance, status }
 }
