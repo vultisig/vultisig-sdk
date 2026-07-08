@@ -306,6 +306,34 @@ describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () 
     expect(out.ok).toBe(true)
     if (out.ok) expect(out.multi_tx).toBe(true)
   })
+
+  // Codex review (this fix): removing the isMultiTx gate means the memo-cap
+  // preflight now runs on every multi-tx leg, including a malformed one. A
+  // leg with `cosmos_tx: null` (key present, value null) must be skipped by
+  // the preflight rather than crash on `cosmosTx.memo` - and correctly caught
+  // downstream by validateTxEnvelopes as a malformed envelope instead.
+  it('does not crash on a malformed leg (cosmos_tx: null) and surfaces the existing malformed-envelope error', async () => {
+    const chainIds = ['osmosis-1', 'columbus-5']
+    mockFetchSequence([
+      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          txs: [
+            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            { cosmos_tx: null },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+        },
+      },
+    ])
+
+    const out = await runSkipSwap(multiTxArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) expect(out.envelope.error).toBe('skip_msgs_tx_malformed')
+  })
 })
 
 describe('quoteSkipRoute (quote-only path)', () => {

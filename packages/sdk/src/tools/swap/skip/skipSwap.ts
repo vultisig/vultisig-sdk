@@ -239,6 +239,11 @@ function getCosmosLegMemoInfos(
   for (const tx of txs) {
     if (!tx || !('cosmos_tx' in tx)) continue
     const cosmosTx = tx.cosmos_tx
+    // A malformed multi-tx response can carry the `cosmos_tx` key with a
+    // null/undefined value - skip rather than crash. validateTxEnvelopes
+    // (later in the pipeline) is what surfaces a structured error for a
+    // malformed tx envelope; this preflight only cares about well-formed legs.
+    if (!cosmosTx || typeof cosmosTx.chain_id !== 'string') continue
     const memo = typeof cosmosTx.memo === 'string' ? cosmosTx.memo : ''
     out.push({
       sourceChainId: cosmosTx.chain_id,
