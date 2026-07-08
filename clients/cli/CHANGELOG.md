@@ -1,5 +1,26 @@
 # @vultisig/cli
 
+## 2.19.7
+
+### Patch Changes
+
+- [#1027](https://github.com/vultisig/vultisig-sdk/pull/1027) [`47908cf`](https://github.com/vultisig/vultisig-sdk/commit/47908cfff78942be6220438f08ab08c61178f282) Thanks [@neavra](https://github.com/neavra)! - Wire the broadcast-journal double-spend guard into the direct `send` and `swap`
+  commands. Previously only the `agent ask` path consulted the persistent journal,
+  so a retried `send`/`swap` re-broadcast an identical intent (audit P5-1, HIGH —
+  double-spend). Both paths now share ONE journal: an identical send/swap within
+  the dedupe window is refused (exit code 9) instead of broadcasting a second time,
+  and `send`/`swap` gain a `--force` flag to override the guard.
+
+  `--max` sends/swaps fingerprint a stable sentinel (not the drift-prone resolved
+  amount) so a `--max` retry can't slip past the guard when the fee/balance moves.
+  The journal is namespaced by the vault's ECDSA key (falling back to the vault id),
+  so a native/EVM `send` and an identical `agent ask` cross-dedupe against the one
+  journal; ERC-20-token cross-path and swap cross-path dedup are out of scope (a
+  missed dedup, never a double-spend).
+
+- Updated dependencies [[`b1f2887`](https://github.com/vultisig/vultisig-sdk/commit/b1f288758ba627061c9c26085f96a3541b131163), [`f54d53a`](https://github.com/vultisig/vultisig-sdk/commit/f54d53a0252d133c2d2d6b37c649542cb4069fd3)]:
+  - @vultisig/sdk@2.19.7
+
 ## 2.19.0
 
 ### Patch Changes
