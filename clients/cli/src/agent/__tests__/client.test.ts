@@ -299,11 +299,10 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onToolProgress).not.toHaveBeenCalled()
   })
 
-  // Phase-1 dual-read: the CLI derives a client-side signable candidate from the
+  // #927 Phase 2: the CLI derives a client-side signable candidate from the
   // tool-output-available channel and hands it to the session via `onToolOutputTx`
-  // (SEPARATE from the backend `tx_ready` channel). Flat off-chain tools
-  // (polymarket) have no tx_ready and are the sign source; `execute_*` prep tools
-  // are parity-only.
+  // — the sole signing source. Flat tools (polymarket / build_custom_* /
+  // erc20_approve) and `execute_*` prep tools both produce signable candidates.
   describe('tool-output signing bridge: tool-output-available → onToolOutputTx', () => {
     const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
     const APPROVE_DATA = '0x095ea7b3' + '0'.repeat(120)
@@ -373,7 +372,7 @@ describe('AgentClient.sendMessageStream', () => {
       })
     })
 
-    it('fires onToolOutputTx (prep) for an execute_* prep envelope with tx_encoding (parity candidate)', async () => {
+    it('fires onToolOutputTx (prep) for an execute_* prep envelope with tx_encoding (sign source)', async () => {
       const onToolOutputTx = vi.fn()
       globalThis.fetch = mockFetchSSE(
         outputFrame('execute_send', {
@@ -395,13 +394,11 @@ describe('AgentClient.sendMessageStream', () => {
       expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
     })
 
-    it('pairs a tx_ready with its wire-adjacent tool-output frame — onTxReady carries the twin tool-call id', async () => {
-      // The backend flushes each pending tool call as [tool-output-available,
-      // tx_ready] back-to-back (agent.go:6397). The client remembers the last
-      // SIGNABLE tool-output frame's id and hands it to onTxReady as the twin id
-      // so the session pairs the two channels before diffing.
+    it('ignores the hollow data-tx_ready marker — only the tool-output candidate fires (Phase 2)', async () => {
+      // Production emits data-tx_ready as a hollow {typed_confirm} marker with NO
+      // tx body; the signable payload rides tool-output-available. The client must
+      // sign PURELY off tool-output and ignore the marker frame.
       const onToolOutputTx = vi.fn()
-      const onTxReady = vi.fn()
       globalThis.fetch = mockFetchSSE([
         `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-send', toolName: 'execute_send' })}\n\n`,
         `data: ${JSON.stringify({
@@ -418,69 +415,17 @@ describe('AgentClient.sendMessageStream', () => {
             resolved: {},
           },
         })}\n\n`,
-        `data: ${JSON.stringify({ type: 'data-tx_ready', data: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } } })}\n\n`,
+        `data: ${JSON.stringify({ type: 'data-tx_ready', id: 'tc-send-txr', data: { typed_confirm: true } })}\n\n`,
         'data: {"type":"finish"}\n\n',
       ])
 
       const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx, onTxReady })
+      await client.sendMessageStream('c1', { public_key: 'pk', content: 'send' }, { onToolOutputTx })
 
-      // The tool-output candidate carries its own id...
-      expect(onToolOutputTx.mock.calls[0][3]).toBe('tc-send')
-      // ...and the following tx_ready carries the SAME id as its twin.
-      expect(onTxReady).toHaveBeenCalledTimes(1)
-      expect(onTxReady.mock.calls[0][1]).toBe('tc-send')
-    })
-
-    it('does NOT mis-pair: a tx_ready following an UNRELATED tool call carries that later id, not an earlier flat tool-output id', async () => {
-      // Turn carries a flat polymarket tool-output (its OWN action, no tx_ready)
-      // THEN an execute_send tool-output + its tx_ready. The tx_ready must pair
-      // with execute_send (tc-send), NOT the earlier polymarket frame (tc-pm) —
-      // so the session sees the flat + tx_ready as DIFFERENT tool calls and skips
-      // the false-divergence diff.
-      const onToolOutputTx = vi.fn()
-      const onTxReady = vi.fn()
-      globalThis.fetch = mockFetchSSE([
-        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-pm', toolName: 'polymarket_setup_trading' })}\n\n`,
-        `data: ${JSON.stringify({
-          type: 'tool-output-available',
-          toolCallId: 'tc-pm',
-          output: {
-            chain: 'Polygon',
-            chain_id: '137',
-            to: USDC_E,
-            value: '0',
-            data: APPROVE_DATA,
-            action: 'approve',
-          },
-        })}\n\n`,
-        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'tc-send', toolName: 'execute_send' })}\n\n`,
-        `data: ${JSON.stringify({
-          type: 'tool-output-available',
-          toolCallId: 'tc-send',
-          output: {
-            txArgs: {
-              chain: 'Base',
-              chain_id: '8453',
-              tx_encoding: 'evm-tx',
-              tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
-            },
-            stepperConfig: {},
-            resolved: {},
-          },
-        })}\n\n`,
-        `data: ${JSON.stringify({ type: 'data-tx_ready', data: { chain: 'Base', chain_id: '8453', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } } })}\n\n`,
-        'data: {"type":"finish"}\n\n',
-      ])
-
-      const client = new AgentClient('http://example.com')
-      await client.sendMessageStream('c1', { public_key: 'pk', content: 'do both' }, { onToolOutputTx, onTxReady })
-
-      // First tool-output candidate captured is the flat polymarket one (tc-pm)...
-      expect(onToolOutputTx.mock.calls[0][3]).toBe('tc-pm')
-      // ...but the tx_ready's twin is execute_send (tc-send) — different id, so the
-      // session treats the polymarket flat and this tx_ready as unrelated.
-      expect(onTxReady.mock.calls[0][1]).toBe('tc-send')
+      // The tool-output candidate is the sole signing signal; the hollow marker is a no-op.
+      expect(onToolOutputTx).toHaveBeenCalledTimes(1)
+      expect(onToolOutputTx.mock.calls[0][1]).toBe('execute_send')
+      expect(onToolOutputTx.mock.calls[0][2]).toBe('prep')
     })
 
     it('does NOT fire onToolOutputTx for an execute_* prep envelope MISSING tx_encoding (backend phantom-card guard)', async () => {

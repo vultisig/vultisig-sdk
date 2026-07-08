@@ -120,14 +120,15 @@ export type ConversationMessage = {
   created_at: string
   // AI-SDK UIMessagePart list, present on messages fetched from
   // /messages/since (the disconnect-recovery endpoint). Text parts carry the
-  // assistant answer; `data-tx_ready` parts carry a persisted signable card so
-  // a turn that dropped its SSE stream mid-flight can still recover both.
+  // assistant answer; `tool-<name>` parts let recovery detect a signable tool
+  // that ran (#927 Phase 2: its payload rides tool-output-available and is NOT
+  // reconstructable, so recovery warns to re-run rather than signing).
   parts?: ConversationMessagePart[]
 }
 
 // Minimal projection of the backend's UIMessagePart (internal/types/parts.go).
 // Only the fields the CLI recovery path reads are typed; `type` is the
-// discriminator ("text", "data-tx_ready", "tool-<name>", …).
+// discriminator ("text", "data-balance_summary", "tool-<name>", …).
 export type ConversationMessagePart = {
   type: string
   text?: string
@@ -359,7 +360,6 @@ export type SSEToolProgress = {
 }
 export type SSETitle = { title: string }
 export type SSESuggestions = { suggestions: Suggestion[] }
-export type SSETxReady = TxReadyPayload
 export type SSEPolicyReady = PolicyReady
 export type SSEInstallRequired = InstallRequired
 export type SSEMessage = { message: ConversationMessage }
@@ -370,7 +370,6 @@ export type SSEEvent =
   | { type: 'tool_progress'; data: SSEToolProgress }
   | { type: 'title'; data: SSETitle }
   | { type: 'suggestions'; data: SSESuggestions }
-  | { type: 'tx_ready'; data: SSETxReady }
   | { type: 'policy_ready'; data: SSEPolicyReady }
   | { type: 'install_required'; data: SSEInstallRequired }
   | { type: 'message'; data: SSEMessage }
