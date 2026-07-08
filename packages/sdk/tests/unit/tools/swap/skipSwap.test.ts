@@ -224,6 +224,90 @@ describe('runSkipSwap fund-safety guards (mocked Skip)', () => {
   })
 })
 
+describe('multi-tx memo-cap regression (SDK-vs-abts reconciliation, VA-86)', () => {
+  // BEFORE this fix: the memo-cap check only ran `if (!isMultiTx)` and only
+  // inspected the FIRST cosmos leg. A multi-tx route (allowMultiTx:true)
+  // with an over-cap memo on a NON-FIRST leg sailed through undetected and
+  // would fail at broadcast (sdk code 12, "memo too long") AFTER signing,
+  // burning the MPC ceremony. This test proves every leg is now checked
+  // regardless of multi-tx status.
+  // Osmosis (source) -> TerraClassic (dest) so both legs are source/dest
+  // (no intermediate-chain address requirement to satisfy in the mock).
+  const multiTxArgs: SkipSwapArgs = {
+    ...baseArgs,
+    toAddress: 'terra1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    destChainId: 'columbus-5',
+    destAssetDenom: 'uluna',
+    allowMultiTx: true,
+  }
+
+  it('catches an over-cap memo on a non-first leg of a multi-tx route', async () => {
+    const overCapMemo = 'a'.repeat(300) // over columbus-5's 256-byte MaxMemoCharacters cap
+    const chainIds = ['osmosis-1', 'columbus-5']
+    mockFetchSequence([
+      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          txs: [
+            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: 'columbus-5',
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: overCapMemo,
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+        },
+      },
+    ])
+
+    const out = await runSkipSwap(multiTxArgs)
+
+    expect(out.ok).toBe(false)
+    if (!out.ok) {
+      expect(out.envelope.error).toBe('skip_source_memo_too_long')
+      expect(out.envelope.source_chain_id).toBe('columbus-5')
+      expect(out.envelope.memo_bytes).toBe(300)
+      expect(out.envelope.memo_max_bytes).toBe(256)
+    }
+  })
+
+  it('accepts a multi-tx route when every leg fits its own chain cap', async () => {
+    const chainIds = ['osmosis-1', 'columbus-5']
+    mockFetchSequence([
+      { body: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds } },
+      {
+        body: {
+          txs: [
+            { cosmos_tx: { chain_id: 'osmosis-1', signer_address: multiTxArgs.fromAddress, msgs: [], memo: '' } },
+            {
+              cosmos_tx: {
+                chain_id: 'columbus-5',
+                signer_address: multiTxArgs.fromAddress,
+                msgs: [],
+                memo: 'a'.repeat(256), // exactly at the cap, not over
+              },
+            },
+          ],
+          msgs: [],
+          min_amount_out: '118800',
+          route: { ...okRoute, txs_required: 2, chain_ids: chainIds, required_chain_addresses: chainIds },
+        },
+      },
+    ])
+
+    const out = await runSkipSwap(multiTxArgs)
+
+    expect(out.ok).toBe(true)
+    if (out.ok) expect(out.multi_tx).toBe(true)
+  })
+})
+
 describe('quoteSkipRoute (quote-only path)', () => {
   it('returns the raw route on success', async () => {
     mockFetchSequence([{ body: okRoute }])
