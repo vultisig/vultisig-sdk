@@ -602,6 +602,12 @@ export class AgentSession {
           ui.onBalanceSummary?.(card)
         }
       },
+      onTurnOutcome: outcome => {
+        // a2a-02: forward the typed turn-outcome straight through (already
+        // validated by parseTurnOutcome in the client). The ask layer latches it
+        // onto AskResult.outcome for the JSON envelope + exit-code mapping.
+        ui.onTurnOutcome?.(outcome)
+      },
       onMessage: (_msg: any) => {
         // Final message received
       },

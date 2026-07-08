@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.8.18",
+  "version": "1.8.19",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -212,9 +212,29 @@
       "default": "./dist/keysign/chainSpecific/resolvers/cardano.js"
     },
     "./keysign/chainSpecific/resolvers/cosmos": {
-      "types": "./dist/keysign/chainSpecific/resolvers/cosmos.d.ts",
-      "import": "./dist/keysign/chainSpecific/resolvers/cosmos.js",
-      "default": "./dist/keysign/chainSpecific/resolvers/cosmos.js"
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos/index.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos/index.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos/index.js"
+    },
+    "./keysign/chainSpecific/resolvers/cosmos/gasEstimation/buildSimulateTxBytes": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/buildSimulateTxBytes.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/buildSimulateTxBytes.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/buildSimulateTxBytes.js"
+    },
+    "./keysign/chainSpecific/resolvers/cosmos/gasEstimation/estimateCosmosGasLimit": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/estimateCosmosGasLimit.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/estimateCosmosGasLimit.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/estimateCosmosGasLimit.js"
+    },
+    "./keysign/chainSpecific/resolvers/cosmos/gasEstimation/scaleCosmosGasLimit": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/scaleCosmosGasLimit.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/scaleCosmosGasLimit.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/scaleCosmosGasLimit.js"
+    },
+    "./keysign/chainSpecific/resolvers/cosmos/gasEstimation/simulateCosmosGas": {
+      "types": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/simulateCosmosGas.d.ts",
+      "import": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/simulateCosmosGas.js",
+      "default": "./dist/keysign/chainSpecific/resolvers/cosmos/gasEstimation/simulateCosmosGas.js"
     },
     "./keysign/chainSpecific/resolvers/evm": {
       "types": "./dist/keysign/chainSpecific/resolvers/evm.d.ts",
@@ -1024,7 +1044,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.23.1",
+    "@vultisig/core-chain": "2.23.2",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

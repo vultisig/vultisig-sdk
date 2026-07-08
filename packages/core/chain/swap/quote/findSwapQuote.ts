@@ -372,8 +372,24 @@ const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(ad
 // THOR/Maya pairs the node validates the destination downstream, so a malformed
 // non-EVM address fails there and the EVM check is skipped. Extracted from
 // findSwapQuote to keep that function's cognitive complexity within the gate.
+// The zero address and the canonical `…dEaD` burn sink — a swap output routed here is
+// unrecoverably destroyed. Never a legit payout target for ANY route, so reject up front
+// (a well-formed but merely WRONG non-burn recipient is the caller's grounding responsibility).
+const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000'
+const BURN_EVM_ADDRESS = '0x000000000000000000000000000000000000dead'
+
 const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
-  if (recipient === undefined || isEvmAddress(recipient)) return
+  if (recipient === undefined) return
+  if (isEvmAddress(recipient)) {
+    const lower = recipient.toLowerCase()
+    if (lower === ZERO_EVM_ADDRESS || lower === BURN_EVM_ADDRESS) {
+      throw new SwapError(
+        SwapErrorCode.InvalidConfig,
+        `recipient "${recipient}" is a zero/burn address — the swap output would be unrecoverable.`
+      )
+    }
+    return
+  }
   const cowSwapPathReachable =
     isChainOfKind(from.chain, 'evm') &&
     from.id !== undefined &&

@@ -291,4 +291,34 @@ describe('getNativeSwapQuote', () => {
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
   })
+
+  // Fund-safety review follow-up: Cardano is enabled as a MayaChain source at
+  // the quote/enabled-chains level (NativeSwapChain.ts), but the SDK's own
+  // buildSwapKeysignPayload path is ALREADY wired to build a signable Cardano
+  // deposit from this quote — unlike SwapKit's Sui/Cardano corridors, which
+  // have no tx-build path at all. Until MayaChain's Cardano CIP-20 memo
+  // round-trip is verified live, this must reject before any network call,
+  // mirroring getSwapKitQuote's SWAP_SOURCE_TX_BUILD_UNSUPPORTED guard.
+  it('Cardano source (MayaChain): rejects before any network call (signing not yet verified)', async () => {
+    const adaFrom = {
+      chain: Chain.Cardano,
+      ticker: 'ADA',
+      decimals: 6,
+      logo: 'ada',
+      priceProviderId: 'cardano',
+      address: 'addr1vytest',
+    } as AccountCoin
+
+    await expect(
+      getNativeSwapQuote({
+        swapChain: Chain.MayaChain,
+        destination: ethTo.address,
+        from: adaFrom,
+        to: ethTo,
+        amount: 1,
+      })
+    ).rejects.toThrow(/not yet supported for signing/i)
+
+    expect(queryUrlMock).not.toHaveBeenCalled()
+  })
 })

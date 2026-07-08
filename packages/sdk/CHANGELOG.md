@@ -1,5 +1,119 @@
 # @vultisig/sdk
 
+## 2.18.4
+
+### Patch Changes
+
+- [#1020](https://github.com/vultisig/vultisig-sdk/pull/1020) [`74fec5a`](https://github.com/vultisig/vultisig-sdk/commit/74fec5a17942689fe8a05c0f145bfe552dbe5e87) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(swap): consolidate Skip Go routing-eligibility predicates into the SDK
+
+  Adds `isSkipRoutableChain`, `isTerraChain`, and `willRouteViaSkip` as tested
+  core functions under `@vultisig/core-chain/swap/skip/skipRouting`, re-exported
+  from the main `@vultisig/sdk` entry. Pure chain-topology predicates (no network
+  calls, no AI-specific logic) that give consumers one shared source of truth for
+  "does this from/to chain pair route through Skip Go?" instead of the
+  independently-maintained copies that can drift (the mcp-ts [#384](https://github.com/vultisig/vultisig-sdk/issues/384) bug class).
+  Purely additive — no existing export or behavior changed.
+
+## 2.18.3
+
+### Patch Changes
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Unblock Sui and Cardano as SwapKit/MayaChain swap sources
+
+- [#1013](https://github.com/vultisig/vultisig-sdk/pull/1013) [`29cce41`](https://github.com/vultisig/vultisig-sdk/commit/29cce4132aa9ad6359d18ebe48cd3c983431ae27) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add groundwork for Sui and Cardano swap source-chain handling while keeping unverified signing paths blocked.
+
+## 2.18.2
+
+### Patch Changes
+
+- [#1014](https://github.com/vultisig/vultisig-sdk/pull/1014) [`c41a219`](https://github.com/vultisig/vultisig-sdk/commit/c41a21950c4cccf70c8298b8e595acf64c276d8c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(cosmos): initiator-side dynamic gas — simulate native sends and relay `CosmosSpecific.gas_limit`
+
+  `getCosmosChainSpecific` now simulates native Cosmos bank sends via
+  `/cosmos/tx/v1beta1/simulate` and relays the padded (`× 1.3`) `gas_used` to
+  co-signers in `CosmosSpecific.gas_limit`. The signing-inputs resolver already
+  honors this field (scaling the fee amount accordingly) and falls back to the
+  static per-chain gas limit when it is absent or zero, so:
+
+  - Only native bank sends are simulated (a relayed dapp `signData`, token / IBC /
+    contract / staking txs, and vault-based chains keep the static limit).
+  - Estimation fails closed: any simulate/build error leaves the field unset, so
+    simulation never blocks signing and peers converge on the static limit.
+  - The relayed limit is part of the SignDoc every device hashes; because it is
+    computed with exact integer math (ceil of `gas_used × 13 / 10`) and honored
+    identically across peers, cross-device co-signing stays byte-identical.
+
+  Mirrors the iOS `CosmosGasEstimator` implementation.
+
+## 2.18.1
+
+### Patch Changes
+
+- [#926](https://github.com/vultisig/vultisig-sdk/pull/926) [`e0eaf83`](https://github.com/vultisig/vultisig-sdk/commit/e0eaf83b0a6d79fd99d7d7d697eea04387834338) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): harden chain/denom/id dispatch against undefined inputs
+
+  Guards cosmos balance resolvers, token metadata resolvers, and public-key
+  lookup against undefined chain, denom, or address inputs that would otherwise
+  throw at runtime or return stale data. Defensive undefined checks added across
+  the cosmos resolver layer.
+
+## 2.18.0
+
+### Patch Changes
+
+- [#1010](https://github.com/vultisig/vultisig-sdk/pull/1010) [`31814c4`](https://github.com/vultisig/vultisig-sdk/commit/31814c4b452ef5b2628dc12bc46e427fcf0b7237) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch portfolio native and token balances in parallel across chains.
+
+- [#1006](https://github.com/vultisig/vultisig-sdk/pull/1006) [`b37dc3c`](https://github.com/vultisig/vultisig-sdk/commit/b37dc3c31d6f93af982cd1e082e0b4d1382dc19d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor positive relayed Cosmos gas limits when building signing inputs.
+
+- [#1009](https://github.com/vultisig/vultisig-sdk/pull/1009) [`01c5630`](https://github.com/vultisig/vultisig-sdk/commit/01c56303d0b872a76de07da9685331106f586c80) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Batch native portfolio price fetches and price portfolio entries concurrently.
+
+## 2.17.1
+
+### Patch Changes
+
+- [#1005](https://github.com/vultisig/vultisig-sdk/pull/1005) [`889380e`](https://github.com/vultisig/vultisig-sdk/commit/889380ec1571d6385ce688c4b49af04bfe8f5b55) Thanks [@rcoderdev](https://github.com/rcoderdev)! - test(mpc): add golden keysign fixtures for 71 mobile cases across 23 chains
+
+  Regression harness for mobile keysign flows. Fixture JSON files under
+  `packages/core/mpc/keysign/tests/fixtures/mobile/` cover arb, bsc,
+  cardano, cosmos, dot, evm, kujira, maya, pol, solana, sui, terra,
+  thorchain, ton, tron, utxo, and xrp chains. No production source changes.
+
+## 2.17.0
+
+### Minor Changes
+
+- [#999](https://github.com/vultisig/vultisig-sdk/pull/999) [`99db752`](https://github.com/vultisig/vultisig-sdk/commit/99db752f093575f90b99b30674ec9be8af49fed9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - feat(cosmos): parameterize the THORChain-family MsgDeposit asset (THOR.RUNE / MAYA.CACAO)
+
+  `buildThorchainDepositTx` gains an optional `asset` ({ chain, symbol, ticker }) that
+  defaults to THOR.RUNE, so every existing caller is byte-identical. MayaChain-source
+  swaps pass MAYA.CACAO, enabling native CACAO->RUNE (and RUNE-source) deposit swaps in
+  the app's react-native signing path (previously hardcoded THOR.RUNE, which would sign
+  the wrong asset for a Maya deposit).
+
+### Patch Changes
+
+- [#960](https://github.com/vultisig/vultisig-sdk/pull/960) [`2585dc1`](https://github.com/vultisig/vultisig-sdk/commit/2585dc1830dd7b28694edd411991b24c3fad1538) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): chunk the 1inch token-metadata request so token-rich wallets don't 414. `findEvmCoins` joined every held-token address into one `/custom` GET, overflowing the proxy URI (HTTP 414) and killing discovery of all tokens; requests are now batched (50/req) and non-fatal per batch.
+
+- [#967](https://github.com/vultisig/vultisig-sdk/pull/967) [`152bb4a`](https://github.com/vultisig/vultisig-sdk/commit/152bb4a2b717efa2f1edb14b7e19cdeba87450c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cardano): paginate `address_assets` so NFT-heavy wallets aren't truncated. A single unbounded Koios query capped at 1000 rows, dropping tokens past 1000 in both discovery and per-token balance; it now follows the offset/limit pages.
+
+- [#968](https://github.com/vultisig/vultisig-sdk/pull/968) [`4a58c6c`](https://github.com/vultisig/vultisig-sdk/commit/4a58c6c1294c88e5d937c3dde24e50edd3fdf2a0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): paginate token discovery so IBC-heavy wallets aren't truncated. cosmjs `getAllBalances` issues a single unpaginated query capped at the node default (100), dropping denoms past 100; discovery now walks the LCD balances pages with a fall-through to cosmjs.
+
+- [#969](https://github.com/vultisig/vultisig-sdk/pull/969) [`ed46385`](https://github.com/vultisig/vultisig-sdk/commit/ed46385358883ed5277f8771ba73000afec9859e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): one token's on-chain metadata failure no longer kills all discovery. `getDiscoveredEvmCoin` re-threw inside `findEvmCoins`' `Promise.all`, so a single transient metadata read rejected discovery of every token on the chain; it now skips just the failing token.
+
+- [#966](https://github.com/vultisig/vultisig-sdk/pull/966) [`72082a6`](https://github.com/vultisig/vultisig-sdk/commit/72082a65eab226cebf562863bcb99346b81ca831) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(polkadot): reject an invalid destination instead of self-sending. `resolvePolkadotToAddress` (Polkadot + Bittensor) fell back to the sender's own address on a missing/invalid `toAddress`, so the signed extrinsic could diverge from the approved pre-sign card; it now throws.
+
+- [#962](https://github.com/vultisig/vultisig-sdk/pull/962) [`a9266a1`](https://github.com/vultisig/vultisig-sdk/commit/a9266a1753ca474b3f337f8a605900acdd7508b0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(solana): use Promise.allSettled across the SPL token programs so one program's failure doesn't hide the other's holdings. `getSplAccounts` used Promise.all, so a single token-program RPC failure (e.g. a 520) rejected the whole lookup; it now only throws when both programs fail.
+
+- [#965](https://github.com/vultisig/vultisig-sdk/pull/965) [`2791af8`](https://github.com/vultisig/vultisig-sdk/commit/2791af8a1e539103678ba71b774d62d2e7691a29) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(sui): paginate `getAllCoins` so sends see every coin object. The keysign resolver read only the first ~50-object page, truncating the coin set used for gas + input selection and producing a broken send on wallets with >50 coin objects.
+
+- [#964](https://github.com/vultisig/vultisig-sdk/pull/964) [`b68ddad`](https://github.com/vultisig/vultisig-sdk/commit/b68ddadbc6295957cbb4b37c365a4062b0a2576f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(ton): fail closed on a null account-info result before it crashes keysign. A transient `ok:false`/null-result response from `getExtendedAddressInformation` slipped through as a 200 and crashed the TON keysign resolver on `const { account_state } = undefined`; `getTonAccountInfo` now throws a descriptive error instead of returning null.
+
+- [#970](https://github.com/vultisig/vultisig-sdk/pull/970) [`ab5e413`](https://github.com/vultisig/vultisig-sdk/commit/ab5e413ead62da47dc144e591ac310d1d4328a56) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(tron): verify the base58check checksum on the TRC-20 balance-read address decode. `tronAddressToAbiParam` used plain `bs58.decode` with no checksum check, so a typo'd-but-decodable address silently queried a different account; it now uses `bs58check.decode`.
+
+- [#959](https://github.com/vultisig/vultisig-sdk/pull/959) [`90f6ae5`](https://github.com/vultisig/vultisig-sdk/commit/90f6ae5a1865321e08bf6f03c17e23ed11006649) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(ripple): add the XRP reserve to the send amount check, not the burned fee. The base reserve was added to `gas` (the burned Fee) instead of being enforced against the Amount, burning ~1 XRP per fresh-address send; the resolver now sets the network fee correctly and rejects a send below the reserve.
+
+- [#961](https://github.com/vultisig/vultisig-sdk/pull/961) [`7cfa332`](https://github.com/vultisig/vultisig-sdk/commit/7cfa332787f7646e049813a9f3b15613454f19d1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): add zkSync to the 1inch-supported chains so its ERC-20s are discovered. zkSync was silently absent from `oneInchSupportedChains`, so token discovery returned an empty set even though the proxy serves chain 324.
+
+- [#973](https://github.com/vultisig/vultisig-sdk/pull/973) [`c60d7c6`](https://github.com/vultisig/vultisig-sdk/commit/c60d7c6ecdf46e46bf1098cc57342d5fb79d2194) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject non-decimal send amounts such as hex and scientific notation with `InvalidAmount`.
+
 ## 2.16.0
 
 ### Minor Changes
