@@ -28,10 +28,25 @@ export type TxStatusParams = {
 const POLL_INTERVAL_MS = 5_000
 const DEFAULT_TIMEOUT_SEC = 120
 
-// Statuses that end the poll. `not_found` is terminal here too: if the node has
-// never seen the hash we surface that immediately rather than waiting it out
-// (a freshly-broadcast tx briefly reading `not_found` is covered by the timeout).
+// Statuses that end the poll. Only the two on-chain outcomes are terminal.
+// `not_found` is deliberately NOT terminal for polling: a freshly-broadcast tx
+// can briefly read `not_found` before the mempool propagates, so we keep polling
+// (bounded by `--timeout`) and surface `TxNotFoundError` only once the budget is
+// spent. Use `--no-wait` for an immediate single-shot read of the current status.
 const isTerminal = (status: TxStatusResult['status']): boolean => status === 'success' || status === 'error'
+
+// Coerce the wait budget to a safe, finite millisecond value. A non-finite
+// `timeoutSec` (NaN/Infinity) or `undefined` falls back to the default; a
+// negative value clamps to 0 (immediate give-up). This is the load-bearing guard
+// against reintroducing the infinite poll — `deadline = Date.now() + NaN` would
+// make `Date.now() >= deadline` forever false. The CLI validates `--timeout`
+// too, but this keeps `executeTxStatus` self-safe for every caller.
+function resolveTimeoutMs(timeoutSec: number | undefined): number {
+  if (typeof timeoutSec !== 'number' || !Number.isFinite(timeoutSec)) {
+    return DEFAULT_TIMEOUT_SEC * 1_000
+  }
+  return Math.max(0, timeoutSec) * 1_000
+}
 
 export async function executeTxStatus(
   ctx: CommandContext,
@@ -62,8 +77,7 @@ export async function executeTxStatus(
     let result = await vault.getTxStatus({ chain: params.chain, txHash: params.txHash })
 
     if (!params.noWait && !isTerminal(result.status)) {
-      const timeoutMs = Math.max(0, (params.timeoutSec ?? DEFAULT_TIMEOUT_SEC) * 1000)
-      const deadline = Date.now() + timeoutMs
+      const deadline = Date.now() + resolveTimeoutMs(params.timeoutSec)
       let waited = 0
 
       while (!isTerminal(result.status)) {

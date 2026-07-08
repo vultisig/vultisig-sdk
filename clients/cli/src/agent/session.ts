@@ -1089,11 +1089,11 @@ export class AgentSession {
     for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
       if (this.abortController?.signal?.aborted) return
       try {
-        // TxStatusResult.status is the SDK's exhaustive union
-        // `'pending' | 'success' | 'error'`. Only the two terminal states
-        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // TxStatusResult.status is the SDK's union
+        // `'pending' | 'success' | 'error' | 'not_found'`. Only the two terminal
+        // on-chain states resolve the poll; `'pending'` and `'not_found'` both keep
         // polling until the budget is spent and we emit `timeout` below — a safe
-        // default since the tx may still confirm later.
+        // default since a not-yet-propagated tx may still confirm later.
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)

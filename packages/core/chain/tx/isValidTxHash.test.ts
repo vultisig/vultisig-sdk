@@ -41,6 +41,23 @@ describe('isValidTxHash', () => {
     expect(isValidTxHash(Chain.Solana, 'A'.repeat(88))).toBe(true)
   })
 
+  it('requires the 0x prefix for polkadot / bittensor (substrate hashes)', () => {
+    for (const chain of [Chain.Polkadot, Chain.Bittensor]) {
+      expect(isValidTxHash(chain, evmHash)).toBe(true)
+      expect(isValidTxHash(chain, hex64)).toBe(false) // missing 0x
+      expect(isValidTxHash(chain, 'nothash')).toBe(false)
+    }
+  })
+
+  it('accepts either bare-hex or base64 for ton, and 64-hex for qbtc', () => {
+    // TON is the only dual-pattern validator.
+    expect(isValidTxHash(Chain.Ton, hex64)).toBe(true)
+    expect(isValidTxHash(Chain.Ton, `${'A'.repeat(43)}=`)).toBe(true) // base64-ish, 44 chars
+    expect(isValidTxHash(Chain.Ton, 'nothash')).toBe(false)
+    expect(isValidTxHash(Chain.QBTC, hex64)).toBe(true)
+    expect(isValidTxHash(Chain.QBTC, 'nothash')).toBe(false)
+  })
+
   it('trims surrounding whitespace before validating', () => {
     expect(isValidTxHash(Chain.Ethereum, `  ${evmHash}\n`)).toBe(true)
   })

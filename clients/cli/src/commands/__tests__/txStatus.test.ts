@@ -67,6 +67,36 @@ describe('executeTxStatus', () => {
     expect(getTxStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('does not loop forever on a negative timeout — clamps to an immediate give-up', async () => {
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'not_found', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    await expect(
+      executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, timeoutSec: -5 })
+    ).rejects.toBeInstanceOf(TxNotFoundError)
+    expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not loop forever on a non-finite (NaN) timeout — falls back to a finite budget', async () => {
+    // If NaN reached the deadline math unguarded, `Date.now() >= Date.now()+NaN`
+    // is always false and the poll would never terminate. The guard maps NaN to
+    // the default budget, so with pollIntervalMs:0 the loop still spins but the
+    // deadline is a real finite timestamp; here the tx confirms on the 2nd poll.
+    const getTxStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'pending', isKnown: true })
+      .mockResolvedValueOnce({ status: 'success', receipt: undefined })
+    const ctx = makeCtx(getTxStatus)
+
+    const out = await executeTxStatus(
+      ctx,
+      { chain: Chain.Ethereum, txHash: EVM_HASH, timeoutSec: Number.NaN },
+      { pollIntervalMs: 0 }
+    )
+    expect(out.status).toBe('success')
+    expect(getTxStatus).toHaveBeenCalledTimes(2)
+  })
+
   it('reports not_found without throwing in --no-wait mode', async () => {
     const getTxStatus = vi.fn().mockResolvedValue({ status: 'not_found', isKnown: false })
     const ctx = makeCtx(getTxStatus)
