@@ -1872,6 +1872,11 @@
       "import": "./dist/tx/fee/evm/baseFee.js",
       "default": "./dist/tx/fee/evm/baseFee.js"
     },
+    "./tx/fee/evm/clampEvmPriorityFee": {
+      "types": "./dist/tx/fee/evm/clampEvmPriorityFee.d.ts",
+      "import": "./dist/tx/fee/evm/clampEvmPriorityFee.js",
+      "default": "./dist/tx/fee/evm/clampEvmPriorityFee.js"
+    },
     "./tx/fee/evm/evmGasLimit": {
       "types": "./dist/tx/fee/evm/evmGasLimit.d.ts",
       "import": "./dist/tx/fee/evm/evmGasLimit.js",
