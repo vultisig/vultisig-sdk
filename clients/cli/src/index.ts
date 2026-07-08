@@ -8,7 +8,6 @@ import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { InvalidArgumentError, program } from 'commander'
-import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -76,6 +75,7 @@ import {
   outputJson,
   printResult,
   requireInteractive,
+  resolveNonInteractive,
   setFields,
   setNonInteractive,
   setQuiet,
@@ -83,6 +83,7 @@ import {
   setupUserAgent,
   warn,
 } from './lib'
+import { prompt } from './lib/prompt'
 import { setupVaultEvents } from './ui'
 
 // Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
@@ -157,7 +158,9 @@ program
     }
     initOutputMode({ silent: opts.silent, output: opts.output })
     setQuiet(!!opts.quiet)
-    setNonInteractive(!!opts.nonInteractive)
+    // A piped/redirected stdout is the machine-output channel — an interactive
+    // prompt would corrupt it — so treat non-TTY stdout as non-interactive too.
+    setNonInteractive(resolveNonInteractive(!!opts.nonInteractive))
     const fields = opts.fields as string | undefined
     setFields(
       fields
@@ -354,7 +357,7 @@ async function promptSeedphrase(): Promise<string> {
   info('\nEnter your 12 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'password',
       name: 'mnemonic',
@@ -381,7 +384,7 @@ async function promptQrPayload(): Promise<string> {
   info('\nEnter the QR code payload from the initiator device.')
   info('The payload starts with "vultisig://".\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'input',
       name: 'qrPayload',

@@ -3,7 +3,6 @@
  */
 import type { Chain, DiscoveredToken } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
 import {
@@ -17,6 +16,7 @@ import {
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 
 export type TokensOptions = {
   chain: Chain
@@ -85,7 +85,7 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
 
     if (prompts.length > 0) {
       requireInteractive('Provide --symbol, --name, and --decimals flags for non-interactive token addition.')
-      const answers = await inquirer.prompt(prompts)
+      const answers = await prompt(prompts)
       symbol = symbol || answers.symbol?.trim()
       name = name || answers.name?.trim()
       decimals = decimals ?? answers.decimals

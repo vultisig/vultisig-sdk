@@ -5,6 +5,7 @@ import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult, formatBigintAmount } from '../ui'
 
@@ -169,7 +170,10 @@ function displayDryRunResult(result: SwapDryRunResult): void {
 async function confirmSwapIfNeeded(options: SwapOptions): Promise<void> {
   if (options.yes) return
   if (isNonInteractive()) {
-    throw new Error('Swap requires confirmation. Use --yes to skip, or --dry-run to preview.')
+    throw new ConfirmationRequiredError(
+      'Swap requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview without signing.'
+    )
   }
   const confirmed = await confirmSwap()
   if (!confirmed) {

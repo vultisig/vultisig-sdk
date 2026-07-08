@@ -6,6 +6,7 @@ import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
@@ -99,7 +100,10 @@ export async function sendTransaction(
   // 3. Confirm (required in all output modes)
   if (!params.yes) {
     if (isNonInteractive()) {
-      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
+      throw new ConfirmationRequiredError(
+        'Transaction requires confirmation.',
+        'Pass --yes to confirm, or --dry-run to preview without signing.'
+      )
     }
     const confirmed = await confirmTransaction()
     if (!confirmed) {

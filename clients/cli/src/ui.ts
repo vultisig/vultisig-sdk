@@ -11,13 +11,13 @@
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
 import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 // Re-export types from core for backwards compatibility
 export type { PortfolioSummary, SendParams } from './core/types'
 import type { PortfolioSummary } from './core/types'
 // Import output helpers
 import { info, isJsonOutput, printError, printResult, printTable, requireInteractive, warn } from './lib/output'
+import { prompt } from './lib/prompt'
 
 // ============================================================================
 // Display Formatters
@@ -187,7 +187,7 @@ export function displayVaultsList(vaults: VaultBase[], activeVault: VaultBase | 
 
 export async function confirmTransaction(): Promise<boolean> {
   requireInteractive('Use --yes to skip confirmation, or --password to provide password non-interactively.')
-  const { confirmed } = await inquirer.prompt([
+  const { confirmed } = await prompt([
     {
       type: 'confirm',
       name: 'confirmed',
@@ -200,7 +200,7 @@ export async function confirmTransaction(): Promise<boolean> {
 
 export async function promptForPassword(message = 'Enter password:'): Promise<string> {
   requireInteractive('Use --password flag or VAULT_PASSWORD env var.')
-  const { password } = await inquirer.prompt([
+  const { password } = await prompt([
     {
       type: 'password',
       name: 'password',
@@ -405,7 +405,7 @@ export function displaySwapChains(chains: readonly Chain[]): void {
 
 export async function confirmSwap(): Promise<boolean> {
   requireInteractive('Use --yes to skip confirmation, or --password to provide password non-interactively.')
-  const { confirmed } = await inquirer.prompt([
+  const { confirmed } = await prompt([
     {
       type: 'confirm',
       name: 'confirmed',
