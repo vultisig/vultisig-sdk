@@ -3,6 +3,7 @@ import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { assertKnownAggregatorRouter } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { OneInchSwapQuoteResponse } from '@vultisig/core-chain/swap/general/oneInch/api/OneInchSwapQuoteResponse'
 import { oneInchAffiliateConfig } from '@vultisig/core-chain/swap/general/oneInch/oneInchAffiliateConfig'
 import { rootApiUrl } from '@vultisig/core-config'
@@ -58,6 +59,11 @@ export const getOneInchSwapQuote = async ({
   const url = addQueryParams(getBaseUrl(chainId), params)
 
   const { dstAmount, tx }: OneInchSwapQuoteResponse = await queryUrl<OneInchSwapQuoteResponse>(url)
+
+  // AGG-02 fund-safety fix: verify tx.to is 1inch's actual router before this untrusted
+  // response can become a signable GeneralSwapQuote. Chain-scoped: 1inch's router differs
+  // on zkSync Era. See knownAggregatorRouters.ts.
+  assertKnownAggregatorRouter('1inch', tx.to, chain)
 
   return {
     dstAmount,
