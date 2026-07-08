@@ -391,4 +391,5 @@ export {
 // Atomic chain helpers (re-exported from core for vault-free callers)
 export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 export { getTxStatus } from '@vultisig/core-chain/tx/status'
