@@ -7,6 +7,7 @@
  * Each chain is not wired through the EVM `getEvmClient` rail, so these talk to
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
+import { rippleIssuedCurrencyDecimals, rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import bs58check from 'bs58check'
 
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
@@ -81,8 +82,31 @@ export type XrpBalance = {
   // account) — keep it a string and parse with BigInt.
   balanceDrops: string
   balanceXrp: string
+  spendableDrops: string
+  spendableXrp: string
+  ownerCount: number
+  minimumReserveDrops: string
+  minimumReserveXrp: string
+  reserveIncrementDrops: string
+  reserveIncrementXrp: string
+  trustLineCount: number
+  issuedCurrencyBalances: XrpIssuedCurrencyBalance[]
   note?: string
   asOf: string
+}
+
+export type XrpIssuedCurrencyBalance = {
+  issuer: string
+  currency: string
+  tokenId: string
+  balance: string
+  limit: string
+  limitPeer: string
+  decimals: number
+  noRipple: boolean
+  noRipplePeer: boolean
+  authorized: boolean
+  peerAuthorized: boolean
 }
 
 // 1 XRP = 1e6 drops. Format via BigInt so a >2^53-drop balance never rounds.
@@ -92,10 +116,102 @@ function formatXrp(drops: bigint): string {
   return `${whole}.${frac.toString().padStart(6, '0')}`
 }
 
+type XrplAccountLine = {
+  account: string
+  balance: string
+  currency: string
+  limit: string
+  limit_peer: string
+  no_ripple?: boolean
+  no_ripple_peer?: boolean
+  authorized?: boolean
+  peer_authorized?: boolean
+}
+
+function hasPositiveIssuedCurrencyBalance(balance: string): boolean {
+  const unsigned = balance.trim().replace(/^\+/, '')
+  if (unsigned.startsWith('-')) return false
+  if (!/^\d+(\.\d+)?$/.test(unsigned)) return false
+
+  return unsigned
+    .replace('.', '')
+    .split('')
+    .some(char => char !== '0')
+}
+
+async function getXrpAccountLines(address: string): Promise<XrplAccountLine[]> {
+  const lines: XrplAccountLine[] = []
+  let marker: unknown
+
+  do {
+    const response = await fetchJson<{
+      result: {
+        lines?: XrplAccountLine[]
+        marker?: unknown
+        error?: string
+        error_message?: string
+      }
+    }>('https://xrplcluster.com', {
+      method: 'account_lines',
+      params: [
+        {
+          account: address,
+          ledger_index: 'current',
+          limit: 400,
+          ...(marker === undefined ? {} : { marker }),
+        },
+      ],
+    })
+
+    if (response.result?.error) {
+      const msg = response.result.error_message ?? response.result.error
+      throw new Error(`XRPL account_lines error (${response.result.error}): ${msg}`)
+    }
+
+    lines.push(...(response.result?.lines ?? []))
+    marker = response.result?.marker
+  } while (marker !== undefined)
+
+  return lines
+}
+
+async function getXrpReserveInfo(): Promise<{
+  reserveBase: bigint
+  reserveInc: bigint
+}> {
+  const response = await fetchJson<{
+    result: {
+      state?: {
+        validated_ledger?: {
+          reserve_base?: number | string
+          reserve_inc?: number | string
+        }
+      }
+      error?: string
+      error_message?: string
+    }
+  }>('https://xrplcluster.com', { method: 'server_state' })
+
+  if (response.result?.error) {
+    const msg = response.result.error_message ?? response.result.error
+    throw new Error(`XRPL server_state error (${response.result.error}): ${msg}`)
+  }
+
+  const reserve = response.result?.state?.validated_ledger
+  if (reserve?.reserve_base == null || reserve.reserve_inc == null) {
+    throw new Error('XRPL server_state returned no validated_ledger reserve data.')
+  }
+
+  return {
+    reserveBase: BigInt(reserve.reserve_base),
+    reserveInc: BigInt(reserve.reserve_inc),
+  }
+}
+
 /**
  * Query the native XRP balance of an XRP Ledger address.
  *
- * Only `actNotFound` (valid-shape but unfunded — 10 XRP reserve requirement)
+ * Only `actNotFound` (valid-shape but unfunded account)
  * resolves to a zero balance. Other XRPL error types (actMalformed, actBadSeed,
  * invalidParams) mean the caller passed something broken and are surfaced as
  * errors, so a mistyped address never reads as "you have 0 XRP".
@@ -103,7 +219,11 @@ function formatXrp(drops: bigint): string {
 export async function getXrpBalance(address: string): Promise<XrpBalance> {
   if (!address) throw new Error('No XRP address provided.')
   const response = await fetchJson<{
-    result: { account_data?: { Balance?: string }; error?: string; error_message?: string }
+    result: {
+      account_data?: { Balance?: string; OwnerCount?: number }
+      error?: string
+      error_message?: string
+    }
   }>('https://xrplcluster.com', {
     method: 'account_info',
     params: [{ account: address, ledger_index: 'current' }],
@@ -114,7 +234,16 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
       address,
       balanceDrops: '0',
       balanceXrp: '0.000000',
-      note: 'Account not found on XRP Ledger. It may be unfunded (requires 10 XRP minimum reserve).',
+      spendableDrops: '0',
+      spendableXrp: '0.000000',
+      ownerCount: 0,
+      minimumReserveDrops: '0',
+      minimumReserveXrp: '0.000000',
+      reserveIncrementDrops: '0',
+      reserveIncrementXrp: '0.000000',
+      trustLineCount: 0,
+      issuedCurrencyBalances: [],
+      note: 'Account not found on XRP Ledger. It may be unfunded.',
       asOf: new Date().toISOString(),
     }
   }
@@ -137,10 +266,39 @@ export async function getXrpBalance(address: string): Promise<XrpBalance> {
   } catch {
     throw new Error(`XRPL returned a non-integer Balance ("${rawDrops}") — malformed upstream response.`)
   }
+
+  const ownerCount = response.result.account_data.OwnerCount ?? 0
+  const accountLines = await getXrpAccountLines(address)
+  const reserveInfo = await getXrpReserveInfo()
+  const minimumReserveDrops = reserveInfo.reserveBase + BigInt(ownerCount) * reserveInfo.reserveInc
+  const spendableDrops = drops > minimumReserveDrops ? drops - minimumReserveDrops : 0n
+  const positiveIssuedCurrencyLines = accountLines.filter(line => hasPositiveIssuedCurrencyBalance(line.balance))
+
   return {
     address,
     balanceDrops: drops.toString(),
     balanceXrp: formatXrp(drops),
+    spendableDrops: spendableDrops.toString(),
+    spendableXrp: formatXrp(spendableDrops),
+    ownerCount,
+    minimumReserveDrops: minimumReserveDrops.toString(),
+    minimumReserveXrp: formatXrp(minimumReserveDrops),
+    reserveIncrementDrops: reserveInfo.reserveInc.toString(),
+    reserveIncrementXrp: formatXrp(reserveInfo.reserveInc),
+    trustLineCount: accountLines.length,
+    issuedCurrencyBalances: positiveIssuedCurrencyLines.map(line => ({
+      issuer: line.account,
+      currency: line.currency,
+      tokenId: rippleTokenId({ currency: line.currency, issuer: line.account }),
+      balance: line.balance,
+      limit: line.limit,
+      limitPeer: line.limit_peer,
+      decimals: rippleIssuedCurrencyDecimals,
+      noRipple: line.no_ripple ?? false,
+      noRipplePeer: line.no_ripple_peer ?? false,
+      authorized: line.authorized ?? false,
+      peerAuthorized: line.peer_authorized ?? false,
+    })),
     asOf: new Date().toISOString(),
   }
 }
@@ -190,7 +348,10 @@ export async function getTronAccountResources(address: string): Promise<TronAcco
     EnergyLimit?: number
     NetUsed?: number
     NetLimit?: number
-  }>('https://tron-rpc.publicnode.com/wallet/getaccountresource', { address, visible: true })
+  }>('https://tron-rpc.publicnode.com/wallet/getaccountresource', {
+    address,
+    visible: true,
+  })
 
   return {
     address,
@@ -295,7 +456,10 @@ export type TonBalance = {
  */
 export async function getTonBalance(address: string): Promise<TonBalance> {
   const extResp = await fetchJson<{
-    result: { balance?: string; account_state?: { seqno?: number; '@type'?: string } }
+    result: {
+      balance?: string
+      account_state?: { seqno?: number; '@type'?: string }
+    }
   }>(`${ROOT_API_URL}/ton/v2/getExtendedAddressInformation?address=${encodeURIComponent(address)}`)
 
   const nanotons = extResp.result?.balance ?? '0'
@@ -400,8 +564,20 @@ export async function getSuiTokenBalance(address: string, coinType: string): Pro
 }
 
 export type SuiAllBalancesResult =
-  | { ok: true; address: string; chain: 'Sui'; balances: SuiCoinBalance[]; asOf: string }
-  | { ok: false; error: 'tokens_unavailable'; chain: 'Sui'; address: string; detail: string }
+  | {
+      ok: true
+      address: string
+      chain: 'Sui'
+      balances: SuiCoinBalance[]
+      asOf: string
+    }
+  | {
+      ok: false
+      error: 'tokens_unavailable'
+      chain: 'Sui'
+      address: string
+      detail: string
+    }
 
 export type SuiCoinBalance = {
   coinType: string
@@ -426,7 +602,11 @@ const SUI_NATIVE_TYPES = new Set([
  */
 export async function getSuiAllBalances(address: string): Promise<SuiAllBalancesResult> {
   let response: {
-    result?: Array<{ coinType: string; totalBalance: string; coinObjectCount: number }>
+    result?: Array<{
+      coinType: string
+      totalBalance: string
+      coinObjectCount: number
+    }>
     error?: { code?: number; message?: string }
   }
   try {
@@ -497,7 +677,13 @@ export async function getSuiAllBalances(address: string): Promise<SuiAllBalances
     })
   }
 
-  return { ok: true, address, chain: 'Sui', balances, asOf: new Date().toISOString() }
+  return {
+    ok: true,
+    address,
+    chain: 'Sui',
+    balances,
+    asOf: new Date().toISOString(),
+  }
 }
 
 // ── Cardano ─────────────────────────────────────────────────────────────────
@@ -528,10 +714,16 @@ export async function getCardanoBalance(address: string): Promise<CardanoBalance
     fetchJson<{ address: string; balance: string }[]>(`${ROOT_API_URL}/cardano/address_info`, {
       _addresses: [address],
     }),
-    fetchJson<{ address: string; asset_list: { policy_id: string; asset_name: string; quantity: string }[] }[]>(
-      `${ROOT_API_URL}/cardano/address_assets`,
-      { _addresses: [address] }
-    ),
+    fetchJson<
+      {
+        address: string
+        asset_list: {
+          policy_id: string
+          asset_name: string
+          quantity: string
+        }[]
+      }[]
+    >(`${ROOT_API_URL}/cardano/address_assets`, { _addresses: [address] }),
   ])
 
   const lovelaceStr = infoRes[0]?.balance ?? '0'

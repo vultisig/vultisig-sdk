@@ -92,6 +92,7 @@ export type {
   TronAccountResources,
   TrxBalance,
   XrpBalance,
+  XrpIssuedCurrencyBalance,
 } from './balance'
 export {
   assertBittensorAddress,

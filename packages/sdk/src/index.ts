@@ -599,6 +599,7 @@ export type {
   VaultIdentity,
   Verdict,
   XrpBalance,
+  XrpIssuedCurrencyBalance,
   YieldActionResponse,
   YieldArgs,
   YieldBalance,

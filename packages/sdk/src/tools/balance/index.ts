@@ -7,7 +7,7 @@
  */
 
 // XRP
-export type { XrpBalance } from './otherBalance'
+export type { XrpBalance, XrpIssuedCurrencyBalance } from './otherBalance'
 export { getXrpBalance } from './otherBalance'
 
 // TRON

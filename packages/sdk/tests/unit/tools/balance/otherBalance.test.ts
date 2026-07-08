@@ -58,13 +58,31 @@ describe('decodeBittensorAddress (fund-safety)', () => {
 describe('getXrpBalance', () => {
   beforeEach(() => mockFetchJson.mockReset())
 
+  const mockXrpReserveInfo = () =>
+    mockFetchJson.mockResolvedValueOnce({
+      result: {
+        state: {
+          validated_ledger: { reserve_base: 1_000_000, reserve_inc: 200_000 },
+        },
+      },
+    })
+
+  const mockXrpAccountLines = (lines: unknown[] = []) =>
+    mockFetchJson.mockResolvedValueOnce({
+      result: { lines },
+    })
+
   it('parses funded balance from drops', async () => {
     mockFetchJson.mockResolvedValueOnce({
-      result: { account_data: { Balance: '25000000' } },
+      result: { account_data: { Balance: '25000000', OwnerCount: 0 } },
     })
+    mockXrpAccountLines()
+    mockXrpReserveInfo()
     const r = await getXrpBalance('rXYZ')
     expect(r.balanceDrops).toBe('25000000')
     expect(r.balanceXrp).toBe('25.000000')
+    expect(r.spendableDrops).toBe('24000000')
+    expect(r.minimumReserveDrops).toBe('1000000')
   })
 
   it('keeps full precision for a >2^53-drop balance (no Number() rounding)', async () => {
@@ -72,8 +90,10 @@ describe('getXrpBalance', () => {
     // A Number() round-trip would corrupt this to ...3460 — assert it does not.
     const raw = '90000000000123456'
     mockFetchJson.mockResolvedValueOnce({
-      result: { account_data: { Balance: raw } },
+      result: { account_data: { Balance: raw, OwnerCount: 0 } },
     })
+    mockXrpAccountLines()
+    mockXrpReserveInfo()
     const r = await getXrpBalance('rXYZ')
     expect(r.balanceDrops).toBe(raw)
     expect(r.balanceXrp).toBe('90000000000.123456')
@@ -83,7 +103,7 @@ describe('getXrpBalance', () => {
 
   it('rejects a non-integer Balance instead of silently NaN-ing', async () => {
     mockFetchJson.mockResolvedValueOnce({
-      result: { account_data: { Balance: 'not-a-number' } },
+      result: { account_data: { Balance: 'not-a-number', OwnerCount: 0 } },
     })
     await expect(getXrpBalance('rXYZ')).rejects.toThrow(/non-integer Balance/)
   })
@@ -93,6 +113,7 @@ describe('getXrpBalance', () => {
     const r = await getXrpBalance('rXYZ')
     expect(r.balanceDrops).toBe('0')
     expect(r.balanceXrp).toBe('0.000000')
+    expect(r.issuedCurrencyBalances).toEqual([])
     expect(r.note).toMatch(/unfunded/i)
   })
 
@@ -101,6 +122,143 @@ describe('getXrpBalance', () => {
       result: { error: 'actMalformed', error_message: 'Account malformed.' },
     })
     await expect(getXrpBalance('garbage')).rejects.toThrow(/actMalformed/)
+  })
+
+  it('reads issued-currency trust lines and includes owner reserve in spendable XRP', async () => {
+    mockFetchJson.mockResolvedValueOnce({
+      result: { account_data: { Balance: '2500000', OwnerCount: 3 } },
+    })
+    mockXrpAccountLines([
+      {
+        account: 'rIssuer',
+        balance: '12.5',
+        currency: 'USD',
+        limit: '100',
+        limit_peer: '0',
+        no_ripple: true,
+        no_ripple_peer: false,
+        authorized: true,
+        peer_authorized: false,
+      },
+    ])
+    mockXrpReserveInfo()
+
+    const r = await getXrpBalance('rXYZ')
+
+    expect(r.ownerCount).toBe(3)
+    expect(r.minimumReserveDrops).toBe('1600000')
+    expect(r.spendableDrops).toBe('900000')
+    expect(r.trustLineCount).toBe(1)
+    expect(r.reserveIncrementDrops).toBe('200000')
+    expect(r.issuedCurrencyBalances).toEqual([
+      {
+        issuer: 'rIssuer',
+        currency: 'USD',
+        tokenId: 'USD.rIssuer',
+        balance: '12.5',
+        limit: '100',
+        limitPeer: '0',
+        decimals: 15,
+        noRipple: true,
+        noRipplePeer: false,
+        authorized: true,
+        peerAuthorized: false,
+      },
+    ])
+  })
+
+  it('paginates account_lines so large trust-line sets are not truncated', async () => {
+    mockFetchJson
+      .mockResolvedValueOnce({
+        result: { account_data: { Balance: '2000000', OwnerCount: 2 } },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          lines: [
+            {
+              account: 'rIssuer1',
+              balance: '1',
+              currency: 'USD',
+              limit: '10',
+              limit_peer: '0',
+            },
+          ],
+          marker: 'next-page',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          lines: [
+            {
+              account: 'rIssuer2',
+              balance: '2',
+              currency: 'EUR',
+              limit: '20',
+              limit_peer: '0',
+            },
+          ],
+        },
+      })
+    mockXrpReserveInfo()
+
+    const r = await getXrpBalance('rXYZ')
+
+    expect(r.trustLineCount).toBe(2)
+    expect(r.reserveIncrementDrops).toBe('200000')
+    expect(r.issuedCurrencyBalances.map(({ tokenId }) => tokenId)).toEqual(['USD.rIssuer1', 'EUR.rIssuer2'])
+    expect(mockFetchJson).toHaveBeenCalledWith('https://xrplcluster.com', {
+      method: 'account_lines',
+      params: [
+        {
+          account: 'rXYZ',
+          ledger_index: 'current',
+          limit: 400,
+          marker: 'next-page',
+        },
+      ],
+    })
+  })
+
+  it('does not expose negative trust-line balances as held issued currencies', async () => {
+    mockFetchJson.mockResolvedValueOnce({
+      result: { account_data: { Balance: '2500000', OwnerCount: 1 } },
+    })
+    mockXrpAccountLines([
+      {
+        account: 'rPeer',
+        balance: '-42',
+        currency: 'USD',
+        limit: '0',
+        limit_peer: '100',
+      },
+      {
+        account: 'rIssuer',
+        balance: '0.000001',
+        currency: 'EUR',
+        limit: '100',
+        limit_peer: '0',
+      },
+      {
+        account: 'rZero',
+        balance: '0',
+        currency: 'JPY',
+        limit: '100',
+        limit_peer: '0',
+      },
+    ])
+    mockXrpReserveInfo()
+
+    const r = await getXrpBalance('rXYZ')
+
+    expect(r.trustLineCount).toBe(3)
+    expect(r.issuedCurrencyBalances).toEqual([
+      expect.objectContaining({
+        issuer: 'rIssuer',
+        currency: 'EUR',
+        tokenId: 'EUR.rIssuer',
+        balance: '0.000001',
+      }),
+    ])
   })
 })
 
@@ -126,8 +284,12 @@ describe('getTrc20TokenBalance', () => {
   it('decodes balanceOf / decimals / symbol from hex constant_result', async () => {
     // balanceOf -> 1_000_000 (0xf4240), decimals -> 6, symbol -> "USDT"
     mockFetchJson
-      .mockResolvedValueOnce({ constant_result: ['00000000000000000000000000000000000000000000000000000000000f4240'] })
-      .mockResolvedValueOnce({ constant_result: ['0000000000000000000000000000000000000000000000000000000000000006'] })
+      .mockResolvedValueOnce({
+        constant_result: ['00000000000000000000000000000000000000000000000000000000000f4240'],
+      })
+      .mockResolvedValueOnce({
+        constant_result: ['0000000000000000000000000000000000000000000000000000000000000006'],
+      })
       .mockResolvedValueOnce({
         constant_result: [
           '0000000000000000000000000000000000000000000000000000000000000020' + // offset
@@ -145,7 +307,9 @@ describe('getTrc20TokenBalance', () => {
     let balanceParam: string | undefined
     mockFetchJson.mockImplementation(async (_url: string, body: { function_selector?: string; parameter?: string }) => {
       if (body?.function_selector === 'balanceOf(address)') balanceParam = body.parameter
-      return { constant_result: ['0000000000000000000000000000000000000000000000000000000000000000'] }
+      return {
+        constant_result: ['0000000000000000000000000000000000000000000000000000000000000000'],
+      }
     })
     await getTrc20TokenBalance(TRON_ADDR, TRON_ADDR)
     // Must be a clean 64-char hex word. The old `addr.replace(/^T/, '41')` path
@@ -158,7 +322,9 @@ describe('getTrc20TokenBalance', () => {
   it('fails closed (throws) when balanceOf returns no constant_result — never a false zero', async () => {
     mockFetchJson.mockImplementation(async (_url: string, body: { function_selector?: string }) => {
       if (body?.function_selector === 'balanceOf(address)') return { result: { code: 'OTHER_ERROR' } }
-      return { constant_result: ['0000000000000000000000000000000000000000000000000000000000000006'] }
+      return {
+        constant_result: ['0000000000000000000000000000000000000000000000000000000000000006'],
+      }
     })
     await expect(getTrc20TokenBalance(TRON_ADDR, TRON_ADDR)).rejects.toThrow(/no constant_result/i)
   })
@@ -169,7 +335,10 @@ describe('getTonBalance', () => {
 
   it('maps account_state and formats nanotons', async () => {
     mockFetchJson.mockResolvedValueOnce({
-      result: { balance: '2500000000', account_state: { seqno: 7, '@type': 'raw.accountState' } },
+      result: {
+        balance: '2500000000',
+        account_state: { seqno: 7, '@type': 'raw.accountState' },
+      },
     })
     const r = await getTonBalance('EQabc')
     expect(r.balance).toBe('2.5')
@@ -182,7 +351,9 @@ describe('getSuiBalance / getSuiAllBalances', () => {
   beforeEach(() => mockFetchJson.mockReset())
 
   it('formats native SUI mist', async () => {
-    mockFetchJson.mockResolvedValueOnce({ result: { totalBalance: '3000000000' } })
+    mockFetchJson.mockResolvedValueOnce({
+      result: { totalBalance: '3000000000' },
+    })
     const r = await getSuiBalance(SUI_ADDR)
     expect(r.balance).toBe('3')
     expect(r.balanceMist).toBe('3000000000')
@@ -191,21 +362,39 @@ describe('getSuiBalance / getSuiAllBalances', () => {
   it('flags native vs token and drops zero holdings', async () => {
     mockFetchJson.mockResolvedValueOnce({
       result: [
-        { coinType: '0x2::sui::SUI', totalBalance: '1000000000', coinObjectCount: 1 },
-        { coinType: '0xabc::usdc::USDC', totalBalance: '5000000', coinObjectCount: 1 },
-        { coinType: '0xdef::dust::DUST', totalBalance: '0', coinObjectCount: 1 },
+        {
+          coinType: '0x2::sui::SUI',
+          totalBalance: '1000000000',
+          coinObjectCount: 1,
+        },
+        {
+          coinType: '0xabc::usdc::USDC',
+          totalBalance: '5000000',
+          coinObjectCount: 1,
+        },
+        {
+          coinType: '0xdef::dust::DUST',
+          totalBalance: '0',
+          coinObjectCount: 1,
+        },
       ],
     })
     const r = await getSuiAllBalances(SUI_ADDR)
     expect(r.ok).toBe(true)
     if (!r.ok) throw new Error('expected ok')
     expect(r.balances).toHaveLength(2)
-    expect(r.balances[0]).toMatchObject({ ticker: 'SUI', isNative: true, balance: '1' })
+    expect(r.balances[0]).toMatchObject({
+      ticker: 'SUI',
+      isNative: true,
+      balance: '1',
+    })
     expect(r.balances[1]).toMatchObject({ ticker: 'USDC', isNative: false })
   })
 
   it('returns tokens_unavailable on a JSON-RPC error (typo address != empty wallet)', async () => {
-    mockFetchJson.mockResolvedValueOnce({ error: { code: -32602, message: 'Invalid params' } })
+    mockFetchJson.mockResolvedValueOnce({
+      error: { code: -32602, message: 'Invalid params' },
+    })
     const r = await getSuiAllBalances('0xbad')
     expect(r.ok).toBe(false)
     if (r.ok) throw new Error('expected not ok')
@@ -217,11 +406,12 @@ describe('getCardanoBalance', () => {
   beforeEach(() => mockFetchJson.mockReset())
 
   it('formats lovelaces to ADA and maps native tokens', async () => {
-    mockFetchJson
-      .mockResolvedValueOnce([{ address: 'addr1', balance: '4200000' }])
-      .mockResolvedValueOnce([
-        { address: 'addr1', asset_list: [{ policy_id: 'aa', asset_name: '4d494c4b', quantity: '42' }] },
-      ])
+    mockFetchJson.mockResolvedValueOnce([{ address: 'addr1', balance: '4200000' }]).mockResolvedValueOnce([
+      {
+        address: 'addr1',
+        asset_list: [{ policy_id: 'aa', asset_name: '4d494c4b', quantity: '42' }],
+      },
+    ])
     const r = await getCardanoBalance('addr1xyz')
     expect(r.balanceAda).toBe('4.200000')
     expect(r.nativeTokens).toHaveLength(1)
