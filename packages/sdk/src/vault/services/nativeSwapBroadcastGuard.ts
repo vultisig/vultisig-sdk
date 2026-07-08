@@ -3,26 +3,41 @@ import {
   getThorchainInboundAddress,
   type ThorchainInboundAddress,
 } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
-import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  nativeSwapApiBaseUrl,
+  type NativeSwapChain,
+  nativeSwapChainIds,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { VaultError, VaultErrorCode } from '../VaultError'
+
+type GetNativeSwapInboundAddresses = (nativeChain: NativeSwapChain) => Promise<ThorchainInboundAddress[]>
 
 type NativeSwapBroadcastGuardInput = {
   chain: Chain
   keysignPayload: KeysignPayload
-  getInboundAddresses?: () => Promise<ThorchainInboundAddress[]>
+  getInboundAddresses?: GetNativeSwapInboundAddresses
   now?: () => number
 }
 
 const getNativeSwapChainId = (chain: Chain): string | undefined =>
   nativeSwapChainIds[chain as keyof typeof nativeSwapChainIds]
 
+const getDefaultNativeSwapInboundAddresses: GetNativeSwapInboundAddresses = nativeChain => {
+  if (nativeChain === Chain.THORChain) {
+    return getThorchainInboundAddress()
+  }
+
+  return queryUrl(`${nativeSwapApiBaseUrl[nativeChain]}/inbound_addresses`)
+}
+
 export const assertNativeSwapReadyForBroadcast = async ({
   chain,
   keysignPayload,
-  getInboundAddresses = getThorchainInboundAddress,
+  getInboundAddresses = getDefaultNativeSwapInboundAddresses,
   now = Date.now,
 }: NativeSwapBroadcastGuardInput): Promise<void> => {
   const swapPayload = getKeysignSwapPayload(keysignPayload)
@@ -40,7 +55,7 @@ export const assertNativeSwapReadyForBroadcast = async ({
     )
   }
 
-  if (native.chain !== Chain.THORChain) {
+  if (native.chain !== Chain.THORChain && native.chain !== Chain.MayaChain) {
     return
   }
 
@@ -48,25 +63,25 @@ export const assertNativeSwapReadyForBroadcast = async ({
   if (!sourceChainId) {
     throw new VaultError(
       VaultErrorCode.UnsupportedChain,
-      `Cannot validate THORChain inbound vault for unsupported source chain ${chain}`
+      `Cannot validate ${native.chain} inbound vault for unsupported source chain ${chain}`
     )
   }
 
-  const activeInboundAddress = (await getInboundAddresses()).find(
+  const activeInboundAddress = (await getInboundAddresses(native.chain)).find(
     ({ chain }) => chain.toUpperCase() === sourceChainId
   )?.address
 
   if (!activeInboundAddress) {
     throw new VaultError(
       VaultErrorCode.NetworkError,
-      `Cannot validate THORChain inbound vault for source chain ${sourceChainId}`
+      `Cannot validate ${native.chain} inbound vault for source chain ${sourceChainId}`
     )
   }
 
   if (activeInboundAddress.toLowerCase() !== native.vaultAddress.toLowerCase()) {
     throw new VaultError(
       VaultErrorCode.InvalidVault,
-      'THORChain inbound vault address changed; refresh the swap quote before broadcasting'
+      `${native.chain} inbound vault address changed; refresh the swap quote before broadcasting`
     )
   }
 }
