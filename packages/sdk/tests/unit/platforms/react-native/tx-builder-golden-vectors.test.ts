@@ -1,8 +1,22 @@
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { encodeFunctionData, erc20Abi, keccak256, parseTransaction, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import { buildErc20TransferTx, buildEvmSendTx } from '../../../../src/platforms/react-native/chains/evm/tx'
 import { buildSolanaSendTx } from '../../../../src/platforms/react-native/chains/solana/tx'
+
+type SolanaCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  recentBlockhash: string
+  lamports: string
+  expectedMessageHex: string
+}
+const loadSolanaCrossEncoderFixture = (): SolanaCrossEncoderFixture =>
+  JSON.parse(
+    readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden/solana-transfer.json'), 'utf8')
+  ) as SolanaCrossEncoderFixture
 
 const SOLANA_FROM = '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw'
 const SOLANA_TO = '7ppk9w8NHnH6ehajvJyU31VcMafwZ3ybRtJWumSyD2wd'
@@ -36,6 +50,37 @@ const ERC20_TRANSFER_CALLDATA =
 const ERC20_TRANSFER_UNSIGNED_HEX =
   '0xf86a038509c765240082fde894444444444444444444444444444444444444444480b844a9059cbb00000000000000000000000055555555555555555555555555555555555555550000000000000000000000000000000000000000000000000db4da5f4415aa0081898080'
 const ERC20_TRANSFER_SIGNING_HASH = '0x6af2740817e7cf4c0980e77931a791952b11ec6416d203c3c9411d9c85d01720'
+
+// CROSS-ENCODER BINDING (Track B follow-up to VA-81's layer-1/layer-2 golden-vector
+// work): the buildSolanaSendTx suite below self-checks against @solana/web3.js (this
+// path's OWN reference) - but packages/core's compileTx.golden.test.ts independently
+// self-checks the SAME logical Solana transfer against WalletCore/WASM (the OTHER real
+// encoder the app can dispatch through). Until now the two suites never shared a single
+// fixture, so the two encoders could silently diverge with nothing catching it - each
+// path only proves itself internally consistent, not that they AGREE with each other.
+//
+// Reads testdata/cross-encoder-golden/solana-transfer.json - the SAME file packages/
+// core/mpc/tx/compile/compileTx.golden.test.ts's 'matches the shared cross-encoder
+// golden vector' test reads - via a plain readFileSync rather than an import
+// (packages/sdk doesn't depend on packages/core). Both suites assert against the SAME
+// fixture-provided expected message bytes, so editing the fixture file updates BOTH
+// suites' expectation at once - no "keep two literals in sync via a comment" drift
+// risk. senderAddress in the fixture is pre-derived from a private key via WalletCore
+// (packages/core's suite re-derives it fresh each run; this unit suite reads the
+// precomputed value directly to avoid adding a WASM wallet-core dependency here).
+describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
+  it('produces the SAME message bytes as WalletCore for the identical Solana transfer', () => {
+    const fx = loadSolanaCrossEncoderFixture()
+    const tx = buildSolanaSendTx({
+      from: fx.senderAddress,
+      to: fx.recipientAddress,
+      lamports: BigInt(fx.lamports),
+      recentBlockhash: fx.recentBlockhash,
+    })
+
+    expect(tx.signingHashHex).toBe(fx.expectedMessageHex)
+  })
+})
 
 describe('React Native transaction builder golden vectors', () => {
   describe('buildSolanaSendTx', () => {

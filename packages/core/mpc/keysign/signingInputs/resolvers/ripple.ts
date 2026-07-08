@@ -1,9 +1,4 @@
 import { Buffer } from 'buffer'
-import {
-  formatIssuedCurrencyValue,
-  parseRippleTokenId,
-  toXrplCurrencyCode,
-} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -21,27 +16,6 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
   const coin = assertField(keysignPayload, 'coin')
 
   const account = coin.address
-
-  // An issued-currency coin (non-native, with a `currency.issuer` contract
-  // address) signals a TrustSet: open/modify the trust line whose limit is the
-  // keysign amount. Native XRP falls through to the Payment path below.
-  const getTrustSet = (): Pick<TW.Ripple.Proto.ISigningInput, 'opTrustSet'> | undefined => {
-    if (coin.isNativeToken || !coin.contractAddress) {
-      return undefined
-    }
-
-    const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
-
-    return {
-      opTrustSet: TW.Ripple.Proto.OperationTrustSet.create({
-        limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
-          currency: toXrplCurrencyCode(currency),
-          issuer,
-          value: formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals),
-        }),
-      }),
-    }
-  }
 
   const getPayment = (): Pick<TW.Ripple.Proto.ISigningInput, 'opPayment' | 'rawJson'> => {
     if (keysignPayload.memo) {
@@ -97,7 +71,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     sequence: Number(sequence),
     lastLedgerSequence: Number(lastLedgerSequence),
     publicKey: getKeysignTwPublicKey(keysignPayload),
-    ...(getTrustSet() ?? getPayment()),
+    ...getPayment(),
   })
 
   return [input]
