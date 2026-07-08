@@ -5,7 +5,6 @@ import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
-import inquirer from 'inquirer'
 import path from 'path'
 import qrcode from 'qrcode-terminal'
 
@@ -350,7 +349,7 @@ export async function executeVerify(
               },
             ]
           : []),
-      ] as unknown as Parameters<typeof inquirer.prompt>[0])
+      ] as unknown as Parameters<typeof prompt>[0])
       email = email || answers.email
       password = password || answers.password
     }
