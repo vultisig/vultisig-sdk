@@ -369,8 +369,28 @@ describe('getCowSwapQuote', () => {
         )
       })
 
-      it('accepts a validTo within the normal ~15 minute quote window', async () => {
+      it('accepts a validTo within the mocked ~15 minute quote window', async () => {
         vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
+
+      // Team-lead review (PR #1082): the initial 2x/30-min ceiling sat RIGHT AT CoW's real
+      // returned validTo with zero headroom for clock skew — live-re-verified (2026-07-08,
+      // real api.cow.fi/mainnet request) that CoW actually returns validTo = now + 1800s (30
+      // min) exactly, not ~15 min as COWSWAP_VALID_TO_SECONDS alone would suggest. Widened to
+      // 4x/60-min. This test locks in the REAL observed value so a future regression back to
+      // a too-tight ceiling gets caught here, not in production.
+      it('accepts a validTo at the REAL observed CoW value (now + 1800s / 30 min) with headroom to spare', async () => {
+        const realObservedValidTo = Math.floor(Date.now() / 1000) + 1800
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: realObservedValidTo }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
+
+      it('accepts a validTo with generous headroom for clock skew above the real 30-min value (e.g. 45 min)', async () => {
+        const withSkewMargin = Math.floor(Date.now() / 1000) + 45 * 60
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: withSkewMargin }))
 
         await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
       })

@@ -107,13 +107,22 @@ export async function getCowSwapQuote({
   // AGG-01 follow-up (codex review, PR #1082): validTo is entirely server-determined (the
   // request sends no validTo of its own, so there is no request-side value to equality-check
   // against — unlike the fields above). Still part of the signed Order struct, so bound it to a
-  // sane multiple of the SDK's own intended TTL (buildCowSwapOrder.ts's sibling implementation
-  // computes its OWN local validTo instead of trusting the response at all — this is the softer
-  // version of that same instinct): reject a response whose validTo is unreasonably far in the
-  // future (a malicious/malfunctioning response making the order executable far beyond user
-  // intent) or already in the past (an expired/garbage quote).
+  // generous ceiling (buildCowSwapOrder.ts's sibling implementation computes its OWN local
+  // validTo instead of trusting the response at all — this is the softer version of that same
+  // instinct): reject a response whose validTo is unreasonably far in the future (a malicious/
+  // malfunctioning response making the order executable far beyond user intent) or already in
+  // the past (an expired/garbage quote).
+  //
+  // The ceiling is 4x COWSWAP_VALID_TO_SECONDS, not 2x — live-verified (2026-07-08, real
+  // api.cow.fi/mainnet request) that CoW's actual returned validTo is `now + 1800s` (30 min),
+  // NOT ~15 min as COWSWAP_VALID_TO_SECONDS alone would suggest (that constant is
+  // buildCowSwapOrder.ts's OWN locally-computed TTL, a different value from what the live API
+  // returns). A 2x/30-min cap would have sat RIGHT AT the observed real value with zero headroom
+  // for clock skew or normal timing variance — exactly the false-block risk the zkSync router
+  // case flagged (team-lead review). 4x/60-min gives real headroom over the observed 30-min
+  // reality while still catching genuinely-absurd values (hours/days out — the actual threat).
   const nowSeconds = Math.floor(Date.now() / 1000)
-  const maxReasonableValidTo = nowSeconds + 2 * COWSWAP_VALID_TO_SECONDS
+  const maxReasonableValidTo = nowSeconds + 4 * COWSWAP_VALID_TO_SECONDS
   if (quote.validTo <= nowSeconds || quote.validTo > maxReasonableValidTo) {
     throw new Error(
       `CowSwap quote returned an unreasonable validTo (${quote.validTo}, now=${nowSeconds}, max=${maxReasonableValidTo}) — refusing to sign.`
