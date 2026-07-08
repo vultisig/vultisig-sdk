@@ -106,6 +106,28 @@ describe('executeTxStatus', () => {
     expect(getTxStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('caps the poll sleep at the remaining budget instead of oversleeping a full interval', async () => {
+    // timeoutSec:2 with the 5s default poll interval — the sleep before the 2nd
+    // poll must be capped to the ~2s remaining, not the full 5s interval.
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'pending', isKnown: true })
+    const ctx = makeCtx(getTxStatus)
+
+    vi.useFakeTimers()
+    try {
+      const promise = executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, timeoutSec: 2 })
+      promise.catch(() => {}) // avoid unhandled rejection warning while advancing timers
+
+      // Advancing by just the remaining budget (2s) — not the full 5s poll
+      // interval — must be enough to trigger the 2nd poll and the give-up.
+      await vi.advanceTimersByTimeAsync(2_000)
+
+      await expect(promise).rejects.toBeInstanceOf(TxStatusTimeoutError)
+      expect(getTxStatus).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('polls until a terminal status and then resolves', async () => {
     const getTxStatus = vi
       .fn()

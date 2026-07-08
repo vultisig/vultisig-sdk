@@ -81,13 +81,17 @@ export async function executeTxStatus(
       let waited = 0
 
       while (!isTerminal(result.status)) {
-        if (Date.now() >= deadline) {
+        const remainingMs = deadline - Date.now()
+        if (remainingMs <= 0) {
           spinner.fail(`Gave up waiting after ${Math.round(waited / 1000)}s (status: ${result.status})`)
           throw giveUpError(params, result, waited)
         }
-        waited += pollIntervalMs
+        // Cap the sleep at the remaining budget so a small --timeout can't
+        // oversleep past its deadline by up to a full poll interval.
+        const sleepMs = Math.min(pollIntervalMs, remainingMs)
+        waited += sleepMs
         spinner.text = `Transaction ${result.status}... (${Math.round(waited / 1000)}s)`
-        await sleep(pollIntervalMs)
+        await sleep(sleepMs)
         result = await vault.getTxStatus({ chain: params.chain, txHash: params.txHash })
       }
     }
