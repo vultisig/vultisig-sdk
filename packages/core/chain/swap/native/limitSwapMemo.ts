@@ -140,7 +140,22 @@ export const getLimitSwapLimitAmount = ({
   const sourceAmount = parsePositiveInteger(source_amount, 'source_amount')
   const targetPrice = parsePositiveDecimal(target_price, 'target_price')
 
-  return (sourceAmount * targetPrice) / priceScale
+  const limit = (sourceAmount * targetPrice) / priceScale
+
+  if (limit === 0n) {
+    // THORChain treats a zero trade target (LIM) in a limit-swap memo as an
+    // unprotected market order. source_amount/target_price combinations
+    // that floor to 0 here can't be honestly expressed as a limit order at
+    // this price scale, so we fail closed instead of silently reinterpreting
+    // the user's price-protected limit swap as a market swap.
+    throw new Error(
+      'source_amount and target_price combination is too small to express as a limit swap: ' +
+        'the computed minimum-received amount (LIM) floors to 0, which THORChain treats as an ' +
+        'unprotected market order. Increase source_amount or target_price.'
+    )
+  }
+
+  return limit
 }
 
 export const assertMemoByteLength = (memo: string, sourceChainKind: LimitSwapSourceChainKind): void => {
