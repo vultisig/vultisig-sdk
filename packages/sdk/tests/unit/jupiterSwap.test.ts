@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -240,7 +241,7 @@ describe('buildJupiterSwapTx', () => {
       amountBaseUnits: 100_000_000n,
     })
 
-    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('BASE64_UNSIGNED_TX==')
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('BASE64_UNSIGNED_TX==', expect.any(PublicKey))
     expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
   })
 

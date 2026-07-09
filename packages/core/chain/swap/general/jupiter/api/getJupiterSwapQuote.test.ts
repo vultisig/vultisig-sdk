@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,14 +28,14 @@ const feeAccount = 'FeeAtaAddr1111111111111111111111111111111111'
 
 const solNative = {
   chain: Chain.Solana,
-  address: 'SoLAddrSender1111111111111111111111111111111',
+  address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
   decimals: 9,
   ticker: 'SOL',
 } as const
 
 const solUsdc = {
   chain: Chain.Solana,
-  address: 'SoLAddrSender1111111111111111111111111111111',
+  address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
   id: usdcMint,
   decimals: 6,
   ticker: 'USDC',
@@ -327,13 +328,13 @@ describe('getJupiterSwapQuote', () => {
 
     // Guarded BEFORE prependJupiterFeeAta mutates it - the raw provider
     // payload is what gets validated, not our own locally-added instruction.
-    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx')
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx', expect.any(PublicKey))
   })
 
   it('validates the raw Jupiter transaction even when no fee is charged', async () => {
     await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
 
-    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx')
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx', expect.any(PublicKey))
   })
 
   it('propagates a refusal from the instruction allow-list guard', async () => {

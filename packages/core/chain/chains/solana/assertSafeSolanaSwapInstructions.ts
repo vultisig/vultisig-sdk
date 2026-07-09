@@ -1,5 +1,17 @@
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@solana/spl-token'
-import { AddressLookupTableAccount, PublicKey, VersionedMessage, VersionedTransaction } from '@solana/web3.js'
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from '@solana/spl-token'
+import {
+  AddressLookupTableAccount,
+  MessageCompiledInstruction,
+  PublicKey,
+  VersionedMessage,
+  VersionedTransaction,
+} from '@solana/web3.js'
 
 import { getSolanaClient } from './client'
 
@@ -39,6 +51,24 @@ export const JUPITER_SWAP_ALLOWED_PROGRAM_IDS: ReadonlySet<string> = new Set([
   ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
 ])
 
+/** Programs that can move funds — require destination/authority validation beyond a program-only check. */
+const FUND_MOVING_PROGRAM_IDS = new Set([
+  SYSTEM_PROGRAM_ID,
+  TOKEN_PROGRAM_ID.toBase58(),
+  TOKEN_2022_PROGRAM_ID.toBase58(),
+])
+
+// SystemProgram instruction type discriminants (LE uint32 at data[0..4])
+const SYSTEM_TRANSFER = 2
+
+// Token/Token-2022 instruction discriminants (uint8 at data[0])
+const TOKEN_TRANSFER = 3
+const TOKEN_APPROVE = 4
+const TOKEN_SET_AUTHORITY = 6
+const TOKEN_CLOSE_ACCOUNT = 9
+const TOKEN_TRANSFER_CHECKED = 12
+const TOKEN_APPROVE_CHECKED = 13
+
 /**
  * Thrown when a Solana swap message contains a top-level instruction that
  * targets a program outside {@link JUPITER_SWAP_ALLOWED_PROGRAM_IDS}.
@@ -56,6 +86,130 @@ export class UnsafeSolanaSwapInstructionError extends Error {
 }
 
 /**
+ * Thrown when a fund-moving instruction (System/Token) in a swap message has
+ * a destination or authority that does not belong to the user.
+ *
+ * Audit finding SOL-01 residual: a program-only allow-list permits injected
+ * top-level `SystemProgram.Transfer { from: user, to: attacker }` or
+ * `Token.Approve { owner: user, delegate: attacker }` because those programs
+ * are allow-listed (needed for SOL wrap/unwrap). This error is thrown when the
+ * decoded instruction accounts don't match the user's controlled addresses.
+ */
+export class UnsafeSolanaSwapFundMovementError extends Error {
+  constructor(
+    public readonly instructionIndex: number,
+    public readonly reason: string
+  ) {
+    super(`SOL_SWAP_UNSAFE_FUND_MOVEMENT: instruction ${instructionIndex} — ${reason}`)
+    this.name = 'UnsafeSolanaSwapFundMovementError'
+  }
+}
+
+type AccountKeys = ReturnType<VersionedMessage['getAccountKeys']>
+
+const assertSystemInstruction = (
+  ix: MessageCompiledInstruction,
+  keys: AccountKeys,
+  userWallet: PublicKey,
+  index: number
+): void => {
+  if (ix.data.length < 4) return
+  const type = new DataView(ix.data.buffer, ix.data.byteOffset, 4).getUint32(0, /* littleEndian */ true)
+  if (type !== SYSTEM_TRANSFER) return
+
+  // Transfer accounts[1] = destination. The only legitimate SOL transfer in
+  // a Jupiter swap is wrapping: from: userWallet → to: userWallet's wSOL ATA.
+  const destIdx = ix.accountKeyIndexes[1]
+  if (destIdx === undefined) {
+    throw new UnsafeSolanaSwapFundMovementError(index, 'SystemProgram.Transfer: missing destination account index')
+  }
+  const dest = keys.get(destIdx)
+  if (!dest) {
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      `SystemProgram.Transfer: destination index ${destIdx} could not be resolved`
+    )
+  }
+  const wSolAta = getAssociatedTokenAddressSync(NATIVE_MINT, userWallet)
+  if (!dest.equals(wSolAta)) {
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      `SystemProgram.Transfer destination ${dest.toBase58()} is not the expected wSOL ATA ${wSolAta.toBase58()} — possible drain injection`
+    )
+  }
+}
+
+const assertTokenInstruction = (
+  ix: MessageCompiledInstruction,
+  keys: AccountKeys,
+  userWallet: PublicKey,
+  index: number
+): void => {
+  if (ix.data.length === 0) return
+  const type = ix.data[0]!
+
+  // Reject instructions that can delegate or transfer authority — these are
+  // never present as top-level instructions in legitimate Jupiter shared-accounts swaps.
+  if (type === TOKEN_APPROVE || type === TOKEN_APPROVE_CHECKED) {
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      `Token.${type === TOKEN_APPROVE ? 'Approve' : 'ApproveChecked'} is not a legitimate top-level Jupiter swap instruction — possible authority delegation to attacker`
+    )
+  }
+  if (type === TOKEN_SET_AUTHORITY) {
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      'Token.SetAuthority is not a legitimate top-level Jupiter swap instruction — possible account seizure'
+    )
+  }
+
+  // Transfer (type=3): accounts[2]=authority must be the user
+  if (type === TOKEN_TRANSFER) {
+    const authIdx = ix.accountKeyIndexes[2]
+    if (authIdx === undefined)
+      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.Transfer: missing authority account index')
+    const auth = keys.get(authIdx)
+    if (!auth || !auth.equals(userWallet)) {
+      throw new UnsafeSolanaSwapFundMovementError(
+        index,
+        `Token.Transfer authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
+      )
+    }
+  }
+
+  // TransferChecked (type=12): accounts[3]=authority must be the user
+  if (type === TOKEN_TRANSFER_CHECKED) {
+    const authIdx = ix.accountKeyIndexes[3]
+    if (authIdx === undefined)
+      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.TransferChecked: missing authority account index')
+    const auth = keys.get(authIdx)
+    if (!auth || !auth.equals(userWallet)) {
+      throw new UnsafeSolanaSwapFundMovementError(
+        index,
+        `Token.TransferChecked authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
+      )
+    }
+  }
+
+  // CloseAccount (type=9): accounts[2]=authority must be the user
+  if (type === TOKEN_CLOSE_ACCOUNT) {
+    const authIdx = ix.accountKeyIndexes[2]
+    if (authIdx === undefined)
+      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.CloseAccount: missing authority account index')
+    const auth = keys.get(authIdx)
+    if (!auth || !auth.equals(userWallet)) {
+      throw new UnsafeSolanaSwapFundMovementError(
+        index,
+        `Token.CloseAccount authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
+      )
+    }
+  }
+
+  // SyncNative (17), InitializeAccount (1), and other Token instructions
+  // that do not move funds to an arbitrary destination: allowed.
+}
+
+/**
  * Fund-safety guard (audit finding SOL-01, vultisig/vultisig-sdk#1056): a
  * compromised Jupiter proxy could inject an arbitrary instruction (e.g. a
  * drain transfer) into the `VersionedTransaction` returned from `/swap`
@@ -63,19 +217,32 @@ export class UnsafeSolanaSwapInstructionError extends Error {
  * render raw Solana instruction bytes for the user to review, so the
  * transaction would be effectively blind-signed.
  *
- * Asserts every TOP-LEVEL instruction's `programIdIndex` resolves (against
- * static account keys and, for v0 messages, any address-lookup-table-resolved
- * keys) to a program in the allow-list. Does NOT — and cannot, via static
- * inspection alone — see into CPI (a program invoked from inside another
- * instruction); that's exactly what the allow-listed Jupiter router is
- * trusted to CPI into on the user's behalf.
+ * Two-layer defense:
  *
- * Throws {@link UnsafeSolanaSwapInstructionError} on the first unrecognized
- * program or unresolvable account index.
+ * 1. **Program allow-list**: every top-level instruction's `programIdIndex`
+ *    must resolve to a program in {@link JUPITER_SWAP_ALLOWED_PROGRAM_IDS}.
+ *    Throws {@link UnsafeSolanaSwapInstructionError} on any unrecognized program.
+ *
+ * 2. **Destination/authority validation for fund-moving programs**: a
+ *    program-only check is insufficient because `SystemProgram`,
+ *    `TOKEN_PROGRAM_ID`, and `TOKEN_2022_PROGRAM_ID` are allow-listed (they
+ *    perform legitimate SOL wrap/unwrap) but also implement drain/seize
+ *    primitives (`Transfer`, `Approve`, `SetAuthority`). For each instruction
+ *    targeting those programs, the decoded accounts are validated:
+ *    - `SystemProgram.Transfer`: destination must be the user's wSOL ATA.
+ *    - `Token.Transfer/TransferChecked`: authority must be the user wallet.
+ *    - `Token.CloseAccount`: authority must be the user wallet.
+ *    - `Token.Approve/ApproveChecked/SetAuthority`: rejected outright.
+ *    Throws {@link UnsafeSolanaSwapFundMovementError} on any violation.
+ *
+ * Does NOT — and cannot, via static inspection alone — see into CPI (a
+ * program invoked from inside another instruction); that's exactly what the
+ * allow-listed Jupiter router is trusted to CPI into on the user's behalf.
  */
 export const assertSafeSolanaSwapInstructions = (
   message: VersionedMessage,
-  addressLookupTableAccounts: AddressLookupTableAccount[] = []
+  addressLookupTableAccounts: AddressLookupTableAccount[] = [],
+  userWallet: PublicKey
 ): void => {
   const accountKeys =
     message.version === 'legacy' ? message.getAccountKeys() : message.getAccountKeys({ addressLookupTableAccounts })
@@ -88,6 +255,15 @@ export const assertSafeSolanaSwapInstructions = (
     const programIdBase58 = programId.toBase58()
     if (!JUPITER_SWAP_ALLOWED_PROGRAM_IDS.has(programIdBase58)) {
       throw new UnsafeSolanaSwapInstructionError(index, programIdBase58)
+    }
+
+    // Layer 2: for fund-moving programs, validate destination/authority
+    if (FUND_MOVING_PROGRAM_IDS.has(programIdBase58)) {
+      if (programIdBase58 === SYSTEM_PROGRAM_ID) {
+        assertSystemInstruction(instruction, accountKeys, userWallet, index)
+      } else {
+        assertTokenInstruction(instruction, accountKeys, userWallet, index)
+      }
     }
   })
 }
@@ -139,10 +315,10 @@ export const resolveSolanaAddressLookupTables = async (
 /**
  * Convenience wrapper: deserialize a base64-encoded `VersionedTransaction`,
  * resolve any referenced LUTs, and assert its top-level instructions are
- * all allow-listed. See {@link assertSafeSolanaSwapInstructions}.
+ * all allow-listed and fund-movement-safe. See {@link assertSafeSolanaSwapInstructions}.
  */
-export const assertSafeSolanaSwapTransactionBase64 = async (txData: string): Promise<void> => {
+export const assertSafeSolanaSwapTransactionBase64 = async (txData: string, userWallet: PublicKey): Promise<void> => {
   const versionedTx = VersionedTransaction.deserialize(Buffer.from(txData, 'base64'))
   const lutAccounts = await resolveSolanaAddressLookupTables(versionedTx.message)
-  assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)
+  assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)
 }

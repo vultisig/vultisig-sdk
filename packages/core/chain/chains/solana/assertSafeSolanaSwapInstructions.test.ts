@@ -2,7 +2,11 @@ import { AddressLookupTableAccount, MessageV0, PublicKey, VersionedTransaction }
 import { describe, expect, it } from 'vitest'
 
 import jupiterSwapFixtures from '../../fixtures/jupiter-swap-transactions.json'
-import { assertSafeSolanaSwapInstructions, UnsafeSolanaSwapInstructionError } from './assertSafeSolanaSwapInstructions'
+import {
+  assertSafeSolanaSwapInstructions,
+  UnsafeSolanaSwapFundMovementError,
+  UnsafeSolanaSwapInstructionError,
+} from './assertSafeSolanaSwapInstructions'
 
 type Fixture = {
   description: string
@@ -28,18 +32,21 @@ describe('assertSafeSolanaSwapInstructions', () => {
   // (a) captured real Jupiter VersionedTransaction -> passes
   it('passes a real captured single-hop Jupiter swap (SOL -> USDC)', () => {
     const { versionedTx, lutAccounts } = decodeFixture(fixtures.singleHopSolToUsdc)
-    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)).not.toThrow()
+    const userWallet = versionedTx.message.staticAccountKeys[0]!
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)).not.toThrow()
   })
 
   it('passes a real captured 3-hop Jupiter swap (SOL -> BONK)', () => {
     const { versionedTx, lutAccounts } = decodeFixture(fixtures.multiHopSolToBonk)
+    const userWallet = versionedTx.message.staticAccountKeys[0]!
     expect(versionedTx.message.version).toBe(0)
-    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)).not.toThrow()
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)).not.toThrow()
   })
 
   // (b) same with one program swapped to a foreign pubkey -> throws
   it('throws SOL_SWAP_UNEXPECTED_PROGRAM when a top-level instruction targets a foreign program', () => {
     const { versionedTx, lutAccounts } = decodeFixture(fixtures.singleHopSolToUsdc)
+    const userWallet = versionedTx.message.staticAccountKeys[0]!
 
     // Swap the Jupiter router's STATIC account-key entry for an
     // attacker-controlled pubkey - simulating a compromised proxy splicing a
@@ -52,22 +59,51 @@ describe('assertSafeSolanaSwapInstructions', () => {
     const maliciousProgramId = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
     versionedTx.message.staticAccountKeys[jupiterRouterIndex] = maliciousProgramId
 
-    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)).toThrow(
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)).toThrow(
       UnsafeSolanaSwapInstructionError
     )
-    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)).toThrow(
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)).toThrow(
       /SOL_SWAP_UNEXPECTED_PROGRAM/
     )
   })
 
-  it('does not throw a false-positive on a benign account substitution elsewhere in the fixture', () => {
-    // Sanity check the previous test is actually exercising the guard and not
-    // just throwing on any mutation: swapping a NON-program account key
-    // (e.g. the payer) must NOT trip the guard.
+  it('rejects when the payer slot (also used as CloseAccount authority) is substituted with an attacker pubkey', () => {
+    // In the real SOL->USDC Jupiter fixture, staticAccountKeys[0] (the payer)
+    // is also the authority in the wSOL Token.CloseAccount (unwrap) instruction.
+    // Substituting it with an attacker pubkey in the raw message bytes while
+    // keeping the real user wallet as the guard's reference correctly trips the
+    // layer-2 authority check -- the test doubles as a regression test for the
+    // case where a compromised proxy modifies the account table without touching
+    // the program list.
     const { versionedTx, lutAccounts } = decodeFixture(fixtures.singleHopSolToUsdc)
-    const payerIndex = 0
-    versionedTx.message.staticAccountKeys[payerIndex] = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
-    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)).not.toThrow()
+    const originalUserWallet = versionedTx.message.staticAccountKeys[0]!
+    versionedTx.message.staticAccountKeys[0] = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, originalUserWallet)).toThrow(
+      UnsafeSolanaSwapFundMovementError
+    )
+    expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, originalUserWallet)).toThrow(
+      /CloseAccount authority/
+    )
+  })
+
+  it('does not throw a false-positive on an account substitution in a non-fund-moving instruction', () => {
+    // Sanity check: swapping an account that ONLY appears as an argument to the
+    // Jupiter router (not a fund-moving program) must NOT trip either guard.
+    // Uses a synthetic fixture so the account layout is fully controlled.
+    const jupiterRouter = new PublicKey('JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4')
+    const originalPayer = new PublicKey('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+    const message = new MessageV0({
+      header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+      staticAccountKeys: [originalPayer, jupiterRouter],
+      recentBlockhash: '11111111111111111111111111111111111111111111',
+      compiledInstructions: [{ programIdIndex: 1, accountKeyIndexes: [0], data: new Uint8Array(0) }],
+      addressTableLookups: [],
+    })
+    // Substitute the payer slot with an attacker pubkey
+    message.staticAccountKeys[0] = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
+    // The program is JUP6 (allow-listed, not a fund-moving program) - no fund-movement
+    // decode fires, so this passes both layers.
+    expect(() => assertSafeSolanaSwapInstructions(message, [], originalPayer)).not.toThrow()
   })
 
   // (c) v0 ALT-resolved keys handled
@@ -106,13 +142,18 @@ describe('assertSafeSolanaSwapInstructions', () => {
 
     it('resolves an ALT-backed program index to an allow-listed program and passes', () => {
       const { message, lutAccount } = buildMessage(systemProgramId)
-      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount])).not.toThrow()
+      // data is empty -> fund-moving validation is a no-op for this synthetic fixture
+      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount], payerKey)).not.toThrow()
     })
 
     it('resolves an ALT-backed program index to a foreign program and throws', () => {
       const { message, lutAccount } = buildMessage(maliciousProgramId)
-      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount])).toThrow(UnsafeSolanaSwapInstructionError)
-      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount])).toThrow(/SOL_SWAP_UNEXPECTED_PROGRAM/)
+      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount], payerKey)).toThrow(
+        UnsafeSolanaSwapInstructionError
+      )
+      expect(() => assertSafeSolanaSwapInstructions(message, [lutAccount], payerKey)).toThrow(
+        /SOL_SWAP_UNEXPECTED_PROGRAM/
+      )
     })
 
     it('throws (fail-safe) when the referenced lookup table is missing entirely', () => {
@@ -120,7 +161,93 @@ describe('assertSafeSolanaSwapInstructions', () => {
       // LUT isn't supplied, before our allow-list check even runs - still
       // fail-safe (never silently treats an unresolvable index as safe).
       const { message } = buildMessage(systemProgramId)
-      expect(() => assertSafeSolanaSwapInstructions(message, [])).toThrow(/address lookup table/i)
+      expect(() => assertSafeSolanaSwapInstructions(message, [], payerKey)).toThrow(/address lookup table/i)
+    })
+  })
+
+  // (d) fund-movement drain-injection tests (audit finding SOL-01 layer 2)
+  describe('drain-injection prevention', () => {
+    const userWallet = new PublicKey('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+    const attacker = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
+    const systemProgramId = new PublicKey('11111111111111111111111111111111')
+    const tokenProgramId = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+
+    const buildSystemTransfer = (from: PublicKey, to: PublicKey): MessageV0 => {
+      // SystemProgram.Transfer instruction data: u32LE discriminant=2 + u64LE lamports
+      const data = new Uint8Array(12)
+      new DataView(data.buffer).setUint32(0, 2, true) // type=Transfer
+      new DataView(data.buffer).setBigUint64(4, 1_000_000n, true) // 1 SOL
+      return new MessageV0({
+        header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+        staticAccountKeys: [from, to, systemProgramId],
+        recentBlockhash: '11111111111111111111111111111111111111111111',
+        compiledInstructions: [{ programIdIndex: 2, accountKeyIndexes: [0, 1], data }],
+        addressTableLookups: [],
+      })
+    }
+
+    const buildTokenInstruction = (discriminant: number, accounts: PublicKey[]): MessageV0 => {
+      const data = new Uint8Array([discriminant])
+      const staticAccountKeys = [...accounts, tokenProgramId]
+      return new MessageV0({
+        header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+        staticAccountKeys,
+        recentBlockhash: '11111111111111111111111111111111111111111111',
+        compiledInstructions: [
+          {
+            programIdIndex: staticAccountKeys.length - 1,
+            accountKeyIndexes: accounts.map((_, i) => i),
+            data,
+          },
+        ],
+        addressTableLookups: [],
+      })
+    }
+
+    it('rejects a SystemProgram.Transfer draining SOL to an attacker address', () => {
+      const msg = buildSystemTransfer(userWallet, attacker)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/SOL_SWAP_UNSAFE_FUND_MOVEMENT/)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/SystemProgram\.Transfer destination/)
+    })
+
+    it('rejects Token.Approve (type=4) regardless of accounts', () => {
+      // Token.Approve: accounts[0]=source, accounts[1]=delegate, accounts[2]=owner
+      const msg = buildTokenInstruction(4, [userWallet, attacker, userWallet])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.Approve/)
+    })
+
+    it('rejects Token.ApproveChecked (type=13) regardless of accounts', () => {
+      const msg = buildTokenInstruction(13, [userWallet, userWallet, attacker, userWallet])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.ApproveChecked/)
+    })
+
+    it('rejects Token.SetAuthority (type=6) regardless of accounts', () => {
+      const msg = buildTokenInstruction(6, [userWallet, attacker])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.SetAuthority/)
+    })
+
+    it('rejects Token.Transfer (type=3) where authority is not the user wallet', () => {
+      // accounts[0]=source, accounts[1]=destination, accounts[2]=authority(attacker)
+      const msg = buildTokenInstruction(3, [userWallet, userWallet, attacker])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.Transfer authority/)
+    })
+
+    it('rejects Token.CloseAccount (type=9) where authority is not the user wallet', () => {
+      // accounts[0]=account, accounts[1]=destination, accounts[2]=authority(attacker)
+      const msg = buildTokenInstruction(9, [userWallet, attacker, attacker])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.CloseAccount authority/)
+    })
+
+    it('allows Token.Transfer (type=3) where authority IS the user wallet', () => {
+      // Legit: wSOL transfer where user is the authority
+      const msg = buildTokenInstruction(3, [userWallet, userWallet, userWallet])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).not.toThrow()
     })
   })
 })

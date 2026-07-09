@@ -27,6 +27,7 @@
  * part of the mcp-ts/backend → SDK code-as-action consolidation.
  */
 
+import { PublicKey } from '@solana/web3.js'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import {
   assertJupiterPriceImpactWithinCeiling,
@@ -304,7 +305,7 @@ export const buildJupiterSwapTx = async ({
   // getJupiterSwapQuote.ts path entirely) — the proxy-supplied transaction
   // must be validated here too before it's handed back to the caller as
   // signable.
-  await assertSafeSolanaSwapTransactionBase64(swapResp.swapTransaction)
+  await assertSafeSolanaSwapTransactionBase64(swapResp.swapTransaction, new PublicKey(userPublicKey))
 
   return {
     swapTransaction: swapResp.swapTransaction,

@@ -98,20 +98,22 @@ export const prependJupiterFeeAta = async ({
   mintPubkey,
   ownerPubkey,
   tokenProgramId,
+  userWallet,
 }: {
   txData: string
   feeAccount: string
   mintPubkey: PublicKey
   ownerPubkey: PublicKey
   tokenProgramId: PublicKey
+  userWallet: PublicKey
 }): Promise<string> => {
   const versionedTx = VersionedTransaction.deserialize(Buffer.from(txData, 'base64'))
   const lutAccounts = await resolveSolanaAddressLookupTables(versionedTx.message)
 
   // Fund-safety guard (audit finding SOL-01): refuse to build a signable
   // transaction out of a proxy-supplied message containing an instruction
-  // that targets an unrecognized program.
-  assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts)
+  // that targets an unrecognized program or moves funds to an unknown destination.
+  assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)
 
   let decompiledMessage: TransactionMessage
   try {

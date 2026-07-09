@@ -1,3 +1,4 @@
+import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
@@ -156,7 +157,8 @@ export const getJupiterSwapQuote = async ({
   // is validated BEFORE any local mutation (fee-ATA prepend), and regardless
   // of whether a fee is charged on this swap — an unguarded no-fee response
   // was previously forwarded to signing verbatim.
-  await assertSafeSolanaSwapTransactionBase64(swapResponse.swapTransaction)
+  const userPubkey = new PublicKey(from.address)
+  await assertSafeSolanaSwapTransactionBase64(swapResponse.swapTransaction, userPubkey)
 
   const data = feeAccountInfo
     ? await prependJupiterFeeAta({
@@ -165,6 +167,7 @@ export const getJupiterSwapQuote = async ({
         mintPubkey: feeAccountInfo.mintPubkey,
         ownerPubkey: feeAccountInfo.ownerPubkey,
         tokenProgramId: feeAccountInfo.tokenProgramId,
+        userWallet: userPubkey,
       })
     : swapResponse.swapTransaction
 
