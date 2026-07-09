@@ -1,6 +1,7 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
+import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
 import { getCosmosChainSpecific } from '../../signingInputs/resolvers/cosmos/chainSpecific'
@@ -27,12 +28,15 @@ export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
   const chainSpecific = getCosmosChainSpecific(chain, keysignPayload.blockchainSpecific)
 
   return matchRecordUnion(chainSpecific, {
-    ibcEnabled: ({ gas, gasLimit }) => {
+    ibcEnabled: ({ gas, gasLimit, transactionType }) => {
       const coin = getKeysignCoin<CosmosChain>(keysignPayload)
       const { feeAmount } = resolveCosmosGasFee({
         gas,
         relayedGasLimit: gasLimit,
         staticGasLimit: getCosmosGasLimit(coin),
+        // COSMOS-02: mirror the signing-inputs resolver's IBC gas multiplier
+        // so the displayed Network Fee never drifts from what gets signed.
+        isIbcTransfer: transactionType === TransactionType.IBC_TRANSFER,
       })
       return feeAmount
     },

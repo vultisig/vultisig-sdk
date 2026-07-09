@@ -85,7 +85,35 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         const memo = shouldBePresent(keysignPayload.memo)
         const [, channel] = memo.split(':')
 
+        // COSMOS-03: sourceChannel is derived from an unvalidated memo
+        // split. An undefined/empty/malformed channel would sign a
+        // MsgTransfer that either fails on-chain or (worse) routes
+        // through an unintended channel. Fail closed.
+        if (!channel || !/^channel-\d+$/.test(channel)) {
+          throw new Error(
+            `Cosmos signing input: IBC transfer memo "${memo}" does not contain a well-formed source channel (expected "<prefix>:channel-<n>[:...]").`
+          )
+        }
+
         const timeoutTimestamp = Long.fromString(ibcDenomTraces?.latestBlock?.split('_')?.[1] || '0')
+        const timeoutHeight = {
+          revisionNumber: Long.fromString('0'),
+          revisionHeight: Long.fromString('0'),
+        }
+
+        // COSMOS-01: a missing ibcDenomTraces (or missing latestBlock)
+        // previously fell back to timeoutTimestamp=0, and timeoutHeight
+        // is always {0,0} here, so the packet ended up with NO expiry.
+        // Relayers accept a no-timeout MsgTransfer, but the destination
+        // side never gets a chance to unwind on failure, leaving funds
+        // stuck indefinitely. Mirror the app's guard
+        // (vultiagent-app/src/services/cosmosTx.ts) and refuse to build.
+        const heightDisabled = timeoutHeight.revisionNumber.isZero() && timeoutHeight.revisionHeight.isZero()
+        if (timeoutTimestamp.isZero() && heightDisabled) {
+          throw new Error(
+            'Cosmos signing input: IBC transfer has no usable timeout (missing ibcDenomTraces.latestBlock and no timeoutHeight set); refusing to build a no-timeout MsgTransfer (relayers accept it but the packet has no expiry, leaving funds stuck).'
+          )
+        }
 
         return {
           messages: [
@@ -96,10 +124,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
                 token: getCosmosCoinAmount(keysignPayload),
                 sender: coin.address,
                 receiver: toAddress,
-                timeoutHeight: {
-                  revisionNumber: Long.fromString('0'),
-                  revisionHeight: Long.fromString('0'),
-                },
+                timeoutHeight,
                 timeoutTimestamp,
               }),
             }),
@@ -426,13 +451,20 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
+
     const staticGasLimit = getCosmosGasLimit(coin)
-    const relayedGasLimit =
-      chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gasLimit : undefined
+    const relayedGasLimit = ibcSpecific?.gasLimit
+    // COSMOS-02: an IBC MsgTransfer needs more gas headroom than the flat
+    // per-chain limit (calibrated for MsgSend) — see resolveCosmosGasFee's
+    // IBC_GAS_MULTIPLIER. Scoped to IBC_TRANSFER only so plain sends and
+    // wasm executes on ibc-enabled chains keep the calibrated flat fee.
+    const isIbcTransfer = ibcSpecific?.transactionType === TransactionType.IBC_TRANSFER
     const { resolvedGasLimit, feeAmount } = resolveCosmosGasFee({
-      gas: chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gas : 0n,
+      gas: ibcSpecific?.gas ?? 0n,
       relayedGasLimit,
       staticGasLimit,
+      isIbcTransfer,
     })
 
     return TW.Cosmos.Proto.Fee.create({
