@@ -2,10 +2,10 @@ import { fromBech32 } from '@cosmjs/encoding'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
+import { chainPrefixToChain } from '../../chains/cosmos/thor/lp/lpChainMap'
 import { assertValidPoolId } from '../../chains/cosmos/thor/lp/pools'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
-import { nativeSwapChainIds } from './NativeSwapChain'
 
 export const limitSwapExpiryHours = [12, 24, 72] as const
 export type LimitSwapExpiryHours = (typeof limitSwapExpiryHours)[number]
@@ -56,23 +56,11 @@ const getAssetChainPrefix = (asset: string): string => {
   return prefix
 }
 
-// nativeSwapChainIds is the swap-scoped (THORChain + MayaChain) asset chain
-// prefix map — a superset of the LP-scoped lpChainMap that also covers
-// swap-only chains like Solana/Noble which never got an LP pairing entry.
-// A limit-swap memo's source/target chain resolution belongs on this map,
-// not lpChainMap, since limit swaps aren't LP actions.
-const chainPrefixToChain: Partial<Record<string, Chain>> = Object.entries(nativeSwapChainIds).reduce<
-  Partial<Record<string, Chain>>
->((acc, [chain, prefix]) => {
-  acc[prefix] = chain as Chain
-  return acc
-}, {})
-
 const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {
   assertValidPoolId(asset)
 
   const prefix = getAssetChainPrefix(asset)
-  const chain = chainPrefixToChain[prefix.toUpperCase()]
+  const chain = chainPrefixToChain(prefix)
   if (!chain) {
     throw new Error(`${fieldName} has unsupported THORChain asset prefix: ${prefix}`)
   }
@@ -212,12 +200,9 @@ const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.Zcash]: address => new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address),
 
-  [Chain.Solana]: address => new RegExp(`^[${base58AddressChars}]{32,44}$`).test(address),
-
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
   [Chain.Kujira]: address => isBech32Address(address, 'kujira'),
   [Chain.THORChain]: address => isBech32Address(address, 'thor'),
-  [Chain.Noble]: address => isBech32Address(address, 'noble'),
 
   [Chain.Ripple]: address => new RegExp(`^r[${base58AddressChars}]{24,34}$`).test(address),
   [Chain.Tron]: address => new RegExp(`^T[${base58AddressChars}]{33}$`).test(address),
