@@ -170,13 +170,13 @@ describe('parseAmount (private helper)', () => {
     expect(result).toBe(BigInt('200000000'))
   })
 
-  it('should handle amount with more decimals than token precision by rounding', () => {
-    // "0.123456789" with 8 decimals: the swap path's `toChainAmount` (viem
-    // `parseUnits`) rounds the excess fraction digit (…9) up. The old
-    // `toBaseUnits`-backed send path truncated to 12345678 — the max 1
-    // base-unit-of-dust divergence noted in the parity fix.
+  it('should handle amount with more decimals than token precision by truncating', () => {
+    // "0.123456789" with 8 decimals: `toChainAmount` truncates (floors) the
+    // excess fraction digit (…9) so the signed amount never exceeds the stated
+    // human amount — the fund-safe direction, matching the swap path and the
+    // old `toBaseUnits`-backed send path (both yield 12345678).
     const result = parseAmount('0.123456789', 8)
-    expect(result).toBe(BigInt('12345679'))
+    expect(result).toBe(BigInt('12345678'))
   })
 
   it('should handle leading/trailing whitespace', () => {
