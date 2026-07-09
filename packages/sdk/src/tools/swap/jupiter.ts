@@ -27,6 +27,7 @@
  * part of the mcp-ts/backend → SDK code-as-action consolidation.
  */
 
+import { jupiterFeeOwnerAddress } from '@vultisig/core-chain/swap/general/jupiter/config'
 import {
   assertJupiterPriceImpactWithinCeiling,
   PriceImpactTooHighError,
@@ -40,11 +41,17 @@ export const SOL_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
 /**
  * Treasury OWNER pubkey on Solana. This is NOT the `feeAccount` itself.
  * Jupiter's `feeAccount` field expects an SPL Token ATA derived per output
- * mint and owned by this pubkey. Confirmed by realpaaao on 2026-06-01
- * (vultisig/agent-backend#631): "Solana address is: 5QXe... Use same swap
- * config as in core app."
+ * mint and owned by this pubkey.
+ *
+ * SOL-03 (audit fix): this used to hardcode a DIFFERENT address
+ * ('5QXePTia...'), an ad-hoc unblock from a single GitHub comment
+ * (vultisig/agent-backend#631, 2026-06-01) that predates and was never
+ * reconciled with the later formal cross-platform shared-spec decision
+ * (vultisig-ios#4669, vultisig-android#5053, vultisig-sdk#894) which settled
+ * on '8iqhrtBz...' and already shipped on iOS/Android main. Re-export the
+ * SDK's own general-swap config value so both Jupiter integrations agree.
  */
-export const JUPITER_AFFILIATE_FEE_OWNER = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
+export const JUPITER_AFFILIATE_FEE_OWNER = jupiterFeeOwnerAddress
 
 /**
  * Affiliate fee in basis points (50 bps = 0.5%). Mirrors `baseAffiliateBps`
@@ -60,10 +67,15 @@ export const JUPITER_PLATFORM_FEE_BPS = 50
 export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
 
 /**
- * Default slippage in basis points (1%). Matches the slippage used in
- * recipes/sdk/swap/jupiter.go.
+ * Default slippage in basis points (0.5%).
+ *
+ * SOL-04 (audit fix): this used to be 100 bps, mirroring `recipes/sdk/swap/
+ * jupiter.go`'s fallback constant — which itself predates and was never
+ * reconciled with the shared cross-platform spec (vultisig-ios#4669) that
+ * explicitly settled on 50 bps, matching iOS/Android/the SDK's own
+ * general-swap Jupiter path (getJupiterSwapQuote.ts) and 1inch.
  */
-export const JUPITER_DEFAULT_SLIPPAGE_BPS = 100
+export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
 
