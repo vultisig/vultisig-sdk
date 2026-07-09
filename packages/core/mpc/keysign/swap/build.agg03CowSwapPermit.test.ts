@@ -6,10 +6,16 @@ import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysig
 import { describe, expect, it, vi } from 'vitest'
 
 // AGG-03 (round-2 spec-level fund-safety audit): `permitRequired` is computed and
-// serialized into the CowSwap keysign payload's `data` field, but the ERC-20
-// allowance-check/approve-building block below it never consulted the flag —
-// so every permit-eligible CowSwap order (e.g. USDC) still built a redundant
-// on-chain approve, defeating the point of the gasless EIP-2612 permit path.
+// serialized into the CowSwap keysign payload's `data` field to signal that a
+// permit-eligible token (e.g. USDC) COULD one day settle via a gasless EIP-2612
+// permit instead of an on-chain approve. But the permit path is not wired yet:
+// `buildEip2612Permit` has zero callers and no permit digest reaches the MPC
+// keysign payload. Until that path lands, the on-chain approve is LOAD-BEARING —
+// skipping it would leave the order with neither approve nor permit, so the
+// solver could not pull the sell token and the order would silently never settle.
+// These tests therefore assert that a permit-flagged CowSwap order STILL obtains
+// its allowance via the approve (allowance-is-obtainable), not merely that the
+// approve is skipped.
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 
 const mocks = vi.hoisted(() => ({
@@ -71,8 +77,8 @@ const baseArgs = {
   walletCore: {} as never,
 }
 
-describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired skips the redundant approve', () => {
-  it('does NOT build an erc20ApprovePayload for a CowSwap order flagged permitRequired, even with insufficient allowance', async () => {
+describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the approve until the EIP-2612 permit path is wired', () => {
+  it('STILL obtains allowance via an erc20ApprovePayload for a CowSwap order flagged permitRequired (permit path unwired, so the approve is load-bearing)', async () => {
     mocks.getErc20Allowance.mockClear()
 
     const swapQuote: SwapQuote = {
@@ -89,8 +95,13 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired skips the r
     const payload = await buildSwapKeysignPayload({ ...baseArgs, swapQuote })
 
     expect(payload.toAddress).toBe(COW_VAULT_RELAYER_ADDRESS)
-    expect(payload.erc20ApprovePayload).toBeUndefined()
-    expect(mocks.getErc20Allowance).not.toHaveBeenCalled()
+    // Until buildEip2612Permit is wired, a permit-flagged order MUST still obtain
+    // allowance via the on-chain approve, otherwise the solver cannot pull the
+    // sell token and the order silently never settles.
+    expect(payload.erc20ApprovePayload?.spender).toBe(COW_VAULT_RELAYER_ADDRESS)
+    expect(mocks.getErc20Allowance).toHaveBeenCalledWith(
+      expect.objectContaining({ chain: Chain.Ethereum, address: '0xsender', spender: COW_VAULT_RELAYER_ADDRESS })
+    )
   })
 
   it('still builds an erc20ApprovePayload for a CowSwap order WITHOUT permitRequired, when allowance is insufficient', async () => {
@@ -116,7 +127,7 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired skips the r
     )
   })
 
-  it('regression: a non-CowSwap EVM swap (1inch) still builds a real approve, unaffected by the permitRequired gate', async () => {
+  it('regression: a non-CowSwap EVM swap (1inch) still builds a real approve, unaffected by CowSwap permit handling', async () => {
     mocks.getErc20Allowance.mockClear()
 
     const swapQuote: SwapQuote = {
