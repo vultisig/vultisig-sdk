@@ -1,4 +1,5 @@
 import { fromBech32 } from '@cosmjs/encoding'
+import { PublicKey } from '@solana/web3.js'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
@@ -207,6 +208,17 @@ const isBech32Address = (address: string, prefix: string): boolean => {
 
 const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
 
+const isSolanaAddress = (address: string): boolean => {
+  if (!new RegExp(`^[${base58AddressChars}]{32,44}$`).test(address)) {
+    return false
+  }
+  try {
+    return new PublicKey(address).toBytes().length === 32
+  } catch {
+    return false
+  }
+}
+
 const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) => boolean>> = {
   [Chain.Arbitrum]: isEvmAddress,
   [Chain.Avalanche]: isEvmAddress,
@@ -224,7 +236,7 @@ const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.Zcash]: address => new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address),
 
-  [Chain.Solana]: address => new RegExp(`^[${base58AddressChars}]{32,44}$`).test(address),
+  [Chain.Solana]: isSolanaAddress,
 
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
   [Chain.Kujira]: address => isBech32Address(address, 'kujira'),

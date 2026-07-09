@@ -92,6 +92,16 @@ describe('validateLimitSwapInputs', () => {
     ).not.toThrow()
   })
 
+  it('rejects a base58 string that is not a valid Solana public key (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: '1'.repeat(44),
+      })
+    ).toThrow(/valid Solana address/)
+  })
+
   it('accepts a Noble limit-swap destination (THOR-04)', () => {
     expect(() =>
       validateLimitSwapInputs({
