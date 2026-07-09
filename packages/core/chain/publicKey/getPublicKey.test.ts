@@ -46,6 +46,26 @@ describe('getPublicKey', () => {
     expect(pubkeyData.length).toBe(33)
   })
 
+  it('throws a clean typed error when chain is undefined - not a raw TypeError', () => {
+    let caught: unknown
+    try {
+      getPublicKey({
+        chain: undefined as unknown as Chain,
+        walletCore,
+        hexChainCode: HEX_CHAIN_CODE,
+        publicKeys: { ecdsa: ECDSA_ROOT_PUBKEY, eddsa: '' },
+      })
+    } catch (e) {
+      caught = e
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    const msg = (caught as Error).message
+    expect(msg).toMatch(/required/)
+    expect(msg).not.toMatch(/is not a function/)
+    expect(msg).not.toMatch(/Cannot read properties/)
+  })
+
   it('uses the 33-byte chainPublicKeys entry directly without re-deriving', () => {
     // A normal 33-byte compressed key in chainPublicKeys - no fallback needed.
     // We verify that the regular path still works correctly alongside the guard.

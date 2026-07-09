@@ -1,5 +1,175 @@
 # @vultisig/cli
 
+## 2.19.7
+
+### Patch Changes
+
+- [#1027](https://github.com/vultisig/vultisig-sdk/pull/1027) [`47908cf`](https://github.com/vultisig/vultisig-sdk/commit/47908cfff78942be6220438f08ab08c61178f282) Thanks [@neavra](https://github.com/neavra)! - Wire the broadcast-journal double-spend guard into the direct `send` and `swap`
+  commands. Previously only the `agent ask` path consulted the persistent journal,
+  so a retried `send`/`swap` re-broadcast an identical intent (audit P5-1, HIGH —
+  double-spend). Both paths now share ONE journal: an identical send/swap within
+  the dedupe window is refused (exit code 9) instead of broadcasting a second time,
+  and `send`/`swap` gain a `--force` flag to override the guard.
+
+  `--max` sends/swaps fingerprint a stable sentinel (not the drift-prone resolved
+  amount) so a `--max` retry can't slip past the guard when the fee/balance moves.
+  The journal is namespaced by the vault's ECDSA key (falling back to the vault id),
+  so a native/EVM `send` and an identical `agent ask` cross-dedupe against the one
+  journal; ERC-20-token cross-path and swap cross-path dedup are out of scope (a
+  missed dedup, never a double-spend).
+
+- Updated dependencies [[`b1f2887`](https://github.com/vultisig/vultisig-sdk/commit/b1f288758ba627061c9c26085f96a3541b131163), [`f54d53a`](https://github.com/vultisig/vultisig-sdk/commit/f54d53a0252d133c2d2d6b37c649542cb4069fd3)]:
+  - @vultisig/sdk@2.19.7
+
+## 2.19.0
+
+### Patch Changes
+
+- Updated dependencies [[`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de)]:
+  - @vultisig/core-chain@2.24.0
+  - @vultisig/sdk@2.19.0
+  - @vultisig/rujira@52.0.0
+
+## 2.18.7
+
+### Patch Changes
+
+- [#1033](https://github.com/vultisig/vultisig-sdk/pull/1033) [`f682eda`](https://github.com/vultisig/vultisig-sdk/commit/f682eda5607a8263e90b18d9ff7167eb2e0a7004) Thanks [@neavra](https://github.com/neavra)! - docs(cli): regenerate the README "Exit Codes" table from the `ExitCode` enum (the single source of truth in `src/core/errors.ts`). The shipped table was stale and mislabelled every non-zero code — e.g. it called `2` "invalid usage" and `3` "configuration error" when the CLI actually returns `2` for authentication-required and `3` for a retryable network error, so a script written to the README's codes misclassified every failure. Codes `8`–`11` (ACK_FAILED, DUPLICATE_BROADCAST, and the two `agent ask` turn-outcome codes) were also undocumented. Also corrects the "disable colored output" env var to `NO_COLOR` (the cross-tool standard the CLI honours; `VULTISIG_NO_COLOR` still works). Adds a doc-lint test that fails if the README table drifts from the enum. Docs-only, but the README ships in the npm package, so this is a patch.
+
+## 2.18.6
+
+### Patch Changes
+
+- [#1003](https://github.com/vultisig/vultisig-sdk/pull/1003) [`b27786d`](https://github.com/vultisig/vultisig-sdk/commit/b27786d8ac596ea3d2d4a13da958b266f589b73c) Thanks [@neavra](https://github.com/neavra)! - fix(agent): sign purely from the `tool-output-available` channel and remove the `tx_ready` signing path ([#927](https://github.com/vultisig/vultisig-sdk/issues/927) Phase 2). The client-enriched tool-output candidate (flat builders and `execute_*` prep) is now the sole signing source, matching what the production backend emits — it writes the signable payload on tool-output and emits `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI never consumed. Removes the Phase-1 dual-read + parity cross-check machinery, the tx_ready capture/selection, and the recovered-tx_ready replay. Fail-closed postures are preserved (a structurally-unsignable candidate is never buffered), and a disconnect that ran a signable tool now warns to re-run rather than signing. Patch: no CLI API change and the same real transactions still sign — this aligns the internal signing source with production.
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
+- Updated dependencies [[`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b), [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921)]:
+  - @vultisig/sdk@2.18.6
+  - @vultisig/core-chain@2.23.3
+
+## 2.18.0
+
+### Minor Changes
+
+- [#1004](https://github.com/vultisig/vultisig-sdk/pull/1004) [`42fe389`](https://github.com/vultisig/vultisig-sdk/commit/42fe3893196e7d8945f852695387828eb49bfb41) Thanks [@neavra](https://github.com/neavra)! - feat(cli): surface a typed turn-outcome for `agent ask` (success / blocked / refusal / error)
+
+  The CLI now advertises the `turn_outcome` surface and parses the backend's
+  `data-turn_outcome` SSE part, so a headless `agent ask` caller can tell four turn
+  endings apart WITHOUT parsing prose:
+
+  - **success** — the turn completed normally
+  - **blocked** — a fund-safety guardrail deliberately blocked the requested action
+  - **refusal** — the model refused or asked a clarifying question (no action taken)
+  - **error** — an infrastructure error ended the turn
+
+  Two additive surfaces:
+
+  - `agent ask --output json` gains a top-level `outcome` field
+    (`{ kind, code?, detail? }`) on both the success and error envelopes. Human
+    output prints a greppable `outcome:<kind>[:<code>]` line for non-success turns.
+  - New dedicated exit codes (additive; the 0–9 taxonomy is unchanged):
+    `10` = a fund-safety block, `11` = a refusal/clarifying question. A frame-less
+    infrastructure error now exits `1` instead of a false `0`. Success stays `0`.
+
+  Behavior change to note: a turn the backend BLOCKS or the model REFUSES previously
+  exited `0` (indistinguishable from success); it now exits `10`/`11`. Scripts that
+  treated every `agent ask` as success-on-0 should branch on `outcome.kind` (or the
+  exit code). Against an older backend that does not emit `data-turn_outcome`, the
+  `outcome` field is absent and exit codes are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`31814c4`](https://github.com/vultisig/vultisig-sdk/commit/31814c4b452ef5b2628dc12bc46e427fcf0b7237), [`b37dc3c`](https://github.com/vultisig/vultisig-sdk/commit/b37dc3c31d6f93af982cd1e082e0b4d1382dc19d), [`01c5630`](https://github.com/vultisig/vultisig-sdk/commit/01c56303d0b872a76de07da9685331106f586c80)]:
+  - @vultisig/sdk@2.18.0
+  - @vultisig/rujira@51.0.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [[`2585dc1`](https://github.com/vultisig/vultisig-sdk/commit/2585dc1830dd7b28694edd411991b24c3fad1538), [`152bb4a`](https://github.com/vultisig/vultisig-sdk/commit/152bb4a2b717efa2f1edb14b7e19cdeba87450c7), [`4a58c6c`](https://github.com/vultisig/vultisig-sdk/commit/4a58c6c1294c88e5d937c3dde24e50edd3fdf2a0), [`ed46385`](https://github.com/vultisig/vultisig-sdk/commit/ed46385358883ed5277f8771ba73000afec9859e), [`72082a6`](https://github.com/vultisig/vultisig-sdk/commit/72082a65eab226cebf562863bcb99346b81ca831), [`a9266a1`](https://github.com/vultisig/vultisig-sdk/commit/a9266a1753ca474b3f337f8a605900acdd7508b0), [`2791af8`](https://github.com/vultisig/vultisig-sdk/commit/2791af8a1e539103678ba71b774d62d2e7691a29), [`b68ddad`](https://github.com/vultisig/vultisig-sdk/commit/b68ddadbc6295957cbb4b37c365a4062b0a2576f), [`ab5e413`](https://github.com/vultisig/vultisig-sdk/commit/ab5e413ead62da47dc144e591ac310d1d4328a56), [`90f6ae5`](https://github.com/vultisig/vultisig-sdk/commit/90f6ae5a1865321e08bf6f03c17e23ed11006649), [`7cfa332`](https://github.com/vultisig/vultisig-sdk/commit/7cfa332787f7646e049813a9f3b15613454f19d1), [`c60d7c6`](https://github.com/vultisig/vultisig-sdk/commit/c60d7c6ecdf46e46bf1098cc57342d5fb79d2194), [`99db752`](https://github.com/vultisig/vultisig-sdk/commit/99db752f093575f90b99b30674ec9be8af49fed9)]:
+  - @vultisig/sdk@2.17.0
+  - @vultisig/rujira@50.0.0
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [[`0147158`](https://github.com/vultisig/vultisig-sdk/commit/0147158ac6955aa420cdad2da704cba998e4a5f1)]:
+  - @vultisig/sdk@2.16.0
+  - @vultisig/rujira@49.0.0
+
+## 2.15.0
+
+### Minor Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`4c31be8`](https://github.com/vultisig/vultisig-sdk/commit/4c31be8f66f40bff4c544aecf635c36d417930d8) Thanks [@neavra](https://github.com/neavra)! - Make the `agent ask` process truthful and idempotent around broadcast (fund-safety, audit F1/F3/F14).
+
+  - **Broadcast-before-ack truthfulness (F1):** a throw AFTER a tx broadcast (the follow-up `recent_actions` report failing) now exits with a distinct `ACK_FAILED` code (8) instead of a generic error — the emitted tx hash is valid and carried in the envelope, so a headless caller knows NOT to blindly retry (which would double-spend).
+  - **Persistent broadcast journal (F1/F14):** every broadcast is recorded to `~/.vultisig/broadcasts.jsonl` (intent fingerprint, hash, chain, ts). If an identical intent was broadcast in the last 10 minutes and hasn't definitively failed, signing is refused (exit 9, `DUPLICATE_BROADCAST`) to prevent a double-broadcast on a retry in a fresh process. Multi-leg approve legs are journaled too. Pass `--force` to override.
+  - **Exit-code taxonomy (F3):** SSE/backend `error` frames and thrown errors now map onto the typed `ExitCode` taxonomy (network/auth/invalid-input/…) instead of a blanket `0`/`1`, and the codes are documented in `agent ask --help`.
+
+### Patch Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`db9bb38`](https://github.com/vultisig/vultisig-sdk/commit/db9bb38691dac0e5ff63e02b3d357cde83606f64) Thanks [@neavra](https://github.com/neavra)! - Harden the `agent ask` broadcast dedupe guard per PR review (fund-safety, audit F1/F3/F14):
+
+  - **Cross-process TOCTOU:** an atomic reservation (exclusive-create lock keyed by the broadcast fingerprint) is now taken BEFORE signing, so two sibling processes can't both pass the duplicate check and both broadcast. The loser refuses with `DUPLICATE_BROADCAST`; a stale reservation (crashed owner) is stolen after a TTL so retries aren't wedged.
+  - **ACK_FAILED no longer masks retryable errors:** exit 8 is now gated on an actual still-unacknowledged broadcast (a broadcast whose follow-up report was undelivered when the turn threw), not merely "some non-failed tx exists". A later independent retryable error after an already-acked broadcast keeps its retryable classification.
+  - **Dedicated exit code for `DUPLICATE_BROADCAST` (9):** no longer shares 4 with generic invalid input, so `$?` alone can branch the fund-safety refusal. Documented in the CLI exit-code taxonomy and `agent ask --help`; the JSON error `code` is unchanged.
+  - **Journal growth bounded:** `broadcasts.jsonl` is pruned on write (size-gated compaction dropping records strictly outside the dedupe window), so a later sign no longer parses an ever-growing file.
+
+- [#927](https://github.com/vultisig/vultisig-sdk/pull/927) [`576d7c4`](https://github.com/vultisig/vultisig-sdk/commit/576d7c49439b767ef424d64133d1426751b22180) Thanks [@neavra](https://github.com/neavra)! - feat(cli): read signable tool outputs off `tool-output-available` with a tx_ready parity cross-check
+
+  Generalizes the Polymarket flat-tx-builder bridge into a client-side tool-output
+  signing + parity layer, the same mechanism the mobile app uses: the CLI derives
+  a signable candidate from the raw `tool-output-available` envelope (client-side
+  enrichment — a 1:1 port of the backend's `enrichBuildResult` flat→nested wrap
+  plus the approve→main split), and cross-checks it against the backend `tx_ready`.
+
+  - The backend `tx_ready` stays authoritative for signing whenever it is signable
+    (unchanged behavior). The client-side candidate is the parity reference, and
+    the sign source only when no usable `tx_ready` arrives — flat off-chain tools
+    that emit no `tx_ready` (`polymarket_deposit`, `polymarket_setup_trading`), and
+    flat tools whose `tx_ready` is structurally unsignable (`build_custom_*`, which
+    use divergent `to_address`/`calldata` field names normalized client-side).
+  - Parity cross-check: when both channels produce a payload for a turn, their
+    `{to, value, data, chain, chain_id, tx_encoding, amount, memo}` leg tuples are
+    compared and any divergence is logged loudly (`[parity][DIVERGENCE] …`).
+  - Guards every non-transaction result (`no_op`, `insufficient_*`, errors,
+    missing/disagreeing chain) so only a real tx is ever signed; the chain guard is
+    generalized past Polygon to any supported EVM chain (fail-closed on a
+    missing/inconsistent chain — never defaults to a chain).
+  - Maps a bundled approve→main envelope onto the executor's existing two-leg
+    machinery so the approve is confirmed (receipt-wait) before the main tx.
+  - First-wins per turn: a second signable frame can never silently overwrite the
+    first; the deferral is reported.
+  - Fail-closed on parity divergence: a flat tool-output candidate is enqueued as a
+    sign source only when there is no `tx_ready` at all, or when the same-turn
+    `tx_ready` matched parity. A client-derived candidate that is not proven equal to
+    a present `tx_ready` (diverged, or unpaired) is never signed — the turn falls
+    closed to the `tx_ready` path (a hard error at sign time) instead of signing the
+    client-enriched bytes.
+  - Parity pairing (telemetry only): the two channels are diffed only when they are
+    the SAME tool call (paired by tool-call id — the `tx_ready` inherits the id of
+    its wire-adjacent tool-output twin), so an unrelated same-turn `tool_output` +
+    `tx_ready` pair no longer emits a false `[DIVERGENCE]`. This pairing affects only
+    the divergence log; the sign decision above is deliberately independent of it, so
+    the fund-safety guarantee rests on parity equality alone, not on the wire-ordering
+    invariant.
+
+  Zero agent-backend / mcp-ts change; entirely within `clients/cli`.
+
+- Updated dependencies [[`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6), [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244)]:
+  - @vultisig/core-chain@2.23.1
+  - @vultisig/sdk@2.15.0
+  - @vultisig/rujira@48.0.0
+
 ## 2.14.0
 
 ### Patch Changes

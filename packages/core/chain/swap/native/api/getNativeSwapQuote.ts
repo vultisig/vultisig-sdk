@@ -106,6 +106,20 @@ const assertOkQuote = (
   return result
 }
 
+// Cardano is enabled as a MayaChain source at the enabled-chains/quote level
+// (NativeSwapChain.ts — live pool confirmed on mayanode), but unlike every
+// other native-swap source chain here, the SDK's own buildSwapKeysignPayload
+// -> getCardanoSigningInputs path IS already wired to build a fully signable
+// Cardano deposit tx from this quote (correct decimals, inbound address, and
+// the swap memo carried into CIP-20 auxiliary data, label 674). The one
+// unverified link is protocol-level: whether MayaChain's Cardano bifrost
+// observer actually reads that CIP-20 label as the routing memo. Until a real
+// deposit confirms that round-trip, reject BEFORE the network call — mirrors
+// getSwapKitQuote's SWAP_SOURCE_TX_BUILD_UNSUPPORTED guard for the SwapKit
+// Sui/Cardano corridors, restoring the "quote groundwork, not yet signable"
+// invariant this PR intends for both providers symmetrically.
+const NATIVE_SWAP_SOURCE_SIGNING_UNVERIFIED = new Set<Chain>([Chain.Cardano])
+
 export const getNativeSwapQuote = async ({
   swapChain,
   destination,
@@ -117,6 +131,13 @@ export const getNativeSwapQuote = async ({
   referral,
   nativeAffiliateConfig,
 }: GetNativeSwapQuoteInput): Promise<NativeSwapQuote> => {
+  if (NATIVE_SWAP_SOURCE_SIGNING_UNVERIFIED.has(from.chain)) {
+    throw new Error(
+      `Native ${from.chain} source swaps are not yet supported for signing (quote-only for now). ` +
+        'Try a different source chain, or swap the other direction.'
+    )
+  }
+
   assertValidSlippageToleranceBps(slippageToleranceBps)
 
   const [fromAsset, toAsset] = [from, to].map(asset => toNativeSwapAsset(asset))
