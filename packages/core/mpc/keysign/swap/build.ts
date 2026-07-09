@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
 import { buildSignBitcoinFromPsbt } from '@vultisig/core-chain/chains/utxo/tx/buildSignBitcoinFromPsbt'
-import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
@@ -195,7 +195,7 @@ export const buildSwapKeysignPayload = async ({
               hexPublicKey: toCoinHexPublicKey,
             }),
             fromAmount: chainAmount.toString(),
-            toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
+            toAmountDecimal: fromChainAmountDisplay(quote.dstAmount, toCoin.decimals),
             txType: transfer.txType ?? '',
             txPayload: transfer.txPayload ?? new Uint8Array(),
             targetAddress: transfer.to,
@@ -302,7 +302,7 @@ export const buildSwapKeysignPayload = async ({
             hexPublicKey: toCoinHexPublicKey,
           }),
           fromAmount: chainAmount.toString(),
-          toAmountDecimal: fromChainAmount(quote.dstAmount, toCoin.decimals).toFixed(toCoin.decimals),
+          toAmountDecimal: fromChainAmountDisplay(quote.dstAmount, toCoin.decimals),
           quote: create(OneInchQuoteSchema, {
             dstAmount: quote.dstAmount,
             tx,
