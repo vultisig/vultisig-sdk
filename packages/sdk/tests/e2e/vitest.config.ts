@@ -34,6 +34,13 @@ export default defineConfig({
       resolve(__dirname, './setup.ts'), // E2E-specific setup
       resolve(__dirname, '../setup.ts'), // Test utilities
     ],
+
+    // Verbose reporter prints a skipped test's `ctx.skip(reason)` inline
+    // (the default reporter doesn't) - needed so vault-gated suites surface
+    // *why* they skipped instead of looking identical to "nothing to see
+    // here" (SDK-TEST-02/03, vultisig/vultisig-sdk#1069). Matches
+    // tests/unit/vitest.config.ts's existing reporter choice.
+    reporters: ['verbose'],
   },
 
   resolve: {
