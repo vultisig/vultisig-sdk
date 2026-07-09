@@ -393,3 +393,10 @@ export { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 export { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 export { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 export { getTxStatus } from '@vultisig/core-chain/tx/status'
+
+// Public-boundary argument validation (AUDIT-R3 TASK-020)
+// Zod schemas + safe-parse helpers for chain and ticker strings at the entry point.
+// Import from '@vultisig/sdk/tools/parse' for the narrow surface, or
+// pick individual names from here for mixed usage alongside other tool exports.
+export type { ParseChainResult, ParseTickerResult } from './parse'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from './parse'
