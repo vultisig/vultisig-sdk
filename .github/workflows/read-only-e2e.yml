@@ -1,0 +1,55 @@
+name: Read-Only E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: read-only-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=8192"
+
+jobs:
+  read-only-e2e:
+    name: Read-only SDK e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.16.0 --activate
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build shared packages
+        run: yarn build:shared
+
+      - name: Build packages
+        run: yarn build:all
+
+      - name: Run swap quote e2e
+        run: yarn test:e2e:swap-quotes
+
+      - name: Run balance e2e
+        run: yarn test:e2e:balance
+
+      - name: Run gas e2e
+        run: yarn test:e2e:gas
+
+      - name: Run prepare-send e2e
+        run: yarn test:e2e:prepare-send
