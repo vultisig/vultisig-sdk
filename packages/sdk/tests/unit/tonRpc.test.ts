@@ -72,7 +72,29 @@ describe('getTonWalletInfo', () => {
       addressInformation: { ok: true, json: { status: 'active' } },
     })
 
-    await expect(getTonWalletInfo('EQflaky', 'https://gw.test')).rejects.toThrow(/getExtendedAddressInformation failed/)
+    const promise = getTonWalletInfo('EQflaky', 'https://gw.test')
+    await expect(promise).rejects.toThrow(/getExtendedAddressInformation failed/)
+    await promise.catch((err: unknown) => {
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).not.toContain('EQflaky')
+    })
+  })
+
+  it('throws on HTTP-200 getExtendedAddressInformation with ok:false/null result', async () => {
+    mockFetchByUrl({
+      getExtendedAddressInformation: {
+        ok: true,
+        json: { ok: false, result: null, error: 'LITE_SERVER_UNKNOWN: EQflaky' },
+      },
+      addressInformation: { ok: true, json: { status: 'active' } },
+    })
+
+    const promise = getTonWalletInfo('EQflaky', 'https://gw.test')
+    await expect(promise).rejects.toThrow(/getExtendedAddressInformation returned no result/)
+    await promise.catch((err: unknown) => {
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).not.toContain('EQflaky')
+    })
   })
 
   it('throws (does not default to uninit/seqno 0) on a non-OK addressInformation response', async () => {
@@ -81,7 +103,29 @@ describe('getTonWalletInfo', () => {
       addressInformation: { ok: false, status: 500, statusText: 'Internal Server Error' },
     })
 
-    await expect(getTonWalletInfo('EQflaky', 'https://gw.test')).rejects.toThrow(/addressInformation failed/)
+    const promise = getTonWalletInfo('EQflaky', 'https://gw.test')
+    await expect(promise).rejects.toThrow(/addressInformation failed/)
+    await promise.catch((err: unknown) => {
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).not.toContain('EQflaky')
+    })
+  })
+
+  it('throws on HTTP-200 addressInformation with ok:false', async () => {
+    mockFetchByUrl({
+      getExtendedAddressInformation: { ok: true, json: { result: { account_state: { seqno: 3 } } } },
+      addressInformation: {
+        ok: true,
+        json: { ok: false, error: 'LITE_SERVER_UNKNOWN: EQflaky' },
+      },
+    })
+
+    const promise = getTonWalletInfo('EQflaky', 'https://gw.test')
+    await expect(promise).rejects.toThrow(/addressInformation returned an error/)
+    await promise.catch((err: unknown) => {
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).message).not.toContain('EQflaky')
+    })
   })
 
   it('throws (does not default to uninit/seqno 0) on a network-level fetch failure', async () => {

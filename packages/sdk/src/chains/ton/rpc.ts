@@ -19,15 +19,19 @@ export type TonWalletInfo = {
 }
 
 type ToncenterExtendedInfo = {
+  ok?: boolean
   result?: {
     account_state?: { seqno?: number }
     balance?: string | number
   }
+  error?: string
 }
 
 type ToncenterV3AddressInfo = {
+  ok?: boolean
   status?: TonWalletStatus
   balance?: string | number
+  error?: string
 }
 
 type ToncenterSendBoc = {
@@ -74,7 +78,8 @@ export async function getTonBalance(address: string, gatewayUrl: string): Promis
  * `{ seqno: 0, status: 'uninit' }` so the caller can attach a StateInit on
  * the first transfer.
  *
- * A transient RPC/network failure (fetch throw, non-OK response) is a
+ * A transient RPC/network failure (fetch throw, non-OK response, or body-level
+ * `{ ok: false, result: null }`) is a
  * DIFFERENT case and must not collapse into the same shape: doing so
  * previously defeated the sender's stale-seqno guard (a failed lookup
  * signed as if the wallet were fresh) and force-disabled the recipient's
@@ -89,18 +94,22 @@ export async function getTonWalletInfo(address: string, gatewayUrl: string): Pro
   ])
 
   if (!extRes.ok) {
-    throw new Error(
-      `toncenter getExtendedAddressInformation failed for ${address}: ${extRes.status} ${extRes.statusText}`
-    )
+    throw new Error(`toncenter getExtendedAddressInformation failed: ${extRes.status} ${extRes.statusText}`)
   }
   const ext = (await extRes.json()) as ToncenterExtendedInfo
+  if (ext.ok === false || !ext.result) {
+    throw new Error('toncenter getExtendedAddressInformation returned no result')
+  }
   const seqno = ext.result?.account_state?.seqno ?? 0
   let balance = ext.result?.balance !== undefined ? toBigInt(ext.result.balance) : 0n
 
   if (!v3Res.ok) {
-    throw new Error(`toncenter addressInformation failed for ${address}: ${v3Res.status} ${v3Res.statusText}`)
+    throw new Error(`toncenter addressInformation failed: ${v3Res.status} ${v3Res.statusText}`)
   }
   const v3 = (await v3Res.json()) as ToncenterV3AddressInfo
+  if (v3.ok === false) {
+    throw new Error('toncenter addressInformation returned an error')
+  }
   const status: TonWalletStatus = v3.status ?? 'uninit'
   if (v3.balance !== undefined && balance === 0n) balance = toBigInt(v3.balance)
 
