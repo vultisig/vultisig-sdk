@@ -14,6 +14,6 @@ the documented `create fast … -o json` agent flow produced unparseable stdout
 into terminals and CI logs.
 
 Route that tracing through a gated logger that writes to stderr only when
-`VULTISIG_DEBUG` is set, so stdout carries only the final JSON envelope while
+`VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
 the debug output stays available to humans on demand. No keygen behavior
 changes — only the log sink moves off stdout.
