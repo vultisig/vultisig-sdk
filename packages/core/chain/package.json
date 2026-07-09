@@ -20,6 +20,11 @@
       "import": "./dist/amount/fromChainAmount.js",
       "default": "./dist/amount/fromChainAmount.js"
     },
+    "./amount/fromChainAmountExact": {
+      "types": "./dist/amount/fromChainAmountExact.d.ts",
+      "import": "./dist/amount/fromChainAmountExact.js",
+      "default": "./dist/amount/fromChainAmountExact.js"
+    },
     "./amount/getMaxValue": {
       "types": "./dist/amount/getMaxValue.d.ts",
       "import": "./dist/amount/getMaxValue.js",
