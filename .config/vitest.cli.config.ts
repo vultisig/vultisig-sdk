@@ -20,6 +20,7 @@ export default defineConfig({
       '@vultisig/lib-mldsa': resolve(root, 'packages/lib/mldsa'),
       '@vultisig/lib-schnorr': resolve(root, 'packages/lib/schnorr'),
       '@vultisig/mpc-types': resolve(root, 'packages/mpc-types/src'),
+      '@vultisig/sdk/node': resolve(root, 'packages/sdk/src/platforms/node/index.ts'),
       '@vultisig/sdk': resolve(root, 'packages/sdk/src/index.ts'),
     },
   },
