@@ -142,22 +142,11 @@ export const buildSwapKeysignPayload = async ({
       }),
   })
 
-  // AGG-03: a CowSwap order flagged `permitRequired` signs an EIP-2612 permit
-  // instead of a separate on-chain approve (see GeneralSwapQuote.ts's
-  // `permitRequired` doc) — so the allowance-check below must skip building a
-  // redundant erc20ApprovePayload for exactly this arm. Every other swap route
-  // (native, 1inch/LiFi/Kyber/SwapKit general, non-permit CowSwap tokens)
-  // keeps requiring a real approve, unaffected by this flag.
-  const cowSwapPermitRequired = matchRecordUnion<SwapQuoteResult, boolean>(swapQuote.quote, {
-    native: () => false,
-    general: ({ tx }) =>
-      matchRecordUnion<GeneralSwapTx, boolean>(tx, {
-        evm: () => false,
-        solana: () => false,
-        transfer: () => false,
-        cowswap_order: order => Boolean(order.permitRequired),
-      }),
-  })
+  // AGG-03 TODO: CowSwap permitRequired tokens could skip the on-chain approve
+  // and sign an EIP-2612 permit instead, but buildEip2612Permit has zero callers
+  // and no permit digest reaches the MPC keysign payload yet. Skipping the approve
+  // without a wired permit means the solver can't pull the sell token and the order
+  // never settles. Keep the normal approve path until the permit flow is fully wired.
 
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
@@ -376,7 +365,7 @@ export const buildSwapKeysignPayload = async ({
     keysignPayload.swapPayload.value.quote.tx.gas = BigInt(gasLimit)
   }
 
-  if (isChainOfKind(chain, 'evm') && fromCoin.id && !cowSwapPermitRequired) {
+  if (isChainOfKind(chain, 'evm') && fromCoin.id) {
     const spender = keysignPayload.toAddress
     const allowance = await getErc20Allowance({
       chain,
