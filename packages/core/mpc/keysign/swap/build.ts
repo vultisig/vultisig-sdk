@@ -359,7 +359,26 @@ export const buildSwapKeysignPayload = async ({
     keysignPayload.swapPayload.value.quote.tx.gas = BigInt(gasLimit)
   }
 
-  if (isChainOfKind(chain, 'evm') && fromCoin.id) {
+  // AGG-03: a CowSwap order flagged permitRequired is settled off-chain via a gasless
+  // EIP-2612 permit signature (bundled into the order digest itself) instead of an
+  // on-chain approve() — that's the entire point of KNOWN_PERMIT_TOKENS. Without this
+  // gate the allowance-check below ran unconditionally and built a redundant approve
+  // keysign step for permit tokens (e.g. USDC), defeating the gasless path. Every other
+  // provider shape (1inch/general evm/solana/transfer) still needs the real approve, so
+  // this only ever SKIPS the block for the one case that provably doesn't need it —
+  // never skips it for a provider that does.
+  const permitRequired = matchRecordUnion<SwapQuoteResult, boolean>(swapQuote.quote, {
+    native: () => false,
+    general: ({ tx }) =>
+      matchRecordUnion<GeneralSwapTx, boolean>(tx, {
+        evm: () => false,
+        solana: () => false,
+        transfer: () => false,
+        cowswap_order: order => Boolean(order.permitRequired),
+      }),
+  })
+
+  if (isChainOfKind(chain, 'evm') && fromCoin.id && !permitRequired) {
     const spender = keysignPayload.toAddress
     const allowance = await getErc20Allowance({
       chain,
