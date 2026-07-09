@@ -169,6 +169,27 @@ describe('validateLimitSwapInputs', () => {
     ).toBe(1n)
   })
 
+  it('rejects source_amount/target_price combinations that floor LIM to 0 (THOR-02)', () => {
+    // 1_000_000 * 1 (scaled target_price) / 1e8 = 0.01, floors to 0.
+    // A zero trade target is treated by THORChain as an unprotected market
+    // order, so this must fail closed rather than silently reinterpreting
+    // the user's limit swap as a market swap.
+    expect(() =>
+      getLimitSwapLimitAmount({
+        source_amount: 1_000_000,
+        target_price: 0.00000001,
+      })
+    ).toThrow(/floors to 0/)
+
+    expect(() =>
+      buildLimitSwapMemo({
+        ...validInput,
+        source_amount: 1_000_000,
+        target_price: 0.00000001,
+      })
+    ).toThrow(/floors to 0/)
+  })
+
   it('rejects unsupported expiries', () => {
     expect(() =>
       validateLimitSwapInputs({

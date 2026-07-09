@@ -1,5 +1,125 @@
 # @vultisig/sdk
 
+## 2.19.8
+
+### Patch Changes
+
+- [#1098](https://github.com/vultisig/vultisig-sdk/pull/1098) [`f695564`](https://github.com/vultisig/vultisig-sdk/commit/f69556421c77e36651143c4ba14aaac9f22133b3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(kyber): bind swap tx.to to /route/build's own routerAddress (AGG-04)
+
+- [#1096](https://github.com/vultisig/vultisig-sdk/pull/1096) [`04b1f38`](https://github.com/vultisig/vultisig-sdk/commit/04b1f38fab52ebb7938f3e5977318d67c9aa0921) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `selectUtxoInputs`, an accumulative largest-first coin-selection layer for
+  UTXO sends (audit UTXO-01, HIGH). `buildUtxoSendTx`'s doc comment always said
+  "caller handles coin-selection", but no selection layer existed — callers
+  fetched every UTXO in the wallet and passed the full set through verbatim.
+  That overpaid fees for all N inputs, could false-positive "insufficient
+  funds" when fee(N) exceeded the balance even though a small subset would
+  cover the send, and linked every UTXO the wallet owns in one transaction.
+
+  `selectUtxoInputs` picks the smallest largest-first prefix of the candidate
+  UTXOs that covers `amount + fee(k)`, reusing `estimateUtxoTxFee` — the same
+  size/fee formula now extracted out of `buildUtxoSendTx` — so selection and
+  build always agree on the fee. Supports a `sendMax` mode that consumes every
+  UTXO for "send whole balance" flows. Covered across all 6 UTXO chains
+  (Bitcoin, Litecoin, Dogecoin, Dash, Bitcoin-Cash, Zcash) with golden-vector
+  tests for the trivial single-input case, multi-input accumulation, exact
+  cover, sub-dust change folding into fee, genuine insufficient-funds, and
+  send-max.
+
+## 2.19.7
+
+### Patch Changes
+
+- [#1078](https://github.com/vultisig/vultisig-sdk/pull/1078) [`b1f2887`](https://github.com/vultisig/vultisig-sdk/commit/b1f288758ba627061c9c26085f96a3541b131163) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): sanity-cap RPC-reported priority fee (SDK2-01). EVM fee estimation trusted `maxPriorityFeePerGas` from the RPC verbatim into the signed tx (Solana already had a ceiling for this, EVM didn't) — a compromised or anomalous RPC could inflate it and drain the user's balance to gas. Added a generous per-chain sanity ceiling (`clampEvmPriorityFee`) that only fires on orders-of-magnitude inflation; normal congestion on any chain passes through unchanged.
+
+- [#1093](https://github.com/vultisig/vultisig-sdk/pull/1093) [`f54d53a`](https://github.com/vultisig/vultisig-sdk/commit/f54d53a0252d133c2d2d6b37c649542cb4069fd3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(coin): findByTicker throws on cross-chain ambiguity instead of a silent first-match (SDK2-02)
+
+  `findByTicker` resolved a bare ticker via `coins.find(c => c.ticker === ticker)` — array-order first match, no chain scoping. A symbol like "USDC" exists on many chains, so if this (currently-unreferenced public) helper were wired into a fund path it would silently resolve to whichever chain was first, sending to the wrong network. It now returns the unique match (or null when absent) and throws when the ticker is ambiguous across more than one chain, forcing the caller to disambiguate.
+
+## 2.19.6
+
+### Patch Changes
+
+- [#1082](https://github.com/vultisig/vultisig-sdk/pull/1082) [`584bdb2`](https://github.com/vultisig/vultisig-sdk/commit/584bdb29b184fc01934645f745033208d42ea2e6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): validate CowSwap order fields against the request before signing (AGG-01). sellToken/buyToken/kind/partiallyFillable were taken straight from the untrusted CoW /quote response and signed as-is via the EIP-712 GPv2 Order struct — a compromised/buggy response could substitute a token address or flip kind from 'sell' to 'buy' (inverting GPv2's sell/buy semantics while the SDK's grossSellAmount math still assumes sell-order semantics), and the SDK would sign it. Now asserts each field matches what was actually requested and refuses to build a signable order on any mismatch.
+
+## 2.19.5
+
+### Patch Changes
+
+- [#1079](https://github.com/vultisig/vultisig-sdk/pull/1079) [`e33c4a8`](https://github.com/vultisig/vultisig-sdk/commit/e33c4a8cfdcae872506b0cdbbc11724b9e14cdf6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): validate aggregator router addresses at quote construction (AGG-02). 1inch/Kyber/LiFi/SwapKit's tx.to was trusted with no allowlist, and fed both the ERC-20 approval spender and the swap transaction's on-chain destination — a compromised/spoofed aggregator response could get both approved and swapped against. 1inch/Kyber now fail closed (throw) if the returned router isn't their live-confirmed address; LiFi/SwapKit log the destination (never throw, since they route through many different contracts by design) so a future allowlist has real usage data if a pattern emerges.
+
+- [#1081](https://github.com/vultisig/vultisig-sdk/pull/1081) [`709f0be`](https://github.com/vultisig/vultisig-sdk/commit/709f0bea7a3d9dfa1e7231d25bb3949072b77195) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(utxo): raise the Litecoin dust threshold to the real P2WPKH standard (~2_940 litoshi)
+
+  Litecoin's DUST_RELAY_TX_FEE is ~10x Bitcoin's, so LTC's real standard dust threshold is ~2_940 litoshi for a P2WPKH output, not the hardcoded 1_000n. At 1_000n a change output of 1_001..2_939 litoshi was treated as spendable but is non-standard dust, so the transaction could be rejected by relays or stall. Bumped in both dust maps (core `minUtxo` + sdk `UTXO_SPECS`) and kept in sync. LTC-scoped (UTXO-02); BCH/Dash/Zcash 1_000n already sits at/above their real dust.
+
+## 2.19.4
+
+### Patch Changes
+
+- [#1083](https://github.com/vultisig/vultisig-sdk/pull/1083) [`d3a372d`](https://github.com/vultisig/vultisig-sdk/commit/d3a372d48683b69ba6626f1b077b95088ff6a12b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): refuse to sign a no-timeout IBC transfer and validate the source channel
+
+  The Cosmos `IBC_TRANSFER` signing-input resolver built a `MsgTransfer` with an all-zero timeout (`timeoutTimestamp=0` and `timeoutHeight={0,0}`) whenever the IBC denom trace was missing. Relayers accept a no-timeout packet, but it never expires, so a failed transfer can leave funds stuck indefinitely instead of unwinding. The resolver now fails closed and refuses to build when neither timeout is usable (COSMOS-01). It also validates that the source channel parsed out of the memo (`<prefix>:channel-<n>[:...]`) is well-formed, refusing to sign with an undefined/empty/malformed channel instead of dispatching a broken `MsgTransfer` (COSMOS-03).
+
+## 2.19.3
+
+### Patch Changes
+
+- [#1075](https://github.com/vultisig/vultisig-sdk/pull/1075) [`ac1a0f7`](https://github.com/vultisig/vultisig-sdk/commit/ac1a0f797e542868263cf31a26c2fe4e00e2ba78) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): enforce a 10% price-impact ceiling on both Jupiter swap-build paths (SOL-02). A thin-pool / sandwich-bait Jupiter quote at 50-90% price impact previously built a fully signable, MPC-ready transaction with zero protection. Both `getJupiterSwapQuote` (core) and `buildJupiterSwapTx` (SDK) now refuse to build above the ceiling, matching the guard already enforced on the production agent path.
+
+## 2.19.2
+
+### Patch Changes
+
+- [#1046](https://github.com/vultisig/vultisig-sdk/pull/1046) [`8d36421`](https://github.com/vultisig/vultisig-sdk/commit/8d364215cdca70f0df12f08d6676d65e352cf235) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix: UTXO/Cardano broadcast no longer reports false success on a genuine failure
+
+  `broadcastCardanoTx`/`broadcastUtxoTx` bucketed `BadInputsUTxO` (a genuine failure — spent/invalid inputs)
+  together with benign MPC-race duplicates (`txn-mempool-conflict`/`already known`) and returned success
+  unconditionally for all three, bypassing the on-chain hash verification safety net. Every ambiguous submit
+  error now routes through `verifyBroadcastByHash`, and `getUtxoTxStatus` now sets `isKnown: false` when the
+  hash is genuinely not found (matching the existing convention already used by the cosmos/evm/polkadot/
+  ripple/solana resolvers) so a real failure correctly rethrows instead of being swallowed as success.
+
+- [#1073](https://github.com/vultisig/vultisig-sdk/pull/1073) [`0013d0d`](https://github.com/vultisig/vultisig-sdk/commit/0013d0d4c7c9249bb0fb64705b726e85fc7a50e0) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): reject a limit-swap LIM that floors to zero (THOR-02). A tiny target price could floor the computed limit amount to 0, and THORChain treats a zero trade target as an unprotected MARKET swap with no minimum-output floor — silently discarding the price protection the user configured for their limit order. Fail closed with a clear error instead of building a memo that reinterprets as a market swap.
+
+## 2.19.1
+
+### Patch Changes
+
+- [#1035](https://github.com/vultisig/vultisig-sdk/pull/1035) [`989ec59`](https://github.com/vultisig/vultisig-sdk/commit/989ec593ac5c8782f731b43696b32c18edb54599) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `getCosmosFeeAmount` (canonical cosmos gas resolver, used by the CLI/browser/electron keysign pipeline) to query Osmosis's own EIP-1559 dynamic base-fee endpoint (`/osmosis/txfees/v1beta1/cur_eip_base_fee`) as an additional floor. Previously this resolver only queried the generic `/cosmos/base/node/v1beta1/config` node config for every ibc-enabled chain, which does not track Osmosis's protocol-level dynamic fee and can be clamped away by the anomaly guard during a genuine base-fee spike — leading to a broadcast rejection (sdk error code 13, "insufficient fees"). This mirrors a fix already live in vultiagent-app.
+
+## 2.19.0
+
+### Minor Changes
+
+- [#1042](https://github.com/vultisig/vultisig-sdk/pull/1042) [`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): XRP trust-line (TrustSet) support for issued tokens
+
+  Add support for opening/modifying an XRPL trust line so a vault can hold issued
+  currencies (e.g. RLUSD). `getRippleSigningInputs` now emits a WalletCore
+  `OperationTrustSet` (LimitAmount = { currency, issuer, value }) when the keysign
+  coin is an issued currency, and falls through to the existing Payment path for
+  native XRP. New `chains/ripple/issuedCurrency` helpers encode the composite
+  `currency.issuer` token id, normalise human tickers to on-ledger currency codes,
+  format issued-currency values, and expose the 0.2 XRP owner-reserve delta
+  (`rippleOwnerReserveDrops`). `isValidTokenId` validates XRPL `currency.issuer`
+  ids.
+
+## 2.18.8
+
+### Patch Changes
+
+- [#1037](https://github.com/vultisig/vultisig-sdk/pull/1037) [`f879364`](https://github.com/vultisig/vultisig-sdk/commit/f8793648823d0016baa1a9375c179bc578d2a952) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `runSkipSwap`'s cosmos memo-length preflight to check every leg of a Skip route, not just the first leg of single-tx routes. Previously the check only ran when the route required a single signature and only inspected the first cosmos leg's memo — a multi-tx route (`allowMultiTx: true`) with an over-cap memo on a later leg sailed through undetected and would fail at broadcast (sdk error code 12, "memo too long") after signing, burning the MPC ceremony. This mirrors a check already present and more thorough in agent-backend-ts's own Skip integration.
+
+## 2.18.6
+
+### Patch Changes
+
+- [#1026](https://github.com/vultisig/vultisig-sdk/pull/1026) [`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add cosmos per-chain fee-denom allowlist helpers (`getCosmosAllowedFeeDenoms`, `isCosmosFeeDenomAllowed`) as the single source of truth for which denoms a cosmos chain's ante handler accepts as a gas fee, consolidating copies previously maintained independently in agent-backend-ts (execute_send.ts, astroport-classic-swap.ts, cosmos-staking.ts).
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
 ## 2.18.5
 
 ### Patch Changes

@@ -55,7 +55,10 @@ type UtxoChainSpec = {
 
 const UTXO_SPECS: Record<UtxoChainName, UtxoChainSpec> = {
   Bitcoin: { scriptType: 'p2wpkh', dustLimit: 546n, slip44: 0, bipPurpose: 84 },
-  Litecoin: { scriptType: 'p2wpkh', dustLimit: 1_000n, slip44: 2, bipPurpose: 84 },
+  // UTXO-02 (audit r2): LTC's DUST_RELAY_TX_FEE is ~10x BTC's -> real P2WPKH dust ~2_940 litoshi, not 1_000.
+  // At 1_000 a 1_001..2_939 change output is non-standard dust that can stall the tx. KEEP IN SYNC with
+  // packages/core/chain/chains/utxo/minUtxo.ts (minUtxo[Chain.Litecoin]).
+  Litecoin: { scriptType: 'p2wpkh', dustLimit: 2_940n, slip44: 2, bipPurpose: 84 },
   Dogecoin: { scriptType: 'p2pkh', dustLimit: 1_000_000n, slip44: 3, bipPurpose: 44 },
   'Bitcoin-Cash': { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 145, bipPurpose: 44 },
   Dash: { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 5, bipPurpose: 44 },
@@ -544,6 +547,35 @@ function buildOpReturnScript(data: Uint8Array): Uint8Array {
   return concat(new Uint8Array([OP_RETURN, OP_PUSHDATA1, data.length]), data)
 }
 
+/**
+ * Estimate the network fee (base units) `buildUtxoSendTx` will charge for a
+ * tx with `inputCount` inputs at `feeRate` sats/byte, optionally carrying an
+ * OP_RETURN memo. Factored out of `buildUtxoSendTx` so a coin-selection
+ * layer (see `select.ts`) can predict the SAME fee the builder will compute
+ * for a given input count — selection and build must agree on the formula,
+ * or "insufficient funds" / change-below-dust outcomes can diverge between
+ * the two steps (UTXO-01).
+ */
+export function estimateUtxoTxFee(
+  chain: UtxoChainName,
+  inputCount: number,
+  feeRate: number,
+  opReturnData?: string
+): bigint {
+  const spec = UTXO_SPECS[chain]
+  if (!spec) throw new Error(`unsupported UTXO chain: ${chain as string}`)
+  const opReturnScript =
+    opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opReturnData)) : undefined
+  // Approximate tx size for fee calc — matches app's heuristic.
+  const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
+  // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
+  const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
+  const txSize = inputCount * bytesPerInput + 2 * 34 + 10 + opReturnBytes
+  const sizeFee = BigInt(Math.ceil(txSize * feeRate))
+  const zip317Floor = chain === 'Zcash' ? zcashConventionalFee(inputCount) : 0n
+  return sizeFee > zip317Floor ? sizeFee : zip317Floor
+}
+
 function serializeOutputs(
   toScriptPubKey: Uint8Array,
   amount: bigint,
@@ -795,14 +827,7 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const opReturnScript =
     opts.opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opts.opReturnData)) : undefined
 
-  // Approximate tx size for fee calc — matches app's heuristic.
-  const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
-  // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
-  const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
-  const txSize = inputs.length * bytesPerInput + 2 * 34 + 10 + opReturnBytes
-  const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
-  const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
-  const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
+  const fee = estimateUtxoTxFee(opts.chain, inputs.length, opts.feeRate, opts.opReturnData)
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
     throw new Error(

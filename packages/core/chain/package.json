@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.23.2",
+  "version": "2.24.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -210,6 +210,11 @@
       "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
       "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
     },
+    "./chains/cosmos/cosmosDecimal": {
+      "types": "./dist/chains/cosmos/cosmosDecimal.d.ts",
+      "import": "./dist/chains/cosmos/cosmosDecimal.js",
+      "default": "./dist/chains/cosmos/cosmosDecimal.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
@@ -249,6 +254,11 @@
       "types": "./dist/chains/cosmos/getCosmosRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
       "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
+    },
+    "./chains/cosmos/osmosisDynamicFee": {
+      "types": "./dist/chains/cosmos/osmosisDynamicFee.d.ts",
+      "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
+      "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
     },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
@@ -659,6 +669,11 @@
       "types": "./dist/chains/ripple/client.d.ts",
       "import": "./dist/chains/ripple/client.js",
       "default": "./dist/chains/ripple/client.js"
+    },
+    "./chains/ripple/issuedCurrency": {
+      "types": "./dist/chains/ripple/issuedCurrency.d.ts",
+      "import": "./dist/chains/ripple/issuedCurrency.js",
+      "default": "./dist/chains/ripple/issuedCurrency.js"
     },
     "./chains/ripple/network/info": {
       "types": "./dist/chains/ripple/network/info.d.ts",
@@ -1547,6 +1562,11 @@
       "import": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js",
       "default": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js"
     },
+    "./swap/general/knownAggregatorRouters": {
+      "types": "./dist/swap/general/knownAggregatorRouters.d.ts",
+      "import": "./dist/swap/general/knownAggregatorRouters.js",
+      "default": "./dist/swap/general/knownAggregatorRouters.js"
+    },
     "./swap/general/kyber/api/baseUrl": {
       "types": "./dist/swap/general/kyber/api/baseUrl.d.ts",
       "import": "./dist/swap/general/kyber/api/baseUrl.js",
@@ -1616,6 +1636,11 @@
       "types": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.d.ts",
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
+    },
+    "./swap/general/priceImpactGuard": {
+      "types": "./dist/swap/general/priceImpactGuard.d.ts",
+      "import": "./dist/swap/general/priceImpactGuard.js",
+      "default": "./dist/swap/general/priceImpactGuard.js"
     },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
@@ -1842,6 +1867,11 @@
       "import": "./dist/tx/fee/evm/baseFee.js",
       "default": "./dist/tx/fee/evm/baseFee.js"
     },
+    "./tx/fee/evm/clampEvmPriorityFee": {
+      "types": "./dist/tx/fee/evm/clampEvmPriorityFee.d.ts",
+      "import": "./dist/tx/fee/evm/clampEvmPriorityFee.js",
+      "default": "./dist/tx/fee/evm/clampEvmPriorityFee.js"
+    },
     "./tx/fee/evm/evmGasLimit": {
       "types": "./dist/tx/fee/evm/evmGasLimit.d.ts",
       "import": "./dist/tx/fee/evm/evmGasLimit.js",
@@ -1931,6 +1961,11 @@
       "types": "./dist/tx/hash/resolvers/utxo.d.ts",
       "import": "./dist/tx/hash/resolvers/utxo.js",
       "default": "./dist/tx/hash/resolvers/utxo.js"
+    },
+    "./tx/isValidTxHash": {
+      "types": "./dist/tx/isValidTxHash.d.ts",
+      "import": "./dist/tx/isValidTxHash.js",
+      "default": "./dist/tx/isValidTxHash.js"
     },
     "./tx/status": {
       "types": "./dist/tx/status/index.d.ts",

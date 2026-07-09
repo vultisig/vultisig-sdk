@@ -1,39 +1,35 @@
 /**
- * Client-side tool-output signing + parity layer (Phase 1: dual-read).
+ * Client-side tool-output signing layer (#927 Phase 2: tool-output is the SOLE
+ * sign source).
  *
  * Generalizes #922's `polymarketTxOutput.ts` into the full client-side
- * enrichment the CLI uses to sign SOME signable tool outputs off the
- * `tool-output-available` SSE channel — the same raw envelope mobile reads —
- * and to CROSS-CHECK (parity) the CLI's client-side enrichment against the
- * backend's `tx_ready` for the tools that emit both.
+ * enrichment the CLI uses to sign signable tool outputs off the
+ * `tool-output-available` SSE channel — the same raw envelope mobile reads.
  *
- * ## What this module is (and is NOT) in Phase 1
- * The authoritative signing source in Phase 1 is STILL `tx_ready` whenever it
- * arrives and is signable. This module:
+ * ## What this module does
  *   1. Derives a client-side signable candidate from a tool's RAW output
  *      (`deriveToolOutputCandidate`) — a port of the backend transforms
  *      `enrichBuildResult` (agent-backend `agent.go:8263`) + the flat-tool
  *      approval split (peer of `splitMultiTx`, `tx_sequence.go:120`).
- *   2. Feeds that candidate into the EXISTING `onTxReady → storeServerTransaction`
- *      pipeline ONLY as (a) the sign source when NO usable `tx_ready` arrives
- *      (flat off-chain tools that emit no `tx_ready` — polymarket; and flat
- *      tools whose `tx_ready` is structurally unsignable — `build_custom_*`,
- *      whose backend `tx_ready` wraps `to_address`/`calldata` the signer can't
- *      read), or (b) the PARITY reference otherwise.
- *   3. Compares the client-enriched candidate to `tx_ready` (`diffToolOutputParity`)
- *      and the caller logs any divergence LOUDLY. This is the Phase-1 deliverable:
- *      PROVE the port against the live backend before Phase 2 removes `tx_ready`.
+ *   2. Hands that candidate to the session, which buffers it into the executor
+ *      (`storeServerTransaction`) as the ONLY signing source.
  *
- * ## Why NOT "prefer tool-output for signing" (design-doc literal) in Phase 1
+ * ## Why this is the sole source (Phase 2)
+ * The production backend (agent-backend-ts) writes the signable payload on
+ * `tool-output-available` and emits `data-tx_ready` only as a hollow
+ * `{typed_confirm:true}` marker (no tx body) for high-distrust calldata tools —
+ * a signal the CLI does not consume. Phase 1 kept the backend `tx_ready`
+ * authoritative and cross-checked (parity) the client-enriched candidate against
+ * it; that dual-read + parity machinery is removed here now that the port has
+ * baked on main and tool-output is what production actually emits.
+ *
+ * ## Fail-closed chain handling
  * `enrichBuildResult` injects `from_chain/chain/to_chain` from the TOOL-CALL
  * ARGUMENTS (`agent.go:8324`) — which the CLI never sees (it holds only tool
  * OUTPUT). A raw tool-output that omits chain would sign on the executor's
  * Ethereum default. So we FAIL CLOSED on chain here (require a self-consistent
- * `chain⇄chain_id` in the OUTPUT) and keep `tx_ready` authoritative when signable.
- * A tool-output frame for a `produces_calldata` tool is co-buffered + co-gated
- * with its `tx_ready` twin (agent.go:4838-4856 buffer, 6397-6402 flush, dropped
- * together on any block) — so preferring `tx_ready` never loses a frame, and the
- * only `tx_ready`-exclusive signal (`typed_confirm`) is not consumed by the CLI.
+ * `chain⇄chain_id` in the OUTPUT) — a candidate that can't prove its chain is
+ * never derived (→ never signed).
  *
  * ZERO agent-backend / mcp-ts change; entirely within `clients/cli`.
  */
@@ -56,13 +52,11 @@ export const POLYMARKET_SETUP_TRADING_TOOL = 'polymarket_setup_trading'
 
 /**
  * FLAT-output signable tools the CLI enriches client-side. Two kinds:
- *  - off-chain flat builders with NO `tx_ready` (polymarket) — the ONLY signing
- *    source; unchanged from #922.
- *  - `produces_calldata` flat tools that DO emit `tx_ready` (`erc20_approve`) or
- *    emit a structurally-unsignable `tx_ready` (`build_custom_*`, divergent
- *    `to_address`/`calldata`). For these, `tx_ready` stays authoritative when
- *    signable; the enriched candidate is the parity reference (and the sign
- *    source only when `tx_ready` can't sign).
+ *  - off-chain flat builders (polymarket) whose signable calldata rides
+ *    tool-output; unchanged from #922.
+ *  - `produces_calldata` flat tools (`erc20_approve`, `build_custom_*` — the
+ *    latter with divergent `to_address`/`calldata` field names). The enriched
+ *    candidate is the sign source.
  *
  * Deliberately EXCLUDED: `polymarket_place_bet` / `polymarket_setup_deposit_wallet`
  * (EIP-712, signed via `sign_typed_data`).
@@ -97,15 +91,16 @@ export const DIVERGENT_FIELD_TOOLS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * `execute_*` PREP tools. Their raw output is already the signer-ready
+ * `execute_*` PREP tools. Their raw tool-output is already the signer-ready
  * `{txArgs, approvalTxArgs?, stepperConfig, resolved}` envelope the executor
- * parses verbatim — no enrichment needed. In Phase 1 these are PARITY-ONLY: the
- * candidate is compared to `tx_ready` and logged, but `tx_ready` always signs
- * class E (it is present + signable for every successful `produces_calldata`
- * tool). Never becomes the sign source in practice (co-gating guarantees the
- * tool-output frame never arrives without its `tx_ready` twin).
+ * parses verbatim — no enrichment needed. In Phase 2 these SIGN from tool-output
+ * (production emits the payload there; `data-tx_ready` is a hollow marker). The
+ * fail-closed gate is the `txArgs.tx_encoding` requirement in
+ * `deriveToolOutputCandidate` — the mirror of the backend's phantom-card
+ * suppression (`enrichBuildResult`, agent.go:8294-8300): a malformed prep
+ * envelope with no `tx_encoding` yields no candidate → nothing signs.
  */
-export const CLI_PARITY_PREP_TOOLS: ReadonlySet<string> = new Set([
+export const CLI_SIGNABLE_PREP_TOOLS: ReadonlySet<string> = new Set([
   'execute_swap',
   'execute_send',
   'execute_contract_call',
@@ -213,6 +208,47 @@ function asChainIdString(value: unknown): string | undefined {
   return undefined
 }
 
+/**
+ * Resolve an `execute_*` prep envelope's `txArgs` chain to a KNOWN, self-consistent
+ * chain, or null when it can't be trusted. This is the prep-path analogue of
+ * `resolveStrictEvmChain` (#927 Phase 2 — the reviewers' converged fund-safety
+ * finding): prep now signs from tool-output, so it needs the same fail-closed
+ * chain guard the flat path already has. Two failure modes it closes:
+ *  - NO resolvable chain (`txArgs` omits/garbles both `chain` and `chain_id`) —
+ *    the executor's single-leg branch would otherwise DEFAULT to Ethereum
+ *    (`resolveChainFromTxReady(...) || Chain.Ethereum`) and broadcast on the wrong
+ *    chain. Fail closed instead.
+ *  - DISAGREEING `chain` vs `chain_id` — the executor resolves `chain` (name)
+ *    BEFORE `chain_id`, so a mismatch (e.g. chain "Base" + chain_id 1) would
+ *    silently sign on the name's chain. Reject rather than pick one.
+ * Unlike the flat guard this is NOT EVM-only: prep also carries non-EVM sends
+ * (Cosmos/Solana), whose `chain_id` may be absent or non-numeric — so a chain that
+ * resolves by NAME alone (no resolvable `chain_id`) is accepted; only a
+ * present-and-disagreeing pair, or a total non-resolution, fails closed.
+ */
+function resolvePrepChain(txArgs: Record<string, unknown>): Chain | null {
+  const byName = asChainString(txArgs.chain) ? resolveChain(asChainString(txArgs.chain)!) : null
+  const byId = asChainIdString(txArgs.chain_id) ? resolveChainId(asChainIdString(txArgs.chain_id)!) : null
+  if (!byName && !byId) return null
+  if (byName && byId && byName !== byId) return null
+  return byName ?? byId
+}
+
+/**
+ * Resolve the parent chain metadata on an execute_* prep envelope the same way the
+ * executor does for single-leg payloads: `chain` → `from_chain` → `chain_id`.
+ * Returns null when present metadata is unresolved or self-conflicting.
+ */
+function resolvePrepParentChain(env: Record<string, unknown>): Chain | null {
+  const byChain = asChainString(env.chain) ? resolveChain(asChainString(env.chain)!) : null
+  const byFromChain = asChainString(env.from_chain) ? resolveChain(asChainString(env.from_chain)!) : null
+  const byId = asChainIdString(env.chain_id) ? resolveChainId(asChainIdString(env.chain_id)!) : null
+  const candidates = [byChain, byFromChain, byId].filter((c): c is Chain => c !== null)
+  if (candidates.length === 0) return null
+  if (candidates.some(c => c !== candidates[0])) return null
+  return candidates[0]
+}
+
 // ============================================================================
 // Flat-tool enrichment (the port) — enrichBuildResult + flat approval split
 // ============================================================================
@@ -295,220 +331,56 @@ export type ToolOutputCandidate = {
  * null when the tool is not signable / the output carries no signable tx.
  *  - FLAT tools → `buildTxReadyFromToolOutput` (the port).
  *  - `execute_*` PREP tools → passthrough of the already-signer-ready envelope
- *    (must carry `txArgs`), for PARITY only.
+ *    (must carry `txArgs` with a `tx_encoding` discriminator).
  */
 export function deriveToolOutputCandidate(toolName: string, output: unknown): ToolOutputCandidate | null {
   if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) {
     const payload = buildTxReadyFromToolOutput(toolName, output)
     return payload ? { payload, source: 'flat', toolName } : null
   }
-  if (CLI_PARITY_PREP_TOOLS.has(toolName)) {
+  if (CLI_SIGNABLE_PREP_TOOLS.has(toolName)) {
     const env = asRecord(output)
     if (!env || env.status === 'error' || 'error' in env) return null
     const txArgs = asRecord(env.txArgs)
     if (!txArgs) return null
     // Mirror the backend phantom-card guard (enrichBuildResult, agent.go:8294-8300):
     // an execute-prep envelope whose `txArgs` lacks a `tx_encoding` discriminator is
-    // structurally malformed and the backend SUPPRESSES its `tx_ready` (returns nil,
-    // emitting only a live tool-output frame). Refuse to derive a candidate for it —
-    // otherwise, with no `tx_ready` twin to compare against, it could become a sign
-    // source. (`selectAndBufferSignable` also never signs a `source:'prep'`
-    // candidate — belt-and-suspenders; prep is PARITY-ONLY.)
+    // structurally malformed and the backend SUPPRESSES its card. Refuse to derive a
+    // candidate for it — this is the load-bearing fail-closed gate for prep signing
+    // (a phantom card yields no candidate → nothing signs).
     if (typeof txArgs.tx_encoding !== 'string' || txArgs.tx_encoding === '') return null
+    // Fail-closed chain guard (parity with the flat path's resolveStrictEvmChain):
+    // reject a prep envelope with no resolvable chain (would default to Ethereum at
+    // sign time) or a disagreeing chain⇄chain_id (would silently sign on the name's
+    // chain). For a multi-leg envelope `env.txArgs` is the MAIN leg; the executor
+    // separately enforces approval⇄main⇄parent chain agreement. For a single-leg
+    // prep envelope, guard the parent metadata too: the executor resolves top-level
+    // `chain` / `from_chain` / `chain_id` BEFORE `txArgs`, so a conflicting parent
+    // would otherwise sign the child tx on the wrong chain.
+    const prepChain = resolvePrepChain(txArgs)
+    if (!prepChain) return null
+    const hasParentChainMetadata =
+      asChainString(env.chain) !== undefined ||
+      asChainString(env.from_chain) !== undefined ||
+      asChainIdString(env.chain_id) !== undefined
+    if (hasParentChainMetadata) {
+      const parentChain = resolvePrepParentChain(env)
+      if (!parentChain || parentChain !== prepChain) return null
+    }
+    // Multi-leg guard: a prep envelope's approval leg (`approvalTxArgs`) carries its
+    // own chain metadata. The executor resolves that leg's `chain` BEFORE `chain_id`,
+    // so a self-conflicting approval leg (e.g. `chain: Base, chain_id: 1`) resolves to
+    // Base and can pass the approval⇄main comparison while its own metadata disagrees
+    // — signing the APPROVAL on the wrong chain. Run the same fail-closed
+    // self-consistency check and require the approval leg to match the main prep chain.
+    const approvalTxArgs = asRecord(env.approvalTxArgs)
+    if (approvalTxArgs) {
+      const approvalChain = resolvePrepChain(approvalTxArgs)
+      if (!approvalChain || approvalChain !== prepChain) return null
+    }
     return { payload: env as TxReadyPayload, source: 'prep', toolName }
   }
   return null
-}
-
-// ============================================================================
-// Parity cross-check — the Phase-1 deliverable
-// ============================================================================
-
-/** One canonical signable leg, field-name- and case-normalized so the
- *  client-enriched candidate and the backend `tx_ready` compare apples-to-apples
- *  regardless of the source field convention (`to`/`to_address`,
- *  `data`/`calldata`) or EVM/non-EVM shape. */
-type CanonicalLeg = {
-  to?: string
-  value?: string
-  data?: string
-  gasLimit?: string
-  chain?: string
-  chainId?: string
-  txEncoding?: string
-  amount?: string
-  memo?: string
-}
-
-/** Canonical form of a whole signable payload for parity comparison. */
-export type CanonicalTx = {
-  legs: CanonicalLeg[]
-  /** tx_ready-exclusive fields that legitimately never ride tool-output
-   *  (reported, not treated as a hard divergence). */
-  exclusive: string[]
-}
-
-function str(value: unknown): string | undefined {
-  if (typeof value === 'string' && value !== '') return value
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  return undefined
-}
-
-/** The nested tx object under any of the known keys (mirrors executor
- *  `extractNestedTx`), else the leg's own `txArgs` (non-EVM prep), else the leg. */
-function nestedSource(legObj: Record<string, unknown>): Record<string, unknown> {
-  const nested =
-    (asRecord(legObj.tx) ||
-      asRecord(legObj.swap_tx) ||
-      asRecord(legObj.send_tx) ||
-      asRecord((legObj.txArgs as Record<string, unknown>)?.tx)) ??
-    asRecord(legObj.txArgs) ??
-    legObj
-  return nested
-}
-
-/** Canonicalize a `gas_limit` for PARITY comparison ONLY. Unlike the
- *  signing-path `normalizeGasLimit` (which deliberately DROPS a hex value — the
- *  SDK is never fed hex), parity must still SEE a hex gas so a hex-vs-decimal
- *  divergence between the two channels is caught. Accepts decimal OR 0x-hex and
- *  reduces both to a canonical decimal string, so `0x5208` and `21000` compare
- *  EQUAL (no false divergence) while `0x5208` vs `30000` is caught. Malformed →
- *  undefined (absent on both sides is not a divergence). */
-function canonGasLimit(value: unknown): string | undefined {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return String(value)
-  if (typeof value === 'string') {
-    const t = value.trim()
-    if (/^\d+$/.test(t) || /^0x[0-9a-fA-F]+$/.test(t)) {
-      try {
-        const n = BigInt(t)
-        return n > 0n ? n.toString() : undefined
-      } catch {
-        return undefined
-      }
-    }
-  }
-  return undefined
-}
-
-function canonLeg(legObj: Record<string, unknown>): CanonicalLeg {
-  const src = nestedSource(legObj)
-  // Chain can live at the envelope top level (flat/enriched), on `txArgs`
-  // (execute_* prep) or on the nested tx — consult all so a prep-vs-tx_ready
-  // chain divergence is caught (wrong-chain routing is the catastrophic case).
-  const txArgs = asRecord(legObj.txArgs)
-  const toRaw = str(src.to) ?? str(src.to_address)
-  const dataRaw = str(src.data) ?? str(src.calldata)
-  const leg: CanonicalLeg = {
-    to: toRaw ? toRaw.toLowerCase() : undefined,
-    value: normalizeValue(src.value),
-    data: dataRaw ? dataRaw.toLowerCase() : undefined,
-    gasLimit: canonGasLimit(src.gas_limit),
-    chain: str(legObj.chain) ?? str(txArgs?.chain) ?? str(src.chain),
-    chainId: str(legObj.chain_id) ?? str(txArgs?.chain_id) ?? str(src.chain_id),
-    txEncoding: str(src.tx_encoding) ?? str(txArgs?.tx_encoding),
-    amount: str(src.amount) ?? str(txArgs?.amount),
-    memo: str(src.memo) ?? str(txArgs?.memo),
-  }
-  return leg
-}
-
-const TX_READY_EXCLUSIVE_KEYS = ['typed_confirm', 'sequence_id', 'sequence_index', 'sequence_total'] as const
-
-function collectExclusive(payload: Record<string, unknown>): string[] {
-  const found: string[] = []
-  const scan = (obj: Record<string, unknown> | null) => {
-    if (!obj) return
-    for (const k of TX_READY_EXCLUSIVE_KEYS) if (k in obj && !found.includes(k)) found.push(k)
-  }
-  scan(payload)
-  scan(asRecord(payload.tx))
-  scan(asRecord(payload.txArgs))
-  return found
-}
-
-/**
- * Canonicalize a signable payload (client-enriched candidate OR backend
- * `tx_ready`) into leg tuples for parity comparison. Handles single-leg
- * (`{tx}`, `{swap_tx}`, `{send_tx}`, `{txArgs.tx}`), non-EVM (`{txArgs:{to,
- * amount,memo,tx_encoding}}`), and two-leg (`{approvalTxArgs, txArgs}`) shapes.
- */
-export function canonicalizeForParity(payload: unknown): CanonicalTx | null {
-  const env = asRecord(payload)
-  if (!env) return null
-  const approval = asRecord(env.approvalTxArgs)
-  const main = asRecord(env.txArgs)
-  const legs: CanonicalLeg[] = approval && main ? [canonLeg(approval), canonLeg(main)] : [canonLeg(env)]
-  return { legs, exclusive: collectExclusive(env) }
-}
-
-/** Result of comparing a client-enriched candidate to the backend `tx_ready`. */
-export type ParityResult = {
-  /** True when all safety-relevant leg fields agree across both channels. */
-  match: boolean
-  /** Human-readable safety-relevant divergences (empty when `match`). */
-  divergences: string[]
-  /** tx_ready-exclusive fields present on tx_ready but not tool-output
-   *  (expected by backend design — informational, never breaks `match`). */
-  txReadyExclusive: string[]
-}
-
-const HARD_FIELDS: Array<keyof CanonicalLeg> = [
-  'to',
-  'value',
-  'data',
-  'chain',
-  'chainId',
-  'txEncoding',
-  'amount',
-  'memo',
-  // gas_limit is signing-relevant, NOT advisory: signEvmServerTx copies a
-  // server-supplied gas_limit into the signed ethereumSpecific.gasLimit when it
-  // exceeds the SDK estimate, so a gas_limit divergence means different signed
-  // bytes/fee. Parity must surface it.
-  'gasLimit',
-]
-
-/**
- * Compare a client-enriched tool-output candidate to the backend `tx_ready` for
- * the SAME tool call. Surfaces safety-relevant divergences (to / value / data /
- * chain / chain_id / tx_encoding / amount / memo / gas_limit, per leg, plus leg
- * count) so the caller can log them LOUDLY. This is how Phase 1 proves the
- * client-side port against the live backend before Phase 2 makes tool-output the
- * sole source. `gas_limit` counts: it changes the signed EVM gasLimit (see
- * `HARD_FIELDS`). Only tx_ready-exclusive fields (typed_confirm, sequence_id)
- * are excluded from `match`.
- */
-export function diffToolOutputParity(enriched: unknown, txReady: unknown): ParityResult {
-  const ce = canonicalizeForParity(enriched)
-  const ct = canonicalizeForParity(txReady)
-  const divergences: string[] = []
-  if (!ce || !ct) {
-    return {
-      match: false,
-      divergences: [`uncomparable payload (enriched=${ce ? 'ok' : 'null'}, tx_ready=${ct ? 'ok' : 'null'})`],
-      txReadyExclusive: ct?.exclusive ?? [],
-    }
-  }
-  if (ce.legs.length !== ct.legs.length) {
-    divergences.push(`leg count: tool-output ${ce.legs.length} vs tx_ready ${ct.legs.length}`)
-  }
-  const n = Math.min(ce.legs.length, ct.legs.length)
-  for (let i = 0; i < n; i++) {
-    for (const f of HARD_FIELDS) {
-      const a = ce.legs[i][f]
-      const b = ct.legs[i][f]
-      // Only flag when BOTH sides carry the field and they differ, or one is
-      // present with a signing-relevant value the other lacks. A field absent
-      // on both is not a divergence.
-      if (a !== b && !(a === undefined && b === undefined)) {
-        divergences.push(`leg[${i}].${f}: tool-output ${a ?? '∅'} vs tx_ready ${b ?? '∅'}`)
-      }
-    }
-  }
-  const txReadyExclusive = ct.exclusive.filter(k => !ce.exclusive.includes(k))
-  // `match` ignores only the tx_ready-exclusive fields (legitimately never on
-  // tool-output). Every HARD_FIELDS divergence — incl. gas_limit — fails parity.
-  return { match: divergences.length === 0, divergences, txReadyExclusive }
 }
 
 // ============================================================================
@@ -519,12 +391,18 @@ export function diffToolOutputParity(enriched: unknown, txReady: unknown): Parit
  * Would the executor's signer accept this payload? Mirrors the real
  * requirements (`signEvmServerTx` needs `extractNestedTx().to`;
  * `parseNonEvmEnvelope` needs `txArgs.{to,amount}`; multi-leg needs both legs).
- * Used by the session to decide whether `tx_ready` is USABLE before preferring
- * it — `storeServerTransaction` buffers some structurally-present-but-unsignable
- * payloads (e.g. `build_custom_*` `tx_ready` wrapping `to_address`/`calldata`),
- * which would only throw at sign time; this lets the session fall back to the
- * normalized tool-output candidate instead.
+ * The session's sign gate (`selectAndBufferSignable`) uses this as the
+ * fail-closed structural check before buffering a tool-output candidate — a
+ * structurally-present-but-unsignable payload (e.g. a `build_custom_*` shape the
+ * enricher couldn't normalize) is never routed to the signer.
  */
+/** A non-empty string, or a finite number stringified; else undefined. */
+function str(value: unknown): string | undefined {
+  if (typeof value === 'string' && value !== '') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
 export function payloadLooksSignable(payload: unknown): boolean {
   const env = asRecord(payload)
   if (!env) return false

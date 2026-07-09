@@ -57,6 +57,14 @@ export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
+// Public-boundary argument validation (AUDIT-R3 TASK-020).
+// Zod schemas + safe-parse helpers for chain and ticker strings.
+// Use `parseChain` / `parseTicker` to validate strings from LLM output,
+// HTTP bodies, or CLI args BEFORE passing them to any SDK tool — you get a
+// typed error instead of a late crash inside getChainKind / resolvers[].
+export type { ParseChainResult, ParseTickerResult } from './tools/parse'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from './tools/parse'
+
 // Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
 // Ported from the agent-backend validator — PURE math only, no grounding.
 // Lets mcp-ts / agent-backend ground claimed amounts and fees through the SDK
@@ -725,6 +733,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,

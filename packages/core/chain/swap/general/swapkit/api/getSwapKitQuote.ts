@@ -4,6 +4,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 import { SwapKitEnabledChain, SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import {
@@ -350,6 +351,11 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
   if (!evmTx.to) {
     throw new Error('SwapKit EVM transaction is missing a required to field.')
   }
+
+  // AGG-02: SwapKit routes through many different bridge/DEX contracts by design
+  // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist would
+  // false-block legitimate routes, so log (never throw). See knownAggregatorRouters.ts.
+  logUnenforcedAggregatorDestination('swapkit', evmTx.to)
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
