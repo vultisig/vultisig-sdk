@@ -198,7 +198,7 @@ export type JupiterSwapParams = {
   toContractAddress?: string
   /** Exact input amount in lamports / token base units. */
   amountBaseUnits: bigint
-  /** Slippage tolerance in basis points (default 100 = 1%). */
+  /** Slippage tolerance in basis points (default {@link JUPITER_DEFAULT_SLIPPAGE_BPS} = 50 = 0.5%). */
   slippageBps?: number
   /** Override the Jupiter API base URL (default {@link JUPITER_API_BASE_URL}). */
   apiBaseUrl?: string
