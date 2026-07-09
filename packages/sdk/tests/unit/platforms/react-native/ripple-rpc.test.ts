@@ -9,7 +9,12 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getXrpAccountInfo, getXrpBalance, submitXrpTx } from '../../../../src/platforms/react-native/chains/ripple/rpc'
+import {
+  getXrpAccountInfo,
+  getXrpBalance,
+  submitXrpTx,
+  XrpSubmitRejectedError,
+} from '../../../../src/platforms/react-native/chains/ripple/rpc'
 
 const RPC_URL = 'https://xrplcluster.com'
 const UNFUNDED = 'rUnfundedAccount1234567890abcdef'
@@ -142,7 +147,7 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
     })
   })
 
-  it('a validated tec* result throws a clear on-ledger-consumed error, not a generic one', async () => {
+  it('a validated tecUNFUNDED_PAYMENT throws a typed on-ledger-consumed error, not a generic one', async () => {
     mockFetchSequence([
       {
         result: {
@@ -159,9 +164,64 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
       },
     ])
 
-    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(
-      /applied on-ledger.*fee \+ sequence consumed.*Do not retry with the same sequence/s
-    )
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('on-ledger-tec')
+    expect(error.engineResult).toBe('tecUNFUNDED_PAYMENT')
+    expect(error.txHash).toBe(TX_HASH)
+    expect(error.message).toMatch(/applied on-ledger.*fee \+ sequence consumed.*Do not retry with the same sequence/s)
+  })
+
+  it('a validated tecPATH_DRY throws the same typed on-ledger-consumed error', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecPATH_DRY',
+          engine_result_message: 'Path could not send partial amount.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+      {
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tecPATH_DRY' },
+        },
+      },
+    ])
+
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('on-ledger-tec')
+    expect(error.engineResult).toBe('tecPATH_DRY')
+  })
+
+  it('a tec* result not yet validated (still pending) is not misclassified as a hard on-ledger failure', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecUNFUNDED_PAYMENT',
+          engine_result_message: 'Insufficient funds.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+      {
+        // Found by hash, but the ledger it's in hasn't validated yet —
+        // XRPL ledgers close ~every 4s, so this is the expected state for
+        // a lookup performed immediately after submit.
+        result: {
+          validated: false,
+        },
+      },
+    ])
+
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('pending-validation')
+    expect(error.reason).not.toBe('on-ledger-tec')
+    expect(error.message).toMatch(/has not reached a validated ledger yet/)
   })
 
   it('a tec* result NOT found on-ledger surfaces the original submit error (fund-safe default)', async () => {
@@ -182,7 +242,11 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
       },
     ])
 
-    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(/XRP submit rejected: tecUNFUNDED_PAYMENT/)
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('not-on-ledger')
+    expect(error.message).toMatch(/XRP submit rejected: tecUNFUNDED_PAYMENT/)
   })
 
   it('a non-tec* rejection (e.g. temMALFORMED) throws directly without a ledger lookup', async () => {
@@ -195,6 +259,10 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
       },
     ])
 
-    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(/XRP submit rejected: temMALFORMED/)
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('not-on-ledger')
+    expect(error.message).toMatch(/XRP submit rejected: temMALFORMED/)
   })
 })
