@@ -5,6 +5,7 @@ import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
+import type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
 import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
 import type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
@@ -96,7 +97,7 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * provider stays eligible, matching existing behavior for every other
    * consumer.
    */
-  excludeProviders?: SwapQuoteProviderName[]
+  excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
 export type SwapQuoteProviderName =
@@ -108,6 +109,8 @@ export type SwapQuoteProviderName =
   | 'Jupiter'
   | 'THORChain'
   | 'MayaChain'
+
+export type SwapQuoteProviderExcludeName = SwapQuoteProviderName | GeneralSwapProvider
 
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
@@ -177,6 +180,28 @@ const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
 
 const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
   providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
+
+const swapQuoteProviderExcludeAlias: Record<GeneralSwapProvider, SwapQuoteProviderName> = {
+  '1inch': '1inch',
+  'li.fi': 'LiFi',
+  kyber: 'KyberSwap',
+  swapkit: 'SwapKit',
+  cowswap: 'CowSwap',
+  jupiter: 'Jupiter',
+}
+
+const swapQuoteProviderExcludeNames = new Set<SwapQuoteProviderExcludeName>([
+  ...providerPreferenceOrder,
+  ...(Object.keys(swapQuoteProviderExcludeAlias) as GeneralSwapProvider[]),
+])
+
+function normalizeExcludeProviderName(providerName: SwapQuoteProviderExcludeName): SwapQuoteProviderName {
+  if (!swapQuoteProviderExcludeNames.has(providerName)) {
+    throw new Error(`Unknown swap quote provider exclusion: ${providerName}`)
+  }
+
+  return swapQuoteProviderExcludeAlias[providerName as GeneralSwapProvider] ?? providerName
+}
 
 const formatTradingHaltedMessage = (reason: string) =>
   `This swap route is temporarily unavailable — ${reason}. Please try again later.`
@@ -833,7 +858,7 @@ export const findSwapQuote = async ({
   // gets identical exclusion semantics regardless of which fetcher list a
   // provider happens to register in. Default (omitted/empty) is a no-op —
   // every other consumer's behavior is unchanged.
-  const excludeProviderSet = new Set(excludeProviders ?? [])
+  const excludeProviderSet = new Set((excludeProviders ?? []).map(normalizeExcludeProviderName))
   const notExcluded = (fetcher: SwapQuoteFetcher) => !excludeProviderSet.has(fetcher.providerName)
 
   const generalFetchers = getGeneralFetchers().filter(notExcluded)

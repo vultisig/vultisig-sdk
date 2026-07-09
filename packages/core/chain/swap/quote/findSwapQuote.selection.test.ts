@@ -1422,6 +1422,58 @@ describe('findSwapQuote net-output provider selection (issues #605/#804)', () =>
     expect(quote.quote.general.provider).not.toBe('cowswap')
   })
 
+  it('excludeProviders accepts returned quote provider ids so ["cowswap"] also excludes CowSwap', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getCowSwapQuote).mockResolvedValue(minimalCowSwapQuote('1000000'))
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('900000', 'kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+
+    const quote = await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+      excludeProviders: ['cowswap'],
+    })
+
+    if (!('general' in quote.quote)) {
+      throw new Error('Expected general quote')
+    }
+    expect(getCowSwapQuote).not.toHaveBeenCalled()
+    expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('excludeProviders fails closed when every eligible provider is excluded', async () => {
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+        excludeProviders: ['CowSwap', 'KyberSwap', '1inch', 'LiFi', 'SwapKit', 'THORChain', 'MayaChain'],
+      })
+    ).rejects.toThrow('No swap routes found.')
+
+    expect(getCowSwapQuote).not.toHaveBeenCalled()
+    expect(getKyberSwapQuote).not.toHaveBeenCalled()
+    expect(getOneInchSwapQuote).not.toHaveBeenCalled()
+    expect(getLifiSwapQuote).not.toHaveBeenCalled()
+    expect(getSwapKitQuote).not.toHaveBeenCalled()
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it('excludeProviders rejects unknown tokens instead of silently failing open', async () => {
+    await expect(
+      findSwapQuote({
+        ...evmSameChainCoins,
+        amount: 1n,
+        excludeProviders: ['not-a-provider' as never],
+      })
+    ).rejects.toThrow('Unknown swap quote provider exclusion: not-a-provider')
+
+    expect(getCowSwapQuote).not.toHaveBeenCalled()
+    expect(getKyberSwapQuote).not.toHaveBeenCalled()
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
   it('excludeProviders is additive/opt-in: omitting it keeps CowSwap eligible (default behavior for every other consumer is unchanged)', async () => {
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
