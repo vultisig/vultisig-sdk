@@ -82,6 +82,54 @@ describe('validateLimitSwapInputs', () => {
     ).toThrow(/unsupported THORChain asset prefix/)
   })
 
+  it('accepts a Solana limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a base58 string that is not a valid Solana public key (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: '1'.repeat(44),
+      })
+    ).toThrow(/valid Solana address/)
+  })
+
+  it('accepts a Noble limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'NOBLE.USDC',
+        dest_addr: 'noble1qyqszqgpqyqszqgpqyqszqgpqyqszqgp6s5k4j',
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a MayaChain-only target asset as a THORChain limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'ADA.ADA',
+        dest_addr: 'addr1qxy2lpan99fcnhhyj96y0j0js5f2fxzua6tv5efztsc2q6euld',
+      })
+    ).toThrow(/unsupported THORChain asset prefix/)
+
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'MAYA.CACAO',
+        dest_addr: 'maya1x2whgc2nt665y0kc44uywhynazvp0l8tp0vtu6',
+      })
+    ).toThrow(/unsupported THORChain asset prefix/)
+  })
+
   it('rejects malformed destination addresses', () => {
     expect(() =>
       validateLimitSwapInputs({
@@ -167,6 +215,27 @@ describe('validateLimitSwapInputs', () => {
         target_price: 0.00000001,
       })
     ).toBe(1n)
+  })
+
+  it('rejects source_amount/target_price combinations that floor LIM to 0 (THOR-02)', () => {
+    // 1_000_000 * 1 (scaled target_price) / 1e8 = 0.01, floors to 0.
+    // A zero trade target is treated by THORChain as an unprotected market
+    // order, so this must fail closed rather than silently reinterpreting
+    // the user's limit swap as a market swap.
+    expect(() =>
+      getLimitSwapLimitAmount({
+        source_amount: 1_000_000,
+        target_price: 0.00000001,
+      })
+    ).toThrow(/floors to 0/)
+
+    expect(() =>
+      buildLimitSwapMemo({
+        ...validInput,
+        source_amount: 1_000_000,
+        target_price: 0.00000001,
+      })
+    ).toThrow(/floors to 0/)
   })
 
   it('rejects unsupported expiries', () => {

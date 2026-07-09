@@ -245,6 +245,26 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.native.expected_amount_out).toBe('100')
   })
 
+  it('surfaces a non-integer dstAmount drop via console.warn instead of dropping it silently (SDK-CORRECTNESS-04)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    vi.mocked(getKyberSwapQuote).mockResolvedValue(minimalGeneralQuote('1.5', 'kyber'))
+    vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockImplementation(async ({ swapChain }) => minimalNativeQuote(swapChain, '100'))
+
+    await findSwapQuote({
+      ...evmSameChainCoins,
+      amount: 1n,
+    })
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('KyberSwap'))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('1.5'))
+
+    warnSpy.mockRestore()
+  })
+
   it('attempts SwapKit for newly enabled non-EVM source chains', async () => {
     vi.mocked(getSwapKitQuote).mockResolvedValue({
       dstAmount: '1000000000',

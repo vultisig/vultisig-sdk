@@ -5,7 +5,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
-import { ensureVaultUnlocked } from '../core'
+import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
@@ -115,27 +115,37 @@ export async function sendTransaction(
   // 4. Unlock and sign via compound method
   await ensureVaultUnlocked(vault, params.password)
 
-  const signSpinner = createSpinner(
-    vault.type === 'secure' ? 'Preparing secure signing session...' : 'Signing transaction...'
-  )
-
-  vault.on('signingProgress', ({ step }: any) => {
-    signSpinner.text = `${step.message} (${step.progress}%)`
+  // Refuse a double-spend: fingerprint the resolved tx and check it against the
+  // persistent broadcast journal (shared with the `agent ask` path) BEFORE
+  // signing. A retry of an identical send that hasn't definitively failed is
+  // refused (exit 9) unless --force is passed. The spinner is created INSIDE the
+  // guarded callback so a refusal short-circuits before any misleading
+  // "Signing..." UI, and the broadcast hash is journaled the instant it returns.
+  const intent = buildSendBroadcastIntent(vault, params.chain, dryResult.keysignPayload, {
+    isMax: params.amount === 'max',
   })
+  let signSpinner: ReturnType<typeof createSpinner> | undefined
 
   try {
-    const result = await vault.send({
-      chain: params.chain,
-      to: params.to,
-      amount: params.amount,
-      symbol: params.tokenId,
-      memo: params.memo,
+    const broadcast = await guardedBroadcast(intent, params.force ?? false, async () => {
+      signSpinner = createSpinner(
+        vault.type === 'secure' ? 'Preparing secure signing session...' : 'Signing transaction...'
+      )
+      vault.on('signingProgress', ({ step }: any) => {
+        if (signSpinner) signSpinner.text = `${step.message} (${step.progress}%)`
+      })
+      const result = await vault.send({
+        chain: params.chain,
+        to: params.to,
+        amount: params.amount,
+        symbol: params.tokenId,
+        memo: params.memo,
+      })
+      if (result.dryRun) throw new Error('unreachable')
+      return result as Extract<typeof result, { dryRun: false }>
     })
 
-    if (result.dryRun) throw new Error('unreachable')
-    const broadcast = result as Extract<typeof result, { dryRun: false }>
-
-    signSpinner.succeed(`Transaction broadcast: ${broadcast.txHash}`)
+    signSpinner?.succeed(`Transaction broadcast: ${broadcast.txHash}`)
 
     const txResult: TransactionResult = {
       txHash: broadcast.txHash,
@@ -150,6 +160,9 @@ export async function sendTransaction(
     }
 
     return txResult
+  } catch (err) {
+    signSpinner?.stop()
+    throw err
   } finally {
     vault.removeAllListeners('signingProgress')
   }
