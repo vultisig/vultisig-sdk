@@ -1,5 +1,12 @@
 # @vultisig/examples-shared
 
+## 0.1.116
+
+### Patch Changes
+
+- Updated dependencies [[`c5e89cb`](https://github.com/vultisig/vultisig-sdk/commit/c5e89cb317ae6f4ca00eb6c628ad6bac636e4821), [`6d78a03`](https://github.com/vultisig/vultisig-sdk/commit/6d78a03651e39b2b99cfbb051dad24b03e303835), [`3fced18`](https://github.com/vultisig/vultisig-sdk/commit/3fced18987a1c2dbf6889e1d6b332db5652ecda7), [`8b72850`](https://github.com/vultisig/vultisig-sdk/commit/8b7285043adc1f02dc8c7b7d827f516b3edff55b), [`9a1fc02`](https://github.com/vultisig/vultisig-sdk/commit/9a1fc0276ddc8fc905fab392875499d39011520d), [`0e03972`](https://github.com/vultisig/vultisig-sdk/commit/0e03972ef9f477bb7dc7b4e01ad286b37c2b7561), [`fe1ddf5`](https://github.com/vultisig/vultisig-sdk/commit/fe1ddf5ee9c325f0873a5a402a074819897999d6)]:
+  - @vultisig/sdk@2.19.9
+
 ## 0.1.115
 
 ### Patch Changes
