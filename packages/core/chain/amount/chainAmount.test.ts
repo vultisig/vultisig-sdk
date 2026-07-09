@@ -14,6 +14,27 @@ describe('toChainAmount', () => {
     expect(toChainAmount(0.1, 18)).toBe(100_000_000_000_000_000n)
   })
 
+  it('truncates (floors) at decimals=0 — never rounds up (fund-safety)', () => {
+    // Cardano native assets, low-decimal tokens: the signed amount must not
+    // exceed what the user stated. viem parseUnits rounds half-up; we floor.
+    expect(toChainAmount('0.5', 0)).toBe(0n)   // was 1n before truncation
+    expect(toChainAmount('0.6', 0)).toBe(0n)   // was 1n
+    expect(toChainAmount('0.999', 0)).toBe(0n) // was 1n
+    expect(toChainAmount('1.5', 0)).toBe(1n)   // was 2n
+    expect(toChainAmount('2.5', 0)).toBe(2n)   // was 3n
+    expect(toChainAmount(1, 0)).toBe(1n)       // integer unchanged
+    expect(toChainAmount(2, 0)).toBe(2n)       // integer unchanged
+  })
+
+  it('truncates excess fractional digits at any decimals (not just 0)', () => {
+    // "1.999" at decimals=2 → 199n (floor), not 200n (round)
+    expect(toChainAmount('1.999', 2)).toBe(199n)
+    // "0.005" at decimals=2 → 0n (floor), not 1n
+    expect(toChainAmount('0.005', 2)).toBe(0n)
+    // "1.004" at decimals=2 → 100n unchanged (no excess digits)
+    expect(toChainAmount('1.004', 3)).toBe(1004n)
+  })
+
   it('normalizes scientific notation via toFixed before parsing', () => {
     // 1e-8 tokens at 10^-10 resolution → 100 smallest units (matches viem parseUnits)
     expect(toChainAmount(1e-8, 10)).toBe(100n)
