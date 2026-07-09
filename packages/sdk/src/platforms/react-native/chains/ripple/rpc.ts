@@ -161,29 +161,26 @@ export async function getXrpLedgerCurrentIndex(rpcUrl: string, signal?: AbortSig
 // ---------------------------------------------------------------------------
 // submit — broadcast a signed tx blob
 //
-// LIMITATION — engine-result handling (CR R7 #1):
+// `submitXrpTx` is the app's ONLY XRP broadcast call site (`xrpTx.ts`'s
+// `buildSignBroadcastXrpSend` calls it directly) — this is NOT a dead/unused
+// helper.
+//
 // XRPL `submit` returns one of several engine-result classes (`tes*`, `tec*`,
-// `ter*`, `tem*`, `tef*`, `tel*`). This helper currently treats everything
-// other than `tesSUCCESS`/`terQUEUED` as fatal — including `tec*` codes.
+// `ter*`, `tem*`, `tef*`, `tel*`). `tesSUCCESS`/`terQUEUED` are provisional
+// success. `tec*` is a half-truth: it means the tx WAS applied on-ledger
+// (fee + sequence consumed) even though the requested operation itself
+// failed — it is NOT the same as "never broadcast". A caller that treats a
+// thrown `tec*` error as proof the tx stayed off-ledger and naively retries
+// with the same `Sequence` risks a `tefPAST_SEQ` (or worse, a fund-loss race
+// if the fee has changed) on the retry.
 //
-// That's a half-truth: `tec*` codes mean "applied on-ledger, op failed" —
-// the tx WAS included in a validated ledger and the sequence number IS
-// consumed. A caller that catches the thrown error and naïvely retries with
-// the same `Sequence` will produce a `tefPAST_SEQ` (or worse, a fund-loss
-// race if a fee has changed) on the second attempt.
-//
-// Callers that want safe retry semantics MUST verify on-chain inclusion (a
-// `tx` lookup against the signed blob's hash on the ledger, e.g. via the
-// `tx` JSON-RPC method) before re-broadcasting with the same sequence. The
-// submit helper alone cannot disambiguate "tx never landed" from "tx landed
-// but failed (tec*)".
-//
-// Pre-adoption upgrade path: introduce a `verifyBroadcastByHash` helper and
-// integrate it directly in `submitXrpTx` so the helper returns
-// `{ engineResult, accepted, onLedger }` and callers can branch without a
-// second round-trip. Deferred because `submitXrpTx` is currently unused by
-// app code (broadcast is performed via the platform-agnostic `broadcastXrpTx`
-// path).
+// `submitXrpTx` verifies on-ledger state for `tec*` results before deciding:
+// a `tx` JSON-RPC lookup by hash confirms whether the transaction actually
+// validated on-ledger. If it did, the error message says so explicitly and
+// warns against retrying with the same sequence. If the lookup can't
+// confirm inclusion (not found / transport hiccup), the original `tec*`
+// error is surfaced unchanged — verification is a safety net for a clearer
+// error message, never a path to reporting false success.
 // ---------------------------------------------------------------------------
 
 export type XrpSubmitResult = {
@@ -200,20 +197,45 @@ type SubmitResult = {
   accepted?: boolean
 }
 
+type TxLookupResult = {
+  validated?: boolean
+  meta?: { TransactionResult?: string }
+}
+
+/**
+ * Look up a submitted tx's on-ledger status by hash via the `tx` JSON-RPC
+ * method. Used to disambiguate a `tec*` submit result (fee + sequence
+ * consumed, applied on-ledger, op itself failed) from a tx that was NEVER
+ * included in a validated ledger (network hiccup / expired
+ * `LastLedgerSequence` / server-local rejection) — the latter is fund-safe
+ * to retry with the same sequence, the former is NOT.
+ *
+ * Falls through to `validated: false` on any lookup error (including
+ * `txnNotFound`) — the caller keeps the original `tec*` error in that case,
+ * which is the fund-safe default (verification unavailable, never invented).
+ */
+async function getXrpValidatedTxResult(
+  txHash: string,
+  rpcUrl: string,
+  signal?: AbortSignal
+): Promise<{ validated: boolean; transactionResult?: string }> {
+  try {
+    const result = await rippleCall<TxLookupResult>(rpcUrl, 'tx', { transaction: txHash }, signal)
+    return { validated: result.validated === true, transactionResult: result.meta?.TransactionResult }
+  } catch {
+    return { validated: false }
+  }
+}
+
 /**
  * Submit a signed tx blob. `tesSUCCESS` and `terQUEUED` are treated as
  * provisional-success — the caller should still poll for ledger inclusion.
- * Anything else throws.
  *
- * NOTE — `tec*` engine results: a thrown error here does NOT prove the tx
- * stayed off-ledger. `tec*` codes mean the tx was applied on-ledger with the
- * sequence consumed but the operation itself failed. Callers that want to
- * retry on error MUST first verify non-inclusion against the ledger (e.g. a
- * `tx` JSON-RPC lookup of the signed blob's hash) — otherwise they risk
- * re-using a consumed sequence (which produces a `tefPAST_SEQ` at best,
- * fund-loss races at worst). See the block comment above for the full
- * upgrade path. This helper is currently unused by app code; the limitation
- * is documented rather than fixed in-place.
+ * `tec*` results are verified against the ledger by hash before the final
+ * error is thrown (see the block comment above) — the thrown error text
+ * makes clear whether the tx actually consumed the fee/sequence on-ledger,
+ * so a caller never mistakes a real on-ledger `tec*` failure for a tx that
+ * never landed. Every other non-success engine result throws directly.
  */
 export async function submitXrpTx(
   signedBlobHex: string,
@@ -223,13 +245,27 @@ export async function submitXrpTx(
   const result = await rippleCall<SubmitResult>(rpcUrl, 'submit', { tx_blob: signedBlobHex }, signal)
   const engineResult = result.engine_result ?? ''
   const engineResultMessage = result.engine_result_message ?? ''
-  if (engineResult !== 'tesSUCCESS' && engineResult !== 'terQUEUED') {
-    throw new Error(`XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`)
+  const txHash = result.tx_json?.hash
+
+  if (engineResult === 'tesSUCCESS' || engineResult === 'terQUEUED') {
+    return {
+      engineResult,
+      engineResultMessage,
+      txHash,
+      accepted: result.accepted ?? true,
+    }
   }
-  return {
-    engineResult,
-    engineResultMessage,
-    txHash: result.tx_json?.hash,
-    accepted: result.accepted ?? true,
+
+  if (engineResult.startsWith('tec') && txHash) {
+    const { validated, transactionResult } = await getXrpValidatedTxResult(txHash, rpcUrl, signal)
+    if (validated) {
+      throw new Error(
+        `XRP submit applied on-ledger with a failed result (fee + sequence consumed, transfer NOT completed): ` +
+          `${transactionResult ?? engineResult} — ${engineResultMessage}. txHash=${txHash}. ` +
+          `Do not retry with the same sequence.`
+      )
+    }
   }
+
+  throw new Error(`XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`)
 }

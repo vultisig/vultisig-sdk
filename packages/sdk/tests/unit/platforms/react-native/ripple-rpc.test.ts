@@ -9,17 +9,26 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getXrpAccountInfo, getXrpBalance } from '../../../../src/platforms/react-native/chains/ripple/rpc'
+import { getXrpAccountInfo, getXrpBalance, submitXrpTx } from '../../../../src/platforms/react-native/chains/ripple/rpc'
 
 const RPC_URL = 'https://xrplcluster.com'
 const UNFUNDED = 'rUnfundedAccount1234567890abcdef'
 const FUNDED = 'rFundedAccount1234567890abcdef'
+const TX_HASH = 'ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890'
 
 function mockFetchOnce(body: unknown): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }))
   )
+}
+
+function mockFetchSequence(bodies: unknown[]): void {
+  const fn = vi.fn()
+  for (const body of bodies) {
+    fn.mockImplementationOnce(async () => new Response(JSON.stringify(body), { status: 200 }))
+  }
+  vi.stubGlobal('fetch', fn)
 }
 
 describe('ripple/rpc — account_info error handling', () => {
@@ -93,5 +102,99 @@ describe('ripple/rpc — account_info error handling', () => {
     })
 
     await expect(getXrpAccountInfo(FUNDED, RPC_URL)).rejects.toThrow(/invalidParams/)
+  })
+})
+
+/**
+ * Regression tests for XRP-02: `submitXrpTx` used to throw a generic error
+ * for any non-`tesSUCCESS`/`terQUEUED` engine result, including `tec*`
+ * codes — which mean the tx WAS applied on-ledger (fee + sequence
+ * consumed) even though the requested operation itself failed. A caller
+ * that treated that generic error as "never broadcast" and retried with
+ * the same sequence risked a `tefPAST_SEQ` (or a fund-loss race on a fee
+ * change). `submitXrpTx` now verifies on-ledger inclusion by hash before
+ * deciding what to surface.
+ */
+describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('resolves tesSUCCESS without a ledger lookup', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tesSUCCESS',
+          engine_result_message: 'The transaction was applied.',
+          tx_json: { hash: TX_HASH },
+          accepted: true,
+        },
+      },
+    ])
+
+    const result = await submitXrpTx('DEADBEEF', RPC_URL)
+    expect(result).toEqual({
+      engineResult: 'tesSUCCESS',
+      engineResultMessage: 'The transaction was applied.',
+      txHash: TX_HASH,
+      accepted: true,
+    })
+  })
+
+  it('a validated tec* result throws a clear on-ledger-consumed error, not a generic one', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecUNFUNDED_PAYMENT',
+          engine_result_message: 'Insufficient funds.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+      {
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tecUNFUNDED_PAYMENT' },
+        },
+      },
+    ])
+
+    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(
+      /applied on-ledger.*fee \+ sequence consumed.*Do not retry with the same sequence/s
+    )
+  })
+
+  it('a tec* result NOT found on-ledger surfaces the original submit error (fund-safe default)', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecUNFUNDED_PAYMENT',
+          engine_result_message: 'Insufficient funds.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+      {
+        result: {
+          status: 'error',
+          error: 'txnNotFound',
+          error_message: 'Transaction not found.',
+        },
+      },
+    ])
+
+    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(/XRP submit rejected: tecUNFUNDED_PAYMENT/)
+  })
+
+  it('a non-tec* rejection (e.g. temMALFORMED) throws directly without a ledger lookup', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'temMALFORMED',
+          engine_result_message: 'Malformed transaction.',
+        },
+      },
+    ])
+
+    await expect(submitXrpTx('DEADBEEF', RPC_URL)).rejects.toThrow(/XRP submit rejected: temMALFORMED/)
   })
 })
