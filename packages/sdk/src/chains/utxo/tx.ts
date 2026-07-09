@@ -569,6 +569,40 @@ function buildOpReturnScript(data: Uint8Array): Uint8Array {
   return concat(new Uint8Array([OP_RETURN, OP_PUSHDATA1, data.length]), data)
 }
 
+/**
+ * Estimate the network fee (base units) `buildUtxoSendTx` will charge for a
+ * tx with `inputCount` inputs at `feeRate` sats/byte, optionally carrying an
+ * OP_RETURN memo. Factored out of `buildUtxoSendTx` so a coin-selection
+ * layer (see `select.ts`) can predict the SAME fee the builder will compute
+ * for a given input count — selection and build must agree on the formula,
+ * or "insufficient funds" / change-below-dust outcomes can diverge between
+ * the two steps (UTXO-01).
+ */
+export function estimateUtxoTxFee(
+  chain: UtxoChainName,
+  inputCount: number,
+  feeRate: number,
+  opReturnData?: string
+): bigint {
+  const spec = UTXO_SPECS[chain]
+  if (!spec) throw new Error(`unsupported UTXO chain: ${chain as string}`)
+  const opReturnScript =
+    opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opReturnData)) : undefined
+  // Approximate tx size for fee calc — matches app's heuristic.
+  const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
+  // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
+  const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
+  const txSize = inputCount * bytesPerInput + 2 * 34 + 10 + opReturnBytes
+  // UTXO-03: raise to chain min-relay-fee floor (most acute on Dogecoin) so
+  // selectUtxoInputs and buildUtxoSendTx agree on the same effective rate.
+  const effectiveFeeRate = Math.max(feeRate, UTXO_MIN_FEE_RATE[chain])
+  const sizeFee = BigInt(Math.ceil(txSize * effectiveFeeRate))
+  // UTXO-04: canonical ZIP-317 action-count formula with actual output sizes.
+  const zip317OutputSizes = opReturnScript ? [34n, 34n, BigInt(opReturnBytes)] : [34n, 34n]
+  const zip317Floor = chain === 'Zcash' ? getZcashConventionalFee({ inputCount, outputSizes: zip317OutputSizes }) : 0n
+  return sizeFee > zip317Floor ? sizeFee : zip317Floor
+}
+
 function serializeOutputs(
   toScriptPubKey: Uint8Array,
   amount: bigint,
