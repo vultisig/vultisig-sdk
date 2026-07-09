@@ -224,7 +224,35 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
     expect(error.message).toMatch(/has not reached a validated ledger yet/)
   })
 
-  it('a tec* result NOT found on-ledger surfaces the original submit error (fund-safe default)', async () => {
+  it('a validated tec* result that canonical-ordering-flipped to tesSUCCESS resolves as success, not a thrown error', async () => {
+    // The preliminary `tec*` from `submit` is provisional — XRPL applies
+    // transactions in canonical order within a ledger, so an earlier tx
+    // (e.g. funding the account) can make this one succeed by the time it
+    // validates. Trusting the original submit result here would wrongly
+    // report a failed transfer that actually completed.
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecUNFUNDED_PAYMENT',
+          engine_result_message: 'Insufficient funds.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+      {
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tesSUCCESS' },
+        },
+      },
+    ])
+
+    const result = await submitXrpTx('DEADBEEF', RPC_URL)
+    expect(result.engineResult).toBe('tesSUCCESS')
+    expect(result.accepted).toBe(true)
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('a tec* result whose ledger lookup errors (txnNotFound) is NOT claimed safe to retry — distinct reason from a real preflight rejection', async () => {
     mockFetchSequence([
       {
         result: {
@@ -245,8 +273,10 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
     const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
     expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
     const error = rejection as XrpSubmitRejectedError
-    expect(error.reason).toBe('not-on-ledger')
-    expect(error.message).toMatch(/XRP submit rejected: tecUNFUNDED_PAYMENT/)
+    expect(error.reason).toBe('tec-lookup-unconfirmed')
+    expect(error.reason).not.toBe('not-on-ledger')
+    expect(error.message).toMatch(/could not be confirmed on-ledger/)
+    expect(error.message).not.toMatch(/safe to retry/i)
   })
 
   it('a non-tec* rejection (e.g. temMALFORMED) throws directly without a ledger lookup', async () => {

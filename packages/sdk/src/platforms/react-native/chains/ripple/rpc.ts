@@ -175,13 +175,14 @@ export async function getXrpLedgerCurrentIndex(rpcUrl: string, signal?: AbortSig
 // if the fee has changed) on the retry.
 //
 // `submitXrpTx` verifies on-ledger state for `tec*` results before deciding
-// what to throw: a `tx` JSON-RPC lookup by hash distinguishes three
-// outcomes (see `XrpSubmitRejectionReason` / `XrpTxLookupOutcome`) —
-// confirmed-validated (definitive fee/sequence-consumed failure),
-// not-yet-validated (transient, ledgers close ~4s, not a hard failure),
-// and not-found (fund-safe default, treated like any other rejection).
-// Verification only sharpens the thrown error; it is never a path to
-// reporting false success.
+// what to throw: a `tx` JSON-RPC lookup by hash distinguishes confirmed
+// (definitive fee/sequence-consumed failure, or a canonical-ordering flip
+// to an actual success), not-yet-validated (transient, ledgers close ~4s,
+// not a hard failure), and unconfirmed (lookup failed/not-found — does NOT
+// prove the tx never landed, see `XrpSubmitRejectionReason`). Verification
+// only sharpens the thrown error; it is never a path to reporting false
+// success, and an unconfirmed lookup is never claimed to be "safe to retry"
+// the way a genuine preflight rejection (`tem*`/`tel*`/`tef*`/`ter*`) is.
 // ---------------------------------------------------------------------------
 
 export type XrpSubmitResult = {
@@ -193,8 +194,8 @@ export type XrpSubmitResult = {
 
 /**
  * Why a submit-rejection is fund-relevant or not:
- *  - `on-ledger-tec` — the `tec*` result was confirmed against the ledger
- *    by hash: the tx WAS included in a validated ledger (fee + sequence
+ *  - `on-ledger-tec` — a `tec*` result confirmed against the ledger by
+ *    hash: the tx WAS included in a validated ledger (fee + sequence
  *    consumed), the requested operation itself failed. Retrying with the
  *    same `Sequence` will fail (`tefPAST_SEQ`) or worse race a fee change.
  *  - `pending-validation` — a `tec*` result whose tx was found by hash but
@@ -202,11 +203,23 @@ export type XrpSubmitResult = {
  *    ledgers close every ~4s). Transient: NOT proof the tx landed, NOT
  *    proof it didn't. The caller should re-check by hash rather than
  *    either assume success or blindly resubmit with the same sequence.
- *  - `not-on-ledger` — every other rejection (`tem*`/`tel*`/`tef*`/`ter*`,
- *    or a `tec*` result whose hash lookup came back not-found). The tx
- *    never landed; safe to retry with the same sequence.
+ *  - `tec-lookup-unconfirmed` — a `tec*` result whose hash lookup errored
+ *    (including `txnNotFound`) or returned no hash to check at all. A
+ *    single failed lookup does NOT prove the tx never landed — it may
+ *    simply not have propagated to the queried node yet. Do NOT treat
+ *    this as safe to resubmit with the same sequence; re-check by hash,
+ *    or wait for the network's validated ledger index to pass this tx's
+ *    `LastLedgerSequence` before concluding it's dead.
+ *  - `not-on-ledger` — a non-`tec*` rejection (`tem*`/`tel*`/`tef*`/`ter*`).
+ *    These are preflight rejections XRPL returns BEFORE the tx is applied
+ *    to any ledger, so no fee/sequence was ever consumed — genuinely safe
+ *    to retry with the same sequence.
  */
-export type XrpSubmitRejectionReason = 'on-ledger-tec' | 'pending-validation' | 'not-on-ledger'
+export type XrpSubmitRejectionReason =
+  | 'on-ledger-tec'
+  | 'pending-validation'
+  | 'tec-lookup-unconfirmed'
+  | 'not-on-ledger'
 
 /**
  * Typed rejection from `submitXrpTx` — callers should branch on `reason`
@@ -228,15 +241,30 @@ export class XrpSubmitRejectedError extends Error {
     txHash: string | undefined
   }) {
     const { reason, engineResult, engineResultMessage, txHash } = params
-    const message =
-      reason === 'on-ledger-tec'
-        ? `XRP submit applied on-ledger with a failed result (fee + sequence consumed, transfer NOT completed): ` +
-          `${engineResult} — ${engineResultMessage}. txHash=${txHash}. Do not retry with the same sequence.`
-        : reason === 'pending-validation'
-          ? `XRP submit returned ${engineResult} — ${engineResultMessage}. txHash=${txHash} was found but has not ` +
+    const message = (() => {
+      switch (reason) {
+        case 'on-ledger-tec':
+          return (
+            `XRP submit applied on-ledger with a failed result (fee + sequence consumed, transfer NOT completed): ` +
+            `${engineResult} — ${engineResultMessage}. txHash=${txHash}. Do not retry with the same sequence.`
+          )
+        case 'pending-validation':
+          return (
+            `XRP submit returned ${engineResult} — ${engineResultMessage}. txHash=${txHash} was found but has not ` +
             `reached a validated ledger yet. This is not a definitive failure — re-check by hash before deciding ` +
             `whether to resubmit with the same sequence.`
-          : `XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`
+          )
+        case 'tec-lookup-unconfirmed':
+          return (
+            `XRP submit returned ${engineResult} — ${engineResultMessage}. txHash=${txHash} could not be ` +
+            `confirmed on-ledger (lookup failed or transaction not found). This does NOT prove the tx never ` +
+            `landed — do not resubmit with the same sequence until you've re-checked by hash or the network's ` +
+            `validated ledger index has passed this tx's LastLedgerSequence.`
+          )
+        case 'not-on-ledger':
+          return `XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`
+      }
+    })()
     super(message)
     this.name = 'XrpSubmitRejectedError'
     this.reason = reason
@@ -260,8 +288,11 @@ type TxLookupResult = {
 
 /**
  * Three-way outcome of a post-submit `tx`-by-hash lookup:
- *  - `validated` — the ledger confirms the tx applied (`tec*` is definitive:
- *    fee + sequence consumed, transfer failed).
+ *  - `validated` — the ledger confirms a final result for this tx hash.
+ *    `transactionResult` is the definitive outcome — it may differ from
+ *    the original submit's `tec*` result (canonical ordering can flip a
+ *    preliminary failure to a final success), so callers must use it
+ *    instead of the original `engineResult`.
  *  - `pending` — the node knows about the tx (no lookup error) but it
  *    hasn't reached a validated ledger yet. XRPL ledgers close every ~4s,
  *    so this is the expected state for a lookup performed immediately
@@ -269,8 +300,10 @@ type TxLookupResult = {
  *    validate on the next ledger close. Genuinely retryable/transient,
  *    should not be treated as a hard failure.
  *  - `not-found` — the lookup errored (including `txnNotFound`) or the
- *    node has no record of the tx at all. Fund-safe default: treated the
- *    same as any other non-`tec*` rejection (never landed).
+ *    queried node has no record of the tx. This does NOT prove the tx
+ *    never landed (it may simply not have propagated to this node, or
+ *    may still be pending elsewhere) — callers must treat it the same as
+ *    `pending`, never as proof of safe-to-retry.
  */
 type XrpTxLookupOutcome =
   | { status: 'validated'; transactionResult?: string }
@@ -280,15 +313,15 @@ type XrpTxLookupOutcome =
 /**
  * Look up a submitted tx's on-ledger status by hash via the `tx` JSON-RPC
  * method. Used to disambiguate a `tec*` submit result (fee + sequence
- * consumed, applied on-ledger, op itself failed) from a tx that was NEVER
- * included in a validated ledger (network hiccup / expired
- * `LastLedgerSequence` / server-local rejection) — the latter is fund-safe
- * to retry with the same sequence, the former is NOT — and from a tx that
- * simply hasn't validated *yet* (see `XrpTxLookupOutcome`).
+ * consumed, applied on-ledger, op itself failed) from a preflight rejection
+ * that was NEVER applied to any ledger (no fee/sequence consumed at all —
+ * genuinely safe to retry) — and from a tx whose fate isn't known yet
+ * (see `XrpTxLookupOutcome`).
  *
  * Never invents a `validated` result: any ambiguity (lookup error,
  * not-yet-validated) falls to `pending` or `not-found`, both of which the
- * caller treats conservatively.
+ * caller must treat conservatively — never as proof the tx is safe to
+ * resubmit with the same sequence.
  */
 async function getXrpValidatedTxResult(
   txHash: string,
@@ -311,13 +344,14 @@ async function getXrpValidatedTxResult(
  * provisional-success — the caller should still poll for ledger inclusion.
  *
  * `tec*` results are verified against the ledger by hash before the final
- * error is thrown (see the block comment above) — the thrown
- * `XrpSubmitRejectedError.reason` makes clear whether the tx actually
- * consumed the fee/sequence on-ledger (`'on-ledger-tec'`), hasn't reached a
- * validated ledger yet (`'pending-validation'`), or never landed
- * (`'not-on-ledger'`), so a caller can branch on `reason` instead of
- * parsing the message string. Every other non-success engine result
- * throws directly with `reason: 'not-on-ledger'`.
+ * outcome is decided (see the block comment above) — the thrown
+ * `XrpSubmitRejectedError.reason` (or, on a canonical-ordering flip to an
+ * actual success, a normal return) makes clear which of four cases applies,
+ * so a caller can branch on `reason` instead of parsing the message string:
+ * confirmed on-ledger failure (`'on-ledger-tec'`), not yet validated
+ * (`'pending-validation'`), lookup couldn't confirm either way
+ * (`'tec-lookup-unconfirmed'`), or a genuine preflight rejection that never
+ * touched the ledger (`'not-on-ledger'`).
  */
 export async function submitXrpTx(
   signedBlobHex: string,
@@ -338,12 +372,39 @@ export async function submitXrpTx(
     }
   }
 
-  if (engineResult.startsWith('tec') && txHash) {
+  if (engineResult.startsWith('tec')) {
+    // XRPL always returns tx_json.hash alongside a tec* result, but if it's
+    // ever missing there's nothing to look up — treat like any other
+    // unconfirmed tec* rather than claiming it's safe to retry.
+    if (!txHash) {
+      throw new XrpSubmitRejectedError({
+        reason: 'tec-lookup-unconfirmed',
+        engineResult,
+        engineResultMessage,
+        txHash,
+      })
+    }
+
     const outcome = await getXrpValidatedTxResult(txHash, rpcUrl, signal)
     if (outcome.status === 'validated') {
+      const finalResult = outcome.transactionResult ?? engineResult
+      // Canonical transaction ordering means the preliminary `tec*` result
+      // from `submit` is NOT guaranteed to match the tx's actual outcome
+      // once other transactions apply first in the same ledger (e.g. an
+      // account that looked unfunded at submit time gets funded by an
+      // earlier-ordered tx). Trust the validated `meta.TransactionResult`,
+      // not the original submit response, when they disagree.
+      if (!finalResult.startsWith('tec')) {
+        return {
+          engineResult: finalResult,
+          engineResultMessage: `Validated on-ledger as ${finalResult} after a provisional ${engineResult} submit result (canonical ordering).`,
+          txHash,
+          accepted: true,
+        }
+      }
       throw new XrpSubmitRejectedError({
         reason: 'on-ledger-tec',
-        engineResult: outcome.transactionResult ?? engineResult,
+        engineResult: finalResult,
         engineResultMessage,
         txHash,
       })
@@ -356,8 +417,19 @@ export async function submitXrpTx(
         txHash,
       })
     }
+
+    // `not-found` — a single failed lookup right after submit doesn't
+    // prove the tx never landed (see `tec-lookup-unconfirmed` above).
+    throw new XrpSubmitRejectedError({
+      reason: 'tec-lookup-unconfirmed',
+      engineResult,
+      engineResultMessage,
+      txHash,
+    })
   }
 
+  // Non-tec* rejection (tem*/tel*/tef*/ter*) — XRPL's preflight rejection,
+  // never applied to any ledger, no fee/sequence consumed.
   throw new XrpSubmitRejectedError({
     reason: 'not-on-ledger',
     engineResult,
