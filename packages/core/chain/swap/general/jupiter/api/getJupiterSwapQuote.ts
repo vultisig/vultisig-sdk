@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
@@ -150,6 +151,12 @@ export const getJupiterSwapQuote = async ({
   if (!swapResponse.swapTransaction) {
     throw new Error('Jupiter swap response did not include a serialized transaction.')
   }
+
+  // Fund-safety guard (audit finding SOL-01): the proxy-supplied transaction
+  // is validated BEFORE any local mutation (fee-ATA prepend), and regardless
+  // of whether a fee is charged on this swap — an unguarded no-fee response
+  // was previously forwarded to signing verbatim.
+  await assertSafeSolanaSwapTransactionBase64(swapResponse.swapTransaction)
 
   const data = feeAccountInfo
     ? await prependJupiterFeeAta({

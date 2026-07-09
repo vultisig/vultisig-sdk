@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getJupiterSwapQuote } from './getJupiterSwapQuote'
@@ -7,6 +8,15 @@ import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
 vi.mock('./jupiterFeeAta', () => ({
   deriveJupiterFeeAccount: vi.fn(),
   prependJupiterFeeAta: vi.fn(),
+}))
+
+// The instruction-allowlist guard (audit finding SOL-01) is covered by its
+// own dedicated test suite against real captured Jupiter fixtures
+// (assertSafeSolanaSwapInstructions.test.ts). Here it's mocked so this
+// file's fake `swapTransaction` strings don't need to be valid
+// VersionedTransaction bytes.
+vi.mock('@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions', () => ({
+  assertSafeSolanaSwapTransactionBase64: vi.fn(),
 }))
 
 const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -54,6 +64,7 @@ describe('getJupiterSwapQuote', () => {
         ownerPubkey: {} as never,
       })
     vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
 
     vi.stubGlobal(
       'fetch',
@@ -309,6 +320,33 @@ describe('getJupiterSwapQuote', () => {
     await expect(
       getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
     ).rejects.toThrow(/price impact/i)
+  })
+
+  it('validates the raw Jupiter transaction against the instruction allow-list before any fee-ATA prepend', async () => {
+    await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    // Guarded BEFORE prependJupiterFeeAta mutates it - the raw provider
+    // payload is what gets validated, not our own locally-added instruction.
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx')
+  })
+
+  it('validates the raw Jupiter transaction even when no fee is charged', async () => {
+    await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx')
+  })
+
+  it('propagates a refusal from the instruction allow-list guard', async () => {
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockRejectedValueOnce(
+      new Error('SOL_SWAP_UNEXPECTED_PROGRAM: instruction 3 targets unrecognized program Evi1...; refusing to sign')
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/SOL_SWAP_UNEXPECTED_PROGRAM/)
+
+    // Refused before the fee-ATA prepend step.
+    expect(prependJupiterFeeAta).not.toHaveBeenCalled()
   })
 
   it('throws when Jupiter returns no serialized transaction', async () => {

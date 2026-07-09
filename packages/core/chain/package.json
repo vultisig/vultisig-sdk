@@ -680,6 +680,11 @@
       "import": "./dist/chains/ripple/network/info.js",
       "default": "./dist/chains/ripple/network/info.js"
     },
+    "./chains/solana/assertSafeSolanaSwapInstructions": {
+      "types": "./dist/chains/solana/assertSafeSolanaSwapInstructions.d.ts",
+      "import": "./dist/chains/solana/assertSafeSolanaSwapInstructions.js",
+      "default": "./dist/chains/solana/assertSafeSolanaSwapInstructions.js"
+    },
     "./chains/solana/client": {
       "types": "./dist/chains/solana/client.d.ts",
       "import": "./dist/chains/solana/client.js",
@@ -1250,6 +1255,7 @@
       "import": "./dist/coin/utils/sortCoinsByBalance.js",
       "default": "./dist/coin/utils/sortCoinsByBalance.js"
     },
+    "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
     "./package.json": "./package.json",
     "./publicKey/address/bittensor": {

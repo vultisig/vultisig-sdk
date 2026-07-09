@@ -27,6 +27,7 @@
  * part of the mcp-ts/backend → SDK code-as-action consolidation.
  */
 
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import {
   assertJupiterPriceImpactWithinCeiling,
   PriceImpactTooHighError,
@@ -297,6 +298,13 @@ export const buildJupiterSwapTx = async ({
   if (!swapResp.swapTransaction) {
     throw new Error('Jupiter swap response missing swapTransaction')
   }
+
+  // Fund-safety guard (audit finding SOL-01, vultisig/vultisig-sdk#1056): this
+  // is a second, independent Jupiter integration (bypasses the recipes/
+  // getJupiterSwapQuote.ts path entirely) — the proxy-supplied transaction
+  // must be validated here too before it's handed back to the caller as
+  // signable.
+  await assertSafeSolanaSwapTransactionBase64(swapResp.swapTransaction)
 
   return {
     swapTransaction: swapResp.swapTransaction,

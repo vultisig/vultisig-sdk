@@ -1,3 +1,4 @@
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -8,6 +9,15 @@ import {
   resolveJupiterFeeAccount,
   SOL_NATIVE_MINT,
 } from '../../src/tools/swap/jupiter'
+
+// The instruction-allowlist guard (audit finding SOL-01) is covered by its
+// own dedicated test suite against real captured Jupiter fixtures
+// (assertSafeSolanaSwapInstructions.test.ts in core-chain). Here it's mocked
+// so this file's fake `swapTransaction` strings don't need to be valid
+// VersionedTransaction bytes.
+vi.mock('@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions', () => ({
+  assertSafeSolanaSwapTransactionBase64: vi.fn(),
+}))
 
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const USER = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
@@ -55,6 +65,7 @@ describe('buildJupiterSwapTx', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
     fetchSpy = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? fakeQuote : fakeSwap
@@ -222,6 +233,27 @@ describe('buildJupiterSwapTx', () => {
     ).rejects.toThrow(PriceImpactTooHighError)
   })
 
+  it('validates the returned transaction against the instruction allow-list (SOL-01)', async () => {
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('BASE64_UNSIGNED_TX==')
+    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+  })
+
+  it('propagates a refusal from the instruction allow-list guard instead of returning a signable tx', async () => {
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockRejectedValueOnce(
+      new Error('SOL_SWAP_UNEXPECTED_PROGRAM: instruction 2 targets unrecognized program Evi1...; refusing to sign')
+    )
+
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+    ).rejects.toThrow(/SOL_SWAP_UNEXPECTED_PROGRAM/)
+  })
+
   it('strips trailing slashes from a custom apiBaseUrl (no double-slash path)', async () => {
     await buildJupiterSwapTx({
       userPublicKey: USER,
@@ -248,6 +280,7 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
     fetchSpy = vi.fn(async (input: string | URL | Request) => {
       const url = typeof input === 'string' ? input : input.toString()
       const body = url.includes('/quote') ? fakeQuote : fakeSwap
