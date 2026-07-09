@@ -1722,6 +1722,11 @@
       "import": "./dist/swap/native/NativeSwapQuote.js",
       "default": "./dist/swap/native/NativeSwapQuote.js"
     },
+    "./swap/native/thorchainDepositMemo": {
+      "types": "./dist/swap/native/thorchainDepositMemo.d.ts",
+      "import": "./dist/swap/native/thorchainDepositMemo.js",
+      "default": "./dist/swap/native/thorchainDepositMemo.js"
+    },
     "./swap/native/utils/getNativeSwapDecimals": {
       "types": "./dist/swap/native/utils/getNativeSwapDecimals.d.ts",
       "import": "./dist/swap/native/utils/getNativeSwapDecimals.js",
