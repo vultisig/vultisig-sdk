@@ -54,6 +54,33 @@ export const TEST_VAULT_CONFIG = {
 export const HAS_TEST_VAULT_FIXTURE = existsSync(TEST_VAULT_CONFIG.path)
 
 /**
+ * SDK-TEST-02/03 (vultisig/vultisig-sdk#1069): a describe.skipIf'd suite
+ * reports "skipped" in the vitest summary, but that summary line is easy to
+ * miss - the job/workflow itself still exits 0 ("green"), which is exactly
+ * what an unattended daily cron or a glance at the GitHub Actions checkmark
+ * reads as "signing was verified." Print an explicit, impossible-to-miss
+ * banner the moment any vault-gated E2E suite loads without a fixture, so
+ * "green" never gets confused with "the real 2-of-2 signing ceremony ran."
+ */
+if (!HAS_TEST_VAULT_FIXTURE) {
+  const message =
+    `SKIPPING vault-gated E2E suite(s): no test vault fixture at ${TEST_VAULT_CONFIG.path}. ` +
+    'This means the real vault.sign() 2-of-2 MPC round trip was NOT exercised in this run. ' +
+    'See packages/sdk/tests/e2e/SECURITY.md to provision TEST_VAULT_PATH / TEST_VAULT_PASSWORD. ' +
+    '(Always-on, non-vault-gated crypto round-trip coverage lives in ' +
+    'tests/unit/crypto/signingRoundTrip.synthetic.test.ts.)'
+
+  console.warn(`\n⚠️  ${message}\n`)
+
+  // Inside GitHub Actions, also emit a workflow annotation so the skip shows
+  // up as a visible yellow warning on the run summary - not just a line
+  // buried in raw logs that nobody reads on a "green" daily cron.
+  if (process.env.GITHUB_ACTIONS === 'true') {
+    console.log(`::warning::${message}`)
+  }
+}
+
+/**
  * Load test vault with instance-scoped configuration
  *
  * Creates an SDK instance with explicit dependencies and loads a test vault.
