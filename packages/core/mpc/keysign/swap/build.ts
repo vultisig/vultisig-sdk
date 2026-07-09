@@ -142,6 +142,12 @@ export const buildSwapKeysignPayload = async ({
       }),
   })
 
+  // AGG-03 TODO: CowSwap permitRequired tokens could skip the on-chain approve
+  // and sign an EIP-2612 permit instead, but buildEip2612Permit has zero callers
+  // and no permit digest reaches the MPC keysign payload yet. Skipping the approve
+  // without a wired permit means the solver can't pull the sell token and the order
+  // never settles. Keep the normal approve path until the permit flow is fully wired.
+
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...fromCoin,
