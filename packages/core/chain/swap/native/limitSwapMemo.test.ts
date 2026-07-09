@@ -126,6 +126,46 @@ describe('validateLimitSwapInputs', () => {
     ).toThrow(/printable ASCII/)
   })
 
+  it('accepts a valid Solana destination address (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a malformed Solana destination address (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: 'not-a-solana-address',
+      })
+    ).toThrow(/valid Solana address/)
+  })
+
+  it('accepts a valid Noble destination address (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'NOBLE.USDC',
+        dest_addr: 'noble1qyqszqgpqyqszqgpqyqszqgpqyqszqgp6s5k4j',
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a malformed Noble destination address (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'NOBLE.USDC',
+        dest_addr: 'cosmos1qyqszqgpqyqszqgpqyqszqgpqyqszqgpjnp7du',
+      })
+    ).toThrow(/valid Noble address/)
+  })
+
   it('rejects invalid source amounts', () => {
     expect(() =>
       validateLimitSwapInputs({

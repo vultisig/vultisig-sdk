@@ -1,4 +1,4 @@
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
@@ -703,6 +703,10 @@ export const findSwapQuote = async ({
             account: pick(from, ['address', 'chain']),
             fromCoinId: from.id ?? from.ticker,
             toCoinId: to.id ?? to.ticker,
+            to: {
+              ...to,
+              chain: to.chain as EvmChain,
+            },
             amount: chainAmount,
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
