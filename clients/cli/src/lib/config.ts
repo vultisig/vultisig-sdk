@@ -42,7 +42,11 @@ const DEFAULT_CONFIG: CLIConfig = {
  * Get the configuration directory path
  */
 export function getConfigDir(): string {
-  return process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
+  // Treat an empty/whitespace-only VULTISIG_CONFIG_DIR as unset. `??` alone only
+  // catches null/undefined, so `VULTISIG_CONFIG_DIR=` would otherwise resolve to
+  // '' and make every config.json / vault storage op fail on `mkdir('')`.
+  const override = process.env.VULTISIG_CONFIG_DIR?.trim()
+  return override ? override : join(homedir(), '.vultisig')
 }
 
 /**

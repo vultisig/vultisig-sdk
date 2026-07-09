@@ -44,4 +44,12 @@ describe('createVaultStorage (VULTISIG_CONFIG_DIR)', () => {
     const expected = join(homedir(), '.vultisig')
     expect(createVaultStorage().basePath).toBe(expected)
   })
+
+  it('treats an empty/whitespace VULTISIG_CONFIG_DIR as unset (no mkdir("") failure)', () => {
+    const expected = join(homedir(), '.vultisig')
+    process.env.VULTISIG_CONFIG_DIR = ''
+    expect(createVaultStorage().basePath).toBe(expected)
+    process.env.VULTISIG_CONFIG_DIR = '   '
+    expect(createVaultStorage().basePath).toBe(expected)
+  })
 })
