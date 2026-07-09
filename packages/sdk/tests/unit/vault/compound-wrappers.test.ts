@@ -6,13 +6,13 @@
  * Since VaultBase is abstract, we create a minimal concrete subclass
  * with mocked service methods.
  */
+import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { toBaseUnits } from '../../../src/utils/convertAmount'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ function parseAmount(amount: string, decimals: number): bigint {
   if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
   let chainAmount: bigint
   try {
-    chainAmount = BigInt(toBaseUnits(trimmed, decimals))
+    chainAmount = toChainAmount(trimmed, decimals)
   } catch {
     throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
   }
@@ -170,10 +170,13 @@ describe('parseAmount (private helper)', () => {
     expect(result).toBe(BigInt('200000000'))
   })
 
-  it('should handle amount with more decimals than token precision by truncating', () => {
-    // "0.123456789" with 8 decimals should truncate to 8 decimal places
+  it('should handle amount with more decimals than token precision by rounding', () => {
+    // "0.123456789" with 8 decimals: the swap path's `toChainAmount` (viem
+    // `parseUnits`) rounds the excess fraction digit (…9) up. The old
+    // `toBaseUnits`-backed send path truncated to 12345678 — the max 1
+    // base-unit-of-dust divergence noted in the parity fix.
     const result = parseAmount('0.123456789', 8)
-    expect(result).toBe(BigInt('12345678'))
+    expect(result).toBe(BigInt('12345679'))
   })
 
   it('should handle leading/trailing whitespace', () => {
@@ -211,13 +214,12 @@ describe('parseAmount (private helper)', () => {
     }
   })
 
-  it('should reject scientific-notation amount input', () => {
-    expect(() => parseAmount('1e5', 18)).toThrow(VaultError)
-    try {
-      parseAmount('1e5', 18)
-    } catch (e) {
-      expect((e as VaultError).code).toBe(VaultErrorCode.InvalidAmount)
-    }
+  it('should accept scientific-notation amount input (toChainAmount parity with swap path)', () => {
+    // Send path now shares the swap path's converter (`toChainAmount`), which
+    // expands scientific notation instead of rejecting it. Previously the
+    // `toBaseUnits`-backed send path threw here.
+    const result = parseAmount('1e5', 18)
+    expect(result).toBe(BigInt('100000000000000000000000'))
   })
 
   it('should throw with InvalidAmount error code', () => {
