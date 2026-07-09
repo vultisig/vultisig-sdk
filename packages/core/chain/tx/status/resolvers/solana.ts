@@ -5,7 +5,22 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { TxStatusResolver } from '../resolver'
 
-export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash }) => {
+const isExpiredLastValidBlockHeight = async (
+  client: ReturnType<typeof getSolanaClient>,
+  lastValidBlockHeight: number | undefined
+): Promise<boolean> => {
+  const height = lastValidBlockHeight
+
+  if (height == null || !Number.isSafeInteger(height) || height < 0) {
+    return false
+  }
+
+  const { data: currentBlockHeight, error } = await attempt(client.getBlockHeight())
+
+  return !error && typeof currentBlockHeight === 'number' && currentBlockHeight > height
+}
+
+export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ hash, lastValidBlockHeight }) => {
   const client = getSolanaClient()
 
   const { data: signatureStatuses, error: signatureStatusError } = await attempt(
@@ -16,6 +31,10 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   const signatureStatus = signatureStatuses?.value[0]
 
   if (signatureStatusError || !signatureStatus) {
+    if (await isExpiredLastValidBlockHeight(client, lastValidBlockHeight)) {
+      return { status: 'not_found', isKnown: false }
+    }
+
     return { status: 'pending', isKnown: false }
   }
 

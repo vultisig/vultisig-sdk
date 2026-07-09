@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  getBlockHeight: vi.fn(),
   getSignatureStatuses: vi.fn(),
   getTransaction: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
   getSolanaClient: () => ({
+    getBlockHeight: mocks.getBlockHeight,
     getSignatureStatuses: mocks.getSignatureStatuses,
     getTransaction: mocks.getTransaction,
   }),
@@ -26,6 +28,40 @@ describe('getSolanaTxStatus', () => {
     mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
 
     await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('marks an unknown signature as not_found when its last valid block height has expired', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockResolvedValue(101)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown signature pending when its last valid block height has not expired', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockResolvedValue(100)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown signature pending when block-height lookup fails', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockRejectedValue(new Error('rpc down'))
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
       status: 'pending',
       isKnown: false,
     })
