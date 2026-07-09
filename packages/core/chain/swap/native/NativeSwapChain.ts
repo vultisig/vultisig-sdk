@@ -22,7 +22,7 @@ export const nativeSwapApiBaseUrl: Record<NativeSwapChain, string> = {
   [Chain.MayaChain]: `${cosmosRpcUrl[Chain.MayaChain]}/mayachain`,
 }
 
-const thorChainSwapEnabledChains = [
+export const thorChainSwapEnabledChains = [
   Chain.Avalanche,
   Chain.BitcoinCash,
   Chain.BSC,
