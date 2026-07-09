@@ -221,16 +221,12 @@ export class SwapService {
       return BigInt(0)
     }
 
-    try {
-      return await getErc20Allowance({
-        chain: coin.chain,
-        id: coin.id,
-        address: coin.address,
-        spender,
-      })
-    } catch {
-      return BigInt(0)
-    }
+    return getErc20Allowance({
+      chain: coin.chain,
+      id: coin.id,
+      address: coin.address,
+      spender,
+    })
   }
 
   // ===== Private Methods =====

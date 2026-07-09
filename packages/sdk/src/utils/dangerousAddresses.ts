@@ -18,6 +18,8 @@
  *   chain can't silently escape the guard.
  * - Comparison is case-insensitive for EVM (normalize to lowercase) so a
  *   checksummed `0x...dEaD` is rejected the same as `0x...dead`.
+ * - Non-EVM burn lists are keyed by the destination chain. A Solana program id
+ *   should not be treated as a burn address for an unrelated chain.
  * - Self-send (`from == to`) is NOT guarded here: self-sends are a legitimate
  *   smoke-test pattern users run before the real transfer.
  */
@@ -28,6 +30,13 @@ export const EVM_DANGEROUS_ADDRESSES: Record<string, string> = {
     'zero address (ETH burn address): funds sent here are permanently destroyed',
   '0x000000000000000000000000000000000000dead': 'dead address (commonly used burn address): funds are unrecoverable',
   '0xdead000000000000000042069420694206942069': 'dead address variant: funds are unrecoverable',
+}
+
+/** Solana burn / program destinations that cannot be user-controlled. Keys are case-sensitive. */
+export const SOLANA_DANGEROUS_ADDRESSES: Record<string, string> = {
+  '11111111111111111111111111111111': 'Solana System Program: no private key controls this address',
+  '1nc1nerator11111111111111111111111111111111':
+    'Solana Incinerator burn address: funds sent here are permanently destroyed',
 }
 
 /** Shape of a 20-byte EVM address (`0x` + 40 hex). */
@@ -46,6 +55,15 @@ export const getEvmDangerousReason = (address: string): string | undefined => {
 /** True iff `address` is a known EVM burn / dead address. */
 export const isEvmBurnAddress = (address: string): boolean => getEvmDangerousReason(address) !== undefined
 
+/** Return the chain-specific dangerous-address reason, if one applies. */
+export const getChainDangerousReason = (chain: string, address: string): string | undefined => {
+  if (chain.trim().toLowerCase() === 'solana') {
+    return SOLANA_DANGEROUS_ADDRESSES[address.trim()]
+  }
+
+  return undefined
+}
+
 /**
  * Throws a descriptive error if `address` is a known EVM burn / dead address.
  * Call this in every primitive that encodes a destination/recipient into
@@ -60,9 +78,13 @@ export const assertSafeEvmDestination = (address: string): void => {
 
 /**
  * Chain-aware overload of the burn-address guard used by swap/bridge tools.
- * `_chain` is accepted for future non-EVM family routing; EVM detection is
- * currently shape-based and does not depend on it.
+ * EVM detection remains shape-based; non-EVM lists are keyed by the destination
+ * chain so family-specific sentinel addresses do not block unrelated chains.
  */
-export function assertSafeDestination(_chain: string, destination: string): void {
+export function assertSafeDestination(chain: string, destination: string): void {
   assertSafeEvmDestination(destination)
+  const reason = getChainDangerousReason(chain, destination)
+  if (reason) {
+    throw new Error(`Refusing to build transaction: destination ${destination} is a ${reason}.`)
+  }
 }
