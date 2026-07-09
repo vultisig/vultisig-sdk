@@ -344,11 +344,25 @@ const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; t
  * amounts. Explicit fee fields are display/receipt metadata for those providers,
  * so subtract them only for a future provider that reports gross output.
  */
-function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
+function getComparableOutputAmount(q: SwapQuote, to: AccountCoin, providerName: SwapQuoteProviderName): bigint {
   if ('native' in q.quote) {
     return nativeSwapAmountToCoinBaseUnit(BigInt(q.quote.native.expected_amount_out), to)
   }
-  const grossOutput = BigInt(q.quote.general.dstAmount)
+  const { dstAmount } = q.quote.general
+  let grossOutput: bigint
+  try {
+    grossOutput = BigInt(dstAmount)
+  } catch (error) {
+    // A non-integer (or otherwise non-BigInt-parseable) dstAmount used to drop
+    // this quote from ranking with no signal it was a parse failure rather than
+    // a genuine decline (SDK-CORRECTNESS-04) — a drifted provider silently
+    // routed the user to a worse-but-valid fill. Surface it before rethrowing;
+    // ranking behavior (allSettled rejection) is unchanged.
+    console.warn(
+      `[findSwapQuote] ${providerName} returned a non-integer dstAmount "${dstAmount}"; dropping this quote from ranking.`
+    )
+    throw error
+  }
   return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to }))
 }
 
@@ -838,7 +852,7 @@ export const findSwapQuote = async ({
       const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
-        outputAmount: getComparableOutputAmount(quote, to),
+        outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
         sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
         providerName: fetcher.providerName,
       }

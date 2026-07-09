@@ -1,5 +1,39 @@
 # @vultisig/sdk
 
+## 2.19.8
+
+### Patch Changes
+
+- [#1098](https://github.com/vultisig/vultisig-sdk/pull/1098) [`f695564`](https://github.com/vultisig/vultisig-sdk/commit/f69556421c77e36651143c4ba14aaac9f22133b3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(kyber): bind swap tx.to to /route/build's own routerAddress (AGG-04)
+
+- [#1096](https://github.com/vultisig/vultisig-sdk/pull/1096) [`04b1f38`](https://github.com/vultisig/vultisig-sdk/commit/04b1f38fab52ebb7938f3e5977318d67c9aa0921) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add `selectUtxoInputs`, an accumulative largest-first coin-selection layer for
+  UTXO sends (audit UTXO-01, HIGH). `buildUtxoSendTx`'s doc comment always said
+  "caller handles coin-selection", but no selection layer existed — callers
+  fetched every UTXO in the wallet and passed the full set through verbatim.
+  That overpaid fees for all N inputs, could false-positive "insufficient
+  funds" when fee(N) exceeded the balance even though a small subset would
+  cover the send, and linked every UTXO the wallet owns in one transaction.
+
+  `selectUtxoInputs` picks the smallest largest-first prefix of the candidate
+  UTXOs that covers `amount + fee(k)`, reusing `estimateUtxoTxFee` — the same
+  size/fee formula now extracted out of `buildUtxoSendTx` — so selection and
+  build always agree on the fee. Supports a `sendMax` mode that consumes every
+  UTXO for "send whole balance" flows. Covered across all 6 UTXO chains
+  (Bitcoin, Litecoin, Dogecoin, Dash, Bitcoin-Cash, Zcash) with golden-vector
+  tests for the trivial single-input case, multi-input accumulation, exact
+  cover, sub-dust change folding into fee, genuine insufficient-funds, and
+  send-max.
+
+## 2.19.7
+
+### Patch Changes
+
+- [#1078](https://github.com/vultisig/vultisig-sdk/pull/1078) [`b1f2887`](https://github.com/vultisig/vultisig-sdk/commit/b1f288758ba627061c9c26085f96a3541b131163) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): sanity-cap RPC-reported priority fee (SDK2-01). EVM fee estimation trusted `maxPriorityFeePerGas` from the RPC verbatim into the signed tx (Solana already had a ceiling for this, EVM didn't) — a compromised or anomalous RPC could inflate it and drain the user's balance to gas. Added a generous per-chain sanity ceiling (`clampEvmPriorityFee`) that only fires on orders-of-magnitude inflation; normal congestion on any chain passes through unchanged.
+
+- [#1093](https://github.com/vultisig/vultisig-sdk/pull/1093) [`f54d53a`](https://github.com/vultisig/vultisig-sdk/commit/f54d53a0252d133c2d2d6b37c649542cb4069fd3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(coin): findByTicker throws on cross-chain ambiguity instead of a silent first-match (SDK2-02)
+
+  `findByTicker` resolved a bare ticker via `coins.find(c => c.ticker === ticker)` — array-order first match, no chain scoping. A symbol like "USDC" exists on many chains, so if this (currently-unreferenced public) helper were wired into a fund path it would silently resolve to whichever chain was first, sending to the wrong network. It now returns the unique match (or null when absent) and throws when the ticker is ambiguous across more than one chain, forcing the caller to disambiguate.
+
 ## 2.19.6
 
 ### Patch Changes
