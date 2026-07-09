@@ -147,6 +147,27 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
     })
   })
 
+  it('resolves terQUEUED as provisional success without a ledger lookup', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'terQUEUED',
+          engine_result_message: 'Held until fee drops.',
+          tx_json: { hash: TX_HASH },
+          accepted: true,
+        },
+      },
+    ])
+
+    const result = await submitXrpTx('DEADBEEF', RPC_URL)
+    expect(result).toEqual({
+      engineResult: 'terQUEUED',
+      engineResultMessage: 'Held until fee drops.',
+      txHash: TX_HASH,
+      accepted: true,
+    })
+  })
+
   it('a validated tecUNFUNDED_PAYMENT throws a typed on-ledger-consumed error, not a generic one', async () => {
     mockFetchSequence([
       {
@@ -279,7 +300,64 @@ describe('ripple/rpc — submitXrpTx tec* on-ledger verification (XRP-02)', () =
     expect(error.message).not.toMatch(/safe to retry/i)
   })
 
-  it('a non-tec* rejection (e.g. temMALFORMED) throws directly without a ledger lookup', async () => {
+  it('a tec* result with no tx hash is unconfirmed, never safe-to-retry', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tecUNFUNDED_PAYMENT',
+          engine_result_message: 'Insufficient funds.',
+        },
+      },
+    ])
+
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('tec-lookup-unconfirmed')
+    expect(error.txHash).toBeUndefined()
+    expect(error.message).not.toMatch(/safe to retry/i)
+  })
+
+  it('a tef* rejection is conservative because the tx or sequence may already be applied', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'tefPAST_SEQ',
+          engine_result_message: 'This sequence number has already passed.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+    ])
+
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('possibly-already-applied')
+    expect(error.reason).not.toBe('not-on-ledger')
+    expect(error.message).toMatch(/may mean the tx or sequence was already applied/)
+  })
+
+  it('a non-queued ter* retry-class result is conservative, never safe-to-retry', async () => {
+    mockFetchSequence([
+      {
+        result: {
+          engine_result: 'terRETRY',
+          engine_result_message: 'Retry transaction.',
+          tx_json: { hash: TX_HASH },
+        },
+      },
+    ])
+
+    const rejection = await submitXrpTx('DEADBEEF', RPC_URL).catch((e: unknown) => e)
+    expect(rejection).toBeInstanceOf(XrpSubmitRejectedError)
+    const error = rejection as XrpSubmitRejectedError
+    expect(error.reason).toBe('retry-class-unconfirmed')
+    expect(error.reason).not.toBe('not-on-ledger')
+    expect(error.message).toMatch(/retry-class result is provisional/)
+    expect(error.message).not.toMatch(/safe to retry/i)
+  })
+
+  it('a local preflight rejection (e.g. temMALFORMED) throws directly without a ledger lookup', async () => {
     mockFetchSequence([
       {
         result: {

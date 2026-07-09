@@ -182,7 +182,7 @@ export async function getXrpLedgerCurrentIndex(rpcUrl: string, signal?: AbortSig
 // prove the tx never landed, see `XrpSubmitRejectionReason`). Verification
 // only sharpens the thrown error; it is never a path to reporting false
 // success, and an unconfirmed lookup is never claimed to be "safe to retry"
-// the way a genuine preflight rejection (`tem*`/`tel*`/`tef*`/`ter*`) is.
+// the way a genuine local/preflight rejection (`tem*`/`tel*`) is.
 // ---------------------------------------------------------------------------
 
 export type XrpSubmitResult = {
@@ -210,15 +210,22 @@ export type XrpSubmitResult = {
  *    this as safe to resubmit with the same sequence; re-check by hash,
  *    or wait for the network's validated ledger index to pass this tx's
  *    `LastLedgerSequence` before concluding it's dead.
- *  - `not-on-ledger` — a non-`tec*` rejection (`tem*`/`tel*`/`tef*`/`ter*`).
- *    These are preflight rejections XRPL returns BEFORE the tx is applied
- *    to any ledger, so no fee/sequence was ever consumed — genuinely safe
- *    to retry with the same sequence.
+ *  - `possibly-already-applied` — a `tef*` rejection can mean an identical
+ *    tx was already applied (`tefALREADY`) or this sequence is already past
+ *    (`tefPAST_SEQ`). Do NOT treat it as safe to resubmit without checking
+ *    ledger state.
+ *  - `retry-class-unconfirmed` — a non-queued `ter*` result is provisional:
+ *    the tx may still be retried/relayed by the network or become valid in
+ *    a later ledger. Do NOT treat it as proof the tx never landed.
+ *  - `not-on-ledger` — a local/preflight rejection (`tem*`/`tel*`). These
+ *    never touch a ledger, so no fee/sequence was consumed.
  */
 export type XrpSubmitRejectionReason =
   | 'on-ledger-tec'
   | 'pending-validation'
   | 'tec-lookup-unconfirmed'
+  | 'possibly-already-applied'
+  | 'retry-class-unconfirmed'
   | 'not-on-ledger'
 
 /**
@@ -260,6 +267,16 @@ export class XrpSubmitRejectedError extends Error {
             `confirmed on-ledger (lookup failed or transaction not found). This does NOT prove the tx never ` +
             `landed — do not resubmit with the same sequence until you've re-checked by hash or the network's ` +
             `validated ledger index has passed this tx's LastLedgerSequence.`
+          )
+        case 'possibly-already-applied':
+          return (
+            `XRP submit returned ${engineResult} — ${engineResultMessage}. This result may mean the tx or ` +
+            `sequence was already applied on-ledger. Do not resubmit until you've verified ledger state by hash/account sequence.`
+          )
+        case 'retry-class-unconfirmed':
+          return (
+            `XRP submit returned ${engineResult} — ${engineResultMessage}. This retry-class result is provisional ` +
+            `and does not prove the tx never landed. Do not resubmit until you've verified ledger state.`
           )
         case 'not-on-ledger':
           return `XRP submit rejected: ${engineResult || 'unknown'} — ${engineResultMessage}`
@@ -346,12 +363,15 @@ async function getXrpValidatedTxResult(
  * `tec*` results are verified against the ledger by hash before the final
  * outcome is decided (see the block comment above) — the thrown
  * `XrpSubmitRejectedError.reason` (or, on a canonical-ordering flip to an
- * actual success, a normal return) makes clear which of four cases applies,
+ * actual success, a normal return) makes clear which submit state applies,
  * so a caller can branch on `reason` instead of parsing the message string:
  * confirmed on-ledger failure (`'on-ledger-tec'`), not yet validated
  * (`'pending-validation'`), lookup couldn't confirm either way
- * (`'tec-lookup-unconfirmed'`), or a genuine preflight rejection that never
- * touched the ledger (`'not-on-ledger'`).
+ * (`'tec-lookup-unconfirmed'`), a failure-class result that may already
+ * have touched the ledger (`'possibly-already-applied'`), a
+ * retry-class result that is still unconfirmed (`'retry-class-unconfirmed'`),
+ * or a local/preflight rejection that never touched the ledger
+ * (`'not-on-ledger'`).
  */
 export async function submitXrpTx(
   signedBlobHex: string,
@@ -428,8 +448,26 @@ export async function submitXrpTx(
     })
   }
 
-  // Non-tec* rejection (tem*/tel*/tef*/ter*) — XRPL's preflight rejection,
-  // never applied to any ledger, no fee/sequence consumed.
+  if (engineResult.startsWith('tef')) {
+    throw new XrpSubmitRejectedError({
+      reason: 'possibly-already-applied',
+      engineResult,
+      engineResultMessage,
+      txHash,
+    })
+  }
+
+  if (engineResult.startsWith('ter')) {
+    throw new XrpSubmitRejectedError({
+      reason: 'retry-class-unconfirmed',
+      engineResult,
+      engineResultMessage,
+      txHash,
+    })
+  }
+
+  // Local/preflight rejection (tem*/tel*) — never applied to any ledger, no
+  // fee/sequence consumed.
   throw new XrpSubmitRejectedError({
     reason: 'not-on-ledger',
     engineResult,
