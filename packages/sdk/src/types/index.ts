@@ -173,6 +173,7 @@ export type Signature = {
     r: string
     s: string
     der: string
+    recovery?: number
   }>
   // ML-DSA-44 post-quantum signature (hex-encoded), present when vault has MLDSA keys
   mldsaSignature?: string
@@ -615,7 +616,12 @@ export type Portfolio = {
 
 export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
-  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+  | {
+      dryRun: true
+      fee: string
+      total: string
+      keysignPayload: KeysignPayload
+    }
 
 export type CompoundSwapResult =
   | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }
