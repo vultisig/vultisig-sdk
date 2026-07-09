@@ -62,6 +62,17 @@ describe('signing round trip (synthetic, non-vault-gated) — SDK-TEST-02/03', (
     // Real cryptographic verification of the adapter's own output — not a shape check.
     const derBytes = hexToBytes(formatted.signature.replace(/^0x/, ''))
     expect(secp256k1.verify(derBytes, msgHash, publicKey)).toBe(true)
+
+    // Pin the DER *format* explicitly. formatSignature() is responsible for
+    // SELECTING DER (not raw r||s) for ECDSA, but secp256k1.verify() accepts
+    // BOTH DER and 64-byte compact r||s — so verify() alone would stay green if
+    // the adapter regressed from DER passthrough to r||s. Parsing strictly as
+    // DER (throws on a compact signature) makes this test actually catch that
+    // format-selection regression, matching this file's "adapter logic
+    // regresses -> red" claim (SDK-TEST-02/03).
+    const parsedDer = secp256k1.Signature.fromDER(formatted.signature.replace(/^0x/, ''))
+    expect(parsedDer.r).toBe(sig.r)
+    expect(parsedDer.s).toBe(sig.s)
   })
 
   it('EdDSA: ephemeral ed25519 keypair signs, SDK adapter formats, signature verifies', () => {
