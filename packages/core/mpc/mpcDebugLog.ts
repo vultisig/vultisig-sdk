@@ -8,13 +8,19 @@
  * failed on the leading garbage) AND leaked MPC internals into terminals/CI
  * logs.
  *
- * Route tracing to STDERR, and only when `VULTISIG_DEBUG` is set, so STDOUT
+ * Route tracing to STDERR, and only when `VULTISIG_DEBUG === '1'`, so STDOUT
  * stays a clean JSON-only stream while the debug output remains available to
- * humans on demand. This mirrors the existing `VULTISIG_DEBUG` convention used
- * by the CLI. Behavior is unchanged — only the log SINK moves off STDOUT.
+ * humans on demand. The `=== '1'` gate matches the CLI convention
+ * (`clients/cli/src/lib/config.ts`) so `VULTISIG_DEBUG=0` disables it rather
+ * than enabling it (any non-empty string is truthy in JS).
+ *
+ * The `typeof process` guard keeps this a no-op — never a throw — in runtimes
+ * without a global `process` (e.g. some browser bundles). This helper runs
+ * inside the keygen relay loop, so a throw here would change ceremony behavior;
+ * it must only ever move the log SINK, never fail.
  */
 export const mpcDebugLog = (...args: unknown[]): void => {
-  if (process.env.VULTISIG_DEBUG) {
+  if (typeof process !== 'undefined' && process.env?.VULTISIG_DEBUG === '1') {
     console.error(...args)
   }
 }
