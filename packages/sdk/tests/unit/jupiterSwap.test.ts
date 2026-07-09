@@ -4,6 +4,7 @@ import {
   buildJupiterSwapTx,
   JUPITER_AFFILIATE_FEE_OWNER,
   JUPITER_PLATFORM_FEE_BPS,
+  PriceImpactTooHighError,
   resolveJupiterFeeAccount,
   SOL_NATIVE_MINT,
 } from '../../src/tools/swap/jupiter'
@@ -161,6 +162,64 @@ describe('buildJupiterSwapTx', () => {
     await expect(
       buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 1n })
     ).rejects.toThrow(/Jupiter swap error: No route found at build time/)
+  })
+
+  it('refuses to build when the quoted price impact exceeds the 10% ceiling (50% sandwich-bait quote)', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      // Jupiter's priceImpactPct is a FRACTION: "0.5" == 50% impact.
+      const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.5' } : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+    ).rejects.toThrow(PriceImpactTooHighError)
+
+    // Refused before the /swap build call was ever made.
+    expect(fetchSpy.mock.calls.some(([u]) => String(u).includes('/swap/v1/swap'))).toBe(false)
+  })
+
+  it('builds normally at a price impact just under the 10% ceiling', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.0999' } : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+  })
+
+  it('builds at exactly 10% price impact (ceiling itself passes, only strictly-above rejects)', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.10' } : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+    expect(res.swapTransaction).toBe('BASE64_UNSIGNED_TX==')
+  })
+
+  it('refuses to build just above the 10% price impact ceiling', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      const body = url.includes('/quote') ? { ...fakeQuote, priceImpactPct: '0.1001' } : fakeSwap
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    await expect(
+      buildJupiterSwapTx({ userPublicKey: USER, toContractAddress: USDC_MINT, amountBaseUnits: 100_000_000n })
+    ).rejects.toThrow(PriceImpactTooHighError)
   })
 
   it('strips trailing slashes from a custom apiBaseUrl (no double-slash path)', async () => {

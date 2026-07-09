@@ -100,7 +100,7 @@ describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
   it('excludes EIP-712 / non-flat tools (signed via sign_typed_data)', () => {
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
-    // execute_* are PREP (parity-only), NOT in the flat-enrichment allowlist.
+    // execute_* are PREP (their own allowlist), NOT in the flat-enrichment allowlist.
     expect(CLI_SIGNABLE_FLAT_TOOLS.has('execute_swap')).toBe(false)
   })
 })
@@ -386,7 +386,7 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     expect(c?.payload).toMatchObject({ tx: { to: USDC_E, data: APPROVE_DATA } })
   })
 
-  it('execute_* prep WITH tx_encoding → candidate tagged source:prep (parity-only)', () => {
+  it('execute_* prep WITH tx_encoding → candidate tagged source:prep (sign source)', () => {
     const prep = {
       txArgs: {
         chain: 'Base',
@@ -418,5 +418,128 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
 
   it('tool outside both allowlists → null', () => {
     expect(deriveToolOutputCandidate('get_balances', { txArgs: { tx_encoding: 'evm-tx' } })).toBeNull()
+  })
+
+  it('FAILS CLOSED: prep with DISAGREEING chain⇄chain_id → null (never sign the name chain over the id)', () => {
+    // The signer resolves `chain` (name) BEFORE `chain_id`, so chain "Base" +
+    // chain_id "1" would silently sign on Base. Reject rather than pick one —
+    // parity with the flat path's resolveStrictEvmChain (#927 Phase 2 review).
+    const mismatched = {
+      txArgs: { chain: 'Base', chain_id: '1', tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', mismatched)).toBeNull()
+  })
+
+  it('FAILS CLOSED: prep with PARENT metadata disagreeing with txArgs → null (never let top-level chain win)', () => {
+    // Single-leg prep envelopes are signed using the WHOLE parent payload, and the
+    // executor resolves top-level `chain` / `from_chain` / `chain_id` BEFORE
+    // `txArgs`. A parent `chain: Ethereum` over `txArgs.chain: Base` would sign the
+    // nested tx on the wrong chain unless we reject it here.
+    const parentMismatch = {
+      chain: 'Ethereum',
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_contract_call', parentMismatch)).toBeNull()
+  })
+
+  it('FAILS CLOSED: multi-leg prep whose approval leg is SELF-CONFLICTING → null (never sign the approval on the wrong chain)', () => {
+    // rcoderdev #1003 review: a multi-leg prep envelope's `approvalTxArgs` carries its
+    // own chain metadata. The executor resolves that leg's `chain` (name) BEFORE
+    // `chain_id`, so `chain: Base` + `chain_id: 1` resolves to Base and can pass the
+    // approval⇄main comparison (main is also Base) even though the leg's own metadata
+    // disagrees — signing the APPROVAL tx on the wrong chain. Reject it.
+    const approvalSelfConflict = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Base',
+        chain_id: '1', // disagrees with its own `chain: Base` (8453)
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_swap', approvalSelfConflict)).toBeNull()
+  })
+
+  it('FAILS CLOSED: multi-leg prep whose approval leg is a DIFFERENT chain than the main leg → null', () => {
+    // A self-consistent but cross-chain approval leg (Ethereum) against a Base main
+    // leg must not derive — the approval would sign on a chain the main tx never uses.
+    const approvalCrossChain = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Ethereum',
+        chain_id: '1',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_swap', approvalCrossChain)).toBeNull()
+  })
+
+  it('accepts multi-leg prep whose approval leg matches the main prep chain', () => {
+    // The happy path the guard must not over-reject: approval + main both on Base.
+    const consistent = {
+      chain: 'Base',
+      chain_id: '8453',
+      approvalTxArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: USDC_E, value: '0', data: APPROVE_DATA },
+      },
+      txArgs: {
+        chain: 'Base',
+        chain_id: '8453',
+        tx_encoding: 'evm',
+        tx: { to: ONRAMP, value: '0', data: WRAP_DATA },
+      },
+      stepperConfig: {},
+    }
+    const c = deriveToolOutputCandidate('execute_swap', consistent)
+    expect(c?.source).toBe('prep')
+  })
+
+  it('FAILS CLOSED: prep with NO resolvable chain → null (never default to Ethereum at sign time)', () => {
+    // A single-leg prep envelope whose txArgs carries no chain/chain_id would let
+    // the executor default to Chain.Ethereum and broadcast on the wrong chain.
+    const chainless = {
+      txArgs: { tx_encoding: 'evm', tx: { to: USDC_E, value: '0', data: APPROVE_DATA } },
+      stepperConfig: {},
+    }
+    expect(deriveToolOutputCandidate('execute_send', chainless)).toBeNull()
+  })
+
+  it('accepts prep resolvable by chain NAME alone (non-EVM: chain_id absent) — not EVM-only', () => {
+    // Non-EVM sends (Cosmos/Solana) may omit a resolvable numeric chain_id; a chain
+    // that resolves by NAME alone is accepted (only a present-and-disagreeing pair,
+    // or total non-resolution, fails closed).
+    const cosmos = {
+      txArgs: { chain: 'THORChain', tx_encoding: 'cosmos', to: 'thor1xyz', amount: '1' },
+      stepperConfig: {},
+    }
+    const c = deriveToolOutputCandidate('execute_send', cosmos)
+    expect(c?.source).toBe('prep')
   })
 })

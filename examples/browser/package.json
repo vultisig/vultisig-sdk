@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-browser",
-  "version": "0.1.110",
+  "version": "0.1.131",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,12 +19,12 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.1",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "autoprefixer": "^10.5.0",
+    "autoprefixer": "^10.5.2",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
     "events": "^3.3.0",
@@ -33,6 +33,6 @@
     "stream-browserify": "^3.0.0",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.1.3"
   }
 }

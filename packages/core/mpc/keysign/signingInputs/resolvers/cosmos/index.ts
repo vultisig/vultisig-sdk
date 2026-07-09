@@ -1,6 +1,7 @@
 import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
@@ -84,7 +85,35 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         const memo = shouldBePresent(keysignPayload.memo)
         const [, channel] = memo.split(':')
 
+        // COSMOS-03: sourceChannel is derived from an unvalidated memo
+        // split. An undefined/empty/malformed channel would sign a
+        // MsgTransfer that either fails on-chain or (worse) routes
+        // through an unintended channel. Fail closed.
+        if (!channel || !/^channel-\d+$/.test(channel)) {
+          throw new Error(
+            `Cosmos signing input: IBC transfer memo "${memo}" does not contain a well-formed source channel (expected "<prefix>:channel-<n>[:...]").`
+          )
+        }
+
         const timeoutTimestamp = Long.fromString(ibcDenomTraces?.latestBlock?.split('_')?.[1] || '0')
+        const timeoutHeight = {
+          revisionNumber: Long.fromString('0'),
+          revisionHeight: Long.fromString('0'),
+        }
+
+        // COSMOS-01: a missing ibcDenomTraces (or missing latestBlock)
+        // previously fell back to timeoutTimestamp=0, and timeoutHeight
+        // is always {0,0} here, so the packet ended up with NO expiry.
+        // Relayers accept a no-timeout MsgTransfer, but the destination
+        // side never gets a chance to unwind on failure, leaving funds
+        // stuck indefinitely. Mirror the app's guard
+        // (vultiagent-app/src/services/cosmosTx.ts) and refuse to build.
+        const heightDisabled = timeoutHeight.revisionNumber.isZero() && timeoutHeight.revisionHeight.isZero()
+        if (timeoutTimestamp.isZero() && heightDisabled) {
+          throw new Error(
+            'Cosmos signing input: IBC transfer has no usable timeout (missing ibcDenomTraces.latestBlock and no timeoutHeight set); refusing to build a no-timeout MsgTransfer (relayers accept it but the packet has no expiry, leaving funds stuck).'
+          )
+        }
 
         return {
           messages: [
@@ -95,10 +124,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
                 token: getCosmosCoinAmount(keysignPayload),
                 sender: coin.address,
                 receiver: toAddress,
-                timeoutHeight: {
-                  revisionNumber: Long.fromString('0'),
-                  revisionHeight: Long.fromString('0'),
-                },
+                timeoutHeight,
                 timeoutTimestamp,
               }),
             }),
@@ -394,14 +420,14 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return fee
     }
 
-    const getFeeAmounts = () => {
+    const getFeeAmounts = (feeAmount: bigint) => {
       if (chainKind !== 'ibcEnabled') return
 
-      const { gas, ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
       const amounts: TW.Cosmos.Proto.Amount[] = [
         TW.Cosmos.Proto.Amount.create({
-          amount: gas.toString(),
+          amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
@@ -425,9 +451,18 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const staticGasLimit = getCosmosGasLimit(coin)
+    const relayedGasLimit =
+      chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gasLimit : undefined
+    const { resolvedGasLimit, feeAmount } = resolveCosmosGasFee({
+      gas: chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gas : 0n,
+      relayedGasLimit,
+      staticGasLimit,
+    })
+
     return TW.Cosmos.Proto.Fee.create({
-      gas: Long.fromBigInt(getCosmosGasLimit(coin)),
-      amounts: getFeeAmounts(),
+      gas: Long.fromBigInt(resolvedGasLimit),
+      amounts: getFeeAmounts(feeAmount),
     })
   }
 
