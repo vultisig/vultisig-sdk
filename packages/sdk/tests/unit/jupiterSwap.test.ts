@@ -57,7 +57,10 @@ describe('resolveJupiterFeeAccount', () => {
   })
 
   it('exposes the treasury owner and bps as source-of-truth constants', () => {
-    expect(JUPITER_AFFILIATE_FEE_OWNER).toBe('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+    // SOL-03: standardized on the shared cross-platform spec address (matches
+    // iOS/Android/the SDK's own general-swap Jupiter config), not the earlier
+    // ad-hoc '5QXePTia...' address this test previously asserted.
+    expect(JUPITER_AFFILIATE_FEE_OWNER).toBe('8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z')
     expect(JUPITER_PLATFORM_FEE_BPS).toBe(50)
   })
 })
