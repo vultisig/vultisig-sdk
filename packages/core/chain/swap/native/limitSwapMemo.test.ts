@@ -82,6 +82,44 @@ describe('validateLimitSwapInputs', () => {
     ).toThrow(/unsupported THORChain asset prefix/)
   })
 
+  it('accepts a Solana limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'SOL.SOL',
+        dest_addr: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      })
+    ).not.toThrow()
+  })
+
+  it('accepts a Noble limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'NOBLE.USDC',
+        dest_addr: 'noble1qyqszqgpqyqszqgpqyqszqgpqyqszqgp6s5k4j',
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects a MayaChain-only target asset as a THORChain limit-swap destination (THOR-04)', () => {
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'ADA.ADA',
+        dest_addr: 'addr1qxy2lpan99fcnhhyj96y0j0js5f2fxzua6tv5efztsc2q6euld',
+      })
+    ).toThrow(/unsupported THORChain asset prefix/)
+
+    expect(() =>
+      validateLimitSwapInputs({
+        ...validInput,
+        target_asset: 'MAYA.CACAO',
+        dest_addr: 'maya1x2whgc2nt665y0kc44uywhynazvp0l8tp0vtu6',
+      })
+    ).toThrow(/unsupported THORChain asset prefix/)
+  })
+
   it('rejects malformed destination addresses', () => {
     expect(() =>
       validateLimitSwapInputs({
