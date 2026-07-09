@@ -17,13 +17,13 @@ describe('toChainAmount', () => {
   it('truncates (floors) at decimals=0 — never rounds up (fund-safety)', () => {
     // Cardano native assets, low-decimal tokens: the signed amount must not
     // exceed what the user stated. viem parseUnits rounds half-up; we floor.
-    expect(toChainAmount('0.5', 0)).toBe(0n)   // was 1n before truncation
-    expect(toChainAmount('0.6', 0)).toBe(0n)   // was 1n
+    expect(toChainAmount('0.5', 0)).toBe(0n) // was 1n before truncation
+    expect(toChainAmount('0.6', 0)).toBe(0n) // was 1n
     expect(toChainAmount('0.999', 0)).toBe(0n) // was 1n
-    expect(toChainAmount('1.5', 0)).toBe(1n)   // was 2n
-    expect(toChainAmount('2.5', 0)).toBe(2n)   // was 3n
-    expect(toChainAmount(1, 0)).toBe(1n)       // integer unchanged
-    expect(toChainAmount(2, 0)).toBe(2n)       // integer unchanged
+    expect(toChainAmount('1.5', 0)).toBe(1n) // was 2n
+    expect(toChainAmount('2.5', 0)).toBe(2n) // was 3n
+    expect(toChainAmount(1, 0)).toBe(1n) // integer unchanged
+    expect(toChainAmount(2, 0)).toBe(2n) // integer unchanged
   })
 
   it('truncates excess fractional digits at any decimals (not just 0)', () => {
