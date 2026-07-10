@@ -34,6 +34,10 @@ export const validateUtxoRequirements = ({ amount, balance, chain, fee, skipDust
 
   const remainingBalance = fee != null ? balance - amount - fee : balance - amount
 
+  if (remainingBalance < 0n) {
+    return 'Insufficient balance to cover amount and network fees.'
+  }
+
   if (remainingBalance === 0n) {
     return
   }
