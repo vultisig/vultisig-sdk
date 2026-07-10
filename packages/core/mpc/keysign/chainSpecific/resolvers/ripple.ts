@@ -12,10 +12,31 @@ import { GetChainSpecificResolver } from '../resolver'
 
 const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
+const rippleRequireDestinationTagFlag = 0x00020000
+const maxDestinationTag = 0xffffffff
 
-export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({ keysignPayload }) => {
-  const { address } = getKeysignCoin(keysignPayload)
+const getLegacyDestinationTag = (memo: string | undefined): number | undefined => {
+  if (!memo || !/^(0|[1-9]\d*)$/.test(memo)) return undefined
+
+  const destinationTag = Number(memo)
+  return destinationTag <= maxDestinationTag ? destinationTag : undefined
+}
+
+export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({
+  keysignPayload,
+  destinationTag,
+}) => {
+  const coin = getKeysignCoin(keysignPayload)
+  const { address } = coin
   const toAddress = shouldBePresent(keysignPayload.toAddress)
+
+  if (
+    destinationTag !== undefined &&
+    (!Number.isSafeInteger(destinationTag) || destinationTag < 1 || destinationTag > maxDestinationTag)
+  ) {
+    throw new Error(`Invalid XRP DestinationTag: expected an integer from 1 to ${maxDestinationTag}`)
+  }
+  const effectiveDestinationTag = destinationTag ?? getLegacyDestinationTag(keysignPayload.memo)
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
@@ -40,6 +61,19 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   const destinationUnfunded =
     'error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')
 
+  // XRP Ledger rejects a Payment to an account with lsfRequireDestTag when no
+  // tag is present. Fail closed on lookup errors other than an unfunded
+  // destination: without an account object there is no RequireDestTag flag.
+  if (!coin.id && effectiveDestinationTag === undefined) {
+    if ('error' in destinationAccountResult) {
+      if (!destinationUnfunded) {
+        throw new Error(`Unable to verify whether XRP destination ${toAddress} requires a DestinationTag`)
+      }
+    } else if ((destinationAccountResult.data.account_data.Flags & rippleRequireDestinationTagFlag) !== 0) {
+      throw new Error(`XRP destination ${toAddress} requires a DestinationTag`)
+    }
+  }
+
   if (destinationUnfunded) {
     const toAmount = BigInt(shouldBePresent(keysignPayload.toAmount))
     if (toAmount < BigInt(reserve_base)) {
@@ -59,5 +93,6 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     lastLedgerSequence: BigInt((ledger_current_index ?? 0) + 60),
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
+    ...(destinationTag !== undefined ? { destinationTag } : {}),
   })
 }

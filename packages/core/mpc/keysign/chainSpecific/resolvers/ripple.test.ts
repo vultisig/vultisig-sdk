@@ -13,6 +13,22 @@ const DEST_UNFUNDED = 'rFreshCCCCCCCCCCCCCCCCCCCCCCCCCCCCC'
 // base_fee 10, load_factor==load_base ⇒ computedFee = 10*2 = 20 ⇒ networkFee 20.
 const RESERVE_BASE = 1_000_000
 const EXPECTED_NETWORK_FEE = 20n
+const REQUIRE_DESTINATION_TAG = 0x00020000
+
+const accountInfo = (flags = 0) => ({
+  account_data: {
+    Account: SENDER,
+    Balance: '1000000',
+    Flags: flags,
+    index: '0'.repeat(64),
+    LedgerEntryType: 'AccountRoot' as const,
+    OwnerCount: 0,
+    PreviousTxnID: '0'.repeat(64),
+    PreviousTxnLgrSeq: 0,
+    Sequence: 5,
+  },
+  ledger_current_index: 100,
+})
 
 vi.mock('@vultisig/core-chain/chains/ripple/network/info', () => ({
   getRippleNetworkInfo: vi.fn(async () => ({
@@ -27,7 +43,7 @@ vi.mock('@vultisig/core-chain/chains/ripple/account/info', () => ({
     if (address === DEST_UNFUNDED) {
       throw new Error('Account not found.')
     }
-    return { account_data: { Sequence: 5 }, ledger_current_index: 100 }
+    return accountInfo()
   }),
 }))
 
@@ -67,5 +83,49 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     await expect(
       getRippleChainSpecific({ keysignPayload: payload(DEST_UNFUNDED, '500000'), walletCore: {} as never })
     ).rejects.toThrow(/not yet activated|base reserve/i)
+  })
+
+  it('carries a first-class destination tag and preserves the uint32 maximum', async () => {
+    const res = await getRippleChainSpecific({
+      keysignPayload: payload(DEST_FUNDED, '1000000'),
+      walletCore: {} as never,
+      destinationTag: 4_294_967_295,
+    })
+
+    expect(res.destinationTag).toBe(4_294_967_295)
+  })
+
+  it('rejects a missing tag for an account that requires DestinationTag', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
+      accountInfo(address === DEST_FUNDED ? REQUIRE_DESTINATION_TAG : 0)
+    )
+
+    await expect(
+      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000000'), walletCore: {} as never })
+    ).rejects.toThrow(/requires a DestinationTag/)
+  })
+
+  it('accepts a legacy canonical numeric memo for an account that requires DestinationTag', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
+      accountInfo(address === DEST_FUNDED ? REQUIRE_DESTINATION_TAG : 0)
+    )
+    const keysignPayload = payload(DEST_FUNDED, '1000000')
+    keysignPayload.memo = '12345'
+
+    await expect(getRippleChainSpecific({ keysignPayload, walletCore: {} as never })).resolves.toBeTruthy()
+  })
+
+  it('fails closed when an existing destination cannot be inspected for DestinationTag requirement', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address => {
+      if (address === DEST_FUNDED) throw new Error('XRPL unavailable')
+      return accountInfo()
+    })
+
+    await expect(
+      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000000'), walletCore: {} as never })
+    ).rejects.toThrow(/Unable to verify.*DestinationTag/)
   })
 })

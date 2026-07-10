@@ -22,6 +22,8 @@ export type BuildSendKeysignPayloadInput = {
   receiver: string
   amount: bigint
   memo?: string
+  /** XRPL DestinationTag, kept independent from the free-text memo. */
+  destinationTag?: number
   vaultId: string
   localPartyId: string
   publicKey: PublicKey | null
@@ -37,6 +39,7 @@ export const buildSendKeysignPayload = async ({
   receiver,
   amount,
   memo,
+  destinationTag,
   vaultId,
   localPartyId,
   publicKey,
@@ -81,11 +84,13 @@ export const buildSendKeysignPayload = async ({
         keysignPayload,
         walletCore,
         transactionType: TransactionType.GENERIC_CONTRACT,
+        destinationTag,
       })
     : await getChainSpecific({
         keysignPayload,
         feeSettings,
         walletCore,
+        destinationTag,
       })
 
   const balance = await getCoinBalance(coin)

@@ -57,6 +57,7 @@ export async function sendTransaction(
     amount: params.amount,
     symbol: params.tokenId,
     memo: params.memo,
+    destinationTag: params.destinationTag,
     dryRun: true,
   })
 
@@ -104,7 +105,16 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
-    displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
+    displayTransactionPreview(
+      address,
+      params.to,
+      dryResult.total,
+      balance.symbol,
+      params.chain,
+      params.memo,
+      params.destinationTag,
+      gas
+    )
   }
 
   // 3. Confirm (required in all output modes; the non-interactive case was
@@ -145,6 +155,7 @@ export async function sendTransaction(
         amount: params.amount,
         symbol: params.tokenId,
         memo: params.memo,
+        destinationTag: params.destinationTag,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

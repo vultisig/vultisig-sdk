@@ -721,7 +721,9 @@ export class ShellSession {
 
   private async runSend(args: string[]): Promise<void> {
     if (args.length < 3) {
-      console.log(chalk.yellow('Usage: send <chain> <to> <amount> [--token <tokenId>] [--memo <memo>]'))
+      console.log(
+        chalk.yellow('Usage: send <chain> <to> <amount> [--token <tokenId>] [--memo <memo>] [--destination-tag <tag>]')
+      )
       return
     }
 
@@ -730,6 +732,7 @@ export class ShellSession {
 
     let tokenId: string | undefined
     let memo: string | undefined
+    let destinationTag: number | undefined
 
     for (let i = 0; i < rest.length; i++) {
       if (rest[i] === '--token' && i + 1 < rest.length) {
@@ -738,12 +741,21 @@ export class ShellSession {
       } else if (rest[i] === '--memo' && i + 1 < rest.length) {
         memo = rest.slice(i + 1).join(' ')
         break
+      } else if (rest[i] === '--destination-tag' && i + 1 < rest.length) {
+        const tag = rest[i + 1]
+        if (chain !== Chain.Ripple || !/^[1-9]\d*$/.test(tag)) {
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
+        }
+        destinationTag = Number(tag)
+        i++
       }
     }
 
     try {
       // Use withAbortHandler to create an AbortSignal and pass it to executeSend
-      await this.withAbortHandler(signal => executeSend(this.ctx, { chain, to, amount, tokenId, memo, signal }))
+      await this.withAbortHandler(signal =>
+        executeSend(this.ctx, { chain, to, amount, tokenId, memo, destinationTag, signal })
+      )
     } catch (err: any) {
       if (
         err.message === 'Transaction cancelled by user' ||
