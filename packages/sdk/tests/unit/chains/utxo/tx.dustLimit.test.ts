@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildUtxoSendTx, getUtxoChainSpec } from './tx'
+import { buildUtxoSendTx, getUtxoChainSpec } from '@/chains/utxo/tx'
 
 // Compressed pubkey (arbitrary, unused for the pre-signing dust guard).
 const COMPRESSED_PUBKEY = Uint8Array.from(
@@ -10,8 +10,9 @@ const COMPRESSED_PUBKEY = Uint8Array.from(
     .map(b => parseInt(b, 16))
 )
 
-// Real BIP141 P2WPKH address for both from/to.
+// Real BIP141 P2WPKH addresses (same witness program, per-chain hrp).
 const BTC_P2WPKH = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4'
+const LTC_P2WPKH = 'ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9'
 
 // UTXO-02 (audit r2): the sdk keeps its OWN per-chain dustLimit map (UTXO_SPECS) separate from core's
 // minUtxo. Both must carry the corrected Litecoin P2WPKH dust — the shared standard 2_940n litoshi (LTC's
@@ -64,7 +65,18 @@ describe('buildUtxoSendTx — primary-amount dust floor (#1137)', () => {
     expect(() => buildUtxoSendTx({ ...baseOpts, amount: 0n })).toThrow('amount must be greater than zero')
   })
 
-  it('does not trip the dust guard for an at-limit amount', () => {
-    expect(() => buildUtxoSendTx({ ...baseOpts, amount: 546n })).not.toThrow(/dust limit/)
+  it('builds normally for an at-limit amount (546n), reaching the finalize step', () => {
+    // Tighter than "not a dust error": the whole build must succeed and hand
+    // back a finalizable builder — a dust throw (or any other) fails this.
+    const builder = buildUtxoSendTx({ ...baseOpts, amount: 546n })
+    expect(typeof builder.finalize).toBe('function')
+  })
+
+  it('uses the PER-CHAIN dust limit, not a hardcoded BTC 546 (Litecoin 2_940n boundary)', () => {
+    const ltcOpts = { ...baseOpts, chain: 'Litecoin' as const, fromAddress: LTC_P2WPKH, toAddress: LTC_P2WPKH }
+    // 2_939 is fine on BTC (>546) but dust on Litecoin (<2_940) — proves the
+    // guard reads spec.dustLimit per chain rather than a constant.
+    expect(() => buildUtxoSendTx({ ...ltcOpts, amount: 2_939n })).toThrow(/below the Litecoin dust limit 2940/)
+    expect(() => buildUtxoSendTx({ ...ltcOpts, amount: 2_940n })).not.toThrow()
   })
 })
