@@ -25,7 +25,11 @@ test('reads the pinned Yarn version from packageManager', () => {
 })
 
 test('rejects missing or non-Yarn packageManager values', () => {
-  withPackageJson({ packageManager: 'pnpm@9.0.0' }, root => {
-    assert.throws(() => getPinnedYarnVersion(root), /packageManager to pin yarn/)
-  })
+  const invalidValues = [undefined, 'pnpm@9.0.0', 'yarn@latest', 'yarn@^4.16.0', 'yarn@4']
+
+  for (const packageManager of invalidValues) {
+    withPackageJson({ packageManager }, root => {
+      assert.throws(() => getPinnedYarnVersion(root), /packageManager to pin yarn/)
+    })
+  }
 })
