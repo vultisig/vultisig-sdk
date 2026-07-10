@@ -6,6 +6,7 @@ import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import type { CoinStruct } from '@mysten/sui/jsonRpc'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
+import { selectSuiPayloadCoins } from '../../../suiCoinSelection'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSuiChainSpecific } from './refine'
 
@@ -58,14 +59,24 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
 
   const referenceGasPrice = await client.getReferenceGasPrice()
+  const amount = BigInt(keysignPayload.toAmount || '0')
+  const isNativeToken = !coin.id
+  const selectCoins = (gasBudget: bigint) =>
+    selectSuiPayloadCoins({
+      coins,
+      isNativeToken,
+      coinType: coin.id,
+      amount,
+      gasBudget,
+    })
 
   const chainSpecific = create(SuiSpecificSchema, {
-    coins,
+    coins: selectCoins(suiGasBudget),
     referenceGasPrice: referenceGasPrice.toString(),
     gasBudget: suiGasBudget.toString(),
   })
 
-  return withFallback(
+  const refined = await withFallback(
     attempt(
       refineSuiChainSpecific({
         keysignPayload,
@@ -75,4 +86,11 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
     ),
     chainSpecific
   )
+
+  const refinedGasBudget = refined.gasBudget ? BigInt(refined.gasBudget) : suiGasBudget
+
+  return create(SuiSpecificSchema, {
+    ...refined,
+    coins: selectCoins(refinedGasBudget),
+  })
 }

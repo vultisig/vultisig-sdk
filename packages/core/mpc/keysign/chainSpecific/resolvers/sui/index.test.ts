@@ -11,7 +11,9 @@ vi.mock('@vultisig/core-chain/chains/sui/client', () => ({
     getReferenceGasPrice: mockGetReferenceGasPrice,
   }),
 }))
-vi.mock('@vultisig/core-chain/chains/sui/config', () => ({ suiGasBudget: 3_000_000n }))
+vi.mock('@vultisig/core-chain/chains/sui/config', () => ({
+  suiGasBudget: 3_000_000n,
+}))
 vi.mock('../../../utils/getKeysignCoin', () => ({
   getKeysignCoin: () => ({ address: '0xsender', id: undefined }),
 }))
@@ -26,12 +28,12 @@ vi.mock('./refine', () => ({
 import { getSuiChainSpecific } from './index'
 
 const suiType = '0x2::sui::SUI'
-const makeCoin = (i: number) => ({
+const makeCoin = (i: number, balance = '1') => ({
   coinType: suiType,
   coinObjectId: `0xobj${i}`,
   version: `${i}`,
   digest: `dig${i}`,
-  balance: '1',
+  balance,
   previousTransaction: `tx${i}`,
 })
 
@@ -61,13 +63,20 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
         nextCursor: null,
       })
 
-    const res = await getSuiChainSpecific({ keysignPayload: payload, walletCore: {} as never })
+    const res = await getSuiChainSpecific({
+      keysignPayload: payload,
+      walletCore: {} as never,
+    })
 
     expect(mockGetAllCoins).toHaveBeenCalledTimes(3)
     expect(res.coins).toHaveLength(107)
     // Cursor from each page is threaded into the next request.
-    expect(mockGetAllCoins.mock.calls[1]?.[0]).toMatchObject({ cursor: 'cur1' })
-    expect(mockGetAllCoins.mock.calls[2]?.[0]).toMatchObject({ cursor: 'cur2' })
+    expect(mockGetAllCoins.mock.calls[1]?.[0]).toMatchObject({
+      cursor: 'cur1',
+    })
+    expect(mockGetAllCoins.mock.calls[2]?.[0]).toMatchObject({
+      cursor: 'cur2',
+    })
   })
 
   it('fails closed (throws, no infinite loop) when the RPC cursor never advances', async () => {
@@ -95,9 +104,28 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
       nextCursor: null,
     })
 
-    const res = await getSuiChainSpecific({ keysignPayload: payload, walletCore: {} as never })
+    const res = await getSuiChainSpecific({
+      keysignPayload: payload,
+      walletCore: {} as never,
+    })
 
     expect(mockGetAllCoins).toHaveBeenCalledTimes(1)
     expect(res.coins).toHaveLength(2)
+  })
+
+  it('bounds a dusty native wallet payload to the largest covering object', async () => {
+    mockGetAllCoins.mockReset()
+    mockGetAllCoins.mockResolvedValueOnce({
+      data: [makeCoin(0, '3000001'), ...Array.from({ length: 799 }, (_, i) => makeCoin(i + 1, '1'))],
+      hasNextPage: false,
+      nextCursor: null,
+    })
+
+    const res = await getSuiChainSpecific({
+      keysignPayload: payload,
+      walletCore: {} as never,
+    })
+
+    expect(res.coins.map(c => c.coinObjectId)).toEqual(['0xobj0'])
   })
 })
