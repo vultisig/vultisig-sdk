@@ -9,6 +9,7 @@ import {
   normalizeJupiterBaseUrl,
 } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { JupiterSwapEnabledChain } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
+import { assertJupiterPriceImpactWithinCeiling } from '@vultisig/core-chain/swap/general/priceImpactGuard'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { deriveJupiterFeeAccount, prependJupiterFeeAta } from './jupiterFeeAta'
@@ -112,6 +113,13 @@ export const getJupiterSwapQuote = async ({
   const quoteResponse = await requestJson<JupiterQuoteResponse>(`${baseUrl}/swap/v1/quote?${quoteParams.toString()}`, {
     headers: { Accept: 'application/json' },
   })
+
+  // Price-impact ceiling (fund-safety, audit finding SOL-02). Jupiter's
+  // priceImpactPct is a FRACTION ("0.05" = 5%); refuse to build a signable
+  // swap transaction above the ceiling — a thin-pool / sandwich-bait quote
+  // that would lose most of the user's funds. Fail-safe: a missing /
+  // unparsable impact passes (see evaluatePriceImpactPercent).
+  assertJupiterPriceImpactWithinCeiling(quoteResponse.priceImpactPct)
 
   // Gate the fee-account flow on the actually quoted fee, not just the requested
   // bps: Jupiter can floor `platformFee.amount` to 0 (tiny amounts, route with no

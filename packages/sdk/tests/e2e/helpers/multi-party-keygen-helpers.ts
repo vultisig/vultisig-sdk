@@ -35,7 +35,7 @@ const getSchnorr = async () => {
 /**
  * Relay server URL for MPC coordination
  */
-export const RELAY_URL = 'https://api.vultisig.com/router'
+export const RELAY_URL = process.env.VULTISIG_ROUTER_URL || 'https://api.vultisig.com/router'
 
 /**
  * Result from a single key import operation

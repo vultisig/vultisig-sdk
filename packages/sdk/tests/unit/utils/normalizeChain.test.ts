@@ -211,4 +211,110 @@ describe('normalizeChain', () => {
       expect(normalizeChain('usdc')).toBe(Chain.Noble)
     })
   })
+
+  // Consolidated from agent-backend-ts's zodHelpers.ts chainString() — the fix for the
+  // LUNA<->LUNC "no route" bug (deepseek emits `to_chain: "Terra Classic"` with a space
+  // ~2/3 of the time, which the pre-consolidation SDK rejected outright). These natural-
+  // language, space/underscore/hyphen-insensitive forms must resolve WITHOUT any caller-side
+  // fallback layer — the SDK is now the single source of this tolerance.
+  describe('separator-insensitive natural-language phrasings (LLM tolerance)', () => {
+    it.each([
+      ['Terra Classic', Chain.TerraClassic],
+      ['terra classic', Chain.TerraClassic],
+      ['TERRA CLASSIC', Chain.TerraClassic],
+      ['terra_classic', Chain.TerraClassic],
+      ['terra-classic', Chain.TerraClassic],
+      ['Bitcoin Cash', Chain.BitcoinCash],
+      ['bitcoin cash', Chain.BitcoinCash],
+      ['BITCOIN CASH', Chain.BitcoinCash],
+      ['bitcoin_cash', Chain.BitcoinCash],
+      ['Cronos Chain', Chain.CronosChain],
+      ['cronos chain', Chain.CronosChain],
+      ['THOR Chain', Chain.THORChain],
+      ['thor chain', Chain.THORChain],
+      ['Thor Chain', Chain.THORChain],
+      ['ZK Sync', Chain.Zksync],
+      ['zk sync', Chain.Zksync],
+      ['Maya Chain', Chain.MayaChain],
+      ['maya chain', Chain.MayaChain],
+      ['Binance Smart Chain', Chain.BSC],
+      ['binance smart chain', Chain.BSC],
+    ])('resolves separator-insensitive "%s" to %s', (input, expected) => {
+      expect(normalizeChain(input)).toBe(expected)
+    })
+
+    it('still resolves the exact hyphenated canonical form directly (no regression)', () => {
+      expect(normalizeChain('Bitcoin-Cash')).toBe(Chain.BitcoinCash)
+    })
+
+    it('still resolves the un-spaced hand-curated alias directly (no regression)', () => {
+      expect(normalizeChain('bitcoincash')).toBe(Chain.BitcoinCash)
+      expect(normalizeChain('binancesmartchain')).toBe(Chain.BSC)
+    })
+
+    it('tolerates surrounding whitespace combined with internal separators', () => {
+      expect(normalizeChain('  Terra Classic  ')).toBe(Chain.TerraClassic)
+      expect(normalizeChain('\tBitcoin Cash\n')).toBe(Chain.BitcoinCash)
+    })
+  })
+
+  // Chain-id / marketing-name aliases (agent-backend-ts CHAIN_ALIAS_TABLE): these carry no
+  // separator-free form anywhere in the existing alias/ticker/canonical tables, so they are
+  // hand-curated additions, not a side effect of separator-stripping alone.
+  describe('chain-id / marketing-name aliases', () => {
+    it.each([
+      ['columbus-5', Chain.TerraClassic],
+      ['columbus5', Chain.TerraClassic],
+      ['Columbus-5', Chain.TerraClassic],
+      ['COLUMBUS-5', Chain.TerraClassic],
+      ['phoenix-1', Chain.Terra],
+      ['phoenix1', Chain.Terra],
+      ['Phoenix-1', Chain.Terra],
+      ['terra v2', Chain.Terra],
+      ['Terra V2', Chain.Terra],
+      ['TERRA V2', Chain.Terra],
+      ['terra-v2', Chain.Terra],
+      ['terra_v2', Chain.Terra],
+      ['terrav2', Chain.Terra],
+    ])('resolves chain-id/marketing alias "%s" to %s', (input, expected) => {
+      expect(normalizeChain(input)).toBe(expected)
+    })
+
+    it('does not conflate Terra v2 aliases with Terra Classic (fund-safety: distinct chains, shared address)', () => {
+      expect(normalizeChain('phoenix-1')).not.toBe(Chain.TerraClassic)
+      expect(normalizeChain('terra v2')).not.toBe(Chain.TerraClassic)
+      expect(normalizeChain('columbus-5')).not.toBe(Chain.Terra)
+    })
+  })
+
+  // Fund-safety guard: a wrong collision here could misroute a swap/send to the wrong chain.
+  // Every canonical Chain value's own separator-stripped form must resolve to ITSELF, never to
+  // a different chain — proves the auto-derived stripped-alias table never cross-wires two
+  // distinct chains that happen to share a stripped form.
+  describe('collision guard — every known chain resolves to itself, never another chain', () => {
+    it.each(Object.values(Chain))('canonical value %s round-trips to itself', chain => {
+      expect(normalizeChain(chain)).toBe(chain)
+      expect(normalizeChain(chain.toLowerCase())).toBe(chain)
+      expect(normalizeChain(chain.toUpperCase())).toBe(chain)
+    })
+
+    it('Terra and TerraClassic never resolve to each other despite sharing an address/name prefix', () => {
+      expect(normalizeChain('Terra')).toBe(Chain.Terra)
+      expect(normalizeChain('Terra')).not.toBe(Chain.TerraClassic)
+      expect(normalizeChain('TerraClassic')).toBe(Chain.TerraClassic)
+      expect(normalizeChain('TerraClassic')).not.toBe(Chain.Terra)
+      expect(normalizeChain('Terra Classic')).toBe(Chain.TerraClassic)
+      expect(normalizeChain('Terra Classic')).not.toBe(Chain.Terra)
+    })
+  })
+
+  describe('error cases (separator-stripped fallback)', () => {
+    it('still throws for a genuinely unknown space-separated phrase', () => {
+      expect(() => normalizeChain('not a real chain')).toThrow(UnknownChainError)
+    })
+
+    it('still throws for a partial/ambiguous fragment', () => {
+      expect(() => normalizeChain('terra classic 2')).toThrow(UnknownChainError)
+    })
+  })
 })
