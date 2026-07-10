@@ -1,5 +1,14 @@
 # @vultisig/core-mpc
 
+## 1.9.3
+
+### Patch Changes
+
+- [#1034](https://github.com/vultisig/vultisig-sdk/pull/1034) [`6643df7`](https://github.com/vultisig/vultisig-sdk/commit/6643df76cf2ff2ffe08ca4985bcaf46289714e4f) Thanks [@neavra](https://github.com/neavra)! - Silence 7z-wasm banner/progress output on stdout during QR payload compression/decompression. The chatter polluted the machine-output channel for CLI consumers (e.g. corrupting piped/JSON output on `join secure`); errors still surface via stderr.
+
+- Updated dependencies [[`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963)]:
+  - @vultisig/core-chain@2.24.3
+
 ## 1.9.2
 
 ### Patch Changes

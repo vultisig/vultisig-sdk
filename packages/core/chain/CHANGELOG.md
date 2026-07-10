@@ -1,5 +1,11 @@
 # @vultisig/core-chain
 
+## 2.24.3
+
+### Patch Changes
+
+- [#1115](https://github.com/vultisig/vultisig-sdk/pull/1115) [`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expand large scientific-notation numeric amounts before base-unit parsing.
+
 ## 2.24.2
 
 ### Patch Changes
