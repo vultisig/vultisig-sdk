@@ -26,6 +26,7 @@ import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
+import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import {
   getLifiClient,
@@ -235,10 +236,17 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
+        const evmTo = shouldBePresent(to)
+        // AGG-02: mirrors core's getLifiSwapQuote.ts — LiFi routes through many different
+        // bridge/DEX contracts by design, so this is logged (never enforced/thrown). See
+        // core's knownAggregatorRouters.ts for the full rationale. This RN override is a
+        // SEPARATE build target (rollup.platforms.config.js redirects core's
+        // getLifiSwapQuote.ts here), so it needs its own call, not just core's.
+        logUnenforcedAggregatorDestination('li.fi', evmTo)
         return {
           evm: {
             from: shouldBePresent(from),
-            to: shouldBePresent(to),
+            to: evmTo,
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,

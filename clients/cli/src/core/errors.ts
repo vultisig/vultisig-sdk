@@ -203,8 +203,36 @@ export class UnknownError extends VsigError {
   }
 }
 
+/**
+ * The local broadcast-journal refused to sign because an identical intent was
+ * broadcast recently (and hasn't definitively failed) or a sibling process holds
+ * the reservation. NOTHING was broadcast. Maps the journal's
+ * `DuplicateBroadcastError` / `ConcurrentBroadcastError` (both carry
+ * `code === 'DUPLICATE_BROADCAST'`) onto the dedicated exit code 9 so a headless
+ * caller can branch the fund-safety refusal on `$?` alone. Retry with `--force`.
+ */
+export class DuplicateBroadcastRefusedError extends VsigError {
+  readonly exitCode = ExitCode.DUPLICATE_BROADCAST
+  readonly code = 'DUPLICATE_BROADCAST'
+
+  constructor(message: string) {
+    super(message, 'An identical transaction was broadcast recently and has not definitively failed', [
+      'Check its status with: vsig tx-status',
+      'Re-broadcast anyway with: --force',
+    ])
+  }
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
+
+  // The journal's duplicate/concurrent refusals aren't VaultErrors — they carry
+  // a stable `code === 'DUPLICATE_BROADCAST'`. Map them to exit 9 before the
+  // generic classification below (which would otherwise fall through to
+  // UNKNOWN/7 and lose the fund-safety signal).
+  if ((err as { code?: unknown }).code === 'DUPLICATE_BROADCAST') {
+    return new DuplicateBroadcastRefusedError(err.message)
+  }
 
   if (err instanceof VaultError) {
     // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
