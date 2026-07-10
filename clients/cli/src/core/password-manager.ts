@@ -8,9 +8,8 @@
  * 4. VAULT_PASSWORD env var (single fallback password)
  * 5. Interactive prompt (if no env password found and not in silent/JSON mode)
  */
-import inquirer from 'inquirer'
-
 import { isJsonOutput, isNonInteractive, isSilent, requireInteractive } from '../lib/output'
+import { prompt } from '../lib/prompt'
 import { getServerPassword as getKeyringPassword } from './credential-store'
 
 /**
@@ -104,7 +103,7 @@ export async function promptForPassword(vaultName?: string, vaultId?: string): P
     'Use --password flag, VAULT_PASSWORD env var, or "vsig auth setup" to store credentials in keyring.'
   )
   const displayName = vaultName || vaultId || 'vault'
-  const { password } = await inquirer.prompt([
+  const { password } = await prompt([
     {
       type: 'password',
       name: 'password',

@@ -6,6 +6,7 @@ import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
@@ -37,6 +38,16 @@ export async function sendTransaction(
   vault: VaultBase,
   params: SendParams
 ): Promise<TransactionResult | SendDryRunResult> {
+  // Fail closed up-front: without --yes this flow ends in an interactive
+  // confirmation a non-interactive session can never answer — refuse before
+  // the preview writes to stdout (or any network work happens).
+  if (!params.dryRun && !params.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Transaction requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview without signing.'
+    )
+  }
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -96,11 +107,9 @@ export async function sendTransaction(
     displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
   }
 
-  // 3. Confirm (required in all output modes)
+  // 3. Confirm (required in all output modes; the non-interactive case was
+  // refused up-front, before the preview)
   if (!params.yes) {
-    if (isNonInteractive()) {
-      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
-    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')

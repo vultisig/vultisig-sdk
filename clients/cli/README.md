@@ -1134,20 +1134,21 @@ Configuration is stored in `~/.vultisig/`:
 
 ## Exit Codes
 
-| Code | Meaning                                                                            |
-| ---- | ---------------------------------------------------------------------------------- |
-| 0    | Success                                                                            |
-| 1    | Usage error (bad arguments, unknown command)                                       |
-| 2    | Authentication required                                                            |
-| 3    | Network error (retryable)                                                          |
-| 4    | Invalid input (bad chain, address, amount)                                         |
-| 5    | Resource not found (token, route)                                                  |
-| 6    | External service error (retryable)                                                 |
-| 7    | Unknown/unexpected error                                                           |
-| 8    | Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry |
-| 9    | Duplicate broadcast refused (nothing sent) — retry with --force to override        |
-| 10   | agent ask: a fund-safety guardrail blocked the requested action                    |
-| 11   | agent ask: the model refused or asked a clarifying question (no action taken)      |
+| Code | Meaning                                                                                                                |
+| ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                                                |
+| 1    | Usage error (bad arguments, unknown command)                                                                           |
+| 2    | Authentication required                                                                                                |
+| 3    | Network error (retryable)                                                                                              |
+| 4    | Invalid input (bad chain, address, amount)                                                                             |
+| 5    | Resource not found (token, route)                                                                                      |
+| 6    | External service error (retryable)                                                                                     |
+| 7    | Unknown/unexpected error                                                                                               |
+| 8    | Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry                                     |
+| 9    | Duplicate broadcast refused (nothing sent) — retry with --force to override                                            |
+| 10   | agent ask: a fund-safety guardrail blocked the requested action                                                        |
+| 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
+| 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

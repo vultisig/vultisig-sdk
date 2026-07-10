@@ -11,6 +11,9 @@ function locateSevenZipWasmFile(file: string): string {
 }
 
 export const getSevenZip = memoizeAsync(() => {
-  const opts = { locateFile: locateSevenZipWasmFile }
+  // Silence 7z's banner/progress chatter: it prints to stdout, which CLI
+  // consumers treat as the machine-output channel. Errors still surface via
+  // the default printErr (stderr); results are read from the virtual FS.
+  const opts = { locateFile: locateSevenZipWasmFile, print: () => {} }
   return SevenZip(opts).catch(() => SevenZip(opts))
 })

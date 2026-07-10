@@ -5,6 +5,7 @@ import type { Chain, SwapQuoteResult } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { buildSwapBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmSwap, displaySwapChains, displaySwapPreview, displaySwapResult, formatBigintAmount } from '../ui'
 
@@ -167,10 +168,17 @@ function displayDryRunResult(result: SwapDryRunResult): void {
   if (result.warnings?.length) result.warnings.forEach(w => warn(`  Warning: ${w}`))
 }
 
+function refuseSwapWhenNonInteractive(): never {
+  throw new ConfirmationRequiredError(
+    'Swap requires confirmation.',
+    'Pass --yes to confirm, or --dry-run to preview without signing.'
+  )
+}
+
 async function confirmSwapIfNeeded(options: SwapOptions): Promise<void> {
   if (options.yes) return
   if (isNonInteractive()) {
-    throw new Error('Swap requires confirmation. Use --yes to skip, or --dry-run to preview.')
+    refuseSwapWhenNonInteractive()
   }
   const confirmed = await confirmSwap()
   if (!confirmed) {
@@ -190,6 +198,13 @@ export async function executeSwap(
 
   validateSwapAmount(options.amount)
   const amountStr = getSwapAmountString(options.amount)
+
+  // Fail closed up-front: without --yes this flow ends in an interactive
+  // confirmation a non-interactive session can never answer — refuse before the
+  // quote preview writes to stdout (or any network work happens).
+  if (!options.dryRun && !options.yes && isNonInteractive()) {
+    refuseSwapWhenNonInteractive()
+  }
 
   // 1. Dry-run for quote/preview
   const quoteSpinner = createSpinner('Getting swap quote...')
