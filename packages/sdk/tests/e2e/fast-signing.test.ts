@@ -27,12 +27,33 @@
 
 import { e2ePrepareSendSkipReason } from '@helpers/prepare-send-skip'
 import { createSigningPayload, TEST_AMOUNTS, TEST_RECEIVERS, validateSignatureFormat } from '@helpers/signing-helpers'
-import { HAS_TEST_VAULT_FIXTURE, loadTestVault, TEST_VAULT_CONFIG, verifyTestVault } from '@helpers/test-vault'
+import {
+  HAS_TEST_VAULT_FIXTURE,
+  loadTestVault,
+  NO_TEST_VAULT_SKIP_REASON,
+  TEST_VAULT_CONFIG,
+  verifyTestVault,
+} from '@helpers/test-vault'
 import { readFile } from 'fs/promises'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { Chain, VaultBase, Vultisig } from '@/index'
 import { MemoryStorage } from '@/storage/MemoryStorage'
+
+// SDK-TEST-02/03 (vultisig/vultisig-sdk#1069): describe.skipIf below reports
+// "skipped" in the summary, but its console output and skip reason are not
+// surfaced by vitest's reporters, so a missing fixture and a real pass can
+// look identically green at a glance. This canary runs unconditionally (it
+// is never itself skipped by describe.skipIf) so the *reason* the real
+// signing suite below didn't run is always printed inline by the verbose
+// reporter, not just buried in tests/e2e/SECURITY.md.
+it('(skip banner) reports why the real vault.sign() round trip below did or did not run', ctx => {
+  if (!HAS_TEST_VAULT_FIXTURE) {
+    ctx.skip(NO_TEST_VAULT_SKIP_REASON)
+    return
+  }
+  expect(HAS_TEST_VAULT_FIXTURE).toBe(true)
+})
 
 describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Fast Signing - Transaction Signing', () => {
   let vault: VaultBase

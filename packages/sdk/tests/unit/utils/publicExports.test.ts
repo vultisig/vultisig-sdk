@@ -42,7 +42,9 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.resolveJupiterFeeAccount).toBe('function')
     expect(sdk.SOL_NATIVE_MINT).toBe('So11111111111111111111111111111111111111112')
     expect(sdk.JUPITER_PLATFORM_FEE_BPS).toBe(50)
-    expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB')
+    // SOL-03: standardized on the shared cross-platform spec address
+    // (jupiterFeeOwnerAddress), not the earlier ad-hoc '5QXePTia...' literal.
+    expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z')
   })
 
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {

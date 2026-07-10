@@ -100,3 +100,59 @@ describe('getOneInchSwapQuote — AGG-02 router allowlist', () => {
     })
   })
 })
+
+describe('getOneInchSwapQuote — affiliateFee display (AGG-05)', () => {
+  it('populates affiliateFee grossed up from the post-fee dstAmount, matching the Kyber convention', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '10000000',
+      tx: {
+        from: '0xsender',
+        to: '0x111111125421ca6dc452d289314280a0f8842a65',
+        data: '0xswap',
+        value: '0',
+        gasPrice: '1000000000',
+        gas: 210000,
+      },
+    })
+
+    const quote = await getOneInchSwapQuote({
+      account,
+      fromCoinId: '0xsrc',
+      toCoinId: '0xdst',
+      to: { chain: Chain.Ethereum, address: '0xsender', id: '0xdst', decimals: 6, ticker: 'DST' },
+      amount: 1_000_000n,
+      affiliateBps: 50,
+    })
+
+    expect('evm' in quote.tx ? quote.tx.evm.affiliateFee : undefined).toEqual({
+      chain: Chain.Ethereum,
+      id: '0xdst',
+      decimals: 6,
+      amount: 50_251n,
+    })
+  })
+
+  it('leaves affiliateFee undefined when no affiliateBps is set', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '10000000',
+      tx: {
+        from: '0xsender',
+        to: '0x111111125421ca6dc452d289314280a0f8842a65',
+        data: '0xswap',
+        value: '0',
+        gasPrice: '1000000000',
+        gas: 210000,
+      },
+    })
+
+    const quote = await getOneInchSwapQuote({
+      account,
+      fromCoinId: '0xsrc',
+      toCoinId: '0xdst',
+      to: { chain: Chain.Ethereum, address: '0xsender', id: '0xdst', decimals: 6, ticker: 'DST' },
+      amount: 1_000_000n,
+    })
+
+    expect('evm' in quote.tx ? quote.tx.evm.affiliateFee : undefined).toBeUndefined()
+  })
+})

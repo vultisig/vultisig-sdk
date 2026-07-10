@@ -451,13 +451,20 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
+
     const staticGasLimit = getCosmosGasLimit(coin)
-    const relayedGasLimit =
-      chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gasLimit : undefined
+    const relayedGasLimit = ibcSpecific?.gasLimit
+    // COSMOS-02: an IBC MsgTransfer needs more gas headroom than the flat
+    // per-chain limit (calibrated for MsgSend) — see resolveCosmosGasFee's
+    // IBC_GAS_MULTIPLIER. Scoped to IBC_TRANSFER only so plain sends and
+    // wasm executes on ibc-enabled chains keep the calibrated flat fee.
+    const isIbcTransfer = ibcSpecific?.transactionType === TransactionType.IBC_TRANSFER
     const { resolvedGasLimit, feeAmount } = resolveCosmosGasFee({
-      gas: chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled').gas : 0n,
+      gas: ibcSpecific?.gas ?? 0n,
       relayedGasLimit,
       staticGasLimit,
+      isIbcTransfer,
     })
 
     return TW.Cosmos.Proto.Fee.create({

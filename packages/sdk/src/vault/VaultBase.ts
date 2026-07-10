@@ -64,7 +64,6 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
-import { toBaseUnits } from '../utils/convertAmount'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -1925,7 +1924,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
     let chainAmount: bigint
     try {
-      chainAmount = BigInt(toBaseUnits(trimmed, decimals))
+      chainAmount = toChainAmount(trimmed, decimals)
     } catch {
       throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
     }
