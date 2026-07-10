@@ -91,6 +91,22 @@ const formatNumberAmount = (amount: number): string => {
   return /[eE]/.test(str) ? expandScientificNotationToDecimalString(str) : str
 }
 
+/**
+ * Truncate a plain decimal string to at most `decimals` fractional digits so
+ * parseUnits cannot round up. viem's parseUnits rounds half-up at decimals=0
+ * (e.g. "0.6" → 1n, "1.5" → 2n), while the signed amount must never exceed
+ * the stated human amount — truncation is the safe direction.
+ * Only called after scientific notation has already been expanded.
+ */
+const truncateToDecimals = (s: string, decimals: number): string => {
+  const dotIdx = s.indexOf('.')
+  if (dotIdx === -1) return s
+  if (decimals === 0) return s.slice(0, dotIdx)
+  const fracPart = s.slice(dotIdx + 1)
+  if (fracPart.length <= decimals) return s
+  return `${s.slice(0, dotIdx + 1)}${fracPart.slice(0, decimals)}`
+}
+
 export const toChainAmount = (amount: string | number, decimals: number) => {
   if (typeof amount === 'string') {
     const trimmed = amount.trim()
@@ -99,9 +115,9 @@ export const toChainAmount = (amount: string | number, decimals: number) => {
     }
     if (/[eE]/.test(trimmed)) {
       const expanded = expandScientificNotationToDecimalString(trimmed)
-      return parseUnits(expanded, decimals)
+      return parseUnits(truncateToDecimals(expanded, decimals), decimals)
     }
-    return parseUnits(trimmed, decimals)
+    return parseUnits(truncateToDecimals(trimmed, decimals), decimals)
   }
-  return parseUnits(formatNumberAmount(amount), decimals)
+  return parseUnits(truncateToDecimals(formatNumberAmount(amount), decimals), decimals)
 }

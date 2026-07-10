@@ -1,5 +1,39 @@
 # @vultisig/core-mpc
 
+## 1.9.2
+
+### Patch Changes
+
+- [#978](https://github.com/vultisig/vultisig-sdk/pull/978) [`1c2f007`](https://github.com/vultisig/vultisig-sdk/commit/1c2f007cef4656a65ec830dd421a1b7c14d3e053) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Compile Bitcoin PSBT payloads for Blockaid transaction validation.
+
+- [#975](https://github.com/vultisig/vultisig-sdk/pull/975) [`22bc005`](https://github.com/vultisig/vultisig-sdk/commit/22bc005fe3a13c1c6490f6f2b8e7f6a564b64fb2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Generate local MPC party IDs with CSPRNG-backed 64-bit hex suffixes instead of Math.random-derived four-digit values.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#1097](https://github.com/vultisig/vultisig-sdk/pull/1097) [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): exact bigint decimal conversion for the displayed swap output (`toAmountDecimal`) — the float64 `fromChainAmount(...).toFixed()` path silently drifted above 2^53 raw units (e.g. `999999999999999999999999` @18dp rendered as `1000000.000000000000000000`), so the amount the user confirmed could differ from the quoted one. Non-integer provider amount strings keep the legacy fallback instead of throwing mid-build.
+
+- Updated dependencies [[`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040), [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7), [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91)]:
+  - @vultisig/core-chain@2.24.2
+
+## 1.9.1
+
+### Patch Changes
+
+- Updated dependencies [[`c5e89cb`](https://github.com/vultisig/vultisig-sdk/commit/c5e89cb317ae6f4ca00eb6c628ad6bac636e4821), [`9a1fc02`](https://github.com/vultisig/vultisig-sdk/commit/9a1fc0276ddc8fc905fab392875499d39011520d)]:
+  - @vultisig/core-chain@2.24.1
+
 ## 1.9.0
 
 ### Minor Changes

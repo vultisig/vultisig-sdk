@@ -58,9 +58,17 @@ export const getEvmFeeQuote = async ({
   )
 
   const capGasLimit = (estimatedGasLimit: bigint | undefined): bigint => {
-    const gasLimit = bigIntMax(
-      ...without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
-    )
+    // SDK2-03: bigIntMax() with zero args throws an opaque error. Unreachable today
+    // (minimumGasLimit is always supplied), but guard so a future caller that omits every
+    // source fails with a clear, actionable message instead of a bare bigIntMax throw —
+    // and can never silently fall through to an undefined/zero gas limit.
+    const gasLimitSources = without([estimatedGasLimit, thirdPartyGasLimitEstimation, minimumGasLimit], undefined)
+    if (gasLimitSources.length === 0) {
+      throw new Error(
+        'capGasLimit: no gas-limit source available (estimated, third-party, and minimum are all undefined)'
+      )
+    }
+    const gasLimit = bigIntMax(...gasLimitSources)
 
     return shouldBufferDataTxGasLimit ? addDataTxGasLimitBuffer(gasLimit) : gasLimit
   }
