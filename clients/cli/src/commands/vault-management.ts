@@ -14,9 +14,11 @@ import {
   error,
   info,
   isJsonOutput,
+  isNonInteractive,
   isSilent,
   outputJson,
   printResult,
+  requireInteractive,
   success,
   warn,
 } from '../lib/output'
@@ -59,12 +61,15 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  // Auto-enable two-step mode when stdin is not a TTY (non-interactive / agent context)
-  const twoStep = options.twoStep || !process.stdin.isTTY
+  // Auto-enable two-step mode in non-interactive sessions (shared definition:
+  // non-TTY stdout OR stdin, or --non-interactive/--ci). Keying off stdin alone
+  // would let a redirected-stdout run create server-side vault state and only
+  // then die on the OTP prompt — a side effect before the fail-closed refusal.
+  const twoStep = options.twoStep || isNonInteractive()
   const { name, password, email, signal } = options
 
   if (!options.twoStep && twoStep) {
-    info('Non-interactive terminal detected. Using --two-step mode automatically.')
+    info('Non-interactive session detected. Using --two-step mode automatically.')
   }
 
   const spinner = createSpinner('Creating vault...')
@@ -705,6 +710,10 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
+  // This flow has no two-step mode: it always ends in an interactive email-OTP
+  // prompt. Refuse up-front in a non-interactive session so no server-side vault
+  // state is created before the prompt chokepoint would reject anyway.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
   const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // jscpd:ignore-start

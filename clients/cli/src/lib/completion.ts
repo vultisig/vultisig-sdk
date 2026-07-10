@@ -9,6 +9,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 
 import { ExitCode } from '../core/errors'
+import { isNonInteractive } from './output'
 
 // Import tabtab dynamically to handle ESM/CJS differences
 let tabtab: any = null
@@ -223,7 +224,10 @@ export function setupCompletionCommand(program: Command): void {
         // tabtab's installer prompts (via readline) for which shell to target.
         // With a non-TTY stdin that readline closes immediately and throws a raw
         // ERR_USE_AFTER_CLOSE stack trace — fail closed with a clear message instead.
-        if (!process.stdin.isTTY) {
+        // Uses the shared non-interactive definition (non-TTY stdout OR stdin, or
+        // --non-interactive/--ci), not just stdin: with redirected stdout the
+        // installer's prompt would land on the machine-output channel.
+        if (isNonInteractive()) {
           console.error(
             'completion --install needs an interactive terminal to pick your shell.\n' +
               'Run it directly in your shell, or append the script manually, e.g.:\n' +

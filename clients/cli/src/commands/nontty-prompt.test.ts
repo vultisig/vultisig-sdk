@@ -5,7 +5,13 @@ import type { CommandContext } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { resetOutput, setNonInteractive } from '../lib/output'
 import { executeAddressBook } from './settings'
-import { executeExport, executeImport, executeVerify } from './vault-management'
+import {
+  executeCreateFast,
+  executeCreateFromSeedphraseFast,
+  executeExport,
+  executeImport,
+  executeVerify,
+} from './vault-management'
 
 // Regression for PR #1034: the non-TTY fail-closed guard lives at the shared
 // prompt chokepoint (src/lib/prompt.ts), so commands that never installed their
@@ -39,7 +45,10 @@ function makeCtx(): CommandContext {
 }
 
 let stdoutSpy: ReturnType<typeof vi.spyOn>
-const savedEnv = { VAULT_PASSWORD: process.env.VAULT_PASSWORD, VULTISIG_PASSWORD: process.env.VULTISIG_PASSWORD }
+const savedEnv = {
+  VAULT_PASSWORD: process.env.VAULT_PASSWORD,
+  VULTISIG_PASSWORD: process.env.VULTISIG_PASSWORD,
+}
 
 beforeEach(() => {
   setNonInteractive(true)
@@ -86,5 +95,58 @@ describe('non-interactive prompt fail-closed, per command', () => {
 
   it('address-book --add (chain/address/name prompts)', async () => {
     await expectFailsClosed(() => executeAddressBook(makeCtx(), { add: true }))
+  })
+})
+
+// Regression for the stdout-nonTTY fail-open review finding: flows that keyed
+// their behavior off stdin alone could, with a redirected stdout but a TTY
+// stdin, create server-side vault state BEFORE the shared prompt chokepoint
+// refused. Both must honor the shared non-interactive state instead. stdin is
+// stubbed to LOOK like a TTY so a stdin-only check would take the wrong branch.
+describe('fast-vault flows honor the shared non-interactive definition (not stdin alone)', () => {
+  const stdinIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
+
+  beforeEach(() => {
+    Object.defineProperty(process.stdin, 'isTTY', {
+      value: true,
+      configurable: true,
+    })
+  })
+
+  afterEach(() => {
+    if (stdinIsTTY) {
+      Object.defineProperty(process.stdin, 'isTTY', stdinIsTTY)
+    } else {
+      delete (process.stdin as { isTTY?: boolean }).isTTY
+    }
+  })
+
+  it('create (fast) auto-enables two-step and never reaches the OTP prompt', async () => {
+    const createFastVault = vi.fn().mockResolvedValue('vault-id-123')
+    const ctx = {
+      sdk: { createFastVault },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    await executeCreateFast(ctx, { name: 'v', password: 'p', email: 'e@x.io' })
+
+    // persistPending:true is the two-step branch — the flow exits pending
+    // verification instead of falling through to the interactive OTP loop.
+    expect(createFastVault).toHaveBeenCalledWith(expect.objectContaining({ persistPending: true }))
+    expect(stdoutSpy).not.toHaveBeenCalled()
+  })
+
+  it('import-seedphrase (fast) refuses up-front, before any server-side vault creation', async () => {
+    // makeCtx traps every sdk access: reaching validateSeedphrase or
+    // createFastVaultFromSeedphrase would throw the trap error, not the typed
+    // refusal — so this also proves the guard fires before any side effect.
+    await expectFailsClosed(() =>
+      executeCreateFromSeedphraseFast(makeCtx(), {
+        mnemonic: 'abandon '.repeat(11) + 'about',
+        name: 'v',
+        password: 'p',
+        email: 'e@x.io',
+      })
+    )
   })
 })
