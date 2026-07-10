@@ -559,7 +559,10 @@ joinCmd
 
         let mnemonic = options.mnemonic
         if (qrParams.libType === 'KEYIMPORT' && !mnemonic) {
-          // Seedphrase-based session requires mnemonic
+          // Seedphrase-based session requires mnemonic. Refuse before the
+          // guidance line below writes to stdout in a non-interactive session
+          // (promptSeedphrase re-checks, but only after the info()).
+          requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
           info('\nThis session requires a seedphrase to join.')
           mnemonic = await promptSeedphrase()
         }
