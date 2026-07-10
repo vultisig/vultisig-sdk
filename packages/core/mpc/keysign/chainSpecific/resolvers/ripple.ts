@@ -7,20 +7,14 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 
+import { BuildKeysignPayloadError } from '../../error'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
+import { resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { GetChainSpecificResolver } from '../resolver'
 
 const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
 const rippleRequireDestinationTagFlag = 0x00020000
-const maxDestinationTag = 0xffffffff
-
-const getLegacyDestinationTag = (memo: string | undefined): number | undefined => {
-  if (!memo || !/^(0|[1-9]\d*)$/.test(memo)) return undefined
-
-  const destinationTag = Number(memo)
-  return destinationTag <= maxDestinationTag ? destinationTag : undefined
-}
 
 export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({
   keysignPayload,
@@ -30,13 +24,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   const { address } = coin
   const toAddress = shouldBePresent(keysignPayload.toAddress)
 
-  if (
-    destinationTag !== undefined &&
-    (!Number.isSafeInteger(destinationTag) || destinationTag < 1 || destinationTag > maxDestinationTag)
-  ) {
-    throw new Error(`Invalid XRP DestinationTag: expected an integer from 1 to ${maxDestinationTag}`)
-  }
-  const effectiveDestinationTag = destinationTag ?? getLegacyDestinationTag(keysignPayload.memo)
+  const effectiveDestinationTag = resolveDestinationTag({ destinationTag, memo: keysignPayload.memo })
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
@@ -64,13 +52,18 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // XRP Ledger rejects a Payment to an account with lsfRequireDestTag when no
   // tag is present. Fail closed on lookup errors other than an unfunded
   // destination: without an account object there is no RequireDestTag flag.
-  if (!coin.id && effectiveDestinationTag === undefined) {
+  if (!coin.id && (effectiveDestinationTag === undefined || effectiveDestinationTag === 0)) {
     if ('error' in destinationAccountResult) {
       if (!destinationUnfunded) {
+        // This lookup can fail transiently, so keep it retryable. Only
+        // deterministic user-input failures use BuildKeysignPayloadError.
         throw new Error(`Unable to verify whether XRP destination ${toAddress} requires a DestinationTag`)
       }
     } else if ((destinationAccountResult.data.account_data.Flags & rippleRequireDestinationTagFlag) !== 0) {
-      throw new Error(`XRP destination ${toAddress} requires a DestinationTag`)
+      throw new BuildKeysignPayloadError(
+        'ripple-destination-tag-required',
+        `XRP destination ${toAddress} requires a DestinationTag`
+      )
     }
   }
 

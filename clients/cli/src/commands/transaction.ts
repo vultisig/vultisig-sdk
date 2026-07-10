@@ -1,6 +1,7 @@
 /**
  * Transaction Commands - thin wrapper around vault.send()
  */
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
@@ -48,6 +49,11 @@ export async function sendTransaction(
     )
   }
 
+  const rippleDestination =
+    params.chain === Chain.Ripple ? normalizeRippleDestination(params.to) : { address: params.to }
+  const to = rippleDestination.address
+  const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -57,7 +63,7 @@ export async function sendTransaction(
     amount: params.amount,
     symbol: params.tokenId,
     memo: params.memo,
-    destinationTag: params.destinationTag,
+    destinationTag,
     dryRun: true,
   })
 
@@ -72,11 +78,11 @@ export async function sendTransaction(
     const result: SendDryRunResult = {
       dryRun: true,
       chain: params.chain,
-      to: params.to,
+      to,
       amount: params.amount,
       symbol: balance.symbol,
       balance: balance.formattedAmount,
-      destinationTag: params.destinationTag,
+      destinationTag,
     }
     if (hasInsufficientBalance) {
       result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
@@ -109,12 +115,12 @@ export async function sendTransaction(
     const address = await vault.address(params.chain)
     displayTransactionPreview(
       address,
-      params.to,
+      to,
       dryResult.total,
       balance.symbol,
       params.chain,
       params.memo,
-      params.destinationTag,
+      destinationTag,
       gas
     )
   }
@@ -157,7 +163,7 @@ export async function sendTransaction(
         amount: params.amount,
         symbol: params.tokenId,
         memo: params.memo,
-        destinationTag: params.destinationTag,
+        destinationTag,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

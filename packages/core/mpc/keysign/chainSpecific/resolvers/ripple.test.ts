@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 
+import { BuildKeysignPayloadError } from '../../error'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 
@@ -103,7 +104,20 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
 
     await expect(
       getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000000'), walletCore: {} as never })
-    ).rejects.toThrow(/requires a DestinationTag/)
+    ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
+  })
+
+  it('does not let a legacy zero memo bypass a required DestinationTag', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
+      accountInfo(address === DEST_FUNDED ? REQUIRE_DESTINATION_TAG : 0)
+    )
+    const keysignPayload = payload(DEST_FUNDED, '1000000')
+    keysignPayload.memo = '0'
+
+    await expect(getRippleChainSpecific({ keysignPayload, walletCore: {} as never })).rejects.toMatchObject({
+      type: 'ripple-destination-tag-required',
+    })
   })
 
   it('accepts a legacy canonical numeric memo for an account that requires DestinationTag', async () => {
@@ -124,8 +138,13 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
       return accountInfo()
     })
 
-    await expect(
-      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000000'), walletCore: {} as never })
-    ).rejects.toThrow(/Unable to verify.*DestinationTag/)
+    const error = await getRippleChainSpecific({
+      keysignPayload: payload(DEST_FUNDED, '1000000'),
+      walletCore: {} as never,
+    }).catch(value => value)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error).not.toBeInstanceOf(BuildKeysignPayloadError)
+    expect(error.message).toMatch(/unable to verify.*requires a DestinationTag/i)
   })
 })

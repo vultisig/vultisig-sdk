@@ -29,6 +29,7 @@ import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { hmac } from '@noble/hashes/hmac.js'
 import { ripemd160 } from '@noble/hashes/legacy.js'
 import { sha256, sha512 } from '@noble/hashes/sha2.js'
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { encodeAccountID } from 'ripple-address-codec'
 import { encode as xrplEncode, encodeForSigning } from 'ripple-binary-codec'
 
@@ -207,10 +208,29 @@ export type BuildXrpSendResult = {
  *   4. Caller broadcasts via `submitXrpTx(signedBlobHex, rpcUrl)`.
  */
 export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
+  const rippleDestination = normalizeRippleDestination(opts.destination)
+  const embeddedDestinationTag = rippleDestination.destinationTag
+  if (
+    embeddedDestinationTag !== undefined &&
+    opts.destinationTag !== undefined &&
+    embeddedDestinationTag !== opts.destinationTag
+  ) {
+    throw new Error(
+      `Conflicting XRP destination tags: X-address ${embeddedDestinationTag}, field ${opts.destinationTag}`
+    )
+  }
+  const destinationTag = opts.destinationTag ?? embeddedDestinationTag
+  if (
+    destinationTag !== undefined &&
+    (!Number.isInteger(destinationTag) || destinationTag < 1 || destinationTag > 0xffffffff)
+  ) {
+    throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
+  }
+
   const tx: XrpPaymentTx = {
     TransactionType: 'Payment',
     Account: opts.account,
-    Destination: opts.destination,
+    Destination: rippleDestination.address,
     Amount: opts.amount,
     Fee: opts.fee,
     Sequence: opts.sequence,
@@ -218,8 +238,8 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     SigningPubKey: opts.signingPubKey.toUpperCase(),
   }
 
-  if (opts.destinationTag !== undefined) {
-    tx.DestinationTag = opts.destinationTag
+  if (destinationTag !== undefined) {
+    tx.DestinationTag = destinationTag
   }
 
   if (opts.memo) {

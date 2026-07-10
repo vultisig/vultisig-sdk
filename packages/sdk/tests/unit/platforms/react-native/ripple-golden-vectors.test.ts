@@ -112,6 +112,37 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(referenceTx))
   })
 
+  it('normalizes a known X-address and applies its embedded DestinationTag', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+    })
+
+    expect(result.tx.Destination).toBe('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY')
+    expect(result.tx.DestinationTag).toBe(495)
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
+  it('rejects an explicit tag that conflicts with the X-address tag', () => {
+    expect(() =>
+      buildXrpSendTx({
+        account: FX.account,
+        destination: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        destinationTag: 12345,
+        amount: FX.amount,
+        fee: FX.fee,
+        sequence: FX.sequence,
+        lastLedgerSequence: FX.lastLedgerSequence,
+        signingPubKey: FX.signingPubKey,
+      })
+    ).toThrow(/Conflicting XRP destination tags/)
+  })
+
   it('produces a finalized signed blob whose bytes match xrpl.encode of the same signed tx', () => {
     const result = buildXrpSendTx({
       account: FX.account,

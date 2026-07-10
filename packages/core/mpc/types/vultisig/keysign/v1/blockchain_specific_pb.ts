@@ -2,196 +2,204 @@
 // @generated from file vultisig/keysign/v1/blockchain_specific.proto (package vultisig.keysign.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Message } from "@bufbuild/protobuf";
+import type { GenEnum, GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2'
+import { enumDesc, fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2'
+import type { Message } from '@bufbuild/protobuf'
 
 /**
  * Describes the file vultisig/keysign/v1/blockchain_specific.proto.
  */
-export const file_vultisig_keysign_v1_blockchain_specific: GenFile = /*@__PURE__*/
-  fileDesc("Ci12dWx0aXNpZy9rZXlzaWduL3YxL2Jsb2NrY2hhaW5fc3BlY2lmaWMucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEiOQoMVVRYT1NwZWNpZmljEhAKCGJ5dGVfZmVlGAEgASgJEhcKD3NlbmRfbWF4X2Ftb3VudBgCIAEoCCJOChRDYXJkYW5vQ2hhaW5TcGVjaWZpYxIQCghieXRlX2ZlZRgBIAEoAxIXCg9zZW5kX21heF9hbW91bnQYAiABKAgSCwoDdHRsGAMgASgEImcKEEV0aGVyZXVtU3BlY2lmaWMSGwoTbWF4X2ZlZV9wZXJfZ2FzX3dlaRgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSDQoFbm9uY2UYAyABKAMSEQoJZ2FzX2xpbWl0GAQgASgJIp4BChFUSE9SQ2hhaW5TcGVjaWZpYxIWCg5hY2NvdW50X251bWJlchgBIAEoBBIQCghzZXF1ZW5jZRgCIAEoBBILCgNmZWUYAyABKAQSEgoKaXNfZGVwb3NpdBgEIAEoCBI+ChB0cmFuc2FjdGlvbl90eXBlGAUgASgOMiQudnVsdGlzaWcua2V5c2lnbi52MS5UcmFuc2FjdGlvblR5cGUiUQoRTUFZQUNoYWluU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSEgoKaXNfZGVwb3NpdBgDIAEoCCLTAgoOQ29zbW9zU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSCwoDZ2FzGAMgASgEEj4KEHRyYW5zYWN0aW9uX3R5cGUYBCABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZRJHChBpYmNfZGVub21fdHJhY2VzGAUgASgLMigudnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NJYmNEZW5vbVRyYWNlSACIAQESOQoIaWJjX2luZm8YBiABKAsyIi52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0liY0luZm9IAYgBARIWCglnYXNfbGltaXQYByABKARIAogBAUITChFfaWJjX2Rlbm9tX3RyYWNlc0ILCglfaWJjX2luZm9CDAoKX2dhc19saW1pdCJNChNDb3Ntb3NJYmNEZW5vbVRyYWNlEgwKBHBhdGgYASABKAkSEgoKYmFzZV9kZW5vbRgCIAEoCRIUCgxsYXRlc3RfYmxvY2sYAyABKAkibgoNQ29zbW9zSWJjSW5mbxITCgtzb3VyY2VfcG9ydBgBIAEoCRIWCg5zb3VyY2VfY2hhbm5lbBgCIAEoCRIXCg9yZXZpc2lvbl9udW1iZXIYAyABKAQSFwoPcmV2aXNpb25faGVpZ2h0GAQgASgEIq8CCg5Tb2xhbmFTcGVjaWZpYxIZChFyZWNlbnRfYmxvY2tfaGFzaBgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSKgodZnJvbV90b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYAyABKAlIAIgBARIoCht0b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYBCABKAlIAYgBARIXCgpwcm9ncmFtX2lkGAUgASgISAKIAQESGgoNY29tcHV0ZV9saW1pdBgGIAEoCUgDiAEBQiAKHl9mcm9tX3Rva2VuX2Fzc29jaWF0ZWRfYWRkcmVzc0IeChxfdG9fdG9rZW5fYXNzb2NpYXRlZF9hZGRyZXNzQg0KC19wcm9ncmFtX2lkQhAKDl9jb21wdXRlX2xpbWl0IrABChBQb2xrYWRvdFNwZWNpZmljEhkKEXJlY2VudF9ibG9ja19oYXNoGAEgASgJEg0KBW5vbmNlGAIgASgEEhwKFGN1cnJlbnRfYmxvY2tfbnVtYmVyGAMgASgJEhQKDHNwZWNfdmVyc2lvbhgEIAEoDRIbChN0cmFuc2FjdGlvbl92ZXJzaW9uGAUgASgNEhQKDGdlbmVzaXNfaGFzaBgGIAEoCRILCgNnYXMYByABKAQihAEKB1N1aUNvaW4SEQoJY29pbl90eXBlGAEgASgJEhYKDmNvaW5fb2JqZWN0X2lkGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSDgoGZGlnZXN0GAQgASgJEg8KB2JhbGFuY2UYBSABKAkSHAoUcHJldmlvdXNfdHJhbnNhY3Rpb24YBiABKAkiawoLU3VpU3BlY2lmaWMSGwoTcmVmZXJlbmNlX2dhc19wcmljZRgBIAEoCRIrCgVjb2lucxgCIAMoCzIcLnZ1bHRpc2lnLmtleXNpZ24udjEuU3VpQ29pbhISCgpnYXNfYnVkZ2V0GAMgASgJIp0BCgtUb25TcGVjaWZpYxIXCg9zZXF1ZW5jZV9udW1iZXIYASABKAQSEQoJZXhwaXJlX2F0GAIgASgEEhIKCmJvdW5jZWFibGUYAyABKAgSFwoPc2VuZF9tYXhfYW1vdW50GAQgASgIEhYKDmpldHRvbl9hZGRyZXNzGAUgASgJEh0KFWlzX2FjdGl2ZV9kZXN0aW5hdGlvbhgGIAEoCCJ/Cg5SaXBwbGVTcGVjaWZpYxIQCghzZXF1ZW5jZRgBIAEoBBILCgNnYXMYAiABKAQSHAoUbGFzdF9sZWRnZXJfc2VxdWVuY2UYAyABKAQSHAoPZGVzdGluYXRpb25fdGFnGAQgASgNSACIAQFCEgoQX2Rlc3RpbmF0aW9uX3RhZyKTAgoMVHJvblNwZWNpZmljEhEKCXRpbWVzdGFtcBgBIAEoBBISCgpleHBpcmF0aW9uGAIgASgEEh4KFmJsb2NrX2hlYWRlcl90aW1lc3RhbXAYAyABKAQSGwoTYmxvY2tfaGVhZGVyX251bWJlchgEIAEoBBIcChRibG9ja19oZWFkZXJfdmVyc2lvbhgFIAEoBBIhChlibG9ja19oZWFkZXJfdHhfdHJpZV9yb290GAYgASgJEiAKGGJsb2NrX2hlYWRlcl9wYXJlbnRfaGFzaBgHIAEoCRIkChxibG9ja19oZWFkZXJfd2l0bmVzc19hZGRyZXNzGAggASgJEhYKDmdhc19lc3RpbWF0aW9uGAkgASgEKuwCCg9UcmFuc2FjdGlvblR5cGUSIAocVFJBTlNBQ1RJT05fVFlQRV9VTlNQRUNJRklFRBAAEhkKFVRSQU5TQUNUSU9OX1RZUEVfVk9URRABEh0KGVRSQU5TQUNUSU9OX1RZUEVfUFJPUE9TQUwQAhIhCh1UUkFOU0FDVElPTl9UWVBFX0lCQ19UUkFOU0ZFUhADEh8KG1RSQU5TQUNUSU9OX1RZUEVfVEhPUl9NRVJHRRAEEiEKHVRSQU5TQUNUSU9OX1RZUEVfVEhPUl9VTk1FUkdFEAUSIAocVFJBTlNBQ1RJT05fVFlQRV9UT05fREVQT1NJVBAGEiEKHVRSQU5TQUNUSU9OX1RZUEVfVE9OX1dJVEhEUkFXEAcSJQohVFJBTlNBQ1RJT05fVFlQRV9HRU5FUklDX0NPTlRSQUNUEAgSKgomVFJBTlNBQ1RJT05fVFlQRV9RQlRDX0NMQUlNX1dJVEhfUFJPT0YQCUJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM");
+export const file_vultisig_keysign_v1_blockchain_specific: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'Ci12dWx0aXNpZy9rZXlzaWduL3YxL2Jsb2NrY2hhaW5fc3BlY2lmaWMucHJvdG8SE3Z1bHRpc2lnLmtleXNpZ24udjEiOQoMVVRYT1NwZWNpZmljEhAKCGJ5dGVfZmVlGAEgASgJEhcKD3NlbmRfbWF4X2Ftb3VudBgCIAEoCCJOChRDYXJkYW5vQ2hhaW5TcGVjaWZpYxIQCghieXRlX2ZlZRgBIAEoAxIXCg9zZW5kX21heF9hbW91bnQYAiABKAgSCwoDdHRsGAMgASgEImcKEEV0aGVyZXVtU3BlY2lmaWMSGwoTbWF4X2ZlZV9wZXJfZ2FzX3dlaRgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSDQoFbm9uY2UYAyABKAMSEQoJZ2FzX2xpbWl0GAQgASgJIp4BChFUSE9SQ2hhaW5TcGVjaWZpYxIWCg5hY2NvdW50X251bWJlchgBIAEoBBIQCghzZXF1ZW5jZRgCIAEoBBILCgNmZWUYAyABKAQSEgoKaXNfZGVwb3NpdBgEIAEoCBI+ChB0cmFuc2FjdGlvbl90eXBlGAUgASgOMiQudnVsdGlzaWcua2V5c2lnbi52MS5UcmFuc2FjdGlvblR5cGUiUQoRTUFZQUNoYWluU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSEgoKaXNfZGVwb3NpdBgDIAEoCCLTAgoOQ29zbW9zU3BlY2lmaWMSFgoOYWNjb3VudF9udW1iZXIYASABKAQSEAoIc2VxdWVuY2UYAiABKAQSCwoDZ2FzGAMgASgEEj4KEHRyYW5zYWN0aW9uX3R5cGUYBCABKA4yJC52dWx0aXNpZy5rZXlzaWduLnYxLlRyYW5zYWN0aW9uVHlwZRJHChBpYmNfZGVub21fdHJhY2VzGAUgASgLMigudnVsdGlzaWcua2V5c2lnbi52MS5Db3Ntb3NJYmNEZW5vbVRyYWNlSACIAQESOQoIaWJjX2luZm8YBiABKAsyIi52dWx0aXNpZy5rZXlzaWduLnYxLkNvc21vc0liY0luZm9IAYgBARIWCglnYXNfbGltaXQYByABKARIAogBAUITChFfaWJjX2Rlbm9tX3RyYWNlc0ILCglfaWJjX2luZm9CDAoKX2dhc19saW1pdCJNChNDb3Ntb3NJYmNEZW5vbVRyYWNlEgwKBHBhdGgYASABKAkSEgoKYmFzZV9kZW5vbRgCIAEoCRIUCgxsYXRlc3RfYmxvY2sYAyABKAkibgoNQ29zbW9zSWJjSW5mbxITCgtzb3VyY2VfcG9ydBgBIAEoCRIWCg5zb3VyY2VfY2hhbm5lbBgCIAEoCRIXCg9yZXZpc2lvbl9udW1iZXIYAyABKAQSFwoPcmV2aXNpb25faGVpZ2h0GAQgASgEIq8CCg5Tb2xhbmFTcGVjaWZpYxIZChFyZWNlbnRfYmxvY2tfaGFzaBgBIAEoCRIUCgxwcmlvcml0eV9mZWUYAiABKAkSKgodZnJvbV90b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYAyABKAlIAIgBARIoCht0b190b2tlbl9hc3NvY2lhdGVkX2FkZHJlc3MYBCABKAlIAYgBARIXCgpwcm9ncmFtX2lkGAUgASgISAKIAQESGgoNY29tcHV0ZV9saW1pdBgGIAEoCUgDiAEBQiAKHl9mcm9tX3Rva2VuX2Fzc29jaWF0ZWRfYWRkcmVzc0IeChxfdG9fdG9rZW5fYXNzb2NpYXRlZF9hZGRyZXNzQg0KC19wcm9ncmFtX2lkQhAKDl9jb21wdXRlX2xpbWl0IrABChBQb2xrYWRvdFNwZWNpZmljEhkKEXJlY2VudF9ibG9ja19oYXNoGAEgASgJEg0KBW5vbmNlGAIgASgEEhwKFGN1cnJlbnRfYmxvY2tfbnVtYmVyGAMgASgJEhQKDHNwZWNfdmVyc2lvbhgEIAEoDRIbChN0cmFuc2FjdGlvbl92ZXJzaW9uGAUgASgNEhQKDGdlbmVzaXNfaGFzaBgGIAEoCRILCgNnYXMYByABKAQihAEKB1N1aUNvaW4SEQoJY29pbl90eXBlGAEgASgJEhYKDmNvaW5fb2JqZWN0X2lkGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSDgoGZGlnZXN0GAQgASgJEg8KB2JhbGFuY2UYBSABKAkSHAoUcHJldmlvdXNfdHJhbnNhY3Rpb24YBiABKAkiawoLU3VpU3BlY2lmaWMSGwoTcmVmZXJlbmNlX2dhc19wcmljZRgBIAEoCRIrCgVjb2lucxgCIAMoCzIcLnZ1bHRpc2lnLmtleXNpZ24udjEuU3VpQ29pbhISCgpnYXNfYnVkZ2V0GAMgASgJIp0BCgtUb25TcGVjaWZpYxIXCg9zZXF1ZW5jZV9udW1iZXIYASABKAQSEQoJZXhwaXJlX2F0GAIgASgEEhIKCmJvdW5jZWFibGUYAyABKAgSFwoPc2VuZF9tYXhfYW1vdW50GAQgASgIEhYKDmpldHRvbl9hZGRyZXNzGAUgASgJEh0KFWlzX2FjdGl2ZV9kZXN0aW5hdGlvbhgGIAEoCCJ/Cg5SaXBwbGVTcGVjaWZpYxIQCghzZXF1ZW5jZRgBIAEoBBILCgNnYXMYAiABKAQSHAoUbGFzdF9sZWRnZXJfc2VxdWVuY2UYAyABKAQSHAoPZGVzdGluYXRpb25fdGFnGAQgASgNSACIAQFCEgoQX2Rlc3RpbmF0aW9uX3RhZyKTAgoMVHJvblNwZWNpZmljEhEKCXRpbWVzdGFtcBgBIAEoBBISCgpleHBpcmF0aW9uGAIgASgEEh4KFmJsb2NrX2hlYWRlcl90aW1lc3RhbXAYAyABKAQSGwoTYmxvY2tfaGVhZGVyX251bWJlchgEIAEoBBIcChRibG9ja19oZWFkZXJfdmVyc2lvbhgFIAEoBBIhChlibG9ja19oZWFkZXJfdHhfdHJpZV9yb290GAYgASgJEiAKGGJsb2NrX2hlYWRlcl9wYXJlbnRfaGFzaBgHIAEoCRIkChxibG9ja19oZWFkZXJfd2l0bmVzc19hZGRyZXNzGAggASgJEhYKDmdhc19lc3RpbWF0aW9uGAkgASgEKuwCCg9UcmFuc2FjdGlvblR5cGUSIAocVFJBTlNBQ1RJT05fVFlQRV9VTlNQRUNJRklFRBAAEhkKFVRSQU5TQUNUSU9OX1RZUEVfVk9URRABEh0KGVRSQU5TQUNUSU9OX1RZUEVfUFJPUE9TQUwQAhIhCh1UUkFOU0FDVElPTl9UWVBFX0lCQ19UUkFOU0ZFUhADEh8KG1RSQU5TQUNUSU9OX1RZUEVfVEhPUl9NRVJHRRAEEiEKHVRSQU5TQUNUSU9OX1RZUEVfVEhPUl9VTk1FUkdFEAUSIAocVFJBTlNBQ1RJT05fVFlQRV9UT05fREVQT1NJVBAGEiEKHVRSQU5TQUNUSU9OX1RZUEVfVE9OX1dJVEhEUkFXEAcSJQohVFJBTlNBQ1RJT05fVFlQRV9HRU5FUklDX0NPTlRSQUNUEAgSKgomVFJBTlNBQ1RJT05fVFlQRV9RQlRDX0NMQUlNX1dJVEhfUFJPT0YQCUJUChN2dWx0aXNpZy5rZXlzaWduLnYxWjhnaXRodWIuY29tL3Z1bHRpc2lnL2NvbW1vbmRhdGEvZ28vdnVsdGlzaWcva2V5c2lnbi92MTt2MboCAlZTYgZwcm90bzM'
+  )
 
 /**
  * @generated from message vultisig.keysign.v1.UTXOSpecific
  */
-export type UTXOSpecific = Message<"vultisig.keysign.v1.UTXOSpecific"> & {
+export type UTXOSpecific = Message<'vultisig.keysign.v1.UTXOSpecific'> & {
   /**
    * @generated from field: string byte_fee = 1;
    */
-  byteFee: string;
+  byteFee: string
 
   /**
    * @generated from field: bool send_max_amount = 2;
    */
-  sendMaxAmount: boolean;
-};
+  sendMaxAmount: boolean
+}
 
 /**
  * Describes the message vultisig.keysign.v1.UTXOSpecific.
  * Use `create(UTXOSpecificSchema)` to create a new message.
  */
-export const UTXOSpecificSchema: GenMessage<UTXOSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 0);
+export const UTXOSpecificSchema: GenMessage<UTXOSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 0)
 
 /**
  * @generated from message vultisig.keysign.v1.CardanoChainSpecific
  */
-export type CardanoChainSpecific = Message<"vultisig.keysign.v1.CardanoChainSpecific"> & {
+export type CardanoChainSpecific = Message<'vultisig.keysign.v1.CardanoChainSpecific'> & {
   /**
    * @generated from field: int64 byte_fee = 1;
    */
-  byteFee: bigint;
+  byteFee: bigint
 
   /**
    * @generated from field: bool send_max_amount = 2;
    */
-  sendMaxAmount: boolean;
+  sendMaxAmount: boolean
 
   /**
    * Add TTL parameter
    *
    * @generated from field: uint64 ttl = 3;
    */
-  ttl: bigint;
-};
+  ttl: bigint
+}
 
 /**
  * Describes the message vultisig.keysign.v1.CardanoChainSpecific.
  * Use `create(CardanoChainSpecificSchema)` to create a new message.
  */
-export const CardanoChainSpecificSchema: GenMessage<CardanoChainSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 1);
+export const CardanoChainSpecificSchema: GenMessage<CardanoChainSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 1)
 
 /**
  * @generated from message vultisig.keysign.v1.EthereumSpecific
  */
-export type EthereumSpecific = Message<"vultisig.keysign.v1.EthereumSpecific"> & {
+export type EthereumSpecific = Message<'vultisig.keysign.v1.EthereumSpecific'> & {
   /**
    * @generated from field: string max_fee_per_gas_wei = 1;
    */
-  maxFeePerGasWei: string;
+  maxFeePerGasWei: string
 
   /**
    * @generated from field: string priority_fee = 2;
    */
-  priorityFee: string;
+  priorityFee: string
 
   /**
    * @generated from field: int64 nonce = 3;
    */
-  nonce: bigint;
+  nonce: bigint
 
   /**
    * @generated from field: string gas_limit = 4;
    */
-  gasLimit: string;
-};
+  gasLimit: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.EthereumSpecific.
  * Use `create(EthereumSpecificSchema)` to create a new message.
  */
-export const EthereumSpecificSchema: GenMessage<EthereumSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 2);
+export const EthereumSpecificSchema: GenMessage<EthereumSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 2)
 
 /**
  * @generated from message vultisig.keysign.v1.THORChainSpecific
  */
-export type THORChainSpecific = Message<"vultisig.keysign.v1.THORChainSpecific"> & {
+export type THORChainSpecific = Message<'vultisig.keysign.v1.THORChainSpecific'> & {
   /**
    * @generated from field: uint64 account_number = 1;
    */
-  accountNumber: bigint;
+  accountNumber: bigint
 
   /**
    * @generated from field: uint64 sequence = 2;
    */
-  sequence: bigint;
+  sequence: bigint
 
   /**
    * @generated from field: uint64 fee = 3;
    */
-  fee: bigint;
+  fee: bigint
 
   /**
    * @generated from field: bool is_deposit = 4;
    */
-  isDeposit: boolean;
+  isDeposit: boolean
 
   /**
    * @generated from field: vultisig.keysign.v1.TransactionType transaction_type = 5;
    */
-  transactionType: TransactionType;
-};
+  transactionType: TransactionType
+}
 
 /**
  * Describes the message vultisig.keysign.v1.THORChainSpecific.
  * Use `create(THORChainSpecificSchema)` to create a new message.
  */
-export const THORChainSpecificSchema: GenMessage<THORChainSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 3);
+export const THORChainSpecificSchema: GenMessage<THORChainSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 3)
 
 /**
  * @generated from message vultisig.keysign.v1.MAYAChainSpecific
  */
-export type MAYAChainSpecific = Message<"vultisig.keysign.v1.MAYAChainSpecific"> & {
+export type MAYAChainSpecific = Message<'vultisig.keysign.v1.MAYAChainSpecific'> & {
   /**
    * @generated from field: uint64 account_number = 1;
    */
-  accountNumber: bigint;
+  accountNumber: bigint
 
   /**
    * @generated from field: uint64 sequence = 2;
    */
-  sequence: bigint;
+  sequence: bigint
 
   /**
    * @generated from field: bool is_deposit = 3;
    */
-  isDeposit: boolean;
-};
+  isDeposit: boolean
+}
 
 /**
  * Describes the message vultisig.keysign.v1.MAYAChainSpecific.
  * Use `create(MAYAChainSpecificSchema)` to create a new message.
  */
-export const MAYAChainSpecificSchema: GenMessage<MAYAChainSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 4);
+export const MAYAChainSpecificSchema: GenMessage<MAYAChainSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 4)
 
 /**
  * @generated from message vultisig.keysign.v1.CosmosSpecific
  */
-export type CosmosSpecific = Message<"vultisig.keysign.v1.CosmosSpecific"> & {
+export type CosmosSpecific = Message<'vultisig.keysign.v1.CosmosSpecific'> & {
   /**
    * @generated from field: uint64 account_number = 1;
    */
-  accountNumber: bigint;
+  accountNumber: bigint
 
   /**
    * @generated from field: uint64 sequence = 2;
    */
-  sequence: bigint;
+  sequence: bigint
 
   /**
    * @generated from field: uint64 gas = 3;
    */
-  gas: bigint;
+  gas: bigint
 
   /**
    * @generated from field: vultisig.keysign.v1.TransactionType transaction_type = 4;
    */
-  transactionType: TransactionType;
+  transactionType: TransactionType
 
   /**
    * @generated from field: optional vultisig.keysign.v1.CosmosIbcDenomTrace ibc_denom_traces = 5;
    */
-  ibcDenomTraces?: CosmosIbcDenomTrace;
+  ibcDenomTraces?: CosmosIbcDenomTrace
 
   /**
    * @generated from field: optional vultisig.keysign.v1.CosmosIbcInfo ibc_info = 6;
    */
-  ibcInfo?: CosmosIbcInfo;
+  ibcInfo?: CosmosIbcInfo
 
   /**
    * Per-tx signed gas limit from a `/cosmos/tx/v1beta1/simulate` estimate.
@@ -202,371 +210,382 @@ export type CosmosSpecific = Message<"vultisig.keysign.v1.CosmosSpecific"> & {
    *
    * @generated from field: optional uint64 gas_limit = 7;
    */
-  gasLimit?: bigint;
-};
+  gasLimit?: bigint
+}
 
 /**
  * Describes the message vultisig.keysign.v1.CosmosSpecific.
  * Use `create(CosmosSpecificSchema)` to create a new message.
  */
-export const CosmosSpecificSchema: GenMessage<CosmosSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 5);
+export const CosmosSpecificSchema: GenMessage<CosmosSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 5)
 
 /**
  * @generated from message vultisig.keysign.v1.CosmosIbcDenomTrace
  */
-export type CosmosIbcDenomTrace = Message<"vultisig.keysign.v1.CosmosIbcDenomTrace"> & {
+export type CosmosIbcDenomTrace = Message<'vultisig.keysign.v1.CosmosIbcDenomTrace'> & {
   /**
    * @generated from field: string path = 1;
    */
-  path: string;
+  path: string
 
   /**
    * @generated from field: string base_denom = 2;
    */
-  baseDenom: string;
+  baseDenom: string
 
   /**
    * @generated from field: string latest_block = 3;
    */
-  latestBlock: string;
-};
+  latestBlock: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.CosmosIbcDenomTrace.
  * Use `create(CosmosIbcDenomTraceSchema)` to create a new message.
  */
-export const CosmosIbcDenomTraceSchema: GenMessage<CosmosIbcDenomTrace> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 6);
+export const CosmosIbcDenomTraceSchema: GenMessage<CosmosIbcDenomTrace> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 6)
 
 /**
  * @generated from message vultisig.keysign.v1.CosmosIbcInfo
  */
-export type CosmosIbcInfo = Message<"vultisig.keysign.v1.CosmosIbcInfo"> & {
+export type CosmosIbcInfo = Message<'vultisig.keysign.v1.CosmosIbcInfo'> & {
   /**
    * @generated from field: string source_port = 1;
    */
-  sourcePort: string;
+  sourcePort: string
 
   /**
    * @generated from field: string source_channel = 2;
    */
-  sourceChannel: string;
+  sourceChannel: string
 
   /**
    * @generated from field: uint64 revision_number = 3;
    */
-  revisionNumber: bigint;
+  revisionNumber: bigint
 
   /**
    * @generated from field: uint64 revision_height = 4;
    */
-  revisionHeight: bigint;
-};
+  revisionHeight: bigint
+}
 
 /**
  * Describes the message vultisig.keysign.v1.CosmosIbcInfo.
  * Use `create(CosmosIbcInfoSchema)` to create a new message.
  */
-export const CosmosIbcInfoSchema: GenMessage<CosmosIbcInfo> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 7);
+export const CosmosIbcInfoSchema: GenMessage<CosmosIbcInfo> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 7)
 
 /**
  * @generated from message vultisig.keysign.v1.SolanaSpecific
  */
-export type SolanaSpecific = Message<"vultisig.keysign.v1.SolanaSpecific"> & {
+export type SolanaSpecific = Message<'vultisig.keysign.v1.SolanaSpecific'> & {
   /**
    * @generated from field: string recent_block_hash = 1;
    */
-  recentBlockHash: string;
+  recentBlockHash: string
 
   /**
    * @generated from field: string priority_fee = 2;
    */
-  priorityFee: string;
+  priorityFee: string
 
   /**
    * @generated from field: optional string from_token_associated_address = 3;
    */
-  fromTokenAssociatedAddress?: string;
+  fromTokenAssociatedAddress?: string
 
   /**
    * @generated from field: optional string to_token_associated_address = 4;
    */
-  toTokenAssociatedAddress?: string;
+  toTokenAssociatedAddress?: string
 
   /**
    * @generated from field: optional bool program_id = 5;
    */
-  programId?: boolean;
+  programId?: boolean
 
   /**
    * @generated from field: optional string compute_limit = 6;
    */
-  computeLimit?: string;
-};
+  computeLimit?: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.SolanaSpecific.
  * Use `create(SolanaSpecificSchema)` to create a new message.
  */
-export const SolanaSpecificSchema: GenMessage<SolanaSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 8);
+export const SolanaSpecificSchema: GenMessage<SolanaSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 8)
 
 /**
  * @generated from message vultisig.keysign.v1.PolkadotSpecific
  */
-export type PolkadotSpecific = Message<"vultisig.keysign.v1.PolkadotSpecific"> & {
+export type PolkadotSpecific = Message<'vultisig.keysign.v1.PolkadotSpecific'> & {
   /**
    * @generated from field: string recent_block_hash = 1;
    */
-  recentBlockHash: string;
+  recentBlockHash: string
 
   /**
    * @generated from field: uint64 nonce = 2;
    */
-  nonce: bigint;
+  nonce: bigint
 
   /**
    * @generated from field: string current_block_number = 3;
    */
-  currentBlockNumber: string;
+  currentBlockNumber: string
 
   /**
    * @generated from field: uint32 spec_version = 4;
    */
-  specVersion: number;
+  specVersion: number
 
   /**
    * @generated from field: uint32 transaction_version = 5;
    */
-  transactionVersion: number;
+  transactionVersion: number
 
   /**
    * @generated from field: string genesis_hash = 6;
    */
-  genesisHash: string;
+  genesisHash: string
 
   /**
    * @generated from field: uint64 gas = 7;
    */
-  gas: bigint;
-};
+  gas: bigint
+}
 
 /**
  * Describes the message vultisig.keysign.v1.PolkadotSpecific.
  * Use `create(PolkadotSpecificSchema)` to create a new message.
  */
-export const PolkadotSpecificSchema: GenMessage<PolkadotSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 9);
+export const PolkadotSpecificSchema: GenMessage<PolkadotSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 9)
 
 /**
  * @generated from message vultisig.keysign.v1.SuiCoin
  */
-export type SuiCoin = Message<"vultisig.keysign.v1.SuiCoin"> & {
+export type SuiCoin = Message<'vultisig.keysign.v1.SuiCoin'> & {
   /**
    * @generated from field: string coin_type = 1;
    */
-  coinType: string;
+  coinType: string
 
   /**
    * @generated from field: string coin_object_id = 2;
    */
-  coinObjectId: string;
+  coinObjectId: string
 
   /**
    * @generated from field: string version = 3;
    */
-  version: string;
+  version: string
 
   /**
    * @generated from field: string digest = 4;
    */
-  digest: string;
+  digest: string
 
   /**
    * @generated from field: string balance = 5;
    */
-  balance: string;
+  balance: string
 
   /**
    * @generated from field: string previous_transaction = 6;
    */
-  previousTransaction: string;
-};
+  previousTransaction: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.SuiCoin.
  * Use `create(SuiCoinSchema)` to create a new message.
  */
-export const SuiCoinSchema: GenMessage<SuiCoin> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 10);
+export const SuiCoinSchema: GenMessage<SuiCoin> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 10)
 
 /**
  * @generated from message vultisig.keysign.v1.SuiSpecific
  */
-export type SuiSpecific = Message<"vultisig.keysign.v1.SuiSpecific"> & {
+export type SuiSpecific = Message<'vultisig.keysign.v1.SuiSpecific'> & {
   /**
    * @generated from field: string reference_gas_price = 1;
    */
-  referenceGasPrice: string;
+  referenceGasPrice: string
 
   /**
    * @generated from field: repeated vultisig.keysign.v1.SuiCoin coins = 2;
    */
-  coins: SuiCoin[];
+  coins: SuiCoin[]
 
   /**
    * @generated from field: string gas_budget = 3;
    */
-  gasBudget: string;
-};
+  gasBudget: string
+}
 
 /**
  * Describes the message vultisig.keysign.v1.SuiSpecific.
  * Use `create(SuiSpecificSchema)` to create a new message.
  */
-export const SuiSpecificSchema: GenMessage<SuiSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 11);
+export const SuiSpecificSchema: GenMessage<SuiSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 11)
 
 /**
  * @generated from message vultisig.keysign.v1.TonSpecific
  */
-export type TonSpecific = Message<"vultisig.keysign.v1.TonSpecific"> & {
+export type TonSpecific = Message<'vultisig.keysign.v1.TonSpecific'> & {
   /**
    * @generated from field: uint64 sequence_number = 1;
    */
-  sequenceNumber: bigint;
+  sequenceNumber: bigint
 
   /**
    * @generated from field: uint64 expire_at = 2;
    */
-  expireAt: bigint;
+  expireAt: bigint
 
   /**
    * @generated from field: bool bounceable = 3;
    */
-  bounceable: boolean;
+  bounceable: boolean
 
   /**
    * @generated from field: bool send_max_amount = 4;
    */
-  sendMaxAmount: boolean;
+  sendMaxAmount: boolean
 
   /**
    * @generated from field: string jetton_address = 5;
    */
-  jettonAddress: string;
+  jettonAddress: string
 
   /**
    * @generated from field: bool is_active_destination = 6;
    */
-  isActiveDestination: boolean;
-};
+  isActiveDestination: boolean
+}
 
 /**
  * Describes the message vultisig.keysign.v1.TonSpecific.
  * Use `create(TonSpecificSchema)` to create a new message.
  */
-export const TonSpecificSchema: GenMessage<TonSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 12);
+export const TonSpecificSchema: GenMessage<TonSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 12)
 
 /**
  * @generated from message vultisig.keysign.v1.RippleSpecific
  */
-export type RippleSpecific = Message<"vultisig.keysign.v1.RippleSpecific"> & {
+export type RippleSpecific = Message<'vultisig.keysign.v1.RippleSpecific'> & {
   /**
    * @generated from field: uint64 sequence = 1;
    */
-  sequence: bigint;
+  sequence: bigint
 
   /**
    * @generated from field: uint64 gas = 2;
    */
-  gas: bigint;
+  gas: bigint
 
   /**
    * @generated from field: uint64 last_ledger_sequence = 3;
    */
-  lastLedgerSequence: bigint;
+  lastLedgerSequence: bigint
 
   /**
    * XRPL DestinationTag: 32-bit unsigned integer, optional (proto3 `optional`
    * so a present tag of 0 is distinguishable from "no tag"). During the
-   * dual-write transition the tag is ALSO carried in the generic
+   * dual-write transition, tag-only sends ALSO carry the tag in the generic
    * KeysignPayload.memo as a canonical uint32 decimal; signers prefer this
    * field and fall back to the memo so mixed-version device pairs stay
-   * byte-identical in MPC keysign. The memo carrier is retired once every
-   * platform reads this field.
+   * byte-identical in MPC keysign. A tag combined with an independent memo
+   * requires every signer to understand this field. The memo carrier is
+   * retired once every platform reads this field.
    *
    * @generated from field: optional uint32 destination_tag = 4;
    */
-  destinationTag?: number;
-};
+  destinationTag?: number
+}
 
 /**
  * Describes the message vultisig.keysign.v1.RippleSpecific.
  * Use `create(RippleSpecificSchema)` to create a new message.
  */
-export const RippleSpecificSchema: GenMessage<RippleSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 13);
+export const RippleSpecificSchema: GenMessage<RippleSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 13)
 
 /**
  * @generated from message vultisig.keysign.v1.TronSpecific
  */
-export type TronSpecific = Message<"vultisig.keysign.v1.TronSpecific"> & {
+export type TronSpecific = Message<'vultisig.keysign.v1.TronSpecific'> & {
   /**
    * @generated from field: uint64 timestamp = 1;
    */
-  timestamp: bigint;
+  timestamp: bigint
 
   /**
    * @generated from field: uint64 expiration = 2;
    */
-  expiration: bigint;
+  expiration: bigint
 
   /**
    * @generated from field: uint64 block_header_timestamp = 3;
    */
-  blockHeaderTimestamp: bigint;
+  blockHeaderTimestamp: bigint
 
   /**
    * @generated from field: uint64 block_header_number = 4;
    */
-  blockHeaderNumber: bigint;
+  blockHeaderNumber: bigint
 
   /**
    * @generated from field: uint64 block_header_version = 5;
    */
-  blockHeaderVersion: bigint;
+  blockHeaderVersion: bigint
 
   /**
    * @generated from field: string block_header_tx_trie_root = 6;
    */
-  blockHeaderTxTrieRoot: string;
+  blockHeaderTxTrieRoot: string
 
   /**
    * @generated from field: string block_header_parent_hash = 7;
    */
-  blockHeaderParentHash: string;
+  blockHeaderParentHash: string
 
   /**
    * @generated from field: string block_header_witness_address = 8;
    */
-  blockHeaderWitnessAddress: string;
+  blockHeaderWitnessAddress: string
 
   /**
    * @generated from field: uint64 gas_estimation = 9;
    */
-  gasEstimation: bigint;
-};
+  gasEstimation: bigint
+}
 
 /**
  * Describes the message vultisig.keysign.v1.TronSpecific.
  * Use `create(TronSpecificSchema)` to create a new message.
  */
-export const TronSpecificSchema: GenMessage<TronSpecific> = /*@__PURE__*/
-  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 14);
+export const TronSpecificSchema: GenMessage<TronSpecific> =
+  /*@__PURE__*/
+  messageDesc(file_vultisig_keysign_v1_blockchain_specific, 14)
 
 /**
  * @generated from enum vultisig.keysign.v1.TransactionType
@@ -626,6 +645,6 @@ export enum TransactionType {
 /**
  * Describes the enum vultisig.keysign.v1.TransactionType.
  */
-export const TransactionTypeSchema: GenEnum<TransactionType> = /*@__PURE__*/
-  enumDesc(file_vultisig_keysign_v1_blockchain_specific, 0);
-
+export const TransactionTypeSchema: GenEnum<TransactionType> =
+  /*@__PURE__*/
+  enumDesc(file_vultisig_keysign_v1_blockchain_specific, 0)

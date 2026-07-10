@@ -1,4 +1,4 @@
-import { create } from '@bufbuild/protobuf'
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import { type WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import {
@@ -148,15 +148,24 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
 
   it('preserves a distinct memo alongside the first-class destination tag in raw JSON', async () => {
     const [input] = await getRippleSigningInputs({
-      keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: '67890' }),
+      keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: 'invoice 67890' }),
       walletCore,
     })
 
     expect(input.opPayment).toBeFalsy()
     expect(JSON.parse(input.rawJson!)).toMatchObject({
       DestinationTag: 12345,
-      Memos: [{ Memo: { MemoData: '3637383930' } }],
+      Memos: [{ Memo: { MemoData: '696E766F696365203637383930' } }],
     })
+  })
+
+  it('rejects a canonical numeric memo that conflicts with the first-class tag', () => {
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: '67890' }),
+        walletCore,
+      })
+    ).toThrow(/Conflicting XRP destination tags/)
   })
 
   it('does not treat an echoed tag memo as a distinct memo', async () => {
@@ -167,6 +176,26 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
 
     expect(input.opPayment?.destinationTag?.toString()).toBe('12345')
     expect(input.rawJson).toBeFalsy()
+  })
+
+  it('produces the same signing input when a legacy peer drops the first-class tag field', async () => {
+    const payload = buildPaymentPayload({ destinationTag: 12345, memo: '12345' })
+    const serialized = toBinary(KeysignPayloadSchema, payload)
+    const modernPayload = fromBinary(KeysignPayloadSchema, serialized)
+    const legacyPayload = fromBinary(KeysignPayloadSchema, serialized)
+
+    if (legacyPayload.blockchainSpecific.case === 'rippleSpecific') {
+      // Simulate an older schema that cannot read optional field 4. The memo
+      // remains available as the canonical legacy carrier.
+      legacyPayload.blockchainSpecific.value.destinationTag = undefined
+    }
+
+    const [modernInput] = await getRippleSigningInputs({ keysignPayload: modernPayload, walletCore })
+    const [legacyInput] = await getRippleSigningInputs({ keysignPayload: legacyPayload, walletCore })
+
+    expect(modernPayload.memo).toBe('12345')
+    expect(legacyInput).toEqual(modernInput)
+    expect(legacyInput.opPayment?.destinationTag?.toString()).toBe('12345')
   })
 
   it('uses a canonical numeric memo as a legacy tag only when the field is absent', async () => {

@@ -272,6 +272,35 @@ describe('send — broadcast dedupe guard', () => {
     expect(realSends.count).toBe(0)
   })
 
+  it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-x-address-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+      amount: '1',
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      to: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY',
+      destinationTag: 495,
+    })
+    expect(vault.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        destinationTag: 495,
+      })
+    )
+    expect(realSends.count).toBe(0)
+  })
+
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
