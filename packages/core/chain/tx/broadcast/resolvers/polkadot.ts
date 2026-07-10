@@ -27,7 +27,10 @@ type RpcResponse = {
  * a genuinely-rejected tx as confirmed (fund-safety false positive). It is
  * routed through `verifyBroadcastByHash` instead, which only swallows the
  * error if the tx hash is actually observed on chain / in the pool and
- * otherwise surfaces the real failure.
+ * otherwise surfaces the real failure. (See the prod-behaviour note at the
+ * `verifyBroadcastByHash` call below: for Polkadot that confirm path is
+ * currently inert because Subscan tx-status needs an API key we don't send, so
+ * today this ships as fail-closed — surfaced, never confirm-and-swallowed.)
  *
  * Substrate sources for the exact strings:
  *   substrate/client/transaction-pool/api/src/error.rs (AlreadyImported,
@@ -84,6 +87,19 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
       throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
     }
   } catch (error) {
+    // NOTE ON CURRENT PROD BEHAVIOUR: for Polkadot the confirm branch of
+    // `verifyBroadcastByHash` is effectively inert. Its status lookup
+    // (`getPolkadotTxStatus`) hits Subscan's `assethub-polkadot.api.subscan.io`
+    // endpoint, which requires an `X-API-Key` this codebase does not send — the
+    // request 403s, `getPolkadotTxStatus` returns `{ isKnown: false }`, and
+    // `verifyBroadcastByHash` therefore always re-throws the original error. So
+    // in practice everything routed here (including `temporarily banned`) ships
+    // as FAIL-CLOSED: surfaced as a failure, never confirm-and-swallowed. That
+    // is the fund-safe direction (a genuinely-rejected tx is never reported as
+    // success), but it means the benign peer-race duplicate of a `temporarily
+    // banned` tx currently surfaces as a signing error too. Restoring the
+    // confirm-and-swallow path needs authenticated Subscan tx-status — tracked
+    // as a follow-up (vultisig-sdk#1145).
     await verifyBroadcastByHash({ chain, tx, error })
   }
 }
