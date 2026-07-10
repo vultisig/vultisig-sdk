@@ -176,4 +176,82 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(failures[0].error).not.toContain('\n')
     expect(raw).not.toContain('at Object.') // no stack frames leaked
   })
+
+  it('preserves chains order across chainBalances and failures for a mixed balance+value failure run', async () => {
+    // Interleaved: chain[0] fails at balance, chain[1] is healthy, chain[2] fails
+    // at value. Proves (a) both arrays track `chains` order, and (b) balance-stage
+    // and value-stage failures are handled together in a single run.
+    const ctx = makeCtx({
+      chains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
+      balance: async chain => {
+        if (chain === Chain.Bitcoin) throw new Error('btc balance down')
+        return makeBalance(chain === Chain.Ethereum ? 'ETH' : 'SOL')
+      },
+      getValue: async chain => {
+        if (chain === Chain.Solana) throw new Error('sol price down')
+        return makeValue('100.00')
+      },
+    })
+
+    const out = captureStdout()
+    await executePortfolio(ctx, { currency: 'usd' })
+    out.restore()
+
+    const { portfolio, failures } = JSON.parse(out.calls.join('')).data
+    // Ethereum (ok, with value) then Solana (kept, value dropped) — Bitcoin omitted.
+    expect(portfolio.chainBalances.map((c: { chain: string }) => c.chain)).toEqual([Chain.Ethereum, Chain.Solana])
+    expect(portfolio.chainBalances[0].value).toBeDefined()
+    expect(portfolio.chainBalances[1].value).toBeUndefined()
+    // Failures preserve chains order: Bitcoin (balance) before Solana (value).
+    expect(failures).toEqual([
+      { chain: Chain.Bitcoin, stage: 'balance', error: 'btc balance down' },
+      { chain: Chain.Solana, stage: 'value', error: 'sol price down' },
+    ])
+  })
+
+  it('collapses a multi-line error MESSAGE to its first line (conciseError, head-on)', async () => {
+    // Unlike test 5 (newline only on .stack), here the message itself is multi-line.
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      balance: async () => {
+        throw new Error('primary failure line\n  secondary detail\n  /Users/secret/path/leak')
+      },
+      getValue: async () => makeValue('0.00'),
+    })
+
+    const err = await executePortfolio(ctx, { currency: 'usd' }).catch(e => e)
+    // Single chain, all-fail → NetworkError; the concise message must be line 1 only.
+    expect(err).toBeInstanceOf(NetworkError)
+    expect((err as NetworkError).message).toContain('primary failure line')
+    expect((err as NetworkError).message).not.toContain('secondary detail')
+    expect((err as NetworkError).message).not.toContain('/Users/secret/path/leak')
+  })
+
+  it('prints per-chain warnings on the human-readable (table) output', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    // Silence console.table noise from the portfolio breakdown.
+    const tableSpy = vi.spyOn(console, 'table').mockImplementation(() => {})
+
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum, Chain.Bitcoin],
+      balance: async chain => {
+        if (chain === Chain.Bitcoin) throw new Error('btc unreachable')
+        return makeBalance('ETH')
+      },
+      getValue: async () => makeValue('12.00'),
+    })
+
+    await executePortfolio(ctx, { currency: 'usd' })
+    logSpy.mockRestore()
+    tableSpy.mockRestore()
+
+    const joined = logs.join('\n')
+    expect(joined).toContain('failed to load fully')
+    expect(joined).toContain('Bitcoin')
+    expect(joined).toContain('btc unreachable')
+  })
 })

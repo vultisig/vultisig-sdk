@@ -1184,6 +1184,12 @@ the rest under `failures`. Machine consumers should branch on `data.failures.len
 If _every_ chain fails to fetch a balance, the command exits **3** (network error, retryable).
 On the human-readable (table) output, failures are printed as `Warning:` lines below the table.
 
+> **Note on `totalValue`:** `failures` describes the per-chain _breakdown_ pass (`chainBalances`).
+> `portfolio.totalValue` is computed by an independent best-effort aggregate that includes token
+> values (not just native) and silently omits any chain/token it could not price. It is therefore
+> not guaranteed to be consistent with `chainBalances`/`failures` — treat it as an approximate
+> total, and rely on `failures` (not the total) to detect which chains had problems.
+
 ## Troubleshooting
 
 ### "No active vault" error
