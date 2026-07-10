@@ -51,24 +51,80 @@ const buildPayload = (memo: string, toAmount = '1000000000') =>
 
 describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)', () => {
   it('FREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:BANDWIDTH'), walletCore })
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildPayload('FREEZE:BANDWIDTH'),
+      walletCore,
+    })
     // FreezeBalanceV2 is a bandwidth op; energy feeLimit is semantically irrelevant.
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
   it('FREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('FREEZE:ENERGY'), walletCore })
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildPayload('FREEZE:ENERGY'),
+      walletCore,
+    })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
   it('UNFREEZE:BANDWIDTH sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'), walletCore })
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildPayload('UNFREEZE:BANDWIDTH'),
+      walletCore,
+    })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
 
   it('UNFREEZE:ENERGY sets feeLimit to 0 regardless of gasEstimation', async () => {
-    const [input] = await getTronSigningInputs({ keysignPayload: buildPayload('UNFREEZE:ENERGY'), walletCore })
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildPayload('UNFREEZE:ENERGY'),
+      walletCore,
+    })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
+  })
+})
+
+describe('getTronSigningInputs -- native transfer amount bounds (#1138)', () => {
+  it('builds a native TRX transfer for an in-range amount', async () => {
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildPayload('', '1000000000'),
+      walletCore,
+    })
+    expect(input.transaction?.transfer?.amount?.toString()).toBe('1000000000')
+  })
+
+  it('rejects a native TRX transfer amount at 2^63 instead of silently wrapping', async () => {
+    // Raw Long.fromString('9223372036854775808') wraps to -2^63 and would be
+    // co-signed as a corrupted magnitude; the guard must throw.
+    const overflow = (2n ** 63n).toString()
+    expect(() =>
+      getTronSigningInputs({
+        keysignPayload: buildPayload('', overflow),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('rejects a native TRX transfer amount far above 64 bits', async () => {
+    const overflow = '99999999999999999999999'
+    expect(() =>
+      getTronSigningInputs({
+        keysignPayload: buildPayload('', overflow),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('rejects a FREEZE amount above the signed-64-bit ceiling instead of wrapping', async () => {
+    // 2^63 wraps to a negative Long under raw Long.fromString; the >0 check
+    // would then either pass a corrupted magnitude or mask the wrap.
+    const overflow = (2n ** 63n).toString()
+    expect(() =>
+      getTronSigningInputs({
+        keysignPayload: buildPayload('FREEZE:BANDWIDTH', overflow),
+        walletCore,
+      })
+    ).toThrow(RangeError)
   })
 
   it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
@@ -90,7 +146,10 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
       blockchainSpecific: { case: 'tronSpecific', value: specific },
     })
 
-    const [input] = await getTronSigningInputs({ keysignPayload: payload, walletCore })
+    const [input] = await getTronSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
     // Anti-regression: prior to fix, feeLimit was passed gasEstimation
     // (a non-zero energy estimate that's semantically meaningless for
     // system contracts and only served to confuse the UI fee display).

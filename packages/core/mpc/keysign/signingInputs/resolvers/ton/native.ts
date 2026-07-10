@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -49,7 +50,7 @@ export const buildNativeTonTransfer = ({
       : TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY) |
     TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
-  const amount = sendMaxAmount ? Long.ZERO : Long.fromString(keysignPayload.toAmount)
+  const amount = sendMaxAmount ? Long.ZERO : toBoundedLong(keysignPayload.toAmount, { unsigned: false })
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,
@@ -72,7 +73,7 @@ export const buildNativeTonTransferFromMessage = ({
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,
-    amount: Buffer.from(numberToEvenHex(Long.fromString(amount)), 'hex'),
+    amount: Buffer.from(numberToEvenHex(toBoundedLong(amount, { unsigned: false })), 'hex'),
     bounceable,
     comment: '',
     customPayload: payload || undefined,

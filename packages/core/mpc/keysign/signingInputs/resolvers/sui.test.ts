@@ -12,6 +12,7 @@ import { getSuiChainSpecific } from '../../chainSpecific/resolvers/sui'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 import { SignSuiSchema } from '../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { SuiSpecificSchema } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { compileTx } from '../../../tx/compile/compileTx'
 import { getPreSigningHashes } from '../../../tx/preSigningHashes'
 import { getEncodedSigningInputs } from '../index'
@@ -151,6 +152,47 @@ describe('getSuiSigningInputs — native send', () => {
     })
 
     expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('do not support a memo')
+  })
+
+  const buildNativeSendPayload = (toAmount: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      toAddress: signer,
+      toAmount,
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          coins: [],
+          gasBudget: '',
+        }),
+      },
+    })
+
+  it('builds a PaySui input for an in-range amount', async () => {
+    const [input] = await getSuiSigningInputs({
+      keysignPayload: buildNativeSendPayload('1000000000'),
+      walletCore,
+    })
+    expect(input.paySui?.amounts?.[0]?.toString()).toBe('1000000000')
+  })
+
+  it('rejects an amount at 2^63 instead of silently wrapping (#1138)', () => {
+    // ~9.22 SUI-supply-adjacent MIST wraps negative under raw Long.fromString.
+    const overflow = (2n ** 63n).toString()
+    expect(() =>
+      getSuiSigningInputs({
+        keysignPayload: buildNativeSendPayload(overflow),
+        walletCore,
+      })
+    ).toThrow(RangeError)
   })
 })
 
