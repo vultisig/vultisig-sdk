@@ -1,12 +1,22 @@
 /**
  * Balance Commands - balance and portfolio
  */
-import type { Chain, FiatCurrency } from '@vultisig/sdk'
+import type { Balance, Chain, FiatCurrency, Value } from '@vultisig/sdk'
 import { fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 
-import type { CommandContext, PortfolioSummary } from '../core'
+import type { ChainFailure, CommandContext, PortfolioSummary } from '../core'
+import { NetworkError } from '../core/errors'
 import { createSpinner, error, isJsonOutput, outputJson, warn } from '../lib/output'
 import { displayBalance, displayBalancesTable, displayPortfolio } from '../ui'
+
+/**
+ * Reduce an unknown thrown value to a concise, single-line message that is safe
+ * to surface to machine consumers: never a stack trace, never a filesystem path.
+ */
+function conciseError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err)
+  return message.split('\n')[0].trim() || 'Unknown error'
+}
 
 export type BalanceOptions = {
   chain?: Chain
@@ -73,25 +83,70 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   const totalValue = await vault.getTotalValue(currency)
   const chains = vault.chains
 
-  const chainBalances = await Promise.all(
-    chains.map(async chain => {
-      const balance = await vault.balance(chain)
+  // Fetch each chain independently and honestly: a chain that throws is recorded
+  // in `failures` instead of rejecting the whole command or silently losing data.
+  // `chains` order is preserved across both the kept entries and the failures.
+  //   - balance() fails  → no entry, failure { stage: 'balance' }
+  //   - getValue() fails → entry kept without value, failure { stage: 'value' }
+  type ChainResult = {
+    entry?: { chain: Chain; balance: Balance; value?: Value }
+    failure?: ChainFailure
+  }
+
+  const results = await Promise.all(
+    chains.map(async (chain): Promise<ChainResult> => {
+      let balance: Balance
+      try {
+        balance = await vault.balance(chain)
+      } catch (err) {
+        return { failure: { chain, stage: 'balance', error: conciseError(err) } }
+      }
       try {
         const value = await vault.getValue(chain, undefined, currency)
-        return { chain, balance, value }
-      } catch {
-        return { chain, balance }
+        return { entry: { chain, balance, value } }
+      } catch (err) {
+        // Balance succeeded but the fiat value did not — keep the balance and
+        // flag the missing value rather than swallowing it as "no value".
+        return { entry: { chain, balance }, failure: { chain, stage: 'value', error: conciseError(err) } }
       }
     })
   )
+
+  const chainBalances: PortfolioSummary['chainBalances'] = []
+  const failures: ChainFailure[] = []
+  for (const result of results) {
+    if (result.entry) chainBalances.push(result.entry)
+    if (result.failure) failures.push(result.failure)
+  }
+
+  // Every chain failed to even fetch a balance → this is a real error, not a
+  // partial success. Surface it as a retryable network error (non-zero exit).
+  if (failures.length > 0 && chainBalances.length === 0) {
+    spinner.fail('Portfolio failed to load')
+    throw new NetworkError(
+      `Failed to load balances for all ${failures.length} chain(s): ${failures
+        .map(f => `${f.chain} (${f.error})`)
+        .join('; ')}`,
+      'All chain balance fetches failed — likely a network/RPC issue',
+      ['Check your internet connection', 'Retry in a few moments']
+    )
+  }
 
   const portfolio: PortfolioSummary = { totalValue, chainBalances }
 
   spinner.succeed('Portfolio loaded')
 
   if (isJsonOutput()) {
-    outputJson({ portfolio, currency })
+    // `failures` is always present (empty array when none) so machine consumers
+    // can branch on `data.failures.length` without probing for the field.
+    outputJson({ portfolio, currency, failures })
     return
   }
   displayPortfolio(portfolio, currency, options.raw ?? false)
+  if (failures.length > 0) {
+    warn(`\nWarning: ${failures.length} chain(s) failed to load fully:`)
+    for (const f of failures) {
+      warn(`  - ${f.chain} (${f.stage}): ${f.error}`)
+    }
+  }
 }

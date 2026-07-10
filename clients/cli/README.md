@@ -1154,6 +1154,43 @@ Configuration is stored in `~/.vultisig/`:
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run
 > `vultisig --help` for the same list.
 
+### Partial failures (`portfolio`)
+
+The `portfolio` command fetches every chain independently, so one unreachable chain no longer
+fails the whole command. The `-o json` envelope always carries a `failures` array (empty when
+everything succeeded):
+
+```jsonc
+{
+  "success": true,
+  "v": 1,
+  "data": {
+    "portfolio": { "totalValue": { ... }, "chainBalances": [ /* only the chains that loaded */ ] },
+    "currency": "usd",
+    "failures": [
+      { "chain": "Bitcoin", "stage": "balance", "error": "ECONNREFUSED btc-rpc" },
+      { "chain": "Ethereum", "stage": "value",   "error": "pricing service unavailable" }
+    ]
+  }
+}
+```
+
+- `stage: "balance"` — the balance fetch failed; the chain is omitted from `chainBalances`.
+- `stage: "value"` — the balance loaded but its fiat value did not; the chain still appears in
+  `chainBalances` (without a `value`) and is also listed here.
+- `error` is a concise single-line message — never a stack trace or filesystem path.
+
+**Partial-success exit contract:** if _some_ chains loaded, the command exits **0** and reports
+the rest under `failures`. Machine consumers should branch on `data.failures.length`, not `$?`.
+If _every_ chain fails to fetch a balance, the command exits **3** (network error, retryable).
+On the human-readable (table) output, failures are printed as `Warning:` lines below the table.
+
+> **Note on `totalValue`:** `failures` describes the per-chain _breakdown_ pass (`chainBalances`).
+> `portfolio.totalValue` is computed by an independent best-effort aggregate that includes token
+> values (not just native) and silently omits any chain/token it could not price. It is therefore
+> not guaranteed to be consistent with `chainBalances`/`failures` — treat it as an approximate
+> total, and rely on `failures` (not the total) to detect which chains had problems.
+
 ## Troubleshooting
 
 ### "No active vault" error
