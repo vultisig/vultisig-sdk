@@ -721,6 +721,11 @@
       "import": "./dist/mldsa/mldsaKeysign.js",
       "default": "./dist/mldsa/mldsaKeysign.js"
     },
+    "./mpcDebugLog": {
+      "types": "./dist/mpcDebugLog.d.ts",
+      "import": "./dist/mpcDebugLog.js",
+      "default": "./dist/mpcDebugLog.js"
+    },
     "./mpcLib": {
       "types": "./dist/mpcLib.d.ts",
       "import": "./dist/mpcLib.js",
