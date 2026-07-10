@@ -186,6 +186,21 @@ describe('assertSafeSolanaSwapInstructions', () => {
       })
     }
 
+    // Build an arbitrary-discriminant System instruction (accounts [from, to])
+    // to exercise the non-Transfer lamport-mover reject path.
+    const buildSystemInstruction = (discriminant: number): MessageV0 => {
+      const data = new Uint8Array(12)
+      new DataView(data.buffer).setUint32(0, discriminant, true)
+      new DataView(data.buffer).setBigUint64(4, 1_000_000n, true)
+      return new MessageV0({
+        header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+        staticAccountKeys: [userWallet, attacker, systemProgramId],
+        recentBlockhash: '11111111111111111111111111111111111111111111',
+        compiledInstructions: [{ programIdIndex: 2, accountKeyIndexes: [0, 1], data }],
+        addressTableLookups: [],
+      })
+    }
+
     const buildTokenInstruction = (discriminant: number, accounts: PublicKey[]): MessageV0 => {
       const data = new Uint8Array([discriminant])
       const staticAccountKeys = [...accounts, tokenProgramId]
@@ -209,6 +224,25 @@ describe('assertSafeSolanaSwapInstructions', () => {
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/SOL_SWAP_UNSAFE_FUND_MOVEMENT/)
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/SystemProgram\.Transfer destination/)
+    })
+
+    it('rejects a non-Transfer System lamport-mover (TransferWithSeed, type=11) outright', () => {
+      // A program-only allow-list would let this survive since it targets the
+      // allow-listed SystemProgram; the destination-vs-authority check never
+      // runs for it. Reject any non-Transfer System discriminant outright.
+      const msg = buildSystemInstruction(11)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(
+        /SystemProgram instruction \(discriminant 11\)/
+      )
+    })
+
+    it('rejects a System CreateAccount (type=0) outright', () => {
+      const msg = buildSystemInstruction(0)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(
+        /SystemProgram instruction \(discriminant 0\)/
+      )
     })
 
     it('rejects Token.Approve (type=4) regardless of accounts', () => {

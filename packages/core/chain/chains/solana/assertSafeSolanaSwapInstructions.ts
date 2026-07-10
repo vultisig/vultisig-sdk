@@ -115,7 +115,21 @@ const assertSystemInstruction = (
 ): void => {
   if (ix.data.length < 4) return
   const type = new DataView(ix.data.buffer, ix.data.byteOffset, 4).getUint32(0, /* littleEndian */ true)
-  if (type !== SYSTEM_TRANSFER) return
+  // A legitimate top-level Jupiter swap only ever emits SystemProgram.Transfer
+  // (the SOL→wSOL wrap). Every OTHER System instruction that moves lamports —
+  // TransferWithSeed (11), CreateAccount (0), CreateAccountWithSeed (3) — is
+  // rejected outright rather than silently allowed: a program-only allow-list
+  // would let a spliced TransferWithSeed to an attacker survive into the signed
+  // bytes exactly like the Token.Transfer drain. Mirrors the reject-outright
+  // stance the token branch takes for non-wrap fund movers. Non-lamport-moving
+  // System instructions don't appear top-level in a swap, so a blanket reject of
+  // "not SYSTEM_TRANSFER" is the safe, tight floor (fail-closed on the unknown).
+  if (type !== SYSTEM_TRANSFER) {
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      `SystemProgram instruction (discriminant ${type}) is not a legitimate top-level Jupiter swap instruction — only SystemProgram.Transfer (SOL wrap) is expected`
+    )
+  }
 
   // Transfer accounts[1] = destination. The only legitimate SOL transfer in
   // a Jupiter swap is wrapping: from: userWallet → to: userWallet's wSOL ATA.
@@ -221,9 +235,14 @@ const assertTokenInstruction = (
  *    perform legitimate SOL wrap/unwrap) but also implement drain/seize
  *    primitives (`Transfer`, `Approve`, `SetAuthority`). For each instruction
  *    targeting those programs, the decoded accounts are validated:
- *    - `SystemProgram.Transfer`: destination must be the user's wSOL ATA.
- *    - `Token.Transfer/TransferChecked`: authority must be the user wallet.
- *    - `Token.CloseAccount`: authority must be the user wallet.
+ *    - `SystemProgram.Transfer`: destination must be the user's wSOL ATA; any
+ *      other System discriminant (TransferWithSeed / CreateAccount*) rejected.
+ *    - `Token.Transfer/TransferChecked`: rejected outright — a top-level token
+ *      move is never part of a legitimate Jupiter shared-accounts swap (the
+ *      router moves tokens via CPI), and validating authority==user is
+ *      meaningless since the authority is definitionally the user for any drain
+ *      of their own account. The distinguishing account is the destination.
+ *    - `Token.CloseAccount`: destination must be the user wallet.
  *    - `Token.Approve/ApproveChecked/SetAuthority`: rejected outright.
  *    Throws {@link UnsafeSolanaSwapFundMovementError} on any violation.
  *
