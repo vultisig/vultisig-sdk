@@ -252,6 +252,26 @@ afterEach(() => {
 describe('send — broadcast dedupe guard', () => {
   const params = { chain: Chain.Ethereum, to: '0xrecipient', amount: '1', yes: true } as const
 
+  it('includes an XRP DestinationTag in a dry-run result', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rRecipient', '1000000'),
+      txHash: 'xrp-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'rRecipient',
+      amount: '1',
+      destinationTag: 123,
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({ dryRun: true, destinationTag: 123 })
+    expect(realSends.count).toBe(0)
+  })
+
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({

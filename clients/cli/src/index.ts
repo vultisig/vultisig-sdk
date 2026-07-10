@@ -676,7 +676,13 @@ See also: balance, tx-status`
         if (options.destinationTag && chain !== Chain.Ripple) {
           throw new Error('--destination-tag is only supported for XRP')
         }
-        if (options.destinationTag && !/^[1-9]\d*$/.test(options.destinationTag)) {
+        const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
+        if (
+          options.destinationTag &&
+          (!/^[1-9]\d*$/.test(options.destinationTag) ||
+            !Number.isSafeInteger(destinationTag) ||
+            destinationTag > 4294967295)
+        ) {
           throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
         }
         const context = await init(program.opts().vault)
@@ -687,7 +693,7 @@ See also: balance, tx-status`
             amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
-            destinationTag: options.destinationTag === undefined ? undefined : Number(options.destinationTag),
+            destinationTag,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
             force: options.force,

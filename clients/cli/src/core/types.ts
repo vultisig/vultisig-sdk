@@ -30,6 +30,7 @@ export type SendDryRunResult = {
   amount: string
   symbol: string
   balance: string
+  destinationTag?: number
   warning?: string
 }
 

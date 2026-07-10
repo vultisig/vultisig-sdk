@@ -739,14 +739,23 @@ export class ShellSession {
         tokenId = rest[i + 1]
         i++
       } else if (rest[i] === '--memo' && i + 1 < rest.length) {
-        memo = rest.slice(i + 1).join(' ')
-        break
-      } else if (rest[i] === '--destination-tag' && i + 1 < rest.length) {
+        const nextOption = rest.findIndex(
+          (arg, index) => index > i && ['--token', '--memo', '--destination-tag'].includes(arg)
+        )
+        memo = rest.slice(i + 1, nextOption === -1 ? undefined : nextOption).join(' ')
+        i = nextOption === -1 ? rest.length : nextOption - 1
+      } else if (rest[i] === '--destination-tag') {
         const tag = rest[i + 1]
-        if (chain !== Chain.Ripple || !/^[1-9]\d*$/.test(tag)) {
+        const parsedTag = Number(tag)
+        if (
+          chain !== Chain.Ripple ||
+          !/^[1-9]\d*$/.test(tag ?? '') ||
+          !Number.isSafeInteger(parsedTag) ||
+          parsedTag > 4294967295
+        ) {
           throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
         }
-        destinationTag = Number(tag)
+        destinationTag = parsedTag
         i++
       }
     }

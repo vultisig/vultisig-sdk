@@ -76,6 +76,7 @@ export async function sendTransaction(
       amount: params.amount,
       symbol: balance.symbol,
       balance: balance.formattedAmount,
+      destinationTag: params.destinationTag,
     }
     if (hasInsufficientBalance) {
       result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
@@ -87,6 +88,7 @@ export async function sendTransaction(
       info(`  Chain:   ${result.chain}`)
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
+      if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
       info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)
