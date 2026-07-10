@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 2.19.11
+
+### Patch Changes
+
+- [#1086](https://github.com/vultisig/vultisig-sdk/pull/1086) [`3bf18a1`](https://github.com/vultisig/vultisig-sdk/commit/3bf18a18606fd1b45d50abb562eb6c3011182d48) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fail closed when TON wallet-info RPC calls return transport or body-level errors instead of defaulting to uninitialized wallet state.
+
 ## 2.19.10
 
 ### Patch Changes
