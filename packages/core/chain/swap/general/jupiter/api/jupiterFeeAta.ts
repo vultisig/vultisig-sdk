@@ -4,35 +4,12 @@ import {
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from '@solana/spl-token'
-import { AddressLookupTableAccount, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
+import { PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
+import {
+  assertSafeSolanaSwapInstructions,
+  resolveSolanaAddressLookupTables,
+} from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
-
-/** Maximum attempts for LUT fetches before giving up. */
-const MAX_LUT_FETCH_ATTEMPTS = 3
-
-/**
- * Fetch a LUT account with simple retry (exponential back-off, up to 3 attempts).
- * RPC timeouts are transient; retrying avoids spurious quote failures.
- */
-const fetchLutWithRetry = async (
-  client: ReturnType<typeof getSolanaClient>,
-  accountKey: PublicKey
-): Promise<AddressLookupTableAccount | null> => {
-  const errors: unknown[] = []
-  for (let attempt = 0; attempt < MAX_LUT_FETCH_ATTEMPTS; attempt++) {
-    try {
-      const result = await client.getAddressLookupTable(accountKey)
-      return result.value ?? null
-    } catch (err) {
-      errors.push(err)
-      if (attempt < MAX_LUT_FETCH_ATTEMPTS - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200 * 2 ** attempt))
-      }
-    }
-  }
-  console.warn('[jupiterFeeAta] LUT fetch failed after retries:', errors)
-  return null
-}
 
 /**
  * Resolve the SPL token program (Token vs Token-2022) that owns a mint.
@@ -121,31 +98,22 @@ export const prependJupiterFeeAta = async ({
   mintPubkey,
   ownerPubkey,
   tokenProgramId,
+  userWallet,
 }: {
   txData: string
   feeAccount: string
   mintPubkey: PublicKey
   ownerPubkey: PublicKey
   tokenProgramId: PublicKey
+  userWallet: PublicKey
 }): Promise<string> => {
-  const client = getSolanaClient()
-
   const versionedTx = VersionedTransaction.deserialize(Buffer.from(txData, 'base64'))
+  const lutAccounts = await resolveSolanaAddressLookupTables(versionedTx.message)
 
-  const lutAccounts: AddressLookupTableAccount[] = []
-  if (versionedTx.message.version === 0) {
-    const lookups = (
-      versionedTx.message as {
-        addressTableLookups: { accountKey: PublicKey }[]
-      }
-    ).addressTableLookups
-    for (const lut of lookups) {
-      const lutAccount = await fetchLutWithRetry(client, lut.accountKey)
-      if (lutAccount) {
-        lutAccounts.push(lutAccount)
-      }
-    }
-  }
+  // Fund-safety guard (audit finding SOL-01): refuse to build a signable
+  // transaction out of a proxy-supplied message containing an instruction
+  // that targets an unrecognized program or moves funds to an unknown destination.
+  assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, userWallet)
 
   let decompiledMessage: TransactionMessage
   try {
