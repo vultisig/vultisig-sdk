@@ -370,6 +370,20 @@ export async function executeVerify(
       error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
       return false
     }
+
+    // Non-interactive sessions can't fall through to the OTP prompt below — resend
+    // is a complete action on its own (the documented follow-up is a separate
+    // `verify --code <OTP>` call), so return here instead of reaching a prompt that
+    // would throw ConfirmationRequiredError right after we already reported success.
+    if (!options.code && isNonInteractive()) {
+      if (isJsonOutput()) {
+        outputJson({ resent: true, vaultId })
+        return true
+      }
+      info('\nOnce you have the code, run:')
+      printResult(chalk.cyan(`  vultisig verify ${vaultId} --code <OTP>`))
+      return true
+    }
   }
 
   let code = options.code

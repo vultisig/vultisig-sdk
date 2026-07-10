@@ -274,4 +274,30 @@ describe('verify --resend and delete refuse before any stdout write (non-interac
     // refuses before any vault property is read for the details block.
     await expectFailsClosed(() => executeDelete(makeTrapVaultCtx(), {}))
   })
+
+  it('verify --resend --email --password (no --code) resends and returns cleanly instead of hitting the OTP prompt', async () => {
+    // Regression: with email/password supplied, the old code sent the resend,
+    // printed "Verification email sent!" guidance, then fell through to the OTP
+    // prompt() call — which fails closed with ConfirmationRequiredError AFTER the
+    // side effect and stdout output already happened. resend-only is a complete,
+    // documented action on its own, so this must now resolve `true` with no throw.
+    const resendVaultVerification = vi.fn().mockResolvedValue(undefined)
+    const ctx = {
+      sdk: { resendVaultVerification },
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    const result = await executeVerify(ctx, 'vault-id', {
+      resend: true,
+      email: 'e@x.io',
+      password: 'password123',
+    })
+
+    expect(result).toBe(true)
+    expect(resendVaultVerification).toHaveBeenCalledWith({
+      vaultId: 'vault-id',
+      email: 'e@x.io',
+      password: 'password123',
+    })
+  })
 })
