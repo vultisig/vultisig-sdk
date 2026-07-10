@@ -60,7 +60,7 @@ export function resolveNonInteractive(
 export function requireInteractive(hint: string): void {
   if (nonInteractive) {
     throw new ConfirmationRequiredError(
-      'Interactive input required but the session is non-interactive (piped output or --non-interactive/--ci).',
+      'Interactive input required but the session is non-interactive (piped/redirected stdout or stdin, or --non-interactive/--ci).',
       hint
     )
   }
