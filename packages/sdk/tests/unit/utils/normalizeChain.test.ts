@@ -276,6 +276,20 @@ describe('normalizeChain', () => {
       ['terra-v2', Chain.Terra],
       ['terra_v2', Chain.Terra],
       ['terrav2', Chain.Terra],
+      ['cosmos hub', Chain.Cosmos],
+      ['Cosmos Hub', Chain.Cosmos],
+      ['gaia', Chain.Cosmos],
+      ['GAIA', Chain.Cosmos],
+      ['ustc', Chain.TerraClassic],
+      ['USTC', Chain.TerraClassic],
+      ['bnb smart chain', Chain.BSC],
+      ['BNB Smart Chain', Chain.BSC],
+      ['bnb chain', Chain.BSC],
+      ['BSC-MAINNET', Chain.BSC],
+      ['arbitrum one', Chain.Arbitrum],
+      ['Arbitrum One', Chain.Arbitrum],
+      ['ethereum-mainnet', Chain.Ethereum],
+      ['Ethereum Mainnet', Chain.Ethereum],
     ])('resolves chain-id/marketing alias "%s" to %s', (input, expected) => {
       expect(normalizeChain(input)).toBe(expected)
     })
