@@ -13,7 +13,16 @@ import {
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
-import { createSpinner, info, isJsonOutput, outputJson, printResult, printTable, warn } from '../lib/output'
+import {
+  createSpinner,
+  info,
+  isJsonOutput,
+  isNonInteractive,
+  outputJson,
+  printResult,
+  printTable,
+  warn,
+} from '../lib/output'
 
 export type RujiraBaseOptions = {
   rpcEndpoint?: string
@@ -205,6 +214,17 @@ export type RujiraSwapOptions = RujiraBaseOptions & {
 export async function executeRujiraSwap(ctx: CommandContext, options: RujiraSwapOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
+  // Fail closed up-front: without --yes this flow ends in a confirmation refusal
+  // (this command never prompts — it requires -y/--yes). In a non-interactive
+  // session refuse before the preview writes to stdout; a TTY keeps the
+  // preview-then-refuse guidance below.
+  if (!options.dryRun && !options.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Swap requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
+  }
+
   const client = await createRujiraClient(ctx, options)
 
   const destination = options.destination ?? (await vault.address('THORChain'))
@@ -287,6 +307,17 @@ export type RujiraWithdrawOptions = RujiraBaseOptions & {
 
 export async function executeRujiraWithdraw(ctx: CommandContext, options: RujiraWithdrawOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
+
+  // Fail closed up-front: without --yes this flow ends in a confirmation refusal
+  // (this command never prompts — it requires -y/--yes). In a non-interactive
+  // session refuse before the preview writes to stdout; a TTY keeps the
+  // preview-then-refuse guidance below.
+  if (!options.dryRun && !options.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Withdrawal requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview.'
+    )
+  }
 
   const client = await createRujiraClient(ctx, options)
 

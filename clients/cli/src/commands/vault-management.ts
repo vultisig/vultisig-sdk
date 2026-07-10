@@ -331,6 +331,7 @@ export async function executeVerify(
     let password = options.password
 
     if (!email || !password) {
+      requireInteractive('Pass --email and --password to resend non-interactively.')
       info('Email and password are required to resend verification.')
       const answers = await prompt([
         ...(!email
@@ -1123,6 +1124,14 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
       },
     })
     return
+  }
+
+  // Fail closed up-front: table mode ends in an interactive delete confirmation
+  // a non-interactive session can never answer — refuse before the vault
+  // details/warnings write to stdout. (JSON mode legitimately skips
+  // confirmation and returned above; --yes maps to skipConfirmation.)
+  if (!options.skipConfirmation) {
+    requireInteractive('Pass --yes to skip confirmation, or use -o json for scripting.')
   }
 
   // Step 3: Display vault info for confirmation
