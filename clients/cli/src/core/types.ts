@@ -54,6 +54,17 @@ export type PortfolioSummary = {
 }
 
 /**
+ * A per-chain failure encountered while building a portfolio.
+ * `stage` marks whether the balance fetch or the fiat-value lookup failed.
+ * `error` is a concise, single-line message (no stack traces or filesystem paths).
+ */
+export type ChainFailure = {
+  chain: Chain
+  stage: 'balance' | 'value'
+  error: string
+}
+
+/**
  * Configuration options for the wallet
  */
 export type WalletConfig = {

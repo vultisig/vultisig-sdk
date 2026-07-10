@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/example-browser",
-  "version": "0.1.132",
+  "version": "0.1.134",
   "private": true,
   "type": "module",
   "scripts": {

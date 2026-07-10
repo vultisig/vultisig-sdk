@@ -5,12 +5,15 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { formatCiToolchain } from './toolchain-package-manager.mjs'
+
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const args = new Set(process.argv.slice(2))
 const typescriptOnly = args.has('--typescript-only')
 
 const eslintCli = join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js')
 const tscJs = join(repoRoot, 'node_modules', 'typescript', 'lib', 'tsc.js')
+const ciToolchain = formatCiToolchain(repoRoot)
 
 const setupMessage = tool =>
   [
@@ -20,7 +23,7 @@ const setupMessage = tool =>
     '  corepack enable',
     '  yarn install --immutable',
     '',
-    'CI uses Node.js 20 and Yarn 4.13.0. Avoid global binaries such as `tsc` or `eslint` for local verification.',
+    `CI uses ${ciToolchain}. Avoid global binaries such as \`tsc\` or \`eslint\` for local verification.`,
   ].join('\n')
 
 const assertTypeScriptVersion = () => {
@@ -38,9 +41,7 @@ const assertTypeScriptVersion = () => {
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim()
   } catch (error) {
-    process.stderr.write(
-      `[vultisig-local-checks] Failed to run repo-local TypeScript: ${error.message}\n`
-    )
+    process.stderr.write(`[vultisig-local-checks] Failed to run repo-local TypeScript: ${error.message}\n`)
     process.exit(1)
   }
 

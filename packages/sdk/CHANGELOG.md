@@ -1,5 +1,75 @@
 # @vultisig/sdk
 
+## 2.19.11
+
+### Patch Changes
+
+- [#1086](https://github.com/vultisig/vultisig-sdk/pull/1086) [`3bf18a1`](https://github.com/vultisig/vultisig-sdk/commit/3bf18a18606fd1b45d50abb562eb6c3011182d48) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fail closed when TON wallet-info RPC calls return transport or body-level errors instead of defaulting to uninitialized wallet state.
+
+## 2.19.10
+
+### Patch Changes
+
+- [#1105](https://github.com/vultisig/vultisig-sdk/pull/1105) [`280956f`](https://github.com/vultisig/vultisig-sdk/commit/280956f1743564ea271a03c4735f70151b63f161) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): keep erc20 approve for cowswap orders until permit path is wired (agg-03)
+
+  The EIP-2612 permit path (buildEip2612Permit) has zero callers and no permit digest
+  flows to the MPC keysign payload. Skipping the approve without a wired permit leaves
+  cowswap permit-token orders with neither approve nor permit, causing silent swap
+  failures. Keep the normal approve path until the permit flow is complete.
+
+- [#1018](https://github.com/vultisig/vultisig-sdk/pull/1018) [`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): accept returned quote provider ids in `findSwapQuote.excludeProviders`
+
+  `findSwapQuote.excludeProviders` now accepts both display names (`CowSwap`, `KyberSwap`, `LiFi`) and returned quote provider ids (`cowswap`, `kyber`, `li.fi`) for general providers. Unknown exclude tokens now fail closed instead of silently leaving the provider eligible.
+
+- [#1113](https://github.com/vultisig/vultisig-sdk/pull/1113) [`0e3f86d`](https://github.com/vultisig/vultisig-sdk/commit/0e3f86db82ed086b1e200a6f83434a638f593c17) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(vault): route the send-path amount parser through `toChainAmount` for swap-path parity (gbbo9)
+
+  `VaultBase.parseAmount` (the `send`/`transfer` amount converter) used `toBaseUnits` (pure string arithmetic, truncates excess fraction digits, rejects scientific notation), while the swap path (`validateHumanSwapAmount`, `SwapService`) used `toChainAmount` (viem `parseUnits`). Both paths now share `toChainAmount` for consistent semantics.
+
+  `toChainAmount` now truncates (floors) excess fractional digits instead of rounding, so the signed amount can never exceed the stated human amount — the safe direction. Previously `parseUnits` rounded half-up, which at `decimals=0` (Cardano native assets, low-decimal tokens) caused a fractional input like `0.6` to sign `1` whole token. Scientific-notation amounts (e.g. `1e18`) are now accepted on the send path.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#974](https://github.com/vultisig/vultisig-sdk/pull/974) [`b37e726`](https://github.com/vultisig/vultisig-sdk/commit/b37e7264db3291adca1cb366f1311446d6add439) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable the incomplete ServerManager reshare stub so it no longer returns stale vaults as successful reshares.
+
+- [#1102](https://github.com/vultisig/vultisig-sdk/pull/1102) [`1b2636b`](https://github.com/vultisig/vultisig-sdk/commit/1b2636b535736a711fc537a87d2f51090fe6342d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(solana): standardize Jupiter tools-path treasury address + slippage default on the shared cross-platform spec (SOL-03, SOL-04)
+
+- [#1112](https://github.com/vultisig/vultisig-sdk/pull/1112) [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): resolve THORChain limit-swap destination chains via the swap-eligible chain set, not the LP-position map (THOR-04) — `getSupportedThorchainAssetChain` (`limitSwapMemo.ts`) resolved a THORChain asset-prefix (e.g. `SOL`, `NOBLE`) to a `Chain` via `lpChainMap`, a map scoped to the wallet's LP-position-display feature (`chains/cosmos/thor/lp/lpChainMap.ts`), not swap eligibility. Since neither Solana nor Noble has a THORChain LP pool, both were missing from that map, so a limit swap (`LIM=` memo) targeting either failed closed with "unsupported THORChain asset prefix" even though both are valid THORChain market-swap destinations (per THORChain's memo docs, `=` vs `=<` only changes execution behavior — price/queue/TTL — not the destination-chain universe). Fixed by unioning `lpChainMap` with `thorChainSwapEnabledChains` (`swap/native/NativeSwapChain.ts`, now exported) — the same THORChain-specific chain list regular market swaps already use to gate eligibility — rather than replacing `lpChainMap` outright or switching to the broader `nativeSwapChainIds`, which also carries MayaChain-only entries (e.g. `Chain.MayaChain`, `Chain.Cardano`) that aren't valid THORChain limit-swap destinations.
+
+- [#1097](https://github.com/vultisig/vultisig-sdk/pull/1097) [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): exact bigint decimal conversion for the displayed swap output (`toAmountDecimal`) — the float64 `fromChainAmount(...).toFixed()` path silently drifted above 2^53 raw units (e.g. `999999999999999999999999` @18dp rendered as `1000000.000000000000000000`), so the amount the user confirmed could differ from the quoted one. Non-integer provider amount strings keep the legacy fallback instead of throwing mid-build.
+
+- [#1089](https://github.com/vultisig/vultisig-sdk/pull/1089) [`fc595a1`](https://github.com/vultisig/vultisig-sdk/commit/fc595a17cb4901af1dfeac2521b93bb75823068f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(utxo): per-chain min-fee floor + canonical zcash zip-317 action count (UTXO-03/04)
+
+  `buildUtxoSendTx` only enforced a minimum fee for Zcash; every other UTXO chain
+  trusted the caller-supplied `feeRate` with no chain-aware floor. Dogecoin's
+  real min-relay-fee is ~100x Bitcoin's, so a BTC-reasonable rate could silently
+  underpay DOGE below relay and get the tx stuck. Added a per-chain minimum
+  relay fee rate (sourced from each chain's own Core `DEFAULT_MIN_RELAY_TX_FEE`)
+  that only raises a too-low `feeRate`, never lowers a legitimate one.
+
+  Also swapped the builder's local, input-only `zcashConventionalFee` for the
+  canonical `getZcashConventionalFee` (ZIP-317 `max(inputActions,
+outputActions)`), which now accounts for OUTPUT bytes (change output + any
+  OP_RETURN memo) instead of only counting inputs — a large-memo send was
+  previously under-counting ZIP-317 actions and risking relay rejection.
+
+- [#1110](https://github.com/vultisig/vultisig-sdk/pull/1110) [`776c539`](https://github.com/vultisig/vultisig-sdk/commit/776c5398764314f140f18ab4f86a1801fe9fdfe6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(ripple): verify on-ledger inclusion for ambiguous XRP submit results instead of a blind throw
+
+  `submitXrpTx` (the app's only XRP broadcast call site) threw a generic error for every `tec*` engine result from XRPL's `submit`, even though `tec*` means the tx was applied on-ledger (fee + sequence consumed) and the requested operation itself failed. A caller that treated that as "never broadcast" and retried with the same sequence risked a `tefPAST_SEQ` or a fund-loss race on a fee change.
+
+  `submitXrpTx` now looks up `tec*` transactions by hash before deciding, and throws a typed `XrpSubmitRejectedError` with `.reason` for confirmed on-ledger failures, pending validation, and unconfirmed lookups. It also classifies `tef*` and non-queued `ter*` submit results conservatively instead of reporting them as safe local/preflight rejections. Only `tem*`/`tel*` local preflight failures are now reported as `'not-on-ledger'`. Also fixes the stale doc comment claiming the helper is unused by app code.
+
 ## 2.19.9
 
 ### Patch Changes
