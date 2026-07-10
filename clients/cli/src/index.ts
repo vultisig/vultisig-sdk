@@ -56,13 +56,14 @@ import {
   executeVaults,
   executeVerify,
 } from './commands'
-import { cachePassword, createPasswordCallback } from './core'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
   checkForUpdates,
+  createVaultStorage,
   error,
   formatVersionDetailed,
   formatVersionShort,
@@ -212,7 +213,12 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
 
+    // Honor VULTISIG_CONFIG_DIR for vault storage. createVaultStorage() falls
+    // back to ~/.vultisig when the env var is unset, so the default location is
+    // unchanged; when set, vaults/active-vault/cache land in the same dir as
+    // config.json instead of leaking to the home directory.
     const sdk = new Vultisig({
+      storage: createVaultStorage(),
       onPasswordRequired: createPasswordCallback(),
       ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
@@ -230,7 +236,9 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
         throw new Error(`Vault not found: "${vaultSelector}"`)
       }
     } else {
-      vault = await sdk.getActiveVault()
+      // Tolerate a corrupt active-vault pointer: fall back to no active vault
+      // instead of bricking every command (including `vaults`).
+      vault = (await loadActiveVaultSafely(sdk)).vault
     }
 
     if (vault) {
@@ -1646,6 +1654,7 @@ program
 async function startInteractiveMode(): Promise<void> {
   const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
+    storage: createVaultStorage(),
     onPasswordRequired: createPasswordCallback(),
     ...(serverEndpoints ? { serverEndpoints } : {}),
   })
