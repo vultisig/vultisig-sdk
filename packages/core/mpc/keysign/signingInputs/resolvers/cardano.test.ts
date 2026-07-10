@@ -220,4 +220,33 @@ describe('getCardanoSigningInputs — per-UTXO native tokens', () => {
     expect(hex(tokenBlind.dataHash)).toBe(TOKEN_BLIND_PRE_IMAGE_HASH)
     expect(hex(tokenBlind.dataHash)).not.toBe(hex(tokenAware.dataHash))
   })
+
+  it('rejects a negative token amount instead of encoding empty/garbage bytes (#1139)', () => {
+    // amountToBytes(BigInt('-1')) would stringify to "-1" and Buffer.from(_,
+    // 'hex') would silently drop it — the co-signers must never be handed a
+    // corrupted token amount.
+    const negativeTokenSend = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Cardano,
+        ticker: 'SUNDAE',
+        address: SENDER_ADDRESS,
+        contractAddress: `${sundae.policyId}.${sundae.assetNameHex}`,
+        decimals: 0,
+        isNativeToken: false,
+      }),
+      toAddress: RECIPIENT_ADDRESS,
+      toAmount: '-1',
+      blockchainSpecific: {
+        case: 'cardano',
+        value: create(CardanoChainSpecificSchema, {
+          byteFee: 200_000n,
+          sendMaxAmount: false,
+          ttl: 500_000n,
+        }),
+      },
+      utxoInfo: [create(UtxoInfoSchema, { hash: '11'.repeat(32), amount: 5_000_000n, index: 0 })],
+    })
+
+    expect(() => getCardanoSigningInputs({ keysignPayload: negativeTokenSend, walletCore })).toThrow(RangeError)
+  })
 })

@@ -11,6 +11,11 @@ import { SigningInputsResolver } from '../resolver'
 
 /** Encodes a token amount as big-endian bytes for WalletCore's Cardano proto. */
 const amountToBytes = (amount: bigint): Uint8Array => {
+  // A negative amount stringifies with a leading "-" that `Buffer.from(hex,
+  // 'hex')` silently turns into empty/garbage bytes; fail closed instead.
+  if (amount < 0n) {
+    throw new RangeError(`amountToBytes: cannot encode negative amount ${amount}`)
+  }
   const hex = amount.toString(16)
   const padded = hex.length % 2 === 0 ? hex : `0${hex}`
   return Uint8Array.from(Buffer.from(padded, 'hex'))
