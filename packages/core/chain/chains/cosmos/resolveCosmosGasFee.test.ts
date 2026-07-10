@@ -49,4 +49,51 @@ describe('resolveCosmosGasFee', () => {
       feeAmount: 11_251n,
     })
   })
+
+  describe('COSMOS-02: isIbcTransfer', () => {
+    it('leaves the gas limit and fee unchanged when isIbcTransfer is omitted (non-IBC messages keep the flat fee)', () => {
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: undefined, staticGasLimit })).toEqual({
+        resolvedGasLimit: staticGasLimit,
+        feeAmount: gas,
+      })
+    })
+
+    it('leaves the gas limit and fee unchanged when isIbcTransfer is explicitly false', () => {
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: undefined, staticGasLimit, isIbcTransfer: false })).toEqual({
+        resolvedGasLimit: staticGasLimit,
+        feeAmount: gas,
+      })
+    })
+
+    it('doubles the gas limit and fee for an IBC transfer with no relayed limit', () => {
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: undefined, staticGasLimit, isIbcTransfer: true })).toEqual({
+        resolvedGasLimit: staticGasLimit * 2n,
+        feeAmount: gas * 2n,
+      })
+    })
+
+    it('doubles the gas limit and fee for an IBC transfer with a zero relayed limit', () => {
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: 0n, staticGasLimit, isIbcTransfer: true })).toEqual({
+        resolvedGasLimit: staticGasLimit * 2n,
+        feeAmount: gas * 2n,
+      })
+    })
+
+    it('keeps the doubled fee when a relayed limit is below the IBC-adjusted static limit', () => {
+      // staticGasLimit * 2 = 400_000; a 300_000 relayed limit stays below it
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: 300_000n, staticGasLimit, isIbcTransfer: true })).toEqual({
+        resolvedGasLimit: 300_000n,
+        feeAmount: gas * 2n,
+      })
+    })
+
+    it('scales further off the IBC-adjusted base when a relayed limit exceeds it', () => {
+      // effective static = 400_000, effective gas = 15_000
+      // 15_000 * 800_000 / 400_000 = 30_000
+      expect(resolveCosmosGasFee({ gas, relayedGasLimit: 800_000n, staticGasLimit, isIbcTransfer: true })).toEqual({
+        resolvedGasLimit: 800_000n,
+        feeAmount: 30_000n,
+      })
+    })
+  })
 })

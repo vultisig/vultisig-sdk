@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { assertSafeDestination } from '@/utils/dangerousAddresses'
+import { assertSafeDestination, SOLANA_DANGEROUS_ADDRESSES } from '../../../src/utils/dangerousAddresses'
 
 describe('assertSafeDestination', () => {
   it.each([
@@ -31,5 +31,13 @@ describe('assertSafeDestination', () => {
 
   it('allows a non-EVM-shaped destination (no EVM table applies)', () => {
     expect(() => assertSafeDestination('Solana', 'SomeSolanaAddress1111')).not.toThrow()
+  })
+
+  it.each(Object.keys(SOLANA_DANGEROUS_ADDRESSES))('rejects known Solana dangerous address %s', burn => {
+    expect(() => assertSafeDestination('Solana', burn)).toThrow(/Refusing to build transaction/)
+  })
+
+  it('does not apply Solana-only sentinel addresses to unrelated chains', () => {
+    expect(() => assertSafeDestination('Bitcoin', '11111111111111111111111111111111')).not.toThrow()
   })
 })

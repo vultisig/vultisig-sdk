@@ -138,4 +138,72 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
       })
     ).toThrow(/well-formed source channel/)
   })
+
+  describe('COSMOS-02: IBC gas multiplier', () => {
+    // Cosmos static gas limit is 200_000, static gas (fee) is 2500 in buildPayload.
+    it('doubles the gas limit and fee for a plain ICS-20 MsgTransfer', async () => {
+      const [input] = await getCosmosSigningInputs({
+        keysignPayload: buildPayload({
+          memo: 'transfer:channel-141',
+          ibcDenomTraces: {
+            path: 'transfer/channel-141',
+            baseDenom: 'uatom',
+            latestBlock: '12345_1751328000000000000',
+          },
+        }),
+        walletCore,
+      })
+
+      expect(input.fee?.gas.toString()).toBe('400000')
+      expect(input.fee?.amounts?.[0]?.amount).toBe('5000')
+    })
+
+    it('doubles the gas limit and fee for an ICS-20 MsgTransfer carrying a PFM forwarding memo', async () => {
+      const [input] = await getCosmosSigningInputs({
+        keysignPayload: buildPayload({
+          memo: 'transfer:channel-141:{"forward":{"receiver":"osmo1abc","port":"transfer","channel":"channel-42"}}',
+          ibcDenomTraces: {
+            path: 'transfer/channel-141',
+            baseDenom: 'uatom',
+            latestBlock: '12345_1751328000000000000',
+          },
+        }),
+        walletCore,
+      })
+
+      expect(input.fee?.gas.toString()).toBe('400000')
+      expect(input.fee?.amounts?.[0]?.amount).toBe('5000')
+    })
+
+    it('does NOT apply the IBC multiplier to a plain (non-IBC) send on the same ibc-enabled chain', async () => {
+      const plainSendPayload = create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.Cosmos,
+          ticker: 'ATOM',
+          address: sender,
+          contractAddress: '',
+          decimals: 6,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: recipient,
+        toAmount: '12345',
+        memo: 'plain send, no multiplier',
+        blockchainSpecific: {
+          case: 'cosmosSpecific',
+          value: create(CosmosSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            gas: 2500n,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      })
+
+      const [input] = await getCosmosSigningInputs({ keysignPayload: plainSendPayload, walletCore })
+
+      expect(input.fee?.gas.toString()).toBe('200000')
+      expect(input.fee?.amounts?.[0]?.amount).toBe('2500')
+    })
+  })
 })

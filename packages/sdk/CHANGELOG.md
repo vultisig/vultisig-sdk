@@ -1,5 +1,31 @@
 # @vultisig/sdk
 
+## 2.19.9
+
+### Patch Changes
+
+- [#1107](https://github.com/vultisig/vultisig-sdk/pull/1107) [`c5e89cb`](https://github.com/vultisig/vultisig-sdk/commit/c5e89cb317ae6f4ca00eb6c628ad6bac636e4821) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): populate 1inch affiliateFee for display (AGG-05) — 1inch general-swap quotes never populated `affiliateFee` on the returned `GeneralSwapQuote`, unlike Kyber and LI.FI, leaving the fee-transparency row blank for 1inch even though a real affiliate cut is taken via its `fee`/`referrer` params. `getOneInchSwapQuote` now grosses the post-fee `dstAmount` back up (same bps-based calc `getKyberSwapAffiliateFee` uses) to compute and attach a display-only `affiliateFee`.
+
+- [#976](https://github.com/vultisig/vultisig-sdk/pull/976) [`6d78a03`](https://github.com/vultisig/vultisig-sdk/commit/6d78a03651e39b2b99cfbb051dad24b03e303835) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Propagate ERC-20 allowance fetch failures instead of treating them as zero allowance.
+
+- [#1111](https://github.com/vultisig/vultisig-sdk/pull/1111) [`3fced18`](https://github.com/vultisig/vultisig-sdk/commit/3fced18987a1c2dbf6889e1d6b332db5652ecda7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(cosmos): apply IBC gas multiplier to MsgTransfer (COSMOS-02)
+
+  The Cosmos signing-inputs and fee-display resolvers used the flat per-chain gas limit (calibrated for `bank.MsgSend`) for every IBC message, including a full ICS-20 `MsgTransfer` with an optional PFM (packet-forward-middleware) memo. IBC transfers do measurably more work on the source leg — channel-state writes plus a relayer event — so the flat limit can run out of gas mid-execution: the fee is spent, the transfer fails, and funds don't move but the fee is still burned. `resolveCosmosGasFee` now applies the same `IBC_GAS_MULTIPLIER` (×2) the app's own Cosmos tx builder already documents (`vultiagent-app/src/services/cosmosTx.ts`), scoped to `IBC_TRANSFER` messages only — plain sends and wasm executes on ibc-enabled chains keep paying the calibrated flat fee.
+
+- [#977](https://github.com/vultisig/vultisig-sdk/pull/977) [`8b72850`](https://github.com/vultisig/vultisig-sdk/commit/8b7285043adc1f02dc8c7b7d827f516b3edff55b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject Solana system and incinerator destinations through the shared dangerous-address guard.
+
+- [#1101](https://github.com/vultisig/vultisig-sdk/pull/1101) [`9a1fc02`](https://github.com/vultisig/vultisig-sdk/commit/9a1fc0276ddc8fc905fab392875499d39011520d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): surface non-integer dstAmount drops + validate THORChain/MayaChain MsgDeposit memos (SDK-CORRECTNESS-04/06/08) — a drifted provider's non-integer `dstAmount` used to silently drop that quote from ranking with no signal it was a parse failure; `findSwapQuote` now `console.warn`s the provider + raw value before rethrowing. `prepareThorchainMsgDepositTxFromKeys` accepted an arbitrary memo string with no structural validation, unlike the fully-validated limit-swap memo path; it now fails closed on non-printable/oversized memos and unrecognized THORChain/MayaChain deposit actions (and, for the two documented LP actions, a malformed pool id), while still accepting non-LP operator-style memos (BOND, UNBOND, etc.) verbatim. Also replaced an `as any` cast on the deposit's chain-specific proto binding with per-chain branches so the `case`/`value` pairing is statically checked instead of bypassed.
+
+- [#1100](https://github.com/vultisig/vultisig-sdk/pull/1100) [`0e03972`](https://github.com/vultisig/vultisig-sdk/commit/0e03972ef9f477bb7dc7b4e01ad286b37c2b7561) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(evm): guard capGasLimit against a zero-source bigIntMax throw (SDK2-03)
+
+- [#1092](https://github.com/vultisig/vultisig-sdk/pull/1092) [`fe1ddf5`](https://github.com/vultisig/vultisig-sdk/commit/fe1ddf5ee9c325f0873a5a402a074819897999d6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(prep): enforce native-quote expiry + committed-amount consistency in the vault-free swap builder (ABTS/plan 005)
+
+  `prepareSwapTxFromKeys` (the vault-free, agent/MCP-reachable swap payload builder) previously enforced neither quote expiry nor amount↔quote consistency, unlike the vault-wrapped `SwapService.prepareSwapTx`. It now, before any signable side effects:
+
+  - rejects an expired native (THORChain/Maya) quote via the authoritative `quote.native.expiry`, mirroring core's `assertQuoteNotExpired`;
+  - rejects an expired CoW order via the authoritative `cowswap_order.validTo`;
+  - cross-checks the caller's `amount` against the CoW order's committed gross sell amount (`sellAmount + feeAmount`) to catch a stale/mismatched quote. The `transfer` route is intentionally excluded because its amount is provider-committed and legitimately diverges from the caller input by small fee adjustments; `evm`/`solana`/native fail open (no confidently-comparable committed field).
+
 ## 2.19.8
 
 ### Patch Changes
