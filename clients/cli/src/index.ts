@@ -57,7 +57,7 @@ import {
   executeVaults,
   executeVerify,
 } from './commands'
-import { cachePassword, createPasswordCallback } from './core'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
 import { EXIT_CODE_DESCRIPTIONS, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
@@ -233,7 +233,9 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
         throw new Error(`Vault not found: "${vaultSelector}"`)
       }
     } else {
-      vault = await sdk.getActiveVault()
+      // Tolerate a corrupt active-vault pointer: fall back to no active vault
+      // instead of bricking every command (including `vaults`).
+      vault = (await loadActiveVaultSafely(sdk)).vault
     }
 
     if (vault) {
