@@ -49,6 +49,7 @@ import {
   executeTxStatus,
   executeVaults,
 } from '../commands'
+import { loadActiveVaultSafely, shouldAutoSelectActiveVault } from '../core'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
@@ -929,8 +930,9 @@ export class ShellSession {
     const spinner = createSpinner('Loading vaults...').start()
 
     try {
-      // Load active vault first
-      const activeVault = await this.ctx.sdk.getActiveVault()
+      // Load active vault first (tolerating a corrupt pointer so a bad
+      // activeVaultId file doesn't stop the rest of the vaults from loading)
+      const { vault: activeVault, corruptPointer } = await loadActiveVaultSafely(this.ctx.sdk)
       if (activeVault) {
         this.ctx.addVault(activeVault)
         await this.ctx.setActiveVault(activeVault)
@@ -947,8 +949,11 @@ export class ShellSession {
           }
         })
 
-        // Set first vault as active if none set
-        if (!this.ctx.getActiveVault() && this.ctx.getVaults().size > 0) {
+        // Set first vault as active if none set — but NOT when the stored
+        // pointer was corrupt. Auto-selecting a vault off the back of a lost
+        // selection would let a later send/sign run against a vault the user
+        // never chose; make them pick one explicitly (`vault <name>`) instead.
+        if (shouldAutoSelectActiveVault(!!this.ctx.getActiveVault(), corruptPointer, this.ctx.getVaults().size)) {
           const firstVault = this.ctx.getVaults().values().next().value
           await this.ctx.setActiveVault(firstVault)
         }
@@ -958,6 +963,14 @@ export class ShellSession {
         spinner.succeed(`Loaded ${this.ctx.getVaults().size} vault(s)`)
       } else {
         spinner.succeed('No vaults found')
+      }
+
+      // A corrupt pointer left us with no active selection even though vaults
+      // exist — tell the user so they can choose one deliberately.
+      if (corruptPointer && !this.ctx.getActiveVault() && this.ctx.getVaults().size > 0) {
+        console.log(
+          chalk.yellow('Active vault pointer was corrupt and has been reset. Use "vault <name>" to pick one.')
+        )
       }
     } catch (error) {
       if (this.ctx.getVaults().size > 0) {
