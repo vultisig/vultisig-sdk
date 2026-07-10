@@ -6,6 +6,7 @@ import { getKeygenThreshold } from '../getKeygenThreshold'
 import { getMessageHash } from '../getMessageHash'
 import { KeygenOperation } from '../keygen/KeygenOperation'
 import { initializeMpcLib } from '../lib/initialize'
+import { mpcDebugLog } from '../mpcDebugLog'
 import { MpcRelayMessage } from '../message/relay'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
@@ -78,14 +79,14 @@ export class DKLS {
       const message = session.outputMessage()
       if (message === undefined) {
         if (this.isKeygenComplete) {
-          console.log('stop processOutbound')
+          mpcDebugLog('stop processOutbound')
           return true
         } else {
           await sleep(100)
           return await this.processOutbound(session, messageId)
         }
       }
-      console.log('outbound message:', message)
+      mpcDebugLog('outbound message:', message)
       const body = toMpcServerMessage(message.body, this.hexEncryptionKey)
 
       message?.receivers.forEach(receiver => {
@@ -111,7 +112,7 @@ export class DKLS {
     } catch (error) {
       console.error('processOutbound error:', error)
       if (this.isKeygenComplete) {
-        console.log('stop processOutbound')
+        mpcDebugLog('stop processOutbound')
         return true
       }
       await sleep(100)
@@ -124,7 +125,7 @@ export class DKLS {
     // recurses indefinitely while HTTP stays "healthy" but no MPC messages arrive.
     // Uses last inbound activity — slow ceremonies keep receiving traffic and reset the clock.
     if (Date.now() - this.lastRelayProgressAt > this.timeoutMs * 2) {
-      console.log('timeout')
+      mpcDebugLog('timeout')
       this.isKeygenComplete = true
       return false
     }
@@ -146,13 +147,13 @@ export class DKLS {
         if (this.cache[cacheKey]) {
           continue
         }
-        console.log(`got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`)
+        mpcDebugLog(`got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`)
         const decryptedMessage = fromMpcServerMessage(msg.body, this.hexEncryptionKey)
         const isFinish = session.inputMessage(decryptedMessage)
         if (isFinish) {
           await sleep(1000) // wait for 1 second to make sure all messages are processed
           this.isKeygenComplete = true
-          console.log('keygen complete')
+          mpcDebugLog('keygen complete')
           return true
         }
         this.cache[cacheKey] = ''
@@ -200,7 +201,7 @@ export class DKLS {
           messageId,
         })
       }
-      console.log('uploaded setup message successfully')
+      mpcDebugLog('uploaded setup message successfully')
       return
     }
 
@@ -224,8 +225,8 @@ export class DKLS {
   }
 
   private async startKeygen(attempt: number, messageId?: string, setupMessageId?: string) {
-    console.log('startKeygen attempt:', attempt)
-    console.log('session id:', this.sessionId)
+    mpcDebugLog('startKeygen attempt:', attempt)
+    mpcDebugLog('session id:', this.sessionId)
     this.isKeygenComplete = false
     this.inboundSequenceNo = 0
     this.onInboundSequenceNoChange?.(this.inboundSequenceNo)
@@ -257,7 +258,7 @@ export class DKLS {
           Buffer.from(this.publicKey || '', 'hex'),
           Buffer.from(this.chainCode || '', 'hex')
         )
-        console.log('migrate session:', session)
+        mpcDebugLog('migrate session:', session)
       } else {
         throw new Error('Invalid keygen operation')
       }
@@ -309,7 +310,7 @@ export class DKLS {
     messageId?: string,
     setupMessageId?: string
   ) {
-    console.log('startReshare dkls, attempt:', attempt)
+    mpcDebugLog('startReshare dkls, attempt:', attempt)
     this.isKeygenComplete = false
     this.inboundSequenceNo = 0
     this.onInboundSequenceNoChange?.(this.inboundSequenceNo)
@@ -342,14 +343,14 @@ export class DKLS {
         )
         // upload setup message to server
         const encryptedSetupMsg = toMpcServerMessage(setupMessage, this.hexEncryptionKey)
-        console.log('encrypted setup message:', encryptedSetupMsg)
+        mpcDebugLog('encrypted setup message:', encryptedSetupMsg)
         await uploadMpcSetupMessage({
           serverUrl: this.serverURL,
           message: encryptedSetupMsg,
           sessionId: this.sessionId,
           messageId: setupMessageId,
         })
-        console.log('uploaded setup message successfully')
+        mpcDebugLog('uploaded setup message successfully')
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverUrl: this.serverURL,
@@ -430,7 +431,7 @@ export class DKLS {
       sessionId: this.sessionId,
       messageId,
     })
-    console.log('uploaded setup message successfully')
+    mpcDebugLog('uploaded setup message successfully')
   }
 
   private async startKeyImport(
@@ -440,7 +441,7 @@ export class DKLS {
     setupMessageId?: string,
     protocolMessageId?: string
   ) {
-    console.log('startKeyImport attempt:', attempt)
+    mpcDebugLog('startKeyImport attempt:', attempt)
     this.isKeygenComplete = false
     const engine = (await ensureMpcEngine()).dkls
     try {
@@ -472,7 +473,7 @@ export class DKLS {
               sessionId: this.sessionId,
               messageId: setupMessageId,
             })
-            console.log('uploaded setup message successfully')
+            mpcDebugLog('uploaded setup message successfully')
           } catch (uploadError) {
             session.free?.()
             session = null
