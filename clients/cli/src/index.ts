@@ -64,6 +64,7 @@ import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
   checkForUpdates,
+  createVaultStorage,
   error,
   formatVersionDetailed,
   formatVersionShort,
@@ -209,7 +210,12 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
 
+    // Honor VULTISIG_CONFIG_DIR for vault storage. createVaultStorage() falls
+    // back to ~/.vultisig when the env var is unset, so the default location is
+    // unchanged; when set, vaults/active-vault/cache land in the same dir as
+    // config.json instead of leaking to the home directory.
     const sdk = new Vultisig({
+      storage: createVaultStorage(),
       onPasswordRequired: createPasswordCallback(),
       ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
@@ -1645,6 +1651,7 @@ program
 async function startInteractiveMode(): Promise<void> {
   const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
+    storage: createVaultStorage(),
     onPasswordRequired: createPasswordCallback(),
     ...(serverEndpoints ? { serverEndpoints } : {}),
   })
