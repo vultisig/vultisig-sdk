@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 2.19.13
+
+### Patch Changes
+
+- [#1091](https://github.com/vultisig/vultisig-sdk/pull/1091) [`56b8bce`](https://github.com/vultisig/vultisig-sdk/commit/56b8bce9ff60e6feaa5381327a23fe56d4ad5a21) Thanks [@ahdzib-maya](https://github.com/ahdzib-maya)! - fix(sdk): notify registered vault devices when keysign QR payloads are ready.
+
 ## 2.19.12
 
 ### Patch Changes
