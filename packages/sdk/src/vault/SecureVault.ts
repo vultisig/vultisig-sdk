@@ -8,7 +8,6 @@ import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/v
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
-import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { RelaySigningService } from '../services/RelaySigningService'
 import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
 import type {
@@ -21,6 +20,7 @@ import type {
   VaultData,
 } from '../types'
 import { normalizeToHex } from '../utils/bytes'
+import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -117,18 +117,7 @@ export class SecureVault extends VaultBase {
         this.emit('signingProgress', { step })
       },
       onQRCodeReady: qrPayload => {
-        this.emit('qrCodeReady', {
-          qrPayload,
-          action: 'keysign',
-          sessionId: '',
-        })
-        // ponytail: push the keysign QR to the vault's registered devices so
-        // co-signers get a native notification instead of having to watch for
-        // the QR. Best-effort — never blocks/fails the sign.
-        void this.notifyDevices(qrPayload)
-        if (options.onQRCodeReady) {
-          options.onQRCodeReady(qrPayload)
-        }
+        this.handleQRCodeReady(qrPayload, options.onQRCodeReady)
       },
       onDeviceJoined: (deviceId, totalJoined, required) => {
         this.emit('deviceJoined', { deviceId, totalJoined, required })
@@ -142,6 +131,16 @@ export class SecureVault extends VaultBase {
     this.emit('transactionSigned', { signature, payload })
 
     return signature
+  }
+
+  private handleQRCodeReady(qrPayload: string, onQRCodeReady?: (qrPayload: string) => void): void {
+    this.emit('qrCodeReady', {
+      qrPayload,
+      action: 'keysign',
+      sessionId: '',
+    })
+    void this.notifyDevices(qrPayload)
+    onQRCodeReady?.(qrPayload)
   }
 
   /**
@@ -166,8 +165,9 @@ export class SecureVault extends VaultBase {
         localPartyId: this.coreVault.localPartyId,
         qrCodeData: qrPayload,
       })
-    } catch {
+    } catch (error) {
       // push is a convenience layer — never let it break signing
+      this.emit('error', error as Error)
     }
   }
 
@@ -225,16 +225,7 @@ export class SecureVault extends VaultBase {
             this.emit('signingProgress', { step })
           },
           onQRCodeReady: qrPayload => {
-            this.emit('qrCodeReady', {
-              qrPayload,
-              action: 'keysign',
-              sessionId: '',
-            })
-            // ponytail: push the keysign QR to registered devices (see notifyDevices).
-            void this.notifyDevices(qrPayload)
-            if (signingOptions.onQRCodeReady) {
-              signingOptions.onQRCodeReady(qrPayload)
-            }
+            this.handleQRCodeReady(qrPayload, signingOptions.onQRCodeReady)
           },
           onDeviceJoined: (deviceId, totalJoined, required) => {
             this.emit('deviceJoined', { deviceId, totalJoined, required })
