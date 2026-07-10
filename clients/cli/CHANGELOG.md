@@ -1,5 +1,52 @@
 # @vultisig/cli
 
+## 2.19.10
+
+### Patch Changes
+
+- [#1076](https://github.com/vultisig/vultisig-sdk/pull/1076) [`5179edd`](https://github.com/vultisig/vultisig-sdk/commit/5179edd9eb25b392941f9649a455e92bfd5bf8b5) Thanks [@neavra](https://github.com/neavra)! - fix(chains): validate `chains --add <chain>` against the registry before persisting
+
+  An invalid `chains --add fakechain` correctly reported INVALID_CHAIN but still wrote
+  "fakechain" to the vault's chain list (chain resolution falls back to the raw user
+  string when the name doesn't match the registry). Every subsequent address-deriving
+  command then re-derived the bogus chain and dumped a stack trace to stderr until it was
+  manually removed. The `--add` path now validates against the supported-chain registry
+  first and fails closed — nothing is persisted for an unsupported chain.
+
+- [#1127](https://github.com/vultisig/vultisig-sdk/pull/1127) [`dea1efa`](https://github.com/vultisig/vultisig-sdk/commit/dea1efae6fbd2975de4ac5a26b2e8210999a0f4f) Thanks [@neavra](https://github.com/neavra)! - fix(cli): honor VULTISIG_CONFIG_DIR for vault storage
+
+  The documented `VULTISIG_CONFIG_DIR` env var was a no-op for vault storage: the
+  CLI constructed the SDK without a storage override, so vaults, the active-vault
+  pointer and cache always resolved to `~/.vultisig` even when the var pointed
+  elsewhere — only `config.json` and the agent journal honored it, producing a
+  split-brain config location that broke CI/container isolation and multi-tenant
+  use. The CLI now roots SDK vault storage at `getConfigDir()` via a shared
+  `createVaultStorage()` helper. When the var is unset it falls back to
+  `~/.vultisig`, so the default location is unchanged.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#1077](https://github.com/vultisig/vultisig-sdk/pull/1077) [`5e5494c`](https://github.com/vultisig/vultisig-sdk/commit/5e5494cf103ea5c17431b6a6231b30931eb004bb) Thanks [@neavra](https://github.com/neavra)! - Tolerate a corrupt `activeVaultId.json` at startup. A truncated or unparseable
+  active-vault pointer used to throw during CLI initialization, which broke every
+  command — including `vultisig vaults`, the one you run to recover. The pointer
+  read now fails open (treated as "no active vault") and self-heals by clearing
+  the bad pointer, so vaults still list with none marked active.
+- Updated dependencies [[`280956f`](https://github.com/vultisig/vultisig-sdk/commit/280956f1743564ea271a03c4735f70151b63f161), [`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040), [`0e3f86d`](https://github.com/vultisig/vultisig-sdk/commit/0e3f86db82ed086b1e200a6f83434a638f593c17), [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb), [`b37e726`](https://github.com/vultisig/vultisig-sdk/commit/b37e7264db3291adca1cb366f1311446d6add439), [`1b2636b`](https://github.com/vultisig/vultisig-sdk/commit/1b2636b535736a711fc537a87d2f51090fe6342d), [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7), [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91), [`fc595a1`](https://github.com/vultisig/vultisig-sdk/commit/fc595a17cb4901af1dfeac2521b93bb75823068f), [`776c539`](https://github.com/vultisig/vultisig-sdk/commit/776c5398764314f140f18ab4f86a1801fe9fdfe6)]:
+  - @vultisig/sdk@2.19.10
+  - @vultisig/core-chain@2.24.2
+
 ## 2.19.7
 
 ### Patch Changes
