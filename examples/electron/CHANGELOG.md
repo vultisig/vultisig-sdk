@@ -1,5 +1,13 @@
 # @vultisig/example-electron
 
+## 0.1.135
+
+### Patch Changes
+
+- Updated dependencies [[`56b8bce`](https://github.com/vultisig/vultisig-sdk/commit/56b8bce9ff60e6feaa5381327a23fe56d4ad5a21)]:
+  - @vultisig/sdk@2.19.13
+  - @vultisig/examples-shared@0.1.120
+
 ## 0.1.134
 
 ### Patch Changes
