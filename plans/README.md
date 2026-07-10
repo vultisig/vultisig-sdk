@@ -17,8 +17,17 @@ live in agent-backend-ts; 004/008 in vultiagent-poc).
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore) | P1 | M | — | TODO |
-| 005  | Add amount↔quote + expiry checks to the agent-reachable vault-free swap helper | P1 | S | — | DONE (partial) — see note |
+| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore) | P1 | M | — | DONE (#1001 + #1044, 2026-07-08) |
+| 005  | Add amount↔quote + expiry checks to the agent-reachable vault-free swap helper | P1 | S | — | DONE (partial, #1092, 2026-07-09) — see note |
+| 013  | Extend the native-swap inbound-vault freshness guard to MayaChain | P1 | M | — | REJECTED — already fixed independently by #971 before this plan was worked; issue closed as fixed-upstream |
+| 014  | Bound Long.fromString against silent 64-bit wraparound on fund-relevant amounts | P1 | S | — | DONE (#1140, 2026-07-10) |
+
+**Round 4 note (2026-07-10):** 003 and 005 shipped 2026-07-08/09 but this file wasn't updated at
+the time — corrected during a reconciliation pass. Plan 012 (align RelaySigningService's signing
+threshold with the canonical keygen formula) is **REJECTED, not attempted** — the user vetoed it
+outright: NeOMakinG already tried this exact fix earlier and it was rejected. No plan file exists
+for it; do not re-propose without asking why first. SDK-CORRECTNESS-04/06/08 (listed below as
+"report-only, not planned this round") got fixed anyway via #1101, 2026-07-09.
 
 ## Plan 005 outcome note (2026-07-08, branch advisor/005-vault-free-swap-safety-checks)
 
@@ -61,8 +70,8 @@ present before any change here).
 
 ## Dependency notes
 
-- 003 and 005 are independent. 003 is the higher-leverage structural net (cross-device signing
-  correctness); 005 is a cheaper agent-safety win.
+- 003 and 005 shipped independently, as expected.
+- 013 and 014 are independent of each other and of everything above.
 
 ## Findings considered and rejected / deferred to report only
 
