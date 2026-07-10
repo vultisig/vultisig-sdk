@@ -47,4 +47,26 @@ describe('toBoundedLong', () => {
   it('accepts both bigint and string inputs equivalently', () => {
     expect(toBoundedLong('42', { unsigned: false }).toString()).toBe(toBoundedLong(42n, { unsigned: false }).toString())
   })
+
+  it('throws on an empty string instead of coercing it to 0 (proto3 default fail-open)', () => {
+    // `BigInt('')` is `0n`, so without the string guard an unset proto `toAmount`
+    // ('') would silently build a zero-amount transfer. Old `Long.fromString('')`
+    // threw; keep failing closed.
+    expect(BigInt('')).toBe(0n)
+    expect(() => toBoundedLong('', { unsigned: true })).toThrow(RangeError)
+    expect(() => toBoundedLong('', { unsigned: false })).toThrow(RangeError)
+  })
+
+  it('rejects non-decimal strings that raw BigInt() would otherwise widen in', () => {
+    // `BigInt('0x10') === 16n`, `BigInt(' 5 ') === 5n` — both would silently
+    // widen the accepted input space of a guard whose job is to tighten it.
+    expect(BigInt('0x10')).toBe(16n)
+    for (const bad of ['0x10', ' 5 ', '5 ', '1e3', '1.0', '+5', 'abc', '-', '']) {
+      expect(() => toBoundedLong(bad, { unsigned: false })).toThrow(RangeError)
+    }
+  })
+
+  it('still accepts a plain negative decimal string in signed mode', () => {
+    expect(toBoundedLong('-5', { unsigned: false }).toString()).toBe('-5')
+  })
 })

@@ -82,6 +82,35 @@ describe('getTronSigningInputs -- FREEZE: / UNFREEZE: feeLimit semantics (BUG-7)
     })
     expect(input.transaction?.feeLimit?.toNumber()).toBe(0)
   })
+
+  it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
+    // Pre-fix behaviour: feeLimit would have been Long.fromString('100000000').
+    // Post-fix: always 0. This assertion pins the regression explicitly.
+    const GAS_ESTIMATION = 100_000_000n
+    const specific = makeTronSpecific(GAS_ESTIMATION)
+    const payload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'TRX',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: true,
+      }),
+      toAddress: OWNER,
+      toAmount: '1000000000',
+      memo: 'FREEZE:ENERGY',
+      blockchainSpecific: { case: 'tronSpecific', value: specific },
+    })
+
+    const [input] = await getTronSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+    // Anti-regression: prior to fix, feeLimit was passed gasEstimation
+    // (a non-zero energy estimate that's semantically meaningless for
+    // system contracts and only served to confuse the UI fee display).
+    expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
+  })
 })
 
 describe('getTronSigningInputs -- native transfer amount bounds (#1138)', () => {
@@ -125,34 +154,5 @@ describe('getTronSigningInputs -- native transfer amount bounds (#1138)', () => 
         walletCore,
       })
     ).toThrow(RangeError)
-  })
-
-  it('gasEstimation value does not leak into FREEZE feeLimit', async () => {
-    // Pre-fix behaviour: feeLimit would have been Long.fromString('100000000').
-    // Post-fix: always 0. This assertion pins the regression explicitly.
-    const GAS_ESTIMATION = 100_000_000n
-    const specific = makeTronSpecific(GAS_ESTIMATION)
-    const payload = create(KeysignPayloadSchema, {
-      coin: create(CoinSchema, {
-        chain: Chain.Tron,
-        ticker: 'TRX',
-        address: OWNER,
-        decimals: 6,
-        isNativeToken: true,
-      }),
-      toAddress: OWNER,
-      toAmount: '1000000000',
-      memo: 'FREEZE:ENERGY',
-      blockchainSpecific: { case: 'tronSpecific', value: specific },
-    })
-
-    const [input] = await getTronSigningInputs({
-      keysignPayload: payload,
-      walletCore,
-    })
-    // Anti-regression: prior to fix, feeLimit was passed gasEstimation
-    // (a non-zero energy estimate that's semantically meaningless for
-    // system contracts and only served to confuse the UI fee display).
-    expect(input.transaction?.feeLimit?.equals(Long.ZERO)).toBe(true)
   })
 })

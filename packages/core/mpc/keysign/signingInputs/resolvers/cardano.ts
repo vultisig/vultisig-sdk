@@ -48,7 +48,7 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: toBoundedLong(keysignPayload.toAmount, { unsigned: false }),
+      amount: toBoundedLong(keysignPayload.toAmount, { unsigned: true }),
       useMaxAmount: sendMaxAmount,
       tokenAmount: tokenBundle,
       forceFee: Long.fromString(byteFee.toString()),

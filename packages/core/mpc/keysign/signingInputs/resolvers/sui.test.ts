@@ -184,15 +184,40 @@ describe('getSuiSigningInputs — native send', () => {
     expect(input.paySui?.amounts?.[0]?.toString()).toBe('1000000000')
   })
 
-  it('rejects an amount at 2^63 instead of silently wrapping (#1138)', () => {
-    // ~9.22 SUI-supply-adjacent MIST wraps negative under raw Long.fromString.
-    const overflow = (2n ** 63n).toString()
-    expect(() =>
-      getSuiSigningInputs({
-        keysignPayload: buildNativeSendPayload(overflow),
-        walletCore,
-      })
-    ).toThrow(RangeError)
+  it('accepts a uint64 amount in the (2^63-1, 2^64-1] range — no false reject (#1138)', async () => {
+    // Sui `Pay`/`PaySui` `amounts` is proto uint64. A value above the signed-64
+    // ceiling but within uint64 is a legitimate large send; bounding it as
+    // `unsigned` must NOT throw. (Regression: an earlier `{ unsigned: false }`
+    // guard wrongly RangeError'd here.)
+    const big = '9500000000000000000' // ~9.5e18, in (2^63-1, 2^64-1]
+    const [input] = await getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(big), walletCore })
+    expect(input.paySui?.amounts?.[0]?.toString()).toBe(big)
+  })
+
+  it('round-trips the (2^63, 2^64) amount through the real wallet-core uint64 codec', async () => {
+    // Encode + decode through the ACTUAL TW proto codec (not just the JS Long)
+    // to prove the on-wire uint64 value is exactly what was requested.
+    const big = '9500000000000000000'
+    const [input] = await getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(big), walletCore })
+    const encoded = TW.Sui.Proto.SigningInput.encode(input).finish()
+    const decoded = TW.Sui.Proto.SigningInput.decode(encoded)
+    expect(decoded.paySui?.amounts?.[0]?.unsigned).toBe(true)
+    expect(decoded.paySui?.amounts?.[0]?.toString()).toBe(big)
+  })
+
+  it('accepts the unsigned-64 max and rejects one above it (#1138)', () => {
+    const uint64Max = (2n ** 64n - 1n).toString()
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(uint64Max), walletCore })).not.toThrow()
+
+    const overflow = (2n ** 64n).toString()
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(overflow), walletCore })).toThrow(
+      RangeError
+    )
+  })
+
+  it('rejects an unset/empty toAmount instead of building a zero-amount send (#1138)', () => {
+    // proto3 defaults an unset `toAmount` to '' — must fail closed, not build 0.
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(''), walletCore })).toThrow(RangeError)
   })
 })
 

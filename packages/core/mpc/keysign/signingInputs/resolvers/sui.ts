@@ -68,7 +68,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
           gas: gasCoins[0],
           inputCoins: inputCoins,
           recipients: [keysignPayload.toAddress],
-          amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: false })],
+          amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: true })],
         }),
       }),
     ]
@@ -80,7 +80,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       paySui: TW.Sui.Proto.PaySui.create({
         inputCoins: inputCoins,
         recipients: [keysignPayload.toAddress],
-        amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: false })],
+        amounts: [toBoundedLong(keysignPayload.toAmount, { unsigned: true })],
       }),
     }),
   ]
