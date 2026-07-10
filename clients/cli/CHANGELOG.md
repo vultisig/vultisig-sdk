@@ -1,5 +1,14 @@
 # @vultisig/cli
 
+## 2.19.11
+
+### Patch Changes
+
+- [#1129](https://github.com/vultisig/vultisig-sdk/pull/1129) [`5949742`](https://github.com/vultisig/vultisig-sdk/commit/59497426a238a75576e92d18023747d66c9d4e7a) Thanks [@neavra](https://github.com/neavra)! - fix(portfolio): report per-chain failures instead of silently swallowing them. The `portfolio` command now fetches each chain independently — one unreachable chain no longer fails the whole command, and a fiat-value lookup failure no longer silently drops the value. The `-o json` envelope always carries a `failures: [{ chain, stage, error }]` array (empty on full success), partial failures still exit 0, and an all-chains-failed run exits with a network error (code 3).
+
+- Updated dependencies [[`3bf18a1`](https://github.com/vultisig/vultisig-sdk/commit/3bf18a18606fd1b45d50abb562eb6c3011182d48)]:
+  - @vultisig/sdk@2.19.11
+
 ## 2.19.10
 
 ### Patch Changes
