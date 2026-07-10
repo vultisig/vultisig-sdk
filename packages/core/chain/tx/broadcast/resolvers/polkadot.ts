@@ -12,25 +12,29 @@ type RpcResponse = {
 }
 
 /**
- * Substrate Pool errors that mean "this extrinsic is already in the pool /
- * imported / banned because a peer just submitted it." In an MPC ceremony,
- * the initiator and the joiner both broadcast the same signed extrinsic; the
+ * Substrate Pool errors that UNAMBIGUOUSLY mean "this exact extrinsic is
+ * already in the pool because a peer just submitted it." In an MPC ceremony
+ * the initiator and joiner both broadcast the same signed extrinsic; the
  * slower device hits exactly these messages while the tx is in fact already
- * on chain. Treat them as idempotent successes — the alternative is showing
- * the slower device a "Signing Error" screen for a transaction that did
- * confirm. Fast path so we don't rely on `verifyBroadcastByHash`, which can't
- * help on Polkadot until tx-status polling moves off the gated Subscan API.
+ * accepted. Treat them as idempotent successes — the alternative is showing
+ * the slower device a "Signing Error" screen for a tx that did confirm.
+ *
+ * `temporarily banned` is deliberately NOT in this list. Substrate's pool
+ * bans a tx hash for a cool-off window whenever it was recently *removed* —
+ * which includes both a benign already-processed duplicate AND a genuine
+ * rejection (invalid/dropped extrinsic that got banned to stop retry spam).
+ * The string alone cannot tell those apart, so assuming success would report
+ * a genuinely-rejected tx as confirmed (fund-safety false positive). It is
+ * routed through `verifyBroadcastByHash` instead, which only swallows the
+ * error if the tx hash is actually observed on chain / in the pool and
+ * otherwise surfaces the real failure.
  *
  * Substrate sources for the exact strings:
  *   substrate/client/transaction-pool/api/src/error.rs (AlreadyImported,
  *   TemporarilyBanned, NoTagsProvided, ImmediatelyDropped) and
  *   primitives/runtime/src/transaction_validity.rs (Stale).
  */
-const idempotentBroadcastErrorPatterns: readonly RegExp[] = [
-  /already imported/i,
-  /already known/i,
-  /temporarily banned/i,
-]
+const idempotentBroadcastErrorPatterns: readonly RegExp[] = [/already imported/i, /already known/i]
 
 const isIdempotentBroadcastError = (text: string): boolean =>
   idempotentBroadcastErrorPatterns.some(pattern => pattern.test(text))
