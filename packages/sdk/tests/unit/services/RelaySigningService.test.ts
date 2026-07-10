@@ -25,6 +25,11 @@ vi.mock('../../../src/crypto', () => ({
   randomUUID: vi.fn(() => `test-uuid-${Math.random().toString(36).slice(2, 8)}`),
 }))
 
+// Mock the relay session join call so tests never hit a real network endpoint
+vi.mock('@vultisig/core-mpc/session/joinMpcSession', () => ({
+  joinMpcSession: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Mock getChainSigningInfo adapter
 vi.mock('../../../src/adapters/getChainSigningInfo', () => ({
   getChainSigningInfo: vi.fn(() => ({
@@ -294,7 +299,7 @@ describe('RelaySigningService threshold calculation', () => {
 
     it('regression: previously-broken sizes now match canonical threshold', () => {
       // These sizes diverged under the old ceil((n+1)/2) formula.
-      const previouslyBroken = [5, 7, 8, 9, 10, 11, 13, 14]
+      const previouslyBroken = [5, 7, 8, 9, 10, 11, 12, 13, 14, 15]
       for (const n of previouslyBroken) {
         const oldWrongFormula = n > 2 ? Math.ceil((n + 1) / 2) : 2
         const canonical = getKeygenThreshold(n)
@@ -331,6 +336,46 @@ describe('RelaySigningService threshold calculation', () => {
           .mockRejectedValue(new Error('stop-before-mpc'))
 
         await expect(service.signWithRelay(mockVault as any, payload as any, mockWalletCore)).rejects.toThrow(
+          'stop-before-mpc'
+        )
+
+        expect(waitForDevicesSpy).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(String),
+          expectedThreshold,
+          expect.any(Object)
+        )
+      }
+    )
+  })
+
+  describe('RelaySigningService.signBytesWithRelay uses canonical threshold', () => {
+    it.each([
+      [5, 4],
+      [7, 5],
+      [8, 6],
+    ])(
+      'waits for the canonical threshold (%i signers -> %i devices), not the legacy formula',
+      async (signerCount, expectedThreshold) => {
+        const service = new RelaySigningService()
+        const signers = Array.from({ length: signerCount }, (_, i) => `party-${i}`)
+
+        const mockVault = {
+          keyShares: { ecdsa: 'mock-key-share' },
+          signers,
+          publicKeys: { ecdsa: 'mock-ecdsa-key', eddsa: 'mock-eddsa-key' },
+        }
+
+        const bytesOptions = {
+          messageHashes: ['hash1'],
+          chain: 'Ethereum' as any,
+        }
+
+        const waitForDevicesSpy = vi
+          .spyOn(service as any, 'waitForDevices')
+          .mockRejectedValue(new Error('stop-before-mpc'))
+
+        await expect(service.signBytesWithRelay(mockVault as any, bytesOptions, mockWalletCore)).rejects.toThrow(
           'stop-before-mpc'
         )
 
