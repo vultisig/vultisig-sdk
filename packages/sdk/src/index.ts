@@ -57,6 +57,14 @@ export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 
+// Public-boundary argument validation (AUDIT-R3 TASK-020).
+// Zod schemas + safe-parse helpers for chain and ticker strings.
+// Use `parseChain` / `parseTicker` to validate strings from LLM output,
+// HTTP bodies, or CLI args BEFORE passing them to any SDK tool — you get a
+// typed error instead of a late crash inside getChainKind / resolvers[].
+export type { ParseChainResult, ParseTickerResult } from './tools/parse'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from './tools/parse'
+
 // Pure-crypto chain-math normalizers (decimals/amount-scale/fee/token-symbol).
 // Ported from the agent-backend validator — PURE math only, no grounding.
 // Lets mcp-ts / agent-backend ground claimed amounts and fees through the SDK
@@ -186,8 +194,25 @@ export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+export {
+  getCosmosAllowedFeeDenoms,
+  isCosmosFeeDenomAllowed,
+} from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+
+// Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
+// "will this memo fit before broadcast rejects it with sdk code 12 (memo too
+// long) after the user has already signed?" Consolidated from independently-
+// maintained copies in agent-backend-ts (skip-swap.ts's full per-chain table,
+// execute_send.ts's TerraClassic-only hardcoded 256 check that missed every
+// other cosmos chain) and mcp-ts's own copy of the same table.
+export {
+  COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  getCosmosMemoMaxBytes,
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosMemoWithinCap,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
@@ -275,6 +300,13 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 
+// Skip Go routing-eligibility predicates. Single source of truth for "does this
+// from/to chain pair route through Skip Go?" — consolidated here so consumers
+// (execute/build tools, route discovery/listing, destination-format validation)
+// share one tested implementation instead of independently-maintained copies
+// that can drift from each other (the mcp-ts #384 bug class).
+export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {
@@ -361,7 +393,11 @@ export type { LifiAffiliateConfig, LifiBootstrapConfig } from '@vultisig/core-ch
 export { setupLifi } from '@vultisig/core-chain/swap/general/lifi/config'
 export type { SwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
 export { configureSwapKit, getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
-export type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+export type {
+  SwapAffiliateConfig,
+  SwapQuoteProviderExcludeName,
+  SwapQuoteProviderName,
+} from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
@@ -701,6 +737,7 @@ export {
   isNullAddress,
   isPendleChain,
   isSelfSend,
+  isValidTxHash,
   isZeroAmount,
   JUPITER_AFFILIATE_FEE_ATAS,
   JUPITER_AFFILIATE_FEE_OWNER,

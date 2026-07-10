@@ -27,17 +27,31 @@
  * part of the mcp-ts/backend → SDK code-as-action consolidation.
  */
 
+import { jupiterFeeOwnerAddress } from '@vultisig/core-chain/swap/general/jupiter/config'
+import {
+  assertJupiterPriceImpactWithinCeiling,
+  PriceImpactTooHighError,
+} from '@vultisig/core-chain/swap/general/priceImpactGuard'
+
+export { PriceImpactTooHighError }
+
 /** SOL native mint address (used when no SPL token contract is specified). */
 export const SOL_NATIVE_MINT = 'So11111111111111111111111111111111111111112'
 
 /**
  * Treasury OWNER pubkey on Solana. This is NOT the `feeAccount` itself.
  * Jupiter's `feeAccount` field expects an SPL Token ATA derived per output
- * mint and owned by this pubkey. Confirmed by realpaaao on 2026-06-01
- * (vultisig/agent-backend#631): "Solana address is: 5QXe... Use same swap
- * config as in core app."
+ * mint and owned by this pubkey.
+ *
+ * SOL-03 (audit fix): this used to hardcode a DIFFERENT address
+ * ('5QXePTia...'), an ad-hoc unblock from a single GitHub comment
+ * (vultisig/agent-backend#631, 2026-06-01) that predates and was never
+ * reconciled with the later formal cross-platform shared-spec decision
+ * (vultisig-ios#4669, vultisig-android#5053, vultisig-sdk#894) which settled
+ * on '8iqhrtBz...' and already shipped on iOS/Android main. Re-export the
+ * SDK's own general-swap config value so both Jupiter integrations agree.
  */
-export const JUPITER_AFFILIATE_FEE_OWNER = '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB'
+export const JUPITER_AFFILIATE_FEE_OWNER = jupiterFeeOwnerAddress
 
 /**
  * Affiliate fee in basis points (50 bps = 0.5%). Mirrors `baseAffiliateBps`
@@ -53,10 +67,15 @@ export const JUPITER_PLATFORM_FEE_BPS = 50
 export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
 
 /**
- * Default slippage in basis points (1%). Matches the slippage used in
- * recipes/sdk/swap/jupiter.go.
+ * Default slippage in basis points (0.5%).
+ *
+ * SOL-04 (audit fix): this used to be 100 bps, mirroring `recipes/sdk/swap/
+ * jupiter.go`'s fallback constant — which itself predates and was never
+ * reconciled with the shared cross-platform spec (vultisig-ios#4669) that
+ * explicitly settled on 50 bps, matching iOS/Android/the SDK's own
+ * general-swap Jupiter path (getJupiterSwapQuote.ts) and 1inch.
  */
-export const JUPITER_DEFAULT_SLIPPAGE_BPS = 100
+export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
 
@@ -179,7 +198,7 @@ export type JupiterSwapParams = {
   toContractAddress?: string
   /** Exact input amount in lamports / token base units. */
   amountBaseUnits: bigint
-  /** Slippage tolerance in basis points (default 100 = 1%). */
+  /** Slippage tolerance in basis points (default {@link JUPITER_DEFAULT_SLIPPAGE_BPS} = 50 = 0.5%). */
   slippageBps?: number
   /** Override the Jupiter API base URL (default {@link JUPITER_API_BASE_URL}). */
   apiBaseUrl?: string
@@ -255,6 +274,13 @@ export const buildJupiterSwapTx = async ({
   }
 
   const quote = await fetchJupiter<JupiterQuoteResponse>(`${base}/swap/v1/quote?${quoteParams.toString()}`)
+
+  // Price-impact ceiling (fund-safety, audit finding SOL-02). Jupiter's
+  // priceImpactPct is a FRACTION ("0.05" = 5%); refuse to build a signable
+  // swap transaction above the ceiling — a thin-pool / sandwich-bait quote
+  // that would lose most of the user's funds. Fail-safe: a missing /
+  // unparsable impact passes.
+  assertJupiterPriceImpactWithinCeiling(quote.priceImpactPct)
 
   // Step 2: Build the (unsigned) swap transaction. Include feeAccount only
   // when resolved.

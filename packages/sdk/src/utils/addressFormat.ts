@@ -24,6 +24,8 @@
 
 import bs58 from 'bs58'
 
+import { isValidCashAddr } from './cashaddr'
+
 /**
  * Coarse chain-family tag. Mirrors the backend `address.Family` enum.
  * `unknown` is returned when an address matches no known family format.
@@ -58,7 +60,12 @@ const reEVM = /^0x[0-9a-fA-F]{40}$/
 const reBTCNativeSegWit = /^bc1[02-9ac-hj-np-z]{25,70}$/
 /** P2PKH (1...) and P2SH (3...) legacy Bitcoin. */
 const reBTCLegacy = /^[13][1-9A-HJ-NP-Za-km-z]{25,34}$/
-/** Bitcoin Cash cashaddr (q/p prefix, 41 chars, optional scheme). */
+/**
+ * Bitcoin Cash cashaddr SHAPE regex (q/p prefix, 41 chars, optional scheme).
+ * Used only by the loose `classifyAddress` family heuristic. The authoritative
+ * fund-safety gate uses `isValidCashAddr` (polymod checksum), NOT this regex —
+ * the regex accepts a single-char typo whose checksum is wrong.
+ */
 const reBCH = /^(?:bitcoincash:)?[qp][a-z0-9]{41}$/
 /** Litecoin bech32 (ltc1...). */
 const reLTCBech32 = /^ltc1[02-9ac-hj-np-z]{25,70}$/
@@ -283,7 +290,9 @@ const chainFormatRules: Record<string, Matcher[]> = {
   ...Object.fromEntries(evmChains.map(chain => [chain, [evmRule]])),
   solana: [isSolanaAddress],
   bitcoin: [re(reBTCNativeSegWit), re(reBTCLegacy)],
-  bitcoincash: [re(reBCH)],
+  // Authoritative fund-safety gate: full CashAddr polymod checksum, not just
+  // the shape regex — rejects a mistyped BCH address the regex would pass.
+  bitcoincash: [isValidCashAddr],
   litecoin: [re(reLTCBech32), re(reLTCLegacy)],
   dogecoin: [re(reDOGE)],
   dash: [re(reDASH)],

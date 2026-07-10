@@ -130,6 +130,82 @@ describe('agent ask --json output contract', () => {
     expect(stderr.join('')).not.toContain('"success"')
   })
 
+  // a2a-02: the typed turn-outcome discriminator drives an ADDITIVE exit-code map
+  // (success→0, blocked→10, refusal→11, frame-less error→1) and rides the top-level
+  // `outcome` field of the JSON envelope so a headless caller never parses prose.
+  it('turn_outcome=success → exit 0 + envelope.outcome', async () => {
+    driver.run = cb => {
+      cb.onAssistantMessage('Your balance is 1.0 ETH')
+      cb.onTurnOutcome?.({ kind: 'success' })
+    }
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.SUCCESS)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(true)
+    expect(envelope.data.outcome).toEqual({ kind: 'success' })
+  })
+
+  it('turn_outcome=blocked → exit 10 (AGENT_TURN_BLOCKED) + outcome on the envelope', async () => {
+    driver.run = cb => {
+      cb.onAssistantMessage("I can't complete that safely — please try again.")
+      cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim', detail: 'unverifiable broadcast' })
+    }
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.AGENT_TURN_BLOCKED)
+    expect(exitCode).toBe(10)
+    const envelope = JSON.parse(stdout.join(''))
+    // completed-but-blocked: success stays true (no transport/error-frame failure);
+    // the block is conveyed via outcome + the exit code, which is the contract.
+    expect(envelope.success).toBe(true)
+    expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
+  })
+
+  it('turn_outcome=refusal → exit 11 (AGENT_TURN_REFUSAL)', async () => {
+    driver.run = cb => {
+      cb.onAssistantMessage('Which chain would you like to use?')
+      cb.onTurnOutcome?.({ kind: 'refusal', code: 'clarify' })
+    }
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.AGENT_TURN_REFUSAL)
+    expect(exitCode).toBe(11)
+  })
+
+  it('turn_outcome=error with no stream error frame → exit 1 (not a false 0)', async () => {
+    driver.run = cb => {
+      cb.onAssistantMessage('Sorry, I ran into a problem completing that.')
+      cb.onTurnOutcome?.({ kind: 'error', code: 'no_output' })
+    }
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.USAGE)
+    expect(exitCode).toBe(1)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.data.outcome.kind).toBe('error')
+  })
+
+  it('a stream error frame keeps its specific exit code; the outcome still rides the error envelope', async () => {
+    driver.run = cb => {
+      cb.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)
+      cb.onTurnOutcome?.({ kind: 'error', code: 'stream_error' })
+    }
+    const { exitCode } = await runAsk()
+    // The error-frame taxonomy wins (EXTERNAL_SERVICE=6), NOT the generic outcome=1.
+    expect(exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    // Same relative slot as the success envelope: data.outcome (not top-level).
+    expect(envelope.data.outcome).toEqual({ kind: 'error', code: 'stream_error' })
+  })
+
+  it('no turn_outcome (older backend) → exit 0 unchanged', async () => {
+    driver.run = cb => {
+      cb.onAssistantMessage('legacy backend answer')
+    }
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(0)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.data.outcome).toBeUndefined()
+  })
+
   it('SSE/backend error frame → error envelope on stdout with conversation_id; exit non-zero', async () => {
     driver.run = cb => {
       cb.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)

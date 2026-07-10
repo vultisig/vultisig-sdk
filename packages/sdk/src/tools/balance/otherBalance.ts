@@ -7,9 +7,21 @@
  * Each chain is not wired through the EVM `getEvmClient` rail, so these talk to
  * public RPC / API endpoints (and the Vultisig proxy) directly via `fetchJson`.
  */
-import bs58 from 'bs58'
+import bs58check from 'bs58check'
 
 import { fetchJson, formatBalance, ROOT_API_URL } from './rpc'
+
+// bs58check ships as ESM with a CJS-compat default export depending on the
+// bundler; resolve the decode function once (mirrors chains/tron/rpc.ts).
+const bs58checkDecode: (s: string) => Uint8Array = (() => {
+  const mod = bs58check as unknown as {
+    decode?: (s: string) => Uint8Array
+    default?: { decode: (s: string) => Uint8Array }
+  }
+  const decode = mod.decode ?? mod.default?.decode
+  if (!decode) throw new Error('bs58check.decode unavailable — bundler did not resolve bs58check correctly')
+  return decode
+})()
 
 // Tron base58check address: T-prefix + 33 base58 chars = 34 total. Format-only
 // guard so an EVM 0x / cosmos bech32 address can't be silently treated as Tron.
@@ -38,10 +50,22 @@ function assertTronAddress(addr: string): void {
  * error body with no `constant_result` — which the caller would then read as a
  * balance of 0. Every funded TRC-20 holder would report empty. Decode for real.
  */
-function tronAddressToAbiParam(addr: string): string {
-  const decoded = bs58.decode(addr)
-  // 21-byte payload (0x41 + 20-byte address) + 4-byte checksum = 25 bytes.
-  if (decoded.length !== 25 || decoded[0] !== 0x41) {
+export function tronAddressToAbiParam(addr: string): string {
+  // bs58check.decode VERIFIES the trailing 4-byte sha256d checksum and strips
+  // it, returning the 21-byte payload (0x41 prefix + 20-byte address). Plain
+  // bs58.decode skips that check: a typo'd-but-still-base58-decodable address
+  // (25 bytes, 0x41 prefix, corrupted checksum) would pass the length/prefix
+  // guard and silently resolve to a DIFFERENT 20-byte address, reporting that
+  // account's balance instead. The send path (abi/tron.ts) already guards this;
+  // the balance-read path must too.
+  let decoded: Uint8Array
+  try {
+    decoded = bs58checkDecode(addr)
+  } catch {
+    throw new Error(`'${addr}' is not a valid Tron base58check address (checksum mismatch).`)
+  }
+  // After the checksum is stripped: 21-byte payload = 0x41 prefix + 20-byte address.
+  if (decoded.length !== 21 || decoded[0] !== 0x41) {
     throw new Error(`'${addr}' did not base58check-decode to a 21-byte Tron address payload.`)
   }
   const addr20 = Buffer.from(decoded.subarray(1, 21)).toString('hex')

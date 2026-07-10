@@ -802,5 +802,24 @@ describe('SwapService', () => {
         spender: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
       })
     })
+
+    it('should propagate ERC-20 allowance fetch failures instead of returning false zero', async () => {
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+
+      vi.mocked(getErc20Allowance).mockRejectedValue(new Error('allowance rpc timeout'))
+
+      await expect(
+        service.getAllowance(
+          {
+            chain: Chain.Ethereum,
+            address: '0x1234...',
+            id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+            ticker: 'USDC',
+            decimals: 6,
+          },
+          '0x1111111254fb6c44bAC0beD2854e76F90643097d'
+        )
+      ).rejects.toThrow('allowance rpc timeout')
+    })
   })
 })

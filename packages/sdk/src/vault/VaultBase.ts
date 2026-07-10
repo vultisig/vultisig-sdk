@@ -925,23 +925,36 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const currency = (fiatCurrency ?? this._currency ?? 'usd') as FiatCurrency
 
     const result: Record<string, Balance> = {}
+    const nativeChains = [
+      ...new Set(
+        Object.values(balances)
+          .filter(balance => !balance.tokenId)
+          .map(balance => balance.chainId as Chain)
+      ),
+    ]
+    const nativePrices = nativeChains.length > 0 ? await this.fiatValueService.getPrices(nativeChains, currency) : {}
 
-    for (const [key, balance] of Object.entries(balances)) {
-      const price = await this.fiatValueService.getPrice(balance.chainId as Chain, balance.tokenId, currency)
+    await Promise.all(
+      Object.entries(balances).map(async ([key, balance]) => {
+        const chain = balance.chainId as Chain
+        const price = balance.tokenId
+          ? await this.fiatValueService.getPrice(chain, balance.tokenId, currency)
+          : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
 
-      const fiatValue = getCoinValue({
-        amount: BigInt(balance.amount),
-        decimals: balance.decimals,
-        price,
+        const fiatValue = getCoinValue({
+          amount: BigInt(balance.amount),
+          decimals: balance.decimals,
+          price,
+        })
+
+        result[key] = {
+          ...balance,
+          value: price,
+          fiatValue,
+          fiatCurrency: currency,
+        }
       })
-
-      result[key] = {
-        ...balance,
-        value: price,
-        fiatValue,
-        fiatCurrency: currency,
-      }
-    }
+    )
 
     return result
   }
@@ -1909,10 +1922,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   private parseAmount(amount: string, decimals: number): bigint {
     const trimmed = amount?.trim()
     if (!trimmed) throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount cannot be empty')
-    if (isNaN(Number(trimmed)) || Number(trimmed) <= 0)
+    let chainAmount: bigint
+    try {
+      chainAmount = toChainAmount(trimmed, decimals)
+    } catch {
       throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
-    const [whole, fraction = ''] = trimmed.split('.')
-    return BigInt(whole + fraction.padEnd(decimals, '0').slice(0, decimals))
+    }
+    if (chainAmount <= 0n) {
+      throw new VaultError(VaultErrorCode.InvalidAmount, `Invalid amount: "${amount}"`)
+    }
+    return chainAmount
   }
 
   /** Same conversion as swap quote / prepare (`toChainAmount` → `parseUnits`); returns trimmed decimal string for quote/prepare. */
