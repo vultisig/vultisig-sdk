@@ -192,54 +192,47 @@ describe('ServerManager — TSS batching wiring', () => {
       createdAt: 0,
     }
 
-    it('calls batchReshareWithServer when tssBatching is true', async () => {
+    it('fails closed instead of calling batchReshareWithServer when tssBatching is true', async () => {
       const mgr = new ServerManager({ fastVault })
-      await mgr.reshareVault(minimalVault as never, {
-        password: 'pw',
-        email: 'e@e.e',
-        tssBatching: true,
-        newThreshold: 2,
-        newParticipants: ['a', 'b'],
-      })
 
-      expect(batchReshareMock).toHaveBeenCalledTimes(1)
+      await expect(
+        mgr.reshareVault(minimalVault as never, {
+          password: 'pw',
+          email: 'e@e.e',
+          tssBatching: true,
+          newThreshold: 2,
+          newParticipants: ['a', 'b'],
+        })
+      ).rejects.toThrow(/use Vultisig\.performReshare/)
+
+      expect(batchReshareMock).not.toHaveBeenCalled()
       expect(reshareWithServerMock).not.toHaveBeenCalled()
-      const batchCalls = batchReshareMock.mock.calls as unknown as [
-        [{ vaultBaseUrl: string; protocols: string[]; hex_chain_code: string }],
-      ]
-      expect(batchCalls[0]).toBeDefined()
-      const body = batchCalls[0][0]
-      expect(body.vaultBaseUrl).toBe(fastVault)
-      expect(body.protocols).toEqual(['ecdsa', 'eddsa'])
-      expect(body.hex_chain_code).toBe('0xhcc')
     })
 
-    it('calls reshareWithServer when tssBatching is false or omitted', async () => {
+    it('fails closed instead of calling reshareWithServer when tssBatching is false or omitted', async () => {
       const mgr = new ServerManager({ fastVault })
 
-      await mgr.reshareVault(minimalVault as never, {
-        password: 'pw',
-        tssBatching: false,
-        newThreshold: 2,
-        newParticipants: ['a', 'b'],
-      })
-      expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
+      await expect(
+        mgr.reshareVault(minimalVault as never, {
+          password: 'pw',
+          tssBatching: false,
+          newThreshold: 2,
+          newParticipants: ['a', 'b'],
+        })
+      ).rejects.toThrow(/use Vultisig\.performReshare/)
+      expect(reshareWithServerMock).not.toHaveBeenCalled()
       expect(batchReshareMock).not.toHaveBeenCalled()
-      const reshareCalls0 = reshareWithServerMock.mock.calls as unknown as [[{ vaultBaseUrl: string }]]
-      expect(reshareCalls0[0]).toBeDefined()
-      expect(reshareCalls0[0][0].vaultBaseUrl).toBe(fastVault)
 
       vi.clearAllMocks()
-      await mgr.reshareVault(minimalVault as never, {
-        password: 'pw',
-        newThreshold: 2,
-        newParticipants: ['a', 'b'],
-      })
-      expect(reshareWithServerMock).toHaveBeenCalledTimes(1)
+      await expect(
+        mgr.reshareVault(minimalVault as never, {
+          password: 'pw',
+          newThreshold: 2,
+          newParticipants: ['a', 'b'],
+        })
+      ).rejects.toThrow(/use Vultisig\.performReshare/)
+      expect(reshareWithServerMock).not.toHaveBeenCalled()
       expect(batchReshareMock).not.toHaveBeenCalled()
-      const reshareCalls1 = reshareWithServerMock.mock.calls as unknown as [[{ vaultBaseUrl: string }]]
-      expect(reshareCalls1[0]).toBeDefined()
-      expect(reshareCalls1[0][0].vaultBaseUrl).toBe(fastVault)
     })
   })
 })
