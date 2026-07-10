@@ -1,3 +1,4 @@
+import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
@@ -260,31 +261,87 @@ describe('RelaySigningService', () => {
 })
 
 describe('RelaySigningService threshold calculation', () => {
-  describe('threshold formula', () => {
-    it('should calculate 2-of-3 for 3 signers', () => {
-      // Threshold formula: ceil((signers.length + 1) / 2) when > 2
-      const signers = ['p1', 'p2', 'p3']
-      const threshold = signers.length > 2 ? Math.ceil((signers.length + 1) / 2) : 2
-      expect(threshold).toBe(2)
+  describe('threshold formula matches canonical getKeygenThreshold', () => {
+    // RelaySigningService MUST use the same threshold formula as keygen
+    // (getKeygenThreshold: ceil(signers * 2 / 3)). A prior regression used
+    // ceil((signers + 1) / 2), which silently diverges for vault sizes
+    // 5, 7, 8, 9, 10, 11, 12, 13, 14, 15+ and breaks the signing ceremony
+    // (waitForDevices requires the wrong number of parties).
+    it.each([
+      // [signers, expectedThreshold]
+      [2, 2],
+      [3, 2],
+      [4, 3],
+      [5, 4],
+      [6, 4],
+      [7, 5],
+      [8, 6],
+      [9, 6],
+      [10, 7],
+      [11, 8],
+      [12, 8],
+      [13, 9],
+      [14, 10],
+      [15, 10],
+    ])('for %i signers, threshold should be %i (canonical ceil(n*2/3))', (signers, expected) => {
+      expect(getKeygenThreshold(signers)).toBe(expected)
     })
 
-    it('should calculate 3-of-5 for 5 signers', () => {
-      const signers = ['p1', 'p2', 'p3', 'p4', 'p5']
-      const threshold = signers.length > 2 ? Math.ceil((signers.length + 1) / 2) : 2
-      expect(threshold).toBe(3)
+    it('regression: previously-correct sizes (2-of-2, 3-of-3) are unchanged', () => {
+      expect(getKeygenThreshold(2)).toBe(2)
+      expect(getKeygenThreshold(3)).toBe(2)
     })
 
-    it('should use 2 for 2 signers', () => {
-      const signers = ['p1', 'p2']
-      const threshold = signers.length > 2 ? Math.ceil((signers.length + 1) / 2) : 2
-      expect(threshold).toBe(2)
+    it('regression: previously-broken sizes now match canonical threshold', () => {
+      // These sizes diverged under the old ceil((n+1)/2) formula.
+      const previouslyBroken = [5, 7, 8, 9, 10, 11, 13, 14]
+      for (const n of previouslyBroken) {
+        const oldWrongFormula = n > 2 ? Math.ceil((n + 1) / 2) : 2
+        const canonical = getKeygenThreshold(n)
+        expect(canonical).not.toBe(oldWrongFormula)
+      }
     })
+  })
 
-    it('should calculate 4-of-7 for 7 signers', () => {
-      const signers = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']
-      const threshold = signers.length > 2 ? Math.ceil((signers.length + 1) / 2) : 2
-      expect(threshold).toBe(4)
-    })
+  describe('RelaySigningService.signWithRelay uses canonical threshold', () => {
+    it.each([
+      [5, 4],
+      [7, 5],
+      [8, 6],
+    ])(
+      'waits for the canonical threshold (%i signers -> %i devices), not the legacy formula',
+      async (signerCount, expectedThreshold) => {
+        const service = new RelaySigningService()
+        const signers = Array.from({ length: signerCount }, (_, i) => `party-${i}`)
+
+        const mockVault = {
+          keyShares: { ecdsa: 'mock-key-share' },
+          signers,
+          publicKeys: { ecdsa: 'mock-ecdsa-key', eddsa: 'mock-eddsa-key' },
+        }
+
+        const payload = {
+          chain: 'Ethereum',
+          transaction: {},
+          messageHashes: ['hash1'],
+        }
+
+        const waitForDevicesSpy = vi
+          .spyOn(service as any, 'waitForDevices')
+          .mockRejectedValue(new Error('stop-before-mpc'))
+
+        await expect(service.signWithRelay(mockVault as any, payload as any, mockWalletCore)).rejects.toThrow(
+          'stop-before-mpc'
+        )
+
+        expect(waitForDevicesSpy).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(String),
+          expectedThreshold,
+          expect.any(Object)
+        )
+      }
+    )
   })
 })
 

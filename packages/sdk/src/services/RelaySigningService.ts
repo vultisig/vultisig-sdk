@@ -15,6 +15,7 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { generateLocalPartyId } from '@vultisig/core-mpc/devices/localPartyId'
+import { getKeygenThreshold } from '@vultisig/core-mpc/getKeygenThreshold'
 import { keysign } from '@vultisig/core-mpc/keysign'
 import type { KeysignSignature } from '@vultisig/core-mpc/keysign/KeysignSignature'
 import { getJoinKeysignUrl } from '@vultisig/core-mpc/keysign/utils/getJoinKeysignUrl'
@@ -229,7 +230,7 @@ export class RelaySigningService {
         throw new Error('Vault key shares not loaded. Call ensureKeySharesLoaded() first.')
       }
 
-      const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
+      const threshold = getKeygenThreshold(vault.signers.length)
 
       // Validate message hashes are provided
       if (!payload.messageHashes || payload.messageHashes.length === 0) {
@@ -420,7 +421,7 @@ export class RelaySigningService {
         throw new Error('Vault key shares not loaded.')
       }
 
-      const threshold = vault.signers.length > 2 ? Math.ceil((vault.signers.length + 1) / 2) : 2
+      const threshold = getKeygenThreshold(vault.signers.length)
 
       // Generate session params
       reportProgress('preparing', 10, 'Generating session parameters')
