@@ -846,6 +846,13 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const inputs = opts.utxos
   if (inputs.length === 0) throw new Error('no UTXOs provided')
   if (opts.amount <= 0n) throw new Error('amount must be greater than zero')
+  // Dust floor on the PRIMARY send output. `spec.dustLimit` otherwise only
+  // gates the change output (via serializeOutputs), so a below-dust send would
+  // build an unrelayable/rejected output and burn an MPC signing ceremony on a
+  // tx that can never confirm. Fail fast, before any sighash work.
+  if (opts.amount < spec.dustLimit) {
+    throw new Error(`amount ${opts.amount} is below the ${opts.chain} dust limit ${spec.dustLimit}`)
+  }
 
   const inputTotal = inputs.reduce((s, u) => s + u.value, 0n)
 
