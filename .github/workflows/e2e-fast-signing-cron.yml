@@ -1,0 +1,101 @@
+name: E2E Fast Signing (scheduled)
+
+# Layer 4 of the txsafe defense plan: proves the real 2-of-2 MPC signing
+# ceremony (vault.sign) still works end-to-end across chain families, on a
+# schedule. Unit/integration tests mock the ceremony entirely - this suite
+# is the only one that exercises the real VultiServer coordination. Never
+# broadcasts (see packages/sdk/tests/e2e/fast-signing.test.ts).
+#
+# Safe-by-default: the suite itself does describe.skipIf(!HAS_TEST_VAULT_FIXTURE),
+# so this workflow cleanly no-ops (green, tests skipped) until a funded
+# multi-chain fast vault is wired via E2E_TEST_VAULT_FILE_BASE64 +
+# E2E_TEST_VAULT_PASSWORD below - see the "Write test vault fixture" step
+# for exactly what's missing and packages/sdk/tests/e2e/SECURITY.md for how
+# to provision one. E2E_TEST_VAULT_PASSWORD is intentionally separate from
+# the existing TEST_VAULT_PASSWORD secret (that one belongs to a different
+# fixture used by integration-test.yml).
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-fast-signing-cron
+  cancel-in-progress: false
+
+jobs:
+  fast-signing:
+    name: Fast Signing E2E (no broadcast)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.16.0 --activate
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build shared packages
+        run: yarn build:shared
+
+      - name: Build packages
+        run: yarn build:all
+
+      # Vault file is a base64-encoded .vult export of a dedicated, disposable
+      # fast test vault funded with dust ($5-10/chain max per SECURITY.md) -
+      # never a production vault. Split across 6 secrets (E2E_TEST_VAULT_FILE_B64_1..6)
+      # because a single base64 vault export exceeds GitHub Actions' per-secret
+      # size cap - concatenated back together here before decoding. If none are
+      # set, this step soft-fails (warns, doesn't error) so the job stays green
+      # with all tests cleanly skipped, rather than failing CI on a missing secret.
+      - name: Write test vault fixture
+        id: vault_setup
+        env:
+          VAULT_B64_1: ${{ secrets.E2E_TEST_VAULT_FILE_B64_1 }}
+          VAULT_B64_2: ${{ secrets.E2E_TEST_VAULT_FILE_B64_2 }}
+          VAULT_B64_3: ${{ secrets.E2E_TEST_VAULT_FILE_B64_3 }}
+          VAULT_B64_4: ${{ secrets.E2E_TEST_VAULT_FILE_B64_4 }}
+          VAULT_B64_5: ${{ secrets.E2E_TEST_VAULT_FILE_B64_5 }}
+          VAULT_B64_6: ${{ secrets.E2E_TEST_VAULT_FILE_B64_6 }}
+        run: |
+          if [ -z "$VAULT_B64_1" ]; then
+            echo "::warning::E2E_TEST_VAULT_FILE_B64_1 secret is not set - fast-signing E2E suite will skip (no fixture). See packages/sdk/tests/e2e/SECURITY.md to provision a funded test vault."
+          else
+            printf '%s' "$VAULT_B64_1$VAULT_B64_2$VAULT_B64_3$VAULT_B64_4$VAULT_B64_5$VAULT_B64_6" | base64 -d > /tmp/e2e-test-vault.vult
+          fi
+
+      # Deliberately its OWN secret, not the existing TEST_VAULT_PASSWORD
+      # (that one belongs to integration-test.yml's separate test-vault.json
+      # fixture - reusing the name would silently break that vault if the
+      # passwords differ).
+      - name: Run fast-signing E2E (real 2-of-2 MPC, never broadcasts)
+        env:
+          TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: yarn workspace @vultisig/sdk test:e2e:fast-signing
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "::warning::DISCORD_WEBHOOK_URL not set, skipping failure notify."
+            exit 0
+          fi
+          curl -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\": \"🚨 fast-signing E2E cron failed on main - the real 2-of-2 MPC signing ceremony may be broken. https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"

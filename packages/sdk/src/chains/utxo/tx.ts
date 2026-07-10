@@ -31,6 +31,8 @@ import { sha256, sha512 } from '@noble/hashes/sha2.js'
 import { bech32 } from '@scure/base'
 import bs58check from 'bs58check'
 
+import { CASHADDR_CHARSET, verifyCashAddrChecksum } from '../../utils/cashaddr'
+
 // ---------------------------------------------------------------------------
 // Chain identifiers — string-typed to keep the module free of @vultisig/core-chain.
 // Consumers pass the Chain enum value as a string; the RN wrapper supplies a
@@ -53,7 +55,10 @@ type UtxoChainSpec = {
 
 const UTXO_SPECS: Record<UtxoChainName, UtxoChainSpec> = {
   Bitcoin: { scriptType: 'p2wpkh', dustLimit: 546n, slip44: 0, bipPurpose: 84 },
-  Litecoin: { scriptType: 'p2wpkh', dustLimit: 1_000n, slip44: 2, bipPurpose: 84 },
+  // UTXO-02 (audit r2): LTC's DUST_RELAY_TX_FEE is ~10x BTC's -> real P2WPKH dust ~2_940 litoshi, not 1_000.
+  // At 1_000 a 1_001..2_939 change output is non-standard dust that can stall the tx. KEEP IN SYNC with
+  // packages/core/chain/chains/utxo/minUtxo.ts (minUtxo[Chain.Litecoin]).
+  Litecoin: { scriptType: 'p2wpkh', dustLimit: 2_940n, slip44: 2, bipPurpose: 84 },
   Dogecoin: { scriptType: 'p2pkh', dustLimit: 1_000_000n, slip44: 3, bipPurpose: 44 },
   'Bitcoin-Cash': { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 145, bipPurpose: 44 },
   Dash: { scriptType: 'p2pkh', dustLimit: 1_000n, slip44: 5, bipPurpose: 44 },
@@ -169,49 +174,15 @@ export function deriveUtxoPubkey(
 // Address decoding
 // ---------------------------------------------------------------------------
 
-/**
- * BCH CashAddr polymod checksum.
- *
- * Spec: https://reference.cash/protocol/blockchain/encoding/cashaddr
- *
- * The checksum is computed over `lower5(prefix) || 0 || payload5 || checksum5`
- * (payload5 already contains the 8 trailing checksum symbols). A valid address
- * produces polymod === 0. Bit-fiddling follows the reference C implementation:
- * 5-symbol state, pre-multiply by 0x20, XOR each input symbol, and conditionally
- * XOR the five generator polynomials based on the high bit of `c0`.
- *
- * We use `BigInt` because the generator coefficients exceed 32 bits and JS
- * `number` bit-ops truncate to i32 — that silently drops the checksum's
- * top bits and would accept invalid addresses.
- */
-function cashAddrPolymod(values: number[]): bigint {
-  const GEN: bigint[] = [0x98f2bc8e61n, 0x79b76d99e2n, 0xf33e5fb3c4n, 0xae2eabe2a8n, 0x1e4f43e470n]
-  let c: bigint = 1n
-  for (const v of values) {
-    const c0 = c >> 35n
-    c = ((c & 0x07ffffffffn) << 5n) ^ BigInt(v)
-    for (let i = 0; i < 5; i++) {
-      if (((c0 >> BigInt(i)) & 1n) === 1n) c ^= GEN[i]!
-    }
-  }
-  return c ^ 1n
-}
-
-function verifyCashAddrChecksum(prefix: string, data5: number[]): boolean {
-  // Low-5-bit representation of the prefix characters (ASCII & 0x1f).
-  const prefixLower5 = Array.from(prefix, ch => ch.charCodeAt(0) & 0x1f)
-  // Polymod input: lower5(prefix) || [0] || data5 (data5 already includes the
-  // 8-symbol trailing checksum, so we don't pad separately).
-  const values = [...prefixLower5, 0, ...data5]
-  return cashAddrPolymod(values) === 0n
-}
+// cashAddrPolymod / verifyCashAddrChecksum / CASHADDR_CHARSET now live in
+// ../../utils/cashaddr (shared with the isAddressValidForChain fund-safety
+// gate, so both agree on what a valid BCH address is).
 
 export type DecodedAddress = {
   pubKeyHash: Uint8Array
   type: UtxoScriptKind
 }
 
-const CASHADDR_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
 const P2SH_BASE58_VERSIONS = new Set<number>([0x05, 0x32, 0x16, 0x10])
 
 function decodeBech32Address(address: string): DecodedAddress | undefined {
@@ -541,19 +512,93 @@ function getSighashZcash(
 // Output serialization
 // ---------------------------------------------------------------------------
 
+const OP_RETURN = 0x6a
+const OP_PUSHDATA1 = 0x4c
+// Standard-relay cap on OP_RETURN payload size. THORChain swap-quote memos fit
+// comfortably within this; anything larger would be non-standard and rejected
+// by relaying nodes, so we fail loud instead of building an unbroadcastable tx.
+const MAX_OP_RETURN_DATA = 80
+
+/**
+ * Build an OP_RETURN scriptPubKey embedding `data` (e.g. a THORChain swap memo):
+ *   len <= 75      -> OP_RETURN <len> <data>            (direct push)
+ *   76 <= len <= 80 -> OP_RETURN OP_PUSHDATA1 <len> <data>
+ * Throws for len > 80 (non-standard).
+ */
+function buildOpReturnScript(data: Uint8Array): Uint8Array {
+  if (data.length === 0) {
+    // Fail loud: an empty memo (e.g. from an upstream `opReturnData: ''` bug)
+    // would otherwise build a useless `6a 00` output and ship a THORChain
+    // deposit with NO routing data — the funds land at the inbound vault
+    // unroutable/stuck. Skipping the output is equally unsafe for a swap (a
+    // memo-less deposit is still unroutable), so we reject rather than skip.
+    throw new Error(
+      'OP_RETURN data is empty: a UTXO THORChain swap needs a non-empty memo to route the deposit. Refusing to build a memo-less (unroutable) transaction.'
+    )
+  }
+  if (data.length > MAX_OP_RETURN_DATA) {
+    throw new Error(
+      `OP_RETURN data too large: ${data.length} bytes (max ${MAX_OP_RETURN_DATA}). THORChain swap memos fit within this cap.`
+    )
+  }
+  if (data.length <= 75) {
+    return concat(new Uint8Array([OP_RETURN, data.length]), data)
+  }
+  return concat(new Uint8Array([OP_RETURN, OP_PUSHDATA1, data.length]), data)
+}
+
+/**
+ * Estimate the network fee (base units) `buildUtxoSendTx` will charge for a
+ * tx with `inputCount` inputs at `feeRate` sats/byte, optionally carrying an
+ * OP_RETURN memo. Factored out of `buildUtxoSendTx` so a coin-selection
+ * layer (see `select.ts`) can predict the SAME fee the builder will compute
+ * for a given input count — selection and build must agree on the formula,
+ * or "insufficient funds" / change-below-dust outcomes can diverge between
+ * the two steps (UTXO-01).
+ */
+export function estimateUtxoTxFee(
+  chain: UtxoChainName,
+  inputCount: number,
+  feeRate: number,
+  opReturnData?: string
+): bigint {
+  const spec = UTXO_SPECS[chain]
+  if (!spec) throw new Error(`unsupported UTXO chain: ${chain as string}`)
+  const opReturnScript =
+    opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opReturnData)) : undefined
+  // Approximate tx size for fee calc — matches app's heuristic.
+  const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
+  // 8-byte value + varint(scriptLen) + scriptLen; scriptLen <= 82 so the varint is 1 byte.
+  const opReturnBytes = opReturnScript ? 9 + opReturnScript.length : 0
+  const txSize = inputCount * bytesPerInput + 2 * 34 + 10 + opReturnBytes
+  const sizeFee = BigInt(Math.ceil(txSize * feeRate))
+  const zip317Floor = chain === 'Zcash' ? zcashConventionalFee(inputCount) : 0n
+  return sizeFee > zip317Floor ? sizeFee : zip317Floor
+}
+
 function serializeOutputs(
   toScriptPubKey: Uint8Array,
   amount: bigint,
   changeScriptPubKey: Uint8Array | null,
   change: bigint,
-  dustLimit: bigint
+  dustLimit: bigint,
+  opReturnScript?: Uint8Array
 ): { outputsWithCount: Uint8Array; outputsRaw: Uint8Array } {
   const hasChange = changeScriptPubKey && change > dustLimit
-  const numOutputs = hasChange ? 2 : 1
+  let numOutputs = 1
+  if (hasChange) numOutputs++
+  if (opReturnScript) numOutputs++
   const parts: Uint8Array[] = []
   parts.push(writeU64LE(amount), writeVarInt(toScriptPubKey.length), toScriptPubKey)
   if (hasChange && changeScriptPubKey) {
     parts.push(writeU64LE(change), writeVarInt(changeScriptPubKey.length), changeScriptPubKey)
+  }
+  // OP_RETURN is a separate 0-value output appended LAST — the recipient (vault)
+  // output keeps the full amount; the fee comes from inputs/change, never by
+  // shaving the vault output. It sits in outputsRaw + outputsWithCount so every
+  // sighash variant commits to the memo (see call sites below).
+  if (opReturnScript) {
+    parts.push(writeU64LE(0n), writeVarInt(opReturnScript.length), opReturnScript)
   }
   const outputsRaw = concat(...parts)
   const outputsWithCount = concat(writeVarInt(numOutputs), outputsRaw)
@@ -725,6 +770,15 @@ export type BuildUtxoSendOptions = {
    * stale compiled fallback.
    */
   zcashBranchId?: number
+  /**
+   * Optional UTF-8 data (typically a THORChain swap memo) embedded on-chain as
+   * a trailing 0-value OP_RETURN output. Standard-relay policy caps this at 80
+   * bytes; longer memos throw. The memo feeds the sighash outputs digest, so
+   * every input signature commits to it — the signed tx cannot be rebroadcast
+   * with the memo stripped or altered. Required for UTXO THORChain swaps
+   * (DOGE/BTC/LTC/BCH): without it THORChain can't route the deposit.
+   */
+  opReturnData?: string
 }
 
 export type UtxoTxBuilderResult = {
@@ -768,12 +822,12 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
 
   const inputTotal = inputs.reduce((s, u) => s + u.value, 0n)
 
-  // Approximate tx size for fee calc — matches app's heuristic.
-  const bytesPerInput = spec.scriptType === 'p2wpkh' ? 68 : 150
-  const txSize = inputs.length * bytesPerInput + 2 * 34 + 10
-  const sizeFee = BigInt(Math.ceil(txSize * opts.feeRate))
-  const zip317Floor = opts.chain === 'Zcash' ? zcashConventionalFee(inputs.length) : 0n
-  const fee = sizeFee > zip317Floor ? sizeFee : zip317Floor
+  // Build the OP_RETURN script up front (throws early on >80 bytes) so its size
+  // feeds fee calc and its bytes feed serializeOutputs / the sighash digest.
+  const opReturnScript =
+    opts.opReturnData !== undefined ? buildOpReturnScript(new TextEncoder().encode(opts.opReturnData)) : undefined
+
+  const fee = estimateUtxoTxFee(opts.chain, inputs.length, opts.feeRate, opts.opReturnData)
   const change = inputTotal - opts.amount - fee
   if (change < 0n) {
     throw new Error(
@@ -811,7 +865,14 @@ export function buildUtxoSendTx(opts: BuildUtxoSendOptions): UtxoTxBuilderResult
   const toScript = buildScriptPubKey(toDec.pubKeyHash, toDec.type)
   const fromScript = buildScriptPubKey(fromDec.pubKeyHash, fromDec.type)
 
-  const { outputsWithCount, outputsRaw } = serializeOutputs(toScript, opts.amount, fromScript, change, spec.dustLimit)
+  const { outputsWithCount, outputsRaw } = serializeOutputs(
+    toScript,
+    opts.amount,
+    fromScript,
+    change,
+    spec.dustLimit,
+    opReturnScript
+  )
 
   const isBCH = opts.chain === 'Bitcoin-Cash'
   const isZcash = opts.chain === 'Zcash'

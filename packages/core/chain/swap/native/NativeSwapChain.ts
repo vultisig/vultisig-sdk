@@ -22,7 +22,7 @@ export const nativeSwapApiBaseUrl: Record<NativeSwapChain, string> = {
   [Chain.MayaChain]: `${cosmosRpcUrl[Chain.MayaChain]}/mayachain`,
 }
 
-const thorChainSwapEnabledChains = [
+export const thorChainSwapEnabledChains = [
   Chain.Avalanche,
   Chain.BitcoinCash,
   Chain.BSC,
@@ -50,6 +50,18 @@ export const nativeSwapEnabledChainsRecord = {
     Chain.Bitcoin,
     Chain.Arbitrum,
     Chain.Zcash,
+    // Live Available ADA.ADA pool confirmed on mayanode (~4,795 ADA,
+    // mayanode.mayachain.info/mayachain/pools). Review follow-up (fund-safety
+    // pass): unlike SwapKit's Sui/Cardano corridors, the SDK's own
+    // buildSwapKeysignPayload -> getCardanoSigningInputs path IS already
+    // wired end-to-end for a signable Cardano deposit (memo -> CIP-20 aux
+    // data), so this is NOT inert groundwork the way the comment here
+    // originally implied. getNativeSwapQuote (api/getNativeSwapQuote.ts) now
+    // rejects Cardano as a source BEFORE the network call, mirroring
+    // getSwapKitQuote's guard, until a real deposit confirms MayaChain's
+    // Cardano bifrost observer actually reads the CIP-20 label as the
+    // routing memo.
+    Chain.Cardano,
   ],
 } as const
 
@@ -79,6 +91,7 @@ export const nativeSwapChainIds = {
   [Chain.Solana]: 'SOL',
   [Chain.Tron]: 'TRON',
   [Chain.Noble]: 'NOBLE',
+  [Chain.Cardano]: 'ADA',
 } satisfies Record<NativeSwapEnabledChain, string>
 export type NativeSwapChainId = (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
 

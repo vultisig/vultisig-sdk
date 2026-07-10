@@ -21,12 +21,18 @@ type KoiosExtendedUtxoResponse = Array<{
   tx_hash: string
   tx_index: number
   value: string
-  asset_list: CardanoUtxoAsset[] | null
+  // Koios reports the unnamed asset under a policy with a null asset_name.
+  asset_list: Array<Omit<CardanoUtxoAsset, 'asset_name'> & { asset_name: string | null }> | null
 }>
 
 /**
  * Fetches UTXOs for a Cardano address with the `_extended` flag,
  * which includes the `asset_list` field for each UTXO.
+ *
+ * UTXOs are ordered deterministically by (hash, index) — mirrors the iOS
+ * CardanoService, so both MPC peers produce identical body bytes when the
+ * WalletCore planner picks inputs, regardless of Koios response ordering.
+ * Null asset names normalize to the empty string, like iOS.
  */
 export const getCardanoExtendedUtxos = async (address: string): Promise<CardanoExtendedUtxo[]> => {
   const url = `${cardanoApiUrl}/address_utxos`
@@ -38,10 +44,12 @@ export const getCardanoExtendedUtxos = async (address: string): Promise<CardanoE
     },
   })
 
-  return response.map(({ tx_hash, tx_index, value, asset_list }) => ({
-    hash: tx_hash,
-    amount: BigInt(value),
-    index: tx_index,
-    assets: asset_list ?? [],
-  }))
+  return response
+    .map(({ tx_hash, tx_index, value, asset_list }) => ({
+      hash: tx_hash,
+      amount: BigInt(value),
+      index: tx_index,
+      assets: (asset_list ?? []).map(asset => ({ ...asset, asset_name: asset.asset_name ?? '' })),
+    }))
+    .sort((a, b) => (a.hash !== b.hash ? (a.hash < b.hash ? -1 : 1) : a.index - b.index))
 }
