@@ -67,14 +67,14 @@ describe('assertSafeSolanaSwapInstructions', () => {
     )
   })
 
-  it('rejects when the payer slot (also used as CloseAccount authority) is substituted with an attacker pubkey', () => {
+  it('rejects when the payer slot (also used as CloseAccount destination) is substituted with an attacker pubkey', () => {
     // In the real SOL->USDC Jupiter fixture, staticAccountKeys[0] (the payer)
-    // is also the authority in the wSOL Token.CloseAccount (unwrap) instruction.
-    // Substituting it with an attacker pubkey in the raw message bytes while
-    // keeping the real user wallet as the guard's reference correctly trips the
-    // layer-2 authority check -- the test doubles as a regression test for the
-    // case where a compromised proxy modifies the account table without touching
-    // the program list.
+    // is also the destination in the wSOL Token.CloseAccount (unwrap) instruction —
+    // the unwrapped SOL/rent returns to the user. Substituting it with an attacker
+    // pubkey in the raw message bytes while keeping the real user wallet as the
+    // guard's reference correctly trips the layer-2 destination check — the test
+    // doubles as a regression test for a compromised proxy modifying the account
+    // table without touching the program list.
     const { versionedTx, lutAccounts } = decodeFixture(fixtures.singleHopSolToUsdc)
     const originalUserWallet = versionedTx.message.staticAccountKeys[0]!
     versionedTx.message.staticAccountKeys[0] = new PublicKey('Eviievi1evi1evi1evi1evi1evi1evi1evi1evi1evi')
@@ -82,7 +82,7 @@ describe('assertSafeSolanaSwapInstructions', () => {
       UnsafeSolanaSwapFundMovementError
     )
     expect(() => assertSafeSolanaSwapInstructions(versionedTx.message, lutAccounts, originalUserWallet)).toThrow(
-      /CloseAccount authority/
+      /CloseAccount destination/
     )
   })
 
@@ -230,23 +230,36 @@ describe('assertSafeSolanaSwapInstructions', () => {
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.SetAuthority/)
     })
 
-    it('rejects Token.Transfer (type=3) where authority is not the user wallet', () => {
-      // accounts[0]=source, accounts[1]=destination, accounts[2]=authority(attacker)
-      const msg = buildTokenInstruction(3, [userWallet, userWallet, attacker])
+    it('rejects Token.Transfer (type=3) outright — even with authority==user, destination==attacker (real drain shape)', () => {
+      // The real drain: authority is definitionally the user (their tokens can only
+      // move if they sign), but destination points to the attacker. Validating
+      // authority==user would PASS this. We reject Token.Transfer top-level entirely.
+      // accounts[0]=source, accounts[1]=destination(attacker), accounts[2]=authority(user)
+      const msg = buildTokenInstruction(3, [userWallet, attacker, userWallet])
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
-      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.Transfer authority/)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.Transfer/)
     })
 
-    it('rejects Token.CloseAccount (type=9) where authority is not the user wallet', () => {
-      // accounts[0]=account, accounts[1]=destination, accounts[2]=authority(attacker)
-      const msg = buildTokenInstruction(9, [userWallet, attacker, attacker])
+    it('rejects Token.TransferChecked (type=12) outright — even with authority==user, destination==attacker (real drain shape)', () => {
+      // accounts[0]=source, accounts[1]=mint, accounts[2]=destination(attacker), accounts[3]=authority(user)
+      const msg = buildTokenInstruction(12, [userWallet, userWallet, attacker, userWallet])
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
-      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.CloseAccount authority/)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.TransferChecked/)
     })
 
-    it('allows Token.Transfer (type=3) where authority IS the user wallet', () => {
-      // Legit: wSOL transfer where user is the authority
-      const msg = buildTokenInstruction(3, [userWallet, userWallet, userWallet])
+    it('rejects Token.CloseAccount (type=9) where destination is not the user wallet', () => {
+      // Real drain: authority==user (required), but destination (accounts[1]) points
+      // to attacker — closes the user's wSOL ATA and sends rent+SOL to attacker.
+      // accounts[0]=account, accounts[1]=destination(attacker), accounts[2]=authority(user)
+      const msg = buildTokenInstruction(9, [userWallet, attacker, userWallet])
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(UnsafeSolanaSwapFundMovementError)
+      expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).toThrow(/Token\.CloseAccount destination/)
+    })
+
+    it('allows Token.CloseAccount (type=9) where destination IS the user wallet', () => {
+      // Legit: wSOL unwrap where rent/SOL returns to the user
+      // accounts[0]=wSOL ATA, accounts[1]=destination(user), accounts[2]=authority(user)
+      const msg = buildTokenInstruction(9, [userWallet, userWallet, userWallet])
       expect(() => assertSafeSolanaSwapInstructions(msg, [], userWallet)).not.toThrow()
     })
   })

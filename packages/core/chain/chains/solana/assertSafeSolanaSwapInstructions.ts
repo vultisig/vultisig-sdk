@@ -163,44 +163,36 @@ const assertTokenInstruction = (
     )
   }
 
-  // Transfer (type=3): accounts[2]=authority must be the user
+  // Transfer (type=3) and TransferChecked (type=12): reject outright as
+  // top-level instructions. Jupiter shared-accounts routing performs token
+  // moves via CPI inside the router — a top-level Token.Transfer with
+  // authority==user and destination==attacker would pass an authority check
+  // and silently drain the user's tokens. Same rationale as Approve.
   if (type === TOKEN_TRANSFER) {
-    const authIdx = ix.accountKeyIndexes[2]
-    if (authIdx === undefined)
-      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.Transfer: missing authority account index')
-    const auth = keys.get(authIdx)
-    if (!auth || !auth.equals(userWallet)) {
-      throw new UnsafeSolanaSwapFundMovementError(
-        index,
-        `Token.Transfer authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
-      )
-    }
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      'Token.Transfer is not a legitimate top-level Jupiter swap instruction — possible token drain to attacker'
+    )
   }
-
-  // TransferChecked (type=12): accounts[3]=authority must be the user
   if (type === TOKEN_TRANSFER_CHECKED) {
-    const authIdx = ix.accountKeyIndexes[3]
-    if (authIdx === undefined)
-      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.TransferChecked: missing authority account index')
-    const auth = keys.get(authIdx)
-    if (!auth || !auth.equals(userWallet)) {
-      throw new UnsafeSolanaSwapFundMovementError(
-        index,
-        `Token.TransferChecked authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
-      )
-    }
+    throw new UnsafeSolanaSwapFundMovementError(
+      index,
+      'Token.TransferChecked is not a legitimate top-level Jupiter swap instruction — possible token drain to attacker'
+    )
   }
 
-  // CloseAccount (type=9): accounts[2]=authority must be the user
+  // CloseAccount (type=9): layout [account, destination, authority].
+  // accounts[1]=destination must be the user wallet so unwrapped SOL/rent
+  // returns to the user and cannot be swept to an attacker address.
   if (type === TOKEN_CLOSE_ACCOUNT) {
-    const authIdx = ix.accountKeyIndexes[2]
-    if (authIdx === undefined)
-      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.CloseAccount: missing authority account index')
-    const auth = keys.get(authIdx)
-    if (!auth || !auth.equals(userWallet)) {
+    const destIdx = ix.accountKeyIndexes[1]
+    if (destIdx === undefined)
+      throw new UnsafeSolanaSwapFundMovementError(index, 'Token.CloseAccount: missing destination account index')
+    const dest = keys.get(destIdx)
+    if (!dest || !dest.equals(userWallet)) {
       throw new UnsafeSolanaSwapFundMovementError(
         index,
-        `Token.CloseAccount authority ${auth?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()}`
+        `Token.CloseAccount destination ${dest?.toBase58() ?? '<unresolved>'} is not the user wallet ${userWallet.toBase58()} — possible SOL/rent drain`
       )
     }
   }
