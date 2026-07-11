@@ -28,11 +28,16 @@ describe('Ripple X-addresses', () => {
     })
   })
 
-  it('rejects tag-zero and malformed X-addresses', () => {
+  it('accepts tag-zero and rejects malformed X-addresses', () => {
     const tagZero = 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2m4Er6SnvjVLpMWPjR'
     const testnet = 'TVd2rqMkYL2AyS97NdELcpeiprNBjwVu8XCE7W73WEvzcB1'
 
-    expect(isValidRippleXAddress(tagZero)).toBe(false)
+    expect(decodeRippleXAddress(tagZero)).toEqual({
+      address: classicAddress,
+      destinationTag: 0,
+    })
+    expect(encodeRippleXAddress(classicAddress, 0)).toBe(tagZero)
+    expect(isValidRippleXAddress(tagZero)).toBe(true)
     expect(isValidRippleXAddress(testnet)).toBe(false)
     expect(isValidRippleXAddress('X-not-valid')).toBe(false)
   })

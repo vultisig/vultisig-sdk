@@ -94,10 +94,25 @@ describe('buildSendKeysignPayload XRP DestinationTag compatibility', () => {
     expectRippleDestinationTag(payload, 12345)
   })
 
+  it('dual-writes a first-class zero tag without losing presence', async () => {
+    const payload = await buildPayload({ destinationTag: 0 })
+    const roundTrip = fromBinary(KeysignPayloadSchema, toBinary(KeysignPayloadSchema, payload))
+
+    expect(roundTrip.memo).toBe('0')
+    expectRippleDestinationTag(roundTrip, 0)
+  })
+
   it('preserves a caller-supplied memo as independent XRPL memo data', async () => {
     const payload = await buildPayload({ memo: 'invoice 12345' })
 
     expect(payload.memo).toBe('invoice 12345')
+    expectRippleDestinationTag(payload, 12345)
+  })
+
+  it('preserves a distinct numeric memo alongside the first-class tag', async () => {
+    const payload = await buildPayload({ memo: '67890' })
+
+    expect(payload.memo).toBe('67890')
     expectRippleDestinationTag(payload, 12345)
   })
 

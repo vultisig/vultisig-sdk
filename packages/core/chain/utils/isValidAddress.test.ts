@@ -19,7 +19,7 @@ describe('isValidAddress for Ripple', () => {
     ).toBe(true)
   })
 
-  it('does not let WalletCore re-accept an unsupported tag-zero X-address', () => {
+  it('accepts a valid tag-zero X-address without falling back to WalletCore', () => {
     const walletCore = {
       CoinType: { xrp: 144 },
       AnyAddress: { isValid: vi.fn(() => true) },
@@ -31,7 +31,7 @@ describe('isValidAddress for Ripple', () => {
         address: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2m4Er6SnvjVLpMWPjR',
         walletCore: walletCore as never,
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(walletCore.AnyAddress.isValid).not.toHaveBeenCalled()
   })
 })

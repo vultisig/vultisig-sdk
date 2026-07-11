@@ -10,7 +10,7 @@ import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
-import { resolveDestinationTag } from '../../utils/rippleDestinationTag'
+import { getLegacyDestinationTag, resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { SigningInputsResolver } from '../resolver'
 
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
@@ -44,12 +44,20 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
   const getPayment = (): Pick<TW.Ripple.Proto.ISigningInput, 'opPayment' | 'rawJson'> => {
     const memo = keysignPayload.memo || undefined
-    const destinationTag = resolveDestinationTag({ destinationTag: rippleSpecific.destinationTag, memo })
+    const destinationTag = resolveDestinationTag({
+      destinationTag: rippleSpecific.destinationTag,
+      memo,
+    })
 
-    // During the transition, clients may put the tag in both fields. That
-    // echoed value is not an independent memo, so keep the typed tag-only
-    // form byte-compatible with legacy signers.
-    const distinctMemo = memo && memo !== destinationTag?.toString() ? memo : undefined
+    // Preserve Johnny's compatibility matrix: a canonical numeric memo is a
+    // legacy tag carrier when no typed field exists; when a typed field exists,
+    // only an equal memo is the echoed carrier. A different memo is independent
+    // even when it is numeric.
+    const inferredLegacyCarrier =
+      memo !== undefined &&
+      ((rippleSpecific.destinationTag === undefined && getLegacyDestinationTag(memo) !== undefined) ||
+        memo === destinationTag?.toString())
+    const distinctMemo = inferredLegacyCarrier ? undefined : memo
 
     if (distinctMemo) {
       const memoDataHex = Buffer.from(distinctMemo, 'utf8').toString('hex').toUpperCase()

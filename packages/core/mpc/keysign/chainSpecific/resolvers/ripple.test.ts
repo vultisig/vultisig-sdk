@@ -107,7 +107,7 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     ).rejects.toMatchObject({ type: 'ripple-destination-tag-required' })
   })
 
-  it('does not let a legacy zero memo bypass a required DestinationTag', async () => {
+  it('accepts a legacy zero memo as a valid DestinationTag', async () => {
     const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
     vi.mocked(getRippleAccountInfo).mockImplementation(async address =>
       accountInfo(address === DEST_FUNDED ? REQUIRE_DESTINATION_TAG : 0)
@@ -115,9 +115,8 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
     const keysignPayload = payload(DEST_FUNDED, '1000000')
     keysignPayload.memo = '0'
 
-    await expect(getRippleChainSpecific({ keysignPayload, walletCore: {} as never })).rejects.toMatchObject({
-      type: 'ripple-destination-tag-required',
-    })
+    const result = await getRippleChainSpecific({ keysignPayload, walletCore: {} as never })
+    expect(result.destinationTag).toBe(0)
   })
 
   it('accepts a legacy canonical numeric memo for an account that requires DestinationTag', async () => {

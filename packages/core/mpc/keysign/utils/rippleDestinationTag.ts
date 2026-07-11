@@ -12,10 +12,10 @@ export const getLegacyDestinationTag = (memo: string | undefined): number | unde
 }
 
 export const validateDestinationTag = (destinationTag: number): number => {
-  if (!Number.isInteger(destinationTag) || destinationTag < 1 || destinationTag > maxRippleDestinationTag) {
+  if (!Number.isInteger(destinationTag) || destinationTag < 0 || destinationTag > maxRippleDestinationTag) {
     throw new BuildKeysignPayloadError(
       'ripple-destination-tag-invalid',
-      `Invalid XRP destination tag: expected an integer between 1 and ${maxRippleDestinationTag}`
+      `Invalid XRP destination tag: expected an integer between 0 and ${maxRippleDestinationTag}`
     )
   }
 
@@ -29,16 +29,6 @@ export const resolveDestinationTag = ({
   destinationTag?: number
   memo?: string
 }): number | undefined => {
-  const legacyDestinationTag = getLegacyDestinationTag(memo)
-  if (destinationTag === undefined) return legacyDestinationTag
-
-  const validDestinationTag = validateDestinationTag(destinationTag)
-  if (legacyDestinationTag !== undefined && legacyDestinationTag !== validDestinationTag) {
-    throw new BuildKeysignPayloadError(
-      'ripple-destination-tag-invalid',
-      `Conflicting XRP destination tags: field ${validDestinationTag}, memo ${legacyDestinationTag}`
-    )
-  }
-
-  return validDestinationTag
+  if (destinationTag !== undefined) return validateDestinationTag(destinationTag)
+  return getLegacyDestinationTag(memo)
 }

@@ -112,6 +112,59 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
     expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(referenceTx))
   })
 
+  it('treats an equal tag and memo as the legacy tag carrier', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      destinationTag: 998877,
+      memo: '998877',
+    })
+
+    expect(result.tx.DestinationTag).toBe(998877)
+    expect(result.tx.Memos).toBeUndefined()
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
+  it('promotes a canonical numeric memo to a legacy DestinationTag', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      memo: '123456',
+    })
+
+    expect(result.tx.DestinationTag).toBe(123456)
+    expect(result.tx.Memos).toBeUndefined()
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
+  it('preserves a distinct numeric memo alongside a DestinationTag', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: FX.destination,
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+      destinationTag: 998877,
+      memo: '123456',
+    })
+
+    expect(result.tx.DestinationTag).toBe(998877)
+    expect(result.tx.Memos?.[0].Memo.MemoData).toBe('313233343536')
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
   it('normalizes a known X-address and applies its embedded DestinationTag', () => {
     const result = buildXrpSendTx({
       account: FX.account,
@@ -125,6 +178,22 @@ describe('Ripple / buildXrpSendTx golden vectors', () => {
 
     expect(result.tx.Destination).toBe('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY')
     expect(result.tx.DestinationTag).toBe(495)
+    expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
+  })
+
+  it('preserves DestinationTag zero from a known X-address', () => {
+    const result = buildXrpSendTx({
+      account: FX.account,
+      destination: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2m4Er6SnvjVLpMWPjR',
+      amount: FX.amount,
+      fee: FX.fee,
+      sequence: FX.sequence,
+      lastLedgerSequence: FX.lastLedgerSequence,
+      signingPubKey: FX.signingPubKey,
+    })
+
+    expect(result.tx.Destination).toBe('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY')
+    expect(result.tx.DestinationTag).toBe(0)
     expect(result.encodedForSigningHex).toBe(xrplEncodeForSigning(result.tx))
   })
 

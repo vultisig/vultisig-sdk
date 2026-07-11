@@ -632,7 +632,7 @@ program
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
-  .option('--destination-tag <tag>', 'XRP DestinationTag (1 to 4294967295)')
+  .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -673,17 +673,17 @@ See also: balance, tx-status`
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
         const chain = findChainByName(chainStr) || (chainStr as Chain)
-        if (options.destinationTag && chain !== Chain.Ripple) {
+        if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
           throw new Error('--destination-tag is only supported for XRP')
         }
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
-          options.destinationTag &&
-          (!/^[1-9]\d*$/.test(options.destinationTag) ||
+          options.destinationTag !== undefined &&
+          (!/^(0|[1-9]\d*)$/.test(options.destinationTag) ||
             !Number.isSafeInteger(destinationTag) ||
             destinationTag > 4294967295)
         ) {
-          throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
         }
         const context = await init(program.opts().vault)
         try {

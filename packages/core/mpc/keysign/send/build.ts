@@ -80,8 +80,9 @@ export const buildSendKeysignPayload = async ({
   })
 
   // Keep tag-only XRP sends compatible with legacy signers that do not read
-  // RippleSpecific.destinationTag yet. A caller-supplied memo remains an
-  // independent XRPL memo and therefore cannot also carry the legacy tag.
+  // RippleSpecific.destinationTag yet. An explicit memo remains independent
+  // when it differs from the tag; an equal memo is treated as the compatibility
+  // carrier by the signing-input resolver.
   const keysignMemo = memo || (coin.chain === Chain.Ripple ? effectiveDestinationTag?.toString() : undefined)
 
   let keysignPayload = create(KeysignPayloadSchema, {

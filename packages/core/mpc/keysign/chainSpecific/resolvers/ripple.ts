@@ -24,7 +24,10 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   const { address } = coin
   const toAddress = shouldBePresent(keysignPayload.toAddress)
 
-  const effectiveDestinationTag = resolveDestinationTag({ destinationTag, memo: keysignPayload.memo })
+  const effectiveDestinationTag = resolveDestinationTag({
+    destinationTag,
+    memo: keysignPayload.memo,
+  })
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
@@ -52,7 +55,7 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // XRP Ledger rejects a Payment to an account with lsfRequireDestTag when no
   // tag is present. Fail closed on lookup errors other than an unfunded
   // destination: without an account object there is no RequireDestTag flag.
-  if (!coin.id && (effectiveDestinationTag === undefined || effectiveDestinationTag === 0)) {
+  if (!coin.id && effectiveDestinationTag === undefined) {
     if ('error' in destinationAccountResult) {
       if (!destinationUnfunded) {
         // This lookup can fail transiently, so keep it retryable. Only
@@ -86,6 +89,6 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     lastLedgerSequence: BigInt((ledger_current_index ?? 0) + 60),
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
-    ...(destinationTag !== undefined ? { destinationTag } : {}),
+    ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),
   })
 }

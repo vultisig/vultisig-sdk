@@ -54,7 +54,13 @@ const buildTrustSetPayload = (toAmount: string) =>
     blockchainSpecific: { case: 'rippleSpecific', value: makeRippleSpecific() },
   })
 
-const buildPaymentPayload = ({ destinationTag, memo }: { destinationTag?: number; memo?: string } = {}) =>
+const buildPaymentPayload = ({
+  destinationTag,
+  memo,
+}: {
+  destinationTag?: number
+  memo?: string
+} = {}) =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
       chain: Chain.Ripple,
@@ -67,7 +73,10 @@ const buildPaymentPayload = ({ destinationTag, memo }: { destinationTag?: number
     toAddress: 'rDestinationAddressForTests9876543210',
     toAmount: '1000000',
     memo,
-    blockchainSpecific: { case: 'rippleSpecific', value: makeRippleSpecific(destinationTag) },
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: makeRippleSpecific(destinationTag),
+    },
   })
 
 describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () => {
@@ -159,16 +168,22 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     })
   })
 
-  it('rejects a canonical numeric memo that conflicts with the first-class tag', () => {
-    expect(() =>
-      getRippleSigningInputs({
-        keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: '67890' }),
-        walletCore,
-      })
-    ).toThrow(/Conflicting XRP destination tags/)
+  it('preserves a distinct numeric memo alongside the first-class tag', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildPaymentPayload({
+        destinationTag: 12345,
+        memo: '67890',
+      }),
+      walletCore,
+    })
+
+    expect(JSON.parse(input.rawJson!)).toMatchObject({
+      DestinationTag: 12345,
+      Memos: [{ Memo: { MemoData: '3637383930' } }],
+    })
   })
 
-  it('does not treat an echoed tag memo as a distinct memo', async () => {
+  it('treats an equal numeric memo as the legacy tag carrier', async () => {
     const [input] = await getRippleSigningInputs({
       keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: '12345' }),
       walletCore,
@@ -230,7 +245,16 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     )
   })
 
-  it.each([0, -1, 4294967296, 1.5])('rejects an invalid first-class destination tag: %s', destinationTag => {
+  it('accepts first-class DestinationTag zero', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildPaymentPayload({ destinationTag: 0 }),
+      walletCore,
+    })
+
+    expect(input.opPayment?.destinationTag?.toString()).toBe('0')
+  })
+
+  it.each([-1, 4294967296, 1.5])('rejects an invalid first-class destination tag: %s', destinationTag => {
     expect(() =>
       getRippleSigningInputs({
         keysignPayload: buildPaymentPayload({ destinationTag }),

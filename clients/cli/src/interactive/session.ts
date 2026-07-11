@@ -749,11 +749,11 @@ export class ShellSession {
         const parsedTag = Number(tag)
         if (
           chain !== Chain.Ripple ||
-          !/^[1-9]\d*$/.test(tag ?? '') ||
+          !/^(0|[1-9]\d*)$/.test(tag ?? '') ||
           !Number.isSafeInteger(parsedTag) ||
           parsedTag > 4294967295
         ) {
-          throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
         }
         destinationTag = parsedTag
         i++

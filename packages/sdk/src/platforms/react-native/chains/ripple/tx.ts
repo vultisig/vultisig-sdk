@@ -198,6 +198,13 @@ export type BuildXrpSendResult = {
   }
 }
 
+const getLegacyDestinationTag = (memo: string | undefined): number | undefined => {
+  if (!memo || !/^(0|[1-9]\d*)$/.test(memo)) return undefined
+
+  const destinationTag = Number(memo)
+  return Number.isSafeInteger(destinationTag) && destinationTag <= 0xffffffff ? destinationTag : undefined
+}
+
 /**
  * Build an XRP Payment transaction with signing hash + finalize callback.
  *
@@ -219,12 +226,14 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
       `Conflicting XRP destination tags: X-address ${embeddedDestinationTag}, field ${opts.destinationTag}`
     )
   }
-  const destinationTag = opts.destinationTag ?? embeddedDestinationTag
+  const explicitDestinationTag = opts.destinationTag ?? embeddedDestinationTag
+  const legacyMemoDestinationTag = explicitDestinationTag === undefined ? getLegacyDestinationTag(opts.memo) : undefined
+  const destinationTag = explicitDestinationTag ?? legacyMemoDestinationTag
   if (
     destinationTag !== undefined &&
-    (!Number.isInteger(destinationTag) || destinationTag < 1 || destinationTag > 0xffffffff)
+    (!Number.isInteger(destinationTag) || destinationTag < 0 || destinationTag > 0xffffffff)
   ) {
-    throw new Error('Invalid XRP DestinationTag: expected an integer from 1 to 4294967295')
+    throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
   }
 
   const tx: XrpPaymentTx = {
@@ -242,7 +251,9 @@ export function buildXrpSendTx(opts: BuildXrpSendOptions): BuildXrpSendResult {
     tx.DestinationTag = destinationTag
   }
 
-  if (opts.memo) {
+  const memoIsLegacyCarrier =
+    opts.memo !== undefined && (legacyMemoDestinationTag !== undefined || opts.memo === destinationTag?.toString())
+  if (opts.memo && !memoIsLegacyCarrier) {
     tx.Memos = [
       {
         Memo: {

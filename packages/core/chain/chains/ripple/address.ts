@@ -7,7 +7,6 @@ export type RippleDestination = {
 
 const assertSupportedTag = (tag: number | false): number | undefined => {
   if (tag === false) return undefined
-  if (tag === 0) throw new Error('XRP X-address DestinationTag must be greater than zero')
   return tag
 }
 
@@ -45,9 +44,9 @@ export const normalizeRippleDestination = (address: string): RippleDestination =
 export const encodeRippleXAddress = (address: string, destinationTag?: number): string => {
   if (
     destinationTag !== undefined &&
-    (!Number.isInteger(destinationTag) || destinationTag < 1 || destinationTag > 0xffffffff)
+    (!Number.isInteger(destinationTag) || destinationTag < 0 || destinationTag > 0xffffffff)
   ) {
-    throw new Error('XRP X-address DestinationTag must be a positive integer')
+    throw new Error('XRP X-address DestinationTag must be a nonnegative UInt32 integer')
   }
   return classicAddressToXAddress(address, destinationTag ?? false, false)
 }
