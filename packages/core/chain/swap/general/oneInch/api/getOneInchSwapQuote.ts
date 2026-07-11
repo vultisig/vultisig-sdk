@@ -19,8 +19,11 @@ export type OneInchAffiliateConfig = typeof oneInchAffiliateConfig
 
 type Input = {
   account: ChainAccount
-  fromCoinId: string
-  toCoinId: string
+  /** The coin's `.id` (contract address), or `undefined` for the chain's native/fee coin.
+   * Must NOT be substituted with a ticker fallback by the caller — `isFeeCoin` below relies
+   * on `undefined` to detect the native asset and map it to 1inch's `0xEeee...` sentinel. */
+  fromCoinId: string | undefined
+  toCoinId: string | undefined
   /** Destination coin metadata. When set alongside affiliateBps, populates a display-only
    * affiliateFee (AGG-05) matching the Kyber/LiFi convention. */
   to?: AccountCoin<EvmChain>
@@ -32,6 +35,13 @@ type Input = {
 }
 
 const getBaseUrl = (chainId: number) => `${rootApiUrl}/1inch/swap/v6.0/${chainId}/swap`
+
+// 1inch's classic swap API requires the chain's native asset to be represented by its
+// `0xEeee...` sentinel address (EIP-7528), not a ticker string or the zero address. A coin
+// with no `.id` (contract address) is the native/fee coin — undefined is the correct signal
+// here, not a ticker fallback, which would be a truthy string and defeat this check.
+const resolveOneInchCoinAddress = (coinId: string | undefined, chain: EvmChain): string =>
+  isFeeCoin({ id: coinId, chain }) ? evmNativeCoinAddress : (coinId as string)
 
 // 1inch's `fee` param deducts the affiliate cut from dstAmount before returning it — same
 // convention as Kyber's /route/build. Gross the net amount back up to derive the fee for
@@ -75,8 +85,8 @@ export const getOneInchSwapQuote = async ({
   const chainId = hexToNumber(getEvmChainId(chain))
 
   const params = {
-    src: isFeeCoin({ id: fromCoinId, chain: account.chain }) ? evmNativeCoinAddress : fromCoinId,
-    dst: isFeeCoin({ id: toCoinId, chain: account.chain }) ? evmNativeCoinAddress : toCoinId,
+    src: resolveOneInchCoinAddress(fromCoinId, chain),
+    dst: resolveOneInchCoinAddress(toCoinId, chain),
     amount: amount.toString(),
     from: account.address,
     slippage,
