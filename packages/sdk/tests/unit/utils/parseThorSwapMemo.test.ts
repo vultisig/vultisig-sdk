@@ -1,20 +1,8 @@
-/**
- * Phase D — THORChain swap-memo parser tests.
- *
- * Validates `parseThorSwapMemo` extracts CHAIN.ASSET + destination address
- * from THORChain swap memos, including the abbreviated asset notation
- * documented at https://docs.thorchain.org/concepts/asset-notation#asset-shorthand.
- *
- * The parser is exercised by `signThorMsgDepositSwap` on the
- * THORChain/MayaChain MsgDeposit branch — its outputs feed both the
- * vault.swap dispatch (destChainCode → Chain enum) and the fund-safety
- * guard that compares `destAddress` against the vault's own destination
- * address before broadcasting.
- */
-import { VaultError, VaultErrorCode } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
-import { parseThorSwapMemo } from '../executor'
+import { Chain } from '@/types'
+import { parseThorSwapMemo } from '@/utils/thorSwapMemo'
+import { VaultError, VaultErrorCode } from '@/vault/VaultError'
 
 describe('parseThorSwapMemo', () => {
   describe('full notation', () => {
@@ -23,6 +11,7 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.destChainCode).toBe('XRP')
       expect(parsed.destAsset).toBe('XRP')
       expect(parsed.destAddress).toBe('rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY')
+      expect(parsed.toChain).toBe(Chain.Ripple)
     })
 
     it('parses ETH.ETH', () => {
@@ -30,6 +19,7 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.destChainCode).toBe('ETH')
       expect(parsed.destAsset).toBe('ETH')
       expect(parsed.destAddress).toBe('0xabc')
+      expect(parsed.toChain).toBe(Chain.Ethereum)
     })
 
     it('strips ERC-20 contract suffix from destAsset (ETH.USDC-0X...)', () => {
@@ -37,6 +27,7 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.destChainCode).toBe('ETH')
       expect(parsed.destAsset).toBe('USDC')
       expect(parsed.destAddress).toBe('0xabc')
+      expect(parsed.toChain).toBe(Chain.Ethereum)
     })
 
     it('accepts memo without slippage suffix', () => {
@@ -44,11 +35,13 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.destChainCode).toBe('BTC')
       expect(parsed.destAsset).toBe('BTC')
       expect(parsed.destAddress).toBe('bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2')
+      expect(parsed.toChain).toBe(Chain.Bitcoin)
     })
 
     it('returns empty destAddress when memo omits it', () => {
       const parsed = parseThorSwapMemo('=:XRP.XRP')
       expect(parsed.destAddress).toBe('')
+      expect(parsed.toChain).toBe(Chain.Ripple)
     })
   })
 
@@ -58,6 +51,7 @@ describe('parseThorSwapMemo', () => {
       expect(parsed.destChainCode).toBe('XRP')
       expect(parsed.destAsset).toBe('XRP')
       expect(parsed.destAddress).toBe('rf7SyXdM3aZqkz9bmgGgX6V3eC8oJ8wxYY')
+      expect(parsed.toChain).toBe(Chain.Ripple)
     })
 
     it('expands b → BTC.BTC, e → ETH.ETH, a → AVAX.AVAX, s → BSC.BNB', () => {
@@ -65,7 +59,6 @@ describe('parseThorSwapMemo', () => {
       expect(parseThorSwapMemo('=:e:0xabc').destChainCode).toBe('ETH')
       expect(parseThorSwapMemo('=:a:0xabc').destChainCode).toBe('AVAX')
       expect(parseThorSwapMemo('=:s:0xabc').destChainCode).toBe('BSC')
-      // BSC.BNB → destAsset is 'BNB' (BSC chain, BNB token).
       expect(parseThorSwapMemo('=:s:0xabc').destAsset).toBe('BNB')
     })
 
@@ -80,10 +73,10 @@ describe('parseThorSwapMemo', () => {
       const parsed = parseThorSwapMemo('=:g:cosmos1abc')
       expect(parsed.destChainCode).toBe('GAIA')
       expect(parsed.destAsset).toBe('ATOM')
+      expect(parsed.toChain).toBe(Chain.Cosmos)
     })
 
     it('is case-insensitive for shortcuts', () => {
-      // memos are typically lowercase but the parser normalises before lookup.
       expect(parseThorSwapMemo('=:X:rf7Sy').destChainCode).toBe('XRP')
       expect(parseThorSwapMemo('=:B:bc1q').destChainCode).toBe('BTC')
     })
@@ -109,12 +102,11 @@ describe('parseThorSwapMemo', () => {
       expect(() => parseThorSwapMemo('UNBOND:thor1abc:1000')).toThrow(VaultError)
     })
 
-    it('throws NotImplemented on empty memo (so signThorMsgDepositSwap rejects bare-MsgDeposit envelopes)', () => {
+    it('throws NotImplemented on empty memo', () => {
       expect(() => parseThorSwapMemo('')).toThrow(/only swap memos/)
     })
 
     it('throws InvalidConfig when unknown short prefix is used with no dot', () => {
-      // `=:zz:dest` — `zz` is not a known shortcut and doesn't contain `.`.
       try {
         parseThorSwapMemo('=:zz:dest')
         expect.fail('expected throw')
@@ -128,15 +120,28 @@ describe('parseThorSwapMemo', () => {
       expect(() => parseThorSwapMemo('=:::')).toThrow(/missing CHAIN.ASSET/)
     })
 
-    it('throws VaultError instances (typed) for downstream normalizeAgentError', () => {
+    it('throws UnsupportedChain when the memo chain code has no SDK mapping', () => {
       try {
-        parseThorSwapMemo('=:zz:dest')
+        parseThorSwapMemo('=:FOO.BAR:dest')
         expect.fail('expected throw')
       } catch (err) {
         expect(err).toBeInstanceOf(VaultError)
-        // Either InvalidConfig (malformed) or NotImplemented (non-swap).
+        expect((err as VaultError).code).toBe(VaultErrorCode.UnsupportedChain)
+      }
+    })
+
+    it('throws VaultError instances (typed) for downstream consumers', () => {
+      try {
+        parseThorSwapMemo('=:FOO.BAR:dest')
+        expect.fail('expected throw')
+      } catch (err) {
+        expect(err).toBeInstanceOf(VaultError)
         const code = (err as VaultError).code
-        expect([VaultErrorCode.InvalidConfig, VaultErrorCode.NotImplemented]).toContain(code)
+        expect([
+          VaultErrorCode.InvalidConfig,
+          VaultErrorCode.NotImplemented,
+          VaultErrorCode.UnsupportedChain,
+        ]).toContain(code)
       }
     })
   })

@@ -98,6 +98,8 @@ export {
 export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
 export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
+export type { ParsedThorSwapMemo } from './utils/thorSwapMemo'
+export { parseThorSwapMemo } from './utils/thorSwapMemo'
 
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
