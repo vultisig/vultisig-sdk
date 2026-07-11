@@ -670,6 +670,11 @@
       "import": "./dist/chains/ripple/account/info.js",
       "default": "./dist/chains/ripple/account/info.js"
     },
+    "./chains/ripple/account/lines": {
+      "types": "./dist/chains/ripple/account/lines.d.ts",
+      "import": "./dist/chains/ripple/account/lines.js",
+      "default": "./dist/chains/ripple/account/lines.js"
+    },
     "./chains/ripple/client": {
       "types": "./dist/chains/ripple/client.d.ts",
       "import": "./dist/chains/ripple/client.js",
@@ -1109,6 +1114,11 @@
       "types": "./dist/coin/find/resolvers/evm/queryOneInch.d.ts",
       "import": "./dist/coin/find/resolvers/evm/queryOneInch.js",
       "default": "./dist/coin/find/resolvers/evm/queryOneInch.js"
+    },
+    "./coin/find/resolvers/ripple": {
+      "types": "./dist/coin/find/resolvers/ripple.d.ts",
+      "import": "./dist/coin/find/resolvers/ripple.js",
+      "default": "./dist/coin/find/resolvers/ripple.js"
     },
     "./coin/find/resolvers/solana": {
       "types": "./dist/coin/find/resolvers/solana/index.d.ts",
