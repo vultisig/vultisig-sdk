@@ -325,6 +325,31 @@ describe('findSwapQuote parallel selection', () => {
     expect(quote.quote.general.provider).toBe('kyber')
   })
 
+  it('forwards a native-ETH destination to 1inch as toCoinId=undefined, not a ticker string (bug: 1inch requires the 0xEeee sentinel)', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('200', '1inch'))
+
+    const nativeEthDestination = {
+      chain: Chain.Ethereum,
+      address: '0xsender',
+      decimals: 18,
+      ticker: 'ETH',
+    } as const
+
+    await findSwapQuote({
+      from: evmSameChainCoins.from,
+      to: nativeEthDestination,
+      amount: 1n,
+    })
+
+    expect(getOneInchSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ toCoinId: undefined, fromCoinId: '0xsrc' })
+    )
+  })
+
   it('tie-break: SwapKit wins over 1inch on equal output by declared provider preference', async () => {
     // SwapKit now sits above the EVM aggregators in providerPreferenceOrder.
     // On an equal-output tie, it must win regardless of fetcher array order
