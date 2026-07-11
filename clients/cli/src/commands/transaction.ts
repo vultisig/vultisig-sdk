@@ -52,6 +52,15 @@ export async function sendTransaction(
   const rippleDestination =
     params.chain === Chain.Ripple ? normalizeRippleDestination(params.to) : { address: params.to }
   const to = rippleDestination.address
+  if (
+    params.destinationTag !== undefined &&
+    rippleDestination.destinationTag !== undefined &&
+    params.destinationTag !== rippleDestination.destinationTag
+  ) {
+    throw new Error(
+      `Conflicting XRP destination tags: --destination-tag=${params.destinationTag} does not match the tag embedded in the X-address (${rippleDestination.destinationTag})`
+    )
+  }
   const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
 
   // 1. Dry-run for preview

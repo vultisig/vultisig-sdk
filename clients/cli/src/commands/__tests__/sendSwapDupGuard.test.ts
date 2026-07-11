@@ -301,6 +301,24 @@ describe('send — broadcast dedupe guard', () => {
     expect(realSends.count).toBe(0)
   })
 
+  it('rejects an explicit DestinationTag that conflicts with an X-address', async () => {
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-conflicting-tag',
+      realSends: { count: 0 },
+    })
+
+    await expect(
+      sendTransaction(vault, {
+        chain: Chain.Ripple,
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        amount: '1',
+        destinationTag: 123,
+        dryRun: true,
+      })
+    ).rejects.toThrow(/Conflicting XRP destination tags/)
+  })
+
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
