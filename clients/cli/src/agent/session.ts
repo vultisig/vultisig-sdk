@@ -11,9 +11,9 @@
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
@@ -1324,9 +1324,8 @@ export function isAuthError(err: unknown): boolean {
 type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
 type TokenStore = Record<string, TokenEntry>
 
-function getTokenCachePath(): string {
-  const dir = process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
-  return join(dir, 'agent-tokens.json')
+export function getTokenCachePath(): string {
+  return join(getVultisigConfigDir(), 'agent-tokens.json')
 }
 
 function readTokenStore(): TokenStore {
