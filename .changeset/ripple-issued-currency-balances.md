@@ -1,5 +1,6 @@
 ---
 '@vultisig/core-chain': minor
+'@vultisig/sdk': patch
 ---
 
 Surface XRP issued-currency (trust-line) token balances.
