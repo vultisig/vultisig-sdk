@@ -94,6 +94,13 @@ describe('findRippleCoins', () => {
     const coins = await findRippleCoins(input)
 
     expect(coins.map(({ id }) => id)).toEqual(['USD.rIssuer1', 'EUR.rIssuer2'])
+
+    // The follow-up request must carry the marker back. Without it the ledger
+    // would return the first page again forever, so asserting only on the merged
+    // result would let that bug through.
+    expect(requestMock).toHaveBeenCalledTimes(2)
+    expect(requestMock).toHaveBeenNthCalledWith(1, expect.not.objectContaining({ marker: expect.anything() }))
+    expect(requestMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ marker: 'page-2' }))
   })
 
   it('returns no coins for an unfunded account instead of throwing', async () => {

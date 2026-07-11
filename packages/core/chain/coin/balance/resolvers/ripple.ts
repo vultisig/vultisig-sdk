@@ -57,7 +57,7 @@ const getRippleNativeBalance = async (address: string): Promise<bigint> => {
   ])
 
   if ('error' in accountResult) {
-    if (isInError(accountResult.error, 'Account not found')) {
+    if (isInError(accountResult.error, 'Account not found', 'actNotFound')) {
       return BigInt(0)
     }
 

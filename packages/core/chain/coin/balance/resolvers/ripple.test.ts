@@ -139,6 +139,16 @@ describe('getRippleCoinBalance', () => {
       })
 
       await expect(getRippleCoinBalance(tokenCoin)).resolves.toBe(7_000_000_000_000_000n)
+
+      // The follow-up request must carry the marker back, or the ledger would
+      // return the first page again forever — a bug the merged result alone hides.
+      const lineRequests = requestMock.mock.calls
+        .map(([request]) => request)
+        .filter(({ command }) => command === 'account_lines')
+
+      expect(lineRequests).toHaveLength(2)
+      expect(lineRequests[0]).not.toHaveProperty('marker')
+      expect(lineRequests[1]).toMatchObject({ marker: 'next-page' })
     })
   })
 })
