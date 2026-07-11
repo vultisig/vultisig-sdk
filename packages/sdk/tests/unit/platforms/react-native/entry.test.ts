@@ -47,4 +47,18 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
   })
+
+  it('re-exports root-public pure helpers needed by React Native consumers', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.parseChain).toBe('function')
+    expect(rn.parseChain('cosmos')).toEqual({ success: true, chain: 'Cosmos' })
+
+    expect(typeof rn.parseTicker).toBe('function')
+    expect(rn.parseTicker('USDC')).toEqual({ success: true, ticker: 'USDC' })
+
+    expect(typeof rn.isKnownContract).toBe('function')
+    expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
+    expect(typeof rn.knownContracts.isKnownContract).toBe('function')
+  })
 })
