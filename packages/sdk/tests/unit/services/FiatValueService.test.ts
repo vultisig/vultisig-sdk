@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // IMPORTANT: Mocks must be defined BEFORE imports
 vi.mock('@vultisig/core-chain/coin/price/getCoinPrices')
 vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+vi.mock('@vultisig/core-chain/coin/price/resolveTokenPriceId', () => ({
+  resolveTokenPriceId: vi.fn(),
+}))
+vi.mock('@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom', () => ({
+  cosmosFeeCoinDenom: { TerraClassic: 'uluna' },
+}))
 vi.mock('@vultisig/core-chain/coin/utils/getCoinValue')
 vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
   chainFeeCoin: {
@@ -26,6 +32,11 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
       ticker: 'MATIC',
       decimals: 18,
       priceProviderId: 'matic-network',
+    },
+    TerraClassic: {
+      ticker: 'LUNC',
+      decimals: 6,
+      priceProviderId: 'terra-luna',
     },
   },
 }))
@@ -428,10 +439,33 @@ describe('FiatValueService', () => {
       await expect(service.getPrice(Chain.Ethereum, '0xInvalidToken')).rejects.toThrow('Price not found for token')
     })
 
-    it('should return 0 for token pricing on non-EVM chains', async () => {
-      // Bitcoin is not an EVM chain — returns 0 instead of throwing
-      const price = await service.getPrice(Chain.Bitcoin, '0xSomeToken')
-      expect(price).toBe(0)
+    it('should fetch known non-EVM token prices through the canonical registry id', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      const solanaUsdc = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      vi.mocked(resolveTokenPriceId).mockReturnValue('usd-coin')
+      vi.mocked(getCoinPrices).mockResolvedValue({ 'usd-coin': 1 })
+
+      const price = await service.getPrice(Chain.Solana, solanaUsdc)
+
+      expect(price).toBe(1)
+      expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['usd-coin'], fiatCurrency: 'usd' })
+    })
+
+    it('should price a Cosmos native fee denom passed as a token identifier', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      vi.mocked(getCoinPrices).mockResolvedValue({ 'terra-luna': 0.000062 })
+
+      await expect(service.getPrice(Chain.TerraClassic, 'uluna')).resolves.toBe(0.000062)
+      expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['terra-luna'], fiatCurrency: 'usd' })
+    })
+
+    it('should preserve zero pricing for unknown non-EVM token identifiers', async () => {
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      await expect(service.getPrice(Chain.Bitcoin, 'not-a-known-token')).resolves.toBe(0)
     })
   })
 
