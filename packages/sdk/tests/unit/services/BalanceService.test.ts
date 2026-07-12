@@ -89,6 +89,50 @@ describe('BalanceService', () => {
     expect(result[Chain.Bitcoin]?.formattedAmount).toBe('1')
   })
 
+  it('does NOT cache or emit a coin the multicall omitted, and refetches it next call (#1191)', async () => {
+    const ethAddress = `${Chain.Ethereum}-address`
+    const nativeKey = accountCoinKeyToString({ chain: Chain.Ethereum, address: ethAddress })
+    const tokenKey = accountCoinKeyToString({ chain: Chain.Ethereum, id: token.id, address: ethAddress })
+    // Multicall returns native but OMITS the token (a transient partial-aggregate / RPC hiccup).
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [nativeKey]: 1_000_000_000_000_000_000n,
+    })
+
+    const emitBalanceUpdated = vi.fn()
+    const service = new BalanceService(
+      cacheService,
+      emitBalanceUpdated,
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => (chain === Chain.Ethereum ? [token] : []),
+      () => ({ [Chain.Ethereum]: [token] }),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+
+    const first = await service.getBalances({ chains: [Chain.Ethereum], includeTokens: true })
+    await flushMicrotasks()
+
+    // Native (present) is returned; the omitted token is returned transiently for shape completeness...
+    expect(first[Chain.Ethereum]?.formattedAmount).toBe('1')
+    // ...but the omitted token is NEVER emitted as a real balance (only the present native fired).
+    const emittedTokenIds = emitBalanceUpdated.mock.calls.map(([d]) => d.tokenId)
+    expect(emittedTokenIds).toContain(undefined) // native
+    expect(emittedTokenIds).not.toContain(token.id) // omitted token must not emit a phantom 0
+
+    // The omitted token was NOT cached — a second call re-multicalls (native is cache-served, token refetches).
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [nativeKey]: 1_000_000_000_000_000_000n,
+      [tokenKey]: 5_000_000n,
+    })
+    const second = await service.getBalances({ chains: [Chain.Ethereum], includeTokens: true })
+
+    expect(getEvmChainBalances).toHaveBeenCalledTimes(2) // refetched because the token was never cached
+    expect(second[`${Chain.Ethereum}:${token.id}`]?.formattedAmount).toBe('5') // real value on refetch
+  })
+
   it('serves cached EVM balances without re-multicalling', async () => {
     const ethAddress = `${Chain.Ethereum}-address`
     vi.mocked(getEvmChainBalances).mockResolvedValue({

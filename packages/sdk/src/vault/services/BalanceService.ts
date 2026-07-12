@@ -187,11 +187,20 @@ export class BalanceService {
 
     const tokensRecord = this.getTokensRecord()
     for (const request of uncached) {
-      const rawBalance = rawBalances[accountCoinKeyToString(request.coinKey)] ?? 0n
-      const balance = formatBalance(rawBalance, chain, request.tokenId, tokensRecord)
+      const rawBalance = rawBalances[accountCoinKeyToString(request.coinKey)]
+      // A key MISSING from the multicall result means that coin was omitted/failed (a transient RPC
+      // hiccup, a partial Multicall3 aggregate). The old per-coin path cached NOTHING on failure; caching
+      // a fabricated 0n here (5min TTL) would show a real 0 for a coin the user owns AND emit it as a real
+      // balanceUpdated. Only cache + emit keys the multicall actually RETURNED (a genuine 0n from the
+      // aggregate IS a real balance and is kept); a missing key falls through uncached + unemitted so the
+      // next call refetches. It's still returned for this call so the shape is complete.
+      const present = rawBalance !== undefined
+      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, tokensRecord)
 
-      await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
-      this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
+      if (present) {
+        await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
+        this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
+      }
 
       entries.push([request.resultKey, balance] as const)
     }

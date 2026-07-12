@@ -15,5 +15,13 @@ Multicall3 fallback covers EVM chains without a multicall3 contract.
 `FiatValueService.getValues` looped `getValue` per token, each triggering a
 single-id `getErc20Prices` request; it now warms the price cache with one
 batched `getErc20Prices` call for the whole chain and resolves native + token
-values concurrently. `getTotalValue` now fetches every chain's values in
-parallel instead of awaiting them one chain at a time.
+values concurrently. `getTotalValue` now fetches chains' values concurrently
+with a bounded number in flight (no unbounded RPC burst on many-chain vaults)
+instead of awaiting them one chain at a time.
+
+Fix: a coin OMITTED from the EVM multicall result (a transient RPC hiccup /
+partial Multicall3 aggregate) is no longer cached as a fabricated `0n` (5-min
+TTL) and no longer emitted as a real `balanceUpdated` — which would have shown a
+real 0 for a coin the user owns. Only keys the multicall actually returned are
+cached/emitted (a genuine `0n` is a real balance and is kept); a missing key
+falls through uncached so the next call refetches it.

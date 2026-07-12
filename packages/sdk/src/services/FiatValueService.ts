@@ -9,6 +9,27 @@ import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { Balance, Token } from '../types'
 import { CacheScope, type CacheService } from './CacheService'
 
+// Max chains fetched at once when totalling portfolio value — bounds the RPC fan-out on many-chain vaults.
+const TOTAL_VALUE_CONCURRENCY = 8
+
+/**
+ * Map over items with a bounded number of in-flight promises, preserving input order. A raw
+ * Promise.all over every chain fans out one price/balance round-trip per chain simultaneously; on a
+ * many-chain vault that's an unbounded RPC burst. This caps concurrency while keeping the results ordered.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await fn(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker))
+  return results
+}
+
 /**
  * Service for fetching cryptocurrency prices and calculating fiat values
  *
@@ -390,18 +411,17 @@ export class FiatValueService {
     // Calculate total - no separate cache needed since getValues() uses cached prices/balances
     const chains = this.getChains()
 
-    // Fetch every chain's values concurrently instead of awaiting them one by one.
-    const chainTotals = await Promise.all(
-      chains.map(async chain => {
-        try {
-          const chainValues = await this.getValues(chain, currency)
-          return Object.values(chainValues).reduce((sum, value) => sum + parseFloat(value.amount), 0)
-        } catch (error) {
-          console.warn(`Failed to get values for ${chain}:`, error)
-          return 0
-        }
-      })
-    )
+    // Fetch chains' values concurrently but with a bounded number in flight, so a many-chain vault
+    // doesn't fire an unbounded simultaneous RPC burst.
+    const chainTotals = await mapWithConcurrency(chains, TOTAL_VALUE_CONCURRENCY, async chain => {
+      try {
+        const chainValues = await this.getValues(chain, currency)
+        return Object.values(chainValues).reduce((sum, value) => sum + parseFloat(value.amount), 0)
+      } catch (error) {
+        console.warn(`Failed to get values for ${chain}:`, error)
+        return 0
+      }
+    })
 
     const total = chainTotals.reduce((sum, value) => sum + value, 0)
 
