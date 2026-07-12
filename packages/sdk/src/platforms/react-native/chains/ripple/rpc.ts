@@ -11,6 +11,8 @@ type RippleResponse<T> = {
   result: T & { status?: string; error?: string; error_message?: string }
 }
 
+export const DEFAULT_XRP_RPC_URL = 'https://xrplcluster.com'
+
 /**
  * Expected-error codes surfaced by XRPL that represent a normal business
  * outcome (not a protocol error). Callers branch on these instead of
@@ -70,14 +72,51 @@ export type XrpAccountInfo = {
   funded: boolean
 }
 
+export type XrpAccountState = XrpAccountInfo & {
+  /** Number of owned ledger objects (trust lines, offers, escrows, ...). */
+  ownerCount: number
+}
+
 type AccountInfoResult = {
   account_data?: {
     Account: string
     Balance: string
     Flags: number
     Sequence: number
+    OwnerCount?: number
   }
   error?: string
+}
+
+export async function getXrpAccountState(
+  address: string,
+  rpcUrl: string = DEFAULT_XRP_RPC_URL,
+  signal?: AbortSignal
+): Promise<XrpAccountState> {
+  const result = await rippleCall<AccountInfoResult>(
+    rpcUrl,
+    'account_info',
+    { account: address, strict: true, ledger_index: 'current' },
+    signal
+  )
+  if (result.error === 'actNotFound' || !result.account_data) {
+    return {
+      address,
+      sequence: 0,
+      balanceDrops: '0',
+      flags: 0,
+      funded: false,
+      ownerCount: 0,
+    }
+  }
+  return {
+    address,
+    sequence: result.account_data.Sequence,
+    balanceDrops: result.account_data.Balance,
+    flags: result.account_data.Flags,
+    funded: true,
+    ownerCount: result.account_data.OwnerCount ?? 0,
+  }
 }
 
 /**
@@ -95,30 +134,16 @@ type AccountInfoResult = {
  */
 export async function getXrpAccountInfo(
   address: string,
-  rpcUrl: string,
+  rpcUrl: string = DEFAULT_XRP_RPC_URL,
   signal?: AbortSignal
 ): Promise<XrpAccountInfo> {
-  const result = await rippleCall<AccountInfoResult>(
-    rpcUrl,
-    'account_info',
-    { account: address, strict: true, ledger_index: 'current' },
-    signal
-  )
-  if (result.error === 'actNotFound' || !result.account_data) {
-    return {
-      address,
-      sequence: 0,
-      balanceDrops: '0',
-      flags: 0,
-      funded: false,
-    }
-  }
+  const state = await getXrpAccountState(address, rpcUrl, signal)
   return {
-    address,
-    sequence: result.account_data.Sequence,
-    balanceDrops: result.account_data.Balance,
-    flags: result.account_data.Flags,
-    funded: true,
+    address: state.address,
+    sequence: state.sequence,
+    balanceDrops: state.balanceDrops,
+    flags: state.flags,
+    funded: state.funded,
   }
 }
 
@@ -126,9 +151,94 @@ export async function getXrpAccountInfo(
  * Convenience wrapper — returns balance in drops (string) for the given
  * address. Returns `"0"` for unfunded accounts.
  */
-export async function getXrpBalance(address: string, rpcUrl: string, signal?: AbortSignal): Promise<string> {
+export async function getXrpBalance(
+  address: string,
+  rpcUrl: string = DEFAULT_XRP_RPC_URL,
+  signal?: AbortSignal
+): Promise<string> {
   const info = await getXrpAccountInfo(address, rpcUrl, signal)
   return info.balanceDrops
+}
+
+export type XrpAccountLine = {
+  account: string
+  currency: string
+  balance: string
+}
+
+type AccountLinesResult = {
+  lines?: XrpAccountLine[]
+  marker?: unknown
+  error?: string
+}
+
+/**
+ * Returns all trust lines for `address`, following XRPL pagination to completion.
+ * Unfunded accounts (`actNotFound`) legitimately have no trust lines.
+ */
+export async function getXrpAccountLines(
+  address: string,
+  rpcUrl: string = DEFAULT_XRP_RPC_URL,
+  signal?: AbortSignal
+): Promise<XrpAccountLine[]> {
+  const lines: XrpAccountLine[] = []
+  let marker: unknown = undefined
+
+  do {
+    const result = await rippleCall<AccountLinesResult>(
+      rpcUrl,
+      'account_lines',
+      {
+        account: address,
+        strict: true,
+        ledger_index: 'current',
+        ...(marker === undefined ? {} : { marker }),
+      },
+      signal
+    )
+
+    if (result.error === 'actNotFound') {
+      return []
+    }
+
+    lines.push(...(result.lines ?? []))
+    marker = result.marker
+  } while (marker !== undefined)
+
+  return lines
+}
+
+type ServerStateResult = {
+  state?: {
+    validated_ledger?: {
+      reserve_base?: string | number
+      reserve_inc?: string | number
+    }
+  }
+}
+
+export type XrpReserveInfo = {
+  reserveBaseDrops: bigint
+  reserveIncrementDrops: bigint
+}
+
+export async function getXrpReserveInfo(
+  rpcUrl: string = DEFAULT_XRP_RPC_URL,
+  signal?: AbortSignal
+): Promise<XrpReserveInfo> {
+  const result = await rippleCall<ServerStateResult>(rpcUrl, 'server_state', {}, signal)
+  const ledger = result.state?.validated_ledger
+  const reserveBase = ledger?.reserve_base
+  const reserveIncrement = ledger?.reserve_inc
+
+  if (reserveBase === undefined || reserveIncrement === undefined) {
+    throw new Error(`XRP server_state missing validated reserve info: ${JSON.stringify(result)}`)
+  }
+
+  return {
+    reserveBaseDrops: BigInt(reserveBase),
+    reserveIncrementDrops: BigInt(reserveIncrement),
+  }
 }
 
 // ---------------------------------------------------------------------------
