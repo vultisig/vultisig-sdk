@@ -288,6 +288,18 @@ describe('RujiraWithdraw', () => {
               isDeposit: true,
             }),
           }),
+          swapPayload: expect.objectContaining({
+            case: 'thorchainSwapPayload',
+            value: expect.objectContaining({
+              vaultAddress: '',
+              routerAddress: '',
+              expirationTime: 0n,
+              fromCoin: expect.objectContaining({
+                chain: 'Bitcoin',
+                ticker: 'BTC',
+              }),
+            }),
+          }),
         }),
         signature: expect.any(Object),
       })
