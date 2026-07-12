@@ -128,3 +128,48 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     expect(input.opTrustSet).toBeFalsy()
   })
 })
+
+describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () => {
+  const offerCreateJson = JSON.stringify({
+    TransactionType: 'OfferCreate',
+    Account: ACCOUNT,
+    TakerGets: '10000000',
+    TakerPays: {
+      currency: '524C555344000000000000000000000000000000',
+      issuer: RLUSD_ISSUER,
+      value: '5',
+    },
+    Fee: '15',
+    Sequence: 100,
+    LastLedgerSequence: 200,
+  })
+
+  const buildSignRipplePayload = () => {
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: { $typeName: 'vultisig.keysign.v1.SignRipple', rawJson: offerCreateJson },
+    }
+    return payload
+  }
+
+  it('forwards the raw transaction JSON verbatim and builds neither Payment nor TrustSet', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildSignRipplePayload(),
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(offerCreateJson)
+    expect(input.opPayment).toBeFalsy()
+    expect(input.opTrustSet).toBeFalsy()
+  })
+
+  it('still carries the signer public key so WalletCore can sign', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildSignRipplePayload(),
+      walletCore,
+    })
+
+    expect(input.publicKey.length).toBeGreaterThan(0)
+  })
+})

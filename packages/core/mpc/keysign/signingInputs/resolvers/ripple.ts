@@ -22,6 +22,21 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
 
   const account = coin.address
 
+  // A dApp-supplied XRPL transaction arrives as JSON in `signData.signRipple`
+  // and is signed verbatim, letting types the payload cannot express — offers,
+  // escrows — round-trip. Every signer rebuilds this input from the same JSON,
+  // so each party serializes identical bytes. The caller has already pinned
+  // `Account` to this vault and filled `Fee` / `Sequence` /
+  // `LastLedgerSequence` inside the JSON, so nothing is reconstructed from the
+  // payload's coin / toAddress / toAmount (which cannot describe an offer).
+  const getRawJson = (): Pick<TW.Ripple.Proto.ISigningInput, 'rawJson'> | undefined => {
+    if (keysignPayload.signData.case !== 'signRipple') {
+      return undefined
+    }
+
+    return { rawJson: keysignPayload.signData.value.rawJson }
+  }
+
   // An issued-currency coin (non-native, with a `currency.issuer` contract
   // address) signals a TrustSet: open/modify the trust line whose limit is the
   // keysign amount. Native XRP falls through to the Payment path below.
@@ -97,7 +112,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     sequence: Number(sequence),
     lastLedgerSequence: Number(lastLedgerSequence),
     publicKey: getKeysignTwPublicKey(keysignPayload),
-    ...(getTrustSet() ?? getPayment()),
+    ...(getRawJson() ?? getTrustSet() ?? getPayment()),
   })
 
   return [input]
