@@ -10,6 +10,13 @@
  * permanently unspendable account on the destination chain. Centralizing the
  * list here means it can't drift per call-site again.
  *
+ * Reconciled to the UNION of the three copies that had drifted (SDK #1160):
+ * the mcp-ts authoritative source added the SPL Token Program + Wrapped SOL
+ * mint (Solana), the Bitcoin null/eater burns (UTXO chains) and the XRP Ledger
+ * black-hole accounts, while this SDK copy was the only one carrying the Solana
+ * Incinerator. Every address from every copy is kept — the guard is only ever
+ * additive/tightening, never weakened.
+ *
  * Design notes (mirrored from the mcp-ts source, see PR #31 review):
  * - EVM addresses are matched by SHAPE (`0x` + 40 hex) regardless of the chain
  *   name the caller passed. Chains rotate in and out of routing tables; the
@@ -18,8 +25,8 @@
  *   chain can't silently escape the guard.
  * - Comparison is case-insensitive for EVM (normalize to lowercase) so a
  *   checksummed `0x...dEaD` is rejected the same as `0x...dead`.
- * - Non-EVM burn lists are keyed by the destination chain. A Solana program id
- *   should not be treated as a burn address for an unrelated chain.
+ * - Non-EVM burn lists are keyed by the destination chain family. A Solana
+ *   program id should not be treated as a burn address for an unrelated chain.
  * - Self-send (`from == to`) is NOT guarded here: self-sends are a legitimate
  *   smoke-test pattern users run before the real transfer.
  */
@@ -35,9 +42,30 @@ export const EVM_DANGEROUS_ADDRESSES: Record<string, string> = {
 /** Solana burn / program destinations that cannot be user-controlled. Keys are case-sensitive. */
 export const SOLANA_DANGEROUS_ADDRESSES: Record<string, string> = {
   '11111111111111111111111111111111': 'Solana System Program: no private key controls this address',
+  TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA: 'SPL Token Program: this is a program, not a wallet',
+  So11111111111111111111111111111111111111112: 'Wrapped SOL mint: this is a program, not a wallet',
   '1nc1nerator11111111111111111111111111111111':
     'Solana Incinerator burn address: funds sent here are permanently destroyed',
 }
+
+/** UTXO (Bitcoin family) burn destinations. Keys are case-sensitive base58. */
+export const UTXO_DANGEROUS_ADDRESSES: Record<string, string> = {
+  '1111111111111111111114oLvT2': 'Bitcoin burn address: funds are unrecoverable',
+  '1BitcoinEaterAddressDontSendf59kuE': 'Bitcoin eater address: funds are permanently destroyed',
+}
+
+/** XRP Ledger black-hole / reserved system accounts. Keys are case-sensitive. */
+export const XRP_DANGEROUS_ADDRESSES: Record<string, string> = {
+  rrrrrrrrrrrrrrrrrrrrrhoLvTp: 'XRP Ledger black-hole address (ACCOUNT_ZERO): funds are unrecoverable',
+  rrrrrrrrrrrrrrrrrrrrBZbvji:
+    'reserved XRPL system account (ACCOUNT_ONE): almost certainly a mistake, not a valid destination',
+}
+
+/**
+ * UTXO chain names (lowercased) whose destinations are vetted against the
+ * Bitcoin-family burn list. Mirrors mcp-ts `UTXO_CHAINS`.
+ */
+const UTXO_CHAINS = new Set(['bitcoin', 'litecoin', 'dogecoin', 'bitcoin-cash', 'dash', 'zcash'])
 
 /** Shape of a 20-byte EVM address (`0x` + 40 hex). */
 const EVM_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
@@ -57,8 +85,17 @@ export const isEvmBurnAddress = (address: string): boolean => getEvmDangerousRea
 
 /** Return the chain-specific dangerous-address reason, if one applies. */
 export const getChainDangerousReason = (chain: string, address: string): string | undefined => {
-  if (chain.trim().toLowerCase() === 'solana') {
-    return SOLANA_DANGEROUS_ADDRESSES[address.trim()]
+  const normalizedChain = chain.trim().toLowerCase()
+  const destination = address.trim()
+
+  if (normalizedChain === 'solana') {
+    return SOLANA_DANGEROUS_ADDRESSES[destination]
+  }
+  if (UTXO_CHAINS.has(normalizedChain)) {
+    return UTXO_DANGEROUS_ADDRESSES[destination]
+  }
+  if (normalizedChain === 'ripple') {
+    return XRP_DANGEROUS_ADDRESSES[destination]
   }
 
   return undefined
