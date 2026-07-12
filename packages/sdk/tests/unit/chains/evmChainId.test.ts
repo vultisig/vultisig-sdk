@@ -7,7 +7,9 @@ import { Chain, getEvmChainByChainId, getEvmChainId } from '../../../src'
 // agent-backend-ts previously hand-maintained as their own copies. Pinning
 // them here guards against the drift class that caused the Hyperliquid
 // 998/999 client↔server chainId bug.
-const CANONICAL_EVM_CHAIN_IDS: Record<string, number> = {
+// `satisfies Record<EvmChain, number>` makes this exhaustive: adding a 14th EvmChain to the enum without
+// pinning its chainId here is a COMPILE error, so a new chain can't silently escape the drift guard.
+const CANONICAL_EVM_CHAIN_IDS = {
   [Chain.Ethereum]: 1,
   [Chain.BSC]: 56,
   [Chain.Polygon]: 137,
@@ -21,7 +23,7 @@ const CANONICAL_EVM_CHAIN_IDS: Record<string, number> = {
   [Chain.CronosChain]: 25,
   [Chain.Hyperliquid]: 999,
   [Chain.Sei]: 1329,
-}
+} satisfies Record<EvmChain, number>
 
 describe('EVM chainId public API', () => {
   it('exposes getEvmChainId and getEvmChainByChainId from the SDK public entry', () => {
