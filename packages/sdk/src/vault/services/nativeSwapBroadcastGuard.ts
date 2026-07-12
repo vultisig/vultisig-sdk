@@ -8,7 +8,7 @@ import {
   type NativeSwapChain,
   nativeSwapChainIds,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
@@ -46,27 +46,9 @@ export const assertNativeSwapReadyForBroadcast = async ({
   }
 
   const { native } = swapPayload
-  const isSecuredAssetWithdrawal =
-    chain === Chain.THORChain &&
-    native.chain === Chain.THORChain &&
-    native.expirationTime === 0n &&
-    native.vaultAddress === '' &&
-    native.routerAddress === '' &&
-    keysignPayload.toAddress === '' &&
-    keysignPayload.memo?.toLowerCase().startsWith('secure-:') &&
-    keysignPayload.blockchainSpecific.case === 'thorchainSpecific' &&
-    keysignPayload.blockchainSpecific.value.isDeposit &&
-    !!native.fromCoin &&
-    native.fromCoin.chain !== Chain.THORChain &&
-    typeof native.fromCoin.ticker === 'string' &&
-    !!native.fromCoin.ticker.trim() &&
-    /^[0-9]+$/.test(native.fromAmount) &&
-    BigInt(native.fromAmount) > 0n &&
-    native.fromAmount === keysignPayload.toAmount
-
   // Secured-asset withdrawals use the native payload union as L1 asset metadata,
   // not as a quote. Their MsgDeposit has no quote expiry or inbound vault.
-  if (isSecuredAssetWithdrawal) {
+  if (isSecuredAssetWithdrawal({ chain, keysignPayload, native })) {
     return
   }
 

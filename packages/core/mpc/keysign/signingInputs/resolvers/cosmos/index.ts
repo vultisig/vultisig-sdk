@@ -15,7 +15,7 @@ import { TW } from '@trustwallet/wallet-core'
 import { AuthInfo, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import Long from 'long'
 
-import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignTwPublicKey } from '../../../tw/getKeysignTwPublicKey'
 import { getTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getTwChainId'
 import { toTwAddress } from '../../../tw/toTwAddress'
@@ -346,7 +346,8 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
           (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
           nativeSwapChainIds[chain as VaultBasedCosmosChain]
         const contractAddress = 'contractAddress' in assetCoin ? assetCoin.contractAddress : undefined
-        const isSecuredWithdrawal = memo?.toLowerCase().startsWith('secure-:') || false
+        const isSecuredWithdrawal =
+          !!swapPayload && isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
         const rawSymbol =
           contractAddress && contractAddress.trim() ? `${assetCoin.ticker}-${contractAddress}` : assetCoin.ticker
         const assetSymbol = isSecuredWithdrawal ? rawSymbol.toUpperCase() : rawSymbol

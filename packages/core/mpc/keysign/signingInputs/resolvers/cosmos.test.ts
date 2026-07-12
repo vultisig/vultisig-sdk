@@ -162,6 +162,7 @@ describe('getCosmosSigningInputs gas limit', () => {
               contractAddress: '',
               decimals: 8,
             },
+            fromAmount: '10000000',
             vaultAddress: '',
             routerAddress: '',
             expirationTime: 0n,
