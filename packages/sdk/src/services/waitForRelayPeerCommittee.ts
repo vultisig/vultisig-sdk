@@ -35,6 +35,11 @@ export async function waitForRelayPeerCommittee(params: {
       continue
     }
 
+    if (!Array.isArray(allPeers)) {
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
+      continue
+    }
+
     const uniquePeers = withoutDuplicates(allPeers)
 
     if (uniquePeers.length > requiredDevices) {

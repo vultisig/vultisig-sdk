@@ -47,4 +47,22 @@ describe('waitForRelayPeerCommittee', () => {
     })
     expect(onDeviceJoined).not.toHaveBeenCalled()
   })
+
+  it('treats malformed successful relay payloads as retriable poll failures', async () => {
+    const controller = new AbortController()
+    queryUrlMock.mockImplementation(async () => {
+      controller.abort()
+      return {}
+    })
+
+    await expect(
+      waitForRelayPeerCommittee({
+        relayUrl: 'https://relay.example',
+        sessionId: 'session-1',
+        requiredDevices: 2,
+        signal: controller.signal,
+        createTimeoutError: () => new Error('timed out'),
+      })
+    ).rejects.toMatchObject({ code: VaultErrorCode.OperationAborted })
+  })
 })
