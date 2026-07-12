@@ -6,6 +6,7 @@
 
 import type { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -50,6 +51,12 @@ export type SwapQuoteParams = {
   referral?: string
   /** Optional fiat currency for fee/output conversion (e.g., 'usd', 'eur') */
   fiatCurrency?: FiatCurrency
+  /**
+   * Optional per-provider affiliate overrides (native/1inch/kyber/lifi/
+   * jupiter). Lets a tenant consumer supply its own fee owners; when omitted
+   * every provider falls back to core's built-in vultisig-0-family defaults.
+   */
+  affiliateConfig?: SwapAffiliateConfig
 }
 
 /**
