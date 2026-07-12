@@ -295,27 +295,77 @@ export class FiatValueService {
   ): Promise<Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }>> {
     const values: Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }> = {}
 
-    try {
-      // Get native token value
-      values.native = await this.getValue(chain, undefined, fiatCurrency)
-    } catch (error) {
-      console.warn(`Failed to get native value for ${chain}:`, error)
-    }
-
     // Get all token values
     const allTokens = this.getTokens()
-    const tokens = allTokens[chain] || []
+    const tokens = (allTokens[chain] || []).filter((token): token is Token & { contractAddress: string } =>
+      Boolean(token.contractAddress)
+    )
 
-    for (const token of tokens) {
-      if (!token.contractAddress) continue
-      try {
-        values[token.contractAddress] = await this.getValue(chain, token.contractAddress, fiatCurrency)
-      } catch (error) {
-        console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
+    // Batch-fetch every token price for this chain in a single request (warms the
+    // price cache) instead of one getErc20Prices call per token via getValue().
+    const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
+    await this.warmTokenPriceCache(
+      chain,
+      tokens.map(token => token.contractAddress),
+      currency
+    )
+
+    const [nativeValue, tokenValues] = await Promise.all([
+      this.getValue(chain, undefined, fiatCurrency).catch(error => {
+        console.warn(`Failed to get native value for ${chain}:`, error)
+        return undefined
+      }),
+      Promise.all(
+        tokens.map(token =>
+          this.getValue(chain, token.contractAddress, fiatCurrency)
+            .then(value => [token.contractAddress, value] as const)
+            .catch(error => {
+              console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
+              return undefined
+            })
+        )
+      ),
+    ])
+
+    if (nativeValue) {
+      values.native = nativeValue
+    }
+    for (const entry of tokenValues) {
+      if (entry) {
+        values[entry[0]] = entry[1]
       }
     }
 
     return values
+  }
+
+  /**
+   * Fetch prices for many ERC-20 tokens on a chain in a single request and seed
+   * the price cache, so subsequent per-token getPrice() calls hit the cache
+   * instead of issuing one getErc20Prices call each.
+   * @private
+   */
+  private async warmTokenPriceCache(chain: Chain, tokenIds: string[], currency: FiatCurrency): Promise<void> {
+    if (tokenIds.length === 0 || !this.isEvmChain(chain)) {
+      return
+    }
+
+    let prices: Record<string, number>
+    try {
+      prices = await getErc20Prices({ ids: tokenIds, chain: chain as EvmChain, fiatCurrency: currency })
+    } catch (error) {
+      // Non-fatal: individual getValue() calls will fall back to per-token fetches.
+      console.warn(`Failed to batch-fetch token prices for ${chain}:`, error)
+      return
+    }
+
+    for (const tokenId of tokenIds) {
+      const price = prices[tokenId.toLowerCase()]
+      if (price !== undefined && price !== 0) {
+        const key = `${chain.toLowerCase()}:${tokenId}:${currency}`
+        await this.cacheService.setScoped(key, CacheScope.PRICE, price)
+      }
+    }
   }
 
   /**
@@ -339,20 +389,21 @@ export class FiatValueService {
 
     // Calculate total - no separate cache needed since getValues() uses cached prices/balances
     const chains = this.getChains()
-    let total = 0
 
-    // Sum values across all chains
-    for (const chain of chains) {
-      try {
-        const chainValues = await this.getValues(chain, currency)
-        for (const value of Object.values(chainValues)) {
-          total += parseFloat(value.amount)
+    // Fetch every chain's values concurrently instead of awaiting them one by one.
+    const chainTotals = await Promise.all(
+      chains.map(async chain => {
+        try {
+          const chainValues = await this.getValues(chain, currency)
+          return Object.values(chainValues).reduce((sum, value) => sum + parseFloat(value.amount), 0)
+        } catch (error) {
+          console.warn(`Failed to get values for ${chain}:`, error)
+          return 0
         }
-      } catch (error) {
-        console.warn(`Failed to get values for ${chain}:`, error)
-        // Continue with other chains
-      }
-    }
+      })
+    )
+
+    const total = chainTotals.reduce((sum, value) => sum + value, 0)
 
     return {
       amount: total.toFixed(2),
