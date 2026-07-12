@@ -9,10 +9,11 @@ type NativeKeysignSwapPayload = Extract<KeysignSwapPayload, { native: unknown }>
 type IsSecuredAssetWithdrawalInput = {
   chain: Chain
   keysignPayload: KeysignPayload
-  native: NativeKeysignSwapPayload
+  native?: NativeKeysignSwapPayload | null
 }
 
 export const isSecuredAssetWithdrawal = ({ chain, keysignPayload, native }: IsSecuredAssetWithdrawalInput): boolean =>
+  !!native &&
   chain === Chain.THORChain &&
   native.chain === Chain.THORChain &&
   native.expirationTime === 0n &&
