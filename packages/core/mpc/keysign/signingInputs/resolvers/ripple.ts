@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import {
   formatIssuedCurrencyValue,
+  parseIssuedCurrencyValue,
   parseRippleTokenId,
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
@@ -29,7 +30,8 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
   // so each party serializes identical bytes. Nothing is reconstructed from the
   // payload's toAddress / toAmount (which cannot describe an offer); this
   // resolver is instead the fail-closed chokepoint that binds the raw
-  // transaction to the signing vault (see the `Account` check below).
+  // transaction to the signing vault (the `Account` check below) and, for
+  // Payments, to the reviewed destination and amount.
   const getRawJson = (): Pick<TW.Ripple.Proto.ISigningInput, 'rawJson'> | undefined => {
     if (keysignPayload.signData.case !== 'signRipple') {
       return undefined
@@ -49,6 +51,11 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       throw new Error('signRipple rawJson is not valid JSON')
     }
 
+    if (typeof parsed.data !== 'object' || parsed.data === null) {
+      throw new Error('signRipple rawJson is not a transaction object')
+    }
+    const tx = parsed.data as Record<string, unknown>
+
     // Fail closed: the signed transaction must spend from the vault whose key
     // is signing. On XRPL the `Account` field is the sender, so every signer
     // — including a Secure Vault co-signer that only sees this payload —
@@ -57,12 +64,50 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     // payload could present one account/destination in its metadata while
     // `rawJson` moves a different account's funds. This bounds every signable
     // Ripple transaction to this vault's own funds regardless of the caller.
-    const rawAccount =
-      typeof parsed.data === 'object' && parsed.data !== null && 'Account' in parsed.data
-        ? parsed.data.Account
-        : undefined
-    if (rawAccount !== account) {
+    if (tx.Account !== account) {
       throw new Error('signRipple rawJson Account does not match the signing account')
+    }
+
+    // The Account check alone cannot stop a same-account swap: a rawJson
+    // Payment from this vault could name a different Destination/Amount than
+    // the reviewed toAddress/toAmount. Payments ARE expressible by the payload
+    // metadata, so for them the reviewed fields must bind to the signed bytes.
+    // Non-Payment types (offers, escrows) have no payload representation and
+    // pass on the Account check alone.
+    if (tx.TransactionType === 'Payment') {
+      if (tx.Destination !== keysignPayload.toAddress) {
+        throw new Error('signRipple rawJson Destination does not match the reviewed toAddress')
+      }
+
+      const amountMismatch = new Error('signRipple rawJson Amount does not match the reviewed toAmount')
+      const amount = tx.Amount
+      if (typeof amount === 'string') {
+        // Native XRP: Amount is a drops string (the XRPL JSON encoding).
+        if (!coin.isNativeToken || amount !== keysignPayload.toAmount) {
+          throw amountMismatch
+        }
+      } else if (typeof amount === 'object' && amount !== null) {
+        // Issued currency: bind currency, issuer and value to the reviewed
+        // coin. Values compare numerically so `1.5` and `1.50` don't diverge.
+        if (coin.isNativeToken || !coin.contractAddress) {
+          throw amountMismatch
+        }
+        const { currency, issuer } = parseRippleTokenId(coin.contractAddress)
+        const iou = amount as Record<string, unknown>
+        const matches =
+          typeof iou.currency === 'string' &&
+          toXrplCurrencyCode(iou.currency) === toXrplCurrencyCode(currency) &&
+          iou.issuer === issuer &&
+          typeof iou.value === 'string' &&
+          attempt(() => parseIssuedCurrencyValue(iou.value as string)).data ===
+            parseIssuedCurrencyValue(formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals))
+        if (!matches) {
+          throw amountMismatch
+        }
+      } else {
+        // Missing Amount (or an unrepresentable encoding) cannot be reviewed.
+        throw amountMismatch
+      }
     }
 
     return { rawJson }

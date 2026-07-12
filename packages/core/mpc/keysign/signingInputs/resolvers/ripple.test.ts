@@ -148,7 +148,10 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     const payload = buildPaymentPayload()
     payload.signData = {
       case: 'signRipple',
-      value: { $typeName: 'vultisig.keysign.v1.SignRipple', rawJson: offerCreateJson },
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: offerCreateJson,
+      },
     }
     return payload
   }
@@ -210,11 +213,176 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
       case: 'signRipple',
       value: {
         $typeName: 'vultisig.keysign.v1.SignRipple',
-        rawJson: JSON.stringify({ TransactionType: 'OfferCancel', OfferSequence: 7 }),
+        rawJson: JSON.stringify({
+          TransactionType: 'OfferCancel',
+          OfferSequence: 7,
+        }),
       },
     }
 
     expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Account does not match/)
+  })
+
+  it('rejects a same-account Payment whose Destination diverges from the reviewed toAddress', () => {
+    // The Account check alone is not enough: the initiator can present
+    // reviewed metadata (toAddress=A / toAmount=1 XRP) while rawJson signs a
+    // Payment from the SAME vault account to a different destination. The
+    // reviewed metadata must bind to the signed bytes.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: 'rAttackerDestination00000000000000',
+          Amount: payload.toAmount,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Destination does not match/)
+  })
+
+  it('rejects a same-account Payment whose Amount diverges from the reviewed toAmount', () => {
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: '999999999999',
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
+  })
+
+  it('rejects a same-account Payment that omits Amount entirely', () => {
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
+  })
+
+  it('forwards a Payment rawJson whose Destination and Amount match the reviewed metadata', async () => {
+    const payload = buildPaymentPayload()
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: payload.toAmount,
+      Fee: '15',
+      Sequence: 100,
+      LastLedgerSequence: 200,
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+    expect(input.opPayment).toBeFalsy()
+  })
+
+  it('rejects an issued-currency Amount object when the reviewed coin is native XRP', () => {
+    // Metadata reviewed as a 1 XRP send, but rawJson pays out an IOU instead.
+    const payload = buildPaymentPayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '100000' },
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
+  })
+
+  it('binds an issued-currency Payment to the reviewed currency, issuer and value', async () => {
+    // 1.5 RLUSD reviewed; rawJson delivers the same amount with an equivalent
+    // value spelling ("1.50") and the human ticker instead of the hex code.
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+    const paymentJson = JSON.stringify({
+      TransactionType: 'Payment',
+      Account: ACCOUNT,
+      Destination: payload.toAddress,
+      Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '1.50' },
+    })
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: paymentJson,
+      },
+    }
+
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(paymentJson)
+    expect(input.opTrustSet).toBeFalsy()
+  })
+
+  it('rejects an issued-currency Payment whose value diverges from the reviewed toAmount', () => {
+    const payload = buildTrustSetPayload('1500000000000000')
+    payload.toAddress = 'rDestinationAddressForTests9876543210'
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: ACCOUNT,
+          Destination: payload.toAddress,
+          Amount: { currency: 'RLUSD', issuer: RLUSD_ISSUER, value: '150' },
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Amount does not match/)
+  })
+
+  it('still lets a non-Payment rawJson through on the Account check alone (OfferCreate)', async () => {
+    // Offers cannot be expressed by toAddress/toAmount, so the metadata
+    // binding must not break them — only the Account gate applies.
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildSignRipplePayload(),
+      walletCore,
+    })
+
+    expect(input.rawJson).toBe(offerCreateJson)
   })
 
   it('throws on a malformed (non-JSON) rawJson', () => {
