@@ -5,6 +5,7 @@ import {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
 import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -38,7 +39,10 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
         limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
           currency: toXrplCurrencyCode(currency),
           issuer,
-          value: formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals),
+          value: formatIssuedCurrencyValue(
+            toBoundedBigInt(keysignPayload.toAmount, { bits: 128, signed: false }),
+            coin.decimals
+          ),
         }),
       }),
     }
@@ -65,7 +69,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
           TransactionType: 'Payment',
           Account: account,
           Destination: keysignPayload.toAddress,
-          Amount: keysignPayload.toAmount,
+          Amount: toBoundedLong(keysignPayload.toAmount, { unsigned: false }).toString(),
           Fee: gas.toString(),
           Sequence: Number(sequence),
           LastLedgerSequence: Number(lastLedgerSequence),
