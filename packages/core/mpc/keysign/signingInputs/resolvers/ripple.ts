@@ -69,7 +69,11 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
           TransactionType: 'Payment',
           Account: account,
           Destination: keysignPayload.toAddress,
-          Amount: toBoundedLong(keysignPayload.toAmount, { unsigned: false }).toString(),
+          // Unlike the two Payment PROTO paths (int64 field, so signedness must
+          // match), this is a plain JSON string: XRP drops are non-negative, so
+          // reject a negative amount here instead of building JSON that XRPL
+          // would bounce after the MPC ceremony already ran.
+          Amount: toBoundedLong(keysignPayload.toAmount, { unsigned: true }).toString(),
           Fee: gas.toString(),
           Sequence: Number(sequence),
           LastLedgerSequence: Number(lastLedgerSequence),

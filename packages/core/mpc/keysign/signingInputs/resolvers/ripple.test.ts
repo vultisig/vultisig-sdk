@@ -171,6 +171,20 @@ describe('getRippleSigningInputs -- amount strict parse (#1147)', () => {
     ).toThrow(RangeError)
   })
 
+  it('rejects a negative amount on the raw-JSON memo payment path', () => {
+    // XRP drops are non-negative; unsigned bound throws pre-ceremony instead
+    // of building JSON that XRPL would reject post-sign.
+    const payload = buildPaymentPayload()
+    payload.memo = 'not-a-destination-tag'
+    payload.toAmount = '-1'
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: payload,
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
   it('keeps the raw-JSON memo payment amount unchanged for a valid value', async () => {
     const payload = buildPaymentPayload()
     payload.memo = 'not-a-destination-tag'
