@@ -753,8 +753,13 @@ export const findSwapQuote = async ({
         fetch: async (): Promise<SwapQuote> => {
           const general = await getOneInchSwapQuote({
             account: pick(from, ['address', 'chain']),
-            fromCoinId: from.id ?? from.ticker,
-            toCoinId: to.id ?? to.ticker,
+            // Pass the raw `.id` (undefined for a chain's native/fee coin) — NOT a ticker
+            // fallback. `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to
+            // map the native asset to 1inch's `0xEeee...` sentinel; a ticker string like
+            // "ETH" is truthy and would defeat that check, sending the literal ticker as
+            // `dst`/`src` to 1inch's API (which requires the sentinel address).
+            fromCoinId: from.id,
+            toCoinId: to.id,
             to: {
               ...to,
               chain: to.chain as EvmChain,
