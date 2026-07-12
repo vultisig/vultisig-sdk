@@ -29,6 +29,11 @@
       "import": "./dist/chains/cosmos/qbtc/QBTCTx.js",
       "default": "./dist/chains/cosmos/qbtc/QBTCTx.js"
     },
+    "./chains/sui/coinSelection": {
+      "types": "./dist/chains/sui/coinSelection.d.ts",
+      "import": "./dist/chains/sui/coinSelection.js",
+      "default": "./dist/chains/sui/coinSelection.js"
+    },
     "./compression/getSevenZip": {
       "types": "./dist/compression/getSevenZip.d.ts",
       "browser": "./dist/compression/getSevenZip.browser.js",

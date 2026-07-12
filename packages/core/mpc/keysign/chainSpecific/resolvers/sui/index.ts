@@ -5,6 +5,7 @@ import { SuiCoinSchema, SuiSpecificSchema } from '@vultisig/core-mpc/types/vulti
 import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
 import type { CoinStruct } from '@mysten/sui/jsonRpc'
 
+import { selectSuiPayloadCoins } from '../../../../chains/sui/coinSelection'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSuiChainSpecific } from './refine'
@@ -55,7 +56,20 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
     }
   } while (cursor)
 
-  const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
+  // Bound the embedded coin set to what the send actually needs (sdk#1132,
+  // iOS #4734 parity): embedding every owned object makes a dusty wallet's
+  // keysign payload too large to relay (co-signer poll 404 / "data expired")
+  // and drags unrelated coin types (memecoins/LSTs) into the payload. The
+  // signing-input resolver performs the same deterministic selection on this
+  // set, so the bounded output is exactly the inputs the signer consumes —
+  // plus, for a token send, the largest few native objects as gas candidates
+  // so a covering gas object survives the refine step's re-estimated budget.
+  const coins = selectSuiPayloadCoins({
+    coins: rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin)),
+    contractAddress: coin.id ?? '',
+    amount: BigInt(keysignPayload.toAmount || '0'),
+    gasBudget: suiGasBudget,
+  })
 
   const referenceGasPrice = await client.getReferenceGasPrice()
 
