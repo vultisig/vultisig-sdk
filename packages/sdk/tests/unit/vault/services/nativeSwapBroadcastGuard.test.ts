@@ -45,11 +45,15 @@ const makeMayachainSwapPayload = ({
     },
   }) as KeysignPayload
 
-const makeSecuredAssetWithdrawalPayload = (
+const makeSecuredAssetWithdrawalPayload = ({
   vaultAddress = '',
   memo = 'SECURE-:bc1qdestination',
-  expirationTime = 0n
-): KeysignPayload =>
+  expirationTime = 0n,
+}: {
+  vaultAddress?: string
+  memo?: string
+  expirationTime?: bigint
+} = {}): KeysignPayload =>
   ({
     toAddress: '',
     toAmount: '10000000',
@@ -167,7 +171,11 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     await expect(
       assertNativeSwapReadyForBroadcast({
         chain: Chain.THORChain,
-        keysignPayload: makeSecuredAssetWithdrawalPayload('thor1stale', 'secure-:bc1qdestination', 1_700_000_100n),
+        keysignPayload: makeSecuredAssetWithdrawalPayload({
+          vaultAddress: 'thor1stale',
+          memo: 'secure-:bc1qdestination',
+          expirationTime: 1_700_000_100n,
+        }),
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
@@ -185,7 +193,11 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     await expect(
       assertNativeSwapReadyForBroadcast({
         chain: Chain.THORChain,
-        keysignPayload: makeSecuredAssetWithdrawalPayload('thor1stale', '-:BTC.BTC:10000', 1_700_000_100n),
+        keysignPayload: makeSecuredAssetWithdrawalPayload({
+          vaultAddress: 'thor1stale',
+          memo: '-:BTC.BTC:10000',
+          expirationTime: 1_700_000_100n,
+        }),
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
