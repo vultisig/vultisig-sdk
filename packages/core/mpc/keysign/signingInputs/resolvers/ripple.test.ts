@@ -182,4 +182,51 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
 
     expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/missing rawJson/)
   })
+
+  it('rejects a rawJson whose Account is not the signing vault (fail closed)', () => {
+    // A malicious initiator could present the reviewed metadata for this vault
+    // while embedding a transaction that spends a different account. The signer
+    // must refuse rather than sign someone else's transaction.
+    const payload = buildSignRipplePayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({
+          TransactionType: 'Payment',
+          Account: 'rAttackerAccount000000000000000000',
+          Destination: 'rElsewhere00000000000000000000000',
+          Amount: '999999999',
+        }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Account does not match/)
+  })
+
+  it('rejects a rawJson that carries no Account at all', () => {
+    const payload = buildSignRipplePayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: JSON.stringify({ TransactionType: 'OfferCancel', OfferSequence: 7 }),
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/Account does not match/)
+  })
+
+  it('throws on a malformed (non-JSON) rawJson', () => {
+    const payload = buildSignRipplePayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: {
+        $typeName: 'vultisig.keysign.v1.SignRipple',
+        rawJson: 'not json',
+      },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/not valid JSON/)
+  })
 })
