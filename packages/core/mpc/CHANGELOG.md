@@ -1,5 +1,178 @@
 # @vultisig/core-mpc
 
+## 1.9.5
+
+### Patch Changes
+
+- Updated dependencies [[`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132)]:
+  - @vultisig/core-chain@2.25.1
+
+## 1.9.4
+
+### Patch Changes
+
+- Updated dependencies [[`1ef64a3`](https://github.com/vultisig/vultisig-sdk/commit/1ef64a39f856d9f1d412df8f5e69c66f7130d8c7)]:
+  - @vultisig/core-chain@2.25.0
+
+## 1.9.3
+
+### Patch Changes
+
+- [#1034](https://github.com/vultisig/vultisig-sdk/pull/1034) [`6643df7`](https://github.com/vultisig/vultisig-sdk/commit/6643df76cf2ff2ffe08ca4985bcaf46289714e4f) Thanks [@neavra](https://github.com/neavra)! - Silence 7z-wasm banner/progress output on stdout during QR payload compression/decompression. The chatter polluted the machine-output channel for CLI consumers (e.g. corrupting piped/JSON output on `join secure`); errors still surface via stderr.
+
+- Updated dependencies [[`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963)]:
+  - @vultisig/core-chain@2.24.3
+
+## 1.9.2
+
+### Patch Changes
+
+- [#978](https://github.com/vultisig/vultisig-sdk/pull/978) [`1c2f007`](https://github.com/vultisig/vultisig-sdk/commit/1c2f007cef4656a65ec830dd421a1b7c14d3e053) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Compile Bitcoin PSBT payloads for Blockaid transaction validation.
+
+- [#975](https://github.com/vultisig/vultisig-sdk/pull/975) [`22bc005`](https://github.com/vultisig/vultisig-sdk/commit/22bc005fe3a13c1c6490f6f2b8e7f6a564b64fb2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Generate local MPC party IDs with CSPRNG-backed 64-bit hex suffixes instead of Math.random-derived four-digit values.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#1097](https://github.com/vultisig/vultisig-sdk/pull/1097) [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): exact bigint decimal conversion for the displayed swap output (`toAmountDecimal`) — the float64 `fromChainAmount(...).toFixed()` path silently drifted above 2^53 raw units (e.g. `999999999999999999999999` @18dp rendered as `1000000.000000000000000000`), so the amount the user confirmed could differ from the quoted one. Non-integer provider amount strings keep the legacy fallback instead of throwing mid-build.
+
+- Updated dependencies [[`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040), [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7), [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91)]:
+  - @vultisig/core-chain@2.24.2
+
+## 1.9.1
+
+### Patch Changes
+
+- Updated dependencies [[`c5e89cb`](https://github.com/vultisig/vultisig-sdk/commit/c5e89cb317ae6f4ca00eb6c628ad6bac636e4821), [`9a1fc02`](https://github.com/vultisig/vultisig-sdk/commit/9a1fc0276ddc8fc905fab392875499d39011520d)]:
+  - @vultisig/core-chain@2.24.1
+
+## 1.9.0
+
+### Minor Changes
+
+- [#1042](https://github.com/vultisig/vultisig-sdk/pull/1042) [`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): XRP trust-line (TrustSet) support for issued tokens
+
+  Add support for opening/modifying an XRPL trust line so a vault can hold issued
+  currencies (e.g. RLUSD). `getRippleSigningInputs` now emits a WalletCore
+  `OperationTrustSet` (LimitAmount = { currency, issuer, value }) when the keysign
+  coin is an issued currency, and falls through to the existing Payment path for
+  native XRP. New `chains/ripple/issuedCurrency` helpers encode the composite
+  `currency.issuer` token id, normalise human tickers to on-ledger currency codes,
+  format issued-currency values, and expose the 0.2 XRP owner-reserve delta
+  (`rippleOwnerReserveDrops`). `isValidTokenId` validates XRPL `currency.issuer`
+  ids.
+
+### Patch Changes
+
+- Updated dependencies [[`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de)]:
+  - @vultisig/core-chain@2.24.0
+
+## 1.8.20
+
+### Patch Changes
+
+- Updated dependencies [[`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921)]:
+  - @vultisig/core-chain@2.23.3
+
+## 1.8.19
+
+### Patch Changes
+
+- [#1014](https://github.com/vultisig/vultisig-sdk/pull/1014) [`c41a219`](https://github.com/vultisig/vultisig-sdk/commit/c41a21950c4cccf70c8298b8e595acf64c276d8c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(cosmos): initiator-side dynamic gas — simulate native sends and relay `CosmosSpecific.gas_limit`
+
+  `getCosmosChainSpecific` now simulates native Cosmos bank sends via
+  `/cosmos/tx/v1beta1/simulate` and relays the padded (`× 1.3`) `gas_used` to
+  co-signers in `CosmosSpecific.gas_limit`. The signing-inputs resolver already
+  honors this field (scaling the fee amount accordingly) and falls back to the
+  static per-chain gas limit when it is absent or zero, so:
+
+  - Only native bank sends are simulated (a relayed dapp `signData`, token / IBC /
+    contract / staking txs, and vault-based chains keep the static limit).
+  - Estimation fails closed: any simulate/build error leaves the field unset, so
+    simulation never blocks signing and peers converge on the static limit.
+  - The relayed limit is part of the SignDoc every device hashes; because it is
+    computed with exact integer math (ceil of `gas_used × 13 / 10`) and honored
+    identically across peers, cross-device co-signing stays byte-identical.
+
+  Mirrors the iOS `CosmosGasEstimator` implementation.
+
+- Updated dependencies [[`c41a219`](https://github.com/vultisig/vultisig-sdk/commit/c41a21950c4cccf70c8298b8e595acf64c276d8c)]:
+  - @vultisig/core-chain@2.23.2
+
+## 1.8.18
+
+### Patch Changes
+
+- [#956](https://github.com/vultisig/vultisig-sdk/pull/956) [`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6) Thanks [@gastonm5](https://github.com/gastonm5)! - fix(cardano): attach and plan per-UTXO native-token data for MPC keysign parity
+
+  Adopts commondata's `UtxoInfo.cardano_tokens` across all three missing
+  layers, mirroring the mainnet-tested iOS implementation byte-for-byte:
+
+  - Regenerates `utxo_info_pb.ts` so `CardanoTokenAsset` /
+    `UtxoInfo.cardanoTokens` exist and can be decoded off the keysign wire.
+  - The keysign initiator fetches Cardano UTXOs with Koios `_extended` and
+    attaches per-UTXO native assets (UTXOs ordered by `(hash, index)`, assets
+    by `(policyId, assetNameHex)`, hex lowercased) so co-signers see
+    deterministic, token-aware payload bytes.
+  - The Cardano signing-inputs resolver maps `cardanoTokens` onto WalletCore
+    `TxInput.token_amount` (minimal big-endian amount bytes), letting the
+    planner reconcile input tokens into the change output.
+
+  Fixes MPC co-signing for any Cardano address holding native tokens:
+  iOS/macOS-initiated sends no longer fail keysign with a pre-image hash
+  mismatch, and SDK-initiated sends no longer build token-dropping bodies
+  that the node rejects at broadcast (Ogmios 3123 "value not conserved").
+
+- [#985](https://github.com/vultisig/vultisig-sdk/pull/985) [`2f23526`](https://github.com/vultisig/vultisig-sdk/commit/2f23526e39d22f8f13aea1310ba4106137f3484c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Regenerate keysign protobuf types from latest commondata: add `CosmosSpecific.gasLimit` (field 7) and the `TransactionType.QBTC_CLAIM_WITH_PROOF` enum value.
+
+- Updated dependencies [[`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6), [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244)]:
+  - @vultisig/core-chain@2.23.1
+
+## 1.8.17
+
+### Patch Changes
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
+- Updated dependencies [[`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc), [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5), [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37), [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81), [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5)]:
+  - @vultisig/core-chain@2.23.0
+
+## 1.8.16
+
+### Patch Changes
+
+- [#921](https://github.com/vultisig/vultisig-sdk/pull/921) [`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - refactor(cardano): attach CIP-20 memo via WalletCore native auxiliary_data
+
+  Bumps `@trustwallet/wallet-core` to `4.7.0`, which adds the Cardano
+  `SigningInput.auxiliary_data` field. The Cardano memo path now hands the
+  CIP-20 CBOR straight to WalletCore, which commits its Blake2b-256 hash into
+  tx body key 7 and embeds the bytes in the signed transaction — replacing the
+  client-side body patching and re-hashing in TypeScript. The chain-specific
+  fee estimator prices the WalletCore body as-is (it already carries key 7),
+  and the now-unused `patchTxBodyWithAuxHash` helper is removed.
+
+- Updated dependencies [[`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e), [`d08a476`](https://github.com/vultisig/vultisig-sdk/commit/d08a47696d0cb1c8dbcb50d41830b9eae16b6d8c)]:
+  - @vultisig/core-chain@2.22.2
+
+## 1.8.15
+
+### Patch Changes
+
+- Updated dependencies [[`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a)]:
+  - @vultisig/lib-utils@0.10.4
+  - @vultisig/core-chain@2.22.1
+
 ## 1.8.14
 
 ### Patch Changes

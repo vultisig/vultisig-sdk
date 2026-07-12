@@ -5,7 +5,6 @@ import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { promises as fs } from 'fs'
-import inquirer from 'inquirer'
 import path from 'path'
 import qrcode from 'qrcode-terminal'
 
@@ -15,12 +14,15 @@ import {
   error,
   info,
   isJsonOutput,
+  isNonInteractive,
   isSilent,
   outputJson,
   printResult,
+  requireInteractive,
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 import { displayVaultInfo, displayVaultsList, setupVaultEvents } from '../ui'
 
 /**
@@ -59,12 +61,15 @@ export type SecureVaultOptions = {
  * Create a fast vault (server-assisted 2-of-2)
  */
 export async function executeCreateFast(ctx: CommandContext, options: FastVaultOptions): Promise<VaultBase> {
-  // Auto-enable two-step mode when stdin is not a TTY (non-interactive / agent context)
-  const twoStep = options.twoStep || !process.stdin.isTTY
+  // Auto-enable two-step mode in non-interactive sessions (shared definition:
+  // non-TTY stdout OR stdin, or --non-interactive/--ci). Keying off stdin alone
+  // would let a redirected-stdout run create server-side vault state and only
+  // then die on the OTP prompt — a side effect before the fail-closed refusal.
+  const twoStep = options.twoStep || isNonInteractive()
   const { name, password, email, signal } = options
 
   if (!options.twoStep && twoStep) {
-    info('Non-interactive terminal detected. Using --two-step mode automatically.')
+    info('Non-interactive session detected. Using --two-step mode automatically.')
   }
 
   const spinner = createSpinner('Creating vault...')
@@ -118,7 +123,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -156,7 +161,7 @@ export async function executeCreateFast(ctx: CommandContext, options: FastVaultO
       }
 
       // Offer retry options
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -282,7 +287,7 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   // Password priority: --password flag > VAULT_PASSWORD env var > interactive prompt
   let password = flagPassword || process.env.VAULT_PASSWORD || ''
   if (!password) {
-    const answers = await inquirer.prompt([
+    const answers = await prompt([
       {
         type: 'password',
         name: 'password',
@@ -326,8 +331,9 @@ export async function executeVerify(
     let password = options.password
 
     if (!email || !password) {
+      requireInteractive('Pass --email and --password to resend non-interactively.')
       info('Email and password are required to resend verification.')
-      const answers = await inquirer.prompt([
+      const answers = await prompt([
         ...(!email
           ? [
               {
@@ -349,7 +355,7 @@ export async function executeVerify(
               },
             ]
           : []),
-      ] as unknown as Parameters<typeof inquirer.prompt>[0])
+      ] as unknown as Parameters<typeof prompt>[0])
       email = email || answers.email
       password = password || answers.password
     }
@@ -364,12 +370,26 @@ export async function executeVerify(
       error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
       return false
     }
+
+    // Non-interactive sessions can't fall through to the OTP prompt below — resend
+    // is a complete action on its own (the documented follow-up is a separate
+    // `verify --code <OTP>` call), so return here instead of reaching a prompt that
+    // would throw ConfirmationRequiredError right after we already reported success.
+    if (!options.code && isNonInteractive()) {
+      if (isJsonOutput()) {
+        outputJson({ resent: true, vaultId })
+        return true
+      }
+      info('\nOnce you have the code, run:')
+      printResult(chalk.cyan(`  vultisig verify ${vaultId} --code <OTP>`))
+      return true
+    }
   }
 
   let code = options.code
 
   if (!code) {
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -485,7 +505,7 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
       exportPassword = options.password
     } else {
       // Prompt for export password
-      const answer = await inquirer.prompt([
+      const answer = await prompt([
         {
           type: 'password',
           name: 'exportPassword',
@@ -705,6 +725,10 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
+  // This flow has no two-step mode: it always ends in an interactive email-OTP
+  // prompt. Refuse up-front in a non-interactive session so no server-side vault
+  // state is created before the prompt chokepoint would reject anyway.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
   const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
 
   // jscpd:ignore-start
@@ -784,7 +808,7 @@ export async function executeCreateFromSeedphraseFast(
   while (attempts < MAX_VERIFY_ATTEMPTS) {
     attempts++
 
-    const codeAnswer = await inquirer.prompt([
+    const codeAnswer = await prompt([
       {
         type: 'input',
         name: 'code',
@@ -821,7 +845,7 @@ export async function executeCreateFromSeedphraseFast(
         throw err
       }
 
-      const { action } = await inquirer.prompt([
+      const { action } = await prompt([
         {
           type: 'select',
           name: 'action',
@@ -1116,6 +1140,14 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
     return
   }
 
+  // Fail closed up-front: table mode ends in an interactive delete confirmation
+  // a non-interactive session can never answer — refuse before the vault
+  // details/warnings write to stdout. (JSON mode legitimately skips
+  // confirmation and returned above; --yes maps to skipConfirmation.)
+  if (!options.skipConfirmation) {
+    requireInteractive('Pass --yes to skip confirmation, or use -o json for scripting.')
+  }
+
   // Step 3: Display vault info for confirmation
   info('\n' + chalk.bold('Vault to delete:'))
   info(`  Name:   ${chalk.cyan(vault.name)}`)
@@ -1130,7 +1162,7 @@ export async function executeDelete(ctx: CommandContext, options: DeleteVaultOpt
     warn('Make sure you have a backup of your vault (.vult file) before proceeding.')
     info('')
 
-    const { confirmed } = await inquirer.prompt([
+    const { confirmed } = await prompt([
       {
         type: 'confirm',
         name: 'confirmed',

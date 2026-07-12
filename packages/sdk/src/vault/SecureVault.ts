@@ -20,6 +20,7 @@ import type {
   VaultData,
 } from '../types'
 import { normalizeToHex } from '../utils/bytes'
+import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -116,14 +117,7 @@ export class SecureVault extends VaultBase {
         this.emit('signingProgress', { step })
       },
       onQRCodeReady: qrPayload => {
-        this.emit('qrCodeReady', {
-          qrPayload,
-          action: 'keysign',
-          sessionId: '',
-        })
-        if (options.onQRCodeReady) {
-          options.onQRCodeReady(qrPayload)
-        }
+        this.handleQRCodeReady(qrPayload, options.onQRCodeReady)
       },
       onDeviceJoined: (deviceId, totalJoined, required) => {
         this.emit('deviceJoined', { deviceId, totalJoined, required })
@@ -137,6 +131,44 @@ export class SecureVault extends VaultBase {
     this.emit('transactionSigned', { signature, payload })
 
     return signature
+  }
+
+  private handleQRCodeReady(qrPayload: string, onQRCodeReady?: (qrPayload: string) => void): void {
+    this.emit('qrCodeReady', {
+      qrPayload,
+      action: 'keysign',
+      sessionId: '',
+    })
+    void this.notifyDevices(qrPayload)
+    onQRCodeReady?.(qrPayload)
+  }
+
+  /**
+   * ponytail: notify the vault's registered devices (mobile/laptop) that a
+   * keysign QR is ready, so a co-signer gets a native push instead of manually
+   * watching for the QR. The keysign path (RelaySigningService) never called
+   * this; it only generated the QR + polled the relay. Best-effort: swallows
+   * errors and no-ops when no push service / keys / registered devices.
+   * vault_id MUST be computeNotificationVaultId (SHA256(utf8(ecdsa+chainCode))),
+   * NOT the raw pubkey — that mismatch was why pushes never landed.
+   */
+  private async notifyDevices(qrPayload: string): Promise<void> {
+    try {
+      const push = this.context.pushNotificationService
+      const ecdsa = this.coreVault.publicKeys?.ecdsa
+      const chainCode = this.coreVault.hexChainCode
+      if (!push || !ecdsa || !chainCode) return
+      const vaultId = await computeNotificationVaultId(ecdsa, chainCode)
+      await push.notifyVaultMembers({
+        vaultId,
+        vaultName: this.coreVault.name,
+        localPartyId: this.coreVault.localPartyId,
+        qrCodeData: qrPayload,
+      })
+    } catch (error) {
+      // push is a convenience layer — never let it break signing
+      this.emit('error', error as Error)
+    }
   }
 
   /**
@@ -193,14 +225,7 @@ export class SecureVault extends VaultBase {
             this.emit('signingProgress', { step })
           },
           onQRCodeReady: qrPayload => {
-            this.emit('qrCodeReady', {
-              qrPayload,
-              action: 'keysign',
-              sessionId: '',
-            })
-            if (signingOptions.onQRCodeReady) {
-              signingOptions.onQRCodeReady(qrPayload)
-            }
+            this.handleQRCodeReady(qrPayload, signingOptions.onQRCodeReady)
           },
           onDeviceJoined: (deviceId, totalJoined, required) => {
             this.emit('deviceJoined', { deviceId, totalJoined, required })

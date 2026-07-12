@@ -1,4 +1,6 @@
+import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getJupiterSwapQuote } from './getJupiterSwapQuote'
@@ -9,20 +11,31 @@ vi.mock('./jupiterFeeAta', () => ({
   prependJupiterFeeAta: vi.fn(),
 }))
 
+// The instruction-allowlist guard (audit finding SOL-01) is covered by its
+// own dedicated test suite against real captured Jupiter fixtures
+// (assertSafeSolanaSwapInstructions.test.ts). Here it's mocked so this
+// file's fake `swapTransaction` strings don't need to be valid
+// VersionedTransaction bytes.
+vi.mock('@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions', () => ({
+  assertSafeSolanaSwapTransactionBase64: vi.fn(),
+}))
+
 const usdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const feeOwner = '8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z'
+const customFeeOwner = 'CustomFeeOwner111111111111111111111111111111'
+const customBaseUrl = 'https://jupiter-proxy.example/jup'
 const feeAccount = 'FeeAtaAddr1111111111111111111111111111111111'
 
 const solNative = {
   chain: Chain.Solana,
-  address: 'SoLAddrSender1111111111111111111111111111111',
+  address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
   decimals: 9,
   ticker: 'SOL',
 } as const
 
 const solUsdc = {
   chain: Chain.Solana,
-  address: 'SoLAddrSender1111111111111111111111111111111',
+  address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
   id: usdcMint,
   decimals: 6,
   ticker: 'USDC',
@@ -52,6 +65,7 @@ describe('getJupiterSwapQuote', () => {
         ownerPubkey: {} as never,
       })
     vi.mocked(prependJupiterFeeAta).mockReset().mockResolvedValue('prepended-base64-tx')
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockReset().mockResolvedValue(undefined)
 
     vi.stubGlobal(
       'fetch',
@@ -99,6 +113,53 @@ describe('getJupiterSwapQuote', () => {
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('prepended-base64-tx')
   })
 
+  it('uses per-call Jupiter affiliate config overrides', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        feeOwner: customFeeOwner,
+        baseUrl: `${customBaseUrl}//`,
+      },
+    })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url.startsWith(`${customBaseUrl}/swap/v1/quote`)).toBe(true)
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner: customFeeOwner })
+  })
+
+  it('falls back to the default fee owner when the per-call override is blank', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        feeOwner: '   ',
+      },
+    })
+
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
+  })
+
+  it('allows overriding only the per-call Jupiter base URL', async () => {
+    await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: {
+        baseUrl: `${customBaseUrl}//`,
+      },
+    })
+
+    const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
+    expect(quoteCall.url.startsWith(`${customBaseUrl}/swap/v1/quote`)).toBe(true)
+    expect(deriveJupiterFeeAccount).toHaveBeenCalledWith({ outputMint: usdcMint, feeOwner })
+  })
+
   it('omits the platform fee entirely when affiliateBps is 0', async () => {
     const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
 
@@ -136,7 +197,13 @@ describe('getJupiterSwapQuote', () => {
       })
     )
 
-    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+    const quote = await getJupiterSwapQuote({
+      from: solNative,
+      to: solUsdc,
+      amount: 1_000_000_000n,
+      affiliateBps: 50,
+      jupiterConfig: { feeOwner: customFeeOwner },
+    })
 
     // The fee was still requested on the quote...
     const quoteCall = calls.find(c => c.url.includes('/swap/v1/quote'))!
@@ -152,6 +219,135 @@ describe('getJupiterSwapQuote', () => {
     // Untouched Jupiter transaction flows through verbatim and the swap fee is 0.
     expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
     expect('solana' in quote.tx && quote.tx.solana.swapFee.amount).toBe(0n)
+  })
+
+  it('refuses to build when the quoted price impact exceeds the 10% ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              // Jupiter's priceImpactPct is a FRACTION: "0.5" == 50% impact.
+              priceImpactPct: '0.5',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/price impact/i)
+
+    // Refused before the /swap build call was ever made.
+    expect(calls.some(c => c.url.includes('/swap/v1/swap'))).toBe(false)
+  })
+
+  it('builds normally at a price impact just under the 10% ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.0999',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+  })
+
+  it('builds at exactly 10% price impact (ceiling itself passes, only strictly-above rejects)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.10',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    const quote = await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    expect('solana' in quote.tx && quote.tx.solana.data).toBe('raw-base64-tx')
+  })
+
+  it('refuses to build just above the 10% price impact ceiling', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        calls.push({ url, init })
+        if (url.includes('/swap/v1/quote')) {
+          return Promise.resolve(
+            jsonResponse({
+              inputMint: 'So11111111111111111111111111111111111111112',
+              inAmount: '1000000000',
+              outputMint: usdcMint,
+              outAmount: '1000000',
+              priceImpactPct: '0.1001',
+            })
+          )
+        }
+        return Promise.resolve(jsonResponse({ swapTransaction: 'raw-base64-tx' }))
+      })
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/price impact/i)
+  })
+
+  it('validates the raw Jupiter transaction against the instruction allow-list before any fee-ATA prepend', async () => {
+    await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 50 })
+
+    // Guarded BEFORE prependJupiterFeeAta mutates it - the raw provider
+    // payload is what gets validated, not our own locally-added instruction.
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx', expect.any(PublicKey))
+  })
+
+  it('validates the raw Jupiter transaction even when no fee is charged', async () => {
+    await getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+
+    expect(assertSafeSolanaSwapTransactionBase64).toHaveBeenCalledWith('raw-base64-tx', expect.any(PublicKey))
+  })
+
+  it('propagates a refusal from the instruction allow-list guard', async () => {
+    vi.mocked(assertSafeSolanaSwapTransactionBase64).mockRejectedValueOnce(
+      new Error('SOL_SWAP_UNEXPECTED_PROGRAM: instruction 3 targets unrecognized program Evi1...; refusing to sign')
+    )
+
+    await expect(
+      getJupiterSwapQuote({ from: solNative, to: solUsdc, amount: 1_000_000_000n, affiliateBps: 0 })
+    ).rejects.toThrow(/SOL_SWAP_UNEXPECTED_PROGRAM/)
+
+    // Refused before the fee-ATA prepend step.
+    expect(prependJupiterFeeAta).not.toHaveBeenCalled()
   })
 
   it('throws when Jupiter returns no serialized transaction', async () => {

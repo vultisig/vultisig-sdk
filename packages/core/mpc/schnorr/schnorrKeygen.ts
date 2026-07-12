@@ -6,6 +6,7 @@ import { getKeygenThreshold } from '../getKeygenThreshold'
 import { getMessageHash } from '../getMessageHash'
 import { KeygenOperation } from '../keygen/KeygenOperation'
 import { initializeMpcLib } from '../lib/initialize'
+import { mpcDebugLog } from '../mpcDebugLog'
 import { deleteMpcRelayMessage } from '../message/relay/delete'
 import { getMpcRelayMessages } from '../message/relay/get'
 import { sendMpcRelayMessage } from '../message/relay/send'
@@ -73,14 +74,14 @@ export class Schnorr {
       const message = session.outputMessage()
       if (message === undefined) {
         if (this.isKeygenComplete) {
-          console.log('stop processOutbound')
+          mpcDebugLog('stop processOutbound')
           return true
         } else {
           await sleep(100) // backoff for 100ms
           return await this.processOutbound(session, messageId)
         }
       }
-      console.log('outbound message:', message)
+      mpcDebugLog('outbound message:', message)
       const messageToSend = toMpcServerMessage(message.body, this.hexEncryptionKey)
       message?.receivers.forEach(receiver => {
         // send message to receiver
@@ -104,7 +105,7 @@ export class Schnorr {
     } catch (error) {
       console.error('processOutbound error:', error)
       if (this.isKeygenComplete) {
-        console.log('stop processOutbound')
+        mpcDebugLog('stop processOutbound')
         return true
       }
       await sleep(100)
@@ -115,7 +116,7 @@ export class Schnorr {
   private async processInbound(session: MpcSession<unknown>, start: number, messageId?: string): Promise<boolean> {
     // Same as DKLS: empty relay polls must honor elapsed time or we spin forever.
     if (Date.now() - start > this.timeoutMs) {
-      console.log('timeout')
+      mpcDebugLog('timeout')
       this.isKeygenComplete = true
       return false
     }
@@ -136,13 +137,13 @@ export class Schnorr {
         if (this.cache[cacheKey]) {
           continue
         }
-        console.log(`got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`)
+        mpcDebugLog(`got message from: ${msg.from},to: ${msg.to},key:${cacheKey}`)
         const decryptedMessage = fromMpcServerMessage(msg.body, this.hexEncryptionKey)
         const isFinish = session.inputMessage(decryptedMessage)
         if (isFinish) {
           await sleep(1000) // wait for 1 second to make sure all messages are processed
           this.isKeygenComplete = true
-          console.log('keygen complete')
+          mpcDebugLog('keygen complete')
           return true
         }
         this.cache[cacheKey] = ''
@@ -167,8 +168,8 @@ export class Schnorr {
     if (this.setupMessage === undefined || this.setupMessage.length === 0) {
       throw new Error('setup message is empty')
     }
-    console.log('startKeygen attempt:', attempt)
-    console.log('session id:', this.sessionId)
+    mpcDebugLog('startKeygen attempt:', attempt)
+    mpcDebugLog('session id:', this.sessionId)
     this.isKeygenComplete = false
     try {
       const engine = (await ensureMpcEngine()).schnorr
@@ -225,7 +226,7 @@ export class Schnorr {
   }
 
   private async startReshare(rawSchnorrKeyshare: string | undefined, attempt: number, messageId?: string) {
-    console.log('startReshare schnorr, attempt:', attempt)
+    mpcDebugLog('startReshare schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     const engine = (await ensureMpcEngine()).schnorr
     let localKeyshare: MpcKeyshare | null = null
@@ -262,7 +263,7 @@ export class Schnorr {
           sessionId: this.sessionId,
           messageId: setupMessageId,
         })
-        console.log('uploaded setup message successfully')
+        mpcDebugLog('uploaded setup message successfully')
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({
           serverUrl: this.serverURL,
@@ -338,7 +339,7 @@ export class Schnorr {
       sessionId: this.sessionId,
       messageId: effectiveSetupId,
     })
-    console.log('uploaded setup message successfully')
+    mpcDebugLog('uploaded setup message successfully')
   }
 
   private async startKeyImport(
@@ -348,7 +349,7 @@ export class Schnorr {
     setupMessageId?: string,
     protocolMessageId?: string
   ) {
-    console.log('startKeyImport schnorr, attempt:', attempt)
+    mpcDebugLog('startKeyImport schnorr, attempt:', attempt)
     this.isKeygenComplete = false
     try {
       const engine = (await ensureMpcEngine()).schnorr
@@ -378,7 +379,7 @@ export class Schnorr {
             sessionId: this.sessionId,
             messageId: effectiveSetupId,
           })
-          console.log('uploaded setup message successfully')
+          mpcDebugLog('uploaded setup message successfully')
         }
       } else {
         const encodedEncryptedSetupMsg = await waitForSetupMessage({

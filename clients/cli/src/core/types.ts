@@ -14,6 +14,7 @@ export type SendParams = {
   memo?: string
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
+  force?: boolean // Bypass the broadcast-journal duplicate guard
   password?: string // Vault password for signing
   signal?: AbortSignal // Optional abort signal for cancellation
 }
@@ -50,6 +51,17 @@ export type PortfolioSummary = {
     balance: Balance
     value?: Value
   }>
+}
+
+/**
+ * A per-chain failure encountered while building a portfolio.
+ * `stage` marks whether the balance fetch or the fiat-value lookup failed.
+ * `error` is a concise, single-line message (no stack traces or filesystem paths).
+ */
+export type ChainFailure = {
+  chain: Chain
+  stage: 'balance' | 'value'
+  error: string
 }
 
 /**

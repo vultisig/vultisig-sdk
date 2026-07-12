@@ -25,10 +25,11 @@ import {
   isAuthError,
   PipeInterface,
 } from '../agent'
-import { AgentErrorCode, normalizeAgentError } from '../agent/agentErrors'
+import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agent/agentErrors'
 import type { AskResult } from '../agent/ask'
 import { renderBalanceSummaryCard } from '../agent/cards'
 import type { CommandContext } from '../core'
+import { ExitCode } from '../core/errors'
 import { isJsonOutput, outputErrorJson, outputJson, printResult, setSilentMode } from '../lib/output'
 
 export type AgentCommandOptions = {
@@ -101,6 +102,8 @@ export type AgentAskOptions = {
   profile?: string
   /** Opt in to unattended signing/broadcast (`--yes`). Default: deny + report the proposed tx. */
   autoApprove?: boolean
+  /** Bypass the broadcast-journal duplicate guard (`--force`). */
+  force?: boolean
 }
 
 /**
@@ -144,6 +147,10 @@ function outputAskError(
     if (result?.transactions.length) data.transactions = result.transactions
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
+    // a2a-02: the typed turn ending, when the backend advertised it. Placed under
+    // `data` so a caller reads `data.outcome` on BOTH the success and error
+    // envelopes (the success envelope wraps its fields under `data` via outputJson).
+    if (result?.outcome) data.outcome = result.outcome
     outputErrorJson({
       success: false,
       v: 1,
@@ -162,6 +169,12 @@ function outputAskError(
 function outputAskHuman(result: AskResult, confirmationRequired: boolean, proposed: string | undefined): void {
   // Line 1: session ID (easily extractable with head -1 | cut -d: -f2-)
   process.stdout.write(`session:${result.sessionId}\n`)
+  // a2a-02: surface a non-success turn ending as a greppable line (matches the exit
+  // code). Success is the norm and needs no line — the response speaks for itself.
+  if (result.outcome && result.outcome.kind !== 'success') {
+    const { kind, code } = result.outcome
+    process.stdout.write(`outcome:${kind}${code ? `:${code}` : ''}\n`)
+  }
   if (confirmationRequired) {
     process.stdout.write(`confirmation-required:pass --yes to authorize signing\n`)
     if (proposed) {
@@ -207,12 +220,40 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       tool_calls: result.toolCalls,
       transactions: result.transactions,
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+      // a2a-02: the typed turn ending (success | blocked | refusal | error) at
+      // `data.outcome` — the same relative slot as on the error envelope. Present
+      // only against a backend that honored the advertised turn_outcome surface;
+      // headless callers should branch on this (and the exit code), not `success`
+      // (which stays true for a completed-but-blocked/refused turn).
+      ...(result.outcome ? { outcome: result.outcome } : {}),
       ...(confirmationRequired ? { confirmation_required: true } : {}),
       ...(proposed ? { proposed } : {}),
     })
     return
   }
   outputAskHuman(result, confirmationRequired, proposed)
+}
+
+/**
+ * Map a typed turn-outcome to an exit code (a2a-02). STRICTLY ADDITIVE to the #952
+ * taxonomy: success stays 0; blocked/refusal take the first free dedicated slots
+ * (10/11); an infra error with no dedicated stream `error` frame collapses to the
+ * generic failure code (1) so it can't read as a false success. Returns undefined
+ * when there is no outcome (older backend) so the caller keeps its prior default.
+ */
+function outcomeToExitCode(outcome: AskResult['outcome']): ExitCode | undefined {
+  switch (outcome?.kind) {
+    case 'blocked':
+      return ExitCode.AGENT_TURN_BLOCKED
+    case 'refusal':
+      return ExitCode.AGENT_TURN_REFUSAL
+    case 'error':
+      return ExitCode.USAGE // 1 — generic failure; a stream error-frame path sets a more specific code first
+    case 'success':
+      return ExitCode.SUCCESS
+    default:
+      return undefined
+  }
 }
 
 export async function executeAgentAsk(ctx: CommandContext, message: string, options: AgentAskOptions): Promise<void> {
@@ -249,6 +290,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       verbose: options.verbose,
       askMode: true,
       profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
+      force: options.force,
     }
 
     const session = new AgentSession(vault, config)
@@ -264,14 +306,22 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // branching on exit code would see false success. Surface it as the error
     // envelope on stdout and exit non-zero; otherwise emit the success turn.
     if (result.error) {
-      exitCode = 1
+      // Map the backend/stream error code onto the ExitCode taxonomy (F3) so a
+      // headless caller can branch on `$?` — a retryable network blip vs a
+      // definitive bad-input vs an auth failure — instead of a blanket 1.
+      exitCode = agentErrorCodeToExitCode(result.error.code)
       outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
     } else {
+      // a2a-02: no stream error frame — the turn ending is the typed turn_outcome
+      // (when the backend emitted one). success→0, blocked→10, refusal→11, a
+      // frame-less error→1. Absent outcome (older backend) keeps the prior exit 0.
+      exitCode = outcomeToExitCode(result.outcome) ?? 0
       outputAskSuccess(wantsJson, result, conversationId)
     }
   } catch (err: unknown) {
-    const { code, message } = normalizeAgentError(err)
-    exitCode = 1
+    const normalized = normalizeAgentError(err)
+    let code = normalized.code
+    const message = normalized.message
     // ask() can throw AFTER a tx already broadcast: a successful sign always
     // triggers a recursive follow-up request to report recent_actions, and an
     // HTTP/timeout/5xx failure there rejects sendMessage. Recover the partial
@@ -280,6 +330,27 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // stranding the funds with exit-1 and an empty record.
     const partial = ask?.partialResult()
     if (partial && !conversationId) conversationId = partial.sessionId
+    // A throw AFTER a broadcast whose outcome is NOT a definitive on-chain
+    // failure IS the ack-failure case (F1): the tx hash is valid (carried in
+    // partial.transactions) but the follow-up report to the backend failed.
+    // Re-tag as ACK_FAILED so the caller gets the distinct fund-safety exit code
+    // (8 — do NOT blindly retry).
+    //
+    // Gate on TWO facts, not just "some non-failed tx exists":
+    //   1. an ACTUAL broadcast hash surfaced this turn that isn't resolved
+    //      'failed' (a reverted tx is safe to retry — the journal even clears
+    //      its guard — so ACK_FAILED would wrongly discourage it), AND
+    //   2. that broadcast's follow-up report was still UNDELIVERED when the turn
+    //      threw (session.hasUnacknowledgedBroadcast()).
+    // Without (2), a later independent retryable error — fired AFTER an earlier
+    // broadcast in the turn was already acked — would be masked as exit 8, when
+    // the caller should retry (the journal blocks any re-broadcast of that
+    // intent, so retrying can't double-spend). See session.ts.
+    const liveBroadcast = !!partial && partial.transactions.some(t => t.hash && t.status !== 'failed')
+    if (liveBroadcast && ask?.hasUnacknowledgedBroadcast()) {
+      code = AgentErrorCode.ACK_FAILED
+    }
+    exitCode = agentErrorCodeToExitCode(code)
     outputAskError(wantsJson, message, code, conversationId, partial)
   } finally {
     console.log = originalConsoleLog

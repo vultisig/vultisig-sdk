@@ -20,6 +20,13 @@ export default defineConfig({
       '@vultisig/lib-mldsa': resolve(root, 'packages/lib/mldsa'),
       '@vultisig/lib-schnorr': resolve(root, 'packages/lib/schnorr'),
       '@vultisig/mpc-types': resolve(root, 'packages/mpc-types/src'),
+      // Point at the leaf FileStorage module, NOT the node platform entry
+      // (platforms/node/index.ts), which runs import-time side effects
+      // (installs globalThis.crypto/fetch, configures MPC + WASM). config.ts is
+      // imported by nearly every CLI test, so aliasing to the entry would leak
+      // those side effects into every worker. storage.ts is the only thing the
+      // '@vultisig/sdk/node' subpath is used for here (FileStorage).
+      '@vultisig/sdk/node': resolve(root, 'packages/sdk/src/platforms/node/storage.ts'),
       '@vultisig/sdk': resolve(root, 'packages/sdk/src/index.ts'),
     },
   },
@@ -28,5 +35,6 @@ export default defineConfig({
     include: ['clients/cli/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     pool: 'forks',
+    setupFiles: ['clients/cli/tests/setup/cliTestEnv.ts'],
   },
 })

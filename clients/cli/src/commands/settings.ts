@@ -4,7 +4,6 @@
 import type { FiatCurrency } from '@vultisig/sdk'
 import { Chain, fiatCurrencies, fiatCurrencyNameRecord } from '@vultisig/sdk'
 import chalk from 'chalk'
-import inquirer from 'inquirer'
 
 import type { CommandContext } from '../core'
 import {
@@ -18,6 +17,7 @@ import {
   success,
   warn,
 } from '../lib/output'
+import { prompt } from '../lib/prompt'
 
 /**
  * Execute currency command - view or set currency preference
@@ -147,7 +147,7 @@ export async function executeAddressBook(
     }
 
     if (prompts.length > 0) {
-      const answers = await inquirer.prompt(prompts)
+      const answers = await prompt(prompts)
       chain = chain || answers.chain
       address = address || answers.address?.trim()
       name = name || answers.name?.trim()

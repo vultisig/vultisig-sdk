@@ -54,6 +54,28 @@ export const TEST_VAULT_CONFIG = {
 export const HAS_TEST_VAULT_FIXTURE = existsSync(TEST_VAULT_CONFIG.path)
 
 /**
+ * SDK-TEST-02/03 (vultisig/vultisig-sdk#1069): `describe.skipIf(...)` marks
+ * a suite "skipped" in the vitest summary, but plain top-level console
+ * output emitted while the file's tests are all skipped is dropped by
+ * vitest's reporters (verified empirically - it never reaches "verbose" or
+ * "default" output), and the job/workflow itself still exits 0. Both add up
+ * to a daily cron / CI run that can look identically green whether the real
+ * vault.sign() 2-of-2 MPC round trip ran or never ran at all.
+ *
+ * Suites that gate on {@link HAS_TEST_VAULT_FIXTURE} should additionally add
+ * one always-on canary test that calls `ctx.skip(NO_TEST_VAULT_SKIP_REASON)`
+ * when the fixture is missing - vitest's verbose reporter prints a skip
+ * *reason* inline next to the test name (unlike describe.skipIf, which does
+ * not), so the "why" is visible in the same run instead of requiring someone
+ * to go dig through tests/e2e/SECURITY.md.
+ */
+export const NO_TEST_VAULT_SKIP_REASON =
+  `No test vault fixture at ${TEST_VAULT_CONFIG.path} - the real vault.sign() 2-of-2 MPC round trip ` +
+  'was NOT exercised in this run. See packages/sdk/tests/e2e/SECURITY.md to provision TEST_VAULT_PATH ' +
+  '/ TEST_VAULT_PASSWORD. Always-on synthetic crypto round-trip coverage: ' +
+  'tests/unit/crypto/signingRoundTrip.synthetic.test.ts.'
+
+/**
  * Load test vault with instance-scoped configuration
  *
  * Creates an SDK instance with explicit dependencies and loads a test vault.

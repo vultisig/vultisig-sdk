@@ -5,10 +5,30 @@
 // reaches a final on-chain state and emits the matching lifecycle status so a
 // headless caller learns confirmed/failed/timeout. Exercised through
 // processMessageLoop with a minimal `this`, mirroring sessionConfirmGate.
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it, vi } from 'vitest'
 
+import { journalPath } from '../broadcastJournal'
 import { AgentSession } from '../session'
 import type { RecentAction } from '../types'
+
+/** Read the terminal-status resolution the session journaled for `hash`. */
+function journaledResolution(hash: string): string | undefined {
+  let raw: string
+  try {
+    raw = readFileSync(journalPath(), 'utf8')
+  } catch {
+    return undefined
+  }
+  let status: string | undefined
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue
+    const rec = JSON.parse(line)
+    if (rec.t === 'resolved' && rec.hash === hash) status = rec.status // last wins
+  }
+  return status
+}
 
 type StatusResult = { status: 'pending' | 'success' | 'error' }
 
@@ -41,12 +61,14 @@ function makeHarness(opts: {
   )
   const client = {
     sendMessageStream: vi.fn(async (_conv: string, _request: any, callbacks: any) => {
-      // Fire a server-built tx on the first turn only; later turns are plain text.
+      // Fire a signable tool-output candidate on the first turn only; later turns
+      // are plain text. (#927 Phase 2: tool-output is the sole sign source.)
       if (client.sendMessageStream.mock.calls.length === 1) {
-        callbacks.onTxReady({
-          chain,
-          txArgs: { tx: { to: '0xR', value: '1' } },
-        })
+        callbacks.onToolOutputTx(
+          { chain, txArgs: { tx: { to: '0x1111111111111111111111111111111111111111', value: '1' } } },
+          'execute_send',
+          'prep'
+        )
       }
       return { message: { content: 'ok' }, fullText: '', transactions: [] }
     }),
@@ -91,6 +113,8 @@ function makeHarness(opts: {
     txConfirmPollIntervalMs: 0,
     txConfirmMaxPolls: opts.maxPolls ?? 5,
     processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+    selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+    reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
     runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
     dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
     renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
@@ -196,5 +220,34 @@ describe('processMessageLoop — post-broadcast confirmation (F1)', () => {
     // Only the pre-poll `pending` was emitted; no confirmed/failed/timeout.
     expect(h.ui.onTxStatus).toHaveBeenCalledTimes(1)
     expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Base', 'pending', 'https://x/1')
+  })
+})
+
+describe('processMessageLoop — broadcast-journal resolution recording (F1/F14)', () => {
+  // The confirmation poll's terminal outcome must be journaled so the
+  // double-spend guard knows whether the intent is still live. Only a definitive
+  // on-chain failure re-opens it for retry; confirmed/timeout keep it guarded.
+  it("records 'confirmed' when the tx reaches success", async () => {
+    const h = makeHarness({ statuses: [{ status: 'success' }] })
+    await h.run()
+    expect(journaledResolution('0xfeed')).toBe('confirmed')
+  })
+
+  it("records 'failed' when the tx reverts", async () => {
+    const h = makeHarness({ statuses: [{ status: 'error' }] })
+    await h.run()
+    expect(journaledResolution('0xfeed')).toBe('failed')
+  })
+
+  it("records 'timeout' when the poll budget is exhausted", async () => {
+    const h = makeHarness({ statuses: [{ status: 'pending' }], maxPolls: 2 })
+    await h.run()
+    expect(journaledResolution('0xfeed')).toBe('timeout')
+  })
+
+  it('records nothing when polling is skipped (interactive mode)', async () => {
+    const h = makeHarness({ statuses: [{ status: 'success' }], headless: false })
+    await h.run()
+    expect(journaledResolution('0xfeed')).toBeUndefined()
   })
 })

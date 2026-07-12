@@ -1,7 +1,6 @@
 import { OtherChain, UtxoBasedChain, UtxoChain } from '@vultisig/core-chain/Chain'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
-import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { getChainKind } from '../../../ChainKind'
@@ -41,10 +40,10 @@ export const broadcastUtxoTx: BroadcastTxResolver<UtxoBasedChain> = async ({ cha
 
   const error = 'context' in response ? response.context.error : extractErrorMsg(response)
 
-  if (isInError(error, 'BadInputsUTxO', 'txn-mempool-conflict', 'already known')) {
-    return null
-  }
-
+  // Any submit error past this point is ambiguous — it could be a benign MPC-race duplicate (another
+  // device already broadcast the same signed tx) OR a genuine failure (e.g. BadInputsUTxO: spent/invalid
+  // inputs). String-matching alone can't tell them apart, so verify against the real chain: the hash
+  // either resolves on-chain (the race case — success) or it doesn't (the real failure — rethrows).
   const broadcastError = new Error(`Failed to broadcast transaction: ${extractErrorMsg(error)}`)
   await verifyBroadcastByHash({ chain, tx, error: broadcastError })
   return null

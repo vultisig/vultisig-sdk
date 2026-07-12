@@ -8,6 +8,7 @@
  */
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
+import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { getLifiSwapQuote } from '@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote'
 import { getOneInchSwapQuote } from '@vultisig/core-chain/swap/general/oneInch/api/getOneInchSwapQuote'
@@ -20,6 +21,10 @@ import { findSwapQuote, type SwapAffiliateConfig } from './findSwapQuote'
 
 vi.mock('@vultisig/core-chain/swap/general/kyber/api/quote', () => ({
   getKyberSwapQuote: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote', () => ({
+  getJupiterSwapQuote: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote', () => ({
@@ -66,6 +71,9 @@ const mockAffiliateConfig: SwapAffiliateConfig = {
   },
   oneInch: {
     referrer: '0xTestFeeReceiver',
+  },
+  jupiter: {
+    feeOwner: '8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z',
   },
 }
 
@@ -134,10 +142,27 @@ const evmPair = {
   },
 } as const
 
+const solanaPair = {
+  from: {
+    chain: Chain.Solana,
+    address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+    decimals: 9,
+    ticker: 'SOL',
+  },
+  to: {
+    chain: Chain.Solana,
+    address: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+    id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    decimals: 6,
+    ticker: 'USDC',
+  },
+} as const
+
 describe('SwapAffiliateConfig propagation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getCowSwapQuote).mockRejectedValue(new Error('skip cowswap'))
+    vi.mocked(getJupiterSwapQuote).mockRejectedValue(new Error('skip jupiter'))
     vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
   })
@@ -192,6 +217,25 @@ describe('SwapAffiliateConfig propagation', () => {
     expect(getOneInchSwapQuote).toHaveBeenCalledWith(
       expect.objectContaining({
         oneInchConfig: mockAffiliateConfig.oneInch,
+      })
+    )
+  })
+
+  it('passes jupiter affiliate config to Jupiter quote fetcher', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getJupiterSwapQuote).mockResolvedValue(makeGeneralQuote('5000000'))
+
+    await findSwapQuote({
+      ...solanaPair,
+      amount: 100000000n,
+      affiliateConfig: mockAffiliateConfig,
+    })
+
+    expect(getJupiterSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jupiterConfig: mockAffiliateConfig.jupiter,
       })
     )
   })

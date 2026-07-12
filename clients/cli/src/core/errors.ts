@@ -12,6 +12,32 @@ export enum ExitCode {
   RESOURCE_NOT_FOUND = 5,
   EXTERNAL_SERVICE = 6,
   UNKNOWN = 7,
+  // Broadcast succeeded on-chain but the post-broadcast acknowledgement/report
+  // back to the backend failed. The emitted tx hash IS VALID — do NOT blindly
+  // retry (that risks a double-spend); track/confirm the hash instead.
+  ACK_FAILED = 8,
+  // A signing attempt was refused by the local broadcast-journal duplicate guard
+  // (an identical intent was broadcast recently and hasn't definitively failed,
+  // or a sibling process holds the reservation). NOTHING was broadcast. Distinct
+  // from generic invalid input (4) so `$?` alone can branch the fund-safety
+  // refusal. Retry with --force to override. See broadcastJournal.ts.
+  DUPLICATE_BROADCAST = 9,
+  // `agent ask` only: the backend deliberately BLOCKED the requested action via a
+  // fund-safety guardrail (turn_outcome kind='blocked'). The turn completed but the
+  // action did not happen and won't on retry without changing the request. Distinct
+  // from a generic error (1) so a headless caller can branch a safety block from a
+  // transient failure. Requires a backend that emits data-turn_outcome (a2a-02).
+  AGENT_TURN_BLOCKED = 10,
+  // `agent ask` only: the model REFUSED or asked a clarifying question with no
+  // actionable result (turn_outcome kind='refusal'). Not an error and not a safety
+  // block — the caller likely needs to refine the prompt. Requires a backend that
+  // emits data-turn_outcome (a2a-02).
+  AGENT_TURN_REFUSAL = 11,
+  // An interactive confirmation/input was required but the session is
+  // non-interactive (a piped/redirected stdout, or --non-interactive/--ci). NOTHING
+  // was signed or broadcast. Distinct from generic UNKNOWN (7) so a headless caller
+  // can branch "needs --yes/--confirm or a required flag" from an unexpected crash.
+  CONFIRMATION_REQUIRED = 12,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -23,6 +49,12 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.RESOURCE_NOT_FOUND]: 'Resource not found (token, route)',
   [ExitCode.EXTERNAL_SERVICE]: 'External service error (retryable)',
   [ExitCode.UNKNOWN]: 'Unknown/unexpected error',
+  [ExitCode.ACK_FAILED]: 'Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry',
+  [ExitCode.DUPLICATE_BROADCAST]: 'Duplicate broadcast refused (nothing sent) — retry with --force to override',
+  [ExitCode.AGENT_TURN_BLOCKED]: 'agent ask: a fund-safety guardrail blocked the requested action',
+  [ExitCode.AGENT_TURN_REFUSAL]: 'agent ask: the model refused or asked a clarifying question (no action taken)',
+  [ExitCode.CONFIRMATION_REQUIRED]:
+    'Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag',
 }
 
 export abstract class VsigError extends Error {
@@ -127,6 +159,28 @@ export class TokenNotFoundError extends VsigError {
   }
 }
 
+export class TxNotFoundError extends VsigError {
+  readonly exitCode = ExitCode.RESOURCE_NOT_FOUND
+  readonly code = 'TX_NOT_FOUND'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
+// A bounded status poll gave up while the tx was still (plausibly) in-flight.
+// Retryable: the tx may confirm later, so re-checking / waiting longer is valid —
+// distinct from TxNotFoundError, where the node affirmatively has no record.
+export class TxStatusTimeoutError extends VsigError {
+  readonly exitCode = ExitCode.NETWORK
+  readonly code = 'TX_STATUS_TIMEOUT'
+  override readonly retryable = true
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
 export class ExternalServiceError extends VsigError {
   readonly exitCode = ExitCode.EXTERNAL_SERVICE
   readonly code = 'EXTERNAL_SERVICE'
@@ -147,6 +201,15 @@ export class PricingUnavailableError extends VsigError {
   }
 }
 
+export class ConfirmationRequiredError extends VsigError {
+  readonly exitCode = ExitCode.CONFIRMATION_REQUIRED
+  readonly code = 'CONFIRMATION_REQUIRED'
+
+  constructor(message: string, hint?: string, suggestions?: string[]) {
+    super(message, hint, suggestions)
+  }
+}
+
 export class UnknownError extends VsigError {
   readonly exitCode = ExitCode.UNKNOWN
   readonly code = 'UNKNOWN_ERROR'
@@ -156,8 +219,36 @@ export class UnknownError extends VsigError {
   }
 }
 
+/**
+ * The local broadcast-journal refused to sign because an identical intent was
+ * broadcast recently (and hasn't definitively failed) or a sibling process holds
+ * the reservation. NOTHING was broadcast. Maps the journal's
+ * `DuplicateBroadcastError` / `ConcurrentBroadcastError` (both carry
+ * `code === 'DUPLICATE_BROADCAST'`) onto the dedicated exit code 9 so a headless
+ * caller can branch the fund-safety refusal on `$?` alone. Retry with `--force`.
+ */
+export class DuplicateBroadcastRefusedError extends VsigError {
+  readonly exitCode = ExitCode.DUPLICATE_BROADCAST
+  readonly code = 'DUPLICATE_BROADCAST'
+
+  constructor(message: string) {
+    super(message, 'An identical transaction was broadcast recently and has not definitively failed', [
+      'Check its status with: vsig tx-status',
+      'Re-broadcast anyway with: --force',
+    ])
+  }
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
+
+  // The journal's duplicate/concurrent refusals aren't VaultErrors — they carry
+  // a stable `code === 'DUPLICATE_BROADCAST'`. Map them to exit 9 before the
+  // generic classification below (which would otherwise fall through to
+  // UNKNOWN/7 and lose the fund-safety signal).
+  if ((err as { code?: unknown }).code === 'DUPLICATE_BROADCAST') {
+    return new DuplicateBroadcastRefusedError(err.message)
+  }
 
   if (err instanceof VaultError) {
     // BalanceFetchFailed is a wrapper code — the real cause may be invalid input

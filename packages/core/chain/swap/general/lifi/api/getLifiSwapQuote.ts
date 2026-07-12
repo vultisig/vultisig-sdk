@@ -17,6 +17,7 @@ import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { logUnenforcedAggregatorDestination } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
@@ -328,10 +329,16 @@ export const getLifiSwapQuote = async ({
         // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
         // actual transferFrom caller → revert.
         const approvalAddr = estimate.approvalAddress
+        const evmTo = shouldBePresent(to)
+        // AGG-02: LiFi routes through many different bridge/DEX contracts by design
+        // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist
+        // would false-block legitimate routes, so log (never throw). See
+        // knownAggregatorRouters.ts.
+        logUnenforcedAggregatorDestination('li.fi', evmTo)
         return {
           evm: {
             from: shouldBePresent(from),
-            to: shouldBePresent(to),
+            to: evmTo,
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,

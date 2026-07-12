@@ -17,8 +17,17 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
   const { address } = coin
   const receiver = keysignPayload.toAddress
 
+  // Read seqno defensively. A TON wallet that has RECEIVED funds but never SENT
+  // is still UNINITIALIZED (its contract deploys on the first outgoing tx via
+  // StateInit); getExtendedAddressInformation returns an `uninited.accountState`
+  // result with NO `seqno` field, so `account_state.seqno` on the raw result is
+  // undefined — optional-chain to seqno 0 (the signing path then correctly
+  // attaches StateInit for seqno === 0), matching the abts side's
+  // `?.account_state?.seqno ?? 0`. A genuine RPC failure (`{ ok:false }`) is now
+  // caught inside `getTonAccountInfo`, which throws a descriptive error rather
+  // than returning null and crashing this destructure.
   const { account_state } = await getTonAccountInfo(address)
-  const sequenceNumber = BigInt(account_state.seqno || 0)
+  const sequenceNumber = BigInt(account_state?.seqno ?? 0)
 
   const getSendMaxAmount = async () => {
     if (coin.id) return false

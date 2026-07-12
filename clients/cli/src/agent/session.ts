@@ -6,7 +6,8 @@
  * - Conversation management
  * - Message sending and SSE streaming
  * - Client-side tool dispatch (`tool-input-available` SSE events) and
- *   tx_ready synthesis (server-built transactions buffered then signed)
+ *   tool-output signing (#927 Phase 2: the client-enriched candidate off the
+ *   `tool-output-available` channel is buffered then signed — the sole sign source)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -18,10 +19,12 @@ import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisi
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import { recordResolution } from './broadcastJournal'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
 import { AgentClient, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -32,8 +35,8 @@ import type {
 } from './types'
 
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
-// reached via tx_ready synthesis (not a registry tool name) but uses the
-// same gate via `runPasswordGatedTool('sign_tx', …)` below.
+// reached via the tool-output signing path (not a registry tool name) but uses
+// the same gate via `runPasswordGatedTool('sign_tx', …)` below.
 const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
 
 // Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
@@ -42,8 +45,8 @@ const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
 // captured at dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
 //
 // This is a SUBSET of the backend's client-side contract
-// (`BACKEND_CLIENT_SIDE_TOOL_NAMES`): `sign_tx` uses the tx_ready channel
-// instead; create_vault / plugin_install / create_policy / delete_policy are
+// (`BACKEND_CLIENT_SIDE_TOOL_NAMES`): `sign_tx` uses the tool-output signing
+// path instead; create_vault / plugin_install / create_policy / delete_policy are
 // mobile-only; the Polymarket bet/batch tools arrive rewritten as
 // `sign_typed_data`. Backend client-side tools NOT in this table dispatch to the
 // `TOOL_UNSUPPORTED` path (see `dispatchClientSideTool`). The CRUD trio
@@ -107,6 +110,23 @@ const RECOVERY_MAX_POLLS = 90
 const TX_CONFIRM_POLL_INTERVAL_MS = 3000
 const TX_CONFIRM_MAX_POLLS = 40
 
+/**
+ * Does this batch of queued (not-yet-delivered) tool results contain a
+ * SUCCESSFUL broadcast — a result carrying a real `tx_hash`? When such a result
+ * is still in the queue at error time, the broadcast happened on-chain but its
+ * follow-up `recent_actions` report to the backend never landed: the true
+ * ACK_FAILED case. A broadcast already delivered in an earlier turn is gone from
+ * the queue, so a later unrelated failure is NOT mis-tagged. Exported for direct
+ * unit testing of the discriminating logic.
+ */
+export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boolean {
+  return results.some(r => {
+    if (!r.success || !r.data) return false
+    const hash = (r.data as { tx_hash?: unknown }).tx_hash
+    return typeof hash === 'string' && hash.length > 0
+  })
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -120,6 +140,14 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
+  // queue), of whether an already-broadcast tx result was still UNDELIVERED to
+  // the backend. This is the true "ack failed" signal: a successful broadcast
+  // whose follow-up recent_actions report never landed. A later independent
+  // retryable error (after an earlier broadcast WAS acked) leaves an empty/
+  // broadcast-free queue here, so `agent ask` keeps the retryable classification
+  // instead of masking it as ACK_FAILED. See executeAgentAsk's catch (F1).
+  private unacknowledgedBroadcastAtError = false
   // Disconnect-recovery poll cadence — instance fields so tests can drive the
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
@@ -151,6 +179,8 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+    // `--force` bypasses the persistent broadcast-journal duplicate guard.
+    this.executor.setForceBroadcast(!!config.force)
   }
 
   /**
@@ -366,6 +396,16 @@ export class AgentSession {
     return this.conversationId
   }
 
+  /**
+   * Whether the most recent failed turn threw with a broadcast whose
+   * follow-up report was still undelivered — the F1 ACK_FAILED signal. False
+   * after a clean turn, or when the failure was unrelated to an unacked
+   * broadcast (so the caller keeps the error's retryable classification).
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.unacknowledgedBroadcastAtError
+  }
+
   getHistoryMessages(): ConversationMessage[] {
     return this.historyMessages
   }
@@ -390,6 +430,8 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    // Fresh turn — clear the prior turn's ack snapshot.
+    this.unacknowledgedBroadcastAtError = false
 
     // Refresh context before each message — skip balance fetches in agent modes
     try {
@@ -404,6 +446,12 @@ export class AgentSession {
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
+      // Snapshot BEFORE clearing: if a just-broadcast tx result is still queued
+      // (its follow-up recent_actions report never landed), this is the F1
+      // ack-failure case and executeAgentAsk will surface exit 8. Capturing here
+      // — rather than after the throw reaches the command — is essential because
+      // the very next line wipes the queue.
+      this.unacknowledgedBroadcastAtError = hasUnacknowledgedBroadcastResult(this.pendingToolResults)
       // SF: any failure that escaped processMessageLoop's internal 401
       // retry — clear the queue so the next user turn doesn't silently
       // inherit stale tool results and trigger phantom auto-submit or
@@ -481,8 +529,15 @@ export class AgentSession {
       }
     }
 
-    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
-    let serverTxStoredFromStream = 0
+    // #927 Phase 2: the client-enriched candidate off the `tool-output-available`
+    // channel is the SOLE signing source. First-wins per turn; buffered AFTER the
+    // stream by `selectAndBufferSignable`. (Production emits the signable payload
+    // on tool-output; `data-tx_ready` is a hollow marker the CLI doesn't consume.)
+    let toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+    } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -527,13 +582,18 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onTxReady: (tx: any) => {
-        if (this.executor.storeServerTransaction(tx)) {
-          serverTxStoredFromStream++
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => {
+        // Client-enriched candidate from a `tool-output-available` frame — the sole
+        // sign source (buffered after the stream by `selectAndBufferSignable`).
+        // First-wins per turn: a SECOND signable frame is deferred (the executor
+        // signs one payload per turn); the dropped tool's output stays in the
+        // backend conversation and re-emerges next turn once its on-chain
+        // precondition still holds — fail-safe, never a partial/wrong sign.
+        if (toolOutputCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
         }
+        toolOutputCandidate = { payload, toolName, source }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -541,6 +601,12 @@ export class AgentSession {
           balanceCardRendered = true
           ui.onBalanceSummary?.(card)
         }
+      },
+      onTurnOutcome: outcome => {
+        // a2a-02: forward the typed turn-outcome straight through (already
+        // validated by parseTurnOutcome in the client). The ask layer latches it
+        // onto AskResult.outcome for the JSON envelope + exit-code mapping.
+        ui.onTurnOutcome?.(outcome)
       },
       onMessage: (_msg: any) => {
         // Final message received
@@ -578,14 +644,15 @@ export class AgentSession {
 
     // Mid-turn disconnect recovery: the SSE stream dropped before the backend
     // delivered the final assistant message. The backend keeps processing on a
-    // detached context and persists the answer (+ any tx_ready card), so poll
+    // detached context and persists the answer, so poll
     // /messages/since to recover what the dropped stream missed. Bounded so a
-    // backend that never persists can't hang the turn. `onTxReady` reuses the
-    // same callback the live stream uses, so a recovered tx_ready flows through
-    // the identical confirm/sign gate below.
+    // backend that never persists can't hang the turn. The recovery path can only
+    // reconstruct the persisted TEXT answer (and balance cards); a signable
+    // tool-output candidate cannot be rebuilt from persisted parts, so a recovered
+    // turn never signs — it warns to re-run (see applyRecoveredMessage).
     if (streamResult.disconnected && !streamResult.message) {
       ui.onReconnecting?.()
-      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onBalanceSummary)
     }
 
     // Final message event wins over streamed deltas (which may be partial).
@@ -601,26 +668,28 @@ export class AgentSession {
       ui.onAssistantMessage(displayText)
     }
 
-    // tx_ready → synthetic sign_tx → executor.signTxFromBuffer.
-    // Routed straight to the executor (no Action wrapper); result is
-    // pushed onto pendingToolResults and recursed for the next turn.
-    //
-    // Backend contract: the agent emits at most one tx_ready per stream
-    // turn. storeServerTransaction overwrites a single 'latest' buffer
-    // slot — if the backend ever emits two tx_ready events in one turn,
-    // only the last would be signed. That is not a currently supported
-    // flow; multi-leg sequences use separate turns via recursion.
-    if (serverTxStoredFromStream > 0) {
-      if (this.config.verbose)
-        process.stderr.write(
-          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
-        )
+    // Tool-output candidate → synthetic sign_tx → executor.signTxFromBuffer.
+    // Routed straight to the executor (no Action wrapper); result is pushed onto
+    // pendingToolResults and recursed for the next turn. One signable tx per turn
+    // — multi-leg approve→main runs within signMultiLeg; multi-step flows advance
+    // across turns via the recursion below.
+    const bufferedSignable = this.selectAndBufferSignable(toolOutputCandidate)
+    if (bufferedSignable) {
+      if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
       const signToolCallId = `tx_sign_${Date.now()}`
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
+      // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
+      // broadcast anything — surface it as a hard error so a headless caller
+      // exits non-zero with a clear, actionable signal instead of reading a
+      // success envelope that hides a silently-failed sign. The failed result is
+      // still queued+recursed above so the backend/LLM learns the sign refused.
+      if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
+        ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
       // learns confirmed/failed/timeout instead of treating broadcast as success.
@@ -646,37 +715,90 @@ export class AgentSession {
   }
 
   /**
+   * Report that a second signable frame arrived in the same turn and was
+   * deferred (the executor signs one payload per turn). Never silent: the
+   * dropped tool's output stays in the backend conversation, so the frame
+   * re-emerges next turn if its on-chain precondition still holds. We neither
+   * fail the turn (risks a no-progress loop) nor overwrite the first (would drop
+   * it unsigned).
+   */
+  private reportDeferredSignable(ui: UICallbacks): void {
+    process.stderr.write(
+      '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+    )
+    ui.onNotification?.(
+      'Transaction deferred',
+      'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
+    )
+  }
+
+  /**
+   * #927 Phase 2 sign gate. Buffer the client-enriched tool-output candidate —
+   * the SOLE signing source — into the executor. Returns true when something was
+   * buffered (signed downstream), false otherwise.
+   *
+   * FAIL-CLOSED, two structural gates:
+   *  1. `deriveToolOutputCandidate` (client.ts) already rejected non-tx envelopes
+   *     (`no_op` / `insufficient_*` / errors) and phantom-card prep envelopes
+   *     (no `tx_encoding`) — so a candidate that reaches here is well-formed.
+   *  2. `payloadLooksSignable` mirrors the executor's real signer requirements
+   *     (`extractNestedTx().to` for EVM; `txArgs.{to,amount}` for non-EVM; both
+   *     legs for multi-leg). A structurally-present-but-unsignable candidate is
+   *     NOT routed to the signer — the mutation-check target for this gate.
+   * `storeServerTransaction` is the final backstop (returns false if it can't
+   * resolve a tx body / cross-chain multi-leg), so a false is never a wrong sign.
+   */
+  private selectAndBufferSignable(
+    toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: 'flat' | 'prep'
+    } | null
+  ): boolean {
+    if (!toolOutputCandidate) return false
+
+    if (!payloadLooksSignable(toolOutputCandidate.payload)) {
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[session] tool-output candidate (${toolOutputCandidate.toolName}, ${toolOutputCandidate.source}) not structurally signable; not buffering\n`
+        )
+      }
+      return false
+    }
+
+    if (this.executor.storeServerTransaction(toolOutputCandidate.payload)) {
+      if (this.config.password) this.executor.setPassword(this.config.password)
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[session] buffered signable from tool-output (${toolOutputCandidate.toolName}, ${toolOutputCandidate.source})\n`
+        )
+      }
+      return true
+    }
+    return false
+  }
+
+  /**
    * Recover a turn whose SSE stream dropped before delivering the final
    * assistant message. Polls /messages/since (server-clock anchored via
    * X-Server-Now) until the persisted assistant message lands or the bounded
    * budget is exhausted. On success it patches `streamResult.message` so the
-   * normal downstream flow surfaces the answer, and replays any persisted
-   * `data-tx_ready` part through `onTxReady` so a recovered signable card hits
-   * the same confirm/sign gate as a live one.
+   * normal downstream flow surfaces the answer, and replays any persisted balance
+   * card. #927 Phase 2: a signable tx is NEVER recovered — the signable payload
+   * rides tool-output-available, which the persisted parts don't reconstruct — so
+   * a recovered turn that ran a signable tool warns to re-run instead of signing.
    */
   private async recoverDisconnectedTurn(
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): Promise<void> {
     if (!this.conversationId) return
 
     // Prefer the server clock (X-Server-Now, epoch ms); fall back to a slightly
     // back-dated local clock so a missing header can't skew the anchor past the
-    // just-persisted message.
-    //
-    // Fund-safety: the local-clock fallback is only trustworthy enough to
-    // recover the *text* answer. Under clock skew between rapid consecutive
-    // turns, a back-dated local anchor can reach back far enough that
-    // /messages/since returns a PRIOR turn's assistant row; replaying that
-    // row's `data-tx_ready` would route an already-superseded transaction into
-    // the sign gate (and auto-broadcast it under --yes). So signable cards are
-    // replayed only when the anchor came from the server clock — which reliably
-    // excludes earlier turns. A stale recovered *text* answer is at worst a
-    // cosmetic glitch; a stale recovered *transaction* is not.
-    const serverAnchor = serverNowToIso(streamResult.serverNow)
-    const since = serverAnchor ?? new Date(Date.now() - 2000).toISOString()
-    const replaySignableCards = serverAnchor !== null
+    // just-persisted message. The anchor only recovers the TEXT answer (a stale
+    // recovered answer is at worst cosmetic); nothing signable is ever replayed.
+    const since = serverNowToIso(streamResult.serverNow) ?? new Date(Date.now() - 2000).toISOString()
     let cursor: string | undefined
 
     // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
@@ -715,29 +837,20 @@ export class AgentSession {
       if (resp.cursor) cursor = resp.cursor
 
       // The detached backend writes the assistant message last; take the newest
-      // assistant row that actually carries content or a recovered card. Newest
-      // (not oldest) is deliberate: a single turn can persist several assistant
-      // rows (clarifier / fast-path ack, then the final answer), and we want the
-      // final one — oldest-after-anchor would surface an early clarifier instead.
-      //
-      // Fund-safety cross-repo invariant: this "newest qualifying row" is only
-      // safe to route to the sign gate because no concurrent writer persists an
-      // *executable* tx_ready (full txArgs/send_tx/swap_tx) into a live
-      // conversation during the recovery window. The single concurrent writer
-      // today — the scheduler — persists an inert `{ proposal_id }` sidecar that
-      // `storeServerTransaction` rejects (no tx envelope → returns false → never
-      // signed). If a future background path ever persists an executable
-      // tx_ready into a shared conversation, this selection + the server-anchor
-      // gate would route it straight to the signer (auto-broadcast under --yes);
-      // such a writer must scope its conversation or this must filter by turn.
+      // assistant row that carries content or a signable tool part. Newest (not
+      // oldest) is deliberate: a single turn can persist several assistant rows
+      // (clarifier / fast-path ack, then the final answer), and we want the final
+      // one — oldest-after-anchor would surface an early clarifier instead. A
+      // signable-tool part qualifies a row even without content so the recovery
+      // can WARN the user that the tx was not signed (see applyRecoveredMessage).
       const assistant = [...resp.messages]
         .reverse()
-        .find(m => m.role === 'assistant' && (!!m.content || hasTxReadyPart(m.parts)))
+        .find(m => m.role === 'assistant' && (!!m.content || hasSignableToolPart(m.parts)))
       if (assistant) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
+        this.applyRecoveredMessage(assistant, streamResult, onBalanceSummary)
         return
       }
 
@@ -823,18 +936,24 @@ export class AgentSession {
     for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
       if (this.abortController?.signal?.aborted) return
       try {
-        // TxStatusResult.status is the SDK's exhaustive union
-        // `'pending' | 'success' | 'error'`. Only the two terminal states
-        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // TxStatusResult.status is the SDK's union
+        // `'pending' | 'success' | 'error' | 'not_found'`. Only the two terminal
+        // on-chain states resolve the poll; `'pending'` and `'not_found'` both keep
         // polling until the budget is spent and we emit `timeout` below — a safe
-        // default since the tx may still confirm later.
+        // default since a not-yet-propagated tx may still confirm later.
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          // Resolve the broadcast-journal record: a confirmed tx stays guarded
+          // (re-sending would double-spend), but the terminal status is logged.
+          recordResolution(txHash, 'confirmed')
           return
         }
         if (result.status === 'error') {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          // A definitive on-chain failure is the ONE resolution that clears the
+          // journal guard so an automatic retry of the same intent is allowed.
+          recordResolution(txHash, 'failed')
           return
         }
       } catch (err: any) {
@@ -855,6 +974,9 @@ export class AgentSession {
       )
     }
     ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+    // Timeout is NOT a definitive failure — the tx may still land later — so the
+    // journal keeps the intent guarded. Log the terminal poll status all the same.
+    recordResolution(txHash, 'timeout')
   }
 
   /** Sleep between confirmation polls. Separate method so tests can stub it out. */
@@ -864,41 +986,49 @@ export class AgentSession {
 
   /**
    * Fold a recovered assistant message back into the live stream result: the
-   * authoritative message wins over any partial deltas, and any persisted
-   * `data-tx_ready` part is replayed through the live tx_ready callback so the
-   * card flows through the same confirm/sign gate.
-   *
-   * `replaySignableCards` gates the tx_ready replay: it is false when the
-   * recovery anchor was the local-clock fallback (no X-Server-Now), where a
-   * recovered card cannot be proven to belong to the current turn. See
-   * recoverDisconnectedTurn — a stale tx_ready must never reach the signer.
+   * authoritative message wins over any partial deltas, and any persisted balance
+   * card is replayed. #927 Phase 2: a signable transaction is NEVER recovered —
+   * the signable payload rides tool-output-available, which the persisted parts
+   * do not reconstruct — so a recovered turn that ran a signable tool warns the
+   * user to re-run rather than signing (fail-CLOSED, never a wrong sign).
    */
   private applyRecoveredMessage(
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
-    replaySignableCards: boolean,
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
+    let signableToolPart: string | undefined
     for (const part of msg.parts ?? []) {
-      // Balance-summary cards are read-only display, so replay them
-      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // Balance-summary cards are read-only display, so replay them. A stale
       // recovered balance card is at worst cosmetic (the live path renders the
-      // same data); only a stale tx_ready is a fund-safety concern. Without this
-      // a balance query whose stream dropped mid-turn recovers the text answer
-      // but silently loses the card.
+      // same data). Without this a balance query whose stream dropped mid-turn
+      // recovers the text answer but silently loses the card.
       if (part.type === 'data-balance_summary' && part.data) {
         onBalanceSummary?.(part.data)
         continue
       }
-      // Signable cards stay gated: a stale tx_ready must never reach the signer
-      // (see recoverDisconnectedTurn's server-anchor rationale).
-      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
-        const tx = part.data as TxReadyPayload
-        streamResult.transactions.push(tx)
-        onTxReady?.(tx)
+      // Detect a persisted signable tool part (flat: polymarket / build_custom_* /
+      // erc20_approve; prep: execute_*). Their signable output rides the
+      // tool-output-available channel, which the recovery path does NOT
+      // reconstruct. Track it so we can WARN — nothing signable is replayed.
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        const toolName = part.type.slice('tool-'.length)
+        if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName) || CLI_SIGNABLE_PREP_TOOLS.has(toolName)) {
+          signableToolPart = toolName
+        }
       }
+    }
+    // A mid-turn disconnect on a signable tool cannot have its client-side
+    // candidate reconstructed from the persisted parts, so the transaction is not
+    // signed this turn. Fail-CLOSED (never a wrong sign), but warn LOUDLY rather
+    // than drop it silently — full tool-output replay in recovery is a follow-up.
+    if (signableToolPart) {
+      process.stderr.write(
+        `[session][recovery] recovered turn ran signable tool '${signableToolPart}', whose signable output ` +
+          `rides tool-output-available. The recovery path does not reconstruct that candidate, so NO transaction ` +
+          `was signed this turn — re-run the request to sign.\n`
+      )
     }
   }
 
@@ -1154,9 +1284,19 @@ export function serverNowToIso(serverNow: string | null): string | null {
   return new Date(ms).toISOString()
 }
 
-/** True if any message part is a persisted `data-tx_ready` signable card. */
-function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
-  return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
+/**
+ * True if any message part is a persisted signable tool part (`tool-<name>` for
+ * a flat or prep signable tool). Used to qualify a recovered assistant row even
+ * without content, so the recovery path can WARN that the tx was not signed
+ * (#927 Phase 2: the signable payload rides tool-output-available, which the
+ * persisted parts don't reconstruct — nothing signable is ever recovered).
+ */
+function hasSignableToolPart(parts: ConversationMessage['parts']): boolean {
+  return !!parts?.some(p => {
+    if (typeof p.type !== 'string' || !p.type.startsWith('tool-')) return false
+    const toolName = p.type.slice('tool-'.length)
+    return CLI_SIGNABLE_FLAT_TOOLS.has(toolName) || CLI_SIGNABLE_PREP_TOOLS.has(toolName)
+  })
 }
 
 /**

@@ -14,9 +14,46 @@ describe('toChainAmount', () => {
     expect(toChainAmount(0.1, 18)).toBe(100_000_000_000_000_000n)
   })
 
-  it('normalizes scientific notation via toFixed before parsing', () => {
+  it('truncates (floors) at decimals=0 — never rounds up (fund-safety)', () => {
+    // Cardano native assets, low-decimal tokens: the signed amount must not
+    // exceed what the user stated. viem parseUnits rounds half-up; we floor.
+    expect(toChainAmount('0.5', 0)).toBe(0n) // was 1n before truncation
+    expect(toChainAmount('0.6', 0)).toBe(0n) // was 1n
+    expect(toChainAmount('0.999', 0)).toBe(0n) // was 1n
+    expect(toChainAmount('1.5', 0)).toBe(1n) // was 2n
+    expect(toChainAmount('2.5', 0)).toBe(2n) // was 3n
+    expect(toChainAmount(1, 0)).toBe(1n) // integer unchanged
+    expect(toChainAmount(2, 0)).toBe(2n) // integer unchanged
+  })
+
+  it('truncates excess fractional digits at any decimals (not just 0)', () => {
+    // "1.999" at decimals=2 → 199n (floor), not 200n (round)
+    expect(toChainAmount('1.999', 2)).toBe(199n)
+    // "0.005" at decimals=2 → 0n (floor), not 1n
+    expect(toChainAmount('0.005', 2)).toBe(0n)
+    // "1.004" at decimals=2 → 100n unchanged (no excess digits)
+    expect(toChainAmount('1.004', 3)).toBe(1004n)
+  })
+
+  it('normalizes scientific notation before parsing', () => {
     // 1e-8 tokens at 10^-10 resolution → 100 smallest units (matches viem parseUnits)
     expect(toChainAmount(1e-8, 10)).toBe(100n)
+  })
+
+  it('normalizes large scientific-notation numbers without leaking an exponent', () => {
+    expect(toChainAmount(1e21, 18)).toBe(1_000_000_000_000_000_000_000_000_000_000_000_000_000n)
+    expect(toChainAmount(1.5e21, 0)).toBe(1_500_000_000_000_000_000_000n)
+  })
+
+  it('keeps numeric truncation parity with decimal strings', () => {
+    expect(toChainAmount(1.55, 1)).toBe(toChainAmount('1.55', 1))
+    expect(toChainAmount(1.55, 1)).toBe(15n) // floored, not rounded to 16n
+    expect(toChainAmount(1.5, 0)).toBe(1n) // floored, not rounded to 2n
+  })
+
+  it('keeps parseUnits truncation after expanding small scientific-notation numbers', () => {
+    expect(toChainAmount(1.99e-8, 8)).toBe(toChainAmount('0.0000000199', 8))
+    expect(toChainAmount(1.99e-8, 8)).toBe(1n) // floored, not rounded to 2n
   })
 
   it('parses scientific-notation strings without floating-point mantissa loss', () => {

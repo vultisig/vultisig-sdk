@@ -8,7 +8,6 @@ import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { InvalidArgumentError, program } from 'commander'
-import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -57,13 +56,14 @@ import {
   executeVaults,
   executeVerify,
 } from './commands'
-import { cachePassword, createPasswordCallback } from './core'
-import { EXIT_CODE_DESCRIPTIONS } from './core/errors'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
+import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
   checkForUpdates,
+  createVaultStorage,
   error,
   formatVersionDetailed,
   formatVersionShort,
@@ -76,6 +76,7 @@ import {
   outputJson,
   printResult,
   requireInteractive,
+  resolveNonInteractive,
   setFields,
   setNonInteractive,
   setQuiet,
@@ -83,6 +84,7 @@ import {
   setupUserAgent,
   warn,
 } from './lib'
+import { prompt } from './lib/prompt'
 import { setupVaultEvents } from './ui'
 
 // Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
@@ -157,7 +159,9 @@ program
     }
     initOutputMode({ silent: opts.silent, output: opts.output })
     setQuiet(!!opts.quiet)
-    setNonInteractive(!!opts.nonInteractive)
+    // A piped/redirected stdout is the machine-output channel — an interactive
+    // prompt would corrupt it — so treat non-TTY stdout as non-interactive too.
+    setNonInteractive(resolveNonInteractive(!!opts.nonInteractive))
     const fields = opts.fields as string | undefined
     setFields(
       fields
@@ -209,7 +213,12 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
 
+    // Honor VULTISIG_CONFIG_DIR for vault storage. createVaultStorage() falls
+    // back to ~/.vultisig when the env var is unset, so the default location is
+    // unchanged; when set, vaults/active-vault/cache land in the same dir as
+    // config.json instead of leaking to the home directory.
     const sdk = new Vultisig({
+      storage: createVaultStorage(),
       onPasswordRequired: createPasswordCallback(),
       ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
@@ -227,7 +236,9 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
         throw new Error(`Vault not found: "${vaultSelector}"`)
       }
     } else {
-      vault = await sdk.getActiveVault()
+      // Tolerate a corrupt active-vault pointer: fall back to no active vault
+      // instead of bricking every command (including `vaults`).
+      vault = (await loadActiveVaultSafely(sdk)).vault
     }
 
     if (vault) {
@@ -354,7 +365,7 @@ async function promptSeedphrase(): Promise<string> {
   info('\nEnter your 12 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'password',
       name: 'mnemonic',
@@ -381,7 +392,7 @@ async function promptQrPayload(): Promise<string> {
   info('\nEnter the QR code payload from the initiator device.')
   info('The payload starts with "vultisig://".\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'input',
       name: 'qrPayload',
@@ -548,7 +559,10 @@ joinCmd
 
         let mnemonic = options.mnemonic
         if (qrParams.libType === 'KEYIMPORT' && !mnemonic) {
-          // Seedphrase-based session requires mnemonic
+          // Seedphrase-based session requires mnemonic. Refuse before the
+          // guidance line below writes to stdout in a non-interactive session
+          // (promptSeedphrase re-checks, but only after the info()).
+          requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
           info('\nThis session requires a seedphrase to join.')
           mnemonic = await promptSeedphrase()
         }
@@ -621,6 +635,7 @@ program
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
+  .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
@@ -649,6 +664,7 @@ See also: balance, tx-status`
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
+          force?: boolean
           password?: string
         }
       ) => {
@@ -664,6 +680,7 @@ See also: balance, tx-status`
             memo: options.memo,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
+            force: options.force,
             password: options.password,
           })
         } catch (err: any) {
@@ -765,20 +782,29 @@ program
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
+  .option('--timeout <seconds>', 'Max seconds to poll before giving up (default 120)')
   .addHelpText(
     'after',
     `
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
+  vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
   vultisig tx-status --chain Bitcoin --tx-hash abc... --no-wait --output json`
   )
   .action(
-    withExit(async (options: { chain: string; txHash: string; wait: boolean }) => {
+    withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
       const context = await init(program.opts().vault)
+      const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
+      if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
+        throw new InvalidInputError(
+          `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
+        )
+      }
       await executeTxStatus(context, {
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
+        timeoutSec,
       })
     })
   )
@@ -1103,6 +1129,7 @@ program
   .option('--dry-run', 'Preview swap without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
+  .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')
   .addHelpText(
     'after',
@@ -1128,6 +1155,7 @@ See also: swap-quote, swap-chains, balance`
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
+          force?: boolean
           password?: string
         }
       ) => {
@@ -1144,6 +1172,7 @@ See also: swap-quote, swap-chains, balance`
             slippage: options.slippage ? parseFloat(options.slippage) : undefined,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
+            force: options.force,
             password: options.password,
           })
         } catch (err: any) {
@@ -1378,6 +1407,10 @@ agentCmd
     '--yes',
     'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
   )
+  .option(
+    '--force',
+    'Bypass the duplicate-broadcast guard. By default a tx whose identical intent was broadcast in the last 10 min (and has not definitively failed) is refused to avoid a double-spend; --force sends it anyway.'
+  )
   .addHelpText(
     'after',
     `
@@ -1389,7 +1422,25 @@ Examples:
 Signing safety:
   Without --yes, ask mode never signs or broadcasts — it reports the proposed
   transaction so a read-only prompt can't move funds. Pass --yes to opt in to
-  unattended signing.`
+  unattended signing.
+
+  A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
+  identical transaction intent was broadcast in the last 10 min and hasn't
+  definitively failed, a re-send is refused (exit 9) to prevent a double-spend
+  on a retry. Pass --force to override.
+
+Exit codes:
+  0  success
+  1  usage error (bad arguments)
+  2  authentication required / vault locked
+  3  network error (retryable)
+  4  invalid input (bad chain, address, amount)
+  5  resource not found (e.g. stale --session)
+  6  external service error (retryable)
+  7  unknown/unexpected error
+  8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
+     emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
+  9  duplicate-broadcast refused — nothing was sent; retry with --force`
   )
   .action(
     async (
@@ -1402,6 +1453,7 @@ Signing safety:
         json?: boolean
         profile?: string
         yes?: boolean
+        force?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1413,6 +1465,7 @@ Signing safety:
         verbose: options.verbose || parentOpts.verbose,
         profile: options.profile ?? parentOpts.profile,
         autoApprove: options.yes,
+        force: options.force,
       })
     }
   )
@@ -1604,6 +1657,7 @@ program
 async function startInteractiveMode(): Promise<void> {
   const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
+    storage: createVaultStorage(),
     onPasswordRequired: createPasswordCallback(),
     ...(serverEndpoints ? { serverEndpoints } : {}),
   })
@@ -1629,6 +1683,13 @@ process.on('SIGINT', () => {
 })
 
 if (isInteractiveMode) {
+  // The interactive shell drives a readline UI on stdin/stdout; it bypasses the
+  // preAction non-interactive gate. Refuse to start it when either stream is
+  // redirected — otherwise its prompts would land on a piped stdout.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    error('Interactive mode (-i/--interactive) requires a TTY on both stdin and stdout.')
+    process.exit(ExitCode.CONFIRMATION_REQUIRED)
+  }
   startInteractiveMode().catch(err => {
     error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)

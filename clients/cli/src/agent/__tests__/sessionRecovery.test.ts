@@ -1,8 +1,12 @@
 // Mid-turn SSE disconnect recovery (audit cat4-cli-disconnect-recovery).
 //
-// A dropped SSE stream must not lose the assistant's answer or a tx_ready
-// signable card. The backend keeps processing on a detached context and
-// persists the message; the CLI recovers it by polling /messages/since.
+// A dropped SSE stream must not lose the assistant's answer. The backend keeps
+// processing on a detached context and persists the message; the CLI recovers
+// it by polling /messages/since.
+//
+// #927 Phase 2: a signable transaction is NEVER recovered — the signable payload
+// rides tool-output-available, which the persisted parts do not reconstruct — so
+// a recovered turn that ran a signable tool warns to re-run rather than signing.
 //
 // These exercise the private recovery methods + the processMessageLoop wiring
 // through the prototype with a minimal `this`, so no real vault/network is hit.
@@ -15,7 +19,6 @@ function makeStreamResult(over: Partial<any> = {}) {
   return {
     fullText: '',
     suggestions: [],
-    transactions: [] as any[],
     message: null as ConversationMessage | null,
     finished: false,
     disconnected: false,
@@ -66,43 +69,37 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
     }
   }
 
-  it('recovers the persisted answer + tx_ready that the dropped stream lost', async () => {
-    // BEFORE: the stream dropped mid-turn — no message, no transactions.
+  it('recovers the persisted answer + balance card that the dropped stream lost', async () => {
+    // BEFORE: the stream dropped mid-turn — no message.
     const streamResult = makeStreamResult({
       disconnected: true,
       serverNow: '1718870400000',
     })
     expect(streamResult.message).toBeNull()
-    expect(streamResult.transactions).toHaveLength(0)
 
-    const txReadyData = {
-      chain: 'Ethereum',
-      action: 'send',
-      send_tx: { to: '0xabc', value: '1' },
-    }
+    const balanceCard = { surface: 'balance_summary', accounts: [] }
     const messagesSince = vi.fn(async () => ({
       messages: [
         recoveredAssistant({
           parts: [
             { type: 'text', text: 'Here is your balance: 1.5 ETH' },
-            { type: 'data-tx_ready', id: 'tx1', data: txReadyData },
+            { type: 'data-balance_summary', id: 'bs1', data: balanceCard },
           ],
         }),
       ],
       cursor: 'opaque-cursor-1',
     }))
-    const onTxReady = vi.fn()
+    const onBalanceSummary = vi.fn()
 
     await (AgentSession.prototype as any).recoverDisconnectedTurn.call(
       makeRecoveryThis(messagesSince),
       streamResult,
-      onTxReady
+      onBalanceSummary
     )
 
-    // AFTER: the answer and the tx_ready card are both recovered.
+    // AFTER: the answer and the (read-only) balance card are both recovered.
     expect(streamResult.message?.content).toBe('Here is your balance: 1.5 ETH')
-    expect(streamResult.transactions).toEqual([txReadyData])
-    expect(onTxReady).toHaveBeenCalledExactlyOnceWith(txReadyData)
+    expect(onBalanceSummary).toHaveBeenCalledExactlyOnceWith(balanceCard)
 
     // Bootstrap poll anchors on the server clock (X-Server-Now), not Date.now().
     expect(messagesSince).toHaveBeenCalledWith('conv-1', {
@@ -157,44 +154,32 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
     expect(streamResult.message).toBeNull() // no worse than today — turn just ends
   })
 
-  it('without a server-clock anchor (no X-Server-Now), recovers the text answer but NOT a signable card', async () => {
-    // Fund-safety: a local-clock fallback anchor can, under clock skew between
-    // rapid turns, reach back to a PRIOR turn's row. Recovering stale text is
-    // cosmetic; replaying a stale tx_ready into the sign gate is not — so the
-    // card must be dropped when the anchor isn't server-derived.
+  it('without a server-clock anchor (no X-Server-Now), still recovers the text answer via the local-clock fallback', async () => {
+    // A local-clock fallback anchor recovers the TEXT answer (at worst cosmetic if
+    // it reaches a prior turn). Nothing signable is ever replayed in Phase 2, so
+    // there is no fund-safety gate on the anchor anymore — only the text is at stake.
     const streamResult = makeStreamResult({
       disconnected: true,
       serverNow: null, // no X-Server-Now → local-clock fallback anchor
     })
-    const txReadyData = {
-      chain: 'Ethereum',
-      action: 'send',
-      send_tx: { to: '0xabc', value: '1' },
-    }
     const messagesSince = vi.fn(async () => ({
       messages: [
         recoveredAssistant({
-          parts: [
-            { type: 'text', text: 'Here is your balance: 1.5 ETH' },
-            { type: 'data-tx_ready', id: 'tx1', data: txReadyData },
-          ],
+          parts: [{ type: 'text', text: 'Here is your balance: 1.5 ETH' }],
         }),
       ],
       cursor: 'c',
     }))
-    const onTxReady = vi.fn()
 
     await (AgentSession.prototype as any).recoverDisconnectedTurn.call(
       makeRecoveryThis(messagesSince),
       streamResult,
-      onTxReady
+      undefined
     )
 
-    // The text answer is recovered…
+    // The text answer is recovered from the local-clock-anchored poll.
     expect(streamResult.message?.content).toBe('Here is your balance: 1.5 ETH')
-    // …but the signable card is NOT replayed (no sign gate, no transactions).
-    expect(onTxReady).not.toHaveBeenCalled()
-    expect(streamResult.transactions).toHaveLength(0)
+    expect(messagesSince).toHaveBeenCalledWith('conv-1', expect.objectContaining({ since: expect.any(String) }))
   })
 
   it('survives a transient poll error and recovers on a later attempt', async () => {
@@ -218,40 +203,111 @@ describe('recoverDisconnectedTurn — before/after differential', () => {
   })
 })
 
+describe('applyRecoveredMessage — signable tool fail-closed (Phase 2: tool-output not reconstructable)', () => {
+  const applyRecovered = (AgentSession.prototype as any).applyRecoveredMessage
+
+  it('warns LOUDLY and signs NOTHING when a recovered turn ran a FLAT signable tool', () => {
+    // A flat signable tool (polymarket / build_custom_*) emits its signable output
+    // on tool-output-available — which the recovery path does NOT reconstruct. So a
+    // mid-turn disconnect on such a tool must FAIL CLOSED (sign nothing) and warn,
+    // never silently drop. If this branch were reverted, no other test catches it.
+    const streamResult = makeStreamResult({ disconnected: true })
+    const onBalanceSummary = vi.fn()
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+    const msg = recoveredAssistant({
+      content: 'Deposited into Polymarket',
+      parts: [
+        { type: 'text', text: 'Deposited into Polymarket' },
+        { type: 'tool-polymarket_deposit', data: { chain: 'Polygon' } },
+      ],
+    })
+
+    applyRecovered.call({}, msg, streamResult, onBalanceSummary)
+    writeSpy.mockRestore()
+
+    // Fail-closed: nothing signable is reconstructed, and the drop is announced LOUDLY.
+    const warned = writes.some(w => w.includes('[session][recovery]') && w.includes('polymarket_deposit'))
+    expect(warned).toBe(true)
+  })
+
+  it('warns for a recovered PREP signable tool too (execute_* rides tool-output, no data-tx_ready)', () => {
+    // Phase 2 broadens the warning past flat tools: execute_send/swap/contract_call
+    // are prep signable tools whose payload also rides tool-output — equally
+    // unreconstructable on recovery. The warning must fire for them too.
+    const streamResult = makeStreamResult({ disconnected: true })
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+    const msg = recoveredAssistant({
+      content: 'Prepared your transfer',
+      parts: [
+        { type: 'text', text: 'Prepared your transfer' },
+        { type: 'tool-execute_send', data: {} },
+      ],
+    })
+
+    applyRecovered.call({}, msg, streamResult, undefined)
+    writeSpy.mockRestore()
+
+    const warned = writes.some(w => w.includes('[session][recovery]') && w.includes('execute_send'))
+    expect(warned).toBe(true)
+  })
+
+  it('does NOT warn when the recovered turn ran only a NON-signable tool', () => {
+    // A read tool (get_balances) is not a signing source — recovering its turn has
+    // no unsigned-tx gap, so the fail-closed warning must NOT fire (else every
+    // recovered read turn nags).
+    const streamResult = makeStreamResult({ disconnected: true })
+    const onBalanceSummary = vi.fn()
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
+    const msg = recoveredAssistant({
+      content: 'Your balance is 1.5 ETH',
+      parts: [
+        { type: 'text', text: 'Your balance is 1.5 ETH' },
+        { type: 'tool-get_balances', data: {} },
+      ],
+    })
+
+    applyRecovered.call({}, msg, streamResult, onBalanceSummary)
+    writeSpy.mockRestore()
+
+    const warned = writes.some(w => w.includes('[session][recovery]'))
+    expect(warned).toBe(false)
+  })
+})
+
 describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () => {
-  function makeHarness(opts: { recover: boolean }) {
-    const txReadyData = {
-      chain: 'Ethereum',
-      action: 'send',
-      send_tx: { to: '0xR', value: '1' },
-    }
+  function makeHarness() {
     const calls: string[] = []
     const client = {
       sendMessageStream: vi.fn(async (_conv: string, _req: any, _cb: any) => {
         calls.push('stream')
-        // Turn 1 drops mid-flight; turn 2 (after the recovered tx is signed and
-        // reported) returns a clean closing message.
-        if (calls.filter(c => c === 'stream').length === 1) {
-          return makeStreamResult({
-            disconnected: true,
-            serverNow: '1718870400000',
-          })
-        }
+        // Turn 1 drops mid-flight; the persisted answer is recovered by polling.
         return makeStreamResult({
-          message: { content: 'done' },
-          finished: true,
+          disconnected: true,
+          serverNow: '1718870400000',
         })
       }),
       messagesSince: vi.fn(async () => ({
         messages: [
           recoveredAssistant({
-            parts: opts.recover
-              ? [
-                  { type: 'text', text: 'Recovered answer' },
-                  { type: 'data-tx_ready', id: 'tx1', data: txReadyData },
-                ]
-              : undefined,
-            content: opts.recover ? 'Recovered answer' : '',
+            parts: [
+              { type: 'text', text: 'Recovered answer' },
+              // The recovered turn ran a signable tool whose payload rode
+              // tool-output — unreconstructable, so nothing is signed (warns).
+              { type: 'tool-execute_send', data: {} },
+            ],
+            content: 'Recovered answer',
           }),
         ],
         cursor: 'c',
@@ -293,6 +349,8 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       client,
       executor,
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
@@ -300,35 +358,41 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
-      // No `vault` here, so confirmBroadcastedTx early-returns — the recovered
-      // tx still only emits the `pending` status this harness asserts.
+      // No `vault` here, so confirmBroadcastedTx early-returns.
       confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
       emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     }
-    const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'whats my balance', ui, 0)
+    const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'send 1 ETH', ui, 0)
     return { run, ui, client, executor }
   }
 
-  it('recovers answer + tx_ready after a drop, signs through the gate, completes', async () => {
-    const h = makeHarness({ recover: true })
+  it('recovers the answer after a drop, signs NOTHING (tool-output not reconstructable), completes', async () => {
+    const h = makeHarness()
+    const writes: string[] = []
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+      writes.push(String(chunk))
+      return true
+    })
     await h.run()
+    writeSpy.mockRestore()
 
     // The drop was signalled to the consumer (pipe emits a `reconnecting` event).
     expect(h.ui.onReconnecting).toHaveBeenCalledOnce()
     // The recovered answer surfaced to the user.
     expect(h.ui.onAssistantMessage).toHaveBeenCalledWith('Recovered answer')
-    // The recovered tx_ready flowed through the confirm/sign gate.
-    expect(h.ui.requestConfirmation).toHaveBeenCalledOnce()
-    expect(h.executor.storeServerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ chain: 'Ethereum', action: 'send' })
-    )
-    expect(h.executor.signTxFromBuffer).toHaveBeenCalledOnce()
-    expect(h.ui.onTxStatus).toHaveBeenCalledWith('0xfeed', 'Ethereum', 'pending', undefined)
+    // Phase 2: a recovered signable tool is NEVER signed — nothing buffered/signed.
+    expect(h.executor.storeServerTransaction).not.toHaveBeenCalled()
+    expect(h.executor.signTxFromBuffer).not.toHaveBeenCalled()
+    expect(h.ui.requestConfirmation).not.toHaveBeenCalled()
+    expect(h.ui.onTxStatus).not.toHaveBeenCalled()
+    // …and the drop is announced LOUDLY so the user re-runs.
+    expect(writes.some(w => w.includes('[session][recovery]') && w.includes('execute_send'))).toBe(true)
+    // Only one stream call — no sign result to recurse on.
+    expect(h.client.sendMessageStream).toHaveBeenCalledOnce()
     expect(h.ui.onDone).toHaveBeenCalledOnce()
   })
 
   it('happy path (no disconnect) does not poll /messages/since', async () => {
-    const txReadyData = { chain: 'Ethereum' }
     const client = {
       sendMessageStream: vi.fn(async () => makeStreamResult({ message: { content: 'hello' }, finished: true })),
       messagesSince: vi.fn(),
@@ -346,7 +410,6 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       requestPassword: vi.fn(async () => 'pw'),
       requestConfirmation: vi.fn(async () => true),
     }
-    void txReadyData
     const fakeThis: any = {
       conversationId: 'conv-1',
       publicKey: 'pk-test',
@@ -362,6 +425,8 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
         setPassword: vi.fn(),
       },
       processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,

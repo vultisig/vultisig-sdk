@@ -96,8 +96,8 @@ describe('getCosmosGasLimit (re-export from core-chain)', () => {
     expect(getCosmosGasLimit({ chain: Chain.Osmosis, id: 'uosmo' })).toBe(300_000n)
   })
 
-  it('applies the TerraClassic uusd burn-tax override (1M)', () => {
-    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(1_000_000n)
-    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uluna' })).toBe(400_000n)
+  it('uses 300000 for all TerraClassic send denoms (matches iOS/Android SignDoc)', () => {
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(300_000n)
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uluna' })).toBe(300_000n)
   })
 })

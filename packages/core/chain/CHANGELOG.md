@@ -1,5 +1,189 @@
 # @vultisig/core-chain
 
+## 2.25.1
+
+### Patch Changes
+
+- [#1175](https://github.com/vultisig/vultisig-sdk/pull/1175) [`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Fix 1inch swap quotes to native ETH (and other EVM chains' native assets) failing route resolution.
+
+  `findSwapQuote`'s 1inch fetcher passed `from.id ?? from.ticker` / `to.id ?? to.ticker` into
+  `getOneInchSwapQuote`, so a native asset (no `.id`) fell back to its ticker string (e.g. `"ETH"`).
+  `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to detect the native asset and
+  substitute 1inch's `0xEeee...` sentinel address (EIP-7528) — a truthy ticker string defeated that
+  check, so 1inch received `dst=ETH` (or `src=ETH`) instead of the sentinel and rejected the request
+  with `dst must be an Ethereum address`. This silently removed 1inch as a route for any swap
+  involving a chain's native asset (e.g. USDC→ETH), even though 1inch could otherwise fill it.
+
+  Now `findSwapQuote` forwards the coin's raw `.id` (`undefined` for the native asset) so
+  `getOneInchSwapQuote`'s existing sentinel-mapping logic works as designed. ERC-20↔ERC-20 quotes
+  are unaffected; other providers (Kyber, LiFi, SwapKit) construct their own requests and are not
+  touched by this change.
+
+## 2.25.0
+
+### Minor Changes
+
+- [#1169](https://github.com/vultisig/vultisig-sdk/pull/1169) [`1ef64a3`](https://github.com/vultisig/vultisig-sdk/commit/1ef64a39f856d9f1d412df8f5e69c66f7130d8c7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface XRP issued-currency (trust-line) token balances.
+
+  - `getRippleAccountLines` reads an account's trust lines, following `account_lines` pagination so a large set is not truncated.
+  - `getRippleCoinBalance` now dispatches on the coin id: native XRP still returns the reserve-adjusted spendable balance, while an issued-currency coin returns that trust line's balance. Previously the resolver ignored the id and returned the XRP balance for _every_ Ripple coin, so a token row displayed the account's XRP balance.
+  - `findRippleCoins` discovers held trust lines for the coin finder, so XRPL tokens appear in the asset list. Lines with a negative balance (the account is the issuer and owes the counterparty) and zero-balance lines are excluded.
+  - `rippleKnownIssuedTokens` (RLUSD) is now wired into `knownTokens`, so it is selectable before a trust line exists.
+
+## 2.24.3
+
+### Patch Changes
+
+- [#1115](https://github.com/vultisig/vultisig-sdk/pull/1115) [`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expand large scientific-notation numeric amounts before base-unit parsing.
+
+## 2.24.2
+
+### Patch Changes
+
+- [#1018](https://github.com/vultisig/vultisig-sdk/pull/1018) [`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): accept returned quote provider ids in `findSwapQuote.excludeProviders`
+
+  `findSwapQuote.excludeProviders` now accepts both display names (`CowSwap`, `KyberSwap`, `LiFi`) and returned quote provider ids (`cowswap`, `kyber`, `li.fi`) for general providers. Unknown exclude tokens now fail closed instead of silently leaving the provider eligible.
+
+- [#1112](https://github.com/vultisig/vultisig-sdk/pull/1112) [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): resolve THORChain limit-swap destination chains via the swap-eligible chain set, not the LP-position map (THOR-04) — `getSupportedThorchainAssetChain` (`limitSwapMemo.ts`) resolved a THORChain asset-prefix (e.g. `SOL`, `NOBLE`) to a `Chain` via `lpChainMap`, a map scoped to the wallet's LP-position-display feature (`chains/cosmos/thor/lp/lpChainMap.ts`), not swap eligibility. Since neither Solana nor Noble has a THORChain LP pool, both were missing from that map, so a limit swap (`LIM=` memo) targeting either failed closed with "unsupported THORChain asset prefix" even though both are valid THORChain market-swap destinations (per THORChain's memo docs, `=` vs `=<` only changes execution behavior — price/queue/TTL — not the destination-chain universe). Fixed by unioning `lpChainMap` with `thorChainSwapEnabledChains` (`swap/native/NativeSwapChain.ts`, now exported) — the same THORChain-specific chain list regular market swaps already use to gate eligibility — rather than replacing `lpChainMap` outright or switching to the broader `nativeSwapChainIds`, which also carries MayaChain-only entries (e.g. `Chain.MayaChain`, `Chain.Cardano`) that aren't valid THORChain limit-swap destinations.
+
+- [#1097](https://github.com/vultisig/vultisig-sdk/pull/1097) [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): exact bigint decimal conversion for the displayed swap output (`toAmountDecimal`) — the float64 `fromChainAmount(...).toFixed()` path silently drifted above 2^53 raw units (e.g. `999999999999999999999999` @18dp rendered as `1000000.000000000000000000`), so the amount the user confirmed could differ from the quoted one. Non-integer provider amount strings keep the legacy fallback instead of throwing mid-build.
+
+## 2.24.1
+
+### Patch Changes
+
+- [#1107](https://github.com/vultisig/vultisig-sdk/pull/1107) [`c5e89cb`](https://github.com/vultisig/vultisig-sdk/commit/c5e89cb317ae6f4ca00eb6c628ad6bac636e4821) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): populate 1inch affiliateFee for display (AGG-05) — 1inch general-swap quotes never populated `affiliateFee` on the returned `GeneralSwapQuote`, unlike Kyber and LI.FI, leaving the fee-transparency row blank for 1inch even though a real affiliate cut is taken via its `fee`/`referrer` params. `getOneInchSwapQuote` now grosses the post-fee `dstAmount` back up (same bps-based calc `getKyberSwapAffiliateFee` uses) to compute and attach a display-only `affiliateFee`.
+
+- [#1101](https://github.com/vultisig/vultisig-sdk/pull/1101) [`9a1fc02`](https://github.com/vultisig/vultisig-sdk/commit/9a1fc0276ddc8fc905fab392875499d39011520d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): surface non-integer dstAmount drops + validate THORChain/MayaChain MsgDeposit memos (SDK-CORRECTNESS-04/06/08) — a drifted provider's non-integer `dstAmount` used to silently drop that quote from ranking with no signal it was a parse failure; `findSwapQuote` now `console.warn`s the provider + raw value before rethrowing. `prepareThorchainMsgDepositTxFromKeys` accepted an arbitrary memo string with no structural validation, unlike the fully-validated limit-swap memo path; it now fails closed on non-printable/oversized memos and unrecognized THORChain/MayaChain deposit actions (and, for the two documented LP actions, a malformed pool id), while still accepting non-LP operator-style memos (BOND, UNBOND, etc.) verbatim. Also replaced an `as any` cast on the deposit's chain-specific proto binding with per-chain branches so the `case`/`value` pairing is statically checked instead of bypassed.
+
+## 2.24.0
+
+### Minor Changes
+
+- [#1042](https://github.com/vultisig/vultisig-sdk/pull/1042) [`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): XRP trust-line (TrustSet) support for issued tokens
+
+  Add support for opening/modifying an XRPL trust line so a vault can hold issued
+  currencies (e.g. RLUSD). `getRippleSigningInputs` now emits a WalletCore
+  `OperationTrustSet` (LimitAmount = { currency, issuer, value }) when the keysign
+  coin is an issued currency, and falls through to the existing Payment path for
+  native XRP. New `chains/ripple/issuedCurrency` helpers encode the composite
+  `currency.issuer` token id, normalise human tickers to on-ledger currency codes,
+  format issued-currency values, and expose the 0.2 XRP owner-reserve delta
+  (`rippleOwnerReserveDrops`). `isValidTokenId` validates XRPL `currency.issuer`
+  ids.
+
+## 2.23.3
+
+### Patch Changes
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
+## 2.23.2
+
+### Patch Changes
+
+- [#1014](https://github.com/vultisig/vultisig-sdk/pull/1014) [`c41a219`](https://github.com/vultisig/vultisig-sdk/commit/c41a21950c4cccf70c8298b8e595acf64c276d8c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(cosmos): initiator-side dynamic gas — simulate native sends and relay `CosmosSpecific.gas_limit`
+
+  `getCosmosChainSpecific` now simulates native Cosmos bank sends via
+  `/cosmos/tx/v1beta1/simulate` and relays the padded (`× 1.3`) `gas_used` to
+  co-signers in `CosmosSpecific.gas_limit`. The signing-inputs resolver already
+  honors this field (scaling the fee amount accordingly) and falls back to the
+  static per-chain gas limit when it is absent or zero, so:
+
+  - Only native bank sends are simulated (a relayed dapp `signData`, token / IBC /
+    contract / staking txs, and vault-based chains keep the static limit).
+  - Estimation fails closed: any simulate/build error leaves the field unset, so
+    simulation never blocks signing and peers converge on the static limit.
+  - The relayed limit is part of the SignDoc every device hashes; because it is
+    computed with exact integer math (ceil of `gas_used × 13 / 10`) and honored
+    identically across peers, cross-device co-signing stays byte-identical.
+
+  Mirrors the iOS `CosmosGasEstimator` implementation.
+
+## 2.23.1
+
+### Patch Changes
+
+- [#956](https://github.com/vultisig/vultisig-sdk/pull/956) [`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6) Thanks [@gastonm5](https://github.com/gastonm5)! - fix(cardano): attach and plan per-UTXO native-token data for MPC keysign parity
+
+  Adopts commondata's `UtxoInfo.cardano_tokens` across all three missing
+  layers, mirroring the mainnet-tested iOS implementation byte-for-byte:
+
+  - Regenerates `utxo_info_pb.ts` so `CardanoTokenAsset` /
+    `UtxoInfo.cardanoTokens` exist and can be decoded off the keysign wire.
+  - The keysign initiator fetches Cardano UTXOs with Koios `_extended` and
+    attaches per-UTXO native assets (UTXOs ordered by `(hash, index)`, assets
+    by `(policyId, assetNameHex)`, hex lowercased) so co-signers see
+    deterministic, token-aware payload bytes.
+  - The Cardano signing-inputs resolver maps `cardanoTokens` onto WalletCore
+    `TxInput.token_amount` (minimal big-endian amount bytes), letting the
+    planner reconcile input tokens into the change output.
+
+  Fixes MPC co-signing for any Cardano address holding native tokens:
+  iOS/macOS-initiated sends no longer fail keysign with a pre-image hash
+  mismatch, and SDK-initiated sends no longer build token-dropping bodies
+  that the node rejects at broadcast (Ogmios 3123 "value not conserved").
+
+- [#806](https://github.com/vultisig/vultisig-sdk/pull/806) [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Rank swap quotes by net user output and tighten the provider preference band.
+
+## 2.23.0
+
+### Minor Changes
+
+- [#931](https://github.com/vultisig/vultisig-sdk/pull/931) [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add a public `SwapAffiliateConfig.jupiter` fee-owner override for Jupiter affiliate fee account derivation.
+
+- [#930](https://github.com/vultisig/vultisig-sdk/pull/930) [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(solana): staking APY resolver
+
+  Phase 6 of Solana native staking. Adds `resolveValidatorApy` under
+  `@vultisig/core-chain/chains/solana/staking/apyResolver`, which drives the
+  per-validator APY on the DeFi stake rows. Two sources, in order: the Stakewiz
+  `apy_estimate` passthrough (network-measured, commission-net) from the Phase 2
+  metadata seam, then an on-chain fallback derived from the network inflation rate
+  and the fraction of supply staked, net of the validator's commission, compounded
+  over the epochs-per-year. Returns `undefined` when neither yields a positive
+  value so the view hides the APY row.
+
+- [#887](https://github.com/vultisig/vultisig-sdk/pull/887) [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add Jupiter as a same-chain Solana swap provider with VULT-scaled affiliate fee support.
+
+### Patch Changes
+
+- [#954](https://github.com/vultisig/vultisig-sdk/pull/954) [`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fix Terra Classic address explorer URLs so Terra Finder receives a single `classic` network segment.
+
+- [#923](https://github.com/vultisig/vultisig-sdk/pull/923) [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fetch Solana signing blockhashes at confirmed commitment and retry transient blockhash misses during standard RPC broadcast.
+
+## 2.22.2
+
+### Patch Changes
+
+- [#921](https://github.com/vultisig/vultisig-sdk/pull/921) [`6eff99f`](https://github.com/vultisig/vultisig-sdk/commit/6eff99fa08f0d2511eab95304c0a0c973944db2e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - refactor(cardano): attach CIP-20 memo via WalletCore native auxiliary_data
+
+  Bumps `@trustwallet/wallet-core` to `4.7.0`, which adds the Cardano
+  `SigningInput.auxiliary_data` field. The Cardano memo path now hands the
+  CIP-20 CBOR straight to WalletCore, which commits its Blake2b-256 hash into
+  tx body key 7 and embeds the bytes in the signed transaction — replacing the
+  client-side body patching and re-hashing in TypeScript. The chain-specific
+  fee estimator prices the WalletCore body as-is (it already carries key 7),
+  and the now-unused `patchTxBodyWithAuxHash` helper is removed.
+
+- [#924](https://github.com/vultisig/vultisig-sdk/pull/924) [`d08a476`](https://github.com/vultisig/vultisig-sdk/commit/d08a47696d0cb1c8dbcb50d41830b9eae16b6d8c) Thanks [@johnnyluo](https://github.com/johnnyluo)! - fix(terra-classic): align send gas limit with iOS/Android for cross-device co-signing
+
+  Corrects the Terra Classic send gas limit in `cosmosGasLimitRecord` so it matches
+  the values used by the iOS and Android clients. When co-signing across devices, a
+  mismatched gas limit produces a different transaction hash and the signing session
+  fails; aligning the record keeps the payload identical across platforms.
+
+## 2.22.1
+
+### Patch Changes
+
+- Updated dependencies [[`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a)]:
+  - @vultisig/lib-utils@0.10.4
+
 ## 2.22.0
 
 ### Minor Changes

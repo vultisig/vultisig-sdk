@@ -25,11 +25,37 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   const { address } = coin
   const client = getSuiClient()
 
-  const { data } = await client.getAllCoins({
-    owner: address,
-  })
+  // `getAllCoins` is paginated (~50 objects/page). Sui's object-per-coin model
+  // makes >50 coin objects realistic for an active wallet (dust, partial fills,
+  // repeated small transfers, staking rewards), so reading only the first page
+  // silently truncates the coin set. That set feeds both `gasCoins` (native SUI
+  // objects for the Pay/PaySui gas payment) and `inputCoins` (the coinType being
+  // sent) downstream, so a truncated page produces a broken send ("insufficient
+  // balance" despite adequate holdings, or an empty inputCoins array if none of
+  // the sent coinType's objects land on page 1) even though the getBalance-based
+  // display path shows the correct aggregate total. Follow the cursor to
+  // completion, mirroring the Solana SPL pagination fix (sdk#962).
+  // Bound the cursor loop: a buggy/misbehaving RPC that keeps returning
+  // hasNextPage=true with a non-advancing cursor would otherwise spin forever.
+  // 200 pages ≈ 10k coin objects — far beyond any real wallet — so hitting the
+  // cap means the cursor is stuck; fail CLOSED (throw) rather than hang or
+  // silently truncate the coin set and under-fund the send.
+  const MAX_COIN_PAGES = 200
+  const rawCoins: CoinStruct[] = []
+  let cursor: string | null | undefined = undefined
+  let pages = 0
+  do {
+    const page = await client.getAllCoins({ owner: address, cursor })
+    rawCoins.push(...page.data)
+    cursor = page.hasNextPage ? page.nextCursor : null
+    if (++pages >= MAX_COIN_PAGES && cursor) {
+      throw new Error(
+        `getSuiChainSpecific: getAllCoins exceeded ${MAX_COIN_PAGES} pages for ${address} — refusing to build a send from a possibly-truncated or looping coin set`
+      )
+    }
+  } while (cursor)
 
-  const coins = data.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
+  const coins = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
 
   const referenceGasPrice = await client.getReferenceGasPrice()
 

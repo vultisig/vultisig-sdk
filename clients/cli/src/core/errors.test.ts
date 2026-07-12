@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AuthRequiredError,
   classifyError,
+  ConfirmationRequiredError,
   ExitCode,
   ExternalServiceError,
   InsufficientBalanceError,
@@ -252,6 +253,39 @@ describe('error class properties', () => {
     expect(new UsageError('x')).toBeInstanceOf(Error)
     expect(new NetworkError('x')).toBeInstanceOf(Error)
     expect(new UnknownError('x')).toBeInstanceOf(Error)
+  })
+})
+
+describe('ConfirmationRequiredError', () => {
+  it('has a stable code and dedicated exit code (not UNKNOWN/7)', () => {
+    const err = new ConfirmationRequiredError('Transaction requires confirmation.', 'Pass --yes to confirm.')
+    expect(err).toBeInstanceOf(VsigError)
+    expect(err).toBeInstanceOf(Error)
+    expect(err.code).toBe('CONFIRMATION_REQUIRED')
+    expect(err.exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+    expect(err.exitCode).not.toBe(ExitCode.UNKNOWN)
+    expect(err.retryable).toBe(false)
+    expect(err.hint).toBe('Pass --yes to confirm.')
+  })
+
+  it('is returned unchanged by classifyError', () => {
+    const original = new ConfirmationRequiredError('needs confirmation')
+    expect(classifyError(original)).toBe(original)
+  })
+
+  it('serializes to a stable JSON envelope', () => {
+    const json = toErrorJson(new ConfirmationRequiredError('Swap requires confirmation.', 'Pass --yes to confirm.'))
+    expect(json).toEqual({
+      success: false,
+      v: 1,
+      error: {
+        code: 'CONFIRMATION_REQUIRED',
+        exitCode: ExitCode.CONFIRMATION_REQUIRED,
+        message: 'Swap requires confirmation.',
+        hint: 'Pass --yes to confirm.',
+        retryable: false,
+      },
+    })
   })
 })
 

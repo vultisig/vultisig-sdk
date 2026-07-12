@@ -1,11 +1,13 @@
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
 import { cowSwapChainConfig, cowSwapSupportedChains } from '@vultisig/core-chain/swap/general/cowswap/config'
+import type { GeneralSwapProvider } from '@vultisig/core-chain/swap/general/GeneralSwapProvider'
 import { getJupiterSwapQuote } from '@vultisig/core-chain/swap/general/jupiter/api/getJupiterSwapQuote'
+import type { JupiterAffiliateConfig } from '@vultisig/core-chain/swap/general/jupiter/config'
 import { jupiterSwapEnabledChains } from '@vultisig/core-chain/swap/general/jupiter/JupiterSwapEnabledChains'
 import { getKyberSwapQuote } from '@vultisig/core-chain/swap/general/kyber/api/quote'
 import { kyberSwapEnabledChains } from '@vultisig/core-chain/swap/general/kyber/chains'
@@ -43,6 +45,7 @@ import { isEmpty } from '@vultisig/lib-utils/array/isEmpty'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { bigIntToNumber } from '@vultisig/lib-utils/bigint/bigIntToNumber'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { pick } from '@vultisig/lib-utils/record/pick'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
@@ -58,6 +61,7 @@ export type SwapAffiliateConfig = {
   oneInch?: OneInchAffiliateConfig
   kyber?: KyberSwapBaseAffiliateConfig
   lifi?: LifiAffiliateConfig
+  jupiter?: JupiterAffiliateConfig
 }
 
 export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
@@ -82,9 +86,21 @@ export type FindSwapQuoteInput = Record<TransferDirection, AccountCoin> & {
    * protocols use their own protection mechanisms and ignore this value.
    */
   slippageTolerance?: number
+  /**
+   * Optional list of providers to never select, even if one would otherwise
+   * win the best-quote comparison. Additive opt-out for a consumer that
+   * cannot yet build/sign a given provider's tx shape — e.g. a consumer with
+   * no CowSwap `cowswap_order` (EIP-712 order) signing flow wired should pass
+   * `['CowSwap']` so a same-chain EVM ERC-20 swap falls through to the next-
+   * best BUILDABLE provider (KyberSwap/1inch/LiFi) instead of CowSwap winning
+   * the quote and then failing to build. Omitted/empty is a no-op — every
+   * provider stays eligible, matching existing behavior for every other
+   * consumer.
+   */
+  excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
-type SwapQuoteProviderName =
+export type SwapQuoteProviderName =
   | 'CowSwap'
   | 'KyberSwap'
   | '1inch'
@@ -94,6 +110,8 @@ type SwapQuoteProviderName =
   | 'THORChain'
   | 'MayaChain'
 
+export type SwapQuoteProviderExcludeName = SwapQuoteProviderName | GeneralSwapProvider
+
 type SwapQuoteFetcher = {
   providerName: SwapQuoteProviderName
   fetch: () => Promise<SwapQuote>
@@ -102,10 +120,18 @@ type SwapQuoteFetcher = {
 type RankedSwapQuote = {
   quote: SwapQuote
   outputAmount: bigint
+  sourceGasUnits?: bigint
   providerName: SwapQuoteProviderName
 }
 
 const QUOTE_FETCH_TIMEOUT_MS = 30_000
+
+// Node/undici network-layer error codes — mirrors agent-backend-ts's
+// `TRANSIENT_QUOTE_CODE_RE` (execute_swap.ts) for the same reason: a provider's raw
+// rejection surfaces these as bare codes (e.g. "ETIMEDOUT"), which don't contain the
+// substrings "timeout" or "timed out" checked elsewhere.
+const TRANSIENT_PROVIDER_CODE_RE =
+  /\b(ETIMEDOUT|ECONNRESET|ECONNREFUSED|ECONNABORTED|EPIPE|ENOTFOUND|EAI_AGAIN|UND_ERR_\w+)\b/i
 
 const withTimeout = <T>(p: Promise<T>, ms: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -155,6 +181,28 @@ const providerPreferenceIndex = new Map<SwapQuoteProviderName, number>(
 const getProviderPreferenceRank = (name: SwapQuoteProviderName): number =>
   providerPreferenceIndex.get(name) ?? Number.POSITIVE_INFINITY
 
+const swapQuoteProviderExcludeAlias: Record<GeneralSwapProvider, SwapQuoteProviderName> = {
+  '1inch': '1inch',
+  'li.fi': 'LiFi',
+  kyber: 'KyberSwap',
+  swapkit: 'SwapKit',
+  cowswap: 'CowSwap',
+  jupiter: 'Jupiter',
+}
+
+const swapQuoteProviderExcludeNames = new Set<SwapQuoteProviderExcludeName>([
+  ...providerPreferenceOrder,
+  ...(Object.keys(swapQuoteProviderExcludeAlias) as GeneralSwapProvider[]),
+])
+
+function normalizeExcludeProviderName(providerName: SwapQuoteProviderExcludeName): SwapQuoteProviderName {
+  if (!swapQuoteProviderExcludeNames.has(providerName)) {
+    throw new Error(`Unknown swap quote provider exclusion: ${providerName}`)
+  }
+
+  return swapQuoteProviderExcludeAlias[providerName as GeneralSwapProvider] ?? providerName
+}
+
 const formatTradingHaltedMessage = (reason: string) =>
   `This swap route is temporarily unavailable — ${reason}. Please try again later.`
 
@@ -188,33 +236,193 @@ const assertNativeTradingOpen = async (input: {
 const asTradingHaltedSwapError = (reason: unknown): SwapError | null =>
   reason instanceof SwapError && reason.code === SwapErrorCode.TradingHalted ? reason : null
 
+const isBelowMinimumMsg = (msg: string) => {
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('below minimum') ||
+    lower.includes('minimum amount') ||
+    lower.includes('min amount') ||
+    lower.includes('amount too small') ||
+    lower.includes('below the minimum')
+  )
+}
+
+// Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
+// pool ragnarok, churn). The quote API then rejects EVERY amount with
+// "trading is halted" — an operational state, not an amount problem. Detect it
+// so we surface a "temporarily unavailable" message instead of the misleading
+// generic "no route" (which reads like the pair is unsupported). Also match the
+// "trading paused" wordings emitted by the THOR halt helpers in
+// `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
+// `<chain> chain trading paused`). (#604, CodeRabbit)
+const isTradingHaltedMsg = (msg: string) => {
+  const lower = msg.toLowerCase()
+  return (
+    lower.includes('halted') ||
+    lower.includes('trading halt') ||
+    lower.includes('trading paused') ||
+    lower.includes('trading is paused')
+  )
+}
+
+// A provider's raw rejection is a transient infra failure (network/timeout/5xx),
+// not a genuine structural decline. Bails to false on the same "no route" /
+// dust-threshold / halted substrings checked above so a provider that positively
+// answered is never misclassified as transient. Mirrors (deliberately duplicated,
+// not imported — separate repo/package) agent-backend-ts's execute_swap.ts
+// `isTransientQuoteError`, which classifies the SAME kind of raw single-provider
+// error for the native asyncFallbackChain path. Used below to detect the case
+// where EVERY provider failed transiently, so the generic `AllProvidersFailed`
+// fallback doesn't collapse a genuine outage into a "no route" hard-negative that
+// downstream classifiers (and `isTransientQuoteError` itself) cannot un-collapse.
+// Hoisted to module scope (rather than nested in findSwapQuote) since it closes
+// over no local state — only the module-level regex and the two helpers above.
+const isTransientProviderFailure = (reason: unknown): boolean => {
+  const msg = reason instanceof Error ? reason.message : String(reason)
+  const lower = msg.toLowerCase()
+  if (
+    lower.includes('no swap routes found') ||
+    lower.includes('no swap route found') ||
+    lower.includes('no routes found') ||
+    lower.includes('no route found') ||
+    lower.includes('amount less than min swap amount') ||
+    isBelowMinimumMsg(msg) ||
+    isTradingHaltedMsg(msg) ||
+    lower.includes('dust threshold') ||
+    lower.includes('does not meet requirements')
+  ) {
+    return false
+  }
+  // Structured status takes precedence over message-sniffing where available
+  // (HttpResponseError.status) — a 429/5xx is unambiguously a transient
+  // infra signal regardless of how the provider worded the body.
+  if (reason instanceof HttpResponseError && (reason.status === 429 || reason.status >= 500)) {
+    return true
+  }
+  return (
+    lower.includes('fetch failed') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('network error') ||
+    lower.includes('socket hang up') ||
+    lower.includes('connection refused') ||
+    lower.includes('econnrefused') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('deadline exceeded') ||
+    lower.includes('the operation was aborted') ||
+    /\bhttp\s+5\d{2}\b/.test(lower) ||
+    lower.includes('bad gateway') ||
+    lower.includes('service unavailable') ||
+    lower.includes('gateway timeout') ||
+    lower.includes('internal server error') ||
+    lower.includes('rate limit') ||
+    lower.includes('too many requests') ||
+    /\b429\b/.test(lower) ||
+    lower.includes('skip api network error') ||
+    TRANSIENT_PROVIDER_CODE_RE.test(msg)
+  )
+}
+
 /**
- * Tuning point for issue #605's banded routing rule. 100 bps = 1%.
+ * Tuning point for issue #605's banded routing rule. 50 bps = 0.5%.
  * Adjust this when product wants a wider or narrower provider-preference band.
  */
-const SWAP_QUOTE_PREFERENCE_BAND_BPS = 100n
+const SWAP_QUOTE_PREFERENCE_BAND_BPS = 50n
 const BPS_DENOMINATOR = 10_000n
 
 const isWithinPreferenceBand = (outputAmount: bigint, bestOutputAmount: bigint): boolean =>
   outputAmount * BPS_DENOMINATOR >= bestOutputAmount * (BPS_DENOMINATOR - SWAP_QUOTE_PREFERENCE_BAND_BPS)
 
+/** Re-base an integer amount from `fromDecimals` fixed-point to `toDecimals`. */
+function rebaseDecimals(value: bigint, fromDecimals: number, toDecimals: number): bigint {
+  if (fromDecimals === toDecimals) {
+    return value
+  }
+  if (toDecimals > fromDecimals) {
+    return value * 10n ** BigInt(toDecimals - fromDecimals)
+  }
+  return value / 10n ** BigInt(fromDecimals - toDecimals)
+}
+
+const subtractClamped = (amount: bigint, fee: bigint): bigint => (fee >= amount ? 0n : amount - fee)
+
+const isSameCoinKey = (fee: { chain: Chain; id?: string }, coin: AccountCoin): boolean =>
+  fee.chain === coin.chain && fee.id === coin.id
+
+const getGeneralDestinationSideFeeAmount = ({ quote, to }: { quote: SwapQuote; to: AccountCoin }): bigint => {
+  if (!('general' in quote.quote)) {
+    return 0n
+  }
+
+  const { general } = quote.quote
+  const { tx } = general
+  const explicitFee = 'evm' in tx ? tx.evm.affiliateFee : 'solana' in tx ? tx.solana.swapFee : undefined
+
+  const providerAlreadyNet =
+    general.provider === '1inch' ||
+    general.provider === 'li.fi' ||
+    general.provider === 'kyber' ||
+    general.provider === 'swapkit' ||
+    general.provider === 'jupiter' ||
+    general.provider === 'cowswap'
+  if (!providerAlreadyNet && explicitFee && isSameCoinKey(explicitFee, to)) {
+    return rebaseDecimals(explicitFee.amount, explicitFee.decimals, to.decimals)
+  }
+
+  return 0n
+}
+
 /**
- * Comparable destination amount in the destination token's smallest units (same
- * scale as `general.dstAmount`).
+ * Comparable destination amount in the destination token's smallest units.
  *
  * Native swap APIs report `expected_amount_out` in chain-specific precision
  * (`getNativeSwapDecimals`); aggregators use the destination token's decimals.
- * Without re-basing, THORChain (8-decimal canonical) and Kyber (token decimals)
- * are not comparable as raw bigints.
- *
- * TODO(#353 follow-up): subtract route-specific gas / outbound fees for true net
- * output; today this ranks gross destination amount after decimal alignment only.
+ * Native THOR/Maya and all current general providers report user-receive
+ * amounts. Explicit fee fields are display/receipt metadata for those providers,
+ * so subtract them only for a future provider that reports gross output.
  */
-function getComparableOutputAmount(q: SwapQuote, to: AccountCoin): bigint {
+function getComparableOutputAmount(q: SwapQuote, to: AccountCoin, providerName: SwapQuoteProviderName): bigint {
   if ('native' in q.quote) {
     return nativeSwapAmountToCoinBaseUnit(BigInt(q.quote.native.expected_amount_out), to)
   }
-  return BigInt(q.quote.general.dstAmount)
+  const { dstAmount } = q.quote.general
+  let grossOutput: bigint
+  try {
+    grossOutput = BigInt(dstAmount)
+  } catch (error) {
+    // A non-integer (or otherwise non-BigInt-parseable) dstAmount used to drop
+    // this quote from ranking with no signal it was a parse failure rather than
+    // a genuine decline (SDK-CORRECTNESS-04) — a drifted provider silently
+    // routed the user to a worse-but-valid fill. Surface it before rethrowing;
+    // ranking behavior (allSettled rejection) is unchanged.
+    console.warn(
+      `[findSwapQuote] ${providerName} returned a non-integer dstAmount "${dstAmount}"; dropping this quote from ranking.`
+    )
+    throw error
+  }
+  return subtractClamped(grossOutput, getGeneralDestinationSideFeeAmount({ quote: q, to }))
+}
+
+const getSameChainEvmSourceGasUnits = (q: SwapQuote, from: AccountCoin, to: AccountCoin): bigint | undefined => {
+  if (from.chain !== to.chain || !isChainOfKind(from.chain, 'evm') || !isChainOfKind(to.chain, 'evm')) {
+    return undefined
+  }
+
+  if (!('general' in q.quote)) {
+    return undefined
+  }
+
+  const { tx } = q.quote.general
+  if ('evm' in tx) {
+    // Missing gas stays non-comparable. Treating it as 0 would incorrectly make
+    // incomplete EVM quotes dominate the final tie-break.
+    return tx.evm.gasLimit
+  }
+  if ('cowswap_order' in tx) {
+    return 0n
+  }
+
+  return undefined
 }
 
 function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[]): SwapQuote | null {
@@ -245,13 +453,35 @@ function selectBestEligibleQuote(settled: PromiseSettledResult<RankedSwapQuote>[
     }
 
     const candidatePreferenceRank = getProviderPreferenceRank(candidate.providerName)
-    if (
-      selected === null ||
-      candidatePreferenceRank < selectedPreferenceRank ||
-      (candidatePreferenceRank === selectedPreferenceRank && candidate.outputAmount > selected.outputAmount)
-    ) {
+
+    if (selected === null) {
       selected = candidate
       selectedPreferenceRank = candidatePreferenceRank
+      continue
+    }
+
+    if (candidatePreferenceRank < selectedPreferenceRank) {
+      selected = candidate
+      selectedPreferenceRank = candidatePreferenceRank
+      continue
+    }
+
+    if (candidatePreferenceRank !== selectedPreferenceRank) {
+      continue
+    }
+
+    const hasComparableGas =
+      candidate.sourceGasUnits !== undefined &&
+      selected.sourceGasUnits !== undefined &&
+      candidate.sourceGasUnits !== selected.sourceGasUnits
+
+    if (hasComparableGas && candidate.sourceGasUnits! < selected.sourceGasUnits!) {
+      selected = candidate
+      continue
+    }
+
+    if (!hasComparableGas && candidate.outputAmount > selected.outputAmount) {
+      selected = candidate
     }
   }
 
@@ -288,8 +518,24 @@ const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(ad
 // THOR/Maya pairs the node validates the destination downstream, so a malformed
 // non-EVM address fails there and the EVM check is skipped. Extracted from
 // findSwapQuote to keep that function's cognitive complexity within the gate.
+// The zero address and the canonical `…dEaD` burn sink — a swap output routed here is
+// unrecoverably destroyed. Never a legit payout target for ANY route, so reject up front
+// (a well-formed but merely WRONG non-burn recipient is the caller's grounding responsibility).
+const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000'
+const BURN_EVM_ADDRESS = '0x000000000000000000000000000000000000dead'
+
 const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
-  if (recipient === undefined || isEvmAddress(recipient)) return
+  if (recipient === undefined) return
+  if (isEvmAddress(recipient)) {
+    const lower = recipient.toLowerCase()
+    if (lower === ZERO_EVM_ADDRESS || lower === BURN_EVM_ADDRESS) {
+      throw new SwapError(
+        SwapErrorCode.InvalidConfig,
+        `recipient "${recipient}" is a zero/burn address — the swap output would be unrecoverable.`
+      )
+    }
+    return
+  }
   const cowSwapPathReachable =
     isChainOfKind(from.chain, 'evm') &&
     from.id !== undefined &&
@@ -338,6 +584,7 @@ export const findSwapQuote = async ({
   affiliateConfig,
   recipient,
   slippageTolerance,
+  excludeProviders,
 }: FindSwapQuoteInput): Promise<SwapQuote> => {
   // Runtime guard: THORName affiliateFeeAddress must be lowercase.
   // THORChain memo parsing is case-sensitive — passing 'STVS' instead of 'stvs'
@@ -506,8 +753,17 @@ export const findSwapQuote = async ({
         fetch: async (): Promise<SwapQuote> => {
           const general = await getOneInchSwapQuote({
             account: pick(from, ['address', 'chain']),
-            fromCoinId: from.id ?? from.ticker,
-            toCoinId: to.id ?? to.ticker,
+            // Pass the raw `.id` (undefined for a chain's native/fee coin) — NOT a ticker
+            // fallback. `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to
+            // map the native asset to 1inch's `0xEeee...` sentinel; a ticker string like
+            // "ETH" is truthy and would defeat that check, sending the literal ticker as
+            // `dst`/`src` to 1inch's API (which requires the sentinel address).
+            fromCoinId: from.id,
+            toCoinId: to.id,
+            to: {
+              ...to,
+              chain: to.chain as EvmChain,
+            },
             amount: chainAmount,
             affiliateBps,
             oneInchConfig: affiliateConfig?.oneInch,
@@ -536,6 +792,7 @@ export const findSwapQuote = async ({
             },
             amount: chainAmount,
             affiliateBps,
+            jupiterConfig: affiliateConfig?.jupiter,
             slippageBps: jupiterSlippageBps,
           })
 
@@ -597,8 +854,20 @@ export const findSwapQuote = async ({
   const shouldPreferGeneralSwap =
     [from.chain, to.chain].every(chain => isChainOfKind(chain, 'evm')) && [from.id, to.id].some(v => v)
 
-  const generalFetchers = getGeneralFetchers()
-  const nativeFetchers = getNativeFetchers()
+  // excludeProviders: additive, opt-in exclusion for a consumer that can't yet
+  // build/sign a given provider's tx shape (e.g. agent-backend-ts doesn't wire
+  // CowSwap's `cowswap_order` EIP-712 signing flow — see execute_swap.ts).
+  // Filtered here, before the sole-THORChain-route check below (so excluding
+  // the only general fetcher correctly falls through to a native route when
+  // one exists) rather than at the call site, so every caller of findSwapQuote
+  // gets identical exclusion semantics regardless of which fetcher list a
+  // provider happens to register in. Default (omitted/empty) is a no-op —
+  // every other consumer's behavior is unchanged.
+  const excludeProviderSet = new Set((excludeProviders ?? []).map(normalizeExcludeProviderName))
+  const notExcluded = (fetcher: SwapQuoteFetcher) => !excludeProviderSet.has(fetcher.providerName)
+
+  const generalFetchers = getGeneralFetchers().filter(notExcluded)
+  const nativeFetchers = getNativeFetchers().filter(notExcluded)
 
   const fetchers = shouldPreferGeneralSwap
     ? [...generalFetchers, ...nativeFetchers]
@@ -642,7 +911,8 @@ export const findSwapQuote = async ({
       const quote = await withTimeout(fetcher.fetch(), QUOTE_FETCH_TIMEOUT_MS)
       return {
         quote,
-        outputAmount: getComparableOutputAmount(quote, to),
+        outputAmount: getComparableOutputAmount(quote, to, fetcher.providerName),
+        sourceGasUnits: getSameChainEvmSourceGasUnits(quote, from, to),
         providerName: fetcher.providerName,
       }
     })
@@ -677,35 +947,6 @@ export const findSwapQuote = async ({
     'MayaChain',
   ]
 
-  const isBelowMinimumMsg = (msg: string) => {
-    const lower = msg.toLowerCase()
-    return (
-      lower.includes('below minimum') ||
-      lower.includes('minimum amount') ||
-      lower.includes('min amount') ||
-      lower.includes('amount too small') ||
-      lower.includes('below the minimum')
-    )
-  }
-
-  // Native protocols halt trading per-chain (THORChain mimir `HALT<CHAIN>TRADING`,
-  // pool ragnarok, churn). The quote API then rejects EVERY amount with
-  // "trading is halted" — an operational state, not an amount problem. Detect it
-  // so we surface a "temporarily unavailable" message instead of the misleading
-  // generic "no route" (which reads like the pair is unsupported). Also match the
-  // "trading paused" wordings emitted by the THOR halt helpers in
-  // `chains/cosmos/thor/lp/halts.ts` (`global trading paused`,
-  // `<chain> chain trading paused`). (#604, CodeRabbit)
-  const isTradingHaltedMsg = (msg: string) => {
-    const lower = msg.toLowerCase()
-    return (
-      lower.includes('halted') ||
-      lower.includes('trading halt') ||
-      lower.includes('trading paused') ||
-      lower.includes('trading is paused')
-    )
-  }
-
   const belowMinimumByProvider = new Map<SwapQuoteProviderName, string>()
   const haltedProviders = new Set<SwapQuoteProviderName>()
   let proactiveTradingHalt: SwapError | null = null
@@ -731,11 +972,8 @@ export const findSwapQuote = async ({
       throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
     }
 
-    if (isBelowMinimumMsg(msg)) {
-      const providerName = fetchers[i].providerName
-      if (!belowMinimumByProvider.has(providerName)) {
-        belowMinimumByProvider.set(providerName, msg)
-      }
+    if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {
+      belowMinimumByProvider.set(fetchers[i].providerName, msg)
     }
 
     if (isTradingHaltedMsg(msg)) {
@@ -803,6 +1041,33 @@ export const findSwapQuote = async ({
   console.warn(
     `[findSwapQuote] no route for ${from.ticker} -> ${to.ticker}; raw provider errors: ${rawProviderErrors.join(' | ')}`
   )
+
+  // If EVERY provider failed transiently (network/timeout/5xx — never a genuine
+  // structural decline), say so explicitly instead of the generic "no route"
+  // wording. The generic message below is deliberately noise-free (never embeds
+  // raw provider text — see "omits noisy provider errors" test) and, worse,
+  // unconditionally contains "no route", which downstream consumers' transient-
+  // error classifiers (e.g. agent-backend-ts's `isTransientQuoteError`) bail out
+  // on BEFORE checking for network/timeout signals — so a real outage was always
+  // reported as a hard, definitive "this pair has no route" dead-end. This is the
+  // one case where that's wrong: nobody actually declined the route, every
+  // provider was simply unreachable. Kept just as noise-free as the generic
+  // fallback (no raw provider text), naming the detected category rather than the
+  // upstream body, so downstream classification is deterministic without leaking
+  // upstream internals.
+  const rejectedReasons = settled
+    .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    .map(result => result.reason)
+  const allProvidersTransient = rejectedReasons.length > 0 && rejectedReasons.every(isTransientProviderFailure)
+
+  if (allProvidersTransient) {
+    throw new SwapError(
+      SwapErrorCode.AllProvidersFailed,
+      `Swap quote lookup failed for all ${failedProviders.length} provider(s) tried ` +
+        `(${failedProviders.join(', ')}) due to a transient network/timeout error. ` +
+        `This is not a missing route — retry the same swap shortly.`
+    )
+  }
 
   throw new SwapError(
     SwapErrorCode.AllProvidersFailed,

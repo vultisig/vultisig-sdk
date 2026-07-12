@@ -922,4 +922,28 @@ describe('getSwapKitQuote', () => {
     expect(evmTx.evm).toBeDefined()
     expect(evmTx.evm.approvalAddress).toBeUndefined()
   })
+
+  it.each([
+    ['Sui', Chain.Sui, 'sui-source', 'SUI', 9],
+    ['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6],
+  ] as const)(
+    '%s is dispatch-eligible as a SwapKit source (in swapKitSourceChains) but getSwapKitQuote rejects it explicitly, before any network call, since no tx-build path exists yet',
+    async (_label, chain, address, ticker, decimals) => {
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(
+        getSwapKitQuote({
+          from: { chain, address, ticker, decimals },
+          to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+          amount: 1000n,
+        })
+      ).rejects.toThrow(`SwapKit ${chain} source swaps are not yet supported for signing`)
+
+      // The whole point of rejecting up front is to never spend a `/v3/quote`
+      // or `/v3/swap` round-trip on a request that can never produce a
+      // signable tx.
+      expect(fetchMock).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -245,6 +245,20 @@ describe('fiatToAmount', () => {
     expect(parseFloat(result)).toBeCloseTo(1e-10, 20)
   })
 
+  it('expands large scientific-notation results into plain decimal strings', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+    vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 1 })
+
+    const result = await fiatToAmount({
+      fiatValue: 1.5e21,
+      chain: Chain.Ethereum,
+      decimals: 18,
+    })
+
+    expect(result).toBe('1500000000000000000000')
+    expect(result).not.toMatch(/e/i)
+  })
+
   it('returns whole-number results without a trailing dot or zeros', async () => {
     const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
     // $100 / $10 per ETH = 10
