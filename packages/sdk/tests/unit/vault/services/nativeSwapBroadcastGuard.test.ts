@@ -121,7 +121,7 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/missing an expiration/)
+    ).rejects.toThrow(/missing or invalid expiration/)
 
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
@@ -143,7 +143,7 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         keysignPayload,
         getInboundAddresses,
       })
-    ).rejects.toThrow(/missing an expiration/)
+    ).rejects.toThrow(/missing or invalid expiration/)
 
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
@@ -235,7 +235,7 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/missing an expiration/)
+    ).rejects.toThrow(/missing or invalid expiration/)
 
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
