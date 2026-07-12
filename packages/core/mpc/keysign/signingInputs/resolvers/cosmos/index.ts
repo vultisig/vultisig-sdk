@@ -341,14 +341,32 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
+        const assetCoin = swapPayload?.fromCoin ?? coin
+        const assetChainId =
+          (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
+          nativeSwapChainIds[chain as VaultBasedCosmosChain]
+        const contractAddress = 'contractAddress' in assetCoin ? assetCoin.contractAddress : undefined
+        const isSecuredWithdrawal = memo?.toLowerCase().startsWith('secure-:') || false
+        const rawSymbol =
+          contractAddress && contractAddress.trim() ? `${assetCoin.ticker}-${contractAddress}` : assetCoin.ticker
+        const assetSymbol = isSecuredWithdrawal ? rawSymbol.toUpperCase() : rawSymbol
+        const finalChainId = isSecuredWithdrawal ? assetChainId.toUpperCase() : assetChainId
+        const finalTicker = isSecuredWithdrawal ? assetCoin.ticker.toUpperCase() : assetCoin.ticker
+
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
           asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: nativeSwapChainIds[chain as VaultBasedCosmosChain],
-            symbol: coin.ticker,
-            ticker: coin.ticker,
+            chain: finalChainId,
+            symbol: assetSymbol,
+            ticker: finalTicker,
             synth: false,
+            secured: isSecuredWithdrawal,
           }),
-          ...(isPositive ? { amount: amountStr, decimals: new Long(coin.decimals) } : {}),
+          ...(isPositive
+            ? {
+                amount: amountStr,
+                decimals: new Long(isSecuredWithdrawal ? 0 : assetCoin.decimals),
+              }
+            : {}),
         })
 
         return {

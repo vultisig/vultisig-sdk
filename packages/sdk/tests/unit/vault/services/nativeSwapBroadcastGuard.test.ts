@@ -45,6 +45,32 @@ const makeMayachainSwapPayload = ({
     },
   }) as KeysignPayload
 
+const makeSecuredAssetWithdrawalPayload = (vaultAddress = '', memo = 'SECURE-:bc1qdestination'): KeysignPayload =>
+  ({
+    toAddress: '',
+    toAmount: '10000000',
+    memo,
+    blockchainSpecific: {
+      case: 'thorchainSpecific',
+      value: { isDeposit: true },
+    },
+    swapPayload: {
+      case: 'thorchainSwapPayload',
+      value: {
+        vaultAddress,
+        routerAddress: '',
+        expirationTime: 0n,
+        fromAmount: '10000000',
+        fromCoin: {
+          chain: Chain.Bitcoin,
+          ticker: 'BTC',
+          contractAddress: '',
+          decimals: 8,
+        },
+      },
+    },
+  }) as KeysignPayload
+
 describe('assertNativeSwapReadyForBroadcast', () => {
   it('does nothing for non-swap payloads', async () => {
     const getInboundAddresses = vi.fn()
@@ -92,13 +118,79 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
+  it('rejects a native swap payload whose expiration field is absent at runtime', async () => {
+    const getInboundAddresses = vi.fn()
+    const keysignPayload = makeThorchainSwapPayload()
+    if (keysignPayload.swapPayload.case !== 'thorchainSwapPayload') {
+      throw new Error('expected THORChain swap payload')
+    }
+    const native = keysignPayload.swapPayload.value as {
+      expirationTime?: bigint
+    }
+    native.expirationTime = undefined
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload,
+        getInboundAddresses,
+      })
+    ).rejects.toThrow(/missing an expiration/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  it('allows a secured-asset withdrawal metadata payload without fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeSecuredAssetWithdrawalPayload(),
+        getInboundAddresses,
+      })
+    ).resolves.toBeUndefined()
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  it('does not exempt a secure-memo payload that carries an inbound vault', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeSecuredAssetWithdrawalPayload('thor1vault'),
+        getInboundAddresses,
+      })
+    ).rejects.toThrow(/missing an expiration/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a standard liquidity-withdraw memo as a secured-asset withdrawal', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeSecuredAssetWithdrawalPayload('', '-:BTC.BTC:10000'),
+        getInboundAddresses,
+      })
+    ).rejects.toThrow(/missing an expiration/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
   it('rejects expired Maya native swap payloads before fetching inbound addresses', async () => {
     const getInboundAddresses = vi.fn()
 
     await expect(
       assertNativeSwapReadyForBroadcast({
         chain: Chain.MayaChain,
-        keysignPayload: makeMayachainSwapPayload({ expirationTime: 1_700_000_000n }),
+        keysignPayload: makeMayachainSwapPayload({
+          expirationTime: 1_700_000_000n,
+        }),
         getInboundAddresses,
         now: () => 1_700_000_001_000,
       })

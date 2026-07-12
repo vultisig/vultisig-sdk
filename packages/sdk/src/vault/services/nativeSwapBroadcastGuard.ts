@@ -46,9 +46,33 @@ export const assertNativeSwapReadyForBroadcast = async ({
   }
 
   const { native } = swapPayload
+  const isSecuredAssetWithdrawal =
+    chain === Chain.THORChain &&
+    native.chain === Chain.THORChain &&
+    native.expirationTime === 0n &&
+    native.vaultAddress === '' &&
+    native.routerAddress === '' &&
+    keysignPayload.toAddress === '' &&
+    keysignPayload.memo?.toLowerCase().startsWith('secure-:') &&
+    keysignPayload.blockchainSpecific.case === 'thorchainSpecific' &&
+    keysignPayload.blockchainSpecific.value.isDeposit &&
+    !!native.fromCoin &&
+    native.fromCoin.chain !== Chain.THORChain &&
+    typeof native.fromCoin.ticker === 'string' &&
+    !!native.fromCoin.ticker.trim() &&
+    /^[0-9]+$/.test(native.fromAmount) &&
+    BigInt(native.fromAmount) > 0n &&
+    native.fromAmount === keysignPayload.toAmount
+
+  // Secured-asset withdrawals use the native payload union as L1 asset metadata,
+  // not as a quote. Their MsgDeposit has no quote expiry or inbound vault.
+  if (isSecuredAssetWithdrawal) {
+    return
+  }
+
   const currentSeconds = BigInt(Math.floor(now() / 1000))
 
-  if (native.expirationTime <= 0n) {
+  if (typeof native.expirationTime !== 'bigint' || native.expirationTime <= 0n) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
       'Native swap quote is missing an expiration; refresh the quote before broadcasting'
