@@ -1,4 +1,5 @@
 ---
+'@vultisig/core-chain': patch
 '@vultisig/sdk': patch
 ---
 
@@ -23,3 +24,19 @@ per-family tables) is now exported from the SDK's public API so the app and
 agent-backend-ts can consume the single source of truth instead of maintaining
 divergent copies. Non-EVM lists stay chain-family-scoped, so a burn address for
 one family never blocks an unrelated chain.
+
+The canonical table now lives in `@vultisig/core-chain`
+(`security/dangerousAddresses`) — re-exported unchanged from the SDK — so the
+lower-level core-chain swap guard can share it too (core-chain cannot depend on
+the SDK). Two in-repo siblings that still held private, incomplete copies now
+route through it:
+
+- `recipientSanity.isNullAddress` (SDK) previously missed the SPL Token
+  Program + Wrapped SOL mint, the Bitcoin/XRP burns, and the third EVM variant;
+  it now flags all of them.
+- `findSwapQuote`'s custom-recipient guard (core-chain) previously vetted only
+  the EVM zero + `…dEaD` addresses; it now rejects the `0xdead…42069` variant
+  and the base58 (Solana / UTXO / XRP) family burns on the destination chain.
+
+The shared EVM shape check is now case-insensitive on the `0x` prefix, so a
+`0X…`-prefixed burn can't slip past (parity with the Go guard).

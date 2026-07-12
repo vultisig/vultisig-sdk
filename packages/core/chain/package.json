@@ -1468,6 +1468,11 @@
       "import": "./dist/security/blockaid/validationChains.js",
       "default": "./dist/security/blockaid/validationChains.js"
     },
+    "./security/dangerousAddresses": {
+      "types": "./dist/security/dangerousAddresses.d.ts",
+      "import": "./dist/security/dangerousAddresses.js",
+      "default": "./dist/security/dangerousAddresses.js"
+    },
     "./signing/SignatureAlgorithm": {
       "types": "./dist/signing/SignatureAlgorithm.d.ts",
       "import": "./dist/signing/SignatureAlgorithm.js",
