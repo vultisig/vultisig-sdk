@@ -31,17 +31,20 @@ describe('waitForRelayPeerCommittee', () => {
 
   it('rejects oversized committees instead of returning ghost peers', async () => {
     queryUrlMock.mockResolvedValue(['device-a', 'device-b', 'device-c'])
+    const onDeviceJoined = vi.fn()
 
     await expect(
       waitForRelayPeerCommittee({
         relayUrl: 'https://relay.example',
         sessionId: 'session-1',
         requiredDevices: 2,
+        onDeviceJoined,
         createTimeoutError: () => new Error('timed out'),
       })
     ).rejects.toMatchObject({
       code: VaultErrorCode.NetworkError,
       message: 'Too many devices joined. Got 3/2 devices.',
     })
+    expect(onDeviceJoined).not.toHaveBeenCalled()
   })
 })

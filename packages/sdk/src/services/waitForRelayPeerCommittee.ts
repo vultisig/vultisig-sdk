@@ -37,6 +37,13 @@ export async function waitForRelayPeerCommittee(params: {
 
     const uniquePeers = withoutDuplicates(allPeers)
 
+    if (uniquePeers.length > requiredDevices) {
+      throw new VaultError(
+        VaultErrorCode.NetworkError,
+        `Too many devices joined. Got ${uniquePeers.length}/${requiredDevices} devices.`
+      )
+    }
+
     if (uniquePeers.length > lastJoinedCount) {
       if (onDeviceJoined) {
         const newDevices = uniquePeers.slice(lastJoinedCount)
@@ -45,13 +52,6 @@ export async function waitForRelayPeerCommittee(params: {
         }
       }
       lastJoinedCount = uniquePeers.length
-    }
-
-    if (uniquePeers.length > requiredDevices) {
-      throw new VaultError(
-        VaultErrorCode.NetworkError,
-        `Too many devices joined. Got ${uniquePeers.length}/${requiredDevices} devices.`
-      )
     }
 
     if (uniquePeers.length === requiredDevices) {
