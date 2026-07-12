@@ -34,7 +34,16 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       return undefined
     }
 
-    return { rawJson: keysignPayload.signData.value.rawJson }
+    const { rawJson } = keysignPayload.signData.value
+    // An empty rawJson on an explicit signRipple case is malformed. Fail loudly
+    // rather than falling through to build a native Payment from the payload's
+    // toAddress/toAmount — signing an unintended transaction is the worse
+    // outcome — and never emit a SigningInput with no operation set.
+    if (!rawJson) {
+      throw new Error('signRipple keysign payload is missing rawJson')
+    }
+
+    return { rawJson }
   }
 
   // An issued-currency coin (non-native, with a `currency.issuer` contract

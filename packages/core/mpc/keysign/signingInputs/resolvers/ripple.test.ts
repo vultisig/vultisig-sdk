@@ -172,4 +172,14 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
 
     expect(input.publicKey.length).toBeGreaterThan(0)
   })
+
+  it('throws on an empty rawJson instead of emitting an operation-less input', () => {
+    const payload = buildSignRipplePayload()
+    payload.signData = {
+      case: 'signRipple',
+      value: { $typeName: 'vultisig.keysign.v1.SignRipple', rawJson: '' },
+    }
+
+    expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/missing rawJson/)
+  })
 })
