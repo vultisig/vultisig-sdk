@@ -536,6 +536,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/solana/index.js",
       "default": "./dist/keysign/signingInputs/resolvers/solana/index.js"
     },
+    "./keysign/signingInputs/resolvers/solana/rawTx": {
+      "types": "./dist/keysign/signingInputs/resolvers/solana/rawTx.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js",
+      "default": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js"
+    },
     "./keysign/signingInputs/resolvers/solana/send": {
       "types": "./dist/keysign/signingInputs/resolvers/solana/send.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/solana/send.js",

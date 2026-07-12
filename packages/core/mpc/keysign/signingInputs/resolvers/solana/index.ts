@@ -16,20 +16,16 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({ keysig
   const { recentBlockHash } = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'solanaSpecific')
 
   if (keysignPayload.signData.case === 'signSolana') {
-    const coinType = getCoinType({ walletCore, chain })
-    const inputs = keysignPayload.signData.value.rawTransactions.map(transaction => {
-      const decodedData = walletCore.TransactionDecoder.decode(coinType, Buffer.from(transaction, 'base64'))
-      const decodedTransaction = TW.Solana.Proto.DecodingTransactionOutput.decode(decodedData)
-      if (!decodedTransaction.transaction) {
-        throw new Error("Can't decode transaction")
-      }
-      const rawMessage = decodedTransaction.transaction
-
-      return TW.Solana.Proto.SigningInput.create({
-        rawMessage,
-      })
-    })
-    return inputs
+    // Handled upstream in getEncodedSigningInputs (sdk#1204): dApp raw
+    // transactions are signed over their ORIGINAL message bytes and never
+    // routed through TransactionDecoder + SigningInput.rawMessage — the
+    // WalletCore re-encode is not byte-identical for v0+ALT transactions
+    // and breaks mixed-vault co-signing (ios#4419, android#5223). Reaching
+    // this branch means a caller bypassed getEncodedSigningInputs; fail
+    // loud instead of silently re-introducing the divergent pre-image.
+    throw new Error(
+      'signSolana raw transactions are handled in getEncodedSigningInputs — do not resolve them into TW SigningInputs (sdk#1204)'
+    )
   }
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
