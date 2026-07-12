@@ -358,10 +358,20 @@ const decodeApproveSpender = (data: string | undefined): string | undefined => {
     return undefined
   }
   const spender = `0x${data.slice(34, 74)}`
-  return /^0x[0-9a-fA-F]{40}$/.test(spender) ? spender : undefined
+  if (!/^0x[0-9a-fA-F]{40}$/.test(spender)) {
+    return undefined
+  }
+  // Mirror LiFi's zero-address omit: an approve() to the zero address is never
+  // a real allowance target, so surface nothing and let the consumer keep the
+  // tx.to fallback instead of emitting a spurious zero-address approval.
+  return spender === '0x0000000000000000000000000000000000000000' ? undefined : spender
 }
 
-const buildEvmTx = (tx: unknown, fromAddress: string, approvalTx?: SwapKitSwapResponse['approvalTx']): GeneralSwapTx => {
+const buildEvmTx = (
+  tx: unknown,
+  fromAddress: string,
+  approvalTx?: SwapKitSwapResponse['approvalTx']
+): GeneralSwapTx => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }

@@ -923,6 +923,41 @@ describe('getSwapKitQuote', () => {
     expect(evmTx.evm.approvalAddress).toBeUndefined()
   })
 
+  it('omits evm.approvalAddress when the approvalTx spender is the zero address', async () => {
+    // approve(0x0000000000000000000000000000000000000000, amount) — never a
+    // real allowance target; mirror LiFi's zero-address omit so the consumer
+    // keeps the tx.to fallback.
+    const zeroSpenderApproveData = `0x095ea7b3${'0'.repeat(24)}${'0'.repeat(40)}${'0'.repeat(64)}`
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          routes: [{ routeId: 'zero-spender-route', providers: ['ONEINCH'], expectedBuyAmount: '12.4' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        response({
+          expectedBuyAmount: '12.4',
+          providers: ['ONEINCH'],
+          tx: { from: '0xsender', to: '0xrouter', data: '0xabcdef', value: '0', gas: '21000' },
+          approvalTx: { from: '0xsender', to: '0xtoken', data: zeroSpenderApproveData },
+        })
+      )
+
+    vi.stubGlobal('fetch', fetchMock)
+    configureSwapKit({ apiKey: 'test-key', baseUrl: 'https://swapkit.example' })
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Ethereum, address: '0xsender', ticker: 'USDC', decimals: 6 },
+      to: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
+      amount: 10_000_000n,
+    })
+
+    const evmTx = quote.tx as { evm: Record<string, unknown> }
+    expect(evmTx.evm).toBeDefined()
+    expect(evmTx.evm.approvalAddress).toBeUndefined()
+  })
+
   it.each([
     ['Sui', Chain.Sui, 'sui-source', 'SUI', 9],
     ['Cardano', Chain.Cardano, 'addr1source', 'ADA', 6],
