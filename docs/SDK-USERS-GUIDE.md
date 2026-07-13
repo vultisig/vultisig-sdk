@@ -304,7 +304,6 @@ import { Vultisig } from '@vultisig/sdk'
 import * as readline from 'readline'
 
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -325,7 +324,6 @@ const sdk = new Vultisig({
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Retrieve from OS keychain, secure enclave, etc.
     return await secureStorage.getPassword(vaultId)
@@ -2192,8 +2190,7 @@ All configuration is passed to the `Vultisig` constructor. The SDK uses instance
 import { Vultisig, Chain } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  // Required: Storage implementation
-  storage: new FileStorage(), // Or MemoryStorage, or custom implementation
+  // Storage is optional; omit it to use the persistent platform default.
 
   // Optional: Default chains for new vaults
   defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
@@ -2237,15 +2234,17 @@ sdk.dispose()
 You can create multiple isolated SDK instances, each with its own storage and configuration:
 
 ```typescript
+import { FileStorage, Vultisig } from '@vultisig/sdk/node'
+
 // Instance for user 1
 const sdk1 = new Vultisig({
-  storage: new FileStorage('./user1/vaults'),
+  storage: new FileStorage({ basePath: './user1/vaults' }),
   defaultCurrency: 'USD',
 })
 
 // Instance for user 2
 const sdk2 = new Vultisig({
-  storage: new FileStorage('./user2/vaults'),
+  storage: new FileStorage({ basePath: './user2/vaults' }),
   defaultCurrency: 'EUR',
 })
 
@@ -2349,7 +2348,6 @@ Configure cache TTLs:
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   cacheConfig: {
     balanceTTL: 300000, // 5 minutes (default)
     priceTTL: 300000, // 5 minutes (default)
@@ -2363,7 +2361,6 @@ Passwords are cached to avoid repeated prompts (see [Password Management](#passw
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   passwordCache: {
     defaultTTL: 300000, // 5 minutes
   },
