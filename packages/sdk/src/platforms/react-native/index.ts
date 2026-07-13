@@ -65,6 +65,10 @@ configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
+export {
+  getCosmosAllowedFeeDenoms,
+  isCosmosFeeDenomAllowed,
+} from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'

@@ -39,4 +39,12 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
   })
+
+  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
+    expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
+    expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+  })
 })
