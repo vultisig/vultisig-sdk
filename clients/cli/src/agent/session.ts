@@ -1109,33 +1109,55 @@ export class AgentSession {
       }
     }
 
+    // Gate signing on whether a password is actually NEEDED, not on the
+    // --password flag. An encrypted vault is unlocked at init from the
+    // keyring/env chain (#899), which also seeds the executor's password, so a
+    // headless session that set VAULT_PASSWORD (or the OS keyring) already has
+    // the secret and must not be re-prompted. Only a still-locked vault with no
+    // executor password requires one — and even then we retry the same
+    // non-interactive chain (cache → keyring → VAULT_PASSWORDS/VAULT_PASSWORD)
+    // before prompting, so #899's "never prompt when the chain resolves"
+    // contract holds at sign time too. Unencrypted vaults are always
+    // "unlocked", so they skip this entirely. `--password` (config.password)
+    // short-circuits the whole block: it was applied to the executor at
+    // construction.
+    //
     // Delay caching the prompted password until after body() succeeds so a
-    // wrong password triggers a re-prompt on the next call rather than
-    // staying silently locked in to a bad value.
+    // wrong password triggers a re-prompt on the next call rather than staying
+    // silently locked in to a bad value.
     let promptedPassword: string | undefined
     if (PASSWORD_REQUIRED_TOOLS.has(toolName) && !this.config.password) {
-      try {
-        promptedPassword = await ui.requestPassword()
-        this.executor.setPassword(promptedPassword)
-      } catch {
-        const failure: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Password not provided',
-            code: AgentErrorCode.PASSWORD_REQUIRED,
-          },
+      const vaultLocked = this.vault.isEncrypted && !this.vault.isUnlocked()
+      const needsPassword = vaultLocked && !this.executor.hasPassword()
+      if (needsPassword) {
+        const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+        if (resolved) {
+          this.executor.setPassword(resolved)
+        } else {
+          try {
+            promptedPassword = await ui.requestPassword()
+            this.executor.setPassword(promptedPassword)
+          } catch {
+            const failure: RecentAction = {
+              tool: toolName,
+              success: false,
+              data: {
+                error: 'Password not provided',
+                code: AgentErrorCode.PASSWORD_REQUIRED,
+              },
+            }
+            ui.onToolCall(toolCallId, toolName, input)
+            ui.onToolResult(
+              toolCallId,
+              toolName,
+              false,
+              failure.data,
+              'Password not provided',
+              AgentErrorCode.PASSWORD_REQUIRED
+            )
+            return failure
+          }
         }
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          failure.data,
-          'Password not provided',
-          AgentErrorCode.PASSWORD_REQUIRED
-        )
-        return failure
       }
     }
 
