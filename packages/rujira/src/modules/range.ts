@@ -578,7 +578,13 @@ export class RujiraRange {
       }
     }>(PAIR_QUERY, {})
       .then(data => {
-        const edges = data?.finV3?.pairs?.edges ?? []
+        const edges = data?.finV3?.pairs?.edges
+        if (!Array.isArray(edges)) {
+          throw new RujiraError(
+            RujiraErrorCode.NETWORK_ERROR,
+            'GraphQL pair-list response missing `finV3.pairs.edges` array (backend or schema error)'
+          )
+        }
         this.pairListCache = {
           edges,
           expiresAt: Date.now() + PAIR_LIST_CACHE_TTL_MS,
