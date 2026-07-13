@@ -110,6 +110,7 @@ export class RelaySigningService {
     // - Consistent behavior with other Vultisig relay clients
     return getJoinKeysignUrl({
       serverType: 'relay',
+      serverUrl: this.relayUrl,
       serviceName: params.localPartyId,
       sessionId: params.sessionId,
       hexEncryptionKey: params.hexEncryptionKey,

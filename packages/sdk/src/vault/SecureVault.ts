@@ -108,7 +108,7 @@ export class SecureVault extends VaultBase {
     const walletCore = await this.wasmProvider.getWalletCore()
 
     // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+    const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
 
     // Sign using relay service with event emission
     const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
@@ -209,7 +209,7 @@ export class SecureVault extends VaultBase {
       const walletCore = await this.wasmProvider.getWalletCore()
 
       // Create relay signing service
-      const relaySigningService = new RelaySigningService()
+      const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
 
       // Sign using relay service with event emission
       const signature = await relaySigningService.signBytesWithRelay(
