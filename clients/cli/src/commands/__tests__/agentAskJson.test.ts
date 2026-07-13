@@ -203,6 +203,19 @@ describe('agent ask --json output contract', () => {
     expect(envelope.data.outcome).toEqual({ kind: 'error', code: 'follow_up_failed' })
   })
 
+  it('confirmation timeout + turn_outcome=error remains committed because the transaction may still confirm', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xtimeout', 'polygon', 'timeout', 'https://polygonscan.com/tx/0xtimeout')
+      cb.onTurnOutcome?.({ kind: 'error', code: 'confirmation_timeout' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].status).toBe('timeout')
+  })
+
   it('confirmed transaction + fabricated-tool-failure-style outcome stays partial, not false overall success', async () => {
     driver.run = cb => {
       cb.onTxStatus('0xconfirmed', 'polygon', 'confirmed', 'https://polygonscan.com/tx/0xconfirmed')
@@ -228,6 +241,22 @@ describe('agent ask --json output contract', () => {
     const { exitCode } = await runAsk()
     expect(exitCode).toBe(ExitCode.AGENT_TURN_REFUSAL)
     expect(exitCode).toBe(11)
+  })
+
+  it('broadcast + turn_outcome=refusal → BROADCAST_COMMITTED instead of the no-action-taken contract', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xrefusal', 'base', 'confirmed', 'https://basescan.org/tx/0xrefusal')
+      cb.onAssistantMessage('Which route would you like me to try next?')
+      cb.onTurnOutcome?.({ kind: 'refusal', code: 'clarify_remaining_step' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].hash).toBe('0xrefusal')
+    expect(envelope.data.outcome).toEqual({ kind: 'refusal', code: 'clarify_remaining_step' })
   })
 
   it('turn_outcome=error with no stream error frame → exit 1 (not a false 0)', async () => {
@@ -315,7 +344,7 @@ describe('agent ask --json output contract', () => {
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
   })
 
-  it('broadcast THEN thrown follow-up failure → BROADCAST_COMMITTED and preserves the throw', async () => {
+  it('unacknowledged broadcast THEN thrown follow-up → preserves ACK_FAILED compatibility and original diagnostic', async () => {
     driver.run = cb => {
       cb.onToolResult('tool-call-1', 'execute_send', true, {
         to: '0xrecipient',
@@ -325,12 +354,12 @@ describe('agent ask --json output contract', () => {
     }
 
     const { exitCode } = await runAsk()
-    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).toBe(ExitCode.ACK_FAILED)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.v).toBe(1)
-    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.error.code).toBe(AgentErrorCode.ACK_FAILED)
     expect(envelope.error.conversation_id).toBe('conv-abc')
     expect(envelope.data.original_error).toEqual({
       message: 'backend 503 reporting recent_actions after broadcast',

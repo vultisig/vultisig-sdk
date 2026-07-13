@@ -162,8 +162,12 @@ function outputAskError(
   }
 }
 
+type PostBroadcastCode = AgentErrorCode.ACK_FAILED | AgentErrorCode.BROADCAST_COMMITTED
+
 const BROADCAST_COMMITTED_MESSAGE =
   'A transaction was broadcast, but the overall agent request may be incomplete. Inspect the transaction status before continuing.'
+const ACK_FAILED_MESSAGE =
+  'A transaction was broadcast, but its post-broadcast report failed. Inspect the transaction status before continuing.'
 
 function hasCommittedBroadcast(result: AskResult | undefined): boolean {
   return !!result?.transactions.some(tx => tx.hash.trim().length > 0 && tx.status !== 'failed')
@@ -175,12 +179,14 @@ function hasCommittedBroadcast(result: AskResult | undefined): boolean {
  * non-retryable so automation cannot mistake the original failure for permission to
  * replay a send, approval, or another leg of a compound flow.
  */
-function outputBroadcastCommitted(
+function outputPostBroadcastFailure(
   wantsJson: boolean,
   result: AskResult,
   conversationId: string,
+  classification: PostBroadcastCode,
   originalError?: { message: string; code: AgentErrorCode }
 ): void {
+  const message = classification === AgentErrorCode.ACK_FAILED ? ACK_FAILED_MESSAGE : BROADCAST_COMMITTED_MESSAGE
   if (wantsJson) {
     const data: Record<string, unknown> = {
       transactions: result.transactions,
@@ -192,18 +198,16 @@ function outputBroadcastCommitted(
     outputErrorJson({
       success: false,
       v: 1,
-      error: {
-        message: BROADCAST_COMMITTED_MESSAGE,
-        code: AgentErrorCode.BROADCAST_COMMITTED,
-        conversation_id: conversationId,
-      },
+      error: { message, code: classification, conversation_id: conversationId },
       data,
     })
     return
   }
 
+  const label =
+    classification === AgentErrorCode.ACK_FAILED ? 'Broadcast acknowledgement failed' : 'Broadcast committed'
   process.stderr.write(`session:${result.sessionId}\n`)
-  process.stderr.write(`Broadcast committed: ${BROADCAST_COMMITTED_MESSAGE}\n`)
+  process.stderr.write(`${label}: ${message}\n`)
   if (result.outcome) {
     const { kind, code } = result.outcome
     process.stderr.write(`outcome:${kind}${code ? `:${code}` : ''}\n`)
@@ -370,7 +374,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       // original diagnostic under data.original_error for investigation.
       if (hasCommittedBroadcast(result)) {
         exitCode = ExitCode.BROADCAST_COMMITTED
-        outputBroadcastCommitted(wantsJson, result, conversationId, result.error)
+        outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED, result.error)
       } else {
         // Map the backend/stream error code onto the ExitCode taxonomy (F3) so a
         // headless caller can branch on `$?` — a retryable network blip vs a
@@ -378,15 +382,12 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         exitCode = agentErrorCodeToExitCode(result.error.code)
         outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
       }
-    } else if (
-      hasCommittedBroadcast(result) &&
-      (result.outcome?.kind === 'blocked' || result.outcome?.kind === 'error')
-    ) {
-      // A typed conversational failure can arrive after an approval/send/swap leg
+    } else if (hasCommittedBroadcast(result) && result.outcome && result.outcome.kind !== 'success') {
+      // Any typed non-success ending can arrive after an approval/send/swap leg
       // already landed. Do not turn that partial execution into overall success or
-      // leave a retryable-looking blocked/error classification in place.
+      // claim that a refusal/clarification means no action was taken.
       exitCode = ExitCode.BROADCAST_COMMITTED
-      outputBroadcastCommitted(wantsJson, result, conversationId)
+      outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED)
     } else {
       // a2a-02: no stream error frame — the turn ending is the typed turn_outcome
       // (when the backend emitted one). success→0, blocked→10, refusal→11, a
@@ -411,8 +412,14 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // available as data.original_error, but the public classification must tell
     // automation to inspect the hash rather than replay the entire request.
     if (partial && hasCommittedBroadcast(partial)) {
-      exitCode = ExitCode.BROADCAST_COMMITTED
-      outputBroadcastCommitted(wantsJson, partial, conversationId, { message, code })
+      // Preserve the established ACK_FAILED/8 contract for the exact case where
+      // the immediate post-broadcast report is still undelivered. The additive
+      // BROADCAST_COMMITTED/13 classification covers broader later failures.
+      const classification = ask?.hasUnacknowledgedBroadcast()
+        ? AgentErrorCode.ACK_FAILED
+        : AgentErrorCode.BROADCAST_COMMITTED
+      exitCode = agentErrorCodeToExitCode(classification)
+      outputPostBroadcastFailure(wantsJson, partial, conversationId, classification, { message, code })
     } else {
       exitCode = agentErrorCodeToExitCode(code)
       outputAskError(wantsJson, message, code, conversationId, partial)
