@@ -570,12 +570,18 @@ export {
   toBaseUnits,
   toHumanUnits,
 } from '../../utils/convertAmount'
+export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
+export { TxNormalizeError, normalizeTx, splitMultiTx } from '../../tx'
+export type { NormalizeArgs, NormalizedTx } from '../../tx'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
+export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))

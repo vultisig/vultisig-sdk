@@ -47,4 +47,22 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
   })
+
+  it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const parse = await import('../../../../src/tools/parse')
+    const tx = await import('../../../../src/tx')
+    const decode = await import('../../../../src/tools/decode')
+
+    expect(rn.parseChain).toBe(parse.parseChain)
+    expect(rn.parseTicker).toBe(parse.parseTicker)
+    expect(rn.chainSchema).toBe(parse.chainSchema)
+    expect(rn.tickerSchema).toBe(parse.tickerSchema)
+    expect(rn.normalizeTx).toBe(tx.normalizeTx)
+    expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
+    expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
+    expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
+    expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+  })
 })
