@@ -355,7 +355,7 @@ describe('password-manager — non-interactive chain + getPassword delegation', 
 
   it('resolvePasswordNonInteractive prefers stored credentials over environment variables', async () => {
     vi.mocked(getStoredServerPassword).mockResolvedValue('stored-secret' as any)
-    process.env.VAULT_PASSWORDS = 'vault-id-1:per-vault-secret'
+    process.env.VAULT_PASSWORDS = JSON.stringify({ 'My Vault': 'name-secret', 'vault-id-1': 'id-secret' })
     process.env.VAULT_PASSWORD = 'fallback-secret'
 
     await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('stored-secret')
