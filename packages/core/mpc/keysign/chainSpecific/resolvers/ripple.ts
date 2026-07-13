@@ -15,12 +15,17 @@ const baseFeeMultiplier = 2n
 
 export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({ keysignPayload }) => {
   const { address } = getKeysignCoin(keysignPayload)
-  const toAddress = shouldBePresent(keysignPayload.toAddress)
+
+  // A dApp-supplied transaction (OfferCreate, OfferCancel, …) carries no
+  // `toAddress`: the base-reserve check below is specific to a Payment that
+  // funds a destination, so skip the destination fetch when there isn't one.
+  // Fee and sequence come from the sender account and are unaffected.
+  const toAddress = keysignPayload.toAddress || undefined
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
     getRippleNetworkInfo(),
-    attempt(getRippleAccountInfo(toAddress)),
+    toAddress ? attempt(getRippleAccountInfo(toAddress)) : undefined,
   ])
 
   const { validated_ledger, load_factor, load_base } = networkInfo
@@ -38,7 +43,9 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // nothing, on top of the actual send amount. Reserve spec:
   // https://xrpl.org/docs/concepts/accounts/reserves
   const destinationUnfunded =
-    'error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')
+    destinationAccountResult !== undefined &&
+    'error' in destinationAccountResult &&
+    isInError(destinationAccountResult.error, 'Account not found')
 
   if (destinationUnfunded) {
     const toAmount = BigInt(shouldBePresent(keysignPayload.toAmount))

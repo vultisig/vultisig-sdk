@@ -172,6 +172,15 @@ export class AgentExecutor {
     this.password = password
   }
 
+  /**
+   * Whether a password is already held (set at unlock via the keyring/env chain
+   * or `--password`). The sign gate consults this so a session unlocked
+   * non-interactively doesn't get re-prompted for a secret it already has.
+   */
+  hasPassword(): boolean {
+    return this.password != null
+  }
+
   /** Opt out of the persistent broadcast-journal duplicate guard (`--force`). */
   setForceBroadcast(force: boolean): void {
     this.forceBroadcast = force
