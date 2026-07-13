@@ -20,6 +20,7 @@ import {
   clearCachedPassword,
   getCachedPassword,
   getPassword,
+  parseVaultPasswords,
   resolvePasswordNonInteractive,
 } from '../../core/password-manager'
 import { resetOutput, setSilentMode } from '../../lib/output'
@@ -38,10 +39,10 @@ vi.mock('../context', () => ({
 // The keyring branch of the chain. Default: no keyring entry (returns null);
 // individual tests override per-case.
 vi.mock('../../core/credential-store', () => ({
-  getServerPassword: vi.fn(async () => null),
+  getStoredServerPassword: vi.fn(async () => null),
 }))
 
-import { getServerPassword } from '../../core/credential-store'
+import { getStoredServerPassword } from '../../core/credential-store'
 
 const initialize = (AgentSession.prototype as any).initialize
 
@@ -111,8 +112,8 @@ beforeEach(() => {
   clearCachedPassword()
 
   vi.mocked(authenticateVault).mockClear()
-  vi.mocked(getServerPassword).mockClear()
-  vi.mocked(getServerPassword).mockResolvedValue(null as any)
+  vi.mocked(getStoredServerPassword).mockClear()
+  vi.mocked(getStoredServerPassword).mockResolvedValue(null as any)
 
   stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
 })
@@ -126,6 +127,43 @@ afterEach(() => {
   if (prevVaultPasswords === undefined) delete process.env.VAULT_PASSWORDS
   else process.env.VAULT_PASSWORDS = prevVaultPasswords
   clearCachedPassword()
+})
+
+describe('parseVaultPasswords', () => {
+  it('parses a JSON object keyed by a vault name with spaces', () => {
+    process.env.VAULT_PASSWORDS = JSON.stringify({ 'Vultisig Cluster #1': 'json-secret' })
+
+    expect(parseVaultPasswords().get('Vultisig Cluster #1')).toBe('json-secret')
+  })
+
+  it('keeps parsing legacy whitespace-separated entries', () => {
+    process.env.VAULT_PASSWORDS = 'first-vault:first-secret second-vault:second-secret'
+
+    expect(parseVaultPasswords()).toEqual(
+      new Map([
+        ['first-vault', 'first-secret'],
+        ['second-vault', 'second-secret'],
+      ])
+    )
+  })
+
+  it('uses the last colon as the separator for each legacy entry', () => {
+    process.env.VAULT_PASSWORDS = 'vault:with:colons:secret other-vault:other-secret'
+
+    expect(parseVaultPasswords()).toEqual(
+      new Map([
+        ['vault:with:colons', 'secret'],
+        ['other-vault', 'other-secret'],
+      ])
+    )
+  })
+
+  it('warns and falls back to legacy parsing when JSON is malformed', () => {
+    process.env.VAULT_PASSWORDS = '{malformed vault-id-1:fallback-secret'
+
+    expect(parseVaultPasswords().get('vault-id-1')).toBe('fallback-secret')
+    expect(stderrSpy.mock.calls.map(call => String(call[0])).join('')).toMatch(/VAULT_PASSWORDS.*JSON/i)
+  })
 })
 
 describe('AgentSession.initialize — password resolution chain', () => {
@@ -144,13 +182,13 @@ describe('AgentSession.initialize — password resolution chain', () => {
   })
 
   it('resolves from the OS keyring with no --password', async () => {
-    vi.mocked(getServerPassword).mockResolvedValue('keyring-secret' as any)
+    vi.mocked(getStoredServerPassword).mockResolvedValue('keyring-secret' as any)
     const ft = makeFakeThis() // no config.password, no env
     const ui = makeAskUi()
 
     await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
 
-    expect(getServerPassword).toHaveBeenCalledWith('vault-id-1')
+    expect(getStoredServerPassword).toHaveBeenCalledWith('vault-id-1')
     expect(ft.vault.unlock).toHaveBeenCalledWith('keyring-secret')
     expect(ui.requestPassword).not.toHaveBeenCalled()
   })
@@ -183,7 +221,7 @@ describe('AgentSession.initialize — password resolution chain', () => {
   })
 
   it('falls through to env when the keyring lookup throws (keyring unavailable)', async () => {
-    vi.mocked(getServerPassword).mockRejectedValue(new Error('keyring unavailable') as any)
+    vi.mocked(getStoredServerPassword).mockRejectedValue(new Error('keyring unavailable') as any)
     process.env.VAULT_PASSWORD = 'env-secret'
     const ft = makeFakeThis()
     const ui = makeAskUi()
@@ -197,7 +235,7 @@ describe('AgentSession.initialize — password resolution chain', () => {
   it('re-prompts and retries unlock when a stored (keyring) password is stale (interactive mode)', async () => {
     // A stale keyring entry must not strand an interactive session: the bad
     // value is cleared and the UI prompt supplies the right one.
-    vi.mocked(getServerPassword).mockResolvedValue('stale-secret' as any)
+    vi.mocked(getStoredServerPassword).mockResolvedValue('stale-secret' as any)
     const unlock = vi.fn(async (pw: string) => {
       if (pw === 'stale-secret') throw new Error('invalid password')
     })
@@ -224,7 +262,7 @@ describe('AgentSession.initialize — password resolution chain', () => {
     // ask mode has no interactive prompt, so re-prompting would misdirect a
     // headless operator. The stale value must be cleared and the error must
     // point at the stored credential, not at argv.
-    vi.mocked(getServerPassword).mockResolvedValue('stale-secret' as any)
+    vi.mocked(getStoredServerPassword).mockResolvedValue('stale-secret' as any)
     const unlock = vi.fn(async () => {
       throw new Error('invalid password')
     })
@@ -281,8 +319,8 @@ describe('password-manager — non-interactive chain + getPassword delegation', 
     clearCachedPassword()
     delete process.env.VAULT_PASSWORD
     delete process.env.VAULT_PASSWORDS
-    vi.mocked(getServerPassword).mockReset()
-    vi.mocked(getServerPassword).mockResolvedValue(null as any)
+    vi.mocked(getStoredServerPassword).mockReset()
+    vi.mocked(getStoredServerPassword).mockResolvedValue(null as any)
   })
 
   afterEach(() => {
@@ -295,7 +333,14 @@ describe('password-manager — non-interactive chain + getPassword delegation', 
     const got = await resolvePasswordNonInteractive('vault-id-1', 'My Vault')
     expect(got).toBe('cached-secret')
     // Step 1 returned — the keyring branch must never be consulted.
-    expect(getServerPassword).not.toHaveBeenCalled()
+    expect(getStoredServerPassword).not.toHaveBeenCalled()
+  })
+
+  it('resolvePasswordNonInteractive prefers VAULT_PASSWORDS over the single-password fallback', async () => {
+    process.env.VAULT_PASSWORDS = 'vault-id-1:per-vault-secret'
+    process.env.VAULT_PASSWORD = 'fallback-secret'
+
+    await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('per-vault-secret')
   })
 
   it('resolvePasswordNonInteractive returns null when nothing is configured (never prompts)', async () => {
