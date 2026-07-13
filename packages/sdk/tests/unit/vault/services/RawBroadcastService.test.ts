@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2'
 import { bytesToHex } from '@noble/hashes/utils'
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
@@ -37,6 +37,7 @@ const {
   mockExecuteSuiTx,
   mockRippleRequest,
   mockGetBittensorTxHash,
+  mockGetCustomRpcOverride,
 } = vi.hoisted(() => ({
   mockQueryUrl: vi.fn(),
   mockGetEvmClient: vi.fn(),
@@ -49,6 +50,11 @@ const {
   mockExecuteSuiTx: vi.fn(),
   mockRippleRequest: vi.fn(),
   mockGetBittensorTxHash: vi.fn(),
+  mockGetCustomRpcOverride: vi.fn(),
+}))
+
+vi.mock('@vultisig/core-chain/chains/customRpc/customRpcOverrides', () => ({
+  getCustomRpcOverride: (...args: unknown[]) => mockGetCustomRpcOverride(...args),
 }))
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
@@ -120,6 +126,7 @@ describe('RawBroadcastService', () => {
       },
     })
     mockGetBittensorTxHash.mockReturnValue('0xbittensorhash')
+    mockGetCustomRpcOverride.mockReturnValue(undefined)
   })
 
   it('throws UnsupportedChain for chains without a raw broadcast path', async () => {
@@ -602,6 +609,21 @@ describe('RawBroadcastService', () => {
     ).rejects.toThrow(/missing extrinsic hash/)
   })
 
+  it('uses the configured Bittensor RPC override', async () => {
+    mockGetCustomRpcOverride.mockReturnValue('https://controlled-bittensor.test')
+    mockQueryUrl.mockResolvedValue({ result: '0xbtensor' })
+
+    await service.broadcastRawTx({ chain: Chain.Bittensor, rawTx: 'beef' })
+
+    expect(mockGetCustomRpcOverride).toHaveBeenCalledWith(OtherChain.Bittensor)
+    expect(mockQueryUrl).toHaveBeenCalledWith(
+      'https://controlled-bittensor.test',
+      expect.objectContaining({
+        body: expect.objectContaining({ method: 'author_submitExtrinsic' }),
+      })
+    )
+  })
+
   it('returns Bittensor raw tx hash when the extrinsic was already imported', async () => {
     mockQueryUrl.mockResolvedValue({
       error: {
@@ -650,6 +672,16 @@ describe('RawBroadcastService', () => {
     expect(mockGetBittensorTxHash).toHaveBeenCalledWith({
       encoded: Buffer.from('beef', 'hex'),
     })
+  })
+
+  it.each(['', 'abc', 'zz'])('rejects malformed Bittensor raw tx %j before submission', async rawTx => {
+    await expect(service.broadcastRawTx({ chain: Chain.Bittensor, rawTx })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('non-empty, even-length hexadecimal bytes'),
+    })
+
+    expect(mockQueryUrl).not.toHaveBeenCalled()
+    expect(mockGetBittensorTxHash).not.toHaveBeenCalled()
   })
 
   it('broadcasts Tron transaction JSON', async () => {
