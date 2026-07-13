@@ -1,5 +1,11 @@
 # @vultisig/cli
 
+## 2.19.18
+
+### Patch Changes
+
+- [#1223](https://github.com/vultisig/vultisig-sdk/pull/1223) [`6296248`](https://github.com/vultisig/vultisig-sdk/commit/62962482d8499f697e0634260a2e6083b944e649) Thanks [@neavra](https://github.com/neavra)! - Fix `agent ask` headless signing so a vault unlocked via `VAULT_PASSWORD` (or the OS keyring) can sign without also passing `--password`. The sign-time gate now keys off whether a password is actually needed — an encrypted vault that is still locked with no password in hand — and retries the same non-interactive chain (cache → keyring → `VAULT_PASSWORDS`/`VAULT_PASSWORD`) before prompting, instead of always re-prompting when `--password` was absent. Unencrypted vaults skip the gate entirely. The transaction confirmation gate is unchanged. Also corrects the `VAULT_PASSWORD` help text.
+
 ## 2.19.14
 
 ### Patch Changes
