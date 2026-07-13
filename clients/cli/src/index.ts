@@ -1440,7 +1440,12 @@ Exit codes:
   7  unknown/unexpected error
   8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
      emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
-  9  duplicate-broadcast refused — nothing was sent; retry with --force`
+  9  duplicate-broadcast refused — nothing was sent; retry with --force
+  10 agent turn blocked by a fund-safety guardrail
+  11 model refusal or clarifying question; no action taken
+  12 non-interactive confirmation/input required
+  13 BROADCAST_COMMITTED — a transaction was submitted but the overall request may
+     be incomplete; inspect every emitted hash and DO NOT blindly retry`
   )
   .action(
     async (

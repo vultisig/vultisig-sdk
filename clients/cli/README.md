@@ -685,41 +685,58 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "session_id": "abc123-def456",
-  "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
-  "tool_calls": [
-    {
-      "action": "get_balances",
-      "success": true,
-      "data": {
-        "balances": [
-          {
-            "chain": "Ethereum",
-            "symbol": "ETH",
-            "amount": "1.5",
-            "decimals": 18,
-            "raw_amount": "1500000000000000000"
-          }
-        ]
+  "success": true,
+  "v": 1,
+  "data": {
+    "conversation_id": "abc123-def456",
+    "session_id": "abc123-def456",
+    "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
+    "tool_calls": [
+      {
+        "id": "tool-call-1",
+        "action": "get_balances",
+        "success": true,
+        "data": { "balances": [] }
       }
-    }
-  ],
-  "transactions": [
-    {
-      "hash": "0x9f8e7d6c...",
-      "chain": "ethereum",
-      "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
-    }
-  ]
+    ],
+    "transactions": [],
+    "outcome": { "kind": "success" }
+  }
 }
 ```
 
-On failure, stdout is a single JSON object with both a human `error` string and a stable `code` (the `error` field is unchanged for older parsers):
+Failures use the same v1 envelope with a stable `error.code`. Partial turn data remains under `data`.
+If a transaction hash has already been submitted and a later backend outcome/error prevents the overall request
+from completing, the CLI exits `13` with `BROADCAST_COMMITTED`. This is deliberately **not** overall success:
+an approval or other first leg may have landed while a swap or follow-up step did not. Inspect every hash and do
+not blindly retry the original request.
 
 ```json
 {
-  "error": "Agent backend unreachable at https://example.invalid",
-  "code": "BACKEND_UNREACHABLE"
+  "success": false,
+  "v": 1,
+  "error": {
+    "message": "A transaction was broadcast, but the overall agent request may be incomplete. Inspect the transaction status before continuing.",
+    "code": "BROADCAST_COMMITTED",
+    "conversation_id": "abc123-def456"
+  },
+  "data": {
+    "transactions": [
+      {
+        "hash": "0x9f8e7d6c...",
+        "chain": "ethereum",
+        "status": "broadcast",
+        "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+      }
+    ],
+    "tool_calls": [],
+    "response": "",
+    "outcome": { "kind": "error", "code": "follow_up_failed" },
+    "original_error": {
+      "message": "Confirmation indexer failed after broadcast",
+      "code": "TRANSACTION_FAILED"
+    }
+  }
 }
 ```
 
@@ -742,6 +759,8 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `TIMEOUT`                 | Deadline exceeded, or abort where the message indicates a timeout                                                            |
 | `TRANSACTION_FAILED`      | Build/broadcast/gas errors mapped from the SDK                                                                               |
 | `SIGNING_FAILED`          | MPC/signing failed                                                                                                           |
+| `ACK_FAILED`              | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying  |
+| `BROADCAST_COMMITTED`     | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                    |
 | `SESSION_NOT_INITIALIZED` | Internal session state error                                                                                                 |
 | `UNKNOWN_ERROR`           | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
 
@@ -1149,6 +1168,7 @@ Configuration is stored in `~/.vultisig/`:
 | 10   | agent ask: a fund-safety guardrail blocked the requested action                                                        |
 | 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
+| 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

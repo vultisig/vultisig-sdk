@@ -162,6 +162,65 @@ function outputAskError(
   }
 }
 
+const BROADCAST_COMMITTED_MESSAGE =
+  'A transaction was broadcast, but the overall agent request may be incomplete. Inspect the transaction status before continuing.'
+
+function hasCommittedBroadcast(result: AskResult | undefined): boolean {
+  return !!result?.transactions.some(tx => tx.hash.trim().length > 0 && tx.status !== 'failed')
+}
+
+/**
+ * Override a later backend/conversational failure after an on-chain submission.
+ * This stays non-zero because the overall request may be partial, but is explicitly
+ * non-retryable so automation cannot mistake the original failure for permission to
+ * replay a send, approval, or another leg of a compound flow.
+ */
+function outputBroadcastCommitted(
+  wantsJson: boolean,
+  result: AskResult,
+  conversationId: string,
+  originalError?: { message: string; code: AgentErrorCode }
+): void {
+  if (wantsJson) {
+    const data: Record<string, unknown> = {
+      transactions: result.transactions,
+      tool_calls: result.toolCalls,
+      response: result.response,
+      ...(result.outcome ? { outcome: result.outcome } : {}),
+      ...(originalError ? { original_error: originalError } : {}),
+    }
+    outputErrorJson({
+      success: false,
+      v: 1,
+      error: {
+        message: BROADCAST_COMMITTED_MESSAGE,
+        code: AgentErrorCode.BROADCAST_COMMITTED,
+        conversation_id: conversationId,
+      },
+      data,
+    })
+    return
+  }
+
+  process.stderr.write(`session:${result.sessionId}\n`)
+  process.stderr.write(`Broadcast committed: ${BROADCAST_COMMITTED_MESSAGE}\n`)
+  if (result.outcome) {
+    const { kind, code } = result.outcome
+    process.stderr.write(`outcome:${kind}${code ? `:${code}` : ''}\n`)
+  }
+  if (originalError) {
+    process.stderr.write(`backend-error:${originalError.message} [${originalError.code}]\n`)
+  }
+  for (const tx of result.transactions) {
+    process.stderr.write(`tx:${tx.chain}:${tx.hash}\n`)
+    process.stderr.write(`status:${tx.status ?? 'unknown'}\n`)
+    if (tx.explorerUrl) process.stderr.write(`explorer:${tx.explorerUrl}\n`)
+  }
+  process.stderr.write(
+    'WARNING: DO NOT blindly retry. Verify each transaction hash and continue only the incomplete step.\n'
+  )
+}
+
 /**
  * Render a human-readable (non-JSON) ask result to stdout: session line, optional
  * confirmation/proposed lines, balance cards, response text, and tx hashes.
@@ -306,11 +365,28 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // branching on exit code would see false success. Surface it as the error
     // envelope on stdout and exit non-zero; otherwise emit the success turn.
     if (result.error) {
-      // Map the backend/stream error code onto the ExitCode taxonomy (F3) so a
-      // headless caller can branch on `$?` — a retryable network blip vs a
-      // definitive bad-input vs an auth failure — instead of a blanket 1.
-      exitCode = agentErrorCodeToExitCode(result.error.code)
-      outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
+      // Once a live transaction hash exists, a later stream/backend error is a
+      // non-retryable partial success, not an ordinary retryable failure. Keep the
+      // original diagnostic under data.original_error for investigation.
+      if (hasCommittedBroadcast(result)) {
+        exitCode = ExitCode.BROADCAST_COMMITTED
+        outputBroadcastCommitted(wantsJson, result, conversationId, result.error)
+      } else {
+        // Map the backend/stream error code onto the ExitCode taxonomy (F3) so a
+        // headless caller can branch on `$?` — a retryable network blip vs a
+        // definitive bad-input vs an auth failure — instead of a blanket 1.
+        exitCode = agentErrorCodeToExitCode(result.error.code)
+        outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
+      }
+    } else if (
+      hasCommittedBroadcast(result) &&
+      (result.outcome?.kind === 'blocked' || result.outcome?.kind === 'error')
+    ) {
+      // A typed conversational failure can arrive after an approval/send/swap leg
+      // already landed. Do not turn that partial execution into overall success or
+      // leave a retryable-looking blocked/error classification in place.
+      exitCode = ExitCode.BROADCAST_COMMITTED
+      outputBroadcastCommitted(wantsJson, result, conversationId)
     } else {
       // a2a-02: no stream error frame — the turn ending is the typed turn_outcome
       // (when the backend emitted one). success→0, blocked→10, refusal→11, a
@@ -320,7 +396,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     }
   } catch (err: unknown) {
     const normalized = normalizeAgentError(err)
-    let code = normalized.code
+    const code = normalized.code
     const message = normalized.message
     // ask() can throw AFTER a tx already broadcast: a successful sign always
     // triggers a recursive follow-up request to report recent_actions, and an
@@ -330,28 +406,17 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
     // stranding the funds with exit-1 and an empty record.
     const partial = ask?.partialResult()
     if (partial && !conversationId) conversationId = partial.sessionId
-    // A throw AFTER a broadcast whose outcome is NOT a definitive on-chain
-    // failure IS the ack-failure case (F1): the tx hash is valid (carried in
-    // partial.transactions) but the follow-up report to the backend failed.
-    // Re-tag as ACK_FAILED so the caller gets the distinct fund-safety exit code
-    // (8 — do NOT blindly retry).
-    //
-    // Gate on TWO facts, not just "some non-failed tx exists":
-    //   1. an ACTUAL broadcast hash surfaced this turn that isn't resolved
-    //      'failed' (a reverted tx is safe to retry — the journal even clears
-    //      its guard — so ACK_FAILED would wrongly discourage it), AND
-    //   2. that broadcast's follow-up report was still UNDELIVERED when the turn
-    //      threw (session.hasUnacknowledgedBroadcast()).
-    // Without (2), a later independent retryable error — fired AFTER an earlier
-    // broadcast in the turn was already acked — would be masked as exit 8, when
-    // the caller should retry (the journal blocks any re-broadcast of that
-    // intent, so retrying can't double-spend). See session.ts.
-    const liveBroadcast = !!partial && partial.transactions.some(t => t.hash && t.status !== 'failed')
-    if (liveBroadcast && ask?.hasUnacknowledgedBroadcast()) {
-      code = AgentErrorCode.ACK_FAILED
+    // A throw after any live transaction surfaced is the same partial-success
+    // safety boundary as a returned stream/typed error. The original throw remains
+    // available as data.original_error, but the public classification must tell
+    // automation to inspect the hash rather than replay the entire request.
+    if (partial && hasCommittedBroadcast(partial)) {
+      exitCode = ExitCode.BROADCAST_COMMITTED
+      outputBroadcastCommitted(wantsJson, partial, conversationId, { message, code })
+    } else {
+      exitCode = agentErrorCodeToExitCode(code)
+      outputAskError(wantsJson, message, code, conversationId, partial)
     }
-    exitCode = agentErrorCodeToExitCode(code)
-    outputAskError(wantsJson, message, code, conversationId, partial)
   } finally {
     console.log = originalConsoleLog
     setSilentMode(false)

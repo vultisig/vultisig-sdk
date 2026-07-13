@@ -98,9 +98,9 @@ describe('agent ask --json output contract', () => {
     resetOutput()
   })
 
-  async function runAsk(): Promise<{ exitCode: number }> {
+  async function runAsk(json = true): Promise<{ exitCode: number }> {
     try {
-      await executeAgentAsk(ctx, 'hello', { json: true })
+      await executeAgentAsk(ctx, 'hello', { json })
       return { exitCode: 0 }
     } catch (e) {
       if (e instanceof ExitError) return { exitCode: e.exitCode }
@@ -158,6 +158,66 @@ describe('agent ask --json output contract', () => {
     // the block is conveyed via outcome + the exit code, which is the contract.
     expect(envelope.success).toBe(true)
     expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
+  })
+
+  it('broadcast + turn_outcome=blocked → BROADCAST_COMMITTED with transactions and outcome preserved', async () => {
+    driver.run = cb => {
+      cb.onToolResult('approval-call', 'execute_swap', true, { phase: 'approval' })
+      cb.onTxStatus('0xapproval', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xapproval')
+      cb.onAssistantMessage("I couldn't complete the swap. Please try again.")
+      cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim', detail: 'unverifiable broadcast' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).toBe(13)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
+    expect(envelope.data.transactions).toEqual([
+      {
+        hash: '0xapproval',
+        chain: 'ethereum',
+        status: 'broadcast',
+        explorerUrl: 'https://etherscan.io/tx/0xapproval',
+      },
+    ])
+    // Approval was only one leg: the nonzero partial-success envelope must not
+    // claim that the full swap completed.
+    expect(envelope.data.tool_calls[0].data.phase).toBe('approval')
+  })
+
+  it('pending transaction + turn_outcome=error → BROADCAST_COMMITTED instead of generic retryable failure', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xpending', 'polygon', 'pending', 'https://polygonscan.com/tx/0xpending')
+      cb.onTurnOutcome?.({ kind: 'error', code: 'follow_up_failed' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].status).toBe('pending')
+    expect(envelope.data.outcome).toEqual({ kind: 'error', code: 'follow_up_failed' })
+  })
+
+  it('confirmed transaction + fabricated-tool-failure-style outcome stays partial, not false overall success', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xconfirmed', 'polygon', 'confirmed', 'https://polygonscan.com/tx/0xconfirmed')
+      cb.onAssistantMessage('No transaction was sent. Please try again.')
+      cb.onTurnOutcome?.({ kind: 'blocked', code: 'fabricated_tool_failure' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].status).toBe('confirmed')
+    expect(envelope.data.response).toContain('No transaction was sent')
+    expect(envelope.data.outcome.code).toBe('fabricated_tool_failure')
   })
 
   it('turn_outcome=refusal → exit 11 (AGENT_TURN_REFUSAL)', async () => {
@@ -224,11 +284,7 @@ describe('agent ask --json output contract', () => {
     expect(envelope.error.conversation_id).toBe('conv-abc')
   })
 
-  it('broadcast THEN SSE error → exit non-zero AND error envelope still carries the tx hash', async () => {
-    // A turn that broadcasts a tx (onTxStatus) and then hits a mid-stream backend
-    // `error` frame (onError) must NOT lose the hash: exit-1 is correct, but a
-    // headless caller still needs the identifier to track/recover the moved funds.
-    // Regression guard for the error envelope dropping result.transactions (F1).
+  it('broadcast THEN SSE error → BROADCAST_COMMITTED and preserves the original diagnostic', async () => {
     driver.run = cb => {
       cb.onToolResult('tool-call-1', 'execute_send', true, {
         to: '0xrecipient',
@@ -238,33 +294,28 @@ describe('agent ask --json output contract', () => {
     }
 
     const { exitCode } = await runAsk()
-    // Exit non-zero: the turn ended in an error frame.
-    expect(exitCode).not.toBe(0)
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.v).toBe(1)
-    expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
     expect(envelope.error.conversation_id).toBe('conv-abc')
-
-    // The broadcast tx record survives into the error envelope's data block.
-    expect(envelope.data).toBeDefined()
+    expect(envelope.data.original_error).toEqual({
+      message: 'confirmation indexer failed after broadcast',
+      code: AgentErrorCode.TRANSACTION_FAILED,
+    })
     expect(envelope.data.transactions).toHaveLength(1)
-    expect(envelope.data.transactions[0].hash).toBe('0xdeadbeef')
-    expect(envelope.data.transactions[0].chain).toBe('ethereum')
-    expect(envelope.data.transactions[0].status).toBe('broadcast')
-    expect(envelope.data.transactions[0].explorerUrl).toBe('https://etherscan.io/tx/0xdeadbeef')
-    // The partial tool_calls are carried too, for correlation/de-dup.
+    expect(envelope.data.transactions[0]).toEqual({
+      hash: '0xdeadbeef',
+      chain: 'ethereum',
+      status: 'broadcast',
+      explorerUrl: 'https://etherscan.io/tx/0xdeadbeef',
+    })
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
   })
 
-  it('broadcast THEN thrown follow-up failure → exit non-zero AND error envelope still carries the tx hash (catch path)', async () => {
-    // A successful sign always triggers a recursive follow-up request to report
-    // recent_actions; an HTTP/timeout/5xx failure there REJECTS sendMessage, so
-    // ask() throws instead of returning. The catch path must still recover the
-    // already-broadcast hash from the partial turn — otherwise exit-1 strands the
-    // funds with no identifier. Regression guard for the thrown-after-broadcast
-    // path (the SSE-error-frame path is covered by the test above).
+  it('broadcast THEN thrown follow-up failure → BROADCAST_COMMITTED and preserves the throw', async () => {
     driver.run = cb => {
       cb.onToolResult('tool-call-1', 'execute_send', true, {
         to: '0xrecipient',
@@ -274,50 +325,104 @@ describe('agent ask --json output contract', () => {
     }
 
     const { exitCode } = await runAsk()
-    // A throw AFTER a broadcast is the ACK-failure case (F1): the tx hash is
-    // valid but the follow-up report failed. Distinct exit code 8 (ACK_FAILED)
-    // tells a headless caller NOT to blindly retry (that would double-spend).
-    expect(exitCode).toBe(ExitCode.ACK_FAILED)
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.v).toBe(1)
-    // Re-tagged to ACK_FAILED regardless of the underlying throw's code.
-    expect(envelope.error.code).toBe(AgentErrorCode.ACK_FAILED)
-    // conversation_id recovered from the session even though ask() threw.
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
     expect(envelope.error.conversation_id).toBe('conv-abc')
-    // The broadcast tx survives into the error envelope's data block.
+    expect(envelope.data.original_error).toEqual({
+      message: 'backend 503 reporting recent_actions after broadcast',
+      code: AgentErrorCode.UNKNOWN_ERROR,
+    })
     expect(envelope.data.transactions).toHaveLength(1)
     expect(envelope.data.transactions[0].hash).toBe('0xcafef00d')
     expect(envelope.data.transactions[0].status).toBe('broadcast')
     expect(envelope.data.tool_calls[0].id).toBe('tool-call-1')
   })
 
-  it('broadcast that was ALREADY acked THEN a later retryable error → keeps retryable code, NOT ACK_FAILED (item 2)', async () => {
-    // The masking bug: an earlier tx broadcast + acked, then a LATER unrelated
-    // network error. The old `.some(t => t.status !== 'failed')` gate re-tagged
-    // it exit 8, telling a headless caller NOT to retry — wrong: retrying is safe
-    // (the journal blocks any re-broadcast of that intent) and desirable. The
-    // session reports the broadcast's follow-up WAS delivered (no unacked
-    // broadcast), so the error keeps its own retryable classification.
+  it('confirmed broadcast followed by a later thrown network failure remains non-retryable partial success', async () => {
     driver.unacknowledgedBroadcast = false
     driver.run = cb => {
       cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
       cb.onTxStatus('0xacked', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xacked')
-      // A later, independent step fails with a retryable network error.
       throw new Error('fetch failed talking to backend')
     }
 
     const { exitCode } = await runAsk()
-    // NETWORK_ERROR → exit 3 (retryable), NOT 8 (ACK_FAILED).
-    expect(exitCode).toBe(ExitCode.NETWORK)
-    expect(exitCode).not.toBe(ExitCode.ACK_FAILED)
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
-    expect(envelope.error.code).toBe(AgentErrorCode.NETWORK_ERROR)
-    // The already-broadcast hash is still carried for tracking/de-dup.
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.original_error.code).toBe(AgentErrorCode.NETWORK_ERROR)
     expect(envelope.data.transactions[0].hash).toBe('0xacked')
+  })
+
+  it('failed-only transaction set retains the original failure classification', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xfailed', 'ethereum', 'failed', 'https://etherscan.io/tx/0xfailed')
+      cb.onError('transaction reverted', AgentErrorCode.TRANSACTION_FAILED)
+      cb.onTurnOutcome?.({ kind: 'error', code: 'reverted' })
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+    expect(envelope.data.original_error).toBeUndefined()
+    expect(envelope.data.transactions[0].status).toBe('failed')
+  })
+
+  it('mixed failed/live transaction statuses use BROADCAST_COMMITTED and preserve every leg', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xfailed-leg', 'ethereum', 'failed', 'https://etherscan.io/tx/0xfailed-leg')
+      cb.onTxStatus('0xlive-leg', 'ethereum', 'pending', 'https://etherscan.io/tx/0xlive-leg')
+      cb.onError('compound flow failed after approval', AgentErrorCode.TRANSACTION_FAILED)
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions).toEqual([
+      {
+        hash: '0xfailed-leg',
+        chain: 'ethereum',
+        status: 'failed',
+        explorerUrl: 'https://etherscan.io/tx/0xfailed-leg',
+      },
+      {
+        hash: '0xlive-leg',
+        chain: 'ethereum',
+        status: 'pending',
+        explorerUrl: 'https://etherscan.io/tx/0xlive-leg',
+      },
+    ])
+    expect(envelope.data.original_error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+  })
+
+  it('human partial-success output prints status/hash and replaces bare retry prose with a warning', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xhuman', 'polygon', 'confirmed', 'https://polygonscan.com/tx/0xhuman')
+      cb.onAssistantMessage('Please try again.')
+      cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim' })
+    }
+
+    const { exitCode } = await runAsk(false)
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(stdout.join('')).toBe('')
+
+    const output = stderr.join('')
+    expect(output).toContain('Broadcast committed:')
+    expect(output).toContain('tx:polygon:0xhuman')
+    expect(output).toContain('status:confirmed')
+    expect(output).toContain('explorer:https://polygonscan.com/tx/0xhuman')
+    expect(output).toContain('DO NOT blindly retry')
+    expect(output).not.toContain('Please try again.')
   })
 
   it('stale --session fallback (SESSION_NOT_FOUND at initialize) → exit non-zero + error envelope on first turn', async () => {
