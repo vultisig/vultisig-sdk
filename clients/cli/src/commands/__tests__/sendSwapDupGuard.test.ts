@@ -728,6 +728,19 @@ describe('swap — broadcast dedupe guard', () => {
     expect(realSwaps.count).toBe(1)
   })
 
+  it('refuses amounts equivalent at the source token precision', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xswap-precision', realSwaps })
+
+    await executeSwap(ctxFor(vault), { ...opts, amount: '1' })
+    expect(vault.swap).toHaveBeenLastCalledWith(expect.objectContaining({ amount: '1' }))
+
+    await expect(executeSwap(ctxFor(vault), { ...opts, amount: '1.0000000000000000009' })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
+    expect(realSwaps.count).toBe(1)
+  })
+
   it('--force overrides and distinct swaps are allowed', async () => {
     const realSwaps = { count: 0 }
     const vault = makeSwapVault({ txHash: '0xswap', realSwaps })
