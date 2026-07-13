@@ -168,11 +168,12 @@ export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519' | 'MLDSA'
-  // For UTXO chains with multiple inputs, includes all signatures
+  // For transactions with multiple message hashes, includes each signature's metadata.
   signatures?: Array<{
     r: string
     s: string
     der: string
+    recovery?: number
   }>
   // ML-DSA-44 post-quantum signature (hex-encoded), present when vault has MLDSA keys
   mldsaSignature?: string

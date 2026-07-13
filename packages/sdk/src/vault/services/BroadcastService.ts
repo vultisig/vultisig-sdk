@@ -81,7 +81,8 @@ export class BroadcastPartialFailureError extends Error {
 export class BroadcastService {
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
-    private wasmProvider: WasmProvider
+    private wasmProvider: WasmProvider,
+    private broadcastTransaction: typeof coreBroadcastTx = coreBroadcastTx
   ) {}
 
   /**
@@ -171,7 +172,7 @@ export class BroadcastService {
         const signingOutput = decodeSigningOutput(chain, compiledTx)
         let broadcastResult: unknown
         try {
-          broadcastResult = await coreBroadcastTx({
+          broadcastResult = await this.broadcastTransaction({
             chain,
             tx: signingOutput,
           })
@@ -187,8 +188,7 @@ export class BroadcastService {
           throw error
         }
 
-        const inputTxHash =
-          extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
         broadcastedTxHashes.push(inputTxHash)
         txHash = inputTxHash
       }

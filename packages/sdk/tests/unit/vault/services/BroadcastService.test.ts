@@ -158,6 +158,18 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).toHaveBeenCalledOnce()
   })
 
+  it('uses an injected broadcaster without calling the network broadcaster', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash').mockResolvedValueOnce('swap-local-hash')
+    const injectedBroadcaster = vi.fn().mockResolvedValue(undefined)
+    const injectedService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster)
+
+    await injectedService.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+
+    expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
+    expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
+  })
+
   it('carries already-broadcast hashes when a later input fails', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
     mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('swap rejected'))
