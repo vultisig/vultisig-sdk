@@ -259,7 +259,7 @@ describe('convertToKeysignSignatures', () => {
       )
     })
 
-    it('should throw error when message hash is missing for multi-signature', () => {
+    it('should throw error when there are more signatures than message hashes', () => {
       const signature: Signature = {
         signature: '',
         format: 'ECDSA',
@@ -279,7 +279,56 @@ describe('convertToKeysignSignatures', () => {
       const messageHashes = ['0x1111111111111111111111111111111111111111111111111111111111111111'] // Only 1 hash but 2 signatures
 
       expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
-        'Missing message hash for signature at index 1'
+        'Signature count 2 does not match message hash count 1'
+      )
+    })
+
+    it('should throw error when there are fewer signatures than message hashes', () => {
+      const signature: Signature = {
+        signature: '',
+        format: 'ECDSA',
+        signatures: [
+          {
+            r: '0xab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d',
+            s: '0x7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+            der: '0x3045022100ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d02207f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+          },
+        ],
+      }
+      const messageHashes = [
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '0x2222222222222222222222222222222222222222222222222222222222222222',
+      ]
+
+      expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
+        'Signature count 1 does not match message hash count 2'
+      )
+    })
+
+    it('should throw error when an empty signatures array is paired with multiple message hashes', () => {
+      const signature: Signature = {
+        signature:
+          '0x3045022100ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d02207f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+        format: 'ECDSA',
+        signatures: [],
+      }
+      const messageHashes = ['0xfirst', '0xsecond']
+
+      expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
+        'Signature count 1 does not match message hash count 2'
+      )
+    })
+
+    it('should throw error when a single signature is paired with multiple message hashes', () => {
+      const signature: Signature = {
+        signature:
+          '0x3045022100ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d02207f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+        format: 'ECDSA',
+      }
+      const messageHashes = ['0xfirst', '0xsecond']
+
+      expect(() => convertToKeysignSignatures(signature, messageHashes)).toThrow(
+        'Signature count 1 does not match message hash count 2'
       )
     })
   })

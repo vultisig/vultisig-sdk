@@ -75,11 +75,14 @@ export function convertToKeysignSignatures(
 
   if (signature.signatures && signature.signatures.length > 0) {
     // UTXO multi-signature case (multiple inputs)
+    if (signature.signatures.length !== messageHashes.length) {
+      throw new Error(
+        `Signature count ${signature.signatures.length} does not match message hash count ${messageHashes.length}`
+      )
+    }
+
     signature.signatures.forEach((sig, index) => {
       const messageHash = messageHashes[index]
-      if (!messageHash) {
-        throw new Error(`Missing message hash for signature at index ${index}`)
-      }
 
       result[messageHash] = {
         msg: messageHash,
@@ -91,6 +94,10 @@ export function convertToKeysignSignatures(
     })
   } else {
     // Single signature case (most chains)
+    if (messageHashes.length > 1) {
+      throw new Error(`Signature count 1 does not match message hash count ${messageHashes.length}`)
+    }
+
     const messageHash = messageHashes[0]
     if (!messageHash) {
       throw new Error('No message hash provided for signature')
