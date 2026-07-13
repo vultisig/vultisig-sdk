@@ -6,6 +6,7 @@ import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vulti
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
+import { getCustomRpcOverride } from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
 import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
@@ -453,18 +454,30 @@ export class RawBroadcastService {
    * @param rawTx - Hex-encoded extrinsic (with or without 0x prefix)
    */
   private async broadcastBittensorRawTx(rawTx: string): Promise<string> {
-    const hexWithPrefix = ensureHexPrefix(rawTx)
+    const hexWithoutPrefix = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
+    if (
+      hexWithoutPrefix.length === 0 ||
+      hexWithoutPrefix.length % 2 !== 0 ||
+      !/^[0-9a-fA-F]+$/.test(hexWithoutPrefix)
+    ) {
+      throw new Error('Bittensor raw transaction must be non-empty, even-length hexadecimal bytes')
+    }
+
+    const hexWithPrefix = ensureHexPrefix(hexWithoutPrefix)
     const rawTxHash = () => this.getBittensorRawTxHash(hexWithPrefix)
 
     const { data: response, error } = await attempt(
-      queryUrl<{ result: string; error?: { message: string } }>(bittensorRpcUrl, {
-        body: {
-          jsonrpc: '2.0',
-          method: 'author_submitExtrinsic',
-          params: [hexWithPrefix],
-          id: 1,
-        },
-      })
+      queryUrl<{ result: string; error?: { message: string } }>(
+        getCustomRpcOverride(OtherChain.Bittensor) ?? bittensorRpcUrl,
+        {
+          body: {
+            jsonrpc: '2.0',
+            method: 'author_submitExtrinsic',
+            params: [hexWithPrefix],
+            id: 1,
+          },
+        }
+      )
     )
 
     if (error) {
