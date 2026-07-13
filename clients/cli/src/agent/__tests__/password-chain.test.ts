@@ -94,6 +94,7 @@ function makeFakeThis(over: { config?: any; client?: any; vault?: any } = {}) {
 let prevConfigDir: string | undefined
 let prevVaultPassword: string | undefined
 let prevVaultPasswords: string | undefined
+let prevVultisigPassword: string | undefined
 let stderrSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
@@ -104,8 +105,10 @@ beforeEach(() => {
 
   prevVaultPassword = process.env.VAULT_PASSWORD
   prevVaultPasswords = process.env.VAULT_PASSWORDS
+  prevVultisigPassword = process.env.VULTISIG_PASSWORD
   delete process.env.VAULT_PASSWORD
   delete process.env.VAULT_PASSWORDS
+  delete process.env.VULTISIG_PASSWORD
 
   // The in-memory password cache is module-level state — clear it so a value
   // resolved in one test can't leak into the next.
@@ -126,6 +129,8 @@ afterEach(() => {
   else process.env.VAULT_PASSWORD = prevVaultPassword
   if (prevVaultPasswords === undefined) delete process.env.VAULT_PASSWORDS
   else process.env.VAULT_PASSWORDS = prevVaultPasswords
+  if (prevVultisigPassword === undefined) delete process.env.VULTISIG_PASSWORD
+  else process.env.VULTISIG_PASSWORD = prevVultisigPassword
   clearCachedPassword()
 })
 
@@ -147,12 +152,12 @@ describe('parseVaultPasswords', () => {
     )
   })
 
-  it('uses the last colon as the separator for each legacy entry', () => {
-    process.env.VAULT_PASSWORDS = 'vault:with:colons:secret other-vault:other-secret'
+  it('preserves colons in legacy passwords', () => {
+    process.env.VAULT_PASSWORDS = 'vault-id:secret:with:colons other-vault:other-secret'
 
     expect(parseVaultPasswords()).toEqual(
       new Map([
-        ['vault:with:colons', 'secret'],
+        ['vault-id', 'secret:with:colons'],
         ['other-vault', 'other-secret'],
       ])
     )
@@ -217,6 +222,18 @@ describe('AgentSession.initialize — password resolution chain', () => {
     await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
 
     expect(ft.vault.unlock).toHaveBeenCalledWith('map-secret')
+    expect(ui.requestPassword).not.toHaveBeenCalled()
+  })
+
+  it('resolves a JSON password keyed by a vault name with spaces', async () => {
+    process.env.VAULT_PASSWORDS = JSON.stringify({ 'Vultisig Cluster #1': 'json-secret' })
+    const ft = makeFakeThis({ vault: { name: 'Vultisig Cluster #1' } })
+    const ui = makeAskUi()
+
+    await expect(initialize.call(ft, ui)).resolves.toBeUndefined()
+
+    expect(ft.vault.unlock).toHaveBeenCalledWith('json-secret')
+    expect(ft.executor.setPassword).toHaveBeenCalledWith('json-secret')
     expect(ui.requestPassword).not.toHaveBeenCalled()
   })
 
@@ -336,11 +353,32 @@ describe('password-manager — non-interactive chain + getPassword delegation', 
     expect(getStoredServerPassword).not.toHaveBeenCalled()
   })
 
+  it('resolvePasswordNonInteractive prefers stored credentials over environment variables', async () => {
+    vi.mocked(getStoredServerPassword).mockResolvedValue('stored-secret' as any)
+    process.env.VAULT_PASSWORDS = 'vault-id-1:per-vault-secret'
+    process.env.VAULT_PASSWORD = 'fallback-secret'
+
+    await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('stored-secret')
+  })
+
+  it('resolvePasswordNonInteractive prefers a vault-name mapping over a vault-ID mapping', async () => {
+    process.env.VAULT_PASSWORDS = JSON.stringify({ 'My Vault': 'name-secret', 'vault-id-1': 'id-secret' })
+
+    await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('name-secret')
+  })
+
   it('resolvePasswordNonInteractive prefers VAULT_PASSWORDS over the single-password fallback', async () => {
     process.env.VAULT_PASSWORDS = 'vault-id-1:per-vault-secret'
     process.env.VAULT_PASSWORD = 'fallback-secret'
 
     await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('per-vault-secret')
+  })
+
+  it('resolvePasswordNonInteractive prefers VAULT_PASSWORD over VULTISIG_PASSWORD', async () => {
+    process.env.VAULT_PASSWORD = 'vault-secret'
+    process.env.VULTISIG_PASSWORD = 'alias-secret'
+
+    await expect(resolvePasswordNonInteractive('vault-id-1', 'My Vault')).resolves.toBe('vault-secret')
   })
 
   it('resolvePasswordNonInteractive returns null when nothing is configured (never prompts)', async () => {

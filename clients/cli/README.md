@@ -673,8 +673,8 @@ The five password-related environment variables have distinct roles:
 # Unambiguous: supports spaces and other punctuation in vault names
 export VAULT_PASSWORDS='{"Vultisig Cluster #1":"pw","vault-id":"other-pw"}'
 
-# Backward-compatible for space-free keys; the last colon separates key and password
-export VAULT_PASSWORDS='MyVault:pw vault-id:other-pw'
+# Backward-compatible for space-free keys; passwords may contain colons
+export VAULT_PASSWORDS='MyVault:pw vault-id:other:pw'
 ```
 
 Vault-ID keys are the most deterministic choice. If a JSON-looking value is malformed, the CLI warns on stderr and falls back to legacy parsing.

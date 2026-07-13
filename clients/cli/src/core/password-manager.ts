@@ -54,8 +54,8 @@ export function clearCachedPassword(vaultIdOrName?: string): void {
  * - JSON object (recommended for vault names containing spaces)
  * - Legacy whitespace-separated key:password entries
  *
- * Legacy entries split on the last colon so keys may contain colons. Use the
- * JSON form whenever a key or password contains whitespace.
+ * Legacy entries preserve the original first-colon separator, so passwords may
+ * contain colons. Use the JSON form whenever a key contains whitespace or colons.
  */
 export function parseVaultPasswords(): Map<string, string> {
   const passwordMap = new Map<string, string>()
@@ -81,7 +81,7 @@ export function parseVaultPasswords(): Map<string, string> {
   }
 
   for (const pair of passwordsEnv.split(/\s+/)) {
-    const colonIndex = pair.lastIndexOf(':')
+    const colonIndex = pair.indexOf(':')
     if (colonIndex > 0) {
       const vaultKey = pair.substring(0, colonIndex)
       const password = pair.substring(colonIndex + 1)
