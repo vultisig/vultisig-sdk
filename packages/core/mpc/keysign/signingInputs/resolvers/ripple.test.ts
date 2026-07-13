@@ -18,9 +18,12 @@ import { getPreSigningHashes } from "../../../tx/preSigningHashes";
 import { getEncodedSigningInputs } from "../index";
 import { getRippleSigningInputs } from "./ripple";
 
+// getRippleSigningInputs does not touch walletCore.
 const walletCore = {} as unknown as WalletCore;
+
 const ACCOUNT = "rExampleAccountAddressForTests1234567";
 const RLUSD_ISSUER = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De";
+// Dummy 33-byte secp256k1 public key (hex) for getKeysignTwPublicKey.
 const HEX_PUBLIC_KEY = `02${"ab".repeat(32)}`;
 
 const makeRippleSpecific = (destinationTag?: number) => {
@@ -84,26 +87,35 @@ const buildPaymentPayload = ({
 
 describe("getRippleSigningInputs -- TrustSet build path (issued currency)", () => {
   it("builds an OperationTrustSet with the on-ledger currency code, issuer and value", async () => {
+    // 1.5 RLUSD at 15 decimals.
     const [input] = await getRippleSigningInputs({
       keysignPayload: buildTrustSetPayload("1500000000000000"),
       walletCore,
     });
+
     expect(input.opTrustSet).toBeTruthy();
     expect(input.opPayment).toBeFalsy();
+
     const limit = input.opTrustSet?.limitAmount;
     expect(limit?.currency).toBe(toXrplCurrencyCode("RLUSD"));
+    // RLUSD is non-standard (>3 chars) so it must be the 160-bit hex form.
     expect(limit?.currency).toBe("524C555344000000000000000000000000000000");
     expect(limit?.issuer).toBe(RLUSD_ISSUER);
     expect(limit?.value).toBe("1.5");
   });
 
   it("normalizes an unencoded non-standard currency stored in contractAddress before signing", async () => {
+    // Defense-in-depth: a `contractAddress` built without going through
+    // `rippleTokenId()` (e.g. a raw "RLUSD.<issuer>" id) must still resolve to
+    // the on-ledger 40-char hex form rather than being forwarded verbatim.
     const payload = buildTrustSetPayload("1000000000000000");
     payload.coin!.contractAddress = `RLUSD.${RLUSD_ISSUER}`;
+
     const [input] = await getRippleSigningInputs({
       keysignPayload: payload,
       walletCore,
     });
+
     expect(input.opTrustSet?.limitAmount?.currency).toBe(
       "524C555344000000000000000000000000000000",
     );
@@ -115,6 +127,7 @@ describe("getRippleSigningInputs -- TrustSet build path (issued currency)", () =
       keysignPayload: buildTrustSetPayload("1000000000000000"),
       walletCore,
     });
+
     expect(input.opTrustSet?.limitAmount?.value).toBe("1");
   });
 
@@ -123,6 +136,7 @@ describe("getRippleSigningInputs -- TrustSet build path (issued currency)", () =
       keysignPayload: buildTrustSetPayload("1000000000000000"),
       walletCore,
     });
+
     expect(input.fee.toString()).toBe("15");
     expect(input.sequence).toBe(100);
     expect(input.lastLedgerSequence).toBe(200);
@@ -134,6 +148,7 @@ describe("getRippleSigningInputs -- TrustSet build path (issued currency)", () =
       keysignPayload: buildPaymentPayload(),
       walletCore,
     });
+
     expect(input.opPayment).toBeTruthy();
     expect(input.opTrustSet).toBeFalsy();
   });
