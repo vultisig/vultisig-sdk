@@ -396,6 +396,18 @@ type FinPairEdge = {
   node: FinPairNode
 }
 
+const isFinPairEdge = (edge: unknown): edge is FinPairEdge => {
+  const node = (edge as { node?: Partial<FinPairNode> } | null)?.node
+  return (
+    typeof node?.address === 'string' &&
+    node.address.length > 0 &&
+    typeof node.assetBase === 'object' &&
+    node.assetBase !== null &&
+    typeof node.assetQuote === 'object' &&
+    node.assetQuote !== null
+  )
+}
+
 const PAIR_LIST_CACHE_TTL_MS = 5 * 60 * 1000
 
 type FinRangeRaw = {
@@ -571,9 +583,9 @@ export class RujiraRange {
     }
 
     this.pairListInflight = gqlFetch<{
-      finV3: {
-        pairs: {
-          edges: FinPairEdge[]
+      finV3?: {
+        pairs?: {
+          edges?: unknown
         }
       }
     }>(PAIR_QUERY, {})
@@ -583,6 +595,12 @@ export class RujiraRange {
           throw new RujiraError(
             RujiraErrorCode.NETWORK_ERROR,
             'GraphQL pair-list response missing `finV3.pairs.edges` array (backend or schema error)'
+          )
+        }
+        if (!edges.every(isFinPairEdge)) {
+          throw new RujiraError(
+            RujiraErrorCode.NETWORK_ERROR,
+            'GraphQL pair-list response contains malformed edge(s) (backend or schema error)'
           )
         }
         this.pairListCache = {

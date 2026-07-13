@@ -328,4 +328,30 @@ describe('RujiraRange queries', () => {
     await expect(localRange.getPairAddress('RUJI', 'RUNE')).resolves.toMatchObject({ address: validPair })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('does not cache malformed FIN pair edges', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { finV3: { pairs: { edges: [{ node: { address: validPair, assetBase: {} } }] } } },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { finV3: { pairs: { edges: [pairEdge(validPair)] } } },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const localRange = new RujiraRange(client)
+
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+    })
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).resolves.toMatchObject({ address: validPair })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
 })
