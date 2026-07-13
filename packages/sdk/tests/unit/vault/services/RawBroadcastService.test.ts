@@ -264,6 +264,20 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe(bytesToHex(sha256(txBytes)).toUpperCase())
   })
 
+  it('fails closed on an ambiguous Cosmos account sequence mismatch', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('account sequence mismatch'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('account sequence mismatch'),
+    })
+  })
+
   it('rejects Sui payload missing unsignedTx or signature', async () => {
     await expect(
       service.broadcastRawTx({
@@ -368,6 +382,27 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe(keccak256(rawTx))
   })
 
+  it.each([
+    'nonce too low',
+    'transaction is temporarily banned',
+    'future transaction tries to replace pending',
+    'could not replace existing tx',
+  ])('fails closed on ambiguous EVM rejection: %s', async errorMessage => {
+    mockGetEvmClient.mockReturnValue({
+      sendRawTransaction: vi.fn().mockRejectedValue(new Error(errorMessage)),
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Base,
+        rawTx: '0x01',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining(errorMessage),
+    })
+  })
+
   it('broadcasts Polkadot extrinsic via JSON-RPC', async () => {
     mockQueryUrl.mockResolvedValue({ result: '0xpdhash' })
 
@@ -468,18 +503,44 @@ describe('RawBroadcastService', () => {
     ).rejects.toThrow(/Tron broadcast failed/)
   })
 
-  it('returns the local Tron txID for duplicate transaction responses', async () => {
+  it('returns the derived Tron txID for duplicate transaction responses', async () => {
     mockQueryUrl.mockResolvedValue({
       code: 'ERROR',
       message: 'DUPLICATE_TRANSACTION',
     })
 
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+
     const hash = await service.broadcastRawTx({
       chain: Chain.Tron,
-      rawTx: JSON.stringify({ txID: 'tron-local-id', raw_data: {} }),
+      rawTx: JSON.stringify({
+        txID: expectedHash.toUpperCase(),
+        raw_data_hex: rawDataHex,
+      }),
     })
 
-    expect(hash).toBe('tron-local-id')
+    expect(hash).toBe(expectedHash)
+  })
+
+  it('fails closed when a duplicate Tron response carries a mismatched txID', async () => {
+    mockQueryUrl.mockResolvedValue({
+      code: 'ERROR',
+      message: 'DUPLICATE_TRANSACTION',
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: '00'.repeat(32),
+          raw_data_hex: '010203',
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('already been submitted'),
+    })
   })
 
   it('broadcasts Ripple tx blob', async () => {
@@ -513,5 +574,19 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe(xrplHashes.hashSignedTx(rawTx))
+  })
+
+  it('fails closed on an ambiguous Ripple past-sequence response', async () => {
+    mockRippleRequest.mockRejectedValue(new Error('tefPAST_SEQ'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx: '1200aa',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('tefPAST_SEQ'),
+    })
   })
 })
