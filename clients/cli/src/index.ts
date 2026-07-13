@@ -139,7 +139,7 @@ program
         .map(([k, v]) => `  ${k}  ${v}`)
         .join('\n') +
       '\n\nEnvironment variables:\n' +
-      '  VAULT_PASSWORD          Vault password for signing (bypasses prompt)\n' +
+      '  VAULT_PASSWORD          Vault password — unlocks the vault for reads and signing (no prompt)\n' +
       '  VULTISIG_PASSWORD       Alias for VAULT_PASSWORD\n' +
       '  VAULT_PASSWORDS         Space-separated VaultName:password pairs\n' +
       '  VULTISIG_VAULT          Default vault name or ID\n' +

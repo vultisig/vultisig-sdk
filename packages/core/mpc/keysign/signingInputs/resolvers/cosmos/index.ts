@@ -15,7 +15,7 @@ import { TW } from '@trustwallet/wallet-core'
 import { AuthInfo, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import Long from 'long'
 
-import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignTwPublicKey } from '../../../tw/getKeysignTwPublicKey'
 import { getTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getTwChainId'
 import { toTwAddress } from '../../../tw/toTwAddress'
@@ -24,6 +24,46 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
 import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
+
+const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPayload>[0]) => {
+  const swapPayload = getKeysignSwapPayload(keysignPayload)
+  if (!swapPayload) {
+    return null
+  }
+
+  return getRecordUnionValue(swapPayload, 'native')
+}
+
+const getThorchainDepositAsset = ({
+  assetCoin,
+  chain,
+  secured,
+}: {
+  assetCoin: {
+    chain: string
+    contractAddress?: string
+    ticker: string
+  }
+  chain: CosmosChain
+  secured: boolean
+}) => {
+  const chainId =
+    (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
+    nativeSwapChainIds[chain as VaultBasedCosmosChain]
+  const { contractAddress } = assetCoin
+  const rawSymbol =
+    typeof contractAddress === 'string' && contractAddress.trim()
+      ? `${assetCoin.ticker}-${contractAddress}`
+      : assetCoin.ticker
+
+  return TW.Cosmos.Proto.THORChainAsset.create({
+    chain: secured ? chainId.toUpperCase() : chainId,
+    symbol: secured ? rawSymbol.toUpperCase() : rawSymbol,
+    ticker: secured ? assetCoin.ticker.toUpperCase() : assetCoin.ticker,
+    synth: false,
+    secured,
+  })
+}
 
 export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
@@ -325,30 +365,24 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         }
       }
 
-      const getSwapPayload = () => {
-        const swapPayload = getKeysignSwapPayload(keysignPayload)
-        if (!swapPayload) {
-          return null
-        }
-
-        return getRecordUnionValue(swapPayload, 'native')
-      }
-
-      const swapPayload = getSwapPayload()
+      const swapPayload = getNativeSwapPayload(keysignPayload)
 
       if (isDeposit || (swapPayload && coin.chain === chain && swapPayload.chain === chain)) {
         const amountStr = isDeposit ? (keysignPayload.toAmount ?? '0') : swapPayload!.fromAmount
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
+        const assetCoin = swapPayload?.fromCoin ?? coin
+        const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
+
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: nativeSwapChainIds[chain as VaultBasedCosmosChain],
-            symbol: coin.ticker,
-            ticker: coin.ticker,
-            synth: false,
-          }),
-          ...(isPositive ? { amount: amountStr, decimals: new Long(coin.decimals) } : {}),
+          asset: getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
+          ...(isPositive
+            ? {
+                amount: amountStr,
+                decimals: new Long(isSecuredWithdrawal ? 0 : assetCoin.decimals),
+              }
+            : {}),
         })
 
         return {
