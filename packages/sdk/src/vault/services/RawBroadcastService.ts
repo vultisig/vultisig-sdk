@@ -73,7 +73,26 @@ const deriveSolanaRawTxSignature = (rawTx: string): string => {
   return base58.encode(txBytes.subarray(offset, offset + 64))
 }
 
-const deriveRippleRawTxHash = (rawTx: string): string => xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
+const deriveRippleRawTxHash = (rawTx: string): string =>
+  xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
+
+const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+  if (
+    typeof txJson.raw_data_hex !== 'string' ||
+    txJson.raw_data_hex.length === 0 ||
+    txJson.raw_data_hex.length % 2 !== 0 ||
+    !/^[0-9a-fA-F]+$/.test(txJson.raw_data_hex)
+  ) {
+    return null
+  }
+
+  const derivedHash = bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+  if (txJson.txID !== undefined && (typeof txJson.txID !== 'string' || txJson.txID.toLowerCase() !== derivedHash)) {
+    return null
+  }
+
+  return derivedHash
+}
 
 /**
  * RawBroadcastService
@@ -185,18 +204,7 @@ export class RawBroadcastService {
 
     if (error) {
       // Ignore certain errors that indicate the tx was already submitted
-      if (
-        isInError(
-          error,
-          'already known',
-          'transaction is temporarily banned',
-          'nonce too low',
-          'transaction already exists',
-          'future transaction tries to replace pending',
-          'could not replace existing tx',
-          'tx already in mempool'
-        )
-      ) {
+      if (isInError(error, 'already known', 'transaction already exists', 'tx already in mempool')) {
         return deriveEvmRawTxHash(rawTx)
       }
       throw error
@@ -304,7 +312,7 @@ export class RawBroadcastService {
     const { data: result, error } = await attempt(client.broadcastTx(txBytes))
 
     if (error) {
-      if (isInError(error, 'tx already exists in cache', 'account sequence mismatch')) {
+      if (isInError(error, 'tx already exists in cache')) {
         return deriveCosmosRawTxHash(rawTx)
       }
       throw error
@@ -456,7 +464,7 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      if (isInError(error, 'tefPAST_SEQ', 'tefALREADY')) {
+      if (isInError(error, 'tefALREADY')) {
         return deriveRippleRawTxHash(rawTx)
       }
       throw error
@@ -534,8 +542,9 @@ export class RawBroadcastService {
     if (response.result === false || (response.code && response.code !== 'SUCCESS')) {
       const errorMsg = response.message || response.code || 'Unknown error'
       if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
-        if (typeof txJson.txID === 'string' && txJson.txID.length > 0) {
-          return txJson.txID
+        const localHash = deriveTronRawTxHash(txJson)
+        if (localHash) {
+          return localHash
         }
         throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
       }
