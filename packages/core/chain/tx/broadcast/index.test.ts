@@ -98,7 +98,7 @@ describe('broadcastTx transient retry dispatcher', () => {
     'classifies common fetch transport error %s as transient',
     message => {
       expect(isTransientBroadcastError(new Error(message))).toBe(true)
-    },
+    }
   )
 
   it('does not add dispatcher retry on top of Solana or EVM resolver-owned retries', async () => {
