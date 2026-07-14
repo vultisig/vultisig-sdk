@@ -352,7 +352,9 @@ describe('formatBalance', () => {
 
     it('formats a decimals=24 balance exactly (old float divisor drifted after 16 significant digits)', () => {
       const result = formatBalance(1234567890123456789012345n, Chain.Ethereum, '0xhighdecimals24', {
-        Ethereum: [{ id: '0xhighdecimals24', symbol: 'HD24', name: 'HighDecimals24', decimals: 24, chainId: Chain.Ethereum }],
+        Ethereum: [
+          { id: '0xhighdecimals24', symbol: 'HD24', name: 'HighDecimals24', decimals: 24, chainId: Chain.Ethereum },
+        ],
       })
 
       expect(result.formattedAmount).toBe('1.234567890123456789012345')
@@ -363,7 +365,9 @@ describe('formatBalance', () => {
 
     it('formats a decimals=30 balance exactly (old float divisor drifted across whole+fraction)', () => {
       const result = formatBalance(5123456789012345678901234567890n, Chain.Ethereum, '0xhighdecimals30', {
-        Ethereum: [{ id: '0xhighdecimals30', symbol: 'HD30', name: 'HighDecimals30', decimals: 30, chainId: Chain.Ethereum }],
+        Ethereum: [
+          { id: '0xhighdecimals30', symbol: 'HD30', name: 'HighDecimals30', decimals: 30, chainId: Chain.Ethereum },
+        ],
       })
 
       expect(result.formattedAmount).toBe('5.12345678901234567890123456789')
