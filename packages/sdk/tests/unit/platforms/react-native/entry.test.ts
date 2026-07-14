@@ -47,4 +47,19 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
   })
+
+  it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.toXrplCurrencyCode).toBe('function')
+    expect(typeof rn.rippleTokenId).toBe('function')
+    expect(typeof rn.parseRippleTokenId).toBe('function')
+    expect(typeof rn.isValidXrplCurrencyCode).toBe('function')
+    expect(typeof rn.parseIssuedCurrencyValue).toBe('function')
+    expect(typeof rn.formatIssuedCurrencyValue).toBe('function')
+    expect(rn.rippleIssuedCurrencyDecimals).toBe(15)
+    expect(rn.rippleOwnerReserveDrops).toBe(200000n)
+    expect(Array.isArray(rn.rippleKnownIssuedTokens)).toBe(true)
+    expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
+  })
 })
