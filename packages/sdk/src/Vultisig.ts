@@ -377,14 +377,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Check in-memory pending vaults first, then fall back to disk
     let pendingVault = this.pendingVaults.get(vaultId)
-    let fromDisk = false
-
     if (!pendingVault) {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
         pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
-        fromDisk = true
       }
     }
 
@@ -407,9 +404,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Clean up pending state
     this.pendingVaults.delete(vaultId)
-    if (fromDisk) {
-      await this.context.storage.remove(`pending:${vaultId}`)
-    }
+    await this.context.storage.remove(`pending:${vaultId}`)
 
     this.emit('vaultChanged', { vaultId })
 

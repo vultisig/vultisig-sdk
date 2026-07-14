@@ -343,6 +343,69 @@ describe('Vultisig', () => {
       expect(initializeSpy).toHaveBeenCalled()
       expect(sdk.initialized).toBe(true)
     })
+
+    describe('verifyVault pending cleanup', () => {
+      const vaultId = 'pending-vault-id'
+      const pendingKey = `pending:${vaultId}`
+      const pendingData = { id: vaultId, name: 'Pending vault' }
+
+      const configureVerification = (subject: Vultisig) => {
+        const internals = subject as any
+        vi.spyOn(internals.context.serverManager, 'verifyVault').mockResolvedValue(true)
+        vi.spyOn(internals.vaultManager, 'setActiveVault').mockResolvedValue(undefined)
+        return internals
+      }
+
+      it('removes a persisted pending record after same-process verification succeeds', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const pendingVault = { save: vi.fn().mockResolvedValue(undefined) }
+        const internals = configureVerification(subject)
+        internals.pendingVaults.set(vaultId, pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+
+        expect(pendingVault.save).toHaveBeenCalledOnce()
+        expect(await storage.get(pendingKey)).toBeNull()
+        expect(internals.pendingVaults.has(vaultId)).toBe(false)
+      })
+
+      it('retains pending state when final vault persistence fails and removes it on retry', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const persistenceError = new Error('final persistence failed')
+        const pendingVault = {
+          save: vi.fn().mockRejectedValueOnce(persistenceError).mockResolvedValueOnce(undefined),
+        }
+        const internals = configureVerification(subject)
+        internals.pendingVaults.set(vaultId, pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).rejects.toThrow(persistenceError)
+        expect(await storage.get(pendingKey)).toEqual(pendingData)
+        expect(internals.pendingVaults.get(vaultId)).toBe(pendingVault)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+        expect(await storage.get(pendingKey)).toBeNull()
+        expect(internals.pendingVaults.has(vaultId)).toBe(false)
+      })
+
+      it('cleans up idempotently after loading pending state in a fresh process', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const pendingVault = { save: vi.fn().mockResolvedValue(undefined) }
+        const internals = configureVerification(subject)
+        vi.spyOn(internals.vaultManager, 'createVaultInstance').mockReturnValue(pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+
+        expect(await storage.get(pendingKey)).toBeNull()
+        await expect(storage.remove(pendingKey)).resolves.toBeUndefined()
+        expect(await storage.get(pendingKey)).toBeNull()
+      })
+    })
   })
 
   describe('error handling', () => {
@@ -430,7 +493,10 @@ describe('Vultisig', () => {
   describe('concurrent operations', () => {
     it('should handle concurrent initialization calls without race condition', async () => {
       // Create a fresh SDK for this test
-      const concurrentSdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
+      const concurrentSdk = new Vultisig({
+        storage: new MemoryStorage(),
+        autoInit: false,
+      })
 
       // Track calls to the mock
       mockGetWalletCore.mockClear()
@@ -452,7 +518,10 @@ describe('Vultisig', () => {
     })
 
     it('should retry initialization on failure', async () => {
-      const retrySdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
+      const retrySdk = new Vultisig({
+        storage: new MemoryStorage(),
+        autoInit: false,
+      })
 
       // First call fails, second succeeds
       mockGetWalletCore.mockRejectedValueOnce(new Error('First attempt failed')).mockResolvedValueOnce({})
