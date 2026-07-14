@@ -1,3 +1,4 @@
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -14,7 +15,6 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: mocks.queryUrl,
 }))
 
-import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getBittensorTxStatus } from './bittensor'
 import { getQbtcTxStatus } from './qbtc'
 import { getSuiTxStatus } from './sui'
