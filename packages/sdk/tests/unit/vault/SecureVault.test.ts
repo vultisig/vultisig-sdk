@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
+import type { VaultData } from '../../../src/types'
 import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -45,6 +46,35 @@ vi.mock('../../../src/services/RelaySigningService', () => ({
     })
   }),
 }))
+
+const makeMockContext = () =>
+  ({
+    storage: {} as any,
+    config: {},
+    serverManager: {} as any,
+    passwordCache: {} as any,
+    wasmProvider: {} as any,
+  }) as any
+
+const makeSecureVaultData = (signers: string[]): VaultData => ({
+  id: 'test-id',
+  name: 'Secure Vault',
+  type: 'secure',
+  vultFileContent: '',
+  isEncrypted: false,
+  signers,
+  localPartyId: signers[0],
+  publicKeys: { ecdsa: 'abc', eddsa: 'def' },
+  hexChainCode: 'abc',
+  libType: 'DKLS',
+  createdAt: Date.now(),
+  isBackedUp: false,
+  order: 0,
+  lastModified: Date.now(),
+  currency: 'usd',
+  chains: [],
+  tokens: {},
+})
 
 describe('SecureVault', () => {
   describe('static properties', () => {
@@ -173,22 +203,29 @@ describe('SecureVault', () => {
   })
 
   describe('instance properties', () => {
-    // Test the expected interface of SecureVault instances
-    it('should define availableSigningModes', () => {
-      // SecureVault.availableSigningModes returns [] until signing is implemented
-      // This is a design check - actual instance testing requires more setup
-      expect(true).toBe(true) // Placeholder for now
+    it('should expose relay signing mode on stored secure vaults', () => {
+      const vault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+
+      expect(vault.availableSigningModes).toEqual(['relay'])
     })
 
-    it('should calculate threshold correctly', () => {
-      // Threshold formula: ceil((n+1)/2)
-      const thresholdFor2 = Math.ceil((2 + 1) / 2) // 2
-      const thresholdFor3 = Math.ceil((3 + 1) / 2) // 2
-      const thresholdFor5 = Math.ceil((5 + 1) / 2) // 3
+    it('should calculate stored secure vault threshold from signer count', () => {
+      const twoSignerVault = SecureVault.fromStorage(makeSecureVaultData(['device-1', 'device-2']), makeMockContext())
+      const threeSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+      const fiveSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      )
 
-      expect(thresholdFor2).toBe(2)
-      expect(thresholdFor3).toBe(2)
-      expect(thresholdFor5).toBe(3)
+      expect(twoSignerVault.threshold).toBe(2)
+      expect(threeSignerVault.threshold).toBe(2)
+      expect(fiveSignerVault.threshold).toBe(4)
     })
   })
 })
@@ -528,10 +565,16 @@ describe('SecureVault vs FastVault signing differences', () => {
 
   describe('threshold', () => {
     it('SecureVault has variable threshold based on signers', () => {
-      // (n+1)/2 threshold
-      const threshold3of5 = Math.ceil((5 + 1) / 2) // 3
-      const threshold2of3 = Math.ceil((3 + 1) / 2) // 2
-      expect(threshold3of5).toBe(3)
+      const threshold3of5 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      ).threshold
+      const threshold2of3 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      ).threshold
+
+      expect(threshold3of5).toBe(4)
       expect(threshold2of3).toBe(2)
     })
 

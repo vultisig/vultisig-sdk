@@ -81,11 +81,13 @@ jobs:
       # (that one belongs to integration-test.yml's separate test-vault.json
       # fixture - reusing the name would silently break that vault if the
       # passwords differ).
-      - name: Run fast-signing E2E (real 2-of-2 MPC, never broadcasts)
+      - name: Run fast-signing and multi-chain production E2E (never broadcasts)
         env:
           TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
           TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
-        run: yarn workspace @vultisig/sdk test:e2e:fast-signing
+        run: |
+          yarn workspace @vultisig/sdk test:e2e:fast-signing
+          yarn workspace @vultisig/sdk test:e2e:multi-chain
 
       - name: Notify Discord on failure
         if: failure()
