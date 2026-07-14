@@ -575,6 +575,7 @@ export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
+export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')

@@ -53,6 +53,7 @@ export {
   toBaseUnits,
   toHumanUnits,
 } from './utils/convertAmount'
+export { computePersonalSignHash, formatEcdsaSignature65 } from './utils/eip191'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
