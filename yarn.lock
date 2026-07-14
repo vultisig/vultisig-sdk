@@ -2674,10 +2674,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@formatjs/bigdecimal@npm:0.2.7":
+  version: 0.2.7
+  resolution: "@formatjs/bigdecimal@npm:0.2.7"
+  checksum: 10c0/9583a4d615553d1353284d0f66d30b6d7ab54b8d57c50f14d42db5fa48029b01c26ac7705b493c4bde716fcffbaee4d2f3cfcb6550d6c111e3a33bcc61cc719a
+  languageName: node
+  linkType: hard
+
 "@formatjs/fast-memoize@npm:3.1.6":
   version: 3.1.6
   resolution: "@formatjs/fast-memoize@npm:3.1.6"
   checksum: 10c0/6cac8413b09aa4771edd98a52d46a9adc2f02e8bce8756a2abbd1eea2cf977757ffbb4bc1b33b6c17092739cd0c33351dffa0ea58b22e431b9754a34e46fe093
+  languageName: node
+  linkType: hard
+
+"@formatjs/fast-memoize@npm:3.1.7":
+  version: 3.1.7
+  resolution: "@formatjs/fast-memoize@npm:3.1.7"
+  checksum: 10c0/dee801f82eda1f6fdc166b0c907e8750c15e409e20b2006c215d9247fe0db720d84d53fcb2fb7559cec21a24932b69dda326c81ee2885aad2cde31bc25449fd0
   languageName: node
   linkType: hard
 
@@ -2707,13 +2721,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/intl-numberformat@npm:^9.3.11":
-  version: 9.3.11
-  resolution: "@formatjs/intl-numberformat@npm:9.3.11"
+"@formatjs/intl-localematcher@npm:0.8.12":
+  version: 0.8.12
+  resolution: "@formatjs/intl-localematcher@npm:0.8.12"
   dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/645864cff17f650488e69c68c1206889f09fde52c57445c5d9d049a5737d420a99d2e827f002e1f65c856694d9e945f61c92840444f0c6486b55cbd6980a59b5
+    "@formatjs/fast-memoize": "npm:3.1.7"
+  checksum: 10c0/2de705d6a800f2d406c7cffdb4c61bc81683cc2e96bb3f0d3a813d04879358a0601c06dc0bf38d8bb60a9ef5737384423773182327de5aadea1cce6375639247
+  languageName: node
+  linkType: hard
+
+"@formatjs/intl-numberformat@npm:^9.3.13":
+  version: 9.3.13
+  resolution: "@formatjs/intl-numberformat@npm:9.3.13"
+  dependencies:
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.8.12"
+  checksum: 10c0/b58f9b75160baf8bcd39659d42dbec5c158589342e0863ea480bd2f7718d959c78f33d90dd0092f3caf3e2c5f073d11069ae537c91eb516eadff3bd2ecc1b4a1
   languageName: node
   linkType: hard
 
@@ -7311,7 +7334,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@formatjs/intl-getcanonicallocales": "npm:^3.2.10"
     "@formatjs/intl-locale": "npm:^5.3.9"
-    "@formatjs/intl-numberformat": "npm:^9.3.11"
+    "@formatjs/intl-numberformat": "npm:^9.3.13"
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.1"
