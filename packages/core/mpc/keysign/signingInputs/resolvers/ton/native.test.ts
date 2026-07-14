@@ -25,6 +25,10 @@ const buildPayload = (toAmount: string): KeysignPayload =>
 
 describe('TON signing input amount encoding', () => {
   it('encodes non-negative native TON amounts as bytes', () => {
+    // TON testnet transaction ee3d0d792404c489ee46fa335a951f7f9158a1758e6a24c3acfbc14b04441133
+    // records a 1 TON internal-message value. Its 1_000_000_000 nanoton amount
+    // must remain the unsigned big-endian bytes 3b9aca00 at this resolver boundary.
+    // https://testnet.tonviewer.com/transaction/ee3d0d792404c489ee46fa335a951f7f9158a1758e6a24c3acfbc14b04441133
     const transfer = buildNativeTonTransfer({
       keysignPayload: buildPayload('1000000000'),
       bounceable: true,
