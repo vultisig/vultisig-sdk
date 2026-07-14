@@ -99,6 +99,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
   })
 
+  it('exports generic CosmWasm amino and protobuf execute builders', () => {
+    expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
+    expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
+  })
+
   it('VaultBase prototype exposes prep-only primitives used by mcp-ts execute_* tools', () => {
     // prepareSendTx / prepareSwapTx / prepareContractCallTx are public instance
     // methods on VaultBase — they build a KeysignPayload without broadcasting.
