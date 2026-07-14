@@ -367,7 +367,7 @@ describe('send — broadcast dedupe guard', () => {
       spawnSync(
         'yarn',
         ['workspace', '@vultisig/cli', 'exec', 'tsx', fixture.pathname, journalPathForTest(), amount, String(force)],
-        { cwd: new URL('../../../../../..', import.meta.url), encoding: 'utf8' }
+        { cwd: new URL('../../../../..', import.meta.url), encoding: 'utf8' }
       )
 
     const first = run()
