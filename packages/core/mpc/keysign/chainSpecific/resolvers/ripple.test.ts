@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 
@@ -16,14 +16,6 @@ const RESERVE_BASE = 1_000_000
 const EXPECTED_NETWORK_FEE = 20n
 const REQUIRE_DESTINATION_TAG = 0x00020000
 
-const mockState = vi.hoisted(() => ({
-  senderLedgerCurrentIndex: 100 as number | undefined,
-}))
-
-beforeEach(() => {
-  mockState.senderLedgerCurrentIndex = 100
-})
-
 const accountInfo = (flags = 0, ledgerCurrentIndex: number | undefined = 100) => ({
   account_data: {
     Account: SENDER,
@@ -39,6 +31,12 @@ const accountInfo = (flags = 0, ledgerCurrentIndex: number | undefined = 100) =>
   ledger_current_index: ledgerCurrentIndex,
 })
 
+const accountInfoWithoutLedgerCurrentIndex = () => {
+  const { ledger_current_index: _ledgerCurrentIndex, ...result } = accountInfo()
+
+  return result
+}
+
 vi.mock('@vultisig/core-chain/chains/ripple/network/info', () => ({
   getRippleNetworkInfo: vi.fn(async () => ({
     validated_ledger: { base_fee: 10, reserve_base: RESERVE_BASE },
@@ -52,7 +50,7 @@ vi.mock('@vultisig/core-chain/chains/ripple/account/info', () => ({
     if (address === DEST_UNFUNDED) {
       throw new Error('Account not found.')
     }
-    return accountInfo(0, address === SENDER ? mockState.senderLedgerCurrentIndex : 100)
+    return accountInfo()
   }),
 }))
 
@@ -80,7 +78,8 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
   })
 
   it('rejects account_info responses without ledger_current_index', async () => {
-    mockState.senderLedgerCurrentIndex = undefined
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockResolvedValueOnce(accountInfoWithoutLedgerCurrentIndex())
 
     await expect(
       getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
