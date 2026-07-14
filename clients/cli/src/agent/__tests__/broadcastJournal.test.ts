@@ -87,6 +87,22 @@ describe('computeFingerprint', () => {
     expect(a).toBe(b)
   })
 
+  // Compatibility note: choosing blank as the canonical representation keeps
+  // fingerprints written by the old direct-send path stable. Old agent-path
+  // records fingerprinted from literal `0x` remain under their legacy fp and
+  // cannot match after this change; that upgrade exposure lasts at most the
+  // journal's 10-minute duplicate window.
+  it.each(['', '0x', '0X', '  0x  ', '  0X  '])(
+    'normalises empty calldata representation %j to the same fingerprint',
+    data => {
+      expect(computeFingerprint({ ...INTENT, data })).toBe(computeFingerprint({ ...INTENT, data: '' }))
+    }
+  )
+
+  it('keeps non-empty calldata distinct from empty calldata', () => {
+    expect(computeFingerprint({ ...INTENT, data: '0x00' })).not.toBe(computeFingerprint({ ...INTENT, data: '0x' }))
+  })
+
   it('differs when any field differs', () => {
     const base = computeFingerprint(INTENT)
     expect(computeFingerprint({ ...INTENT, to: '0xOther' })).not.toBe(base)

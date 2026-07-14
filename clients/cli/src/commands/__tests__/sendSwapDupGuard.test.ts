@@ -440,6 +440,35 @@ describe('send — broadcast dedupe guard', () => {
     expect(signSpy).not.toHaveBeenCalled() // never double-signed across paths
   })
 
+  it('cross-PATH: both real builders fingerprint empty EVM calldata identically', () => {
+    const vault = makeSendVault({
+      ecdsa: OWNER,
+      payload: nativeSendPayload('0xrecipient', '17000000000000000'),
+      txHash: '0xunused',
+      realSends: { count: 0 },
+    })
+    const directIntent = buildSendBroadcastIntent(
+      vault,
+      Chain.Polygon,
+      nativeSendPayload('0xrecipient', '17000000000000000')
+    )
+    const executor = new AgentExecutor(execVault(), false, OWNER)
+    const agentIntent = (
+      executor as unknown as {
+        buildBroadcastIntent: (payload: unknown, chain: Chain) => Parameters<typeof computeFingerprint>[0]
+      }
+    ).buildBroadcastIntent(
+      {
+        send_tx: { to: '0xrecipient', value: '17000000000000000', data: '0x' },
+      },
+      Chain.Polygon
+    )
+
+    expect(directIntent.data).toBeUndefined()
+    expect(agentIntent.data).toBe('0x')
+    expect(computeFingerprint(directIntent)).toBe(computeFingerprint(agentIntent))
+  })
+
   it('token (ERC-20) sends: identical refused, a different token to the same recipient allowed', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({

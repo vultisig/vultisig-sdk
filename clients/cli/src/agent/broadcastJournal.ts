@@ -209,8 +209,9 @@ export function journalPath(): string {
   return join(dir, 'broadcasts.jsonl')
 }
 
-function normalize(v: string | undefined): string {
-  return (v ?? '').trim().toLowerCase()
+function normalize(v: string | undefined, canonicalizeEmptyCalldata = false): string {
+  const normalized = (v ?? '').trim().toLowerCase()
+  return canonicalizeEmptyCalldata && normalized === '0x' ? '' : normalized
 }
 
 /** Stable fingerprint for a broadcast intent (sha256 → short hex). */
@@ -220,7 +221,7 @@ export function computeFingerprint(intent: BroadcastIntent): string {
     normalize(intent.chain),
     normalize(intent.to),
     normalize(intent.value),
-    normalize(intent.data),
+    normalize(intent.data, true),
     normalize(intent.asset),
   ].join('|')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
