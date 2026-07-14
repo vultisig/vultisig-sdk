@@ -20,6 +20,16 @@ import { Chain, EvmGasInfo, VaultBase } from '@/index'
 
 describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Multi-Chain Coverage (Production)', () => {
   let vault: VaultBase
+  const testResults: Record<
+    string,
+    {
+      success: boolean
+      symbol?: string
+      amount?: string
+      decimals?: number
+      error?: string
+    }
+  > = {}
 
   beforeAll(async () => {
     console.log('📦 Loading persistent test vault for multi-chain testing...')
@@ -29,17 +39,6 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Multi-Chain Coverage (Production)
   })
 
   describe('Comprehensive Chain Balance Coverage', () => {
-    const testResults: Record<
-      string,
-      {
-        success: boolean
-        symbol?: string
-        amount?: string
-        decimals?: number
-        error?: string
-      }
-    > = {}
-
     it('should fetch balances for all major chains', async () => {
       console.log(`\n📊 Testing ${TEST_VAULT_CONFIG.testChains.length} chains...\n`)
 
@@ -353,8 +352,10 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Multi-Chain Coverage (Production)
       console.log(`🌐 Environment: Production (mainnet RPCs)`)
       console.log('='.repeat(60) + '\n')
 
-      // This test always passes - it's just for logging
-      expect(true).toBe(true)
+      const successfulChains = Object.values(testResults).filter(({ success }) => success)
+
+      expect(Object.keys(testResults)).toHaveLength(TEST_VAULT_CONFIG.testChains.length)
+      expect(successfulChains.length).toBeGreaterThanOrEqual(Math.ceil(TEST_VAULT_CONFIG.testChains.length * 0.75))
     })
   })
 })
