@@ -68,6 +68,17 @@ describe('getSolanaTxStatus', () => {
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
+  it('keeps a signature-status lookup failure pending without attempting expiry classification', async () => {
+    mocks.getSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
   it('marks known signatures as known pending until transaction details are indexed', async () => {
     mocks.getSignatureStatuses.mockResolvedValue({
       value: [{ err: null, confirmationStatus: 'processed' }],
