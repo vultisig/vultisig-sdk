@@ -27,6 +27,7 @@ await build({
     'inquirer',
     '@napi-rs/keyring',
     'ora',
+    'ripple-address-codec',
     'cli-table3',
     'tabtab',
     'ws',

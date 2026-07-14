@@ -33,6 +33,16 @@ export enum ExitCode {
   // block — the caller likely needs to refine the prompt. Requires a backend that
   // emits data-turn_outcome (a2a-02).
   AGENT_TURN_REFUSAL = 11,
+  // An interactive confirmation/input was required but the session is
+  // non-interactive (a piped/redirected stdout, or --non-interactive/--ci). NOTHING
+  // was signed or broadcast. Distinct from generic UNKNOWN (7) so a headless caller
+  // can branch "needs --yes/--confirm or a required flag" from an unexpected crash.
+  CONFIRMATION_REQUIRED = 12,
+  // `agent ask` only: at least one transaction was submitted on-chain, but a
+  // later backend/stream outcome means the overall request may be incomplete.
+  // This is a non-retryable partial success: inspect the emitted hashes before
+  // deciding how to continue, and never blindly replay the original request.
+  BROADCAST_COMMITTED = 13,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -48,6 +58,10 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.DUPLICATE_BROADCAST]: 'Duplicate broadcast refused (nothing sent) — retry with --force to override',
   [ExitCode.AGENT_TURN_BLOCKED]: 'agent ask: a fund-safety guardrail blocked the requested action',
   [ExitCode.AGENT_TURN_REFUSAL]: 'agent ask: the model refused or asked a clarifying question (no action taken)',
+  [ExitCode.CONFIRMATION_REQUIRED]:
+    'Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag',
+  [ExitCode.BROADCAST_COMMITTED]:
+    'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
 }
 
 export abstract class VsigError extends Error {
@@ -188,6 +202,15 @@ export class PricingUnavailableError extends VsigError {
   readonly exitCode = ExitCode.EXTERNAL_SERVICE
   readonly code = 'PRICING_UNAVAILABLE'
   override readonly retryable = true
+
+  constructor(message: string, hint?: string, suggestions?: string[]) {
+    super(message, hint, suggestions)
+  }
+}
+
+export class ConfirmationRequiredError extends VsigError {
+  readonly exitCode = ExitCode.CONFIRMATION_REQUIRED
+  readonly code = 'CONFIRMATION_REQUIRED'
 
   constructor(message: string, hint?: string, suggestions?: string[]) {
     super(message, hint, suggestions)

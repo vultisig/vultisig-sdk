@@ -1,3 +1,4 @@
+import { getJoinKeysignUrl } from '@vultisig/core-mpc/keysign/utils/getJoinKeysignUrl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelaySigningService } from '../../../src/services/RelaySigningService'
@@ -151,6 +152,26 @@ describe('RelaySigningService', () => {
       expect(url.searchParams.get('type')).toBe('SignTransaction')
       expect(url.searchParams.get('vault')).toBe('test-ecdsa-key')
       expect(url.searchParams.get('jsonData')).toBeDefined()
+    })
+
+    it('passes the configured relay URL to the QR payload generator', async () => {
+      const customRelayUrl = 'https://relay.example.test/router'
+      const customService = new RelaySigningService(customRelayUrl)
+
+      await customService.generateQRPayload({
+        sessionId: 'session-custom',
+        hexEncryptionKey: 'c'.repeat(64),
+        localPartyId: 'party-custom',
+        vaultPublicKeyEcdsa: 'test-ecdsa-key',
+      })
+
+      expect(getJoinKeysignUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serverType: 'relay',
+          serverUrl: customRelayUrl,
+          sessionId: 'session-custom',
+        })
+      )
     })
   })
 

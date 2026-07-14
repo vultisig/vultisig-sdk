@@ -252,6 +252,73 @@ afterEach(() => {
 describe('send — broadcast dedupe guard', () => {
   const params = { chain: Chain.Ethereum, to: '0xrecipient', amount: '1', yes: true } as const
 
+  it('includes an XRP DestinationTag in a dry-run result', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rRecipient', '1000000'),
+      txHash: 'xrp-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'rRecipient',
+      amount: '1',
+      destinationTag: 123,
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({ dryRun: true, destinationTag: 123 })
+    expect(realSends.count).toBe(0)
+  })
+
+  it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-x-address-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+      amount: '1',
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      to: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY',
+      destinationTag: 495,
+    })
+    expect(vault.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        destinationTag: 495,
+      })
+    )
+    expect(realSends.count).toBe(0)
+  })
+
+  it('rejects an explicit DestinationTag that conflicts with an X-address', async () => {
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-conflicting-tag',
+      realSends: { count: 0 },
+    })
+
+    await expect(
+      sendTransaction(vault, {
+        chain: Chain.Ripple,
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        amount: '1',
+        destinationTag: 123,
+        dryRun: true,
+      })
+    ).rejects.toThrow(/Conflicting XRP destination tags/)
+  })
+
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({

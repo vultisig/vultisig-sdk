@@ -6,6 +6,7 @@ import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
+import { InvalidChainError } from '../core'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
 
@@ -38,6 +39,19 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
   }
 
   if (options.add) {
+    // Validate against the registry BEFORE persisting. Chain resolution upstream
+    // falls back to the raw user string on an unknown name (`... || (input as Chain)`),
+    // so an invalid `--add` would otherwise be written to the vault's chain list and
+    // then throw on every subsequent address derivation. Fail closed: nothing is
+    // persisted for a chain that isn't supported.
+    if (!SUPPORTED_CHAINS.includes(options.add)) {
+      throw new InvalidChainError(
+        `Unsupported chain: "${options.add}"`,
+        'Run "vultisig chains" to see the supported chains, or check the spelling.',
+        undefined,
+        { chain: String(options.add) }
+      )
+    }
     const alreadyActive = vault.chains.includes(options.add)
     if (!alreadyActive) {
       await vault.addChain(options.add)

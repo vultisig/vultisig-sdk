@@ -101,6 +101,65 @@ describe('getOneInchSwapQuote — AGG-02 router allowlist', () => {
   })
 })
 
+describe('getOneInchSwapQuote — native asset sentinel (EIP-7528)', () => {
+  const mockResponse = {
+    dstAmount: '1000000',
+    tx: {
+      from: '0xsender',
+      to: '0x111111125421ca6dc452d289314280a0f8842a65',
+      data: '0xswap',
+      value: '0',
+      gasPrice: '1000000000',
+      gas: 210000,
+    },
+  }
+
+  it('maps a native destination (toCoinId undefined) to the 0xEeee sentinel, not a ticker string', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce(mockResponse)
+
+    await getOneInchSwapQuote({
+      account,
+      fromCoinId: '0xsrc',
+      toCoinId: undefined,
+      amount: 1_000_000n,
+    })
+
+    const calledUrl = vi.mocked(queryUrl).mock.calls.at(-1)![0] as string
+    expect(calledUrl).toContain('dst=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+    expect(calledUrl).not.toContain('dst=ETH')
+  })
+
+  it('maps a native source (fromCoinId undefined) to the 0xEeee sentinel, not a ticker string', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce(mockResponse)
+
+    await getOneInchSwapQuote({
+      account,
+      fromCoinId: undefined,
+      toCoinId: '0xdst',
+      amount: 1_000_000n,
+    })
+
+    const calledUrl = vi.mocked(queryUrl).mock.calls.at(-1)![0] as string
+    expect(calledUrl).toContain('src=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+    expect(calledUrl).not.toContain('src=ETH')
+  })
+
+  it('leaves an ERC-20 destination untouched (non-native dst is not remapped)', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce(mockResponse)
+
+    await getOneInchSwapQuote({
+      account,
+      fromCoinId: '0xsrc',
+      toCoinId: '0xdst',
+      amount: 1_000_000n,
+    })
+
+    const calledUrl = vi.mocked(queryUrl).mock.calls.at(-1)![0] as string
+    expect(calledUrl).toContain('dst=0xdst')
+    expect(calledUrl).toContain('src=0xsrc')
+  })
+})
+
 describe('getOneInchSwapQuote — affiliateFee display (AGG-05)', () => {
   it('populates affiliateFee grossed up from the post-fee dstAmount, matching the Kyber convention', async () => {
     vi.mocked(queryUrl).mockResolvedValueOnce({

@@ -8,7 +8,7 @@ import {
   type NativeSwapChain,
   nativeSwapChainIds,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getKeysignSwapPayload } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
@@ -46,9 +46,22 @@ export const assertNativeSwapReadyForBroadcast = async ({
   }
 
   const { native } = swapPayload
+  // Secured-asset withdrawals use the native payload union as L1 asset metadata,
+  // not as a quote. Their MsgDeposit has no quote expiry or inbound vault.
+  if (isSecuredAssetWithdrawal({ chain, keysignPayload, native })) {
+    return
+  }
+
   const currentSeconds = BigInt(Math.floor(now() / 1000))
 
-  if (native.expirationTime > 0n && native.expirationTime <= currentSeconds) {
+  if (typeof native.expirationTime !== 'bigint' || native.expirationTime <= 0n) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      'Native swap quote has a missing or invalid expiration; refresh the quote before broadcasting'
+    )
+  }
+
+  if (native.expirationTime <= currentSeconds) {
     throw new VaultError(
       VaultErrorCode.InvalidConfig,
       'Native swap quote is expired; refresh the quote before broadcasting'

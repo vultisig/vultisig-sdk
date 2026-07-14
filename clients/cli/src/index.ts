@@ -8,7 +8,6 @@ import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { InvalidArgumentError, program } from 'commander'
-import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -57,13 +56,14 @@ import {
   executeVaults,
   executeVerify,
 } from './commands'
-import { cachePassword, createPasswordCallback } from './core'
-import { EXIT_CODE_DESCRIPTIONS, InvalidInputError } from './core/errors'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
+import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
 import {
   checkForUpdates,
+  createVaultStorage,
   error,
   formatVersionDetailed,
   formatVersionShort,
@@ -76,6 +76,7 @@ import {
   outputJson,
   printResult,
   requireInteractive,
+  resolveNonInteractive,
   setFields,
   setNonInteractive,
   setQuiet,
@@ -83,6 +84,7 @@ import {
   setupUserAgent,
   warn,
 } from './lib'
+import { prompt } from './lib/prompt'
 import { setupVaultEvents } from './ui'
 
 // Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
@@ -137,9 +139,11 @@ program
         .map(([k, v]) => `  ${k}  ${v}`)
         .join('\n') +
       '\n\nEnvironment variables:\n' +
-      '  VAULT_PASSWORD          Vault password for signing (bypasses prompt)\n' +
-      '  VULTISIG_PASSWORD       Alias for VAULT_PASSWORD\n' +
-      '  VAULT_PASSWORDS         Space-separated VaultName:password pairs\n' +
+      '  VAULT_PASSWORD          Single fallback; unlocks the vault for reads and signing\n' +
+      '  VULTISIG_PASSWORD       Alias during normal unlock/signing (not auth setup)\n' +
+      '  VAULT_PASSWORDS         JSON object or space-separated key:password pairs\n' +
+      '  VAULT_DECRYPT_PASSWORD  Decrypt an encrypted .vult file during auth setup\n' +
+      '  VULTISIG_CREDENTIALS_PASSPHRASE  Encrypt credentials on disk without a keyring\n' +
       '  VULTISIG_VAULT          Default vault name or ID\n' +
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
@@ -157,7 +161,9 @@ program
     }
     initOutputMode({ silent: opts.silent, output: opts.output })
     setQuiet(!!opts.quiet)
-    setNonInteractive(!!opts.nonInteractive)
+    // A piped/redirected stdout is the machine-output channel — an interactive
+    // prompt would corrupt it — so treat non-TTY stdout as non-interactive too.
+    setNonInteractive(resolveNonInteractive(!!opts.nonInteractive))
     const fields = opts.fields as string | undefined
     setFields(
       fields
@@ -209,7 +215,12 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
     }>()
     const serverEndpoints = resolveServerEndpoints(globalOptions)
 
+    // Honor VULTISIG_CONFIG_DIR for vault storage. createVaultStorage() falls
+    // back to ~/.vultisig when the env var is unset, so the default location is
+    // unchanged; when set, vaults/active-vault/cache land in the same dir as
+    // config.json instead of leaking to the home directory.
     const sdk = new Vultisig({
+      storage: createVaultStorage(),
       onPasswordRequired: createPasswordCallback(),
       ...(serverEndpoints ? { serverEndpoints } : {}),
       ...(passwordTTL !== undefined ? { passwordCache: { defaultTTL: passwordTTL } } : {}),
@@ -227,7 +238,9 @@ async function init(vaultOverride?: string, unlockPassword?: string, passwordTTL
         throw new Error(`Vault not found: "${vaultSelector}"`)
       }
     } else {
-      vault = await sdk.getActiveVault()
+      // Tolerate a corrupt active-vault pointer: fall back to no active vault
+      // instead of bricking every command (including `vaults`).
+      vault = (await loadActiveVaultSafely(sdk)).vault
     }
 
     if (vault) {
@@ -354,7 +367,7 @@ async function promptSeedphrase(): Promise<string> {
   info('\nEnter your 12 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'password',
       name: 'mnemonic',
@@ -381,7 +394,7 @@ async function promptQrPayload(): Promise<string> {
   info('\nEnter the QR code payload from the initiator device.')
   info('The payload starts with "vultisig://".\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'input',
       name: 'qrPayload',
@@ -548,7 +561,10 @@ joinCmd
 
         let mnemonic = options.mnemonic
         if (qrParams.libType === 'KEYIMPORT' && !mnemonic) {
-          // Seedphrase-based session requires mnemonic
+          // Seedphrase-based session requires mnemonic. Refuse before the
+          // guidance line below writes to stdout in a non-interactive session
+          // (promptSeedphrase re-checks, but only after the info()).
+          requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
           info('\nThis session requires a seedphrase to join.')
           mnemonic = await promptSeedphrase()
         }
@@ -618,6 +634,7 @@ program
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
+  .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -633,7 +650,7 @@ Examples:
 
 Environment variables:
   VAULT_PASSWORD    Vault password (bypasses prompt)
-  VAULT_PASSWORDS   Space-separated VaultName:password pairs
+  VAULT_PASSWORDS   JSON object or space-separated key:password pairs
 
 See also: balance, tx-status`
   )
@@ -647,6 +664,7 @@ See also: balance, tx-status`
           max?: boolean
           token?: string
           memo?: string
+          destinationTag?: string
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -656,14 +674,28 @@ See also: balance, tx-status`
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
+        const chain = findChainByName(chainStr) || (chainStr as Chain)
+        if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
+          throw new Error('--destination-tag is only supported for XRP')
+        }
+        const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
+        if (
+          options.destinationTag !== undefined &&
+          (!/^(0|[1-9]\d*)$/.test(options.destinationTag) ||
+            !Number.isSafeInteger(destinationTag) ||
+            destinationTag > 4294967295)
+        ) {
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+        }
         const context = await init(program.opts().vault)
         try {
           await executeSend(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
+            chain,
             to,
             amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
+            destinationTag,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
             force: options.force,
@@ -1426,7 +1458,12 @@ Exit codes:
   7  unknown/unexpected error
   8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
      emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
-  9  duplicate-broadcast refused — nothing was sent; retry with --force`
+  9  duplicate-broadcast refused — nothing was sent; retry with --force
+  10 agent turn blocked by a fund-safety guardrail
+  11 model refusal or clarifying question; no action taken
+  12 non-interactive confirmation/input required
+  13 BROADCAST_COMMITTED — a transaction was submitted but the overall request may
+     be incomplete; inspect every emitted hash and DO NOT blindly retry`
   )
   .action(
     async (
@@ -1547,14 +1584,14 @@ program
   )
 
 // ============================================================================
-// Auth Commands (keyring credential management)
+// Auth Commands (stored credential management)
 // ============================================================================
 
-const authCmd = program.command('auth').description('Manage keyring-stored vault credentials')
+const authCmd = program.command('auth').description('Manage stored vault credentials')
 
 authCmd
   .command('setup')
-  .description('Discover .vult files, prompt for passwords, and store credentials in the OS keyring')
+  .description('Import a .vult file and store credentials in the OS keyring or encrypted file')
   .option('--vault-file <path>', 'Path to a specific .vult file')
   .option('--non-interactive', 'Fail instead of prompting (use env vars)')
   .addHelpText(
@@ -1563,7 +1600,13 @@ authCmd
 Examples:
   vultisig auth setup
   vultisig auth setup --vault-file ~/vault.vult
-  VAULT_PASSWORD=secret VAULT_DECRYPT_PASSWORD=pass vultisig auth setup --non-interactive`
+
+Keychain-less Docker/CI:
+  VULTISIG_CONFIG_DIR=/data/vultisig \\
+  VAULT_DECRYPT_PASSWORD=backup-password \\
+  VAULT_PASSWORD=server-password \\
+  VULTISIG_CREDENTIALS_PASSPHRASE=file-passphrase \\
+  vultisig auth setup --non-interactive --vault-file /vaults/vault.vult`
   )
   .action(
     withExit(async (options: { vaultFile?: string; nonInteractive?: boolean }) => {
@@ -1643,6 +1686,7 @@ program
 async function startInteractiveMode(): Promise<void> {
   const serverEndpoints = resolveServerEndpoints(parseServerEndpointOverridesFromArgv(process.argv.slice(2)))
   const sdk = new Vultisig({
+    storage: createVaultStorage(),
     onPasswordRequired: createPasswordCallback(),
     ...(serverEndpoints ? { serverEndpoints } : {}),
   })
@@ -1668,6 +1712,13 @@ process.on('SIGINT', () => {
 })
 
 if (isInteractiveMode) {
+  // The interactive shell drives a readline UI on stdin/stdout; it bypasses the
+  // preAction non-interactive gate. Refuse to start it when either stream is
+  // redirected — otherwise its prompts would land on a piped stdout.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    error('Interactive mode (-i/--interactive) requires a TTY on both stdin and stdout.')
+    process.exit(ExitCode.CONFIRMATION_REQUIRED)
+  }
   startInteractiveMode().catch(err => {
     error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)

@@ -15,6 +15,7 @@ import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
 
 export type GetJoinKeysignUrlInput = {
   serverType: MpcServerType
+  serverUrl?: string
   serviceName: string
   sessionId: string
   hexEncryptionKey: string
@@ -28,6 +29,7 @@ const urlMaxLength = 2048
 
 export const getJoinKeysignUrl = async ({
   serverType,
+  serverUrl,
   serviceName,
   sessionId,
   hexEncryptionKey,
@@ -36,6 +38,7 @@ export const getJoinKeysignUrl = async ({
   customPayloadId,
   vaultId,
 }: GetJoinKeysignUrlInput): Promise<string> => {
+  const resolvedServerUrl = serverUrl ?? mpcServerUrl[serverType]
   const keysignMessage = create(KeysignMessageSchema, {
     sessionId,
     serviceName: serviceName,
@@ -65,11 +68,14 @@ export const getJoinKeysignUrl = async ({
     binary,
   })
 
-  const urlWithPayload = addQueryParams(deepLinkBaseUrl, {
+  const urlParams = {
     type: 'SignTransaction',
     vault: vaultId,
     jsonData,
-  })
+    ...(serverUrl ? { serverUrl } : {}),
+  }
+
+  const urlWithPayload = addQueryParams(deepLinkBaseUrl, urlParams)
 
   if (payload && urlWithPayload.length > urlMaxLength) {
     if ('keysign' in payload) {
@@ -80,11 +86,12 @@ export const getJoinKeysignUrl = async ({
       })
       const payloadId = await uploadPayloadToServer({
         payload: compressedPayload,
-        serverUrl: mpcServerUrl[serverType],
+        serverUrl: resolvedServerUrl,
       })
 
       return getJoinKeysignUrl({
         serverType,
+        serverUrl,
         serviceName,
         sessionId,
         hexEncryptionKey,
@@ -101,11 +108,12 @@ export const getJoinKeysignUrl = async ({
       })
       const customPayloadId = await uploadPayloadToServer({
         payload: compressedPayload,
-        serverUrl: mpcServerUrl[serverType],
+        serverUrl: resolvedServerUrl,
       })
 
       return getJoinKeysignUrl({
         serverType,
+        serverUrl,
         serviceName,
         sessionId,
         hexEncryptionKey,
