@@ -14,7 +14,7 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: mocks.queryUrl,
 }))
 
-import { Chain, OtherChain } from '../../../Chain'
+import { Chain, OtherChain } from '@vultisig/core-chain/Chain'
 import { getBittensorTxStatus } from './bittensor'
 import { getQbtcTxStatus } from './qbtc'
 import { getSuiTxStatus } from './sui'
