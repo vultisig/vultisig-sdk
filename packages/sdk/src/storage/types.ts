@@ -23,6 +23,12 @@ export type StoredValue<T = unknown> = {
 /**
  * Universal storage interface for vault persistence.
  * All implementations must support async operations and provide atomic writes.
+ * Custom adapters may share their backing store with host application data.
+ * The SDK reserves `vault:*`, `pending:*`, `cache:*`, `addressBook:*`,
+ * `activeVaultId`, `pushNotificationRegistrations`, `config:defaultCurrency`,
+ * and `config:defaultChains`. `clearVaults()` removes the vault-scoped keys and
+ * notification registrations but intentionally retains the two SDK preference
+ * keys. `clear()` remains an explicit adapter-wide operation.
  */
 export type Storage = {
   /**
@@ -48,7 +54,8 @@ export type Storage = {
   list(): Promise<string[]>
 
   /**
-   * Clear all stored data.
+   * Clear all data in the adapter, including non-SDK host keys.
+   * SDK vault APIs do not call this adapter-wide operation.
    * @throws StorageError if operation not permitted
    */
   clear(): Promise<void>

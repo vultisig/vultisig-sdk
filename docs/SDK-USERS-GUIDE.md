@@ -2272,7 +2272,7 @@ import { Vultisig, type VaultStorage } from '@vultisig/sdk'
 import * as fs from 'fs'
 import * as path from 'path'
 
-class CustomStorage implements Storage {
+class CustomStorage implements VaultStorage {
   constructor(private basePath: string) {}
 
   async get(key: string): Promise<string | null> {
@@ -2311,6 +2311,14 @@ await sdk.initialize()
 // ... use the SDK ...
 sdk.dispose()
 ```
+
+Custom adapters may share a backing store with application data. The SDK
+reserves `vault:*`, `pending:*`, `cache:*`, `addressBook:*`, `activeVaultId`,
+`pushNotificationRegistrations`, `config:defaultCurrency`, and
+`config:defaultChains`. `sdk.clearVaults()` removes the vault-scoped keys and
+local push registrations but intentionally retains the two SDK preference
+keys. The adapter's `clear()` method remains an explicit adapter-wide operation
+that may also remove unrelated host keys.
 
 ---
 

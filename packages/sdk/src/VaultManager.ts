@@ -402,13 +402,17 @@ export class VaultManager {
    * Clear all stored vaults
    */
   async clearVaults(): Promise<void> {
-    // Remove all vault data
+    // Remove all SDK-owned per-vault and pending-vault data.
     const keys = await this.storage.list()
-    const vaultKeys = keys.filter(k => k.startsWith('vault:'))
+    const vaultKeys = keys.filter(
+      key =>
+        key.startsWith('vault:') ||
+        key.startsWith('pending:') ||
+        key.startsWith('cache:') ||
+        key === 'pushNotificationRegistrations'
+    )
 
-    for (const key of vaultKeys) {
-      await this.storage.remove(key)
-    }
+    await Promise.all(vaultKeys.map(key => this.storage.remove(key)))
 
     // Clear active vault
     await this.storage.remove('activeVaultId')
