@@ -94,6 +94,13 @@ describe('broadcastTx transient retry dispatcher', () => {
     expect(isTransientBroadcastError(httpError(400))).toBe(false)
   })
 
+  it.each(['fetch failed', 'Failed to fetch', 'Network request failed'])(
+    'classifies common fetch transport error %s as transient',
+    message => {
+      expect(isTransientBroadcastError(new Error(message))).toBe(true)
+    },
+  )
+
   it('does not add dispatcher retry on top of Solana or EVM resolver-owned retries', async () => {
     const error = new Error('fetch failed')
     mocks.broadcastSolanaTx.mockRejectedValueOnce(error)

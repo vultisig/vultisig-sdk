@@ -19,7 +19,9 @@ const transientErrorCodes = new Set([
 
 const transientMessagePatterns = [
   /\bfetch failed\b/i,
+  /\bfailed to fetch\b/i,
   /\bnetwork error\b/i,
+  /\bnetwork request failed\b/i,
   /\brequest timed out\b/i,
   /\btimed out\b/i,
   /\babort(?:ed)?\b/i,
