@@ -13,6 +13,7 @@
 import type { TxStatusResult } from '@vultisig/sdk'
 import { Chain, isValidTxHash, Vultisig } from '@vultisig/sdk'
 
+import { recordResolution } from '../agent/broadcastJournal'
 import type { CommandContext } from '../core'
 import { InvalidInputError, TxNotFoundError, TxStatusTimeoutError } from '../core'
 import { createSpinner, isJsonOutput, outputJson, printResult } from '../lib/output'
@@ -94,6 +95,12 @@ export async function executeTxStatus(
         await sleep(sleepMs)
         result = await vault.getTxStatus({ chain: params.chain, txHash: params.txHash })
       }
+    }
+
+    if (result.status === 'success') {
+      recordResolution(params.txHash, 'confirmed')
+    } else if (result.status === 'error') {
+      recordResolution(params.txHash, 'failed')
     }
 
     spinner.succeed(`Transaction status: ${result.status}`)

@@ -361,32 +361,28 @@ describe('send — broadcast dedupe guard', () => {
     expect(realSends.count).toBe(2) // forced through
   })
 
-  it(
-    'persists across separate CLI processes and exits 9 unless --force is used',
-    () => {
-      const fixture = new URL('./fixtures/sendProcess.ts', import.meta.url)
-      const run = (amount = '1', force = false) =>
-        spawnSync(
-          'yarn',
-          ['workspace', '@vultisig/cli', 'exec', 'tsx', fixture.pathname, journalPathForTest(), amount, String(force)],
-          { cwd: new URL('../../../../../..', import.meta.url), encoding: 'utf8' }
-        )
+  it('persists across separate CLI processes and exits 9 unless --force is used', () => {
+    const fixture = new URL('./fixtures/sendProcess.ts', import.meta.url)
+    const run = (amount = '1', force = false) =>
+      spawnSync(
+        'yarn',
+        ['workspace', '@vultisig/cli', 'exec', 'tsx', fixture.pathname, journalPathForTest(), amount, String(force)],
+        { cwd: new URL('../../../../../..', import.meta.url), encoding: 'utf8' }
+      )
 
-      const first = run()
-      expect(first.status, first.stderr).toBe(0)
+    const first = run()
+    expect(first.status, first.stderr).toBe(0)
 
-      const duplicate = run()
-      expect(duplicate.status).toBe(ExitCode.DUPLICATE_BROADCAST)
-      expect(duplicate.stderr).toMatch(/Refusing to broadcast: an identical transaction/)
+    const duplicate = run()
+    expect(duplicate.status).toBe(ExitCode.DUPLICATE_BROADCAST)
+    expect(duplicate.stderr).toMatch(/Refusing to broadcast: an identical transaction/)
 
-      const distinct = run('2')
-      expect(distinct.status, distinct.stderr).toBe(0)
+    const distinct = run('2')
+    expect(distinct.status, distinct.stderr).toBe(0)
 
-      const forced = run('1', true)
-      expect(forced.status, forced.stderr).toBe(0)
-    },
-    30_000
-  )
+    const forced = run('1', true)
+    expect(forced.status, forced.stderr).toBe(0)
+  }, 30_000)
 
   it('does not block a genuinely distinct intent', async () => {
     const realSends = { count: 0 }
