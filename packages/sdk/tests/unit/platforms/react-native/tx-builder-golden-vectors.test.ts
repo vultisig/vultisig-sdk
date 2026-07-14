@@ -204,6 +204,7 @@ describe('React Native transaction builder golden vectors', () => {
         rawTxBase64: SOLANA_SEND_RAW_BASE64,
         signature: SOLANA_SIGNATURE_BASE58,
       })
+      expect(() => tx.finalize(`${SOLANA_SIG_HEX.slice(0, -1)}g`)).toThrow(/non-hex/)
     })
 
     it('dedupes the sender account for self-transfers like @solana/web3.js', async () => {
@@ -263,6 +264,9 @@ describe('React Native transaction builder golden vectors', () => {
       expect(parsed.type).toBe('eip1559')
       expect(parsed.yParity).toBe(1)
       expect(parsed.v).toBe(28n)
+      expect(() => tx.finalize(`${EVM_SIG_HEX.slice(0, -1)}g`)).toThrow(/non-hex/)
+      expect(() => tx.finalize(`${EVM_SIG_HEX.slice(0, -2)}02`)).toThrow(/recoveryId must be 0 or 1/)
+      expect(() => tx.finalize(`${EVM_SIG_HEX.slice(0, -2)}ff`)).toThrow(/recoveryId must be 0 or 1/)
     })
 
     it('pins ERC-20 transfer calldata and legacy unsigned transaction bytes', () => {
