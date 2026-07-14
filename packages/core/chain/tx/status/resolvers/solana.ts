@@ -30,7 +30,11 @@ export const getSolanaTxStatus: TxStatusResolver<OtherChain.Solana> = async ({ h
   )
   const signatureStatus = signatureStatuses?.value[0]
 
-  if (signatureStatusError || !signatureStatus) {
+  if (signatureStatusError) {
+    return { status: 'pending', isKnown: false }
+  }
+
+  if (!signatureStatus) {
     if (await isExpiredLastValidBlockHeight(client, lastValidBlockHeight)) {
       return { status: 'not_found', isKnown: false }
     }
