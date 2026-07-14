@@ -12,6 +12,7 @@
  *   - the guard is cross-process (the journal is file-backed) and cross-PATH: a
  *     `send` and an identical `agent ask` intent dedupe against the SAME journal.
  */
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -234,10 +235,14 @@ function execVault(): VaultBase {
 let home: string
 let saved: string | undefined
 
+function journalPathForTest(): string {
+  return join(home, 'broadcasts.jsonl')
+}
+
 beforeEach(() => {
   saved = process.env.VULTISIG_BROADCAST_JOURNAL_PATH
   home = mkdtempSync(join(tmpdir(), 'vultisig-sendguard-'))
-  process.env.VULTISIG_BROADCAST_JOURNAL_PATH = join(home, 'broadcasts.jsonl')
+  process.env.VULTISIG_BROADCAST_JOURNAL_PATH = journalPathForTest()
 })
 
 afterEach(() => {
@@ -355,6 +360,33 @@ describe('send — broadcast dedupe guard', () => {
     await sendTransaction(vault, { ...params, force: true })
     expect(realSends.count).toBe(2) // forced through
   })
+
+  it(
+    'persists across separate CLI processes and exits 9 unless --force is used',
+    () => {
+      const fixture = new URL('./fixtures/sendProcess.ts', import.meta.url)
+      const run = (amount = '1', force = false) =>
+        spawnSync(
+          'yarn',
+          ['workspace', '@vultisig/cli', 'exec', 'tsx', fixture.pathname, journalPathForTest(), amount, String(force)],
+          { cwd: new URL('../../../../../..', import.meta.url), encoding: 'utf8' }
+        )
+
+      const first = run()
+      expect(first.status, first.stderr).toBe(0)
+
+      const duplicate = run()
+      expect(duplicate.status).toBe(ExitCode.DUPLICATE_BROADCAST)
+      expect(duplicate.stderr).toMatch(/Refusing to broadcast: an identical transaction/)
+
+      const distinct = run('2')
+      expect(distinct.status, distinct.stderr).toBe(0)
+
+      const forced = run('1', true)
+      expect(forced.status, forced.stderr).toBe(0)
+    },
+    30_000
+  )
 
   it('does not block a genuinely distinct intent', async () => {
     const realSends = { count: 0 }

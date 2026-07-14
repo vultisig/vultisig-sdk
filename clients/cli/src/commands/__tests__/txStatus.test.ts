@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { Chain } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,11 +18,20 @@ function makeCtx(getTxStatus: ReturnType<typeof vi.fn>) {
 }
 
 describe('executeTxStatus', () => {
+  let journalDir: string
+  let savedJournalPath: string | undefined
+
   beforeEach(() => {
     // Suppress the ora spinner (stderr) so tests stay quiet and synchronous.
     setSilentMode(true)
+    savedJournalPath = process.env.VULTISIG_BROADCAST_JOURNAL_PATH
+    journalDir = mkdtempSync(join(tmpdir(), 'vultisig-tx-status-journal-'))
+    process.env.VULTISIG_BROADCAST_JOURNAL_PATH = join(journalDir, 'broadcasts.jsonl')
   })
   afterEach(() => {
+    if (savedJournalPath === undefined) delete process.env.VULTISIG_BROADCAST_JOURNAL_PATH
+    else process.env.VULTISIG_BROADCAST_JOURNAL_PATH = savedJournalPath
+    rmSync(journalDir, { recursive: true, force: true })
     setSilentMode(false)
     vi.clearAllMocks()
   })
@@ -44,6 +57,21 @@ describe('executeTxStatus', () => {
     const out = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH })
     expect(out).toEqual(result)
     expect(getTxStatus).toHaveBeenCalledTimes(1)
+    expect(readFileSync(process.env.VULTISIG_BROADCAST_JOURNAL_PATH!, 'utf8')).toContain(
+      `"t":"resolved","hash":"${EVM_HASH}","status":"confirmed"`
+    )
+  })
+
+  it('records a definitive on-chain error as a failed broadcast resolution', async () => {
+    const result = { status: 'error' as const, receipt: undefined }
+    const getTxStatus = vi.fn().mockResolvedValue(result)
+
+    await expect(executeTxStatus(makeCtx(getTxStatus), { chain: Chain.Ethereum, txHash: EVM_HASH })).resolves.toEqual(
+      result
+    )
+    expect(readFileSync(process.env.VULTISIG_BROADCAST_JOURNAL_PATH!, 'utf8')).toContain(
+      `"t":"resolved","hash":"${EVM_HASH}","status":"failed"`
+    )
   })
 
   it('throws TxNotFoundError (never polls forever) for a well-formed hash the node has never seen', async () => {
