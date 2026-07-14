@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf'
-import { fromChainAmount } from '@vultisig/core-chain/amount/fromChainAmount'
+import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { DEFAULT_NATIVE_SWAP_SLIPPAGE_TOLERANCE_BPS } from '@vultisig/core-chain/swap/native/api/getNativeSwapQuote'
@@ -83,7 +83,7 @@ export const nativeSwapQuoteToSwapPayload = ({ quote, fromCoin, amount, toCoin }
       vaultAddress: quote.inbound_address ?? fromCoin.address,
       routerAddress: quote.router,
       fromAmount: amount.toString(),
-      toAmountDecimal: fromChainAmount(quote.expected_amount_out, toDecimals).toFixed(toDecimals),
+      toAmountDecimal: fromChainAmountDisplay(quote.expected_amount_out, toDecimals),
       expirationTime: BigInt(quote.expiry),
       streamingInterval,
       streamingQuantity,

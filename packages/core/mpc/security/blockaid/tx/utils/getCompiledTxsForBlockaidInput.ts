@@ -6,10 +6,12 @@ import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPubli
 import { match } from '@vultisig/lib-utils/match'
 import { WalletCore } from '@trustwallet/wallet-core'
 
+import { KeysignSignature } from '../../../../keysign/KeysignSignature'
 import { getEncodedSigningInputs } from '../../../../keysign/signingInputs'
 import { getKeysignTwPublicKey } from '../../../../keysign/tw/getKeysignTwPublicKey'
 import { getKeysignChain } from '../../../../keysign/utils/getKeysignChain'
 import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+import { compileSignBitcoinTx } from '../../../../tx/compile/compileSignBitcoinTx'
 import { getPreSigningHashes } from '../../../../tx/preSigningHashes'
 
 type Input = {
@@ -29,18 +31,32 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
     walletCore,
   })
 
+  if (payload.signData.case === 'signBitcoin') {
+    const privateKey = walletCore.PrivateKey.create()
+    const signatures = getPreSigningHashes({
+      walletCore,
+      txInputData: new Uint8Array(),
+      chain,
+      keysignPayload: payload,
+    }).reduce<Record<string, KeysignSignature>>((result, msg) => {
+      const msgHex = Buffer.from(msg).toString('hex')
+      result[msgHex] = {
+        msg: msgHex,
+        r: '',
+        s: '',
+        der_signature: Buffer.from(privateKey.signAsDER(msg)).toString('hex'),
+      }
+      return result
+    }, {})
+
+    return [compileSignBitcoinTx(payload.signData.value, signatures, publicKey)]
+  }
+
   const inputs = await getEncodedSigningInputs({
     keysignPayload: payload,
     walletCore,
     publicKey,
   })
-
-  // SignBitcoin (PSBT) flows use custom sighash/compilation that WalletCore
-  // doesn't understand. Skip Blockaid simulation for PSBT transactions.
-  // TODO: implement Blockaid validation for PSBT flows using compileSignBitcoinTx
-  if (payload.signData.case === 'signBitcoin') {
-    return []
-  }
 
   return inputs.map(txInputData => {
     const preHashes = getPreSigningHashes({

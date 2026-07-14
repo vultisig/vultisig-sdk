@@ -1,11 +1,13 @@
 /**
  * Transaction Commands - thin wrapper around vault.send()
  */
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
 
@@ -37,6 +39,30 @@ export async function sendTransaction(
   vault: VaultBase,
   params: SendParams
 ): Promise<TransactionResult | SendDryRunResult> {
+  // Fail closed up-front: without --yes this flow ends in an interactive
+  // confirmation a non-interactive session can never answer — refuse before
+  // the preview writes to stdout (or any network work happens).
+  if (!params.dryRun && !params.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Transaction requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview without signing.'
+    )
+  }
+
+  const rippleDestination =
+    params.chain === Chain.Ripple ? normalizeRippleDestination(params.to) : { address: params.to }
+  const to = rippleDestination.address
+  if (
+    params.destinationTag !== undefined &&
+    rippleDestination.destinationTag !== undefined &&
+    params.destinationTag !== rippleDestination.destinationTag
+  ) {
+    throw new Error(
+      `Conflicting XRP destination tags: --destination-tag=${params.destinationTag} does not match the tag embedded in the X-address (${rippleDestination.destinationTag})`
+    )
+  }
+  const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -46,6 +72,7 @@ export async function sendTransaction(
     amount: params.amount,
     symbol: params.tokenId,
     memo: params.memo,
+    destinationTag,
     dryRun: true,
   })
 
@@ -60,10 +87,11 @@ export async function sendTransaction(
     const result: SendDryRunResult = {
       dryRun: true,
       chain: params.chain,
-      to: params.to,
+      to,
       amount: params.amount,
       symbol: balance.symbol,
       balance: balance.formattedAmount,
+      destinationTag,
     }
     if (hasInsufficientBalance) {
       result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
@@ -75,6 +103,7 @@ export async function sendTransaction(
       info(`  Chain:   ${result.chain}`)
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
+      if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
       info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)
@@ -93,14 +122,21 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
-    displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
+    displayTransactionPreview(
+      address,
+      to,
+      dryResult.total,
+      balance.symbol,
+      params.chain,
+      params.memo,
+      destinationTag,
+      gas
+    )
   }
 
-  // 3. Confirm (required in all output modes)
+  // 3. Confirm (required in all output modes; the non-interactive case was
+  // refused up-front, before the preview)
   if (!params.yes) {
-    if (isNonInteractive()) {
-      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
-    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')
@@ -136,6 +172,7 @@ export async function sendTransaction(
         amount: params.amount,
         symbol: params.tokenId,
         memo: params.memo,
+        destinationTag,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

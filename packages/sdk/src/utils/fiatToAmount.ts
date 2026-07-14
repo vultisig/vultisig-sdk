@@ -7,6 +7,8 @@ import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import { fiatCurrencies, type FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
+import { AmountConvertError, fiatToCrypto } from './convertAmount'
+
 /** Thrown when a fiat -> token amount conversion fails. Message is LLM-readable. */
 export class FiatToAmountError extends Error {
   override readonly name = 'FiatToAmountError'
@@ -37,21 +39,6 @@ const parseFiatValue = (v: number | string): number => {
     throw new FiatToAmountError(`Invalid fiat value "${v}" — must be a positive number.`)
   }
   return n
-}
-
-// Prefer value.toString() — JS picks the shortest round-trip representation, so clean
-// values like 0.05 stay "0.05" instead of surfacing float artefacts ("0.050000000000000003").
-// Fall back to toFixed only to expand scientific notation (e.g. 1e-10). Then cap fractional
-// digits and trim trailing zeros.
-const formatDecimalString = (value: number, decimals: number): string => {
-  if (!Number.isFinite(value)) {
-    throw new FiatToAmountError(`Non-finite amount computed: ${value}`)
-  }
-  const str = /[eE]/.test(value.toString()) ? value.toFixed(decimals) : value.toString()
-  if (!str.includes('.')) return str
-  const [whole, fraction] = str.split('.')
-  const trimmed = fraction.slice(0, decimals).replace(/0+$/, '')
-  return trimmed === '' ? whole : `${whole}.${trimmed}`
 }
 
 /**
@@ -152,6 +139,12 @@ export const fiatToAmount = async (params: FiatToAmountParams): Promise<string> 
     )
   }
 
-  const amount = value / price
-  return formatDecimalString(amount, decimals)
+  try {
+    return fiatToCrypto({ fiatValue: value, price, decimals })
+  } catch (error) {
+    if (error instanceof AmountConvertError) {
+      throw new FiatToAmountError(error.message)
+    }
+    throw error
+  }
 }

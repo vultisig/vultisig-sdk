@@ -647,18 +647,61 @@ JSON output for two-step create:
 
 Send a single natural-language message and get a structured response. Designed for AI-to-AI communication.
 
-**Password resolution:** `agent ask` unlocks the vault from the keyring/env chain before prompting, so a headless operator never has to put the password on argv. Set it up **once** — store it in the OS keyring with `vsig auth setup` (recommended), or export `VAULT_PASSWORD` (or `VAULT_PASSWORDS="VaultName:pw ..."` for multiple vaults) — then run `agent ask` with **no** `--password`. The `--password` flag still works as a fallback but is discouraged: it exposes the secret to `ps` and shell history, and triggers a stderr warning.
+#### Headless Password and Credential Chain
+
+`agent ask` resolves the vault password before prompting, so automation does not need to put a secret on argv. The lookup order is:
+
+1. In-memory cache (an explicit `--password` or a password already resolved in this process)
+2. Stored credentials from `vsig auth setup` (OS keyring, or the encrypted-file backend)
+3. `VAULT_PASSWORDS` by vault name, then by vault ID
+4. `VAULT_PASSWORD`, then its namespaced alias `VULTISIG_PASSWORD`
+5. Interactive prompt, or an error in non-interactive mode
+
+The five password-related environment variables have distinct roles:
+
+| Variable                          | Purpose                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VAULT_PASSWORD`                  | Single fallback vault/server-signing password. It is also the server password required by `auth setup --non-interactive`.                                     |
+| `VULTISIG_PASSWORD`               | Namespaced alias for the single-password fallback during normal vault unlock. `auth setup` still requires `VAULT_PASSWORD`.                                   |
+| `VAULT_PASSWORDS`                 | Per-vault passwords keyed by vault name or ID. Use the JSON form for names containing spaces.                                                                 |
+| `VAULT_DECRYPT_PASSWORD`          | Password for decrypting an encrypted `.vult` backup during `auth setup`; it is not part of the normal signing-password lookup chain.                          |
+| `VULTISIG_CREDENTIALS_PASSPHRASE` | Passphrase for the AES-256-GCM `credentials.enc` backend used instead of an OS keyring in Docker/CI. It must be set again when later commands read that file. |
+
+`VAULT_PASSWORDS` accepts a JSON object (recommended) or the legacy whitespace-separated form:
 
 ```bash
-# Recommended: store the password once, then no --password on each call
-vsig auth setup                 # stores in the OS keyring
-# or: export VAULT_PASSWORD="..."
+# Unambiguous: supports spaces and other punctuation in vault names
+export VAULT_PASSWORDS='{"Vultisig Cluster #1":"pw","vault-id":"other-pw"}'
 
-# Simple query (password resolved from keyring/env)
+# Backward-compatible for space-free keys; passwords may contain colons
+export VAULT_PASSWORDS='MyVault:pw vault-id:other:pw'
+```
+
+Vault-ID keys are the most deterministic choice. If a JSON-looking value is malformed, the CLI warns on stderr and falls back to legacy parsing.
+
+For a keychain-less container, provide all setup secrets once, persist the config directory, then remove the vault passwords from the environment. Keep the credentials-file passphrase available to later CLI processes:
+
+```bash
+export VULTISIG_CONFIG_DIR=/var/lib/vultisig
+export VAULT_DECRYPT_PASSWORD='backup-file-password'
+export VAULT_PASSWORD='server-signing-password'
+export VULTISIG_CREDENTIALS_PASSPHRASE='credentials-file-passphrase'
+
+vsig auth setup --non-interactive --vault-file /run/secrets/vault.vult
+
+# Setup stored both passwords in $VULTISIG_CONFIG_DIR/credentials.enc (mode 0600).
+unset VAULT_DECRYPT_PASSWORD VAULT_PASSWORD
+vsig auth status
+
+# No vault password on argv or in the environment. --yes authorizes signing/broadcast.
+vsig agent ask 'Send 0.01 ETH to 0x742d...' --yes
+```
+
+Omit `VAULT_DECRYPT_PASSWORD` when the `.vult` file is not encrypted. Mount `VULTISIG_CONFIG_DIR` persistently and provide the same `VULTISIG_CREDENTIALS_PASSPHRASE` to each new container. The `--password` flag remains available as a fallback, but it exposes the secret to `ps` and shell history and emits a stderr warning.
+
+```bash
+# Simple query (password resolved from stored credentials or environment)
 vultisig agent ask "What is my ETH balance?"
-
-# Execute a transaction
-vultisig agent ask "Send 0.01 ETH to 0x742d..."
 
 # Continue a conversation (multi-turn)
 vultisig agent ask "Now swap it to USDC" --session abc123
@@ -855,7 +898,7 @@ VULTISIG_VAULT=MyWallet
 VAULT_PASSWORD=mypassword
 
 # Multiple vault passwords
-VAULT_PASSWORDS="Vault1:pass1 Vault2:pass2"
+VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 
 # Suppress spinners and info messages
 VULTISIG_SILENT=1
@@ -1100,7 +1143,7 @@ VULTISIG_NO_UPDATE_CHECK=1
 VAULT_PASSWORD=mypassword
 
 # Multiple vault passwords
-VAULT_PASSWORDS="Vault1:pass1 Vault2:pass2"
+VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 ```
 
 ### Config Directory
@@ -1109,9 +1152,10 @@ Configuration is stored in `~/.vultisig/`:
 
 ```
 ~/.vultisig/
-├── config.json      # User preferences
-├── vaults/          # Vault data
-├── cache/           # Version checks, etc.
+├── config.json       # User preferences and registered vaults
+├── credentials.enc   # Optional encrypted-file credential backend
+├── vaults/           # Vault data
+├── cache/            # Version checks, etc.
 └── address-book.json
 ```
 
@@ -1134,24 +1178,62 @@ Configuration is stored in `~/.vultisig/`:
 
 ## Exit Codes
 
-| Code | Meaning                                                                            |
-| ---- | ---------------------------------------------------------------------------------- |
-| 0    | Success                                                                            |
-| 1    | Usage error (bad arguments, unknown command)                                       |
-| 2    | Authentication required                                                            |
-| 3    | Network error (retryable)                                                          |
-| 4    | Invalid input (bad chain, address, amount)                                         |
-| 5    | Resource not found (token, route)                                                  |
-| 6    | External service error (retryable)                                                 |
-| 7    | Unknown/unexpected error                                                           |
-| 8    | Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry |
-| 9    | Duplicate broadcast refused (nothing sent) — retry with --force to override        |
-| 10   | agent ask: a fund-safety guardrail blocked the requested action                    |
-| 11   | agent ask: the model refused or asked a clarifying question (no action taken)      |
+| Code | Meaning                                                                                                                |
+| ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                                                |
+| 1    | Usage error (bad arguments, unknown command)                                                                           |
+| 2    | Authentication required                                                                                                |
+| 3    | Network error (retryable)                                                                                              |
+| 4    | Invalid input (bad chain, address, amount)                                                                             |
+| 5    | Resource not found (token, route)                                                                                      |
+| 6    | External service error (retryable)                                                                                     |
+| 7    | Unknown/unexpected error                                                                                               |
+| 8    | Broadcast succeeded but post-broadcast report failed — hash is valid, do NOT retry                                     |
+| 9    | Duplicate broadcast refused (nothing sent) — retry with --force to override                                            |
+| 10   | agent ask: a fund-safety guardrail blocked the requested action                                                        |
+| 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
+| 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run
 > `vultisig --help` for the same list.
+
+### Partial failures (`portfolio`)
+
+The `portfolio` command fetches every chain independently, so one unreachable chain no longer
+fails the whole command. The `-o json` envelope always carries a `failures` array (empty when
+everything succeeded):
+
+```jsonc
+{
+  "success": true,
+  "v": 1,
+  "data": {
+    "portfolio": { "totalValue": { ... }, "chainBalances": [ /* only the chains that loaded */ ] },
+    "currency": "usd",
+    "failures": [
+      { "chain": "Bitcoin", "stage": "balance", "error": "ECONNREFUSED btc-rpc" },
+      { "chain": "Ethereum", "stage": "value",   "error": "pricing service unavailable" }
+    ]
+  }
+}
+```
+
+- `stage: "balance"` — the balance fetch failed; the chain is omitted from `chainBalances`.
+- `stage: "value"` — the balance loaded but its fiat value did not; the chain still appears in
+  `chainBalances` (without a `value`) and is also listed here.
+- `error` is a concise single-line message — never a stack trace or filesystem path.
+
+**Partial-success exit contract:** if _some_ chains loaded, the command exits **0** and reports
+the rest under `failures`. Machine consumers should branch on `data.failures.length`, not `$?`.
+If _every_ chain fails to fetch a balance, the command exits **3** (network error, retryable).
+On the human-readable (table) output, failures are printed as `Warning:` lines below the table.
+
+> **Note on `totalValue`:** `failures` describes the per-chain _breakdown_ pass (`chainBalances`).
+> `portfolio.totalValue` is computed by an independent best-effort aggregate that includes token
+> values (not just native) and silently omits any chain/token it could not price. It is therefore
+> not guaranteed to be consistent with `chainBalances`/`failures` — treat it as an approximate
+> total, and rely on `failures` (not the total) to detect which chains had problems.
 
 ## Troubleshooting
 

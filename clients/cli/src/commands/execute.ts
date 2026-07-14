@@ -12,6 +12,7 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import {
   createSpinner,
   info,
@@ -124,6 +125,16 @@ async function executeContractTransaction(
   msg: object,
   funds: ParsedFund[]
 ): Promise<TransactionResult> {
+  // Fail closed up-front: without --yes this flow ends in an interactive
+  // confirmation a non-interactive session can never answer — refuse before the
+  // contract preview writes to stdout (or any network work happens).
+  if (!params.dryRun && !params.yes && isNonInteractive()) {
+    throw new ConfirmationRequiredError(
+      'Transaction requires confirmation.',
+      'Pass --yes to confirm, or --dry-run to preview without signing.'
+    )
+  }
+
   // 1. Prepare transaction
   const prepareSpinner = createSpinner('Preparing contract execution...')
 
@@ -186,11 +197,9 @@ async function executeContractTransaction(
     info('━'.repeat(50))
   }
 
-  // 3. Confirm with user (required in all output modes)
+  // 3. Confirm (required in all output modes; the non-interactive case was
+  // refused up-front, before the preview)
   if (!params.yes) {
-    if (isNonInteractive()) {
-      throw new Error('Transaction requires confirmation. Use --yes to skip, or --dry-run to preview.')
-    }
     const confirmed = await confirmTransaction()
     if (!confirmed) {
       warn('Transaction cancelled')

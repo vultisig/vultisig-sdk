@@ -1,5 +1,163 @@
 # @vultisig/sdk
 
+## 2.19.19
+
+### Patch Changes
+
+- [#1190](https://github.com/vultisig/vultisig-sdk/pull/1190) [`4fcce4d`](https://github.com/vultisig/vultisig-sdk/commit/4fcce4d4b9bc40efdacd5d1754f3b2adb7a42985) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Support signing dApp-supplied XRPL transactions via the new `SignRipple` keysign payload.
+
+  - `getRippleSigningInputs` signs `signData.signRipple.rawJson` verbatim, so transaction types the keysign payload cannot otherwise express — offers (DEX swaps), cross-currency payments, trust lines — round-trip. Every signer rebuilds its input from the same JSON, so each party signs identical bytes. Native XRP sends and issued-currency `TrustSet` are unchanged.
+  - Fail closed on rawJson `Payment` transactions: `Account`, `Destination` and `Amount` must match the reviewed keysign metadata (`coin.address`, `toAddress`, `toAmount`), so the review surface and the signed bytes cannot diverge even for same-account payments. Non-Payment types still pass on the `Account` check alone.
+  - `getRippleChainSpecific` now skips the base-reserve destination check when the payload has no `toAddress` (a dApp offer has none); fee and sequence come from the sender account and are unaffected.
+  - Regenerated the keysign protos for the `SignRipple` variant added in commondata.
+
+## 2.19.17
+
+### Patch Changes
+
+- [#1039](https://github.com/vultisig/vultisig-sdk/pull/1039) [`44b2903`](https://github.com/vultisig/vultisig-sdk/commit/44b2903a4dd6ccc935ebfdecb8be16f4f5996563) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor the configured message relay URL for secure vault transaction and raw-byte signing, including signing QR payloads.
+
+- [#972](https://github.com/vultisig/vultisig-sdk/pull/972) [`13c3b65`](https://github.com/vultisig/vultisig-sdk/commit/13c3b654d0bbdec698d385b72cea50bf428161b3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed before broadcasting native swap payloads that do not carry a positive quote expiration, while preserving secured-asset withdrawal deposits with a shared classifier.
+
+## 2.19.16
+
+### Patch Changes
+
+- [#1175](https://github.com/vultisig/vultisig-sdk/pull/1175) [`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Fix 1inch swap quotes to native ETH (and other EVM chains' native assets) failing route resolution.
+
+  `findSwapQuote`'s 1inch fetcher passed `from.id ?? from.ticker` / `to.id ?? to.ticker` into
+  `getOneInchSwapQuote`, so a native asset (no `.id`) fell back to its ticker string (e.g. `"ETH"`).
+  `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to detect the native asset and
+  substitute 1inch's `0xEeee...` sentinel address (EIP-7528) — a truthy ticker string defeated that
+  check, so 1inch received `dst=ETH` (or `src=ETH`) instead of the sentinel and rejected the request
+  with `dst must be an Ethereum address`. This silently removed 1inch as a route for any swap
+  involving a chain's native asset (e.g. USDC→ETH), even though 1inch could otherwise fill it.
+
+  Now `findSwapQuote` forwards the coin's raw `.id` (`undefined` for the native asset) so
+  `getOneInchSwapQuote`'s existing sentinel-mapping logic works as designed. ERC-20↔ERC-20 quotes
+  are unaffected; other providers (Kyber, LiFi, SwapKit) construct their own requests and are not
+  touched by this change.
+
+## 2.19.15
+
+### Patch Changes
+
+- [#1169](https://github.com/vultisig/vultisig-sdk/pull/1169) [`1ef64a3`](https://github.com/vultisig/vultisig-sdk/commit/1ef64a39f856d9f1d412df8f5e69c66f7130d8c7) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Surface XRP issued-currency (trust-line) token balances.
+
+  - `getRippleAccountLines` reads an account's trust lines, following `account_lines` pagination so a large set is not truncated.
+  - `getRippleCoinBalance` now dispatches on the coin id: native XRP still returns the reserve-adjusted spendable balance, while an issued-currency coin returns that trust line's balance. Previously the resolver ignored the id and returned the XRP balance for _every_ Ripple coin, so a token row displayed the account's XRP balance.
+  - `findRippleCoins` discovers held trust lines for the coin finder, so XRPL tokens appear in the asset list. Lines with a negative balance (the account is the issuer and owes the counterparty) and zero-balance lines are excluded.
+  - `rippleKnownIssuedTokens` (RLUSD) is now wired into `knownTokens`, so it is selectable before a trust line exists.
+
+## 2.19.14
+
+### Patch Changes
+
+- [#1115](https://github.com/vultisig/vultisig-sdk/pull/1115) [`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expand large scientific-notation numeric amounts before base-unit parsing.
+
+- [#1034](https://github.com/vultisig/vultisig-sdk/pull/1034) [`6643df7`](https://github.com/vultisig/vultisig-sdk/commit/6643df76cf2ff2ffe08ca4985bcaf46289714e4f) Thanks [@neavra](https://github.com/neavra)! - Silence 7z-wasm banner/progress output on stdout during QR payload compression/decompression. The chatter polluted the machine-output channel for CLI consumers (e.g. corrupting piped/JSON output on `join secure`); errors still surface via stderr.
+
+## 2.19.13
+
+### Patch Changes
+
+- [#1091](https://github.com/vultisig/vultisig-sdk/pull/1091) [`56b8bce`](https://github.com/vultisig/vultisig-sdk/commit/56b8bce9ff60e6feaa5381327a23fe56d4ad5a21) Thanks [@ahdzib-maya](https://github.com/ahdzib-maya)! - fix(sdk): notify registered vault devices when keysign QR payloads are ready.
+
+## 2.19.12
+
+### Patch Changes
+
+- [#1104](https://github.com/vultisig/vultisig-sdk/pull/1104) [`e450756`](https://github.com/vultisig/vultisig-sdk/commit/e4507569a92a24ed926c2fd6876b610ae807716b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Assert every Solana swap instruction targets an allow-listed program before
+  handing the transaction to MPC signing (audit SOL-01, MEDIUM). Both Jupiter
+  integration points — `getJupiterSwapQuote` (recipes/general-swap path) and
+  `buildJupiterSwapTx` (SDK code-as-action tool) — deserialized a proxy-supplied
+  `VersionedTransaction` and forwarded it to signing with no check that each
+  instruction's `programIdIndex` resolves to an expected program. A compromised
+  Jupiter proxy could otherwise splice in an arbitrary instruction (e.g. a
+  drain transfer) that the user would effectively blind-sign.
+
+  Add `assertSafeSolanaSwapInstructions` (`@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions`):
+  resolves every top-level instruction's program against static account keys
+  and, for v0 messages, address-lookup-table-resolved keys, and throws
+  `SOL_SWAP_UNEXPECTED_PROGRAM` on the first unrecognized one. The allow-list
+  (Jupiter v6 router, Compute Budget, System, SPL Token, Token-2022,
+  Associated-Token-Account) was captured empirically by decoding real
+  `/swap` responses from Jupiter's public API across a single-hop route, a
+  3-hop route, a Token-2022 output mint, and a platform-fee-included swap.
+  Wired into both Jupiter call sites, guarding the raw provider response
+  before any local mutation (fee-ATA prepend) and regardless of whether an
+  affiliate fee is charged on the swap.
+
+## 2.19.11
+
+### Patch Changes
+
+- [#1086](https://github.com/vultisig/vultisig-sdk/pull/1086) [`3bf18a1`](https://github.com/vultisig/vultisig-sdk/commit/3bf18a18606fd1b45d50abb562eb6c3011182d48) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fail closed when TON wallet-info RPC calls return transport or body-level errors instead of defaulting to uninitialized wallet state.
+
+## 2.19.10
+
+### Patch Changes
+
+- [#1105](https://github.com/vultisig/vultisig-sdk/pull/1105) [`280956f`](https://github.com/vultisig/vultisig-sdk/commit/280956f1743564ea271a03c4735f70151b63f161) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): keep erc20 approve for cowswap orders until permit path is wired (agg-03)
+
+  The EIP-2612 permit path (buildEip2612Permit) has zero callers and no permit digest
+  flows to the MPC keysign payload. Skipping the approve without a wired permit leaves
+  cowswap permit-token orders with neither approve nor permit, causing silent swap
+  failures. Keep the normal approve path until the permit flow is complete.
+
+- [#1018](https://github.com/vultisig/vultisig-sdk/pull/1018) [`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): accept returned quote provider ids in `findSwapQuote.excludeProviders`
+
+  `findSwapQuote.excludeProviders` now accepts both display names (`CowSwap`, `KyberSwap`, `LiFi`) and returned quote provider ids (`cowswap`, `kyber`, `li.fi`) for general providers. Unknown exclude tokens now fail closed instead of silently leaving the provider eligible.
+
+- [#1113](https://github.com/vultisig/vultisig-sdk/pull/1113) [`0e3f86d`](https://github.com/vultisig/vultisig-sdk/commit/0e3f86db82ed086b1e200a6f83434a638f593c17) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(vault): route the send-path amount parser through `toChainAmount` for swap-path parity (gbbo9)
+
+  `VaultBase.parseAmount` (the `send`/`transfer` amount converter) used `toBaseUnits` (pure string arithmetic, truncates excess fraction digits, rejects scientific notation), while the swap path (`validateHumanSwapAmount`, `SwapService`) used `toChainAmount` (viem `parseUnits`). Both paths now share `toChainAmount` for consistent semantics.
+
+  `toChainAmount` now truncates (floors) excess fractional digits instead of rounding, so the signed amount can never exceed the stated human amount — the safe direction. Previously `parseUnits` rounded half-up, which at `decimals=0` (Cardano native assets, low-decimal tokens) caused a fractional input like `0.6` to sign `1` whole token. Scientific-notation amounts (e.g. `1e18`) are now accepted on the send path.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#974](https://github.com/vultisig/vultisig-sdk/pull/974) [`b37e726`](https://github.com/vultisig/vultisig-sdk/commit/b37e7264db3291adca1cb366f1311446d6add439) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Disable the incomplete ServerManager reshare stub so it no longer returns stale vaults as successful reshares.
+
+- [#1102](https://github.com/vultisig/vultisig-sdk/pull/1102) [`1b2636b`](https://github.com/vultisig/vultisig-sdk/commit/1b2636b535736a711fc537a87d2f51090fe6342d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(solana): standardize Jupiter tools-path treasury address + slippage default on the shared cross-platform spec (SOL-03, SOL-04)
+
+- [#1112](https://github.com/vultisig/vultisig-sdk/pull/1112) [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): resolve THORChain limit-swap destination chains via the swap-eligible chain set, not the LP-position map (THOR-04) — `getSupportedThorchainAssetChain` (`limitSwapMemo.ts`) resolved a THORChain asset-prefix (e.g. `SOL`, `NOBLE`) to a `Chain` via `lpChainMap`, a map scoped to the wallet's LP-position-display feature (`chains/cosmos/thor/lp/lpChainMap.ts`), not swap eligibility. Since neither Solana nor Noble has a THORChain LP pool, both were missing from that map, so a limit swap (`LIM=` memo) targeting either failed closed with "unsupported THORChain asset prefix" even though both are valid THORChain market-swap destinations (per THORChain's memo docs, `=` vs `=<` only changes execution behavior — price/queue/TTL — not the destination-chain universe). Fixed by unioning `lpChainMap` with `thorChainSwapEnabledChains` (`swap/native/NativeSwapChain.ts`, now exported) — the same THORChain-specific chain list regular market swaps already use to gate eligibility — rather than replacing `lpChainMap` outright or switching to the broader `nativeSwapChainIds`, which also carries MayaChain-only entries (e.g. `Chain.MayaChain`, `Chain.Cardano`) that aren't valid THORChain limit-swap destinations.
+
+- [#1097](https://github.com/vultisig/vultisig-sdk/pull/1097) [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(swap): exact bigint decimal conversion for the displayed swap output (`toAmountDecimal`) — the float64 `fromChainAmount(...).toFixed()` path silently drifted above 2^53 raw units (e.g. `999999999999999999999999` @18dp rendered as `1000000.000000000000000000`), so the amount the user confirmed could differ from the quoted one. Non-integer provider amount strings keep the legacy fallback instead of throwing mid-build.
+
+- [#1089](https://github.com/vultisig/vultisig-sdk/pull/1089) [`fc595a1`](https://github.com/vultisig/vultisig-sdk/commit/fc595a17cb4901af1dfeac2521b93bb75823068f) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(utxo): per-chain min-fee floor + canonical zcash zip-317 action count (UTXO-03/04)
+
+  `buildUtxoSendTx` only enforced a minimum fee for Zcash; every other UTXO chain
+  trusted the caller-supplied `feeRate` with no chain-aware floor. Dogecoin's
+  real min-relay-fee is ~100x Bitcoin's, so a BTC-reasonable rate could silently
+  underpay DOGE below relay and get the tx stuck. Added a per-chain minimum
+  relay fee rate (sourced from each chain's own Core `DEFAULT_MIN_RELAY_TX_FEE`)
+  that only raises a too-low `feeRate`, never lowers a legitimate one.
+
+  Also swapped the builder's local, input-only `zcashConventionalFee` for the
+  canonical `getZcashConventionalFee` (ZIP-317 `max(inputActions,
+outputActions)`), which now accounts for OUTPUT bytes (change output + any
+  OP_RETURN memo) instead of only counting inputs — a large-memo send was
+  previously under-counting ZIP-317 actions and risking relay rejection.
+
+- [#1110](https://github.com/vultisig/vultisig-sdk/pull/1110) [`776c539`](https://github.com/vultisig/vultisig-sdk/commit/776c5398764314f140f18ab4f86a1801fe9fdfe6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(ripple): verify on-ledger inclusion for ambiguous XRP submit results instead of a blind throw
+
+  `submitXrpTx` (the app's only XRP broadcast call site) threw a generic error for every `tec*` engine result from XRPL's `submit`, even though `tec*` means the tx was applied on-ledger (fee + sequence consumed) and the requested operation itself failed. A caller that treated that as "never broadcast" and retried with the same sequence risked a `tefPAST_SEQ` or a fund-loss race on a fee change.
+
+  `submitXrpTx` now looks up `tec*` transactions by hash before deciding, and throws a typed `XrpSubmitRejectedError` with `.reason` for confirmed on-ledger failures, pending validation, and unconfirmed lookups. It also classifies `tef*` and non-queued `ter*` submit results conservatively instead of reporting them as safe local/preflight rejections. Only `tem*`/`tel*` local preflight failures are now reported as `'not-on-ledger'`. Also fixes the stale doc comment claiming the helper is unused by app code.
+
 ## 2.19.9
 
 ### Patch Changes

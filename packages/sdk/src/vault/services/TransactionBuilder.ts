@@ -63,6 +63,7 @@ export class TransactionBuilder {
    * @param params.receiver - The recipient's address
    * @param params.amount - Amount to send in base units (as bigint)
    * @param params.memo - Optional transaction memo (for chains that support it)
+   * @param params.destinationTag - Optional XRP DestinationTag, independent from memo
    * @param params.feeSettings - Optional custom fee settings (FeeSettings - chain-specific)
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
@@ -87,6 +88,7 @@ export class TransactionBuilder {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
@@ -131,6 +133,7 @@ export class TransactionBuilder {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<bigint> {
     try {
@@ -168,6 +171,7 @@ export class TransactionBuilder {
         receiver: params.receiver,
         amount: params.amount,
         memo: params.memo,
+        destinationTag: params.destinationTag,
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,

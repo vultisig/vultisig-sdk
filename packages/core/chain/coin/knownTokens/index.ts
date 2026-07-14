@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rippleKnownIssuedTokens } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { makeRecord } from '@vultisig/lib-utils/record/makeRecord'
 import { omit } from '@vultisig/lib-utils/record/omit'
 
@@ -796,6 +797,7 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       priceProviderId: 'usd-coin',
     },
   },
+  [Chain.Ripple]: Object.fromEntries(rippleKnownIssuedTokens.map(token => [token.id, omit(token, 'id', 'chain')])),
   ...knownCosmosTokens,
 }
 
