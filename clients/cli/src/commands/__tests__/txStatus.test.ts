@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -132,6 +132,21 @@ describe('executeTxStatus', () => {
     const out = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, noWait: true })
     expect(out.status).toBe('not_found')
     expect(getTxStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT record a resolution for a non-terminal status — a not_found tx stays guarded', async () => {
+    // Fund-safety regression guard: only `success`/`error` are terminal on-chain
+    // outcomes. `not_found` (and `pending`) must never write a `resolved` record —
+    // `failed`/`error` resolutions unblock the dedupe guard (broadcastJournal.ts
+    // isRetryableResolution), so mislabeling a still-in-flight tx as resolved would
+    // re-open the double-spend window. `--no-wait` is the one path that reaches the
+    // record block with a non-terminal status; assert the journal stays unwritten.
+    const getTxStatus = vi.fn().mockResolvedValue({ status: 'not_found', isKnown: false })
+    const ctx = makeCtx(getTxStatus)
+
+    await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: EVM_HASH, noWait: true })
+
+    expect(existsSync(process.env.VULTISIG_BROADCAST_JOURNAL_PATH!)).toBe(false)
   })
 
   it('caps the poll sleep at the remaining budget instead of oversleeping a full interval', async () => {
