@@ -636,6 +636,11 @@
       "import": "./dist/keysign/utils/resolvePolkadotToAddress.js",
       "default": "./dist/keysign/utils/resolvePolkadotToAddress.js"
     },
+    "./keysign/utils/rippleDestinationTag": {
+      "types": "./dist/keysign/utils/rippleDestinationTag.d.ts",
+      "import": "./dist/keysign/utils/rippleDestinationTag.js",
+      "default": "./dist/keysign/utils/rippleDestinationTag.js"
+    },
     "./keysign/utxo/getKeysignUtxoInfo": {
       "types": "./dist/keysign/utxo/getKeysignUtxoInfo.d.ts",
       "import": "./dist/keysign/utxo/getKeysignUtxoInfo.js",
