@@ -56,16 +56,19 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
     }
   } while (cursor)
 
+  const rawCoinObjects = rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin))
+
   // Bound the embedded coin set to what the send actually needs (sdk#1132,
   // iOS #4734 parity): embedding every owned object makes a dusty wallet's
   // keysign payload too large to relay (co-signer poll 404 / "data expired")
-  // and drags unrelated coin types (memecoins/LSTs) into the payload. The
-  // signing-input resolver performs the same deterministic selection on this
-  // set, so the bounded output is exactly the inputs the signer consumes —
-  // plus, for a token send, the largest few native objects as gas candidates
-  // so a covering gas object survives the refine step's re-estimated budget.
+  // and drags unrelated coin types (memecoins/LSTs) into the payload. This
+  // baseline selection (sized against the static `suiGasBudget` default) only
+  // needs to be good enough to build a valid dry-run tx below — refine
+  // re-selects from the full `rawCoinObjects` set against the REAL gas
+  // budget once it's known, so the payload coins that actually ship lock in
+  // exactly once, after the real cost is known (sdk#1216 follow-up).
   const coins = selectSuiPayloadCoins({
-    coins: rawCoins.map((coin: CoinStruct) => create(SuiCoinSchema, coin)),
+    coins: rawCoinObjects,
     contractAddress: coin.id ?? '',
     amount: BigInt(keysignPayload.toAmount || '0'),
     gasBudget: suiGasBudget,
@@ -84,6 +87,7 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
       refineSuiChainSpecific({
         keysignPayload,
         chainSpecific,
+        rawCoins: rawCoinObjects,
         walletCore,
       })
     ),
