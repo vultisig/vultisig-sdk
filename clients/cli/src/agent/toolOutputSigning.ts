@@ -33,8 +33,7 @@
  *
  * ZERO agent-backend / mcp-ts change; entirely within `clients/cli`.
  */
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { Chain } from '@vultisig/sdk'
+import { Chain, getChainKind } from '@vultisig/sdk'
 
 import { resolveChain, resolveChainId } from './executor'
 import type { TxReadyPayload } from './types'
