@@ -46,10 +46,13 @@ const getCause = (error: unknown): unknown => {
 
 export const isTransientBroadcastError = (error: unknown): boolean => {
   let current: unknown = error
+  const seen = new Set<unknown>()
 
-  while (current != null) {
+  while (current != null && !seen.has(current)) {
+    seen.add(current)
+
     if (current instanceof HttpResponseError) {
-      return current.status === 429 || current.status >= 500
+      return current.status === 429 || (current.status >= 500 && current.status <= 599)
     }
 
     if (typeof current === 'object') {
@@ -59,7 +62,7 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
       }
 
       const status = (current as { status?: unknown }).status
-      if (typeof status === 'number' && (status === 429 || status >= 500)) {
+      if (typeof status === 'number' && (status === 429 || (status >= 500 && status <= 599))) {
         return true
       }
     }
