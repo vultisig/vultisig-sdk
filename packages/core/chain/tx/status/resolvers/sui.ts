@@ -16,7 +16,7 @@ export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash })
   )
 
   if (error || !data) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const effectsStatus = data.effects?.status?.status
@@ -47,5 +47,5 @@ export const getSuiTxStatus: TxStatusResolver<OtherChain.Sui> = async ({ hash })
     return { status: 'error' }
   }
 
-  return { status: 'pending' }
+  return { status: 'pending', isKnown: true }
 }

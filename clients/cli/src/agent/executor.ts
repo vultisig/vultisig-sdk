@@ -6,10 +6,8 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, getChainKind, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
