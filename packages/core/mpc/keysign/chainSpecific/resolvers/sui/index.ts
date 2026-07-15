@@ -76,21 +76,55 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
     gasBudget: suiGasBudget.toString(),
   })
 
+  // PaySui gas cost grows with the number of input objects. Refining the
+  // baseline budget can therefore select more objects than the dry run priced.
+  // Re-price that grown selection, bounded so a pathological RPC response
+  // cannot make transaction construction loop indefinitely.
+  const maxGasBudgetConvergeIterations = 2
   const refined = await withFallback(
-    attempt(
-      refineSuiChainSpecific({
+    attempt(async () => {
+      let priced = await refineSuiChainSpecific({
         keysignPayload,
         chainSpecific,
         walletCore,
       })
-    ),
+
+      let gasBudget = priced.gasBudget ? BigInt(priced.gasBudget) : suiGasBudget
+      let selectedCoins = selectCoins(gasBudget)
+      let pricedCoinCount = chainSpecific.coins.length
+
+      for (
+        let iteration = 0;
+        iteration < maxGasBudgetConvergeIterations && selectedCoins.length > pricedCoinCount;
+        iteration++
+      ) {
+        const repriced = await refineSuiChainSpecific({
+          keysignPayload,
+          chainSpecific: create(SuiSpecificSchema, {
+            ...priced,
+            coins: selectedCoins,
+            gasBudget: gasBudget.toString(),
+          }),
+          walletCore,
+        })
+        const repricedGasBudget = repriced.gasBudget ? BigInt(repriced.gasBudget) : gasBudget
+        const nextGasBudget = repricedGasBudget > gasBudget ? repricedGasBudget : gasBudget
+        if (nextGasBudget === gasBudget) break
+
+        pricedCoinCount = selectedCoins.length
+        gasBudget = nextGasBudget
+        priced = repriced
+        selectedCoins = selectCoins(gasBudget)
+      }
+
+      return create(SuiSpecificSchema, {
+        ...priced,
+        coins: selectedCoins,
+        gasBudget: gasBudget.toString(),
+      })
+    }),
     chainSpecific
   )
 
-  const refinedGasBudget = refined.gasBudget ? BigInt(refined.gasBudget) : suiGasBudget
-
-  return create(SuiSpecificSchema, {
-    ...refined,
-    coins: selectCoins(refinedGasBudget),
-  })
+  return refined
 }
