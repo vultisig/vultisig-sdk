@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 35
     env:
       TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
-      TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
 
     steps:
       - name: Checkout code
@@ -53,6 +52,7 @@ jobs:
           VAULT_B64_4: ${{ secrets.E2E_TEST_VAULT_FILE_B64_4 }}
           VAULT_B64_5: ${{ secrets.E2E_TEST_VAULT_FILE_B64_5 }}
           VAULT_B64_6: ${{ secrets.E2E_TEST_VAULT_FILE_B64_6 }}
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: |
           if [ -z "$TEST_VAULT_PASSWORD" ] ||
              [ -z "$VAULT_B64_1" ] || [ -z "$VAULT_B64_2" ] ||
@@ -66,15 +66,23 @@ jobs:
           chmod 600 "$TEST_VAULT_PATH"
 
       - name: Run swap quote e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: yarn test:e2e:swap-quotes
 
       - name: Run balance e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: yarn test:e2e:balance
 
       - name: Run gas e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: yarn test:e2e:gas
 
       - name: Run prepare-send e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
         run: yarn test:e2e:prepare-send
 
       - name: Remove test vault fixture
