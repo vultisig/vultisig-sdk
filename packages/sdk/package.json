@@ -72,6 +72,32 @@
       "import": "./dist/vite/index.js",
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
+    },
+    "./tools/parse": {
+      "types": "./dist/tools/parse/index.d.ts",
+      "browser": "./dist/tools/parse/index.js",
+      "worker": "./dist/tools/parse/index.js",
+      "react-native": "./dist/tools/parse/index.js",
+      "node": {
+        "import": "./dist/tools/parse/index.js",
+        "require": "./dist/tools/parse/index.cjs"
+      },
+      "import": "./dist/tools/parse/index.js",
+      "require": "./dist/tools/parse/index.cjs",
+      "default": "./dist/tools/parse/index.cjs"
+    },
+    "./tools/defi": {
+      "types": "./dist/tools/defi/index.d.ts",
+      "browser": "./dist/tools/defi/index.js",
+      "worker": "./dist/tools/defi/index.js",
+      "react-native": "./dist/tools/defi/index.js",
+      "node": {
+        "import": "./dist/tools/defi/index.js",
+        "require": "./dist/tools/defi/index.cjs"
+      },
+      "import": "./dist/tools/defi/index.js",
+      "require": "./dist/tools/defi/index.cjs",
+      "default": "./dist/tools/defi/index.cjs"
     }
   },
   "scripts": {
