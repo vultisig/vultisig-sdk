@@ -584,6 +584,26 @@ describe('swap — broadcast dedupe guard', () => {
   const ctxFor = (vault: VaultBase) => ({ ensureActiveVault: async () => vault }) as never
   const opts = { fromChain: Chain.Ethereum, toChain: Chain.Bitcoin, amount: 0.1, yes: true } as const
 
+  it('forwards CLI slippage into vault.swap preview and execution requests', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xslippage', realSwaps })
+
+    const result = await executeSwap(ctxFor(vault), { ...opts, slippage: 2.5, dryRun: true })
+
+    expect(result).toMatchObject({ dryRun: true, provider: 'thorchain' })
+    expect(vault.swap).toHaveBeenCalledTimes(1)
+    expect(vault.swap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromChain: Chain.Ethereum,
+        toChain: Chain.Bitcoin,
+        amount: '0.1',
+        slippageTolerance: 2.5,
+        dryRun: true,
+      })
+    )
+    expect(realSwaps.count).toBe(0)
+  })
+
   it('refuses an identical second swap (no second broadcast)', async () => {
     const realSwaps = { count: 0 }
     const vault = makeSwapVault({ txHash: '0xswap1', realSwaps })

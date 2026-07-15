@@ -1726,12 +1726,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     toChain: Chain
     toSymbol: string
     amount: string
+    recipient?: string
+    slippageTolerance?: number
+    excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, dryRun } = params
+    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } = params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
-    const [fromAddress, toAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const toAddress = recipient ?? defaultToAddress
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
@@ -1743,7 +1747,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
+    const quote = await this.getSwapQuote({
+      fromCoin,
+      toCoin,
+      amount: normalizedAmount,
+      recipient,
+      slippageTolerance,
+      excludeProviders,
+    })
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({
