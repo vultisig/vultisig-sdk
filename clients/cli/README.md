@@ -412,7 +412,7 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 }
 ```
 
-A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`.
+A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`; if it is still `pending` when the wait budget is exhausted, default polling exits `3` with `TX_STATUS_TIMEOUT` (retryable) rather than reporting a false terminal status.
 
 EVM RPCs can distinguish a missing receipt from a hash the node does not know, so they report `not_found` explicitly. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those chains conservatively remain `pending` with an unknown-presence signal, and default CLI polling is still bounded by `--timeout`.
 
