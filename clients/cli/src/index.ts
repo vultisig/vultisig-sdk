@@ -53,9 +53,9 @@ import {
   executeSwitch,
   executeTokens,
   executeTxStatus,
-  resolveTxStatusParams,
   executeVaults,
   executeVerify,
+  resolveTxStatusParams,
 } from './commands'
 import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
