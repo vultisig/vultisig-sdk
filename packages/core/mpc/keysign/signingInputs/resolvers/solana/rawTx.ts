@@ -68,6 +68,16 @@ export function extractSolanaMessageBytes(txData: Uint8Array): ParsedSolanaRawTx
  * index 0 (the dApp builds the tx with the user as fee payer == first
  * signer; any other signature slots stay as the dApp-provided placeholders).
  * Returns a new array — the input is not mutated.
+ *
+ * Assumes the vault is signer index 0. Byte-for-byte parity with
+ * vultisig-ios#4419, which makes the same assumption. A sponsored
+ * transaction (a relayer pays and is signer 0, the vault signs at index
+ * >= 1) would land the vault's signature in the wrong slot — not
+ * fund-unsafe (the signature still binds the exact message it was
+ * computed over, so a misplaced signature just fails Solana's runtime
+ * signature check), but the tx would be rejected on broadcast rather
+ * than land. No sponsored-tx path exists today; if one is added, this
+ * splice needs the vault's actual signer index, not a hardcoded 0.
  */
 export function spliceSolanaSignature(txData: Uint8Array, signature: Uint8Array): Uint8Array {
   if (signature.length !== 64) {
