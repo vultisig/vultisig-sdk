@@ -92,6 +92,10 @@ export function buildSendBroadcastIntent(
     chain: chain.toString(),
     to: keysignPayload.toAddress || undefined,
     value: opts.isMax ? MAX_AMOUNT_SENTINEL : keysignPayload.toAmount || undefined,
+    // `data` here is always the chain memo (never EVM calldata), so it keeps memo
+    // semantics: dataIsEvmCalldata stays unset and a `"0x"` memo is NOT folded to
+    // empty (PR #1259). A native EVM send simply has no memo → data undefined → "",
+    // which still matches the agent path's empty-`"0x"` calldata after its fold.
     data: keysignPayload.memo || undefined,
     asset: isNative ? undefined : coin?.contractAddress || coin?.ticker || undefined,
   }

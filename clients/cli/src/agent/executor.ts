@@ -203,7 +203,11 @@ export class AgentExecutor {
         chain: chain.toString(),
         to: nested.to != null ? String(nested.to) : undefined,
         value: nested.value != null ? String(nested.value) : undefined,
+        // Nested `tx`/`send_tx` shape carries EVM calldata — mark it so an empty
+        // `"0x"` folds to `""` and cross-path dedupes with a native send that
+        // emitted no data. The memo branch below deliberately leaves this unset.
         data: nested.data != null ? String(nested.data) : undefined,
+        dataIsEvmCalldata: true,
       }
     }
     const txArgs = source?.txArgs ?? source
