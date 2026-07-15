@@ -39,8 +39,9 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 
 import { AgentErrorCode } from './agentErrors'
 
@@ -202,11 +203,7 @@ function nowMs(): number {
 export function journalPath(): string {
   const explicit = process.env.VULTISIG_BROADCAST_JOURNAL_PATH
   if (explicit && explicit.trim()) return explicit
-  const dir =
-    process.env.VULTISIG_CONFIG_DIR && process.env.VULTISIG_CONFIG_DIR.trim()
-      ? process.env.VULTISIG_CONFIG_DIR
-      : join(homedir(), '.vultisig')
-  return join(dir, 'broadcasts.jsonl')
+  return join(getVultisigConfigDir(), 'broadcasts.jsonl')
 }
 
 function normalize(v: string | undefined): string {

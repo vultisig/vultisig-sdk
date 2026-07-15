@@ -7,13 +7,14 @@ import { promisify } from 'node:util'
 
 const scryptAsync = promisify(scryptCb)
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+
+import { getVultisigConfigDir } from './config-dir.js'
 
 const SERVICE_NAME = 'vultisig'
 
 export function getCredentialsPath(): string {
-  return join(process.env.VULTISIG_CONFIG_DIR || join(homedir(), '.vultisig'), 'credentials.enc')
+  return join(getVultisigConfigDir(), 'credentials.enc')
 }
 
 // --- Keyring backend (lazy import to avoid crash when native module unavailable) ---
@@ -87,7 +88,7 @@ async function getFileStore(passphrase: string): Promise<Map<string, string>> {
 }
 
 async function saveFileStore(store: Map<string, string>, passphrase: string): Promise<void> {
-  const dir = process.env.VULTISIG_CONFIG_DIR || join(homedir(), '.vultisig')
+  const dir = getVultisigConfigDir()
   await mkdir(dir, { recursive: true })
   const salt = randomBytes(16)
   const iv = randomBytes(12)
