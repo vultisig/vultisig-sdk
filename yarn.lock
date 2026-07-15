@@ -5041,7 +5041,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@rolldown/pluginutils@npm:^1.0.0":
+"@rolldown/pluginutils@npm:^1.0.0, @rolldown/pluginutils@npm:^1.0.1":
   version: 1.0.1
   resolution: "@rolldown/pluginutils@npm:1.0.1"
   checksum: 10c0/99d9b06d90196823e4d8c841f258db7a16e5dbba5824a2962b05d907b79f1ba929d56f22dd744fd530936e568c865ee56a719dc31e57e13bc0a8eb4764a8d8dd
@@ -6496,12 +6496,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^26.0.0":
-  version: 26.0.0
-  resolution: "@types/node@npm:26.0.0"
+"@types/node@npm:^26.1.1":
+  version: 26.1.1
+  resolution: "@types/node@npm:26.1.1"
   dependencies:
     undici-types: "npm:~8.3.0"
-  checksum: 10c0/f36e21634fd8e8ded162ca486508bd8bb229d398a8d5541f6d8c1255968d4464e53327a77f403b216ef98e3b6f6956882eef83e4857d4bc2be9569dd55d37aae
+  checksum: 10c0/25ac5093195736dd074d5027adbba85617bc951d5a41506ebd3b9073048acb7233613f3822d5f9b9447f9c0841c91f6387c46283916767e3ef79f23917452c46
   languageName: node
   linkType: hard
 
@@ -6860,11 +6860,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitejs/plugin-react@npm:^6.0.2":
-  version: 6.0.2
-  resolution: "@vitejs/plugin-react@npm:6.0.2"
+"@vitejs/plugin-react@npm:^6.0.3":
+  version: 6.0.3
+  resolution: "@vitejs/plugin-react@npm:6.0.3"
   dependencies:
-    "@rolldown/pluginutils": "npm:^1.0.0"
+    "@rolldown/pluginutils": "npm:^1.0.1"
   peerDependencies:
     "@rolldown/plugin-babel": ^0.1.7 || ^0.2.0
     babel-plugin-react-compiler: ^1.0.0
@@ -6874,7 +6874,7 @@ __metadata:
       optional: true
     babel-plugin-react-compiler:
       optional: true
-  checksum: 10c0/6e2d90974e05f2a9aefafad1d137b75c3b3b4bf3f2affdbfe77c6b11b24832cff22dd8852430c6341e2fb5b00a4513fb00db306a6abdbec6f0f5841e93bbcfba
+  checksum: 10c0/592a93178c0eec420759d529a2c964a7103860808f549f72993b96a38c287c929a0d371cacbd932c37ee2118b830348db752cc01a31d688c71d19d74567251fa
   languageName: node
   linkType: hard
 
@@ -7015,7 +7015,7 @@ __metadata:
     "@napi-rs/keyring": "npm:^1.3.0"
     "@noble/hashes": "npm:^2.2.0"
     "@types/inquirer": "npm:^9.0.10"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@types/tabtab": "npm:^3.0.4"
     "@types/ws": "npm:^8.18.1"
     "@vultisig/client-shared": "workspace:^"
@@ -7049,7 +7049,7 @@ __metadata:
   resolution: "@vultisig/client-shared@workspace:packages/client-shared"
   dependencies:
     "@napi-rs/keyring": "npm:^1.3.0"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@vultisig/sdk": "workspace:^"
     inquirer: "npm:^14.0.2"
     typescript: "npm:^6.0.3"
@@ -7132,10 +7132,10 @@ __metadata:
   resolution: "@vultisig/example-browser@workspace:examples/browser"
   dependencies:
     "@tailwindcss/postcss": "npm:^4.3.2"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@types/react": "npm:^19.2.17"
     "@types/react-dom": "npm:^19.2.3"
-    "@vitejs/plugin-react": "npm:^6.0.2"
+    "@vitejs/plugin-react": "npm:^6.0.3"
     "@vultisig/examples-shared": "workspace:*"
     "@vultisig/sdk": "workspace:*"
     autoprefixer: "npm:^10.5.2"
@@ -7149,7 +7149,7 @@ __metadata:
     react: "npm:^19.2.7"
     react-dom: "npm:^19.2.7"
     stream-browserify: "npm:^3.0.0"
-    tailwindcss: "npm:^4.3.1"
+    tailwindcss: "npm:^4.3.2"
     typescript: "npm:^6.0.3"
     vite: "npm:^8.1.3"
   languageName: unknown
@@ -7160,10 +7160,10 @@ __metadata:
   resolution: "@vultisig/example-electron@workspace:examples/electron"
   dependencies:
     "@tailwindcss/postcss": "npm:^4.3.2"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@types/react": "npm:^19.2.17"
     "@types/react-dom": "npm:^19.2.3"
-    "@vitejs/plugin-react": "npm:^6.0.2"
+    "@vitejs/plugin-react": "npm:^6.0.3"
     "@vultisig/examples-shared": "workspace:*"
     "@vultisig/sdk": "workspace:*"
     autoprefixer: "npm:^10.5.2"
@@ -7174,7 +7174,7 @@ __metadata:
     qrcode.react: "npm:^4.2.0"
     react: "npm:^19.2.7"
     react-dom: "npm:^19.2.7"
-    tailwindcss: "npm:^4.3.1"
+    tailwindcss: "npm:^4.3.2"
     typescript: "npm:^6.0.3"
     vite: "npm:^8.1.3"
     vite-plugin-electron: "npm:^1.1.0"
@@ -7233,7 +7233,7 @@ __metadata:
   dependencies:
     "@modelcontextprotocol/sdk": "npm:~1.29.0"
     "@napi-rs/keyring": "npm:^1.3.0"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/sdk": "workspace:^"
     esbuild: "npm:^0.28.1"
@@ -7287,7 +7287,7 @@ __metadata:
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
     "@types/big.js": "npm:^7.0.0"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@vultisig/sdk": "workspace:*"
     big.js: "npm:^7.0.1"
     cosmjs-types: "npm:^0.11.0"
@@ -7334,7 +7334,7 @@ __metadata:
     "@trustwallet/wallet-core": "npm:^4.7.0"
     "@types/chrome": "npm:^0.2.2"
     "@types/events": "npm:^3"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@types/path-browserify": "npm:^1"
     "@vitest/coverage-v8": "npm:4.1.9"
     "@vultisig/lib-dkls": "workspace:*"
@@ -18862,17 +18862,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tailwindcss@npm:4.3.2":
+"tailwindcss@npm:4.3.2, tailwindcss@npm:^4.3.2":
   version: 4.3.2
   resolution: "tailwindcss@npm:4.3.2"
   checksum: 10c0/5a377846f77590812df234446175c4c2a45111a9626fd135e46f4552a33faee0d10c4e51aa5bbec955583265d48b380fb66c96f5da2775c961d4c26157617d19
-  languageName: node
-  linkType: hard
-
-"tailwindcss@npm:^4.3.1":
-  version: 4.3.1
-  resolution: "tailwindcss@npm:4.3.1"
-  checksum: 10c0/7d852a242cd9367c1ba54c0aa4a9f7e437753ed3530f0dd7eb6c9c5be577323695412d3e14df80c28013bfc22cc2b55255558005fc0b73de8d633ff2dfc29b5f
   languageName: node
   linkType: hard
 
@@ -20074,13 +20067,13 @@ __metadata:
     "@rollup/plugin-terser": "npm:^1.0.0"
     "@rollup/plugin-typescript": "npm:^12.3.0"
     "@secretlint/secretlint-rule-preset-recommend": "npm:^13.0.2"
-    "@types/node": "npm:^26.0.0"
+    "@types/node": "npm:^26.1.1"
     "@types/react": "npm:^19.2.17"
     "@types/react-dom": "npm:^19.2.3"
     "@types/uuid": "npm:^11.0.0"
     "@typescript-eslint/eslint-plugin": "npm:^8.62.1"
     "@typescript-eslint/parser": "npm:^8.62.1"
-    "@vitejs/plugin-react": "npm:^6.0.2"
+    "@vitejs/plugin-react": "npm:^6.0.3"
     concurrently: "npm:^10.0.3"
     dependency-cruiser: "npm:^17.4.3"
     eslint: "npm:^10.6.0"
