@@ -1,5 +1,4 @@
-import type { Chain } from '@vultisig/core-chain/Chain'
-import type { EvmChain } from '@vultisig/core-chain/Chain'
+import { type Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
@@ -467,15 +466,19 @@ export class FiatValueService {
    */
   private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
     if (!this.isEvmChain(chain)) {
+      const normalizedTokenAddress = tokenAddress.trim()
       const nativeCosmosDenom = cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom]
       const priceProviderId =
-        resolveTokenPriceId(chain, tokenAddress) ??
-        (nativeCosmosDenom && tokenAddress.toLowerCase() === nativeCosmosDenom
+        resolveTokenPriceId(chain, normalizedTokenAddress) ??
+        (nativeCosmosDenom && normalizedTokenAddress.toLowerCase() === nativeCosmosDenom
           ? chainFeeCoin[chain]?.priceProviderId
           : undefined)
       if (!priceProviderId) return 0
 
-      const prices = await getCoinPrices({ ids: [priceProviderId], fiatCurrency: currency })
+      const prices = await getCoinPrices({
+        ids: [priceProviderId],
+        fiatCurrency: currency,
+      })
       const price = prices[priceProviderId.toLowerCase()]
       if (price === undefined || price === 0) {
         throw new Error(`Price not found for token ${tokenAddress} on ${chain}`)
@@ -484,10 +487,10 @@ export class FiatValueService {
     }
 
     const prices = await getErc20Prices({
-          ids: [tokenAddress],
-          chain: chain as EvmChain,
-          fiatCurrency: currency,
-        })
+      ids: [tokenAddress],
+      chain: chain as EvmChain,
+      fiatCurrency: currency,
+    })
     const price = prices[tokenAddress.toLowerCase()]
     if (price === undefined || price === 0) {
       throw new Error(`Price not found for token ${tokenAddress} on ${chain}`)
@@ -514,20 +517,6 @@ export class FiatValueService {
    * @private
    */
   private isEvmChain(chain: Chain): boolean {
-    const evmChains = [
-      'Ethereum',
-      'Polygon',
-      'BNBChain',
-      'Avalanche',
-      'Arbitrum',
-      'Optimism',
-      'Base',
-      'Blast',
-      'CronosChain',
-      'ZkSync',
-      'Mantle',
-      'Sei',
-    ]
-    return evmChains.includes(chain)
+    return Object.values(EvmChain).includes(chain as EvmChain)
   }
 }

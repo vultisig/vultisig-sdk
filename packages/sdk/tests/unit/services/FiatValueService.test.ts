@@ -131,6 +131,23 @@ describe('FiatValueService', () => {
       })
     })
 
+    for (const chain of [Chain.BSC, Chain.Zksync, Chain.Hyperliquid]) {
+      it(`should route ${chain} tokens through the EVM price API`, async () => {
+        const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+        const tokenAddress = '0xA0b86991c6218b36c1d19d4a2e9Eb0cE3606eB48'
+        vi.mocked(getErc20Prices).mockResolvedValue({
+          [tokenAddress.toLowerCase()]: 1,
+        })
+
+        await expect(service.getPrice(chain, tokenAddress)).resolves.toBe(1)
+        expect(getErc20Prices).toHaveBeenCalledWith({
+          ids: [tokenAddress],
+          chain,
+          fiatCurrency: 'usd',
+        })
+      })
+    }
+
     it('should support different fiat currencies', async () => {
       const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
@@ -458,7 +475,7 @@ describe('FiatValueService', () => {
       vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
       vi.mocked(getCoinPrices).mockResolvedValue({ 'terra-luna': 0.000062 })
 
-      await expect(service.getPrice(Chain.TerraClassic, 'uluna')).resolves.toBe(0.000062)
+      await expect(service.getPrice(Chain.TerraClassic, ' uluna ')).resolves.toBe(0.000062)
       expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['terra-luna'], fiatCurrency: 'usd' })
     })
 
