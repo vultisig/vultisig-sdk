@@ -1,6 +1,6 @@
 ---
-'@vultisig/core-chain': patch
-'@vultisig/sdk': patch
+'@vultisig/core-chain': minor
+'@vultisig/sdk': minor
 ---
 
 Allow Solana status checks to return terminal `not_found` for unknown
