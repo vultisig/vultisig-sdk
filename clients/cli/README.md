@@ -370,24 +370,24 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 
 #### Transaction Status
 
-Check whether a transaction has confirmed on-chain. By default, polls every 5 seconds until the transaction reaches a final state (success or error):
+Check whether a transaction has confirmed on-chain. The CLI reports `pending`, `not_found`, `confirmed`, or `failed`. A recently broadcast hash may briefly be `not_found`, so the default mode polls every 5 seconds for up to 120 seconds. Use `--no-wait` for one read:
 
 ```bash
 # Poll until confirmed (default)
-vultisig tx-status ethereum 0x9f8e7d6c...
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c...
 
 # Check current status without polling
-vultisig tx-status ethereum 0x9f8e7d6c... --no-wait
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 
 # JSON output
-vultisig tx-status ethereum 0x9f8e7d6c... -o json
+vultisig --output json tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 ```
 
 **Output:**
 
 ```
-✓ Transaction status: success
-Status: success
+✓ Transaction status: confirmed
+Status: confirmed
 Fee: 0.00042 ETH
 Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 ```
@@ -396,17 +396,25 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "chain": "ethereum",
-  "txHash": "0x9f8e7d6c...",
-  "status": "success",
-  "receipt": {
-    "feeAmount": "420000000000000",
-    "feeDecimals": 18,
-    "feeTicker": "ETH"
-  },
-  "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  "success": true,
+  "v": 1,
+  "data": {
+    "chain": "Ethereum",
+    "txHash": "0x9f8e7d6c...",
+    "status": "confirmed",
+    "receipt": {
+      "feeAmount": "420000000000000",
+      "feeDecimals": 18,
+      "feeTicker": "ETH"
+    },
+    "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  }
 }
 ```
+
+A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`; if it is still `pending` when the wait budget is exhausted, default polling exits `3` with `TX_STATUS_TIMEOUT` (retryable) rather than reporting a false terminal status.
+
+EVM RPCs can distinguish a missing receipt from a hash the node does not know, so they report `not_found` explicitly. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those chains conservatively remain `pending` with an unknown-presence signal, and default CLI polling is still bounded by `--timeout`.
 
 #### Signing Arbitrary Bytes
 

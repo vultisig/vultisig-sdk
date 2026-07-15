@@ -55,6 +55,7 @@ import {
   executeTxStatus,
   executeVaults,
   executeVerify,
+  resolveTxStatusParams,
 } from './commands'
 import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
@@ -796,7 +797,7 @@ program
 // Command: Check transaction status
 program
   .command('tx-status')
-  .description('Check the status of a transaction (polls until confirmed)')
+  .description('Check transaction status (polls until terminal or timeout)')
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
@@ -804,6 +805,9 @@ program
   .addHelpText(
     'after',
     `
+Statuses: pending, not_found, confirmed, failed
+Malformed hashes fail with INVALID_HASH (exit 4).
+
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
   vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
@@ -811,19 +815,20 @@ Examples:
   )
   .action(
     withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
-      const context = await init(program.opts().vault)
       const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
       if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
         throw new InvalidInputError(
           `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
         )
       }
-      await executeTxStatus(context, {
+      const params = resolveTxStatusParams({
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
         timeoutSec,
       })
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, params)
     })
   )
 

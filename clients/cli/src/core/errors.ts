@@ -139,6 +139,16 @@ export class InvalidInputError extends VsigError {
   }
 }
 
+/** A transaction hash whose shape is invalid for the selected chain. */
+export class InvalidTxHashError extends VsigError {
+  readonly exitCode = ExitCode.INVALID_INPUT
+  readonly code = 'INVALID_HASH'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
 export class InsufficientBalanceError extends VsigError {
   readonly exitCode = ExitCode.INVALID_INPUT
   readonly code = 'INSUFFICIENT_BALANCE'
