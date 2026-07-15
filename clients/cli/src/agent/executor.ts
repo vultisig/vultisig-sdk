@@ -7,7 +7,7 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, chainFeeCoin, getChainKind, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, getChainKind, normalizeChain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -1898,47 +1898,11 @@ export class AgentExecutor {
 export function resolveChain(name: string): Chain | null {
   if (!name) return null
 
-  // Direct enum match
-  if (Object.values(Chain).includes(name as Chain)) {
-    return name as Chain
+  try {
+    return normalizeChain(name)
+  } catch {
+    return null
   }
-
-  // Case-insensitive search
-  const lower = name.toLowerCase()
-  for (const [, value] of Object.entries(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
-      return value as Chain
-    }
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    eth: 'Ethereum',
-    btc: 'Bitcoin',
-    sol: 'Solana',
-    bnb: 'BSC',
-    avax: 'Avalanche',
-    matic: 'Polygon',
-    arb: 'Arbitrum',
-    op: 'Optimism',
-    ltc: 'Litecoin',
-    doge: 'Dogecoin',
-    dot: 'Polkadot',
-    atom: 'Cosmos',
-    rune: 'THORChain',
-    thor: 'THORChain',
-    sui: 'Sui',
-    ton: 'Ton',
-    trx: 'Tron',
-    xrp: 'Ripple',
-  }
-
-  const aliased = aliases[lower]
-  if (aliased && Object.values(Chain).includes(aliased as Chain)) {
-    return aliased as Chain
-  }
-
-  return null
 }
 
 /**
