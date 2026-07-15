@@ -16,6 +16,9 @@ describe('agentErrorCodeToExitCode', () => {
   const cases: Array<[AgentErrorCode, ExitCode]> = [
     [AgentErrorCode.ACK_FAILED, ExitCode.ACK_FAILED],
     [AgentErrorCode.BROADCAST_COMMITTED, ExitCode.BROADCAST_COMMITTED],
+    [AgentErrorCode.AGENT_TURN_BLOCKED, ExitCode.AGENT_TURN_BLOCKED],
+    [AgentErrorCode.AGENT_TURN_REFUSAL, ExitCode.AGENT_TURN_REFUSAL],
+    [AgentErrorCode.AGENT_TURN_ERROR, ExitCode.USAGE],
     [AgentErrorCode.DUPLICATE_BROADCAST, ExitCode.DUPLICATE_BROADCAST],
     [AgentErrorCode.INVALID_INPUT, ExitCode.INVALID_INPUT],
     [AgentErrorCode.AUTH_FAILED, ExitCode.AUTH_REQUIRED],
@@ -29,7 +32,7 @@ describe('agentErrorCodeToExitCode', () => {
     [AgentErrorCode.ACTION_NOT_IMPLEMENTED, ExitCode.USAGE],
     [AgentErrorCode.TOOL_UNSUPPORTED, ExitCode.USAGE],
     [AgentErrorCode.SESSION_NOT_INITIALIZED, ExitCode.USAGE],
-    [AgentErrorCode.CONFIRMATION_REQUIRED, ExitCode.USAGE],
+    [AgentErrorCode.CONFIRMATION_REQUIRED, ExitCode.CONFIRMATION_REQUIRED],
     [AgentErrorCode.SIGNING_FAILED, ExitCode.UNKNOWN],
     [AgentErrorCode.LOOP_DEPTH_EXCEEDED, ExitCode.UNKNOWN],
     [AgentErrorCode.UNKNOWN_ERROR, ExitCode.UNKNOWN],

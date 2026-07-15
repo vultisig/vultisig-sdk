@@ -185,6 +185,15 @@ export class TxNotFoundError extends VsigError {
   }
 }
 
+export class VaultNotFoundError extends VsigError {
+  readonly exitCode = ExitCode.RESOURCE_NOT_FOUND
+  readonly code = 'VAULT_NOT_FOUND'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
 // A bounded status poll gave up while the tx was still (plausibly) in-flight.
 // Retryable: the tx may confirm later, so re-checking / waiting longer is valid —
 // distinct from TxNotFoundError, where the node affirmatively has no record.
@@ -256,6 +265,13 @@ export class DuplicateBroadcastRefusedError extends VsigError {
   }
 }
 
+function isPermanentBroadcastInputError(err: VaultError): boolean {
+  const details = `${err.message}\n${err.originalError?.message ?? ''}`
+  return /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i.test(
+    details
+  )
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
 
@@ -303,17 +319,28 @@ export function classifyError(err: Error): VsigError {
             chainMatch ? { chain: chainMatch[1] } : undefined
           )
         }
+        if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
+          return new AuthRequiredError(err.message)
+        }
         return new UsageError(err.message)
       }
+      case VaultErrorCode.VaultNotFound:
+        return new VaultNotFoundError(err.message)
       case VaultErrorCode.UnsupportedToken:
         return new TokenNotFoundError(err.message)
       case VaultErrorCode.BroadcastFailed:
+        if (isPermanentBroadcastInputError(err)) {
+          return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
+        }
         return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
           'Retry the transaction',
         ])
       case VaultErrorCode.GasEstimationFailed:
         return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
       case VaultErrorCode.SigningFailed:
+        if (/must be 32 bytes|expected 32 bytes|non-32-byte/i.test(err.message)) {
+          return new InvalidInputError(err.message)
+        }
         return new UnknownError(err.message)
       default:
         return new UnknownError(err.message)
@@ -330,8 +357,15 @@ export function classifyError(err: Error): VsigError {
     }
   }
 
+  if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    return new InvalidInputError(err.message, 'Check that the file or directory exists')
+  }
+
   // Best-effort heuristic for errors that escape SDK typing — may misclassify
   const msg = err.message.toLowerCase()
+  if (msg.includes('no vault found matching') || msg.includes('vault not found')) {
+    return new VaultNotFoundError(err.message)
+  }
   if (msg.includes('unsupported chain') || msg.includes('invalid chain') || msg.includes('unknown chain')) {
     const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i) || err.message.match(/chain[:\s]+(\S+)/i)
     return new InvalidChainError(err.message, undefined, undefined, chainMatch ? { chain: chainMatch[1] } : undefined)
@@ -342,6 +376,17 @@ export function classifyError(err: Error): VsigError {
   }
   if (msg.includes('insufficient') && msg.includes('balance')) {
     return new InsufficientBalanceError(err.message)
+  }
+  if (
+    msg.includes('invalid currency') ||
+    msg.includes('invalid amount') ||
+    msg.includes('invalid mnemonic') ||
+    msg.includes('invalid seedphrase') ||
+    msg.includes('must be 32 bytes') ||
+    msg.includes('expected 32 bytes') ||
+    msg.includes('non-32-byte')
+  ) {
+    return new InvalidInputError(err.message)
   }
   if (msg.includes('no route') || msg.includes('no swap') || msg.includes('no provider')) {
     return new NoRouteError(err.message)
