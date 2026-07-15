@@ -1,8 +1,7 @@
 import type { Chain } from '../../Chain'
-import { getChainKind } from '../../ChainKind'
 import { cosmosFeeCoinDenom } from '../../chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '../chainFeeCoin'
-import { knownTokens, knownTokensIndex } from '../knownTokens'
+import { getKnownTokenById } from '../knownTokens'
 
 /**
  * Resolve a token's CoinGecko price-provider id from the SDK's curated
@@ -29,10 +28,7 @@ export function resolveTokenPriceId(chain: Chain, denomOrAddress?: string): stri
     return chainFeeCoin[chain]?.priceProviderId || undefined
   }
 
-  const knownPriceProviderId =
-    getChainKind(chain) === 'evm'
-      ? knownTokensIndex[chain]?.[identifier.toLowerCase()]?.priceProviderId
-      : knownTokens[chain]?.find(coin => coin.id === identifier)?.priceProviderId
+  const knownPriceProviderId = getKnownTokenById(chain, identifier)?.priceProviderId
   if (knownPriceProviderId) return knownPriceProviderId
 
   return cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom] === identifier
