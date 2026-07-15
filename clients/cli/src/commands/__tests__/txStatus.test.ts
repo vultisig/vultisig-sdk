@@ -5,9 +5,9 @@ import { join } from 'node:path'
 import { Chain } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { InvalidInputError, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
-import { setSilentMode } from '../../lib/output'
-import { executeTxStatus } from '../tx-status'
+import { ExitCode, InvalidTxHashError, toErrorJson, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
+import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
+import { executeTxStatus, resolveTimeoutMs, resolveTxStatusParams } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
 
@@ -16,6 +16,12 @@ function makeCtx(getTxStatus: ReturnType<typeof vi.fn>) {
     ensureActiveVault: vi.fn().mockResolvedValue({ getTxStatus }),
   } as any
 }
+
+describe('resolveTxStatusParams', () => {
+  it('rejects a malformed hash before command-layer vault lookup', () => {
+    expect(() => resolveTxStatusParams({ chain: Chain.Ethereum, txHash: 'nothash' })).toThrow(InvalidTxHashError)
+  })
+})
 
 describe('executeTxStatus', () => {
   let journalDir: string
@@ -32,18 +38,68 @@ describe('executeTxStatus', () => {
     if (savedJournalPath === undefined) delete process.env.VULTISIG_BROADCAST_JOURNAL_PATH
     else process.env.VULTISIG_BROADCAST_JOURNAL_PATH = savedJournalPath
     rmSync(journalDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
+    resetOutput()
     setSilentMode(false)
-    vi.clearAllMocks()
   })
 
-  it('rejects a malformed hash with INVALID_INPUT and never calls the RPC', async () => {
+  it('rejects a malformed hash as invalid_hash before vault access or RPC', async () => {
     const getTxStatus = vi.fn()
-    const ctx = makeCtx(getTxStatus)
+    const ensureActiveVault = vi.fn().mockResolvedValue({ getTxStatus })
+    const ctx = { ensureActiveVault } as any
 
-    await expect(executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: 'nothash' })).rejects.toBeInstanceOf(
-      InvalidInputError
-    )
+    const error = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: 'nothash' }).catch(error => error)
+
+    expect(error).toBeInstanceOf(InvalidTxHashError)
+    expect(error).toMatchObject({
+      code: 'INVALID_HASH',
+      exitCode: ExitCode.INVALID_INPUT,
+      context: { chain: Chain.Ethereum, txHash: 'nothash', status: 'invalid_hash' },
+    })
+    expect(toErrorJson(error).error).toMatchObject({
+      code: 'INVALID_HASH',
+      exitCode: ExitCode.INVALID_INPUT,
+      context: { status: 'invalid_hash' },
+    })
+    expect(ensureActiveVault).not.toHaveBeenCalled()
     expect(getTxStatus).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ status: 'pending' as const, isKnown: true }, 'pending'],
+    [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
+    [{ status: 'error' as const, receipt: undefined }, 'failed'],
+  ])('emits the CLI status %s consistently in JSON mode', async (result, expectedStatus) => {
+    configureOutput({ format: 'json' })
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await executeTxStatus(makeCtx(vi.fn().mockResolvedValue(result)), {
+      chain: Chain.Ethereum,
+      txHash: EVM_HASH,
+      noWait: true,
+    })
+
+    const envelope = JSON.parse(String(write.mock.calls.at(-1)?.[0]))
+    expect(envelope.data.status).toBe(expectedStatus)
+  })
+
+  it.each([
+    [{ status: 'pending' as const, isKnown: true }, 'pending'],
+    [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
+    [{ status: 'error' as const, receipt: undefined }, 'failed'],
+  ])('emits the CLI status %s consistently in human mode', async (result, expectedStatus) => {
+    configureOutput({ format: 'table' })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await executeTxStatus(makeCtx(vi.fn().mockResolvedValue(result)), {
+      chain: Chain.Ethereum,
+      txHash: EVM_HASH,
+      noWait: true,
+    })
+
+    expect(log.mock.calls.flat().join('\n')).toContain(`Status: ${expectedStatus}`)
   })
 
   it('returns success + receipt for a confirmed hash', async () => {
@@ -186,5 +242,32 @@ describe('executeTxStatus', () => {
     )
     expect(out.status).toBe('success')
     expect(getTxStatus).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('resolveTimeoutMs', () => {
+  const DEFAULT_MS = 120_000
+
+  it('falls back to the default budget for undefined or non-finite input', () => {
+    expect(resolveTimeoutMs(undefined)).toBe(DEFAULT_MS)
+    expect(resolveTimeoutMs(Number.NaN)).toBe(DEFAULT_MS)
+    expect(resolveTimeoutMs(Number.POSITIVE_INFINITY)).toBe(DEFAULT_MS)
+  })
+
+  it('clamps a negative timeout to an immediate (0ms) give-up', () => {
+    expect(resolveTimeoutMs(-5)).toBe(0)
+  })
+
+  it('scales a normal timeout to milliseconds', () => {
+    expect(resolveTimeoutMs(30)).toBe(30_000)
+  })
+
+  it('stays finite when a huge (but finite) timeout overflows after ×1000', () => {
+    // 1e308 is finite and passes the CLI `--timeout` guard, but 1e308 * 1000
+    // overflows to Infinity. An Infinite deadline makes the poll give-up check
+    // (`remainingMs <= 0`) unreachable — the infinite poll the guard forbids.
+    const ms = resolveTimeoutMs(1e308)
+    expect(Number.isFinite(ms)).toBe(true)
+    expect(ms).toBe(Number.MAX_SAFE_INTEGER)
   })
 })
