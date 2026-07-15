@@ -43,6 +43,10 @@ export enum ExitCode {
   // This is a non-retryable partial success: inspect the emitted hashes before
   // deciding how to continue, and never blindly replay the original request.
   BROADCAST_COMMITTED = 13,
+  // The backend already accepted this exact keyed agent turn. The duplicate
+  // request did not execute or consume credits; inspect the conversation for
+  // the first attempt's persisted result before starting a fresh attempt.
+  IDEMPOTENT_TURN_DUPLICATE = 14,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -62,6 +66,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
     'Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag',
   [ExitCode.BROADCAST_COMMITTED]:
     'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
+  [ExitCode.IDEMPOTENT_TURN_DUPLICATE]:
+    'agent ask: duplicate keyed turn rejected — inspect the conversation for the original result',
 }
 
 export abstract class VsigError extends Error {
@@ -224,6 +230,21 @@ export class ConfirmationRequiredError extends VsigError {
 
   constructor(message: string, hint?: string, suggestions?: string[]) {
     super(message, hint, suggestions)
+  }
+}
+
+/** The backend already accepted the same idempotency-keyed agent turn. */
+export class IdempotentTurnDuplicateError extends VsigError {
+  readonly exitCode = ExitCode.IDEMPOTENT_TURN_DUPLICATE
+  readonly code = 'IDEMPOTENT_TURN_DUPLICATE'
+
+  constructor(message: string, conversationId?: string) {
+    super(
+      message,
+      'The duplicate did not execute; inspect the conversation for the first attempt result',
+      ['Retry only as a new user-initiated attempt'],
+      conversationId ? { conversationId } : undefined
+    )
   }
 }
 

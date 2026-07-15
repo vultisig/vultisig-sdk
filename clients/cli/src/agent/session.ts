@@ -21,7 +21,7 @@ import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { recordResolution } from './broadcastJournal'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
-import { AgentClient, type SSEStreamResult } from './client'
+import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
 import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, payloadLooksSignable } from './toolOutputSigning'
@@ -616,6 +616,16 @@ export class AgentSession {
       },
     }
 
+    // One key belongs to this exact POST attempt (body + recent_actions). A
+    // recursive continuation calls processMessageLoop again and gets a fresh
+    // key, as does a new user-initiated send after any failure. The one automatic
+    // 401/403 re-POST below deliberately closes over and reuses this key because
+    // it replays the identical attempt. SSE disconnect recovery does not share
+    // or regenerate it: that path only polls GET /messages/since and never
+    // re-POSTs the turn. This lifetime honors the backend's poison-on-failure
+    // contract: only a genuinely new attempt receives a new execution identity.
+    const idempotencyKey = createTurnIdempotencyKey()
+
     // CR2: 401/403 retry at the request boundary so the replay uses the
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
@@ -625,7 +635,13 @@ export class AgentSession {
     let streamResult
     try {
       streamResult = await this.withAuthRetry(() =>
-        this.client.sendMessageStream(this.conversationId!, request, callbacks, this.abortController?.signal)
+        this.client.sendMessageStream(
+          this.conversationId!,
+          request,
+          callbacks,
+          this.abortController?.signal,
+          idempotencyKey
+        )
       )
     } catch (err) {
       // Non-401 or already-retried auth failure: restore the spliced batch so

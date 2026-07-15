@@ -797,23 +797,24 @@ Each entry in `tool_calls` may include `code` when `success` is false (same valu
 
 Orchestrators should branch on `code`. The message in `error` / `message` stays human-readable and may change between releases.
 
-| Code                      | Typical meaning                                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `BACKEND_UNREACHABLE`     | Agent health check failed or backend not responding                                                                          |
-| `AUTH_FAILED`             | Auth/token failure, HTTP 401/403, or wrong vault password                                                                    |
-| `VAULT_LOCKED`            | Encrypted vault needs unlock (password)                                                                                      |
-| `PASSWORD_REQUIRED`       | Password was not supplied when required (e.g. pipe mode or signing)                                                          |
-| `CONFIRMATION_REQUIRED`   | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`)                                                |
-| `ACTION_NOT_IMPLEMENTED`  | Local executor does not implement this action type                                                                           |
-| `INVALID_INPUT`           | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                  |
-| `NETWORK_ERROR`           | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                        |
-| `TIMEOUT`                 | Deadline exceeded, or abort where the message indicates a timeout                                                            |
-| `TRANSACTION_FAILED`      | Build/broadcast/gas errors mapped from the SDK                                                                               |
-| `SIGNING_FAILED`          | MPC/signing failed                                                                                                           |
-| `ACK_FAILED`              | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying  |
-| `BROADCAST_COMMITTED`     | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                    |
-| `SESSION_NOT_INITIALIZED` | Internal session state error                                                                                                 |
-| `UNKNOWN_ERROR`           | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
+| Code                        | Typical meaning                                                                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `BACKEND_UNREACHABLE`       | Agent health check failed or backend not responding                                                                          |
+| `AUTH_FAILED`               | Auth/token failure, HTTP 401/403, or wrong vault password                                                                    |
+| `VAULT_LOCKED`              | Encrypted vault needs unlock (password)                                                                                      |
+| `PASSWORD_REQUIRED`         | Password was not supplied when required (e.g. pipe mode or signing)                                                          |
+| `CONFIRMATION_REQUIRED`     | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`)                                                |
+| `ACTION_NOT_IMPLEMENTED`    | Local executor does not implement this action type                                                                           |
+| `INVALID_INPUT`             | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                  |
+| `NETWORK_ERROR`             | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                        |
+| `TIMEOUT`                   | Deadline exceeded, or abort where the message indicates a timeout                                                            |
+| `TRANSACTION_FAILED`        | Build/broadcast/gas errors mapped from the SDK                                                                               |
+| `SIGNING_FAILED`            | MPC/signing failed                                                                                                           |
+| `ACK_FAILED`                | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying  |
+| `BROADCAST_COMMITTED`       | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                    |
+| `IDEMPOTENT_TURN_DUPLICATE` | The backend already accepted the same keyed turn; inspect the conversation for the original persisted result                 |
+| `SESSION_NOT_INITIALIZED`   | Internal session state error                                                                                                 |
+| `UNKNOWN_ERROR`             | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
 
 SSE `error` events may optionally include a `code` field from the backend; if it matches one of the values above, it is passed through unchanged. Otherwise the CLI infers a code from the message.
 
@@ -1221,6 +1222,7 @@ Configuration is stored in `~/.vultisig/`:
 | 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
 | 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
+| 14   | agent ask: duplicate keyed turn rejected — inspect the conversation for the original result                            |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

@@ -39,6 +39,9 @@ export enum AgentErrorCode {
   // and hasn't definitively failed, so signing was refused to avoid a
   // double-spend. Retry with --force to override. See broadcastJournal.ts.
   DUPLICATE_BROADCAST = 'DUPLICATE_BROADCAST',
+  // The backend already accepted this exact idempotency-keyed turn. The
+  // duplicate did not execute; inspect the conversation for the first result.
+  IDEMPOTENT_TURN_DUPLICATE = 'IDEMPOTENT_TURN_DUPLICATE',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
   LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
   // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
@@ -142,6 +145,9 @@ export function inferAgentErrorCodeFromMessage(message: string): AgentErrorCode 
   if (/^CONFIRMATION_REQUIRED:/i.test(m)) return AgentErrorCode.CONFIRMATION_REQUIRED
   if (/password required|password not provided|use --password/i.test(m)) return AgentErrorCode.PASSWORD_REQUIRED
   if (/session not initialized/i.test(m)) return AgentErrorCode.SESSION_NOT_INITIALIZED
+  if (/keyed turn was already accepted|idempotent turn duplicate/i.test(m)) {
+    return AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE
+  }
   if (
     /not implemented locally|is not yet implemented|is not implemented locally|action type .*not implemented/i.test(m)
   ) {
@@ -236,6 +242,8 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
       // headless caller can branch on `$?` alone instead of conflating it with
       // generic bad input (4). --force overrides.
       return ExitCode.DUPLICATE_BROADCAST
+    case AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE:
+      return ExitCode.IDEMPOTENT_TURN_DUPLICATE
     case AgentErrorCode.SESSION_NOT_FOUND:
       return ExitCode.RESOURCE_NOT_FOUND
     case AgentErrorCode.TRANSACTION_FAILED:

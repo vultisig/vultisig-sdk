@@ -4,6 +4,9 @@
  * HTTP/SSE client for communicating with the agent-backend server.
  * Supports both JSON and SSE streaming responses.
  */
+import { randomUUID } from 'node:crypto'
+
+import { IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
 import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
@@ -24,7 +27,12 @@ import type {
   TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string; code?: string }
+type JsonErrorBody = { error?: string; code?: string; conversation_id?: string }
+
+/** Generate a server-valid visible-ASCII key for one agent turn POST attempt. */
+export function createTurnIdempotencyKey(): string {
+  return randomUUID()
+}
 
 /** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
  *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
@@ -327,8 +335,17 @@ export class AgentClient {
   // Messages - JSON mode
   // ============================================================================
 
-  async sendMessage(conversationId: string, req: SendMessageRequest): Promise<SendMessageResponse> {
-    return this.post<SendMessageResponse>(`/agent/conversations/${conversationId}/messages`, req)
+  async sendMessage(
+    conversationId: string,
+    req: SendMessageRequest,
+    idempotencyKey: string = createTurnIdempotencyKey()
+  ): Promise<SendMessageResponse> {
+    return this.post<SendMessageResponse>(
+      `/agent/conversations/${conversationId}/messages`,
+      req,
+      { 'Idempotency-Key': idempotencyKey },
+      true
+    )
   }
 
   /**
@@ -361,7 +378,8 @@ export class AgentClient {
     conversationId: string,
     req: SendMessageRequest,
     callbacks: StreamCallbacks,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    idempotencyKey: string = createTurnIdempotencyKey()
   ): Promise<SSEStreamResult> {
     // Bound only the initial connect, not the (intentionally unbounded)
     // long-lived SSE body read — an idle stream sends keep-alive pings, so a
@@ -390,6 +408,7 @@ export class AgentClient {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
+          'Idempotency-Key': idempotencyKey,
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
           ...this.profileHeader(),
         },
@@ -412,6 +431,7 @@ export class AgentClient {
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({ error: res.statusText }))) as JsonErrorBody
+      this.throwMessageError(res.status, res.statusText, body)
       throw new Error(`Message failed (${res.status}): ${body.error || res.statusText}`)
     }
 
@@ -745,13 +765,19 @@ export class AgentClient {
     return this.readJson<T>(res)
   }
 
-  private async post<T>(path: string, body: unknown): Promise<T> {
+  private async post<T>(
+    path: string,
+    body: unknown,
+    extraHeaders: Record<string, string> = {},
+    isMessageTurn = false
+  ): Promise<T> {
     let res: Response
     try {
       res = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...extraHeaders,
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {}),
           ...this.profileHeader(),
         },
@@ -766,10 +792,23 @@ export class AgentClient {
 
     if (!res.ok) {
       const errorBody = await this.readErrorBody(res)
+      if (isMessageTurn) this.throwMessageError(res.status, res.statusText, errorBody)
       throw new Error(`Request failed (${res.status}): ${errorBody.error || res.statusText}`)
     }
 
     return this.readJson<T>(res)
+  }
+
+  /** Map the backend's durable keyed-turn duplicate/conflict into the CLI's
+   * dedicated typed error. Other message failures keep their existing wire and
+   * error behavior unchanged. */
+  private throwMessageError(status: number, statusText: string, body: JsonErrorBody): void {
+    if (status === 409 && (body.code === 'idempotent_turn_duplicate' || body.code === 'idempotency_key_reused')) {
+      throw new IdempotentTurnDuplicateError(
+        body.error || statusText || 'This keyed turn was already accepted',
+        body.conversation_id
+      )
+    }
   }
 
   private async delete(path: string, body: unknown): Promise<void> {

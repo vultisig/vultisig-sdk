@@ -17,6 +17,7 @@ describe('agentErrorCodeToExitCode', () => {
     [AgentErrorCode.ACK_FAILED, ExitCode.ACK_FAILED],
     [AgentErrorCode.BROADCAST_COMMITTED, ExitCode.BROADCAST_COMMITTED],
     [AgentErrorCode.DUPLICATE_BROADCAST, ExitCode.DUPLICATE_BROADCAST],
+    [AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE, ExitCode.IDEMPOTENT_TURN_DUPLICATE],
     [AgentErrorCode.INVALID_INPUT, ExitCode.INVALID_INPUT],
     [AgentErrorCode.AUTH_FAILED, ExitCode.AUTH_REQUIRED],
     [AgentErrorCode.VAULT_LOCKED, ExitCode.AUTH_REQUIRED],
