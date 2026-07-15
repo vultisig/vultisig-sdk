@@ -38,15 +38,29 @@ export const validateTonComment = (memo: string): void => {
 }
 
 const tonUnsignedDecimalRegex = /^\d+$/
+const tonMaxAmount = (1n << 120n) - 1n
+const tonMaxAmountDecimal = tonMaxAmount.toString()
 
 export const tonAmountToBytes = (amount: string | bigint): Buffer => {
   if (typeof amount === 'string' && !tonUnsignedDecimalRegex.test(amount)) {
     throw new Error('TON amount must be a non-negative integer')
   }
 
-  const value = typeof amount === 'bigint' ? amount : BigInt(amount)
+  const normalizedAmount = typeof amount === 'string' ? amount.replace(/^0+(?=\d)/, '') : amount
+  if (
+    typeof normalizedAmount === 'string' &&
+    (normalizedAmount.length > tonMaxAmountDecimal.length ||
+      (normalizedAmount.length === tonMaxAmountDecimal.length && normalizedAmount > tonMaxAmountDecimal))
+  ) {
+    throw new Error('TON amount exceeds the VarUInteger 16 maximum')
+  }
+
+  const value = typeof normalizedAmount === 'bigint' ? normalizedAmount : BigInt(normalizedAmount)
   if (value < 0n) {
     throw new Error('TON amount must be a non-negative integer')
+  }
+  if (value > tonMaxAmount) {
+    throw new Error('TON amount exceeds the VarUInteger 16 maximum')
   }
 
   return Buffer.from(numberToEvenHex(value), 'hex')
