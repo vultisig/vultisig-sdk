@@ -272,6 +272,70 @@ function isPermanentBroadcastInputError(err: VaultError): boolean {
   )
 }
 
+function classifyVaultError(err: VaultError): VsigError {
+  // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
+  // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
+  // errors as retryable network errors.
+  if (err.code === VaultErrorCode.BalanceFetchFailed && err.originalError) {
+    const inner = classifyError(err.originalError)
+    if (!(inner instanceof UnknownError)) return inner
+  }
+
+  switch (err.code) {
+    case VaultErrorCode.UnsupportedChain:
+    case VaultErrorCode.ChainNotSupported:
+      return new InvalidChainError(err.message)
+    case VaultErrorCode.NetworkError:
+    case VaultErrorCode.BalanceFetchFailed:
+    case VaultErrorCode.Timeout:
+      return new NetworkError(err.message)
+    case VaultErrorCode.InvalidAmount:
+      return new InvalidInputError(err.message)
+    case VaultErrorCode.InvalidConfig: {
+      // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
+      // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
+      const lowerMsg = err.message.toLowerCase()
+      if (
+        lowerMsg.includes('unknown chain') ||
+        lowerMsg.includes('unsupported chain') ||
+        lowerMsg.includes('chain not supported')
+      ) {
+        const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i)
+        return new InvalidChainError(
+          err.message,
+          undefined,
+          undefined,
+          chainMatch ? { chain: chainMatch[1] } : undefined
+        )
+      }
+      if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
+        return new AuthRequiredError(err.message)
+      }
+      return new UsageError(err.message)
+    }
+    case VaultErrorCode.VaultNotFound:
+      return new VaultNotFoundError(err.message)
+    case VaultErrorCode.UnsupportedToken:
+      return new TokenNotFoundError(err.message)
+    case VaultErrorCode.BroadcastFailed:
+      if (isPermanentBroadcastInputError(err)) {
+        return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
+      }
+      return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
+        'Retry the transaction',
+      ])
+    case VaultErrorCode.GasEstimationFailed:
+      return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
+    case VaultErrorCode.SigningFailed:
+      if (/must be 32 bytes|expected 32 bytes|non-32-byte/i.test(err.message)) {
+        return new InvalidInputError(err.message)
+      }
+      return new UnknownError(err.message)
+    default:
+      return new UnknownError(err.message)
+  }
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
 
@@ -283,69 +347,7 @@ export function classifyError(err: Error): VsigError {
     return new DuplicateBroadcastRefusedError(err.message)
   }
 
-  if (err instanceof VaultError) {
-    // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
-    // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
-    // errors as retryable network errors.
-    if (err.code === VaultErrorCode.BalanceFetchFailed && err.originalError) {
-      const inner = classifyError(err.originalError)
-      if (!(inner instanceof UnknownError)) return inner
-    }
-
-    switch (err.code) {
-      case VaultErrorCode.UnsupportedChain:
-      case VaultErrorCode.ChainNotSupported:
-        return new InvalidChainError(err.message)
-      case VaultErrorCode.NetworkError:
-      case VaultErrorCode.BalanceFetchFailed:
-      case VaultErrorCode.Timeout:
-        return new NetworkError(err.message)
-      case VaultErrorCode.InvalidAmount:
-        return new InvalidInputError(err.message)
-      case VaultErrorCode.InvalidConfig: {
-        // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
-        // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
-        const lowerMsg = err.message.toLowerCase()
-        if (
-          lowerMsg.includes('unknown chain') ||
-          lowerMsg.includes('unsupported chain') ||
-          lowerMsg.includes('chain not supported')
-        ) {
-          const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i)
-          return new InvalidChainError(
-            err.message,
-            undefined,
-            undefined,
-            chainMatch ? { chain: chainMatch[1] } : undefined
-          )
-        }
-        if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
-          return new AuthRequiredError(err.message)
-        }
-        return new UsageError(err.message)
-      }
-      case VaultErrorCode.VaultNotFound:
-        return new VaultNotFoundError(err.message)
-      case VaultErrorCode.UnsupportedToken:
-        return new TokenNotFoundError(err.message)
-      case VaultErrorCode.BroadcastFailed:
-        if (isPermanentBroadcastInputError(err)) {
-          return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
-        }
-        return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
-          'Retry the transaction',
-        ])
-      case VaultErrorCode.GasEstimationFailed:
-        return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
-      case VaultErrorCode.SigningFailed:
-        if (/must be 32 bytes|expected 32 bytes|non-32-byte/i.test(err.message)) {
-          return new InvalidInputError(err.message)
-        }
-        return new UnknownError(err.message)
-      default:
-        return new UnknownError(err.message)
-    }
-  }
+  if (err instanceof VaultError) return classifyVaultError(err)
 
   if (err instanceof VaultImportError) {
     switch (err.code) {
