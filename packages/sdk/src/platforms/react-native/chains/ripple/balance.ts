@@ -12,10 +12,10 @@ import {
 
 export async function getRippleCoinBalance(input: CoinBalanceResolverInput): Promise<bigint> {
   if (isFeeCoin(input)) {
-    const account = await getXrpAccountState(input.address, DEFAULT_XRP_RPC_URL, input.signal)
+    const account = await getXrpAccountState(input.address, DEFAULT_XRP_RPC_URL)
     if (!account.funded) return 0n
 
-    const { reserveBaseDrops, reserveIncrementDrops } = await getXrpReserveInfo(DEFAULT_XRP_RPC_URL, input.signal)
+    const { reserveBaseDrops, reserveIncrementDrops } = await getXrpReserveInfo(DEFAULT_XRP_RPC_URL)
     const totalBalance = BigInt(account.balanceDrops)
     const totalReserve = reserveBaseDrops + BigInt(account.ownerCount) * reserveIncrementDrops
     const spendableBalance = totalBalance - totalReserve
@@ -24,7 +24,7 @@ export async function getRippleCoinBalance(input: CoinBalanceResolverInput): Pro
   }
 
   const { currency, issuer } = parseRippleTokenId(shouldBePresent(input.id, 'Ripple token id'))
-  const lines = await getXrpAccountLines(input.address, DEFAULT_XRP_RPC_URL, input.signal)
+  const lines = await getXrpAccountLines(input.address, DEFAULT_XRP_RPC_URL)
   const line = lines.find(
     ({ account, currency: lineCurrency }) =>
       account === issuer && toXrplCurrencyCode(lineCurrency) === toXrplCurrencyCode(currency)
