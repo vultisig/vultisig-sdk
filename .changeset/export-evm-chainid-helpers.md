@@ -12,3 +12,7 @@ drift class behind the Hyperliquid 998 (testnet) vs 999 (mainnet) client↔serve
 chainId bug. Consumers can now import the single source of truth. Native tickers
 were already exported via `chainFeeCoin`, so no additional ticker export is
 needed.
+
+Also re-exported from the React Native entry (`platforms/react-native`), which
+omitted these too, so RN consumers (Station) couldn't reach them without
+falling back to a hand-maintained copy.
