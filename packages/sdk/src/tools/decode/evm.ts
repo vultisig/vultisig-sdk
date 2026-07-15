@@ -1,29 +1,23 @@
+import { getEvmChainByChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { type Address, decodeFunctionData, getAddress, type Hex, parseAbi, parseTransaction } from 'viem'
+
+import { canonicalChainTag } from '../../utils/addressFormat'
 
 import type { Envelope } from './types'
 
 /**
- * EIP-155 numeric chain id (decimal string) -> the symbolic chain id the
- * policy layer compares against (matches recipes' `evm.AllEVMChainConfigs`
- * `cfg.ID`, mirrored from the Go reference `evmChainIDToSymbol`).
+ * Resolve an on-wire EIP-155 numeric chain id to the SDK's canonical policy tag.
  *
- * Without this, a typed tx to Base would surface `chain: "8453"` and the
- * downstream policy `chainsMatch("base", "8453")` would return false → a
- * spurious BLOCK on every legitimate typed-EVM transaction. We resolve the
- * on-wire numeric id back to the symbol so the safety layer can match it.
+ * The core chain registry keys EVM chain ids by 0x-hex (`getEvmChainByChainId`),
+ * while typed txs surface them here as decimal numbers. Bridge through
+ * `numberToHex`, then collapse the returned Chain enum (`CronosChain`,
+ * `Hyperliquid`, `Sei`, ...) to the lowercase tag the policy layer compares
+ * against (`cronos`, `hyperliquid`, `sei`, ...).
  */
-const EVM_CHAIN_ID_TO_SYMBOL: Record<string, string> = {
-  '1': 'ethereum',
-  '10': 'optimism',
-  '25': 'cronos',
-  '56': 'bsc',
-  '137': 'polygon',
-  '324': 'zksync',
-  '5000': 'mantle',
-  '8453': 'base',
-  '42161': 'arbitrum',
-  '43114': 'avalanche',
-  '81457': 'blast',
+function resolveTypedEvmChain(chainId: number): string {
+  const evm = getEvmChainByChainId(numberToHex(chainId))
+  return evm ? canonicalChainTag(evm) : String(chainId)
 }
 
 /**
@@ -176,8 +170,7 @@ export function decodeEvmTx(bytes: Uint8Array, chainHint: string): Envelope {
   const isTyped = tx.type === 'eip1559' || tx.type === 'eip2930'
   let chain = chainHint
   if (isTyped && typeof tx.chainId === 'number' && tx.chainId > 0) {
-    const numeric = String(tx.chainId)
-    chain = EVM_CHAIN_ID_TO_SYMBOL[numeric] ?? numeric
+    chain = resolveTypedEvmChain(tx.chainId)
   }
 
   const env: Envelope = {
