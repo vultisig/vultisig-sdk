@@ -18,9 +18,10 @@ import { knownTokensIndex } from '../knownTokens'
  *   index keys are built with the same call, so the build/lookup casing is
  *   always symmetric.
  *
- * Returns `undefined` if no registry entry exists — never guesses or
- * fabricates an id. The caller decides whether to fall back to CoinGecko
- * search, DeFiLlama, or surface a `price_unavailable` to the user.
+ * The native Cosmos fee denom is also resolved to its chain fee coin's
+ * priceProviderId. Other unknown identifiers return `undefined` — the caller
+ * decides whether to fall back to CoinGecko search, DeFiLlama, or surface a
+ * `price_unavailable` to the user.
  *
  * Referenced by vultisig/mcp-ts#255 — registry-driven price resolution.
  */
@@ -29,8 +30,10 @@ export function resolveTokenPriceId(chain: Chain, denomOrAddress?: string): stri
   if (!normalized) {
     return chainFeeCoin[chain]?.priceProviderId || undefined
   }
-  if (cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom] === normalized) {
-    return chainFeeCoin[chain]?.priceProviderId || undefined
-  }
-  return knownTokensIndex[chain]?.[normalized]?.priceProviderId || undefined
+  const knownPriceProviderId = knownTokensIndex[chain]?.[normalized]?.priceProviderId
+  if (knownPriceProviderId) return knownPriceProviderId
+
+  return cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom] === normalized
+    ? chainFeeCoin[chain]?.priceProviderId || undefined
+    : undefined
 }

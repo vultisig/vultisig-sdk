@@ -472,7 +472,7 @@ describe('FiatValueService', () => {
     it('should price a Cosmos native fee denom passed as a token identifier', async () => {
       const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
       const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
-      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      vi.mocked(resolveTokenPriceId).mockReturnValue('terra-luna')
       vi.mocked(getCoinPrices).mockResolvedValue({ 'terra-luna': 0.000062 })
 
       await expect(service.getPrice(Chain.TerraClassic, ' uluna ')).resolves.toBe(0.000062)
