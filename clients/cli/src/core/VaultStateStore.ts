@@ -5,15 +5,16 @@
  * used concurrently (EVM nonces, UTXO selection, Cosmos sequences, etc.).
  *
  * Design:
- *   - Storage dir: ~/.vultisig/vault-state/<vaultId>/
+ *   - Storage dir: <VULTISIG_CONFIG_DIR>/vault-state/<vaultId>/ (default ~/.vultisig/vault-state/<vaultId>/)
  *   - Lock files:  <chain>.lock   (atomic O_CREAT|O_EXCL)
  *   - State files:  <chain>.state.json
  *   - Always uses max(onChainValue, localValue) so external txs are respected.
  */
 
 import * as fs from 'node:fs'
-import * as os from 'node:os'
 import * as path from 'node:path'
+
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,7 +62,7 @@ export class VaultStateStore {
     if (!safeId) {
       throw new Error('Invalid vaultId: must contain alphanumeric characters')
     }
-    this.baseDir = path.join(os.homedir(), '.vultisig', 'vault-state', safeId)
+    this.baseDir = path.join(getVultisigConfigDir(), 'vault-state', safeId)
     fs.mkdirSync(this.baseDir, { recursive: true })
   }
 
