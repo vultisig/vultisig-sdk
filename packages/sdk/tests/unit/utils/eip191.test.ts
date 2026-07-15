@@ -19,10 +19,26 @@ describe('formatEcdsaSignature65', () => {
     expect(formatEcdsaSignature65(`0x${der}`, 1)).toBe(`${r}${s}1c`)
   })
 
+  it('recognizes a valid DER signature whose encoding is exactly 64 bytes', () => {
+    const shortR = '01'.repeat(29)
+    const shortS = '02'.repeat(29)
+    const exact64ByteDer = `303e021d${shortR}021d${shortS}`
+    const paddedR = `${'00'.repeat(3)}${shortR}`
+    const paddedS = `${'00'.repeat(3)}${shortS}`
+
+    expect(formatEcdsaSignature65(exact64ByteDer, 0)).toBe(`${paddedR}${paddedS}1b`)
+  })
+
   it('accepts only an exact 64-byte raw signature', () => {
     const raw = `${'aa'.repeat(32)}${'bb'.repeat(32)}`
     expect(formatEcdsaSignature65(raw, 1)).toBe(`${raw}1c`)
     expect(() => formatEcdsaSignature65(`${raw}00`, 1)).toThrow(/unrecognized format/)
+  })
+
+  it('accepts a 64-byte raw signature whose first byte is the DER sequence tag', () => {
+    const raw = `30${'aa'.repeat(31)}${'bb'.repeat(32)}`
+
+    expect(formatEcdsaSignature65(raw, 1)).toBe(`${raw}1c`)
   })
 
   it.each([

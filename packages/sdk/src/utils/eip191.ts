@@ -103,10 +103,22 @@ export const formatEcdsaSignature65 = (signature: string, recovery: number): str
   }
 
   const bytes = parseHex(signature)
-  if (bytes.length !== 64 && bytes[0] !== 0x30) {
-    throw new Error(`Invalid ECDSA signature: unrecognized format (${bytes.length} bytes)`)
+  let raw: Uint8Array
+  if (bytes[0] === 0x30) {
+    try {
+      raw = derToRawSignature(bytes)
+    } catch (error) {
+      if (bytes.length !== 64) {
+        throw error
+      }
+      raw = bytes
+    }
+  } else {
+    if (bytes.length !== 64) {
+      throw new Error(`Invalid ECDSA signature: unrecognized format (${bytes.length} bytes)`)
+    }
+    raw = bytes
   }
-  const raw = bytes.length === 64 ? bytes : derToRawSignature(bytes)
   assertValidScalar(raw.subarray(0, 32), 'r')
   assertValidScalar(raw.subarray(32), 's')
   return `${toHex(raw)}${(recovery + 27).toString(16)}`
