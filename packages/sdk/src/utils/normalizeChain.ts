@@ -47,6 +47,8 @@ Object.assign(aliasToChain, {
   bitcoincash: Chain.BitcoinCash, // canonical `Bitcoin-Cash` has a hyphen; this is the un-hyphenated form
   binance: Chain.BSC,
   binancesmartchain: Chain.BSC,
+  bnbsmartchain: Chain.BSC, // alt marketing name post BNB rebrand
+  gaia: Chain.Cosmos, // Cosmos Hub's SDK/binary name (gaiad)
   matic: Chain.Polygon, // legacy ticker; current fee-coin ticker is POL
   arb: Chain.Arbitrum, // L2 tickers collide via shared ether metadata
   op: Chain.Optimism,
