@@ -7,6 +7,8 @@ import {
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { assertField } from '@vultisig/lib-utils/record/assertField'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
+import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
@@ -127,7 +129,10 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
         limitAmount: TW.Ripple.Proto.CurrencyAmount.create({
           currency: toXrplCurrencyCode(currency),
           issuer,
-          value: formatIssuedCurrencyValue(BigInt(keysignPayload.toAmount), coin.decimals),
+          value: formatIssuedCurrencyValue(
+            toBoundedBigInt(keysignPayload.toAmount, { bits: 128, signed: false }),
+            coin.decimals
+          ),
         }),
       }),
     }
@@ -157,7 +162,11 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
         TransactionType: 'Payment',
         Account: account,
         Destination: keysignPayload.toAddress,
-        Amount: keysignPayload.toAmount,
+        // Unlike the two Payment PROTO paths (int64 field, so signedness must
+        // match), this is a plain JSON string: XRP drops are non-negative, so
+        // reject a negative amount here instead of building JSON that XRPL
+        // would bounce after the MPC ceremony already ran.
+        Amount: toBoundedLong(keysignPayload.toAmount, { unsigned: true }).toString(),
         Fee: gas.toString(),
         Sequence: Number(sequence),
         LastLedgerSequence: Number(lastLedgerSequence),
@@ -179,7 +188,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
     return {
       opPayment: TW.Ripple.Proto.OperationPayment.create({
         destination: keysignPayload.toAddress,
-        amount: Long.fromString(keysignPayload.toAmount),
+        amount: toBoundedLong(keysignPayload.toAmount, { unsigned: false }),
         ...(destinationTag === undefined ? {} : { destinationTag: Long.fromNumber(destinationTag) as any }),
       }),
     }

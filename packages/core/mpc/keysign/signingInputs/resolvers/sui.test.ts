@@ -12,6 +12,7 @@ import { getSuiChainSpecific } from '../../chainSpecific/resolvers/sui'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 import { SignSuiSchema } from '../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
+import { SuiSpecificSchema } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { compileTx } from '../../../tx/compile/compileTx'
 import { getPreSigningHashes } from '../../../tx/preSigningHashes'
 import { getEncodedSigningInputs } from '../index'
@@ -151,6 +152,72 @@ describe('getSuiSigningInputs — native send', () => {
     })
 
     expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('do not support a memo')
+  })
+
+  const buildNativeSendPayload = (toAmount: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      toAddress: signer,
+      toAmount,
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          coins: [],
+          gasBudget: '',
+        }),
+      },
+    })
+
+  it('builds a PaySui input for an in-range amount', async () => {
+    const [input] = await getSuiSigningInputs({
+      keysignPayload: buildNativeSendPayload('1000000000'),
+      walletCore,
+    })
+    expect(input.paySui?.amounts?.[0]?.toString()).toBe('1000000000')
+  })
+
+  it('accepts a uint64 amount in the (2^63-1, 2^64-1] range — no false reject (#1138)', async () => {
+    // Sui `Pay`/`PaySui` `amounts` is proto uint64. A value above the signed-64
+    // ceiling but within uint64 is a legitimate large send; bounding it as
+    // `unsigned` must NOT throw. (Regression: an earlier `{ unsigned: false }`
+    // guard wrongly RangeError'd here.)
+    const big = '9500000000000000000' // ~9.5e18, in (2^63-1, 2^64-1]
+    const [input] = await getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(big), walletCore })
+    expect(input.paySui?.amounts?.[0]?.toString()).toBe(big)
+  })
+
+  it('round-trips the (2^63, 2^64) amount through the real wallet-core uint64 codec', async () => {
+    // Encode + decode through the ACTUAL TW proto codec (not just the JS Long)
+    // to prove the on-wire uint64 value is exactly what was requested.
+    const big = '9500000000000000000'
+    const [input] = await getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(big), walletCore })
+    const encoded = TW.Sui.Proto.SigningInput.encode(input).finish()
+    const decoded = TW.Sui.Proto.SigningInput.decode(encoded)
+    expect(decoded.paySui?.amounts?.[0]?.unsigned).toBe(true)
+    expect(decoded.paySui?.amounts?.[0]?.toString()).toBe(big)
+  })
+
+  it('accepts the unsigned-64 max and rejects one above it (#1138)', () => {
+    const uint64Max = (2n ** 64n - 1n).toString()
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(uint64Max), walletCore })).not.toThrow()
+
+    const overflow = (2n ** 64n).toString()
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(overflow), walletCore })).toThrow(
+      RangeError
+    )
+  })
+
+  it('rejects an unset/empty toAmount instead of building a zero-amount send (#1138)', () => {
+    // proto3 defaults an unset `toAmount` to '' — must fail closed, not build 0.
+    expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(''), walletCore })).toThrow(RangeError)
   })
 })
 

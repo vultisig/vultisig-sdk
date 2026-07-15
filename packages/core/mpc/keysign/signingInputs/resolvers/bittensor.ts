@@ -4,6 +4,7 @@ import {
 } from '@vultisig/core-chain/chains/bittensor/signing/buildExtrinsic'
 import { concatBytes } from '@vultisig/core-chain/chains/bittensor/signing/scale'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
@@ -63,7 +64,7 @@ export const getBittensorSigningInputs = ({
 
   const params: BittensorSigningParams = {
     toAddress,
-    amount: BigInt(keysignPayload.toAmount),
+    amount: toBoundedBigInt(keysignPayload.toAmount, { bits: 64, signed: false }),
     nonce: Number(nonce),
     blockNumber: Number(currentBlockNumber),
     blockHash: recentBlockHash,
