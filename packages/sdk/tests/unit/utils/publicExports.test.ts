@@ -89,6 +89,7 @@ describe('@vultisig/sdk public exports', () => {
 
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
     expect(typeof sdk.getChainKind).toBe('function')
+    expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
