@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AgentErrorCode } from '../agentErrors'
-import { AgentClient, resolveHttpTimeoutMs } from '../client'
+import { ExitCode } from '../../core/errors'
+import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agentErrors'
+import { AgentClient, AgentStreamIdleTimeoutError, resolveHttpTimeoutMs, resolveSseIdleTimeoutMs } from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -250,6 +251,34 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onTextDelta).toHaveBeenNthCalledWith(2, 'world')
     expect(onTitle).toHaveBeenCalledWith('Greeting')
     expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports unknown V1 frame types as protocol drift while keeping known telemetry quiet', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"data-usage","data":{"total_tokens":10}}\n\n',
+      'data: {"type":"data-confirmation","data":{"required":true}}\n\n',
+      'data: {"type":"data-future-critical","data":{"value":1}}\n\n',
+      'data: {"type":"data-future-critical","data":{"value":2}}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.protocolWarnings).toEqual([
+      {
+        code: 'PROTOCOL_DRIFT',
+        message: 'Ignored 3 unknown SSE frames: data-confirmation, data-future-critical',
+        count: 3,
+        eventTypes: ['data-confirmation', 'data-future-critical'],
+      },
+    ])
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('[SSE] unknown frame type: data-confirmation'))
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('[SSE] unknown frame type: data-future-critical'))
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('data-usage'))
   })
 
   it('derives tool_progress status from v1 frame type and resolves toolName via toolCallId cache', async () => {
@@ -832,6 +861,73 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     expect(result.disconnected).toBe(false)
     expect(result.fullText).toBe('slow')
   })
+
+  it('rejects with a typed TIMEOUT when an established SSE stream stops producing frames', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(': keep-alive\n\n'))
+        // Deliberately never enqueue another frame or close.
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    await vi.advanceTimersByTimeAsync(49)
+
+    let settled = false
+    void pending.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    const error = await pending.catch((caught: unknown) => caught)
+    expect(error).toMatchObject({
+      name: 'AgentStreamIdleTimeoutError',
+      code: AgentErrorCode.TIMEOUT,
+    })
+    expect(error).toBeInstanceOf(AgentStreamIdleTimeoutError)
+    expect(normalizeAgentError(error)).toEqual({
+      code: AgentErrorCode.TIMEOUT,
+      message: 'SSE stream idle timeout after 50ms without a frame',
+    })
+    expect(agentErrorCodeToExitCode(AgentErrorCode.TIMEOUT)).toBe(ExitCode.NETWORK)
+    vi.useRealTimers()
+  })
+
+  it('resets the SSE idle deadline on keep-alive frames', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+        c.enqueue(encoder.encode(': keep-alive\n\n'))
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    await vi.advanceTimersByTimeAsync(40)
+    controller.enqueue(encoder.encode(': keep-alive\n\n'))
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(40)
+    controller.enqueue(encoder.encode('data: {"type":"finish"}\n\n'))
+    controller.close()
+
+    await expect(pending).resolves.toMatchObject({ finished: true, disconnected: false })
+    vi.useRealTimers()
+  })
 })
 
 describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
@@ -856,5 +952,25 @@ describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
   it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])('falls back to the default for invalid value %j', val => {
     process.env.VULTISIG_HTTP_TIMEOUT_MS = val
     expect(resolveHttpTimeoutMs()).toBe(30_000)
+  })
+})
+
+describe('resolveSseIdleTimeoutMs (VULTISIG_SSE_IDLE_TIMEOUT_MS parsing)', () => {
+  const original = process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+  afterEach(() => {
+    if (original === undefined) delete process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+    else process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = original
+  })
+
+  it('defaults to 60000ms, safely above the backend keep-alive cadence', () => {
+    delete process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+    expect(resolveSseIdleTimeoutMs()).toBe(60_000)
+  })
+
+  it('honors a valid positive override and rejects disabling typos', () => {
+    process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = '90000'
+    expect(resolveSseIdleTimeoutMs()).toBe(90_000)
+    process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = '0'
+    expect(resolveSseIdleTimeoutMs()).toBe(60_000)
   })
 })

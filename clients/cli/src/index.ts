@@ -149,6 +149,7 @@ program
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
       '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
+      '  VULTISIG_SSE_IDLE_TIMEOUT_MS  Agent SSE frame-idle timeout in ms (default 60000)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
@@ -1374,6 +1375,10 @@ const agentCmd = program
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Without this flag, the CLI signs when confirmed but strips submit authorization.'
+  )
   .action(
     async (options: {
       viaAgent?: boolean
@@ -1384,6 +1389,7 @@ const agentCmd = program
       sessionId?: string
       notificationUrl?: string
       profile?: string
+      allowAutoSubmit?: boolean
     }) => {
       // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
       // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
@@ -1409,6 +1415,7 @@ const agentCmd = program
         sessionId: options.sessionId,
         notificationUrl: options.notificationUrl,
         profile: options.profile,
+        allowAutoSubmit: options.allowAutoSubmit,
       })
     }
   )
@@ -1426,6 +1433,10 @@ agentCmd
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Requires --yes for unattended signing.'
+  )
   .option(
     '--yes',
     'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
@@ -1446,6 +1457,9 @@ Signing safety:
   Without --yes, ask mode never signs or broadcasts — it reports the proposed
   transaction so a read-only prompt can't move funds. Pass --yes to opt in to
   unattended signing.
+
+  Signed Polymarket orders are NOT submitted by the backend unless
+  --allow-auto-submit is also passed.
 
   A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
   identical transaction intent was broadcast in the last 10 min and hasn't
@@ -1482,6 +1496,7 @@ Exit codes:
         profile?: string
         yes?: boolean
         force?: boolean
+        allowAutoSubmit?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1494,6 +1509,7 @@ Exit codes:
         profile: options.profile ?? parentOpts.profile,
         autoApprove: options.yes,
         force: options.force,
+        allowAutoSubmit: options.allowAutoSubmit ?? parentOpts.allowAutoSubmit,
       })
     }
   )
