@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ExitCode, InvalidTxHashError, toErrorJson, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
 import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
-import { executeTxStatus, resolveTimeoutMs } from '../tx-status'
+import { executeTxStatus, resolveTimeoutMs, resolveTxStatusParams } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
 
@@ -12,6 +12,12 @@ function makeCtx(getTxStatus: ReturnType<typeof vi.fn>) {
     ensureActiveVault: vi.fn().mockResolvedValue({ getTxStatus }),
   } as any
 }
+
+describe('resolveTxStatusParams', () => {
+  it('rejects a malformed hash before command-layer vault lookup', () => {
+    expect(() => resolveTxStatusParams({ chain: Chain.Ethereum, txHash: 'nothash' })).toThrow(InvalidTxHashError)
+  })
+})
 
 describe('executeTxStatus', () => {
   beforeEach(() => {

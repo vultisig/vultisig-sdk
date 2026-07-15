@@ -25,6 +25,25 @@ export type TxStatusParams = {
   timeoutSec?: number
 }
 
+export function resolveTxStatusParams(params: TxStatusParams): TxStatusParams {
+  if (!Object.values(Chain).includes(params.chain)) {
+    throw new InvalidInputError(`Invalid chain: ${params.chain}`)
+  }
+
+  // Validate before vault lookup as well as before RPC. Invalid input must be
+  // reported truthfully even when no active vault is configured.
+  if (!isValidTxHash(params.chain, params.txHash)) {
+    throw new InvalidTxHashError(
+      `Invalid transaction hash for ${params.chain}: "${params.txHash}"`,
+      'Check the hash — it must match the expected format for the chain.',
+      undefined,
+      { chain: params.chain, txHash: params.txHash, status: 'invalid_hash' }
+    )
+  }
+
+  return params
+}
+
 const POLL_INTERVAL_MS = 5_000
 const DEFAULT_TIMEOUT_SEC = 120
 
@@ -58,20 +77,7 @@ export async function executeTxStatus(
   params: TxStatusParams,
   opts: { pollIntervalMs?: number } = {}
 ): Promise<TxStatusResult> {
-  if (!Object.values(Chain).includes(params.chain)) {
-    throw new InvalidInputError(`Invalid chain: ${params.chain}`)
-  }
-
-  // Validate before vault lookup as well as before RPC. Invalid input must be
-  // reported truthfully even when no active vault is configured.
-  if (!isValidTxHash(params.chain, params.txHash)) {
-    throw new InvalidTxHashError(
-      `Invalid transaction hash for ${params.chain}: "${params.txHash}"`,
-      'Check the hash — it must match the expected format for the chain.',
-      undefined,
-      { chain: params.chain, txHash: params.txHash, status: 'invalid_hash' }
-    )
-  }
+  resolveTxStatusParams(params)
 
   const vault = await ctx.ensureActiveVault()
   const pollIntervalMs = opts.pollIntervalMs ?? POLL_INTERVAL_MS

@@ -53,6 +53,7 @@ import {
   executeSwitch,
   executeTokens,
   executeTxStatus,
+  resolveTxStatusParams,
   executeVaults,
   executeVerify,
 } from './commands'
@@ -814,19 +815,20 @@ Examples:
   )
   .action(
     withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
-      const context = await init(program.opts().vault)
       const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
       if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
         throw new InvalidInputError(
           `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
         )
       }
-      await executeTxStatus(context, {
+      const params = resolveTxStatusParams({
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
         timeoutSec,
       })
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, params)
     })
   )
 
