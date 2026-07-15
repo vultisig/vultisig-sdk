@@ -2,7 +2,7 @@ import { banxaSupportedChains } from '@vultisig/core-chain/banxa'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { findCoins as coreFindCoins } from '@vultisig/core-chain/coin/find'
-import { knownTokens, knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownTokenById, knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinPrices as coreCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { getCoinPricesWithChange as coreCoinPricesWithChange } from '@vultisig/core-chain/coin/price/getCoinPricesWithChange'
 import { scanAddressWithBlockaid } from '@vultisig/core-chain/security/blockaid/address'
@@ -1315,7 +1315,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    * @returns Token metadata or null if not found
    */
   static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
+    const coin = getKnownTokenById(chain, contractAddress)
     if (!coin) return null
     return {
       chain,

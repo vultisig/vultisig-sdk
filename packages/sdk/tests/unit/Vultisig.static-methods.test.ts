@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Only mock async/network-dependent core modules
@@ -58,6 +59,11 @@ describe('Vultisig static methods', () => {
   describe('getKnownToken', () => {
     // USDC on Ethereum is a well-known stable token in the registry
     const USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    const SOLANA_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const RIPPLE_RLUSD_ID = rippleTokenId({
+      currency: 'RLUSD',
+      issuer: 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+    })
 
     it('should return token info for a known contract address', () => {
       const token = Vultisig.getKnownToken(Chain.Ethereum, USDC_ADDRESS)
@@ -85,6 +91,16 @@ describe('Vultisig static methods', () => {
       const token = Vultisig.getKnownToken(Chain.Bitcoin, '0x123')
 
       expect(token).toBeNull()
+    })
+
+    it('requires exact-case lookup for Solana mints', () => {
+      expect(Vultisig.getKnownToken(Chain.Solana, SOLANA_USDC_MINT)?.ticker).toBe('USDC')
+      expect(Vultisig.getKnownToken(Chain.Solana, SOLANA_USDC_MINT.toLowerCase())).toBeNull()
+    })
+
+    it('requires exact canonical ids for Ripple issued currencies', () => {
+      expect(Vultisig.getKnownToken(Chain.Ripple, RIPPLE_RLUSD_ID)?.ticker).toBe('RLUSD')
+      expect(Vultisig.getKnownToken(Chain.Ripple, RIPPLE_RLUSD_ID.toLowerCase())).toBeNull()
     })
   })
 
