@@ -214,6 +214,9 @@ export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
 // Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
 export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
+export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
+export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
+export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
