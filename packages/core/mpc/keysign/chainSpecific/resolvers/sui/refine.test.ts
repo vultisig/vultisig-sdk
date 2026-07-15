@@ -71,7 +71,11 @@ const dryRunResponse = {
 describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, refine NOT stubbed)', () => {
   it('re-selects payload coins against the REFINED budget so the final signing input covers the budget it declares', async () => {
     mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
-    mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce(dryRunResponse)
+    // Selection grows 140 -> 149 (see below), so refine's converge loop fires
+    // ONE re-price round. The re-price reports the SAME cost as the first dry
+    // run, so it converges immediately without growing further — the "typical
+    // path converges in one round" case the loop bound's comment describes.
+    mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce(dryRunResponse).mockResolvedValueOnce(dryRunResponse)
 
     const amount = 4_000_000n
     const keysignPayload = buildPayload(amount)
@@ -80,6 +84,7 @@ describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, r
 
     // Refine actually landed (not the attempt/withFallback error path).
     expect(chainSpecific.gasBudget).toBe('3450000')
+    expect(mockDryRunTransactionBlock).toHaveBeenCalledTimes(2)
 
     const target = amount + BigInt(chainSpecific.gasBudget)
     const payloadTotal = chainSpecific.coins.reduce((sum, c) => sum + BigInt(c.balance), 0n)
@@ -108,11 +113,53 @@ describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, r
     expect(inputTotal).toBeGreaterThanOrEqual(target)
     expect(inputCoins.length).toBeLessThanOrEqual(maxSuiInputCoinObjects)
 
-    // Deterministic: an identical wallet + dry-run response selects the
+    // Deterministic: an identical wallet + dry-run responses select the
     // identical object set on a second run.
     mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
-    mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce(dryRunResponse)
+    mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce(dryRunResponse).mockResolvedValueOnce(dryRunResponse)
     const again = await getSuiChainSpecific({ keysignPayload: buildPayload(amount), walletCore })
     expect(again.coins.map(c => c.coinObjectId)).toEqual(chainSpecific.coins.map(c => c.coinObjectId))
+  })
+
+  it('bounds the converge loop at 2 re-price rounds even when the dry-run cost keeps climbing', async () => {
+    // Each round's re-price reports a HIGHER cost than the last, so the
+    // selection keeps growing (140 -> 149 -> 154 -> 159) and would keep
+    // triggering further rounds forever if unbounded. The loop must stop
+    // after exactly 2 extra rounds (3 dry runs total) and accept the last
+    // computed budget/selection rather than looping indefinitely.
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
+    mockDryRunTransactionBlock
+      .mockReset()
+      // Round 0 (baseline, 140 objects): 3_000_000 -> budget 3_450_000, grows to 149.
+      .mockResolvedValueOnce({
+        effects: { gasUsed: { computationCost: '2000000', storageCost: '1000000', storageRebate: '0' } },
+      })
+      // Round 1 (re-price on 149 objects): 3_200_000 -> budget 3_680_000, grows to 154.
+      .mockResolvedValueOnce({
+        effects: { gasUsed: { computationCost: '2100000', storageCost: '1100000', storageRebate: '0' } },
+      })
+      // Round 2 (re-price on 154 objects): 3_400_000 -> budget 3_910_000, grows to 159.
+      .mockResolvedValueOnce({
+        effects: { gasUsed: { computationCost: '2200000', storageCost: '1200000', storageRebate: '0' } },
+      })
+
+    const amount = 4_000_000n
+    const keysignPayload = buildPayload(amount)
+
+    const chainSpecific = await getSuiChainSpecific({ keysignPayload, walletCore })
+
+    // Exactly 1 (baseline) + 2 (the bound) dry runs — never a 4th, even though
+    // the round-2 selection (159 objects) still grew past round-1's (154).
+    expect(mockDryRunTransactionBlock).toHaveBeenCalledTimes(3)
+    expect(chainSpecific.gasBudget).toBe('3910000')
+    expect(chainSpecific.coins).toHaveLength(159)
+
+    // The selection accepted at the bound still covers the budget it itself
+    // declares, even though a hypothetical round 3 might have priced higher
+    // still — the documented fail-safe tradeoff of the bound.
+    const target = amount + BigInt(chainSpecific.gasBudget)
+    const payloadTotal = chainSpecific.coins.reduce((sum, c) => sum + BigInt(c.balance), 0n)
+    expect(payloadTotal).toBeGreaterThanOrEqual(target)
+    expect(chainSpecific.coins.length).toBeLessThanOrEqual(maxSuiInputCoinObjects)
   })
 })

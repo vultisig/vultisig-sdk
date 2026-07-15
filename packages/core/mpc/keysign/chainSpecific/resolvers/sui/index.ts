@@ -82,6 +82,9 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
     gasBudget: suiGasBudget.toString(),
   })
 
+  // On dry-run/RPC failure, refine never runs — fall back to the static-budget
+  // baseline `chainSpecific` above as-is. Pre-existing best-effort behavior,
+  // unchanged by the refine re-selection/re-pricing this resolver now does.
   return withFallback(
     attempt(
       refineSuiChainSpecific({
