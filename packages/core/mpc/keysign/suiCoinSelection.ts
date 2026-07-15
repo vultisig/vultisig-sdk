@@ -6,19 +6,19 @@ export const maxSuiInputCoinObjects = 255
 export const suiGasCandidateObjectCount = 5
 
 const normalizeSuiAddress = (address: string): string => {
-  const hex = address.startsWith('0x') ? address.slice(2) : address
+  const lowered = address.toLowerCase()
+  const hex = lowered.startsWith('0x') ? lowered.slice(2) : lowered
   const trimmed = hex.replace(/^0+/, '')
   return `0x${trimmed || '0'}`
 }
 
 export const normalizeSuiCoinType = (coinType: string): string => {
-  const lowered = coinType.toLowerCase()
-  const addressEnd = lowered.indexOf('::')
+  const addressEnd = coinType.indexOf('::')
   if (addressEnd < 0) {
-    return lowered
+    return normalizeSuiAddress(coinType)
   }
 
-  return `${normalizeSuiAddress(lowered.slice(0, addressEnd))}${lowered.slice(addressEnd)}`
+  return `${normalizeSuiAddress(coinType.slice(0, addressEnd))}${coinType.slice(addressEnd)}`
 }
 
 export const isSameSuiCoinType = (lhs: string, rhs: string): boolean =>
@@ -60,6 +60,10 @@ export const selectSuiInputCoins = (
     accumulated += getSuiCoinBalance(coin)
   }
 
+  if (accumulated < target) {
+    throw new Error(`Insufficient Sui coin balance to cover ${target.toString()}`)
+  }
+
   return selected
 }
 
@@ -69,10 +73,18 @@ export const selectSuiGasObject = (coins: readonly SuiCoin[], gasBudget: bigint)
 
   const covering = nativeCoins.filter(coin => getSuiCoinBalance(coin) >= gasBudget)
   if (covering.length > 0) {
-    return covering.reduce((best, coin) => (getSuiCoinBalance(coin) < getSuiCoinBalance(best) ? coin : best))
+    return covering.sort((lhs, rhs) => {
+      const lhsBalance = getSuiCoinBalance(lhs)
+      const rhsBalance = getSuiCoinBalance(rhs)
+      if (lhsBalance !== rhsBalance) {
+        return lhsBalance < rhsBalance ? -1 : 1
+      }
+
+      return lhs.coinObjectId.localeCompare(rhs.coinObjectId)
+    })[0]
   }
 
-  return nativeCoins.reduce((best, coin) => (getSuiCoinBalance(coin) > getSuiCoinBalance(best) ? coin : best))
+  throw new Error(`Insufficient SUI balance to cover gas budget ${gasBudget.toString()}`)
 }
 
 type SelectSuiPayloadCoinsInput = {

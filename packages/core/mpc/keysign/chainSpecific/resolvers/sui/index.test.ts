@@ -58,7 +58,7 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
         nextCursor: 'cur2',
       })
       .mockResolvedValueOnce({
-        data: Array.from({ length: 7 }, (_, i) => makeCoin(100 + i)),
+        data: [makeCoin(100, '3000001'), ...Array.from({ length: 6 }, (_, i) => makeCoin(101 + i))],
         hasNextPage: false,
         nextCursor: null,
       })
@@ -69,7 +69,7 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
     })
 
     expect(mockGetAllCoins).toHaveBeenCalledTimes(3)
-    expect(res.coins).toHaveLength(107)
+    expect(res.coins.map(coin => coin.coinObjectId)).toEqual(['0xobj100'])
     // Cursor from each page is threaded into the next request.
     expect(mockGetAllCoins.mock.calls[1]?.[0]).toMatchObject({
       cursor: 'cur1',
@@ -99,7 +99,7 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
   it('terminates on a single page (hasNextPage false)', async () => {
     mockGetAllCoins.mockReset()
     mockGetAllCoins.mockResolvedValueOnce({
-      data: [makeCoin(0), makeCoin(1)],
+      data: [makeCoin(0, '3000001'), makeCoin(1)],
       hasNextPage: false,
       nextCursor: null,
     })
@@ -110,7 +110,7 @@ describe('getSuiChainSpecific — getAllCoins pagination', () => {
     })
 
     expect(mockGetAllCoins).toHaveBeenCalledTimes(1)
-    expect(res.coins).toHaveLength(2)
+    expect(res.coins.map(coin => coin.coinObjectId)).toEqual(['0xobj0'])
   })
 
   it('bounds a dusty native wallet payload to the largest covering object', async () => {
