@@ -1,5 +1,4 @@
 import { type Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
@@ -466,13 +465,7 @@ export class FiatValueService {
    */
   private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
     if (!this.isEvmChain(chain)) {
-      const normalizedTokenAddress = tokenAddress.trim()
-      const nativeCosmosDenom = cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom]
-      const priceProviderId =
-        resolveTokenPriceId(chain, normalizedTokenAddress) ??
-        (nativeCosmosDenom && normalizedTokenAddress.toLowerCase() === nativeCosmosDenom
-          ? chainFeeCoin[chain]?.priceProviderId
-          : undefined)
+      const priceProviderId = resolveTokenPriceId(chain, tokenAddress)
       if (!priceProviderId) return 0
 
       const prices = await getCoinPrices({

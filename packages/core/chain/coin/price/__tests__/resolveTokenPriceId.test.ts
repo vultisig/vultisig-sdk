@@ -99,9 +99,8 @@ describe('resolveTokenPriceId', () => {
       expect(resolveTokenPriceId(Chain.TerraClassic, 'krtc')).toBeUndefined()
     })
 
-    it('uluna on TerraClassic -> undefined (only in chainFeeCoin, not knownTokensIndex)', () => {
-      // uluna is the native denom but it is not registered as a separate knownToken entry
-      expect(resolveTokenPriceId(Chain.TerraClassic, 'uluna')).toBeUndefined()
+    it('unknown native-looking denom on TerraClassic -> undefined', () => {
+      expect(resolveTokenPriceId(Chain.TerraClassic, 'ufoo')).toBeUndefined()
     })
 
     it('unknown Solana mint -> undefined', () => {
@@ -110,6 +109,10 @@ describe('resolveTokenPriceId', () => {
   })
 
   describe('whitespace tolerance (upstream string sources may carry padding)', () => {
+    it('whitespace-padded Cosmos native fee denom resolves to the native coin', () => {
+      expect(resolveTokenPriceId(Chain.TerraClassic, ' uluna ')).toBe('terra-luna')
+    })
+
     it('whitespace-padded EVM contract still resolves', () => {
       expect(resolveTokenPriceId(Chain.Ethereum, '  0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48  ')).toBe('usd-coin')
     })

@@ -1,4 +1,5 @@
 import type { Chain } from '../../Chain'
+import { cosmosFeeCoinDenom } from '../../chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '../chainFeeCoin'
 import { knownTokensIndex } from '../knownTokens'
 
@@ -26,6 +27,9 @@ import { knownTokensIndex } from '../knownTokens'
 export function resolveTokenPriceId(chain: Chain, denomOrAddress?: string): string | undefined {
   const normalized = denomOrAddress?.trim().toLowerCase()
   if (!normalized) {
+    return chainFeeCoin[chain]?.priceProviderId || undefined
+  }
+  if (cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom] === normalized) {
     return chainFeeCoin[chain]?.priceProviderId || undefined
   }
   return knownTokensIndex[chain]?.[normalized]?.priceProviderId || undefined
