@@ -308,6 +308,23 @@ export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/
 // that can drift from each other (the mcp-ts #384 bug class).
 export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
 
+// Dangerous/burn-address guard. Single source of truth for "is this destination
+// a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
+// XRP. Exported so the app + agent-backend-ts consume it instead of maintaining
+// their own copies that drift (the CCTP mintRecipient burn-drift incident this
+// list's header documents). Reconciled to the union of all three prior copies.
+export {
+  assertSafeDestination,
+  assertSafeEvmDestination,
+  EVM_DANGEROUS_ADDRESSES,
+  getChainDangerousReason,
+  getEvmDangerousReason,
+  isEvmBurnAddress,
+  SOLANA_DANGEROUS_ADDRESSES,
+  UTXO_DANGEROUS_ADDRESSES,
+  XRP_DANGEROUS_ADDRESSES,
+} from './utils/dangerousAddresses'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {
