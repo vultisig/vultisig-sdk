@@ -17,6 +17,9 @@ jobs:
     name: Read-only SDK e2e
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
+      TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
 
     steps:
       - name: Checkout code
@@ -42,6 +45,26 @@ jobs:
       - name: Build packages
         run: yarn build:all
 
+      - name: Write test vault fixture
+        env:
+          VAULT_B64_1: ${{ secrets.E2E_TEST_VAULT_FILE_B64_1 }}
+          VAULT_B64_2: ${{ secrets.E2E_TEST_VAULT_FILE_B64_2 }}
+          VAULT_B64_3: ${{ secrets.E2E_TEST_VAULT_FILE_B64_3 }}
+          VAULT_B64_4: ${{ secrets.E2E_TEST_VAULT_FILE_B64_4 }}
+          VAULT_B64_5: ${{ secrets.E2E_TEST_VAULT_FILE_B64_5 }}
+          VAULT_B64_6: ${{ secrets.E2E_TEST_VAULT_FILE_B64_6 }}
+        run: |
+          if [ -z "$TEST_VAULT_PASSWORD" ] ||
+             [ -z "$VAULT_B64_1" ] || [ -z "$VAULT_B64_2" ] ||
+             [ -z "$VAULT_B64_3" ] || [ -z "$VAULT_B64_4" ] ||
+             [ -z "$VAULT_B64_5" ] || [ -z "$VAULT_B64_6" ]; then
+            echo "::error::The dedicated E2E vault fixture is incomplete; refusing to report a green read-only run with skipped suites."
+            exit 1
+          fi
+          printf '%s' "$VAULT_B64_1$VAULT_B64_2$VAULT_B64_3$VAULT_B64_4$VAULT_B64_5$VAULT_B64_6" |
+            base64 -d > "$TEST_VAULT_PATH"
+          chmod 600 "$TEST_VAULT_PATH"
+
       - name: Run swap quote e2e
         run: yarn test:e2e:swap-quotes
 
@@ -53,3 +76,7 @@ jobs:
 
       - name: Run prepare-send e2e
         run: yarn test:e2e:prepare-send
+
+      - name: Remove test vault fixture
+        if: always()
+        run: rm -f "$TEST_VAULT_PATH"
