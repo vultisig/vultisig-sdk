@@ -1,10 +1,22 @@
 import { spawnSync } from 'node:child_process'
-import path from 'node:path'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path, { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ExitCode } from '../core/errors'
+
+const parseEnvMock = vi.fn()
+const logMock = vi.fn()
+
+vi.mock('tabtab', () => ({
+  default: {
+    parseEnv: parseEnvMock,
+    log: logMock,
+  },
+}))
 
 const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.ts')
 
@@ -28,6 +40,48 @@ function runPiped(args: string[]) {
     env,
   })
 }
+
+describe('handleCompletion vault completion', () => {
+  const originalConfigDir = process.env.VULTISIG_CONFIG_DIR
+  let tmpConfigDir: string
+
+  beforeEach(() => {
+    vi.resetModules()
+    parseEnvMock.mockReset()
+    logMock.mockReset()
+    tmpConfigDir = mkdtempSync(join(tmpdir(), 'vultisig-completion-'))
+  })
+
+  afterEach(() => {
+    if (originalConfigDir === undefined) {
+      delete process.env.VULTISIG_CONFIG_DIR
+    } else {
+      process.env.VULTISIG_CONFIG_DIR = originalConfigDir
+    }
+    rmSync(tmpConfigDir, { recursive: true, force: true })
+  })
+
+  it('reads vault names from the SDK storage layout rooted at VULTISIG_CONFIG_DIR', async () => {
+    process.env.VULTISIG_CONFIG_DIR = tmpConfigDir
+    writeFileSync(
+      join(tmpConfigDir, 'vault:alpha-id.json'),
+      JSON.stringify({
+        value: { id: 'alpha-id', name: 'Alpha Vault' },
+        metadata: { version: 1, createdAt: 1, lastModified: 1 },
+      })
+    )
+    parseEnvMock.mockReturnValue({
+      complete: true,
+      line: 'vultisig switch A',
+      lastPartial: 'A',
+    })
+
+    const { handleCompletion } = await import('./completion')
+
+    await expect(handleCompletion()).resolves.toBe(true)
+    expect(logMock).toHaveBeenCalledWith(['Alpha Vault', 'alpha-id'])
+  })
+})
 
 describe('completion --install in a non-TTY session', () => {
   it('fails closed gracefully instead of prompting on stdout or crashing on readline', () => {
