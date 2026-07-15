@@ -618,15 +618,21 @@ describe('getRippleSigningInputs interop vector', () => {
   })
 
   it('keeps serialized signing bytes and pre-signing hash stable', async () => {
-    const [txInputData] = await getEncodedSigningInputs({
+    const txInputDataList = await getEncodedSigningInputs({
       keysignPayload: buildInteropPayload(),
       walletCore: interopWalletCore,
     })
-    const [preSigningHash] = getPreSigningHashes({
+    expect(txInputDataList).toHaveLength(1)
+    const [txInputData] = txInputDataList
+
+    const preSigningHashes = getPreSigningHashes({
       walletCore: interopWalletCore,
       chain: Chain.Ripple,
       txInputData,
     })
+    expect(preSigningHashes).toHaveLength(1)
+    const [preSigningHash] = preSigningHashes
+
     expect(hex(txInputData)).toBe(vector.expected.serializedSigningInputHex)
     expect(hex(preSigningHash)).toBe(vector.expected.preSigningHashHex)
   })
