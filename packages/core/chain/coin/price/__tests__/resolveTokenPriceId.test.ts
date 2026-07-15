@@ -67,9 +67,12 @@ describe('resolveTokenPriceId', () => {
       expect(resolveTokenPriceId(Chain.Ethereum, '0xdac17f958d2ee523a2206206994597c13d831ec7')).toBe('tether')
     })
 
-    it('Solana USDC mint -> usd-coin (case-insensitive lookup into lowercased index)', () => {
-      // The index stores keys lowercased; passing the canonical mixed-case mint works fine
+    it('Solana USDC canonical mint -> usd-coin', () => {
       expect(resolveTokenPriceId(Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
+    })
+
+    it('does not case-fold a distinct Solana mint into the canonical USDC mint', () => {
+      expect(resolveTokenPriceId(Chain.Solana, 'EpjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBeUndefined()
     })
 
     it('Solana USDT mint -> tether', () => {
