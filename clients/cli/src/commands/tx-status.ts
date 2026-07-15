@@ -41,11 +41,16 @@ const isTerminal = (status: TxStatusResult['status']): boolean => status === 'su
 // against reintroducing the infinite poll — `deadline = Date.now() + NaN` would
 // make `Date.now() >= deadline` forever false. The CLI validates `--timeout`
 // too, but this keeps `executeTxStatus` self-safe for every caller.
-function resolveTimeoutMs(timeoutSec: number | undefined): number {
+export function resolveTimeoutMs(timeoutSec: number | undefined): number {
   if (typeof timeoutSec !== 'number' || !Number.isFinite(timeoutSec)) {
     return DEFAULT_TIMEOUT_SEC * 1_000
   }
-  return Math.max(0, timeoutSec) * 1_000
+  const ms = Math.max(0, timeoutSec) * 1_000
+  // A *finite* `timeoutSec` can still overflow to Infinity once scaled to ms
+  // (e.g. `1e308 * 1000`). An Infinite deadline makes `remainingMs <= 0`
+  // unreachable — reintroducing the exact infinite poll this guard exists to
+  // prevent — so clamp an overflowed value back to a finite ceiling.
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER
 }
 
 export async function executeTxStatus(

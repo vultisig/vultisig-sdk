@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ExitCode, InvalidTxHashError, toErrorJson, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
 import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
-import { executeTxStatus } from '../tx-status'
+import { executeTxStatus, resolveTimeoutMs } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
 
@@ -193,5 +193,32 @@ describe('executeTxStatus', () => {
     )
     expect(out.status).toBe('success')
     expect(getTxStatus).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('resolveTimeoutMs', () => {
+  const DEFAULT_MS = 120_000
+
+  it('falls back to the default budget for undefined or non-finite input', () => {
+    expect(resolveTimeoutMs(undefined)).toBe(DEFAULT_MS)
+    expect(resolveTimeoutMs(Number.NaN)).toBe(DEFAULT_MS)
+    expect(resolveTimeoutMs(Number.POSITIVE_INFINITY)).toBe(DEFAULT_MS)
+  })
+
+  it('clamps a negative timeout to an immediate (0ms) give-up', () => {
+    expect(resolveTimeoutMs(-5)).toBe(0)
+  })
+
+  it('scales a normal timeout to milliseconds', () => {
+    expect(resolveTimeoutMs(30)).toBe(30_000)
+  })
+
+  it('stays finite when a huge (but finite) timeout overflows after ×1000', () => {
+    // 1e308 is finite and passes the CLI `--timeout` guard, but 1e308 * 1000
+    // overflows to Infinity. An Infinite deadline makes the poll give-up check
+    // (`remainingMs <= 0`) unreachable — the infinite poll the guard forbids.
+    const ms = resolveTimeoutMs(1e308)
+    expect(Number.isFinite(ms)).toBe(true)
+    expect(ms).toBe(Number.MAX_SAFE_INTEGER)
   })
 })
