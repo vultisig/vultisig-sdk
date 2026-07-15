@@ -28,14 +28,14 @@ export const validateUtxoRequirements = ({ amount, balance, chain, fee, skipDust
     return `Minimum send amount is ${formattedAmount}. ${chain} requires this to prevent spam.`
   }
 
-  if (skipDustCheck) {
-    return
-  }
-
   const remainingBalance = fee != null ? balance - amount - fee : balance - amount
 
   if (remainingBalance < 0n) {
     return 'Insufficient balance to cover amount and network fees.'
+  }
+
+  if (skipDustCheck) {
+    return
   }
 
   if (remainingBalance === 0n) {

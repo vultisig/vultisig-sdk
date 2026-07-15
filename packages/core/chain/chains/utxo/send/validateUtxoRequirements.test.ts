@@ -15,6 +15,17 @@ describe('validateUtxoRequirements', () => {
     ).toBe('Insufficient balance to cover amount and network fees.')
   })
 
+  it('reports insufficient funds while dust validation is deferred', () => {
+    expect(
+      validateUtxoRequirements({
+        amount: 10_200n,
+        balance: 10_100n,
+        chain: Chain.Bitcoin,
+        skipDustCheck: true,
+      })
+    ).toBe('Insufficient balance to cover amount and network fees.')
+  })
+
   it('keeps the dust-change warning for positive sub-dust change', () => {
     expect(
       validateUtxoRequirements({
