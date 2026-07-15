@@ -7,7 +7,7 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, chainFeeCoin, getChainKind, normalizeChain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, getChainKind, getEvmChainByChainId, normalizeChain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -2160,22 +2160,12 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
  * Resolve a Chain from a numeric EVM chain ID.
  */
 export function resolveChainId(chainId: string | number): Chain | null {
-  const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
-  if (isNaN(id)) return null
+  const normalized = typeof chainId === 'string' ? chainId.trim().toLowerCase() : String(chainId)
+  const id = Number.parseInt(normalized, normalized.startsWith('0x') ? 16 : 10)
+  if (Number.isNaN(id)) return null
 
-  const chainIdMap: Record<number, Chain> = {
-    1: Chain.Ethereum,
-    56: Chain.BSC,
-    137: Chain.Polygon,
-    43114: Chain.Avalanche,
-    42161: Chain.Arbitrum,
-    10: Chain.Optimism,
-    8453: Chain.Base,
-    81457: Chain.Blast,
-    324: Chain.Zksync,
-    25: Chain.CronosChain,
-  }
-  return chainIdMap[id] || null
+  const canonicalChainId = normalized.startsWith('0x') ? normalized : `0x${id.toString(16)}`
+  return (getEvmChainByChainId(canonicalChainId) as Chain | undefined) ?? null
 }
 
 // ============================================================================
