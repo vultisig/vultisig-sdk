@@ -196,6 +196,15 @@ export class AgentExecutor {
    */
   private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
     const source = overrideTx ?? payload
+    // `data` is EVM calldata iff the chain is an EVM chain — the single authority
+    // that decides whether an empty `"0x"` folds (calldata) or stays literal (a
+    // memo on a memo-routed chain, PR #1259). Derived from chain kind, never
+    // hardcoded per branch, so a new chain family can't silently reintroduce the
+    // memo collision. The nested-tx branch is EVM by construction (extractNestedTx
+    // only yields EVM `tx`/`send_tx` shapes); the flat branch is a non-EVM memo —
+    // but if an EVM send ever reaches it, its `0x` memo is still calldata, so gate
+    // both on the same rule rather than assuming which branch runs.
+    const dataIsEvmCalldata = getChainKind(chain) === 'evm'
     const nested = extractNestedTx(source)
     if (nested && (nested.to || nested.value || nested.data)) {
       return {
@@ -203,11 +212,8 @@ export class AgentExecutor {
         chain: chain.toString(),
         to: nested.to != null ? String(nested.to) : undefined,
         value: nested.value != null ? String(nested.value) : undefined,
-        // Nested `tx`/`send_tx` shape carries EVM calldata — mark it so an empty
-        // `"0x"` folds to `""` and cross-path dedupes with a native send that
-        // emitted no data. The memo branch below deliberately leaves this unset.
         data: nested.data != null ? String(nested.data) : undefined,
-        dataIsEvmCalldata: true,
+        dataIsEvmCalldata,
       }
     }
     const txArgs = source?.txArgs ?? source
@@ -222,6 +228,7 @@ export class AgentExecutor {
       to: txArgs?.to != null ? String(txArgs.to) : undefined,
       value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
       data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      dataIsEvmCalldata,
       asset: asset != null ? String(asset) : undefined,
     }
   }
