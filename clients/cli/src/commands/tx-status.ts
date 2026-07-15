@@ -6,7 +6,7 @@
  * spent. Use --no-wait to return the current status immediately.
  *
  * The `--tx-hash` value is validated for its chain-kind BEFORE any RPC call, so a
- * malformed hash fails fast with INVALID_INPUT (exit 4) instead of being polled.
+ * malformed hash fails fast with INVALID_HASH (exit 4) instead of being polled.
  * A well-formed hash the node has never seen resolves to `not_found` rather than
  * an indefinite `pending`, so a typo'd or dropped hash can never poll forever.
  */
@@ -14,7 +14,7 @@ import type { TxStatusResult } from '@vultisig/sdk'
 import { Chain, isValidTxHash, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
-import { InvalidInputError, TxNotFoundError, TxStatusTimeoutError } from '../core'
+import { InvalidInputError, InvalidTxHashError, TxNotFoundError, TxStatusTimeoutError } from '../core'
 import { createSpinner, isJsonOutput, outputJson, printResult } from '../lib/output'
 
 export type TxStatusParams = {
@@ -53,23 +53,22 @@ export async function executeTxStatus(
   params: TxStatusParams,
   opts: { pollIntervalMs?: number } = {}
 ): Promise<TxStatusResult> {
-  const vault = await ctx.ensureActiveVault()
-
   if (!Object.values(Chain).includes(params.chain)) {
     throw new InvalidInputError(`Invalid chain: ${params.chain}`)
   }
 
-  // Validate the hash shape BEFORE touching the network — a malformed hash is a
-  // user error, not something to poll. (exit 4 / INVALID_INPUT, no RPC.)
+  // Validate before vault lookup as well as before RPC. Invalid input must be
+  // reported truthfully even when no active vault is configured.
   if (!isValidTxHash(params.chain, params.txHash)) {
-    throw new InvalidInputError(
+    throw new InvalidTxHashError(
       `Invalid transaction hash for ${params.chain}: "${params.txHash}"`,
       'Check the hash — it must match the expected format for the chain.',
       undefined,
-      { chain: params.chain, txHash: params.txHash }
+      { chain: params.chain, txHash: params.txHash, status: 'invalid_hash' }
     )
   }
 
+  const vault = await ctx.ensureActiveVault()
   const pollIntervalMs = opts.pollIntervalMs ?? POLL_INTERVAL_MS
   const spinner = createSpinner('Checking transaction status...')
 
@@ -96,7 +95,7 @@ export async function executeTxStatus(
       }
     }
 
-    spinner.succeed(`Transaction status: ${result.status}`)
+    spinner.succeed(`Transaction status: ${toCliStatus(result.status)}`)
     displayResult(params.chain, params.txHash, result)
     return result
   } catch (error) {
@@ -135,11 +134,12 @@ function giveUpError(
 }
 
 function displayResult(chain: Chain, txHash: string, result: TxStatusResult): void {
+  const status = toCliStatus(result.status)
   if (isJsonOutput()) {
     outputJson({
       chain,
       txHash,
-      status: result.status,
+      status,
       receipt: result.receipt
         ? {
             feeAmount: result.receipt.feeAmount.toString(),
@@ -150,13 +150,21 @@ function displayResult(chain: Chain, txHash: string, result: TxStatusResult): vo
       explorerUrl: Vultisig.getTxExplorerUrl(chain, txHash),
     })
   } else {
-    printResult(`Status: ${result.status}`)
+    printResult(`Status: ${status}`)
     if (result.receipt) {
       const fee = formatFee(result.receipt.feeAmount, result.receipt.feeDecimals)
       printResult(`Fee: ${fee} ${result.receipt.feeTicker}`)
     }
     printResult(`Explorer: ${Vultisig.getTxExplorerUrl(chain, txHash)}`)
   }
+}
+
+type CliTxStatus = 'pending' | 'not_found' | 'confirmed' | 'failed'
+
+function toCliStatus(status: TxStatusResult['status']): CliTxStatus {
+  if (status === 'success') return 'confirmed'
+  if (status === 'error') return 'failed'
+  return status
 }
 
 function formatFee(amount: bigint, decimals: number): string {

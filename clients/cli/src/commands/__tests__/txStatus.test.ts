@@ -1,8 +1,8 @@
 import { Chain } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { InvalidInputError, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
-import { setSilentMode } from '../../lib/output'
+import { ExitCode, InvalidTxHashError, toErrorJson, TxNotFoundError, TxStatusTimeoutError } from '../../core/errors'
+import { configureOutput, resetOutput, setSilentMode } from '../../lib/output'
 import { executeTxStatus } from '../tx-status'
 
 const EVM_HASH = '0x' + 'a'.repeat(64)
@@ -19,18 +19,68 @@ describe('executeTxStatus', () => {
     setSilentMode(true)
   })
   afterEach(() => {
+    vi.restoreAllMocks()
+    resetOutput()
     setSilentMode(false)
-    vi.clearAllMocks()
   })
 
-  it('rejects a malformed hash with INVALID_INPUT and never calls the RPC', async () => {
+  it('rejects a malformed hash as invalid_hash before vault access or RPC', async () => {
     const getTxStatus = vi.fn()
-    const ctx = makeCtx(getTxStatus)
+    const ensureActiveVault = vi.fn().mockResolvedValue({ getTxStatus })
+    const ctx = { ensureActiveVault } as any
 
-    await expect(executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: 'nothash' })).rejects.toBeInstanceOf(
-      InvalidInputError
-    )
+    const error = await executeTxStatus(ctx, { chain: Chain.Ethereum, txHash: 'nothash' }).catch(error => error)
+
+    expect(error).toBeInstanceOf(InvalidTxHashError)
+    expect(error).toMatchObject({
+      code: 'INVALID_HASH',
+      exitCode: ExitCode.INVALID_INPUT,
+      context: { chain: Chain.Ethereum, txHash: 'nothash', status: 'invalid_hash' },
+    })
+    expect(toErrorJson(error).error).toMatchObject({
+      code: 'INVALID_HASH',
+      exitCode: ExitCode.INVALID_INPUT,
+      context: { status: 'invalid_hash' },
+    })
+    expect(ensureActiveVault).not.toHaveBeenCalled()
     expect(getTxStatus).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ status: 'pending' as const, isKnown: true }, 'pending'],
+    [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
+    [{ status: 'error' as const, receipt: undefined }, 'failed'],
+  ])('emits the CLI status %s consistently in JSON mode', async (result, expectedStatus) => {
+    configureOutput({ format: 'json' })
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    await executeTxStatus(makeCtx(vi.fn().mockResolvedValue(result)), {
+      chain: Chain.Ethereum,
+      txHash: EVM_HASH,
+      noWait: true,
+    })
+
+    const envelope = JSON.parse(String(write.mock.calls.at(-1)?.[0]))
+    expect(envelope.data.status).toBe(expectedStatus)
+  })
+
+  it.each([
+    [{ status: 'pending' as const, isKnown: true }, 'pending'],
+    [{ status: 'not_found' as const, isKnown: false }, 'not_found'],
+    [{ status: 'success' as const, receipt: undefined }, 'confirmed'],
+    [{ status: 'error' as const, receipt: undefined }, 'failed'],
+  ])('emits the CLI status %s consistently in human mode', async (result, expectedStatus) => {
+    configureOutput({ format: 'table' })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await executeTxStatus(makeCtx(vi.fn().mockResolvedValue(result)), {
+      chain: Chain.Ethereum,
+      txHash: EVM_HASH,
+      noWait: true,
+    })
+
+    expect(log.mock.calls.flat().join('\n')).toContain(`Status: ${expectedStatus}`)
   })
 
   it('returns success + receipt for a confirmed hash', async () => {

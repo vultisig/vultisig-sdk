@@ -1343,6 +1343,9 @@ const checkStatus = async () => {
     case 'pending':
       console.log('Still pending...')
       return false
+    case 'not_found':
+      console.log('The node does not currently know this transaction hash')
+      return false
   }
 }
 ```
@@ -1351,11 +1354,13 @@ const checkStatus = async () => {
 
 **Return type (`TxStatusResult`):**
 
-- `status: 'pending' | 'success' | 'error'` - Current on-chain status
+- `status: 'pending' | 'success' | 'error' | 'not_found'` - Current on-chain status. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
 - `receipt?: TxReceiptInfo` - Fee details when available:
   - `feeAmount: bigint` - Fee paid in base units
   - `feeDecimals: number` - Decimal places for the fee token
   - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+
+EVM RPCs can explicitly distinguish a missing receipt from an unknown hash and return `not_found`. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those resolvers conservatively return `pending` with `isKnown: false`.
 
 **Error handling:**
 

@@ -796,7 +796,7 @@ program
 // Command: Check transaction status
 program
   .command('tx-status')
-  .description('Check the status of a transaction (polls until confirmed)')
+  .description('Check transaction status (polls until terminal or timeout)')
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
@@ -804,6 +804,9 @@ program
   .addHelpText(
     'after',
     `
+Statuses: pending, not_found, confirmed, failed
+Malformed hashes fail with INVALID_HASH (exit 4).
+
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
   vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
