@@ -63,6 +63,18 @@ describe('AgentExecutor — per-tool handlers (new tool-path API)', () => {
     expect(added.map(a => a.chain).sort()).toEqual(['Bitcoin', 'Ethereum'])
   })
 
+  it('add_chain accepts SDK-only alias forms like gaia via the real handler', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.addChain('call-2b', { chain: 'gaia' })
+
+    expect(recent.success).toBe(true)
+    expect(vault.addChain).toHaveBeenCalledWith(Chain.Cosmos)
+    expect(recent.data?.chain).toBe('Cosmos')
+    expect(recent.data?.added).toBe(true)
+  })
+
   it('add_chain returns failure RecentAction on unknown chain', async () => {
     const executor = new AgentExecutor(createMockVault())
 
@@ -263,6 +275,27 @@ describe('AgentExecutor — discriminator wrappers', () => {
     expect(recent.tool).toBe('vault_coin')
     expect(vault.addToken).toHaveBeenCalled()
     expect(recent.data?.added).toBe(true)
+  })
+
+  it('vaultCoin dispatches action=add with normalizeChain aliases like bnb smart chain', async () => {
+    const vault = createMockVault()
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.vaultCoin('call-vk-1b', {
+      action: 'add',
+      chain: 'bnb smart chain',
+      ticker: 'BNB',
+      contract_address: '0xabc',
+      decimals: 18,
+    })
+
+    expect(recent.success).toBe(true)
+    expect(recent.tool).toBe('vault_coin')
+    expect(vault.addToken).toHaveBeenCalledWith(
+      Chain.BSC,
+      expect.objectContaining({ symbol: 'BNB', contractAddress: '0xabc', decimals: 18, chainId: 'BSC' })
+    )
+    expect(recent.data?.chain).toBe('BSC')
   })
 
   it('vaultCoin dispatches action=remove to removeCoinImpl with batch', async () => {
