@@ -1,3 +1,4 @@
+import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -12,9 +13,14 @@ export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({ chai
   const decodedTxBytes = Buffer.from(tx_bytes, 'base64')
 
   const client = await getCosmosClient(chain)
-  const { error } = await attempt(client.broadcastTx(decodedTxBytes))
+  const { data, error } = await attempt(client.broadcastTx(decodedTxBytes))
 
-  if (!error) {
+  if (data) {
+    // client.broadcastTx resolves (does not throw) once the tx is INCLUDED in a
+    // block, even when execution itself failed (DeliverTx code !== 0 — e.g.
+    // out-of-gas, wasm revert, a THORChain/Maya deposit-handler rejection). The
+    // tx is on-chain but nothing moved, so this must not be reported as success.
+    assertIsDeliverTxSuccess(data)
     return
   }
 
