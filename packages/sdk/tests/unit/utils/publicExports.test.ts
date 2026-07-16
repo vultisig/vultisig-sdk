@@ -17,6 +17,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxNormalizeError).toBe('function')
   })
 
+  it('exports the documented sdk.decode namespace alongside flat decode helpers', () => {
+    expect(sdk.decode).toBeDefined()
+    expect(typeof sdk.decode.fromToolResult).toBe('function')
+    expect(typeof sdk.decode.decodeCosmosTx).toBe('function')
+    expect(typeof sdk.decode.decodeEvmTx).toBe('function')
+    expect(sdk.decode.fromToolResult).toBe(sdk.decodeFromToolResult)
+    expect(sdk.decode.decodeCosmosTx).toBe(sdk.decodeCosmosTx)
+    expect(sdk.decode.decodeEvmTx).toBe(sdk.decodeEvmTx)
+  })
+
   it('exports the knownContracts canonical registry + lookup helpers', () => {
     expect(typeof sdk.isKnownContract).toBe('function')
     expect(typeof sdk.isCanonicalEvmContract).toBe('function')
