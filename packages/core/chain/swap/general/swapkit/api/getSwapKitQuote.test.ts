@@ -425,7 +425,7 @@ describe('getSwapKitQuote', () => {
             tx: 'serialized-solana-transaction',
             fees: [
               { type: 'network', amount: '0.000005' },
-              { type: 'service', amount: '0.000000007' },
+              { type: 'service', amount: '0.000000007', asset: 'SOL.SOL', chain: 'Solana' },
             ],
           })
         )
@@ -464,6 +464,166 @@ describe('getSwapKitQuote', () => {
         },
       },
     })
+  })
+
+  it('maps the live Chainflip streaming fee shape to destination USDC', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              {
+                routeId: 'chainflip-streaming-route',
+                providers: ['CHAINFLIP_STREAMING'],
+                expectedBuyAmount: '75245.896838',
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP_STREAMING'],
+            expectedBuyAmount: '75245.896838',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '378.691268', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+              { type: 'service', amount: '113.60738', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Solana,
+        address: 'sol-source',
+        ticker: 'SOL',
+        decimals: 9,
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'USDC',
+        decimals: 6,
+        id: usdcId.toLowerCase(),
+      },
+      amount: 1_000_000_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      solana: {
+        swapFee: {
+          amount: 492_298_648n,
+          decimals: 6,
+          chain: Chain.Ethereum,
+          id: usdcId.toLowerCase(),
+        },
+      },
+    })
+  })
+
+  it('sums repeated SwapKit fee entries of the same type and asset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'repeated-fees', providers: ['JUPITER'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'service', amount: '0.1', asset: 'SOL.SOL' },
+              { type: 'service', amount: '0.2', asset: 'SOL.SOL' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+      to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+      amount: 1_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      solana: {
+        swapFee: {
+          amount: 300_000_000n,
+          decimals: 9,
+          chain: Chain.Solana,
+        },
+      },
+    })
+  })
+
+  it('rejects a non-zero SwapKit fee without asset metadata', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'missing-fee-asset', providers: ['JUPITER'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow('SwapKit service fee is missing its asset.')
+  })
+
+  it('rejects affiliate and service fees denominated in different assets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'mixed-fee-assets', providers: ['JUPITER'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '0.1', asset: 'SOL.SOL' },
+              { type: 'service', amount: '0.1', asset: 'ETH.ETH' },
+            ],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow('SwapKit affiliate and service fees use different assets.')
   })
 
   it('uses the Vultisig proxy without an API key by default', async () => {
