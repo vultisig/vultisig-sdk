@@ -412,7 +412,9 @@ export class VaultManager {
         key === 'pushNotificationRegistrations'
     )
 
-    await Promise.all(vaultKeys.map(key => this.storage.remove(key)))
+    for (const key of vaultKeys) {
+      await this.storage.remove(key)
+    }
 
     // Clear active vault
     await this.storage.remove('activeVaultId')

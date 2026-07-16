@@ -26,9 +26,10 @@ export type StoredValue<T = unknown> = {
  * Custom adapters may share their backing store with host application data.
  * The SDK reserves `vault:*`, `pending:*`, `cache:*`, `addressBook:*`,
  * `activeVaultId`, `pushNotificationRegistrations`, `config:defaultCurrency`,
- * and `config:defaultChains`. `clearVaults()` removes the vault-scoped keys and
- * notification registrations but intentionally retains the two SDK preference
- * keys. `clear()` remains an explicit adapter-wide operation.
+ * and `config:defaultChains`. `clearVaults()` removes the vault-scoped keys,
+ * saved and vault address-book entries, and notification registrations but
+ * intentionally retains the two SDK preference keys. `clear()` remains an
+ * explicit adapter-wide operation.
  */
 export type Storage = {
   /**
