@@ -402,9 +402,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         const assetCoin = swapPayload?.fromCoin ?? coin
         const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
         const securedSwapFromCoin =
-          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin)
-            ? swapPayload.fromCoin
-            : undefined
+          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
           asset: securedSwapFromCoin

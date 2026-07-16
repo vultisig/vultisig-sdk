@@ -313,8 +313,7 @@ describe('getCosmosSigningInputs gas limit', () => {
             fromCoin: {
               chain: Chain.THORChain,
               ticker: 'USDC',
-              contractAddress:
-                'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              contractAddress: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
               decimals: 8,
             },
             fromAmount: '41391997',
