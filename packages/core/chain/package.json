@@ -390,6 +390,11 @@
       "import": "./dist/chains/cosmos/terraClassicTax.js",
       "default": "./dist/chains/cosmos/terraClassicTax.js"
     },
+    "./chains/cosmos/thor/brune-bond/config": {
+      "types": "./dist/chains/cosmos/thor/brune-bond/config.d.ts",
+      "import": "./dist/chains/cosmos/thor/brune-bond/config.js",
+      "default": "./dist/chains/cosmos/thor/brune-bond/config.js"
+    },
     "./chains/cosmos/thor/getThorchainInboundAddress": {
       "types": "./dist/chains/cosmos/thor/getThorchainInboundAddress.d.ts",
       "import": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js",
