@@ -1,5 +1,8 @@
+import { Buffer } from 'buffer'
+import { readFileSync } from 'fs'
+
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
-import { type WalletCore } from '@trustwallet/wallet-core'
+import { type WalletCore, initWasm } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import {
   rippleIssuedCurrencyDecimals,
@@ -9,8 +12,10 @@ import {
 import { RippleSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
+import { getPreSigningHashes } from '../../../tx/preSigningHashes'
+import { getEncodedSigningInputs } from '../index'
 import { getRippleSigningInputs } from './ripple'
 
 // getRippleSigningInputs does not touch walletCore.
@@ -157,7 +162,10 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
 
   it('preserves a distinct memo alongside the first-class destination tag in raw JSON', async () => {
     const [input] = await getRippleSigningInputs({
-      keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: 'invoice 67890' }),
+      keysignPayload: buildPaymentPayload({
+        destinationTag: 12345,
+        memo: 'invoice 67890',
+      }),
       walletCore,
     })
 
@@ -185,7 +193,10 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
 
   it('treats an equal numeric memo as the legacy tag carrier', async () => {
     const [input] = await getRippleSigningInputs({
-      keysignPayload: buildPaymentPayload({ destinationTag: 12345, memo: '12345' }),
+      keysignPayload: buildPaymentPayload({
+        destinationTag: 12345,
+        memo: '12345',
+      }),
       walletCore,
     })
 
@@ -194,7 +205,10 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
   })
 
   it('produces the same signing input when a legacy peer drops the first-class tag field', async () => {
-    const payload = buildPaymentPayload({ destinationTag: 12345, memo: '12345' })
+    const payload = buildPaymentPayload({
+      destinationTag: 12345,
+      memo: '12345',
+    })
     const serialized = toBinary(KeysignPayloadSchema, payload)
     const modernPayload = fromBinary(KeysignPayloadSchema, serialized)
     const legacyPayload = fromBinary(KeysignPayloadSchema, serialized)
@@ -205,8 +219,14 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
       legacyPayload.blockchainSpecific.value.destinationTag = undefined
     }
 
-    const [modernInput] = await getRippleSigningInputs({ keysignPayload: modernPayload, walletCore })
-    const [legacyInput] = await getRippleSigningInputs({ keysignPayload: legacyPayload, walletCore })
+    const [modernInput] = await getRippleSigningInputs({
+      keysignPayload: modernPayload,
+      walletCore,
+    })
+    const [legacyInput] = await getRippleSigningInputs({
+      keysignPayload: legacyPayload,
+      walletCore,
+    })
 
     expect(modernPayload.memo).toBe('12345')
     expect(legacyInput).toEqual(modernInput)
@@ -531,5 +551,89 @@ describe('getRippleSigningInputs -- rawJson build path (dApp-supplied tx)', () =
     }
 
     expect(() => getRippleSigningInputs({ keysignPayload: payload, walletCore })).toThrow(/not valid JSON/)
+  })
+})
+
+type RippleInteropVector = {
+  input: {
+    address: string
+    hexPublicKey: string
+    toAddress: string
+    toAmount: string
+    destinationTag: string
+    sequence: string
+    fee: string
+    lastLedgerSequence: string
+  }
+  expected: { serializedSigningInputHex: string; preSigningHashHex: string }
+}
+
+const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
+const vector = JSON.parse(
+  readFileSync(new URL('../fixtures/ripple-interop-vector.test.json', import.meta.url), 'utf8')
+) as RippleInteropVector
+
+const buildInteropPayload = () =>
+  create(KeysignPayloadSchema, {
+    coin: create(CoinSchema, {
+      chain: Chain.Ripple,
+      ticker: 'XRP',
+      address: vector.input.address,
+      contractAddress: '',
+      decimals: 6,
+      isNativeToken: true,
+      hexPublicKey: vector.input.hexPublicKey,
+    }),
+    toAddress: vector.input.toAddress,
+    toAmount: vector.input.toAmount,
+    memo: vector.input.destinationTag,
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, {
+        sequence: BigInt(vector.input.sequence),
+        gas: BigInt(vector.input.fee),
+        lastLedgerSequence: BigInt(vector.input.lastLedgerSequence),
+      }),
+    },
+  })
+
+describe('getRippleSigningInputs interop vector', () => {
+  let interopWalletCore: WalletCore
+  beforeAll(async () => {
+    interopWalletCore = await initWasm()
+  })
+
+  it('pins destination-tag payment fields for the shared vector', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildInteropPayload(),
+      walletCore: interopWalletCore,
+    })
+    expect(input.account).toBe(vector.input.address)
+    expect(input.opPayment?.destination).toBe(vector.input.toAddress)
+    expect(input.opPayment?.amount.toString()).toBe(vector.input.toAmount)
+    expect(input.opPayment?.destinationTag?.toString()).toBe(vector.input.destinationTag)
+    expect(input.sequence).toBe(Number(vector.input.sequence))
+    expect(input.fee.toString()).toBe(vector.input.fee)
+    expect(input.lastLedgerSequence).toBe(Number(vector.input.lastLedgerSequence))
+  })
+
+  it('keeps serialized signing bytes and pre-signing hash stable', async () => {
+    const txInputDataList = await getEncodedSigningInputs({
+      keysignPayload: buildInteropPayload(),
+      walletCore: interopWalletCore,
+    })
+    expect(txInputDataList).toHaveLength(1)
+    const [txInputData] = txInputDataList
+
+    const preSigningHashes = getPreSigningHashes({
+      walletCore: interopWalletCore,
+      chain: Chain.Ripple,
+      txInputData,
+    })
+    expect(preSigningHashes).toHaveLength(1)
+    const [preSigningHash] = preSigningHashes
+
+    expect(hex(txInputData)).toBe(vector.expected.serializedSigningInputHex)
+    expect(hex(preSigningHash)).toBe(vector.expected.preSigningHashHex)
   })
 })
