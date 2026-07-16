@@ -81,9 +81,16 @@ describe('fastVaultSign — cancellation', () => {
   it('cancels a VultiServer body that stalls after response headers', async () => {
     const controller = new AbortController()
     const reason = new Error('cancel sign response body')
+    let notifyBodyRead!: () => void
+    const bodyRead = new Promise<void>(resolve => {
+      notifyBodyRead = resolve
+    })
     const fetchMock = vi.fn(async () => ({
       ok: true,
-      text: () => new Promise(() => {}),
+      text: () => {
+        notifyBodyRead()
+        return new Promise<string>(() => {})
+      },
     }))
     vi.stubGlobal('fetch', fetchMock)
     const promise = fastVaultSign({
@@ -93,6 +100,7 @@ describe('fastVaultSign — cancellation', () => {
       requestTimeoutMs: 10_000,
     })
 
+    await bodyRead
     controller.abort(reason)
 
     await expect(promise).rejects.toBe(reason)
