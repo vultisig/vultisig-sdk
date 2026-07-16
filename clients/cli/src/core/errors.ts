@@ -272,6 +272,17 @@ function isPermanentBroadcastInputError(err: VaultError): boolean {
   )
 }
 
+// The SDK words a bad receiver differently depending on which layer rejects it:
+// VaultBase throws VaultError(InvalidConfig, "Invalid receiver address for chain
+// X: …") while the vault-free prep helpers throw a plain Error carrying the same
+// text. Both must land on INVALID_ADDRESS/4, so both classifier paths share this.
+const INVALID_ADDRESS_RE = /invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i
+
+function invalidAddressError(message: string): InvalidAddressError {
+  const addrMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
+  return new InvalidAddressError(message, undefined, undefined, addrMatch ? { address: addrMatch[1] } : undefined)
+}
+
 function classifyVaultError(err: VaultError): VsigError {
   // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
   // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
@@ -308,19 +319,11 @@ function classifyVaultError(err: VaultError): VsigError {
           chainMatch ? { chain: chainMatch[1] } : undefined
         )
       }
-      // InvalidConfig is also the SDK's slot for a bad receiver ("Invalid receiver
-      // address for chain X: …", VaultBase.ts:1051). Without this, `send` fell to
-      // the UsageError default (exit 1) while `address-book` reported the same
-      // class as INVALID_ADDRESS (4) — the documented code. Unify on 4.
-      if (/invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i.test(lowerMsg)) {
-        const addrMatch = err.message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
-        return new InvalidAddressError(
-          err.message,
-          undefined,
-          undefined,
-          addrMatch ? { address: addrMatch[1] } : undefined
-        )
-      }
+      // InvalidConfig is also the SDK's slot for a bad receiver (VaultBase.ts:1051).
+      // Without this, `send` fell to the UsageError default (exit 1) while
+      // `address-book` reported the same class as INVALID_ADDRESS (4) — the
+      // documented code. Unify on 4.
+      if (INVALID_ADDRESS_RE.test(lowerMsg)) return invalidAddressError(err.message)
       if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
         return new AuthRequiredError(err.message)
       }
@@ -385,10 +388,9 @@ export function classifyError(err: Error): VsigError {
     const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i) || err.message.match(/chain[:\s]+(\S+)/i)
     return new InvalidChainError(err.message, undefined, undefined, chainMatch ? { chain: chainMatch[1] } : undefined)
   }
-  if (msg.includes('invalid address') || msg.includes('bad address') || msg.includes('malformed address')) {
-    const addrMatch = err.message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
-    return new InvalidAddressError(err.message, undefined, undefined, addrMatch ? { address: addrMatch[1] } : undefined)
-  }
+  // Same wording, thrown as a plain Error by the vault-free prep helpers
+  // (tools/prep/send.ts:60) rather than wrapped in a VaultError.
+  if (INVALID_ADDRESS_RE.test(msg)) return invalidAddressError(err.message)
   if (msg.includes('insufficient') && msg.includes('balance')) {
     return new InsufficientBalanceError(err.message)
   }

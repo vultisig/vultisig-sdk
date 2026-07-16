@@ -51,6 +51,14 @@ describe('classifyError', () => {
     expect(result.code).toBe('INVALID_ADDRESS')
   })
 
+  // The vault-free prep helpers (tools/prep/send.ts:60) throw this wording as a
+  // plain Error, which `includes('invalid address')` does not match.
+  it('classifies "Invalid receiver address" plain errors', () => {
+    const result = classifyError(new Error('Invalid receiver address for chain Ethereum: 0xdeadbeef'))
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+
   it('classifies bad address errors', () => {
     const result = classifyError(new Error('Bad address provided'))
     expect(result).toBeInstanceOf(InvalidAddressError)
