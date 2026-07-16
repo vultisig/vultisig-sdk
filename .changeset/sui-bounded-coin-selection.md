@@ -1,5 +1,6 @@
 ---
 "@vultisig/core-mpc": patch
+"@vultisig/sdk": patch
 ---
 
 Match iOS Sui send coin selection by bounding native inputs to the largest
