@@ -5,19 +5,46 @@ vi.mock('@vultisig/core-chain/coin/find', () => ({
   findCoins: vi.fn(),
 }))
 
-vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
-  knownTokensIndex: {
-    Ethereum: {
-      '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
-        chain: 'Ethereum',
-        id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-        ticker: 'USDC',
-        decimals: 6,
-        logo: 'usdc.png',
-        priceProviderId: 'usd-coin',
-      },
+const knownTokensByChain: Record<string, Record<string, any>> = {
+  Ethereum: {
+    '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
+      chain: 'Ethereum',
+      id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      ticker: 'USDC',
+      decimals: 6,
+      logo: 'usdc.png',
+      priceProviderId: 'usd-coin',
     },
   },
+  Solana: {
+    EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: {
+      chain: 'Solana',
+      id: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+      ticker: 'USDC',
+      decimals: 6,
+      logo: 'usdc.png',
+      priceProviderId: 'usd-coin',
+    },
+  },
+  Ripple: {
+    '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De': {
+      chain: 'Ripple',
+      id: '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+      ticker: 'RLUSD',
+      decimals: 15,
+      logo: 'rlusd',
+      priceProviderId: 'rlusd',
+    },
+  },
+}
+
+vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
+  getKnownTokenById: vi.fn((chain: string, id: string) => {
+    if (chain === 'Ethereum') {
+      return knownTokensByChain[chain]?.[id.toLowerCase()]
+    }
+    return knownTokensByChain[chain]?.[id]
+  }),
 }))
 
 vi.mock('@vultisig/core-chain/coin/token/metadata', () => ({
@@ -127,6 +154,9 @@ describe('TokenDiscoveryService', () => {
   })
 
   describe('resolveToken', () => {
+    const solanaUsdcMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    const rippleRlusdId = '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+
     it('should return token from known tokens registry (fast path)', async () => {
       const token = await service.resolveToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 
@@ -148,6 +178,20 @@ describe('TokenDiscoveryService', () => {
 
       expect(token).not.toBeNull()
       expect(token.ticker).toBe('USDC')
+    })
+
+    it('requires exact-case lookup for known Solana mints', async () => {
+      const token = await service.resolveToken(Chain.Solana, solanaUsdcMint)
+
+      expect(token.ticker).toBe('USDC')
+      await expect(service.resolveToken(Chain.Solana, solanaUsdcMint.toLowerCase())).rejects.toThrow(VaultError)
+    })
+
+    it('requires exact canonical ids for known Ripple issued currencies', async () => {
+      const token = await service.resolveToken(Chain.Ripple, rippleRlusdId)
+
+      expect(token.ticker).toBe('RLUSD')
+      await expect(service.resolveToken(Chain.Ripple, rippleRlusdId.toLowerCase())).rejects.toThrow(VaultError)
     })
 
     it('should fall back to chain API for unknown tokens', async () => {

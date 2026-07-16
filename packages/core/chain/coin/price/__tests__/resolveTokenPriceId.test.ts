@@ -67,8 +67,8 @@ describe('resolveTokenPriceId', () => {
       expect(resolveTokenPriceId(Chain.Ethereum, '0xdac17f958d2ee523a2206206994597c13d831ec7')).toBe('tether')
     })
 
-    it('Solana USDC mint -> usd-coin (case-insensitive lookup into lowercased index)', () => {
-      // The index stores keys lowercased; passing the canonical mixed-case mint works fine
+    it('Solana USDC mint -> usd-coin', () => {
+      // Non-EVM ids must match the registry's canonical case exactly.
       expect(resolveTokenPriceId(Chain.Solana, 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')).toBe('usd-coin')
     })
 
@@ -83,6 +83,12 @@ describe('resolveTokenPriceId', () => {
     it('TON USDT jetton -> tether', () => {
       // EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs
       expect(resolveTokenPriceId(Chain.Ton, 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs')).toBe('tether')
+    })
+
+    it('Ripple RLUSD issued-currency id -> ripple-usd', () => {
+      expect(
+        resolveTokenPriceId(Chain.Ripple, '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De')
+      ).toBe('ripple-usd')
     })
 
     it('Arbitrum USDC -> usd-coin', () => {
@@ -106,6 +112,16 @@ describe('resolveTokenPriceId', () => {
 
     it('unknown Solana mint -> undefined', () => {
       expect(resolveTokenPriceId(Chain.Solana, 'So11111111111111111111111111111111111111112')).toBeUndefined()
+    })
+
+    it('lowercased Solana mint -> undefined', () => {
+      expect(resolveTokenPriceId(Chain.Solana, 'epjfwdd5aufqssqem2qn1xzybapc8g4weggkzwytdt1v')).toBeUndefined()
+    })
+
+    it('lowercased Ripple issued-currency id -> undefined', () => {
+      expect(
+        resolveTokenPriceId(Chain.Ripple, '524c555344000000000000000000000000000000.rmxckbedwqr76quhesumdegf4b9xj8m5de')
+      ).toBeUndefined()
     })
   })
 

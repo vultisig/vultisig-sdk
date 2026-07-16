@@ -1,6 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { findCoins } from '@vultisig/core-chain/coin/find'
-import { knownTokensIndex } from '@vultisig/core-chain/coin/knownTokens'
+import { getKnownTokenById } from '@vultisig/core-chain/coin/knownTokens'
 import { getTokenMetadata as coreGetTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 import { ChainWithTokenMetadataDiscovery } from '@vultisig/core-chain/coin/token/metadata/chains'
 
@@ -33,7 +33,7 @@ export class TokenDiscoveryService {
 
   async resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo> {
     // Check known tokens first (fast, no network)
-    const known = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
+    const known = getKnownTokenById(chain, contractAddress)
     if (known) {
       return {
         chain,
