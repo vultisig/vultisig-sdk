@@ -306,8 +306,12 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
  * human rendering. Computes the confirmation-required / proposed signals once.
  */
 function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId: string): void {
-  // Retained for compatibility with successful turns that carry a proposal;
-  // failed/declined signing is classified before this success renderer.
+  // Defensive only: in ask mode a declined sign_tx/sign_typed_data always carries
+  // success:false + code:CONFIRMATION_REQUIRED on its own toolCall (session.ts:1105-1113),
+  // so failedSigningError() intercepts it in executeAgentAsk before this success
+  // renderer ever runs. This branch can't currently fire from an ask-mode declined
+  // sign, it stays as a guard against a future toolCall shape where CONFIRMATION_REQUIRED
+  // rides along on an otherwise-successful turn.
   const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
   // The same summary the gate showed the user (or would have, in --yes mode).
   const proposedCall = result.toolCalls.find(

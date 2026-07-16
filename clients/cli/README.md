@@ -806,7 +806,7 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `AUTH_FAILED`             | Auth/token failure, HTTP 401/403, or wrong vault password                                                                    |
 | `VAULT_LOCKED`            | Encrypted vault needs unlock (password)                                                                                      |
 | `PASSWORD_REQUIRED`       | Password was not supplied when required (e.g. pipe mode or signing)                                                          |
-| `CONFIRMATION_REQUIRED`   | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`)                                                |
+| `CONFIRMATION_REQUIRED`   | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`); also returned by `agent ask` on a declined sign (no `--yes`), exit 12 |
 | `ACTION_NOT_IMPLEMENTED`  | Local executor does not implement this action type                                                                           |
 | `INVALID_INPUT`           | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                  |
 | `NETWORK_ERROR`           | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                        |
