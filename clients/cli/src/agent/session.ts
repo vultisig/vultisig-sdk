@@ -289,6 +289,21 @@ export class AgentSession {
         const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
+        // One-shot ask mode must fail closed when the requested context is
+        // unavailable. Sending the user's message in a fresh conversation can
+        // execute an intent without the history the caller explicitly named.
+        // Interactive/pipe sessions retain the recoverable fallback below.
+        if (this.config.askMode) {
+          this.conversationId = null
+          this.historyMessages = []
+          throw Object.assign(
+            new Error(
+              `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
+            ),
+            { code: AgentErrorCode.SESSION_NOT_FOUND }
+          )
+        }
+
         // Resume failed: a stale/typo'd --session-id, a persistent backend
         // error, or an auth failure that survived the single retry. Fall back
         // to a fresh conversation rather than hard-failing (finding b — the old
