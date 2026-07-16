@@ -1,5 +1,5 @@
 ---
-'@vultisig/core-chain': patch
+'@vultisig/core-chain': minor
 ---
 
 Retry transient broadcast transport failures at the dispatcher for non-EVM,

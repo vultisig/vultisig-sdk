@@ -38,6 +38,11 @@ export enum ExitCode {
   // was signed or broadcast. Distinct from generic UNKNOWN (7) so a headless caller
   // can branch "needs --yes/--confirm or a required flag" from an unexpected crash.
   CONFIRMATION_REQUIRED = 12,
+  // `agent ask` only: at least one transaction was submitted on-chain, but a
+  // later backend/stream outcome means the overall request may be incomplete.
+  // This is a non-retryable partial success: inspect the emitted hashes before
+  // deciding how to continue, and never blindly replay the original request.
+  BROADCAST_COMMITTED = 13,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -55,6 +60,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
   [ExitCode.AGENT_TURN_REFUSAL]: 'agent ask: the model refused or asked a clarifying question (no action taken)',
   [ExitCode.CONFIRMATION_REQUIRED]:
     'Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag',
+  [ExitCode.BROADCAST_COMMITTED]:
+    'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
 }
 
 export abstract class VsigError extends Error {
@@ -126,6 +133,16 @@ export class InvalidAddressError extends VsigError {
 export class InvalidInputError extends VsigError {
   readonly exitCode = ExitCode.INVALID_INPUT
   readonly code = 'INVALID_INPUT'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
+/** A transaction hash whose shape is invalid for the selected chain. */
+export class InvalidTxHashError extends VsigError {
+  readonly exitCode = ExitCode.INVALID_INPUT
+  readonly code = 'INVALID_HASH'
 
   constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
     super(message, hint, suggestions, context)

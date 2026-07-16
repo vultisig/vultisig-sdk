@@ -16,14 +16,26 @@ const mocks = vi.hoisted(() => ({
   broadcastUtxoTx: vi.fn(),
 }))
 
-vi.mock('./resolvers/bittensor', () => ({ broadcastBittensorTx: mocks.broadcastBittensorTx }))
-vi.mock('./resolvers/cardano', () => ({ broadcastCardanoTx: mocks.broadcastCardanoTx }))
-vi.mock('./resolvers/cosmos', () => ({ broadcastCosmosTx: mocks.broadcastCosmosTx }))
+vi.mock('./resolvers/bittensor', () => ({
+  broadcastBittensorTx: mocks.broadcastBittensorTx,
+}))
+vi.mock('./resolvers/cardano', () => ({
+  broadcastCardanoTx: mocks.broadcastCardanoTx,
+}))
+vi.mock('./resolvers/cosmos', () => ({
+  broadcastCosmosTx: mocks.broadcastCosmosTx,
+}))
 vi.mock('./resolvers/evm', () => ({ broadcastEvmTx: mocks.broadcastEvmTx }))
-vi.mock('./resolvers/polkadot', () => ({ broadcastPolkadotTx: mocks.broadcastPolkadotTx }))
+vi.mock('./resolvers/polkadot', () => ({
+  broadcastPolkadotTx: mocks.broadcastPolkadotTx,
+}))
 vi.mock('./resolvers/qbtc', () => ({ broadcastQbtcTx: mocks.broadcastQbtcTx }))
-vi.mock('./resolvers/ripple', () => ({ broadcastRippleTx: mocks.broadcastRippleTx }))
-vi.mock('./resolvers/solana', () => ({ broadcastSolanaTx: mocks.broadcastSolanaTx }))
+vi.mock('./resolvers/ripple', () => ({
+  broadcastRippleTx: mocks.broadcastRippleTx,
+}))
+vi.mock('./resolvers/solana', () => ({
+  broadcastSolanaTx: mocks.broadcastSolanaTx,
+}))
 vi.mock('./resolvers/sui', () => ({ broadcastSuiTx: mocks.broadcastSuiTx }))
 vi.mock('./resolvers/ton', () => ({ broadcastTonTx: mocks.broadcastTonTx }))
 vi.mock('./resolvers/tron', () => ({ broadcastTronTx: mocks.broadcastTronTx }))
@@ -92,6 +104,14 @@ describe('broadcastTx transient retry dispatcher', () => {
     expect(isTransientBroadcastError(httpError(429))).toBe(true)
     expect(isTransientBroadcastError(httpError(503))).toBe(true)
     expect(isTransientBroadcastError(httpError(400))).toBe(false)
+    expect(isTransientBroadcastError(httpError(600))).toBe(false)
+  })
+
+  it('terminates when an error cause chain is cyclic', () => {
+    const error = new Error('deterministic rejection')
+    error.cause = error
+
+    expect(isTransientBroadcastError(error)).toBe(false)
   })
 
   it.each(['fetch failed', 'Failed to fetch', 'Network request failed'])(
