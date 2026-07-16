@@ -18,6 +18,11 @@ describe('agentErrorCodeToExitCode', () => {
     [AgentErrorCode.BROADCAST_COMMITTED, ExitCode.BROADCAST_COMMITTED],
     [AgentErrorCode.DUPLICATE_BROADCAST, ExitCode.DUPLICATE_BROADCAST],
     [AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE, ExitCode.IDEMPOTENT_TURN_DUPLICATE],
+    // Pinned deliberately: `agent ask` derives its exit from THIS mapping, not from
+    // the typed error's own exitCode field (commands/agent.ts:382/421/424). Without
+    // a case here, dropping the mapping arm would fall through to UNKNOWN and the
+    // CLI would silently exit 7 instead of 4 while every other test stayed green.
+    [AgentErrorCode.IDEMPOTENCY_KEY_REUSED, ExitCode.INVALID_INPUT],
     [AgentErrorCode.INVALID_INPUT, ExitCode.INVALID_INPUT],
     [AgentErrorCode.AUTH_FAILED, ExitCode.AUTH_REQUIRED],
     [AgentErrorCode.VAULT_LOCKED, ExitCode.AUTH_REQUIRED],
