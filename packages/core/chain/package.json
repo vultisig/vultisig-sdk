@@ -1888,6 +1888,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/transientRetry": {
+      "types": "./dist/tx/broadcast/transientRetry.d.ts",
+      "import": "./dist/tx/broadcast/transientRetry.js",
+      "default": "./dist/tx/broadcast/transientRetry.js"
+    },
     "./tx/broadcast/verifyBroadcastByHash": {
       "types": "./dist/tx/broadcast/verifyBroadcastByHash.d.ts",
       "import": "./dist/tx/broadcast/verifyBroadcastByHash.js",
