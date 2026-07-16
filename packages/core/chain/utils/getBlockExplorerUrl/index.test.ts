@@ -39,4 +39,29 @@ describe('getBlockExplorerUrl', () => {
       })
     ).toBe(`https://etherscan.io/address/${address}`)
   })
+
+  it('builds a Hyperliquid transaction URL under hypurrscan /evm', () => {
+    const txHash =
+      '0x00b1b8e2c63d7eb2e2928f297d3898f932cb43ad601f06f0b5da0b31b38d53b6'
+
+    expect(
+      getBlockExplorerUrl({
+        chain: Chain.Hyperliquid,
+        entity: 'tx',
+        value: txHash,
+      })
+    ).toBe(`https://hypurrscan.io/evm/tx/${txHash}`)
+  })
+
+  it('builds a Hyperliquid address URL under hypurrscan /evm', () => {
+    const address = '0x1234'
+
+    expect(
+      getBlockExplorerUrl({
+        chain: Chain.Hyperliquid,
+        entity: 'address',
+        value: address,
+      })
+    ).toBe(`https://hypurrscan.io/evm/address/${address}`)
+  })
 })
