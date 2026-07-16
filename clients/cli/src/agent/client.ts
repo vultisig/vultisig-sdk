@@ -770,9 +770,18 @@ export class AgentClient {
   // The 'ignore' list must cover EVERY frame both backends actually emit, or a
   // healthy turn reports PROTOCOL_DRIFT. UI-only frames the CLI has no surface
   // for: `data-quick_actions` / `data-vault_required` / `data-diagnostics`
-  // (Go, agent.go) and `data-agentStep` (Mastra, uiStream.ts — one per tool
-  // step). `data-confirmation` is deliberately NOT here: it appears only in
-  // backend tests, so a real one is genuine drift and must stay loud.
+  // (Go, agent.go), `data-checkout-wall` (Go, api/message.go, on credit
+  // exhaustion) and `data-agentStep` (Mastra, uiStream.ts — one per tool step).
+  // `data-confirmation` is deliberately NOT here: it appears only in backend
+  // tests, so a real one is genuine drift and must stay loud.
+  //
+  // The generic-card surfaces below are emitted from a DYNAMIC call site —
+  // `V1Data(streamSurface, …)` (agent.go) over the backend's
+  // `genericCardSurfaces` map (response_validator.go). A static list cannot
+  // track that map, so a new backend surface will drift here until it is added
+  // on both sides; the backend's own comment already says new surfaces must be
+  // registered in two places, and this is now a third. See the review's open
+  // question on whether unknown `data-*` should be tolerated by contract.
   private mapV1EventType(type: string): string {
     switch (type) {
       case 'text-delta':
@@ -806,7 +815,11 @@ export class AgentClient {
       case 'data-quick_actions':
       case 'data-vault_required':
       case 'data-diagnostics':
+      case 'data-checkout-wall':
       case 'data-agentStep':
+      case 'data-polymarket_markets':
+      case 'data-yield_opportunities':
+      case 'data-yield_position':
         return 'ignore'
       default:
         return 'unknown'

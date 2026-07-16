@@ -281,13 +281,19 @@ describe('AgentClient.sendMessageStream', () => {
     expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('data-usage'))
   })
 
-  // Every frame below is emitted by a live backend on an ordinary healthy turn:
-  // data-quick_actions / data-vault_required / data-diagnostics from the Go
-  // backend (internal/service/agent/agent.go) and data-agentStep from Mastra
-  // (src/mastra/uiStream.ts, one per tool step). If any drops out of the
+  // Frames a live backend emits on an ordinary turn. If any drops out of the
   // 'ignore' list, `vsig agent ask --output json` stamps a PROTOCOL_DRIFT
-  // warning onto successful turns and machine consumers learn to ignore the
-  // field. Keep this pinned to what the backends actually emit.
+  // warning onto a SUCCESSFUL turn and machine consumers learn to filter the
+  // field away. Sources, all non-test emit sites:
+  //   Go  internal/service/agent/agent.go — quick_actions, vault_required,
+  //       diagnostics; plus V1Data(streamSurface, …) over genericCardSurfaces
+  //       (response_validator.go) — polymarket_markets, yield_opportunities,
+  //       yield_position
+  //   Go  internal/api/message.go — checkout-wall (credit exhaustion)
+  //   TS  agent-backend-ts/src/mastra/uiStream.ts — agentStep, one per tool step
+  // This list is only as good as that enumeration: the streamSurface site is
+  // dynamic, so a new backend card surface will NOT be caught by this test —
+  // it has to be added here and in mapV1EventType by hand.
   it('keeps UI-only backend frames quiet instead of reporting them as protocol drift', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     globalThis.fetch = mockFetchSSE([
@@ -295,7 +301,11 @@ describe('AgentClient.sendMessageStream', () => {
       'data: {"type":"data-quick_actions","data":{"quick_actions":[]}}\n\n',
       'data: {"type":"data-vault_required","data":{"required":true}}\n\n',
       'data: {"type":"data-diagnostics","data":{"trace":"x"}}\n\n',
+      'data: {"type":"data-checkout-wall","data":{"catalog":[]}}\n\n',
       'data: {"type":"data-agentStep","id":"c1-0","data":{"status":"running"}}\n\n',
+      'data: {"type":"data-polymarket_markets","data":{"surface":"polymarket_markets"}}\n\n',
+      'data: {"type":"data-yield_opportunities","data":{"surface":"yield_opportunities"}}\n\n',
+      'data: {"type":"data-yield_position","data":{"surface":"yield_position"}}\n\n',
       'data: {"type":"finish"}\n\n',
     ])
 
