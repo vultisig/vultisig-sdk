@@ -1240,11 +1240,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * }
    * ```
    */
-  async getTxStatus(params: { chain: Chain; txHash: string }): Promise<TxStatusResult> {
-    const { chain, txHash } = params
+  async getTxStatus(params: { chain: Chain; txHash: string; lastValidBlockHeight?: number }): Promise<TxStatusResult> {
+    const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash })
+      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
