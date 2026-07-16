@@ -100,7 +100,7 @@ export type { VultisigConfig } from '../../Vultisig'
 export { Vultisig } from '../../Vultisig'
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
-export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse } from './rpcFetch'
+export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'
 export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
 
 // RN runtime config registry — consumers inject chain RPC URLs and
@@ -205,8 +205,12 @@ export {
   buildWithdrawRewardsMsg,
   cosmosStaking,
 } from '../../tools/prep/cosmosStaking'
-// Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
-// native crypto, safe as a static re-export on the RN graph).
+// Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
+// WalletCore or native crypto, safe as static re-exports on the RN graph).
+// Keep this list aligned with the root entrypoint: package exports resolve
+// React Native consumers to this hand-curated module.
+export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
+export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
@@ -576,6 +580,7 @@ export async function fiatToAmount(...args: unknown[]) {
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
+export { resolveChainReference } from '../../utils/resolveChainReference'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
