@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '../../../src/index'
 
 describe('@vultisig/sdk public exports', () => {
-  it('exports fiatToAmount and normalizeChain utilities', () => {
+  it('exports fiatToAmount and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
+    expect(typeof sdk.resolveChainReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
