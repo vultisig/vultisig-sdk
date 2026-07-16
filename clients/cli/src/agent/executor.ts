@@ -1914,6 +1914,7 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
+/** Resolve a CLI chain name or ID through the SDK's canonical resolver. */
 export function resolveChain(name: string): Chain | null {
   return resolveChainReference(name) ?? null
 }

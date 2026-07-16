@@ -31,6 +31,7 @@ async function wrapHandler<T>(fn: () => Promise<T>): Promise<ToolResult> {
   }
 }
 
+/** Resolve a chain reference within the vault's currently known chain set. */
 export function resolveChain(name: string, knownChains: readonly string[]): string {
   const match = resolveChainReference(name, knownChains)
   if (!match) throw new Error(`Unknown chain "${name}". Use supported_chains or vault_info to see available chains.`)
