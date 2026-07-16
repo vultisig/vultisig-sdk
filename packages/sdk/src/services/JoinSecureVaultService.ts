@@ -16,10 +16,8 @@ import { Schnorr } from '@vultisig/core-mpc/schnorr/schnorrKeygen'
 import { joinMpcSession } from '@vultisig/core-mpc/session/joinMpcSession'
 import { startMpcSessionWithRetry } from '@vultisig/core-mpc/session/startMpcSession'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
-import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { attempt } from '@vultisig/lib-utils/attempt'
-import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import type { SdkContext } from '../context/SdkContext'
 import { MasterKeyDeriver } from '../seedphrase/MasterKeyDeriver'
@@ -29,6 +27,7 @@ import type { VaultCreationStep } from '../types'
 import type { ParsedKeygenQR } from '../utils/parseKeygenQR'
 import { getChainBatchMessageIds, TSS_BATCH_MESSAGE_IDS } from '../utils/tssBatching'
 import { VaultError, VaultErrorCode } from '../vault/VaultError'
+import { waitForRelayPeerCommittee } from './waitForRelayPeerCommittee'
 
 /**
  * JoinSecureVaultService
@@ -54,53 +53,22 @@ export class JoinSecureVaultService {
    */
   private async waitForPeers(
     sessionId: string,
-    localPartyId: string,
     requiredDevices: number,
     signal?: AbortSignal,
     onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
   ): Promise<string[]> {
-    const maxWaitTime = 300000 // 5 minutes
-    const checkInterval = 2000
-    const startTime = Date.now()
-    let lastJoinedCount = 0
-
-    while (Date.now() - startTime < maxWaitTime) {
-      if (signal?.aborted) {
-        throw new Error('Operation aborted')
-      }
-
-      const url = `${this.relayUrl}/${sessionId}`
-      const { data: allPeers, error } = await attempt(queryUrl<string[]>(url))
-
-      if (error || !allPeers) {
-        await new Promise(resolve => setTimeout(resolve, checkInterval))
-        continue
-      }
-
-      const uniquePeers = withoutDuplicates(allPeers)
-
-      // Notify about new devices
-      if (uniquePeers.length > lastJoinedCount && onDeviceJoined) {
-        const newDevices = uniquePeers.slice(lastJoinedCount)
-        for (const device of newDevices) {
-          onDeviceJoined(device, uniquePeers.length, requiredDevices)
-        }
-        lastJoinedCount = uniquePeers.length
-      }
-
-      // Check if we have enough devices
-      if (uniquePeers.length >= requiredDevices) {
-        // Must match initiator (SecureVaultCreationService / SecureVaultFromSeedphraseService)
-        return [...uniquePeers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-      }
-
-      await new Promise(resolve => setTimeout(resolve, checkInterval))
-    }
-
-    throw new VaultError(
-      VaultErrorCode.NetworkError,
-      `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
-    )
+    return waitForRelayPeerCommittee({
+      relayUrl: this.relayUrl,
+      sessionId,
+      requiredDevices,
+      signal,
+      onDeviceJoined,
+      createTimeoutError: (lastJoinedCount, requiredDevices) =>
+        new VaultError(
+          VaultErrorCode.NetworkError,
+          `Timeout waiting for devices. Got ${lastJoinedCount}/${requiredDevices} devices.`
+        ),
+    })
   }
 
   /**
@@ -186,7 +154,6 @@ export class JoinSecureVaultService {
 
     const allDevices = await this.waitForPeers(
       qrParams.sessionId,
-      localPartyId,
       requiredDevices,
       signal,
       (deviceId, total, required) => {
@@ -418,7 +385,6 @@ export class JoinSecureVaultService {
 
     const allDevices = await this.waitForPeers(
       qrParams.sessionId,
-      localPartyId,
       requiredDevices,
       signal,
       (deviceId, total, required) => {
