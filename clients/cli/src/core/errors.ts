@@ -43,6 +43,10 @@ export enum ExitCode {
   // This is a non-retryable partial success: inspect the emitted hashes before
   // deciding how to continue, and never blindly replay the original request.
   BROADCAST_COMMITTED = 13,
+  // The backend already accepted this exact keyed agent turn. The duplicate
+  // request did not execute or consume credits; inspect the conversation for
+  // the first attempt's persisted result before starting a fresh attempt.
+  IDEMPOTENT_TURN_DUPLICATE = 14,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -62,6 +66,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
     'Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag',
   [ExitCode.BROADCAST_COMMITTED]:
     'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
+  [ExitCode.IDEMPOTENT_TURN_DUPLICATE]:
+    'agent ask: duplicate keyed turn rejected — inspect the conversation for the original result',
 }
 
 export abstract class VsigError extends Error {
@@ -185,6 +191,15 @@ export class TxNotFoundError extends VsigError {
   }
 }
 
+export class VaultNotFoundError extends VsigError {
+  readonly exitCode = ExitCode.RESOURCE_NOT_FOUND
+  readonly code = 'VAULT_NOT_FOUND'
+
+  constructor(message: string, hint?: string, suggestions?: string[], context?: Record<string, string>) {
+    super(message, hint, suggestions, context)
+  }
+}
+
 // A bounded status poll gave up while the tx was still (plausibly) in-flight.
 // Retryable: the tx may confirm later, so re-checking / waiting longer is valid —
 // distinct from TxNotFoundError, where the node affirmatively has no record.
@@ -227,6 +242,51 @@ export class ConfirmationRequiredError extends VsigError {
   }
 }
 
+/** The backend already accepted the same idempotency-keyed agent turn (same key,
+ *  same body). The first attempt's result IS persisted — the caller should read
+ *  it, not replay the request. */
+export class IdempotentTurnDuplicateError extends VsigError {
+  readonly exitCode = ExitCode.IDEMPOTENT_TURN_DUPLICATE
+  readonly code = 'IDEMPOTENT_TURN_DUPLICATE'
+
+  constructor(message: string, conversationId?: string, firstRequestAt?: string) {
+    super(
+      message,
+      'The duplicate did not execute; inspect the conversation for the first attempt result',
+      ['Retry only as a new user-initiated attempt'],
+      keyedTurnContext(conversationId, firstRequestAt)
+    )
+  }
+}
+
+/** The idempotency key was already used for a DIFFERENT request body. Unlike a
+ *  duplicate, THIS operation never ran and nothing was persisted for it — the
+ *  claim belongs to another request, so there is no "original result" to inspect.
+ *  A caller protocol bug (the CLI mints a fresh key per attempt), hence
+ *  INVALID_INPUT: the request was malformed and nothing happened. */
+export class IdempotencyKeyReusedError extends VsigError {
+  readonly exitCode = ExitCode.INVALID_INPUT
+  readonly code = 'IDEMPOTENCY_KEY_REUSED'
+
+  constructor(message: string, conversationId?: string, firstRequestAt?: string) {
+    super(
+      message,
+      'This request did NOT execute; the key is bound to a different request body, so no result was persisted for it',
+      ['Retry this operation with a fresh idempotency key'],
+      keyedTurnContext(conversationId, firstRequestAt)
+    )
+  }
+}
+
+/** Shared context for the keyed-turn 409s. `first_request_at` locates the claim
+ *  that won the key — without it, "inspect the conversation" has no anchor. */
+function keyedTurnContext(conversationId?: string, firstRequestAt?: string): Record<string, string> | undefined {
+  const context: Record<string, string> = {}
+  if (conversationId) context.conversationId = conversationId
+  if (firstRequestAt) context.firstRequestAt = firstRequestAt
+  return Object.keys(context).length > 0 ? context : undefined
+}
+
 export class UnknownError extends VsigError {
   readonly exitCode = ExitCode.UNKNOWN
   readonly code = 'UNKNOWN_ERROR'
@@ -256,6 +316,93 @@ export class DuplicateBroadcastRefusedError extends VsigError {
   }
 }
 
+function isPermanentBroadcastInputError(err: VaultError): boolean {
+  const details = `${err.message}\n${err.originalError?.message ?? ''}`
+  return /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i.test(
+    details
+  )
+}
+
+// The SDK words a bad receiver differently depending on which layer rejects it:
+// VaultBase throws VaultError(InvalidConfig, "Invalid receiver address for chain
+// X: …") while the vault-free prep helpers throw a plain Error carrying the same
+// text. Both must land on INVALID_ADDRESS/4, so both classifier paths share this.
+const INVALID_ADDRESS_RE = /invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i
+
+function invalidAddressError(message: string): InvalidAddressError {
+  const addrMatch = message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
+  return new InvalidAddressError(message, undefined, undefined, addrMatch ? { address: addrMatch[1] } : undefined)
+}
+
+function classifyVaultError(err: VaultError): VsigError {
+  // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
+  // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
+  // errors as retryable network errors.
+  if (err.code === VaultErrorCode.BalanceFetchFailed && err.originalError) {
+    const inner = classifyError(err.originalError)
+    if (!(inner instanceof UnknownError)) return inner
+  }
+
+  switch (err.code) {
+    case VaultErrorCode.UnsupportedChain:
+    case VaultErrorCode.ChainNotSupported:
+      return new InvalidChainError(err.message)
+    case VaultErrorCode.NetworkError:
+    case VaultErrorCode.BalanceFetchFailed:
+    case VaultErrorCode.Timeout:
+      return new NetworkError(err.message)
+    case VaultErrorCode.InvalidAmount:
+      return new InvalidInputError(err.message)
+    case VaultErrorCode.InvalidConfig: {
+      // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
+      // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
+      const lowerMsg = err.message.toLowerCase()
+      if (
+        lowerMsg.includes('unknown chain') ||
+        lowerMsg.includes('unsupported chain') ||
+        lowerMsg.includes('chain not supported')
+      ) {
+        const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i)
+        return new InvalidChainError(
+          err.message,
+          undefined,
+          undefined,
+          chainMatch ? { chain: chainMatch[1] } : undefined
+        )
+      }
+      // InvalidConfig is also the SDK's slot for a bad receiver (VaultBase.ts:1051).
+      // Without this, `send` fell to the UsageError default (exit 1) while
+      // `address-book` reported the same class as INVALID_ADDRESS (4) — the
+      // documented code. Unify on 4.
+      if (INVALID_ADDRESS_RE.test(lowerMsg)) return invalidAddressError(err.message)
+      if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
+        return new AuthRequiredError(err.message)
+      }
+      return new UsageError(err.message)
+    }
+    case VaultErrorCode.VaultNotFound:
+      return new VaultNotFoundError(err.message)
+    case VaultErrorCode.UnsupportedToken:
+      return new TokenNotFoundError(err.message)
+    case VaultErrorCode.BroadcastFailed:
+      if (isPermanentBroadcastInputError(err)) {
+        return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
+      }
+      return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
+        'Retry the transaction',
+      ])
+    case VaultErrorCode.GasEstimationFailed:
+      return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
+    case VaultErrorCode.SigningFailed:
+      if (/must be 32 bytes|expected 32 bytes|non-32-byte/i.test(err.message)) {
+        return new InvalidInputError(err.message)
+      }
+      return new UnknownError(err.message)
+    default:
+      return new UnknownError(err.message)
+  }
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
 
@@ -267,58 +414,7 @@ export function classifyError(err: Error): VsigError {
     return new DuplicateBroadcastRefusedError(err.message)
   }
 
-  if (err instanceof VaultError) {
-    // BalanceFetchFailed is a wrapper code — the real cause may be invalid input
-    // (e.g. unknown chain). Unwrap originalError so we don't mis-tag validation
-    // errors as retryable network errors.
-    if (err.code === VaultErrorCode.BalanceFetchFailed && err.originalError) {
-      const inner = classifyError(err.originalError)
-      if (!(inner instanceof UnknownError)) return inner
-    }
-
-    switch (err.code) {
-      case VaultErrorCode.UnsupportedChain:
-      case VaultErrorCode.ChainNotSupported:
-        return new InvalidChainError(err.message)
-      case VaultErrorCode.NetworkError:
-      case VaultErrorCode.BalanceFetchFailed:
-      case VaultErrorCode.Timeout:
-        return new NetworkError(err.message)
-      case VaultErrorCode.InvalidAmount:
-        return new InvalidInputError(err.message)
-      case VaultErrorCode.InvalidConfig: {
-        // SDK overloads InvalidConfig for "Unknown chain" — detect and reclassify
-        // so agents get INVALID_INPUT / non-retryable instead of generic USAGE.
-        const lowerMsg = err.message.toLowerCase()
-        if (
-          lowerMsg.includes('unknown chain') ||
-          lowerMsg.includes('unsupported chain') ||
-          lowerMsg.includes('chain not supported')
-        ) {
-          const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i)
-          return new InvalidChainError(
-            err.message,
-            undefined,
-            undefined,
-            chainMatch ? { chain: chainMatch[1] } : undefined
-          )
-        }
-        return new UsageError(err.message)
-      }
-      case VaultErrorCode.UnsupportedToken:
-        return new TokenNotFoundError(err.message)
-      case VaultErrorCode.BroadcastFailed:
-        return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
-          'Retry the transaction',
-        ])
-      case VaultErrorCode.GasEstimationFailed:
-        return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
-      case VaultErrorCode.SigningFailed:
-        return new UnknownError(err.message)
-      default:
-        return new UnknownError(err.message)
-    }
-  }
+  if (err instanceof VaultError) return classifyVaultError(err)
 
   if (err instanceof VaultImportError) {
     switch (err.code) {
@@ -330,18 +426,35 @@ export function classifyError(err: Error): VsigError {
     }
   }
 
+  if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+    return new InvalidInputError(err.message, 'Check that the file or directory exists')
+  }
+
   // Best-effort heuristic for errors that escape SDK typing — may misclassify
   const msg = err.message.toLowerCase()
+  if (msg.includes('no vault found matching') || msg.includes('vault not found')) {
+    return new VaultNotFoundError(err.message)
+  }
   if (msg.includes('unsupported chain') || msg.includes('invalid chain') || msg.includes('unknown chain')) {
     const chainMatch = err.message.match(/chain[:\s]*"([^"]+)"/i) || err.message.match(/chain[:\s]+(\S+)/i)
     return new InvalidChainError(err.message, undefined, undefined, chainMatch ? { chain: chainMatch[1] } : undefined)
   }
-  if (msg.includes('invalid address') || msg.includes('bad address') || msg.includes('malformed address')) {
-    const addrMatch = err.message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
-    return new InvalidAddressError(err.message, undefined, undefined, addrMatch ? { address: addrMatch[1] } : undefined)
-  }
+  // Same wording, thrown as a plain Error by the vault-free prep helpers
+  // (tools/prep/send.ts:60) rather than wrapped in a VaultError.
+  if (INVALID_ADDRESS_RE.test(msg)) return invalidAddressError(err.message)
   if (msg.includes('insufficient') && msg.includes('balance')) {
     return new InsufficientBalanceError(err.message)
+  }
+  if (
+    msg.includes('invalid currency') ||
+    msg.includes('invalid amount') ||
+    msg.includes('invalid mnemonic') ||
+    msg.includes('invalid seedphrase') ||
+    msg.includes('must be 32 bytes') ||
+    msg.includes('expected 32 bytes') ||
+    msg.includes('non-32-byte')
+  ) {
+    return new InvalidInputError(err.message)
   }
   if (msg.includes('no route') || msg.includes('no swap') || msg.includes('no provider')) {
     return new NoRouteError(err.message)

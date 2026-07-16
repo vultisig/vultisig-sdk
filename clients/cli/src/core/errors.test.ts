@@ -51,6 +51,14 @@ describe('classifyError', () => {
     expect(result.code).toBe('INVALID_ADDRESS')
   })
 
+  // The vault-free prep helpers (tools/prep/send.ts:60) throw this wording as a
+  // plain Error, which `includes('invalid address')` does not match.
+  it('classifies "Invalid receiver address" plain errors', () => {
+    const result = classifyError(new Error('Invalid receiver address for chain Ethereum: 0xdeadbeef'))
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+
   it('classifies bad address errors', () => {
     const result = classifyError(new Error('Bad address provided'))
     expect(result).toBeInstanceOf(InvalidAddressError)
@@ -341,6 +349,18 @@ describe('classifyError with VaultError', () => {
     expect(result.retryable).toBe(false)
   })
 
+  // `send` raises InvalidConfig for a bad receiver (VaultBase.ts:1051) while
+  // address-book already reported INVALID_ADDRESS/4 for the same class. The
+  // README documents 4, so the UsageError/1 default was a documented-vs-actual lie.
+  it('maps InvalidConfig with an "Invalid receiver address" message to InvalidAddressError/4', () => {
+    const err = new VaultError(VaultErrorCode.InvalidConfig, 'Invalid receiver address for chain Ethereum: 0xdeadbeef')
+    const result = classifyError(err)
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+    expect(result.context).toMatchObject({ address: '0xdeadbeef' })
+  })
+
   it('maps Timeout to NetworkError with retryable', () => {
     const err = new VaultError(VaultErrorCode.Timeout, 'request timed out')
     const result = classifyError(err)
@@ -435,5 +455,65 @@ describe('classifyError with VaultImportError', () => {
     const err = new VaultImportError(VaultImportErrorCode.UNSUPPORTED_FORMAT, 'unsupported')
     const result = classifyError(err)
     expect(result).toBeInstanceOf(UsageError)
+  })
+})
+
+describe('anticipated CLI taxonomy regressions', () => {
+  it.each([
+    ['No vault found matching: missing', 'VAULT_NOT_FOUND', ExitCode.RESOURCE_NOT_FOUND],
+    ['Vault not found: "missing"', 'VAULT_NOT_FOUND', ExitCode.RESOURCE_NOT_FOUND],
+    ['Invalid currency', 'INVALID_INPUT', ExitCode.INVALID_INPUT],
+    ['Invalid amount', 'INVALID_INPUT', ExitCode.INVALID_INPUT],
+    ['Invalid mnemonic phrase', 'INVALID_INPUT', ExitCode.INVALID_INPUT],
+    ['signBytes failed: message must be 32 bytes', 'INVALID_INPUT', ExitCode.INVALID_INPUT],
+  ])('maps %s to %s / exit %i', (message, code, exitCode) => {
+    const result = classifyError(new Error(message))
+    expect(result.code).toBe(code)
+    expect(result.exitCode).toBe(exitCode)
+    expect(result.retryable).toBe(false)
+  })
+
+  it('maps filesystem ENOENT to non-retryable invalid input', () => {
+    const err = Object.assign(new Error("ENOENT: no such file or directory, open '/tmp/missing.vult'"), {
+      code: 'ENOENT',
+    })
+    const result = classifyError(err)
+    expect(result.code).toBe('INVALID_INPUT')
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+  })
+
+  it('maps SDK VaultNotFound to exit 5', () => {
+    const result = classifyError(new VaultError(VaultErrorCode.VaultNotFound, 'Vault missing was not found'))
+    expect(result.code).toBe('VAULT_NOT_FOUND')
+    expect(result.exitCode).toBe(ExitCode.RESOURCE_NOT_FOUND)
+  })
+
+  it('maps sign-time wrong password to the same auth slot as import wrong password', () => {
+    const signError = new VaultError(VaultErrorCode.InvalidConfig, 'Failed to unlock vault: invalid password')
+    const importError = new VaultImportError(VaultImportErrorCode.INVALID_PASSWORD, 'wrong password')
+    expect(classifyError(signError).exitCode).toBe(ExitCode.AUTH_REQUIRED)
+    expect(classifyError(importError).exitCode).toBe(ExitCode.AUTH_REQUIRED)
+  })
+
+  it('maps permanent raw-transaction decode rejection to invalid input without retry advice', () => {
+    const err = new VaultError(
+      VaultErrorCode.BroadcastFailed,
+      'Failed to broadcast raw transaction on Ethereum: failed to decode signed transaction'
+    )
+    const result = classifyError(err)
+    expect(result.code).toBe('INVALID_INPUT')
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+    expect(result.suggestions).toBeUndefined()
+  })
+
+  it('keeps transient broadcast failures retryable', () => {
+    const result = classifyError(
+      new VaultError(VaultErrorCode.BroadcastFailed, 'Failed to broadcast raw transaction on Ethereum: RPC unavailable')
+    )
+    expect(result.code).toBe('EXTERNAL_SERVICE')
+    expect(result.exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
+    expect(result.retryable).toBe(true)
   })
 })

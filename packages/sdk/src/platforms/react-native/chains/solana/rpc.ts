@@ -8,7 +8,9 @@
  * would pull `rpc-websockets` into the bundle at import time.
  */
 
-import { jsonRpcCall } from '../../rpcFetch'
+import { jsonRpcCall, JsonRpcCallOptions } from '../../rpcFetch'
+
+type RpcRequestOptions = Pick<JsonRpcCallOptions, 'signal' | 'timeoutMs'>
 
 type RpcBlockhash = {
   context: { slot: number }
@@ -25,6 +27,8 @@ type RpcSendTxOpts = {
   skipPreflight?: boolean
   preflightCommitment?: 'processed' | 'confirmed' | 'finalized'
   maxRetries?: number
+  signal?: AbortSignal
+  timeoutMs?: number
 }
 
 /**
@@ -33,9 +37,10 @@ type RpcSendTxOpts = {
  * builders that need a `recentBlockhash` before signing.
  */
 export async function getSolanaRecentBlockhash(
-  rpcUrl: string
+  rpcUrl: string,
+  options: RpcRequestOptions = {}
 ): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
-  const res = await jsonRpcCall<RpcBlockhash>(rpcUrl, 'getLatestBlockhash', [{ commitment: 'confirmed' }])
+  const res = await jsonRpcCall<RpcBlockhash>(rpcUrl, 'getLatestBlockhash', [{ commitment: 'confirmed' }], options)
   return {
     blockhash: res.value.blockhash,
     lastValidBlockHeight: res.value.lastValidBlockHeight,
@@ -47,8 +52,12 @@ export async function getSolanaRecentBlockhash(
  * yet exist (consistent with `Connection.getBalance` on an uninitialized
  * account).
  */
-export async function getSolanaBalance(address: string, rpcUrl: string): Promise<bigint> {
-  const res = await jsonRpcCall<RpcBalance>(rpcUrl, 'getBalance', [address, { commitment: 'confirmed' }])
+export async function getSolanaBalance(
+  address: string,
+  rpcUrl: string,
+  options: RpcRequestOptions = {}
+): Promise<bigint> {
+  const res = await jsonRpcCall<RpcBalance>(rpcUrl, 'getBalance', [address, { commitment: 'confirmed' }], options)
   return BigInt(res.value ?? 0)
 }
 
@@ -65,13 +74,18 @@ export async function broadcastSolanaTx(
   rpcUrl: string,
   opts: Omit<RpcSendTxOpts, 'encoding'> = {}
 ): Promise<string> {
-  return jsonRpcCall<string>(rpcUrl, 'sendTransaction', [
-    rawTxBase64,
-    {
-      encoding: 'base64',
-      skipPreflight: opts.skipPreflight ?? false,
-      preflightCommitment: opts.preflightCommitment ?? 'confirmed',
-      maxRetries: opts.maxRetries ?? 3,
-    },
-  ])
+  return jsonRpcCall<string>(
+    rpcUrl,
+    'sendTransaction',
+    [
+      rawTxBase64,
+      {
+        encoding: 'base64',
+        skipPreflight: opts.skipPreflight ?? false,
+        preflightCommitment: opts.preflightCommitment ?? 'confirmed',
+        maxRetries: opts.maxRetries ?? 3,
+      },
+    ],
+    { signal: opts.signal, timeoutMs: opts.timeoutMs }
+  )
 }
