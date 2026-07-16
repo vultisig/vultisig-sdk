@@ -35,6 +35,12 @@ export enum AgentErrorCode {
   // Preserve the original diagnostic, but override its retry classification so
   // callers inspect the hashes instead of replaying the request blindly.
   BROADCAST_COMMITTED = 'BROADCAST_COMMITTED',
+  // Typed `agent ask` turn endings. These mirror process exits 10/11 and the
+  // generic non-success exit 1 so a JSON envelope never needs `success:true`
+  // to carry a blocked, refused, or failed request.
+  AGENT_TURN_BLOCKED = 'AGENT_TURN_BLOCKED',
+  AGENT_TURN_REFUSAL = 'AGENT_TURN_REFUSAL',
+  AGENT_TURN_ERROR = 'AGENT_TURN_ERROR',
   // A local broadcast-journal hit: an identical intent was broadcast recently
   // and hasn't definitively failed, so signing was refused to avoid a
   // double-spend. Retry with --force to override. See broadcastJournal.ts.
@@ -221,6 +227,12 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
       return ExitCode.ACK_FAILED
     case AgentErrorCode.BROADCAST_COMMITTED:
       return ExitCode.BROADCAST_COMMITTED
+    case AgentErrorCode.AGENT_TURN_BLOCKED:
+      return ExitCode.AGENT_TURN_BLOCKED
+    case AgentErrorCode.AGENT_TURN_REFUSAL:
+      return ExitCode.AGENT_TURN_REFUSAL
+    case AgentErrorCode.AGENT_TURN_ERROR:
+      return ExitCode.USAGE
     case AgentErrorCode.AUTH_FAILED:
     case AgentErrorCode.VAULT_LOCKED:
     case AgentErrorCode.PASSWORD_REQUIRED:
@@ -243,8 +255,9 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
     case AgentErrorCode.ACTION_NOT_IMPLEMENTED:
     case AgentErrorCode.TOOL_UNSUPPORTED:
     case AgentErrorCode.SESSION_NOT_INITIALIZED:
-    case AgentErrorCode.CONFIRMATION_REQUIRED:
       return ExitCode.USAGE
+    case AgentErrorCode.CONFIRMATION_REQUIRED:
+      return ExitCode.CONFIRMATION_REQUIRED
     case AgentErrorCode.SIGNING_FAILED:
     case AgentErrorCode.LOOP_DEPTH_EXCEEDED:
     case AgentErrorCode.UNKNOWN_ERROR:
