@@ -65,6 +65,33 @@ const getThorchainDepositAsset = ({
   })
 }
 
+// Mirrors iOS THORChainHelper.isSecuredAsset (thorchain.swift): a THORChain-held
+// token whose denom encodes an L1 chain prefix + '-' (e.g. `xrp-xrp`,
+// `eth-usdc-0x…`). RUNE and `x/…` THORChain-native tokens are not secured assets.
+const isSecuredAssetSwapCoin = (assetCoin: { chain: string; contractAddress?: string }): boolean =>
+  assetCoin.chain === Chain.THORChain &&
+  !!assetCoin.contractAddress &&
+  !assetCoin.contractAddress.startsWith('x/') &&
+  assetCoin.contractAddress.includes('-')
+
+// Builds the MsgDeposit asset for a THORChain secured asset spent in a swap.
+// Mirrors iOS THORChainHelper: the L1 chain and symbol are derived from the
+// secured denom (`eth-usdc-0x…` -> chain `ETH`, symbol `USDC-0X…`) with the
+// `secured` flag set, so THORNode matches the deposited coin against the same
+// secured asset referenced by the server-issued swap memo (`=:ETH-USDC:…`).
+const getSecuredAssetDepositAsset = (assetCoin: { contractAddress: string; ticker: string }) => {
+  const [chainPrefix, ...symbolParts] = assetCoin.contractAddress.split('-')
+  const symbol = symbolParts.join('-')
+
+  return TW.Cosmos.Proto.THORChainAsset.create({
+    chain: chainPrefix.toUpperCase(),
+    symbol: (symbol || assetCoin.ticker).toUpperCase(),
+    ticker: assetCoin.ticker.toUpperCase().replace(/X\//g, ''),
+    synth: false,
+    secured: true,
+  })
+}
+
 export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
   const coin = getKeysignCoin<CosmosChain>(keysignPayload)
@@ -374,9 +401,16 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
         const assetCoin = swapPayload?.fromCoin ?? coin
         const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
+        const securedSwapFromCoin =
+          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
+          asset: securedSwapFromCoin
+            ? getSecuredAssetDepositAsset({
+                contractAddress: securedSwapFromCoin.contractAddress,
+                ticker: securedSwapFromCoin.ticker,
+              })
+            : getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
           ...(isPositive
             ? {
                 amount: amountStr,
