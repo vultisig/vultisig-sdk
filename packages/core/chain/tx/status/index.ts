@@ -1,7 +1,6 @@
-import { Chain } from '@vultisig/core-chain/Chain'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 
-import { TxReceiptInfo, TxStatusResolver } from './resolver'
+import { TxReceiptInfo, TxStatusInput, TxStatusResolver } from './resolver'
 import { getBittensorTxStatus } from './resolvers/bittensor'
 import { getCardanoTxStatus } from './resolvers/cardano'
 import { getCosmosTxStatus } from './resolvers/cosmos'
@@ -30,12 +29,7 @@ const statusHandlers: Record<ChainKind, TxStatusResolver<any>> = {
   tron: getTronTxStatus,
 }
 
-type GetTxStatusInput = {
-  chain: Chain
-  hash: string
-}
-
-export const getTxStatus = (input: GetTxStatusInput) => {
+export const getTxStatus = (input: TxStatusInput) => {
   const { chain } = input
   const chainKind = getChainKind(chain)
 
@@ -44,4 +38,4 @@ export const getTxStatus = (input: GetTxStatusInput) => {
   return handler(input)
 }
 
-export type { TxReceiptInfo }
+export type { TxReceiptInfo, TxStatusInput }

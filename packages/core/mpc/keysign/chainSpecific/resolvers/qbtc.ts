@@ -17,13 +17,13 @@ export const getQbtcChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> = 
   timeoutTimestamp,
 }) => {
   const coin = getKeysignCoin<typeof Chain.QBTC>(keysignPayload)
-  const { accountNumber, sequence, latestBlock } = await getQbtcAccountInfo({
+  const { accountNumberBigInt, sequenceBigInt, latestBlock } = await getQbtcAccountInfo({
     address: coin.address,
   })
 
   return create(CosmosSpecificSchema, {
-    accountNumber: BigInt(accountNumber),
-    sequence: BigInt(sequence),
+    accountNumber: accountNumberBigInt,
+    sequence: sequenceBigInt,
     transactionType,
     gas: qbtcDefaultGas,
     ibcDenomTraces: {
