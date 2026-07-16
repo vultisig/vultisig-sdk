@@ -719,7 +719,12 @@ vultisig agent ask "Check my portfolio" --json
 
 # Fallback only — exposes the secret to `ps`/shell history (emits a warning)
 vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
+
+# Signing does not authorize backend order submission unless this is also set
+vultisig agent ask "Place the order" --yes --allow-auto-submit
 ```
+
+`--yes` authorizes unattended signing and transaction broadcast. It does not authorize the backend to submit a signed Polymarket order: that separate behavior is fail-closed unless `--allow-auto-submit` is present.
 
 **Text output (default):**
 
@@ -751,10 +756,20 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
       }
     ],
     "transactions": [],
+    "warnings": [
+      {
+        "code": "PROTOCOL_DRIFT",
+        "message": "Ignored 1 unknown SSE frame: data-future-critical",
+        "count": 1,
+        "eventTypes": ["data-future-critical"]
+      }
+    ],
     "outcome": { "kind": "success" }
   }
 }
 ```
+
+`warnings` is omitted when empty. `PROTOCOL_DRIFT` means the backend emitted an SSE frame type this CLI version does not understand; the turn continues, but automation should retain the warning because a newer CLI may be required to handle that frame.
 
 Failures use the same v1 envelope with `success:false` and a stable `error.code`. This includes
 failed/declined signing and typed blocked/refusal/error turn endings; their partial turn data remains under `data`.
@@ -810,7 +825,7 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `ACTION_NOT_IMPLEMENTED`    | Local executor does not implement this action type                                                                                                                            |
 | `INVALID_INPUT`             | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                                                                   |
 | `NETWORK_ERROR`             | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                                                                         |
-| `TIMEOUT`                   | Deadline exceeded, or abort where the message indicates a timeout                                                                                                             |
+| `TIMEOUT`                   | HTTP deadline or SSE frame-idle deadline exceeded (process exit 3, retryable)                                                                                                 |
 | `TRANSACTION_FAILED`        | Build/broadcast/gas errors mapped from the SDK                                                                                                                                |
 | `SIGNING_FAILED`            | MPC/signing failed                                                                                                                                                            |
 | `ACK_FAILED`                | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying                                                   |
@@ -832,6 +847,9 @@ SSE `error` events may optionally include a `code` field from the backend; if it
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env — see **Password resolution** above)
 - `--verbose` - Show tool calls and debug info on stderr
 - `--json` - Output structured JSON
+- `--yes` - Authorize unattended signing/broadcast
+- `--allow-auto-submit` - Separately allow backend submission of signed Polymarket orders (requires `--yes` to sign)
+- `--force` - Bypass the duplicate-broadcast guard
 
 #### Agent Chat (Interactive/Pipe Mode)
 
@@ -855,6 +873,7 @@ The vault password is resolved from the keyring/env chain (`vsig auth setup` or 
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env)
 - `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
 - `--session-id <id>` - Resume an existing session
+- `--allow-auto-submit` - Allow backend submission of signed Polymarket orders after local confirmation
 
 #### Pipe Protocol (`--via-agent`)
 
@@ -870,19 +889,20 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 
 **Output events** (emitted on stdout):
 
-| Type          | Fields                                      | When                                                                                                     |
-| ------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `ready`       | `vault, addresses`                          | Session initialized, addresses for all chains                                                            |
-| `session`     | `id`                                        | Conversation ID for resuming later                                                                       |
-| `history`     | `messages[]`                                | Previous messages when resuming a session                                                                |
-| `text_delta`  | `delta`                                     | Streaming text chunk from the agent                                                                      |
-| `tool_call`   | `id, action, params?, status`               | Action started (`running`)                                                                               |
-| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false)                                                        |
-| `tx_status`   | `tx_hash, chain, status, explorer_url?`     | Transaction broadcast/confirmed/failed                                                                   |
-| `assistant`   | `content`                                   | Full assistant response                                                                                  |
-| `suggestions` | `suggestions[]`                             | Suggested follow-up actions                                                                              |
-| `error`       | `message, code`                             | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
-| `done`        | `{}`                                        | Response cycle complete                                                                                  |
+| Type          | Fields                                          | When                                                                                                     |
+| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ready`       | `vault, addresses`                              | Session initialized, addresses for all chains                                                            |
+| `session`     | `id`                                            | Conversation ID for resuming later                                                                       |
+| `history`     | `messages[]`                                    | Previous messages when resuming a session                                                                |
+| `text_delta`  | `delta`                                         | Streaming text chunk from the agent                                                                      |
+| `tool_call`   | `id, action, params?, status`                   | Action started (`running`)                                                                               |
+| `tool_result` | `id, action, success, data?, error?, code?`     | Action completed (`code` when `success` is false)                                                        |
+| `tx_status`   | `tx_hash, chain, status, explorer_url?`         | Transaction broadcast/confirmed/failed                                                                   |
+| `assistant`   | `content`                                       | Full assistant response                                                                                  |
+| `suggestions` | `suggestions[]`                                 | Suggested follow-up actions                                                                              |
+| `warning`     | `warning: { code, message, count, eventTypes }` | Non-fatal protocol drift; an unknown SSE frame was ignored                                               |
+| `error`       | `message, code`                                 | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
+| `done`        | `{}`                                            | Response cycle complete                                                                                  |
 
 **Example session:**
 
@@ -937,6 +957,12 @@ VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 
 # Suppress spinners and info messages
 VULTISIG_SILENT=1
+
+# Bound agent-backend connection/unary requests (default: 30000ms)
+VULTISIG_HTTP_TIMEOUT_MS=30000
+
+# Bound an established SSE stream with no complete frame (default: 60000ms)
+VULTISIG_SSE_IDLE_TIMEOUT_MS=60000
 ```
 
 ### Settings

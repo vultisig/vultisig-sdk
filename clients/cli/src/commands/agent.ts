@@ -46,6 +46,7 @@ export type AgentCommandOptions = {
   verbose?: boolean
   notificationUrl?: string
   profile?: string
+  allowAutoSubmit?: boolean
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -61,6 +62,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     verbose: options.verbose,
     notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
     profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
+    allowAutoSubmit: options.allowAutoSubmit,
   }
 
   const session = new AgentSession(vault, config)
@@ -108,6 +110,8 @@ export type AgentAskOptions = {
   profile?: string
   /** Opt in to unattended signing/broadcast (`--yes`). Default: deny + report the proposed tx. */
   autoApprove?: boolean
+  /** Permit the backend to submit a signed Polymarket order. */
+  allowAutoSubmit?: boolean
   /** Bypass the broadcast-journal duplicate guard (`--force`). */
   force?: boolean
 }
@@ -153,6 +157,7 @@ function outputAskError(
     if (result?.transactions.length) data.transactions = result.transactions
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
+    if (result?.warnings.length) data.warnings = result.warnings
     // a2a-02: the typed turn ending, when the backend advertised it. Placed under
     // `data` so a caller reads `data.outcome` on BOTH the success and error
     // envelopes (the success envelope wraps its fields under `data` via outputJson).
@@ -232,6 +237,7 @@ function outputPostBroadcastFailure(
       transactions: result.transactions,
       tool_calls: result.toolCalls,
       response: result.response,
+      ...(result.warnings.length ? { warnings: result.warnings } : {}),
       ...(result.outcome ? { outcome: result.outcome } : {}),
       ...(originalError ? { original_error: originalError } : {}),
     }
@@ -327,6 +333,7 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       tool_calls: result.toolCalls,
       transactions: result.transactions,
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+      ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
       // a2a-02: the typed turn ending (success | blocked | refusal | error) at
       // `data.outcome` — the same relative slot as on the error envelope. Present
       // only against a backend that honored the advertised turn_outcome surface;
@@ -398,6 +405,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       askMode: true,
       profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
       force: options.force,
+      allowAutoSubmit: options.allowAutoSubmit,
     }
 
     const session = new AgentSession(vault, config)

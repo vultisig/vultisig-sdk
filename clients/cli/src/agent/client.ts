@@ -21,6 +21,7 @@ import type {
   ListConversationsRequest,
   ListConversationsResponse,
   MessagesSinceResponse,
+  ProtocolWarning,
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
@@ -46,6 +47,10 @@ export function createTurnIdempotencyKey(): string {
 /** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
  *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000
+const DEFAULT_SSE_IDLE_TIMEOUT_MS = 60_000
+/** Bounds on the backend-controlled frame types recorded in a PROTOCOL_DRIFT warning. */
+const MAX_DRIFT_EVENT_TYPES = 10
+const MAX_DRIFT_TYPE_LENGTH = 64
 
 /** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
  *  to the default. Non-positive / non-numeric values are ignored so a typo
@@ -55,6 +60,25 @@ export function resolveHttpTimeoutMs(): number {
   if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
   const n = Number(raw)
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
+}
+
+/** Maximum time between complete SSE frames. The backend emits keep-alive
+ * comments every 15s, so 60s tolerates several delayed heartbeats while still
+ * bounding a dead established stream. */
+export function resolveSseIdleTimeoutMs(): number {
+  const raw = process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_SSE_IDLE_TIMEOUT_MS
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_SSE_IDLE_TIMEOUT_MS
+}
+
+export class AgentStreamIdleTimeoutError extends Error {
+  readonly code = AgentErrorCode.TIMEOUT
+
+  constructor(readonly timeoutMs: number) {
+    super(`SSE stream idle timeout after ${timeoutMs}ms without a frame`)
+    this.name = 'AgentStreamIdleTimeoutError'
+  }
 }
 
 type StreamCallbacks = {
@@ -200,10 +224,12 @@ export class AgentClient {
   // stalled connection so a headless run can't hang indefinitely. Overridable
   // via the constructor (tests pass a tiny value) or VULTISIG_HTTP_TIMEOUT_MS.
   private readonly timeoutMs: number
+  private readonly sseIdleTimeoutMs: number
 
-  constructor(baseUrl: string, timeoutMs?: number) {
+  constructor(baseUrl: string, timeoutMs?: number, sseIdleTimeoutMs?: number) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
     this.timeoutMs = timeoutMs ?? resolveHttpTimeoutMs()
+    this.sseIdleTimeoutMs = sseIdleTimeoutMs ?? resolveSseIdleTimeoutMs()
   }
 
   /** Build the AbortSignal for a unary request: a fresh timeout, combined with
@@ -390,11 +416,10 @@ export class AgentClient {
     signal?: AbortSignal,
     idempotencyKey: string = createTurnIdempotencyKey()
   ): Promise<SSEStreamResult> {
-    // Bound only the initial connect, not the (intentionally unbounded)
-    // long-lived SSE body read — an idle stream sends keep-alive pings, so a
-    // body-level timeout would kill healthy turns. A dedicated controller fires
-    // the connect deadline; it's cleared once headers arrive. The caller signal
-    // (Ctrl+C) is combined in so cancellation still aborts the whole request.
+    // Bound the initial connect separately from the long-lived body read. A
+    // dedicated controller fires the connect deadline and is cleared once
+    // headers arrive; the read loop below uses a frame-idle deadline that healthy
+    // keep-alive comments reset. The caller signal (Ctrl+C) remains combined in.
     const connectController = new AbortController()
     let connectTimedOut = false
     // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
@@ -432,8 +457,8 @@ export class AgentClient {
       }
       throw err
     } finally {
-      // Headers received (or fetch failed) — stop bounding; the body read below
-      // runs against `signal` only, so SSE streaming is not time-limited.
+      // Headers received (or fetch failed) — stop the connect deadline. The body
+      // is bounded independently by the frame-idle deadline below.
       settled = true
       clearTimeout(connectTimer)
     }
@@ -454,6 +479,7 @@ export class AgentClient {
       message: null,
       finished: false,
       disconnected: false,
+      protocolWarnings: [],
       // A-C2 contract: the backend stamps server-side wall-clock (epoch ms) on
       // the SSE response headers before the first chunk, so the recovery poll
       // anchors /messages/since to the server clock instead of Date.now()
@@ -472,11 +498,12 @@ export class AgentClient {
     let buffer = ''
     let currentEvent = ''
     let currentData = ''
+    let lastFrameAt = Date.now()
 
     /** Strip optional single leading space from an SSE field value per spec. */
     const stripLeadingSpace = (v: string): string => (v.length > 0 && v[0] === ' ' ? v.slice(1) : v)
 
-    const processLine = (raw: string): void => {
+    const processLine = (raw: string): boolean => {
       const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
       if (line.startsWith('event:')) {
         currentEvent = stripLeadingSpace(line.slice(6)).trim()
@@ -484,22 +511,27 @@ export class AgentClient {
         currentData += (currentData ? '\n' : '') + stripLeadingSpace(line.slice(5))
       } else if (line === '') {
         // Empty line = end of event
+        const completedFrame = currentData.length > 0
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
           this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
         }
         currentEvent = ''
         currentData = ''
+        return completedFrame
       } else if (line[0] === ':') {
         // SSE comment (keep-alive ping) - ignore
+        return true
       }
       // Unknown fields (id:, retry:, etc.) silently ignored - no reconnection support.
       // Bare \r line endings are unsupported (only \n and \r\n).
+      return false
     }
 
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        const idleRemaining = this.sseIdleTimeoutMs - (Date.now() - lastFrameAt)
+        const { done, value } = await this.readWithIdleDeadline(reader, idleRemaining)
 
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
 
@@ -510,12 +542,12 @@ export class AgentClient {
         buffer = done ? '' : trailing
 
         for (const rawLine of lines) {
-          processLine(rawLine)
+          if (processLine(rawLine)) lastFrameAt = Date.now()
         }
 
         if (done) {
           // Process any trailing content that wasn't newline-terminated
-          if (trailing) processLine(trailing)
+          if (trailing && processLine(trailing)) lastFrameAt = Date.now()
           // Flush any pending event (stream ended without final blank line)
           if (currentData) {
             this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
@@ -524,6 +556,10 @@ export class AgentClient {
         }
       }
     } catch (err) {
+      if (err instanceof AgentStreamIdleTimeoutError) {
+        await reader.cancel(err).catch(() => {})
+        throw err
+      }
       // A user-initiated cancel (Ctrl+C → AbortController.abort()) is a
       // deliberate stop, not a dropped connection — re-throw so the caller
       // surfaces "[cancelled]" and does NOT try to recover the turn.
@@ -541,6 +577,26 @@ export class AgentClient {
     }
 
     return result
+  }
+
+  private readWithIdleDeadline(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    remainingMs: number
+  ): ReturnType<ReadableStreamDefaultReader<Uint8Array>['read']> {
+    if (remainingMs <= 0) return Promise.reject(new AgentStreamIdleTimeoutError(this.sseIdleTimeoutMs))
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new AgentStreamIdleTimeoutError(this.sseIdleTimeoutMs)), remainingMs)
+      reader.read().then(
+        value => {
+          clearTimeout(timer)
+          resolve(value)
+        },
+        err => {
+          clearTimeout(timer)
+          reject(err)
+        }
+      )
+    })
   }
 
   private handleSSEEvent(
@@ -610,6 +666,10 @@ export class AgentClient {
           // Terminal finish frame — the turn completed cleanly, no recovery needed.
           result.finished = true
           break
+        case 'ignore':
+          break
+        default:
+          this.recordProtocolDrift(v1Type ?? event, result)
       }
     } catch (e) {
       if (e instanceof SyntaxError) {
@@ -618,6 +678,26 @@ export class AgentClient {
         throw e
       }
     }
+  }
+
+  // `type` is backend-controlled wire content that lands in the ask JSON, so it
+  // is bounded on both axes: a malformed backend emitting many long, distinct
+  // types would otherwise grow `eventTypes` without limit and re-join it on
+  // every frame. `count` stays exact — only the type list is capped.
+  private recordProtocolDrift(rawType: string, result: SSEStreamResult): void {
+    const type = rawType.length > MAX_DRIFT_TYPE_LENGTH ? `${rawType.slice(0, MAX_DRIFT_TYPE_LENGTH)}…` : rawType
+    let warning = result.protocolWarnings[0]
+    if (!warning) {
+      warning = { code: 'PROTOCOL_DRIFT', message: '', count: 0, eventTypes: [] }
+      result.protocolWarnings.push(warning)
+    }
+    warning.count += 1
+    if (!warning.eventTypes.includes(type) && warning.eventTypes.length < MAX_DRIFT_EVENT_TYPES) {
+      warning.eventTypes.push(type)
+    }
+    const noun = warning.count === 1 ? 'frame' : 'frames'
+    warning.message = `Ignored ${warning.count} unknown SSE ${noun}: ${warning.eventTypes.join(', ')}`
+    if (this.verbose) process.stderr.write(`[SSE] unknown frame type: ${type}\n`)
   }
 
   private handleTextDelta(parsed: SSEPayload, result: SSEStreamResult, callbacks: StreamCallbacks): void {
@@ -713,10 +793,26 @@ export class AgentClient {
 
   // Maps a V1 `type` field to the legacy event bucket used by handleSSEEvent's
   // switch. Frame-level types (start, text-start, text-end, finish-step) and
-  // non-critical telemetry (data-tokens, data-usage, data-confirmation) route
-  // to 'ignore' which is a no-op. `data-tx_ready` also routes to 'ignore':
+  // known frame-level lifecycle and non-critical telemetry route to 'ignore'.
+  // `data-tx_ready` also routes to 'ignore':
   // #927 Phase 2 signs purely from `tool-output-available`, and production emits
   // `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI doesn't use.
+  //
+  // The 'ignore' list must cover EVERY frame both backends actually emit, or a
+  // healthy turn reports PROTOCOL_DRIFT. UI-only frames the CLI has no surface
+  // for: `data-quick_actions` / `data-vault_required` / `data-diagnostics`
+  // (Go, agent.go), `data-checkout-wall` (Go, api/message.go, on credit
+  // exhaustion) and `data-agentStep` (Mastra, uiStream.ts — one per tool step).
+  // `data-confirmation` is deliberately NOT here: it appears only in backend
+  // tests, so a real one is genuine drift and must stay loud.
+  //
+  // The generic-card surfaces below are emitted from a DYNAMIC call site —
+  // `V1Data(streamSurface, …)` (agent.go) over the backend's
+  // `genericCardSurfaces` map (response_validator.go). A static list cannot
+  // track that map, so a new backend surface will drift here until it is added
+  // on both sides; the backend's own comment already says new surfaces must be
+  // registered in two places, and this is now a third. See the review's open
+  // question on whether unknown `data-*` should be tolerated by contract.
   private mapV1EventType(type: string): string {
     switch (type) {
       case 'text-delta':
@@ -740,8 +836,24 @@ export class AgentClient {
         return 'error'
       case 'finish':
         return 'done'
-      default:
+      case 'start':
+      case 'text-start':
+      case 'text-end':
+      case 'finish-step':
+      case 'data-tokens':
+      case 'data-usage':
+      case 'data-tx_ready':
+      case 'data-quick_actions':
+      case 'data-vault_required':
+      case 'data-diagnostics':
+      case 'data-checkout-wall':
+      case 'data-agentStep':
+      case 'data-polymarket_markets':
+      case 'data-yield_opportunities':
+      case 'data-yield_position':
         return 'ignore'
+      default:
+        return 'unknown'
     }
   }
 
@@ -876,6 +988,8 @@ export type SSEStreamResult = {
    *  dropped connection, not a user abort). Signals the caller to recover the
    *  persisted answer via /messages/since. */
   disconnected: boolean
+  /** Non-fatal unknown wire frames observed during this stream. */
+  protocolWarnings: ProtocolWarning[]
   /** X-Server-Now (epoch millis as a string) captured from the SSE response
    *  headers — the server-clock bootstrap anchor for the recovery poll.
    *  null when the header is absent (older backend). */

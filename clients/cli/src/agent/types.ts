@@ -9,6 +9,13 @@ import type { Vultisig } from '@vultisig/sdk'
 import type { AgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard, TurnOutcome } from './cards'
 
+export type ProtocolWarning = {
+  code: 'PROTOCOL_DRIFT'
+  message: string
+  count: number
+  eventTypes: string[]
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -34,6 +41,9 @@ export type AgentConfig = {
   profile?: string
   /** Bypass the persistent broadcast-journal duplicate guard (`--force`). */
   force?: boolean
+  /** Permit signed Polymarket payloads to be submitted by the backend. Signing
+   *  alone does not imply this; default false strips submit markers/tokens. */
+  allowAutoSubmit?: boolean
 }
 
 // ============================================================================
@@ -429,6 +439,7 @@ export type PipeOutputEvent =
   // /messages/since to recover the answer — lets an agent consumer
   // distinguish "still working" from "failed".
   | { type: 'reconnecting' }
+  | { type: 'warning'; warning: ProtocolWarning }
   | { type: 'error'; message: string; code: AgentErrorCode }
   | { type: 'done' }
 
@@ -462,6 +473,9 @@ export type UICallbacks = {
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void
+  /** Non-fatal wire-contract drift. The turn continues, but machine callers
+   *  receive the ignored frame count/types instead of silently losing them. */
+  onProtocolWarning?: (warning: ProtocolWarning) => void
   onDone: () => void
   // Fired when a mid-turn SSE disconnect is detected and the session begins
   // polling /messages/since to recover the dropped answer/tx_ready.

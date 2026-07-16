@@ -130,6 +130,30 @@ describe('agent ask --json output contract', () => {
     expect(stderr.join('')).not.toContain('"success"')
   })
 
+  it('surfaces protocol-drift warnings in the success envelope', async () => {
+    driver.run = cb => {
+      cb.onProtocolWarning?.({
+        code: 'PROTOCOL_DRIFT',
+        message: 'Ignored 1 unknown SSE frame: data-confirmation',
+        count: 1,
+        eventTypes: ['data-confirmation'],
+      })
+      cb.onAssistantMessage('Completed with a newer backend frame')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(0)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.data.warnings).toEqual([
+      {
+        code: 'PROTOCOL_DRIFT',
+        message: 'Ignored 1 unknown SSE frame: data-confirmation',
+        count: 1,
+        eventTypes: ['data-confirmation'],
+      },
+    ])
+  })
+
   // a2a-02: the typed turn-outcome discriminator drives an ADDITIVE exit-code map
   // (success→0, blocked→10, refusal→11, frame-less error→1) and rides the top-level
   // `outcome` field of the JSON envelope so a headless caller never parses prose.
