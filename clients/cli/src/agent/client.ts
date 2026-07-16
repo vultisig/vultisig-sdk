@@ -511,19 +511,21 @@ export class AgentClient {
         currentData += (currentData ? '\n' : '') + stripLeadingSpace(line.slice(5))
       } else if (line === '') {
         // Empty line = end of event
+        const completedFrame = currentData.length > 0
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
           this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
         }
         currentEvent = ''
         currentData = ''
+        return completedFrame
       } else if (line[0] === ':') {
         // SSE comment (keep-alive ping) - ignore
         return true
       }
       // Unknown fields (id:, retry:, etc.) silently ignored - no reconnection support.
       // Bare \r line endings are unsupported (only \n and \r\n).
-      return line === ''
+      return false
     }
 
     try {

@@ -974,6 +974,29 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     vi.useRealTimers()
   })
 
+  it('does not reset the SSE idle deadline on bare blank lines', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    const caught = pending.catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(40)
+    controller.enqueue(encoder.encode('\n'))
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(10)
+
+    await expect(caught).resolves.toBeInstanceOf(AgentStreamIdleTimeoutError)
+    vi.useRealTimers()
+  })
+
   it('resets the SSE idle deadline on keep-alive frames', async () => {
     vi.useFakeTimers()
     const encoder = new TextEncoder()
