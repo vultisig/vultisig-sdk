@@ -1,5 +1,6 @@
 ---
 '@vultisig/core-mpc': patch
+'@vultisig/sdk': patch
 ---
 
 Reject negative TON signing amounts before byte encoding so native, dApp-supplied
