@@ -47,4 +47,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
   })
+
+  it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
+    const sdk = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
+    expect(
+      sdk.buildCosmosWasmExecuteMsg({
+        sender: 'thor1sender',
+        contract: 'thor1contract',
+        msg: { swap: { minimum_output: '123' } },
+      })
+    ).toEqual({
+      type: 'wasm/MsgExecuteContract',
+      value: '{"sender":"thor1sender","contract":"thor1contract","msg":{"swap":{"minimum_output":"123"}},"funds":[]}',
+    })
+  })
 })
