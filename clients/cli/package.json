@@ -87,7 +87,7 @@
     "ripple-address-codec": "^5.0.1",
     "tabtab": "^3.0.2",
     "viem": "^2.53.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.10",
