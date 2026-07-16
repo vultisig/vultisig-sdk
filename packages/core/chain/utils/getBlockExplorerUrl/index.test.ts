@@ -41,8 +41,7 @@ describe('getBlockExplorerUrl', () => {
   })
 
   it('builds a Hyperliquid transaction URL under hypurrscan /evm', () => {
-    const txHash =
-      '0x00b1b8e2c63d7eb2e2928f297d3898f932cb43ad601f06f0b5da0b31b38d53b6'
+    const txHash = '0x00b1b8e2c63d7eb2e2928f297d3898f932cb43ad601f06f0b5da0b31b38d53b6'
 
     expect(
       getBlockExplorerUrl({
