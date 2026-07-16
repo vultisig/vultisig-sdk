@@ -7,6 +7,7 @@ describe('resolveChainReference', () => {
   it.each([
     ['Terra Classic', Chain.TerraClassic],
     ['Bitcoin Cash', Chain.BitcoinCash],
+    ['THOR Chain', Chain.THORChain],
     ['columbus-5', Chain.TerraClassic],
     [8453, Chain.Base],
     ['999', Chain.Hyperliquid],
