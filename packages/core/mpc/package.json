@@ -571,6 +571,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/utxo.js",
       "default": "./dist/keysign/signingInputs/resolvers/utxo.js"
     },
+    "./keysign/suiCoinSelection": {
+      "types": "./dist/keysign/suiCoinSelection.d.ts",
+      "import": "./dist/keysign/suiCoinSelection.js",
+      "default": "./dist/keysign/suiCoinSelection.js"
+    },
     "./keysign/swap/build": {
       "types": "./dist/keysign/swap/build.d.ts",
       "import": "./dist/keysign/swap/build.js",
