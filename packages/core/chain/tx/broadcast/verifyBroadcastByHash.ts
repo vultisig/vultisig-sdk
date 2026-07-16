@@ -1,3 +1,5 @@
+import { sleep } from '@vultisig/lib-utils/sleep'
+
 import { Chain } from '../../Chain'
 import { SigningOutput } from '../../tw/signingOutput'
 import { getTxHash } from '../hash'
@@ -9,6 +11,9 @@ type VerifyInput<T extends Chain> = {
   error: unknown
 }
 
+export const broadcastVerificationMaxAttempts = 4
+export const broadcastVerificationBaseDelayMs = 500
+
 /**
  * Hash-verification safety net for broadcast resolvers.
  *
@@ -19,26 +24,51 @@ type VerifyInput<T extends Chain> = {
  * string matching is fragile across RPC providers and versions; the
  * deterministic signal is the tx hash itself.
  *
- * This helper re-runs `getTxHash` + `getTxStatus` on the signed output.
+ * This helper derives the hash once, then retries `getTxStatus` briefly to
+ * allow for RPC propagation and indexing lag.
  * If the status lookup confirms the transaction exists (pending or
  * success), the broadcast error is swallowed. Otherwise the original
  * error is re-thrown so the caller sees the real failure.
  *
- * Any failure inside verification (hash/status RPC down, tx not indexed
- * yet, network error) falls through to re-throwing the original error —
- * verification is a safety net, never a new failure mode.
+ * A terminal failed status rethrows immediately. Unknown/not-found status and
+ * transient status lookup failures exhaust the bounded verification window
+ * before the original error is rethrown. Verification is a safety net, never
+ * a new failure mode.
  */
 export const verifyBroadcastByHash = async <T extends Chain>({ chain, tx, error }: VerifyInput<T>): Promise<void> => {
-  try {
-    const hash = await getTxHash({ chain, tx })
-    const result = await getTxStatus({ chain, hash })
-    const isKnownPending = result.status === 'pending' && result.isKnown !== false
+  let hash: string
 
-    if (result.status === 'success' || isKnownPending) {
-      return
-    }
+  try {
+    hash = await getTxHash({ chain, tx })
   } catch {
-    // fall through — verification unavailable, rethrow the original error
+    throw error
   }
+
+  for (let attempt = 1; attempt <= broadcastVerificationMaxAttempts; attempt++) {
+    let result: Awaited<ReturnType<typeof getTxStatus>> | undefined
+
+    try {
+      result = await getTxStatus({ chain, hash })
+    } catch {
+      // Retry status lookup failures within the same bounded window.
+    }
+
+    if (result) {
+      const isKnownPending = result.status === 'pending' && result.isKnown !== false
+
+      if (result.status === 'success' || isKnownPending) {
+        return
+      }
+
+      if (result.status === 'error') {
+        break
+      }
+    }
+
+    if (attempt < broadcastVerificationMaxAttempts) {
+      await sleep(broadcastVerificationBaseDelayMs * attempt)
+    }
+  }
+
   throw error
 }
