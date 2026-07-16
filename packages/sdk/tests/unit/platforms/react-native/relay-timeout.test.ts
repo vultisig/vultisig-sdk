@@ -6,12 +6,15 @@ import { joinRelaySession, waitForParties } from '../../../../src/platforms/reac
 const neverRespondingFetch = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
   return new Promise<Response>((_resolve, reject) => {
     const signal = init?.signal
-    signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+    signal?.addEventListener('abort', () => reject(signal.reason), {
+      once: true,
+    })
   })
 })
 
 describe('React Native relay timeout and cancellation', () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
@@ -20,7 +23,9 @@ describe('React Native relay timeout and cancellation', () => {
     vi.stubGlobal('fetch', neverRespondingFetch)
 
     await expect(
-      joinRelaySession('http://127.0.0.1:1', 'session', 'local', { requestTimeoutMs: 10 })
+      joinRelaySession('http://127.0.0.1:1', 'session', 'local', {
+        requestTimeoutMs: 10,
+      })
     ).rejects.toBeInstanceOf(FetchTimeoutError)
   })
 
@@ -33,5 +38,17 @@ describe('React Native relay timeout and cancellation', () => {
     controller.abort(reason)
 
     await expect(promise).rejects.toBe(reason)
+  })
+
+  it('keeps polling after a per-request timeout until the overall deadline', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', neverRespondingFetch)
+
+    const promise = waitForParties('http://127.0.0.1:1', 'session', 2, 100, undefined, 20)
+    const expectation = expect(promise).rejects.toThrow('Timeout waiting for parties to join relay')
+
+    await vi.advanceTimersByTimeAsync(100)
+    await expectation
+    expect(neverRespondingFetch).toHaveBeenCalledTimes(5)
   })
 })

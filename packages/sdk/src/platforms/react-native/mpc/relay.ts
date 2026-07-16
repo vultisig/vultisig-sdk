@@ -10,6 +10,7 @@
 import {
   DEFAULT_RN_FETCH_TIMEOUT_MS,
   delayWithSignal,
+  FetchTimeoutError,
   throwIfSignalAborted,
   withFetchTimeout,
 } from '../fetchWithTimeout'
@@ -56,12 +57,18 @@ export async function waitForParties(
   while (Date.now() - start < timeoutMs) {
     throwIfSignalAborted(signal)
     const remainingMs = Math.max(1, timeoutMs - (Date.now() - start))
-    const parties = await withFetchTimeout(
-      `${relayUrl}/${sessionId}`,
-      { signal },
-      Math.min(requestTimeoutMs, remainingMs),
-      async res => (res.ok ? ((await res.json()) as string[]) : null)
-    )
+    let parties: string[] | null
+    try {
+      parties = await withFetchTimeout(
+        `${relayUrl}/${sessionId}`,
+        { signal },
+        Math.min(requestTimeoutMs, remainingMs),
+        async res => (res.ok ? ((await res.json()) as string[]) : null)
+      )
+    } catch (error) {
+      if (!(error instanceof FetchTimeoutError)) throw error
+      continue
+    }
     if (parties && parties.length >= expectedCount) return parties
 
     const delayMs = Math.min(1000, Math.max(0, timeoutMs - (Date.now() - start)))
