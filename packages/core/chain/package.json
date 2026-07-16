@@ -675,6 +675,11 @@
       "import": "./dist/chains/ripple/account/lines.js",
       "default": "./dist/chains/ripple/account/lines.js"
     },
+    "./chains/ripple/address": {
+      "types": "./dist/chains/ripple/address.d.ts",
+      "import": "./dist/chains/ripple/address.js",
+      "default": "./dist/chains/ripple/address.js"
+    },
     "./chains/ripple/client": {
       "types": "./dist/chains/ripple/client.d.ts",
       "import": "./dist/chains/ripple/client.js",
@@ -1883,6 +1888,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/transientRetry": {
+      "types": "./dist/tx/broadcast/transientRetry.d.ts",
+      "import": "./dist/tx/broadcast/transientRetry.js",
+      "default": "./dist/tx/broadcast/transientRetry.js"
+    },
     "./tx/broadcast/verifyBroadcastByHash": {
       "types": "./dist/tx/broadcast/verifyBroadcastByHash.d.ts",
       "import": "./dist/tx/broadcast/verifyBroadcastByHash.js",
@@ -2130,6 +2140,7 @@
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
     "long": "^5.3.2",
+    "ripple-address-codec": "^5.0.1",
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.53.1",
     "xrpl": "^5.0.0"

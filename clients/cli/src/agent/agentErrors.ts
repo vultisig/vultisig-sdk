@@ -30,6 +30,11 @@ export enum AgentErrorCode {
   // double-spend); it should track/confirm the emitted hash instead. Distinct
   // from TRANSACTION_FAILED (the broadcast itself failed — safe to retry).
   ACK_FAILED = 'ACK_FAILED',
+  // One or more tx hashes were submitted on-chain, but a later typed outcome,
+  // stream error, or thrown follow-up means the overall request may be partial.
+  // Preserve the original diagnostic, but override its retry classification so
+  // callers inspect the hashes instead of replaying the request blindly.
+  BROADCAST_COMMITTED = 'BROADCAST_COMMITTED',
   // A local broadcast-journal hit: an identical intent was broadcast recently
   // and hasn't definitively failed, so signing was refused to avoid a
   // double-spend. Retry with --force to override. See broadcastJournal.ts.
@@ -214,6 +219,8 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
   switch (code) {
     case AgentErrorCode.ACK_FAILED:
       return ExitCode.ACK_FAILED
+    case AgentErrorCode.BROADCAST_COMMITTED:
+      return ExitCode.BROADCAST_COMMITTED
     case AgentErrorCode.AUTH_FAILED:
     case AgentErrorCode.VAULT_LOCKED:
     case AgentErrorCode.PASSWORD_REQUIRED:

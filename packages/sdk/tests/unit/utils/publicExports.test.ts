@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '../../../src/index'
 
 describe('@vultisig/sdk public exports', () => {
-  it('exports fiatToAmount and normalizeChain utilities', () => {
+  it('exports fiatToAmount and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
+    expect(typeof sdk.resolveChainReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
   })
@@ -87,10 +88,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.VaultBase).toBe('function')
   })
 
+  it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
+    expect(typeof sdk.getChainKind).toBe('function')
+    expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
+    expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports generic CosmWasm amino and protobuf execute builders', () => {
+    expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
+    expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
   })
 
   it('VaultBase prototype exposes prep-only primitives used by mcp-ts execute_* tools', () => {

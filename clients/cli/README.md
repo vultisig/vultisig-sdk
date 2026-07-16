@@ -370,24 +370,24 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 
 #### Transaction Status
 
-Check whether a transaction has confirmed on-chain. By default, polls every 5 seconds until the transaction reaches a final state (success or error):
+Check whether a transaction has confirmed on-chain. The CLI reports `pending`, `not_found`, `confirmed`, or `failed`. A recently broadcast hash may briefly be `not_found`, so the default mode polls every 5 seconds for up to 120 seconds. Use `--no-wait` for one read:
 
 ```bash
 # Poll until confirmed (default)
-vultisig tx-status ethereum 0x9f8e7d6c...
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c...
 
 # Check current status without polling
-vultisig tx-status ethereum 0x9f8e7d6c... --no-wait
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 
 # JSON output
-vultisig tx-status ethereum 0x9f8e7d6c... -o json
+vultisig --output json tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 ```
 
 **Output:**
 
 ```
-✓ Transaction status: success
-Status: success
+✓ Transaction status: confirmed
+Status: confirmed
 Fee: 0.00042 ETH
 Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 ```
@@ -396,17 +396,25 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "chain": "ethereum",
-  "txHash": "0x9f8e7d6c...",
-  "status": "success",
-  "receipt": {
-    "feeAmount": "420000000000000",
-    "feeDecimals": 18,
-    "feeTicker": "ETH"
-  },
-  "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  "success": true,
+  "v": 1,
+  "data": {
+    "chain": "Ethereum",
+    "txHash": "0x9f8e7d6c...",
+    "status": "confirmed",
+    "receipt": {
+      "feeAmount": "420000000000000",
+      "feeDecimals": 18,
+      "feeTicker": "ETH"
+    },
+    "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  }
 }
 ```
+
+A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`; if it is still `pending` when the wait budget is exhausted, default polling exits `3` with `TX_STATUS_TIMEOUT` (retryable) rather than reporting a false terminal status.
+
+EVM RPCs can distinguish a missing receipt from a hash the node does not know, so they report `not_found` explicitly. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those chains conservatively remain `pending` with an unknown-presence signal, and default CLI polling is still bounded by `--timeout`.
 
 #### Signing Arbitrary Bytes
 
@@ -728,41 +736,58 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "session_id": "abc123-def456",
-  "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
-  "tool_calls": [
-    {
-      "action": "get_balances",
-      "success": true,
-      "data": {
-        "balances": [
-          {
-            "chain": "Ethereum",
-            "symbol": "ETH",
-            "amount": "1.5",
-            "decimals": 18,
-            "raw_amount": "1500000000000000000"
-          }
-        ]
+  "success": true,
+  "v": 1,
+  "data": {
+    "conversation_id": "abc123-def456",
+    "session_id": "abc123-def456",
+    "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
+    "tool_calls": [
+      {
+        "id": "tool-call-1",
+        "action": "get_balances",
+        "success": true,
+        "data": { "balances": [] }
       }
-    }
-  ],
-  "transactions": [
-    {
-      "hash": "0x9f8e7d6c...",
-      "chain": "ethereum",
-      "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
-    }
-  ]
+    ],
+    "transactions": [],
+    "outcome": { "kind": "success" }
+  }
 }
 ```
 
-On failure, stdout is a single JSON object with both a human `error` string and a stable `code` (the `error` field is unchanged for older parsers):
+Failures use the same v1 envelope with a stable `error.code`. Partial turn data remains under `data`.
+If a transaction hash has already been submitted and a later backend outcome/error prevents the overall request
+from completing, the CLI exits `13` with `BROADCAST_COMMITTED`. This is deliberately **not** overall success:
+an approval or other first leg may have landed while a swap or follow-up step did not. Inspect every hash and do
+not blindly retry the original request.
 
 ```json
 {
-  "error": "Agent backend unreachable at https://example.invalid",
-  "code": "BACKEND_UNREACHABLE"
+  "success": false,
+  "v": 1,
+  "error": {
+    "message": "A transaction was broadcast, but the overall agent request may be incomplete. Inspect the transaction status before continuing.",
+    "code": "BROADCAST_COMMITTED",
+    "conversation_id": "abc123-def456"
+  },
+  "data": {
+    "transactions": [
+      {
+        "hash": "0x9f8e7d6c...",
+        "chain": "ethereum",
+        "status": "broadcast",
+        "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+      }
+    ],
+    "tool_calls": [],
+    "response": "",
+    "outcome": { "kind": "error", "code": "follow_up_failed" },
+    "original_error": {
+      "message": "Confirmation indexer failed after broadcast",
+      "code": "TRANSACTION_FAILED"
+    }
+  }
 }
 ```
 
@@ -785,6 +810,8 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `TIMEOUT`                 | Deadline exceeded, or abort where the message indicates a timeout                                                            |
 | `TRANSACTION_FAILED`      | Build/broadcast/gas errors mapped from the SDK                                                                               |
 | `SIGNING_FAILED`          | MPC/signing failed                                                                                                           |
+| `ACK_FAILED`              | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying  |
+| `BROADCAST_COMMITTED`     | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                    |
 | `SESSION_NOT_INITIALIZED` | Internal session state error                                                                                                 |
 | `UNKNOWN_ERROR`           | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
 
@@ -1193,6 +1220,7 @@ Configuration is stored in `~/.vultisig/`:
 | 10   | agent ask: a fund-safety guardrail blocked the requested action                                                        |
 | 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
+| 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

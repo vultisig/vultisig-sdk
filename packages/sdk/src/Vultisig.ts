@@ -1010,13 +1010,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Clear all stored vaults
+   * Clear all SDK-owned vault data while preserving unrelated values in a
+   * shared custom storage adapter.
    */
   async clearVaults(): Promise<void> {
     await this.ensureInitialized()
     await this.vaultManager.clearVaults()
-    await this.storage.clear()
-    this.addressBookManager.clear()
+    this.pendingVaults.clear()
+    await this.addressBookManager.clear()
     this.emit('vaultChanged', { vaultId: '' })
   }
 

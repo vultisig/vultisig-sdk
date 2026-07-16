@@ -28,6 +28,7 @@
  * guard to move down into `vault.send()`/`vault.swap()` — see the residual note on
  * {@link guardedBroadcast}.
  */
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import type { Chain, KeysignPayload, VaultBase } from '@vultisig/sdk'
 
 import {
@@ -92,7 +93,17 @@ export function buildSendBroadcastIntent(
     chain: chain.toString(),
     to: keysignPayload.toAddress || undefined,
     value: opts.isMax ? MAX_AMOUNT_SENTINEL : keysignPayload.toAmount || undefined,
+    // `data` is the user-supplied memo. On an EVM chain the signer encodes a
+    // `0x`-prefixed memo AS calldata (memoToTxData), so a memo of `"0x"` is empty
+    // calldata — functionally identical to a no-memo native transfer, and it must
+    // fold to `""` to cross-path dedupe with the agent path (which fingerprints the
+    // same send as empty `"0x"` calldata). On a memo-routed chain (THORChain,
+    // Cosmos, UTXO) the memo is a real distinct value and must NOT fold (PR #1259).
+    // So the fold is gated on chain kind — the single "is this data EVM calldata?"
+    // authority — not hardcoded, which keeps a new chain family from silently
+    // reintroducing the memo collision.
     data: keysignPayload.memo || undefined,
+    dataIsEvmCalldata: getChainKind(chain) === 'evm',
     asset: isNative ? undefined : coin?.contractAddress || coin?.ticker || undefined,
   }
 }

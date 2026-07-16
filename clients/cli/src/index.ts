@@ -55,6 +55,7 @@ import {
   executeTxStatus,
   executeVaults,
   executeVerify,
+  resolveTxStatusParams,
 } from './commands'
 import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
@@ -634,6 +635,7 @@ program
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
+  .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -663,6 +665,7 @@ See also: balance, tx-status`
           max?: boolean
           token?: string
           memo?: string
+          destinationTag?: string
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -672,14 +675,28 @@ See also: balance, tx-status`
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
+        const chain = findChainByName(chainStr) || (chainStr as Chain)
+        if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
+          throw new Error('--destination-tag is only supported for XRP')
+        }
+        const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
+        if (
+          options.destinationTag !== undefined &&
+          (!/^(0|[1-9]\d*)$/.test(options.destinationTag) ||
+            !Number.isSafeInteger(destinationTag) ||
+            destinationTag > 4294967295)
+        ) {
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+        }
         const context = await init(program.opts().vault)
         try {
           await executeSend(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
+            chain,
             to,
             amount: amount ?? 'max',
             tokenId: options.token,
             memo: options.memo,
+            destinationTag,
             dryRun: options.dryRun,
             yes: options.yes || options.confirm,
             force: options.force,
@@ -780,7 +797,7 @@ program
 // Command: Check transaction status
 program
   .command('tx-status')
-  .description('Check the status of a transaction (polls until confirmed)')
+  .description('Check transaction status (polls until terminal or timeout)')
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
@@ -788,6 +805,9 @@ program
   .addHelpText(
     'after',
     `
+Statuses: pending, not_found, confirmed, failed
+Malformed hashes fail with INVALID_HASH (exit 4).
+
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
   vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
@@ -795,19 +815,20 @@ Examples:
   )
   .action(
     withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
-      const context = await init(program.opts().vault)
       const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
       if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
         throw new InvalidInputError(
           `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
         )
       }
-      await executeTxStatus(context, {
+      const params = resolveTxStatusParams({
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
         timeoutSec,
       })
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, params)
     })
   )
 
@@ -1442,7 +1463,12 @@ Exit codes:
   7  unknown/unexpected error
   8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
      emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
-  9  duplicate-broadcast refused — nothing was sent; retry with --force`
+  9  duplicate-broadcast refused — nothing was sent; retry with --force
+  10 agent turn blocked by a fund-safety guardrail
+  11 model refusal or clarifying question; no action taken
+  12 non-interactive confirmation/input required
+  13 BROADCAST_COMMITTED — a transaction was submitted but the overall request may
+     be incomplete; inspect every emitted hash and DO NOT blindly retry`
   )
   .action(
     async (
