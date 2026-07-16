@@ -31,6 +31,9 @@ type JsonErrorBody = { error?: string; code?: string }
  *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000
 const DEFAULT_SSE_IDLE_TIMEOUT_MS = 60_000
+/** Bounds on the backend-controlled frame types recorded in a PROTOCOL_DRIFT warning. */
+const MAX_DRIFT_EVENT_TYPES = 10
+const MAX_DRIFT_TYPE_LENGTH = 64
 
 /** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
  *  to the default. Non-positive / non-numeric values are ignored so a typo
@@ -646,14 +649,21 @@ export class AgentClient {
     }
   }
 
-  private recordProtocolDrift(type: string, result: SSEStreamResult): void {
+  // `type` is backend-controlled wire content that lands in the ask JSON, so it
+  // is bounded on both axes: a malformed backend emitting many long, distinct
+  // types would otherwise grow `eventTypes` without limit and re-join it on
+  // every frame. `count` stays exact — only the type list is capped.
+  private recordProtocolDrift(rawType: string, result: SSEStreamResult): void {
+    const type = rawType.length > MAX_DRIFT_TYPE_LENGTH ? `${rawType.slice(0, MAX_DRIFT_TYPE_LENGTH)}…` : rawType
     let warning = result.protocolWarnings[0]
     if (!warning) {
       warning = { code: 'PROTOCOL_DRIFT', message: '', count: 0, eventTypes: [] }
       result.protocolWarnings.push(warning)
     }
     warning.count += 1
-    if (!warning.eventTypes.includes(type)) warning.eventTypes.push(type)
+    if (!warning.eventTypes.includes(type) && warning.eventTypes.length < MAX_DRIFT_EVENT_TYPES) {
+      warning.eventTypes.push(type)
+    }
     const noun = warning.count === 1 ? 'frame' : 'frames'
     warning.message = `Ignored ${warning.count} unknown SSE ${noun}: ${warning.eventTypes.join(', ')}`
     if (this.verbose) process.stderr.write(`[SSE] unknown frame type: ${type}\n`)
@@ -756,6 +766,13 @@ export class AgentClient {
   // `data-tx_ready` also routes to 'ignore':
   // #927 Phase 2 signs purely from `tool-output-available`, and production emits
   // `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI doesn't use.
+  //
+  // The 'ignore' list must cover EVERY frame both backends actually emit, or a
+  // healthy turn reports PROTOCOL_DRIFT. UI-only frames the CLI has no surface
+  // for: `data-quick_actions` / `data-vault_required` / `data-diagnostics`
+  // (Go, agent.go) and `data-agentStep` (Mastra, uiStream.ts — one per tool
+  // step). `data-confirmation` is deliberately NOT here: it appears only in
+  // backend tests, so a real one is genuine drift and must stay loud.
   private mapV1EventType(type: string): string {
     switch (type) {
       case 'text-delta':
@@ -786,6 +803,10 @@ export class AgentClient {
       case 'data-tokens':
       case 'data-usage':
       case 'data-tx_ready':
+      case 'data-quick_actions':
+      case 'data-vault_required':
+      case 'data-diagnostics':
+      case 'data-agentStep':
         return 'ignore'
       default:
         return 'unknown'

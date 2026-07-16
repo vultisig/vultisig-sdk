@@ -281,6 +281,66 @@ describe('AgentClient.sendMessageStream', () => {
     expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('data-usage'))
   })
 
+  // Every frame below is emitted by a live backend on an ordinary healthy turn:
+  // data-quick_actions / data-vault_required / data-diagnostics from the Go
+  // backend (internal/service/agent/agent.go) and data-agentStep from Mastra
+  // (src/mastra/uiStream.ts, one per tool step). If any drops out of the
+  // 'ignore' list, `vsig agent ask --output json` stamps a PROTOCOL_DRIFT
+  // warning onto successful turns and machine consumers learn to ignore the
+  // field. Keep this pinned to what the backends actually emit.
+  it('keeps UI-only backend frames quiet instead of reporting them as protocol drift', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"data-quick_actions","data":{"quick_actions":[]}}\n\n',
+      'data: {"type":"data-vault_required","data":{"required":true}}\n\n',
+      'data: {"type":"data-diagnostics","data":{"trace":"x"}}\n\n',
+      'data: {"type":"data-agentStep","id":"c1-0","data":{"status":"running"}}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.protocolWarnings).toEqual([])
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('unknown frame type'))
+  })
+
+  // Frame `type` is backend-controlled and lands in the ask JSON envelope, so
+  // both the number of distinct types and each type's length stay bounded.
+  it('caps the distinct frame types recorded in a drift warning while keeping the count exact', async () => {
+    const frames = Array.from({ length: 25 }, (_, i) => `data: {"type":"data-junk-${i}","data":{}}\n\n`)
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      ...frames,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    const [warning] = result.protocolWarnings
+    expect(warning?.count).toBe(25)
+    expect(warning?.eventTypes).toHaveLength(10)
+  })
+
+  it('truncates an oversized frame type instead of echoing it whole', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      `data: {"type":"data-${'x'.repeat(500)}","data":{}}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    const [warning] = result.protocolWarnings
+    expect(warning?.eventTypes).toHaveLength(1)
+    expect(warning?.eventTypes[0]).toHaveLength(65)
+    expect(warning?.eventTypes[0]).toMatch(/…$/)
+  })
+
   it('derives tool_progress status from v1 frame type and resolves toolName via toolCallId cache', async () => {
     const onToolProgress = vi.fn()
 

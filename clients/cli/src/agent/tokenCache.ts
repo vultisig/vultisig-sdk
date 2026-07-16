@@ -122,10 +122,28 @@ async function acquireTokenStoreLock(): Promise<() => void> {
   }
 }
 
+/** Drop entries that predate scoped keys. Before this module the store was keyed
+ *  by bare publicKey, so those entries are unreachable by every accessor here —
+ *  but a plain round-trip would preserve their access AND refresh tokens on disk
+ *  forever. Reap them on the first locked write instead. */
+function pruneLegacyEntries(store: TokenStore): void {
+  for (const key of Object.keys(store)) {
+    let scoped = false
+    try {
+      const parts = JSON.parse(key) as unknown
+      scoped = Array.isArray(parts) && parts.length === 3
+    } catch {
+      scoped = false
+    }
+    if (!scoped) delete store[key]
+  }
+}
+
 async function mutateTokenStore(mutator: (store: TokenStore) => void): Promise<void> {
   const release = await acquireTokenStoreLock()
   try {
     const store = readTokenStore()
+    pruneLegacyEntries(store)
     mutator(store)
     writeTokenStoreAtomic(store)
   } finally {
