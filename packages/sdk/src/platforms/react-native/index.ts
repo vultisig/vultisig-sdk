@@ -580,6 +580,7 @@ export async function fiatToAmount(...args: unknown[]) {
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
+export { resolveChainReference } from '../../utils/resolveChainReference'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
