@@ -2667,72 +2667,72 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@formatjs/bigdecimal@npm:0.2.6":
-  version: 0.2.6
-  resolution: "@formatjs/bigdecimal@npm:0.2.6"
-  checksum: 10c0/8e39a52ffd77bb6ed877e044d16a8dc4282ab940b0d10caeaf94ba7db9a0b56e7440fc56caee369915d5614cff2116cb6ad46a199a53f2caa1b3b1735f808307
+"@formatjs/bigdecimal@npm:0.2.7":
+  version: 0.2.7
+  resolution: "@formatjs/bigdecimal@npm:0.2.7"
+  checksum: 10c0/9583a4d615553d1353284d0f66d30b6d7ab54b8d57c50f14d42db5fa48029b01c26ac7705b493c4bde716fcffbaee4d2f3cfcb6550d6c111e3a33bcc61cc719a
   languageName: node
   linkType: hard
 
-"@formatjs/fast-memoize@npm:3.1.6":
-  version: 3.1.6
-  resolution: "@formatjs/fast-memoize@npm:3.1.6"
-  checksum: 10c0/6cac8413b09aa4771edd98a52d46a9adc2f02e8bce8756a2abbd1eea2cf977757ffbb4bc1b33b6c17092739cd0c33351dffa0ea58b22e431b9754a34e46fe093
+"@formatjs/fast-memoize@npm:3.1.7":
+  version: 3.1.7
+  resolution: "@formatjs/fast-memoize@npm:3.1.7"
+  checksum: 10c0/dee801f82eda1f6fdc166b0c907e8750c15e409e20b2006c215d9247fe0db720d84d53fcb2fb7559cec21a24932b69dda326c81ee2885aad2cde31bc25449fd0
   languageName: node
   linkType: hard
 
-"@formatjs/intl-getcanonicallocales@npm:3.2.10, @formatjs/intl-getcanonicallocales@npm:^3.2.10":
-  version: 3.2.10
-  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.10"
-  checksum: 10c0/16d39fe94efd57dd4d1b261115892c86d0c230e921ee402153f7c1e87b833aee678f44ff31d10c436c59b081f95ebf8d70324c1ba83fd99543d84e66dfa1fba3
+"@formatjs/intl-getcanonicallocales@npm:3.2.11, @formatjs/intl-getcanonicallocales@npm:^3.2.11":
+  version: 3.2.11
+  resolution: "@formatjs/intl-getcanonicallocales@npm:3.2.11"
+  checksum: 10c0/8083c055fc4c86e307a70266f06489745e1e17f44539a5742023a5224ed6672b513905d2f1acab4b13f586e70a9416f8eb53cb4ac9eafb149a5e6055a2f96db2
   languageName: node
   linkType: hard
 
-"@formatjs/intl-locale@npm:^5.3.9":
-  version: 5.3.9
-  resolution: "@formatjs/intl-locale@npm:5.3.9"
+"@formatjs/intl-locale@npm:^5.3.10":
+  version: 5.3.10
+  resolution: "@formatjs/intl-locale@npm:5.3.10"
   dependencies:
-    "@formatjs/intl-getcanonicallocales": "npm:3.2.10"
-    "@formatjs/intl-supportedvaluesof": "npm:2.3.8"
-  checksum: 10c0/f8233900c3777badfad67a60a4ba92e4d6b1b26d669410041bbd70471573cd7565f5af38403033e2a30bbddda561159463720a9af4ff2f4cad4f3ec32815000a
+    "@formatjs/intl-getcanonicallocales": "npm:3.2.11"
+    "@formatjs/intl-supportedvaluesof": "npm:2.3.9"
+  checksum: 10c0/b2de54b5ff032b968b427ac65d45e6a0aca8aadb291819a61d4a12596c8782922d279a49eacd3d1c8c07b446127948f122f9420eb41741aee3076ca553514a6c
   languageName: node
   linkType: hard
 
-"@formatjs/intl-localematcher@npm:0.8.10":
-  version: 0.8.10
-  resolution: "@formatjs/intl-localematcher@npm:0.8.10"
+"@formatjs/intl-localematcher@npm:0.8.12":
+  version: 0.8.12
+  resolution: "@formatjs/intl-localematcher@npm:0.8.12"
   dependencies:
-    "@formatjs/fast-memoize": "npm:3.1.6"
-  checksum: 10c0/49a38b45d618de0ce857d62208e41af4c043a90d739a10828cb0a1e57c88c1ad28c27905ce57246ae5aa1c66834276a42665320d8294b01607d0e46b229d4a71
+    "@formatjs/fast-memoize": "npm:3.1.7"
+  checksum: 10c0/2de705d6a800f2d406c7cffdb4c61bc81683cc2e96bb3f0d3a813d04879358a0601c06dc0bf38d8bb60a9ef5737384423773182327de5aadea1cce6375639247
   languageName: node
   linkType: hard
 
-"@formatjs/intl-numberformat@npm:^9.3.11":
-  version: 9.3.11
-  resolution: "@formatjs/intl-numberformat@npm:9.3.11"
+"@formatjs/intl-numberformat@npm:^9.3.13":
+  version: 9.3.13
+  resolution: "@formatjs/intl-numberformat@npm:9.3.13"
   dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/645864cff17f650488e69c68c1206889f09fde52c57445c5d9d049a5737d420a99d2e827f002e1f65c856694d9e945f61c92840444f0c6486b55cbd6980a59b5
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.8.12"
+  checksum: 10c0/b58f9b75160baf8bcd39659d42dbec5c158589342e0863ea480bd2f7718d959c78f33d90dd0092f3caf3e2c5f073d11069ae537c91eb516eadff3bd2ecc1b4a1
   languageName: node
   linkType: hard
 
-"@formatjs/intl-pluralrules@npm:^6.3.10":
-  version: 6.3.10
-  resolution: "@formatjs/intl-pluralrules@npm:6.3.10"
+"@formatjs/intl-pluralrules@npm:^6.3.12":
+  version: 6.3.12
+  resolution: "@formatjs/intl-pluralrules@npm:6.3.12"
   dependencies:
-    "@formatjs/bigdecimal": "npm:0.2.6"
-    "@formatjs/intl-localematcher": "npm:0.8.10"
-  checksum: 10c0/136d1af6531ab30f6acbe548abe995b841bbf3eb331a83e09f22aebb9f0654fbbb94b3cd872a412e796cba278a8c45efe501a3cdd3303bc7fde5e535ffc8614a
+    "@formatjs/bigdecimal": "npm:0.2.7"
+    "@formatjs/intl-localematcher": "npm:0.8.12"
+  checksum: 10c0/b54b94913707c2d7005f1895e08c87468ea4b64a03e7262df976b2e5adb35d1a6c7cc38f28b41580a330162074ff6ba60dc16db7dc7f4ec34e4e262e630df287
   languageName: node
   linkType: hard
 
-"@formatjs/intl-supportedvaluesof@npm:2.3.8":
-  version: 2.3.8
-  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.8"
+"@formatjs/intl-supportedvaluesof@npm:2.3.9":
+  version: 2.3.9
+  resolution: "@formatjs/intl-supportedvaluesof@npm:2.3.9"
   dependencies:
-    "@formatjs/fast-memoize": "npm:3.1.6"
-  checksum: 10c0/4c84b70c48ddd47c86087666b8dd7524f263cbbe8825341745db2416441907b6354509f3439a08f373f374442c8abc1e1d53662c2a6d8ef7a5e7385be10e1619
+    "@formatjs/fast-memoize": "npm:3.1.7"
+  checksum: 10c0/7b3d8fe5c16e9c7d93ee34161cda4a91facad7c9dc33d0e8cf22c3acd6a09b405d98ea838473c290bc8fcc2053e3358b0874a5e9f88336c2c3c50b9e4e7f4cdc
   languageName: node
   linkType: hard
 
@@ -7309,10 +7309,10 @@ __metadata:
     "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
-    "@formatjs/intl-getcanonicallocales": "npm:^3.2.10"
-    "@formatjs/intl-locale": "npm:^5.3.9"
-    "@formatjs/intl-numberformat": "npm:^9.3.11"
-    "@formatjs/intl-pluralrules": "npm:^6.3.10"
+    "@formatjs/intl-getcanonicallocales": "npm:^3.2.11"
+    "@formatjs/intl-locale": "npm:^5.3.10"
+    "@formatjs/intl-numberformat": "npm:^9.3.13"
+    "@formatjs/intl-pluralrules": "npm:^6.3.12"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.1"
     "@noble/hashes": "npm:^1.8.0"
