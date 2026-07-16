@@ -189,9 +189,17 @@ function hasCommittedBroadcast(result: AskResult | undefined): boolean {
 
 const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data'])
 
+/**
+ * The turn's signing verdict, or undefined if it signed cleanly (or never tried).
+ *
+ * Only the LAST signing call decides. A failed sign is queued and recursed so the
+ * LLM learns it refused (session.ts:704) and can re-emit a corrected tx_ready — so
+ * an earlier failure superseded by a later successful sign is not a turn failure,
+ * and reporting one would be its own lie.
+ */
 function failedSigningError(result: AskResult): { message: string; code: AgentErrorCode } | undefined {
-  const failed = [...result.toolCalls].reverse().find(call => SIGNING_TOOLS.has(call.action) && !call.success)
-  if (!failed) return undefined
+  const failed = [...result.toolCalls].reverse().find(call => SIGNING_TOOLS.has(call.action))
+  if (!failed || failed.success) return undefined
 
   const message =
     failed.error ??
@@ -414,18 +422,22 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         exitCode = agentErrorCodeToExitCode(result.error.code)
         outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
       }
-    } else if (hasCommittedBroadcast(result) && result.outcome && result.outcome.kind !== 'success') {
-      // Any typed non-success ending can arrive after an approval/send/swap leg
-      // already landed. Do not turn that partial execution into overall success or
-      // claim that a refusal/clarification means no action was taken.
-      exitCode = ExitCode.BROADCAST_COMMITTED
-      outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED)
     } else {
-      const signingError = failedSigningError(result)
-      const turnError = outcomeError(result.outcome)
-      const failure = signingError ?? turnError
+      // A failed signing leg or any typed non-success ending. Either can arrive
+      // after an approval/send/swap leg already landed.
+      const failure = failedSigningError(result) ?? outcomeError(result.outcome)
 
-      if (failure) {
+      if (failure && hasCommittedBroadcast(result)) {
+        // A live hash exists, so the request is PARTIAL, not merely failed. The
+        // failure's own code must not reach the exit — TRANSACTION_FAILED (6) and
+        // TIMEOUT (3) are documented retryable, and replaying the request would
+        // re-broadcast the leg that landed. 13 is the non-retryable partial slot;
+        // the original diagnostic rides along as data.original_error. Checked
+        // regardless of whether the backend emitted an outcome, so an older
+        // backend (outcome undefined) cannot bypass the guard.
+        exitCode = ExitCode.BROADCAST_COMMITTED
+        outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED, failure)
+      } else if (failure) {
         exitCode = agentErrorCodeToExitCode(failure.code)
         outputAskError(wantsJson, failure.message, failure.code, conversationId, result)
       } else {

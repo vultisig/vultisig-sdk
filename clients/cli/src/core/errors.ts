@@ -308,6 +308,19 @@ function classifyVaultError(err: VaultError): VsigError {
           chainMatch ? { chain: chainMatch[1] } : undefined
         )
       }
+      // InvalidConfig is also the SDK's slot for a bad receiver ("Invalid receiver
+      // address for chain X: …", VaultBase.ts:1051). Without this, `send` fell to
+      // the UsageError default (exit 1) while `address-book` reported the same
+      // class as INVALID_ADDRESS (4) — the documented code. Unify on 4.
+      if (/invalid (?:receiver |recipient |destination )?address|bad address|malformed address/i.test(lowerMsg)) {
+        const addrMatch = err.message.match(/(0x[a-fA-F0-9]+|bc1[a-z0-9]+|[13][a-km-zA-HJ-NP-Z1-9]+)/i)
+        return new InvalidAddressError(
+          err.message,
+          undefined,
+          undefined,
+          addrMatch ? { address: addrMatch[1] } : undefined
+        )
+      }
       if (lowerMsg.includes('failed to unlock vault') || lowerMsg.includes('invalid password')) {
         return new AuthRequiredError(err.message)
       }

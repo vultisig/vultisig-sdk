@@ -341,6 +341,18 @@ describe('classifyError with VaultError', () => {
     expect(result.retryable).toBe(false)
   })
 
+  // `send` raises InvalidConfig for a bad receiver (VaultBase.ts:1051) while
+  // address-book already reported INVALID_ADDRESS/4 for the same class. The
+  // README documents 4, so the UsageError/1 default was a documented-vs-actual lie.
+  it('maps InvalidConfig with an "Invalid receiver address" message to InvalidAddressError/4', () => {
+    const err = new VaultError(VaultErrorCode.InvalidConfig, 'Invalid receiver address for chain Ethereum: 0xdeadbeef')
+    const result = classifyError(err)
+    expect(result).toBeInstanceOf(InvalidAddressError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+    expect(result.context).toMatchObject({ address: '0xdeadbeef' })
+  })
+
   it('maps Timeout to NetworkError with retryable', () => {
     const err = new VaultError(VaultErrorCode.Timeout, 'request timed out')
     const result = classifyError(err)

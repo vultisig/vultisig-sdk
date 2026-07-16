@@ -325,6 +325,77 @@ describe('agent ask --json output contract', () => {
     })
   })
 
+  // A failed leg AFTER one already landed must never exit on the failure's own
+  // code: TRANSACTION_FAILED→6 and TIMEOUT→3 are documented retryable, so an
+  // orchestrator honoring them would replay the request and re-broadcast the leg
+  // that succeeded. 13 is the non-retryable partial slot (#1233).
+  it('failed second sign leg after a committed broadcast → exit 13, not the leg error’s retryable code', async () => {
+    driver.run = cb => {
+      cb.onToolResult('sign-approve', 'sign_tx', true, { tx_hash: '0xapproved', chain: 'ethereum' })
+      cb.onTxStatus('0xapproved', 'ethereum', 'pending', 'https://etherscan.io/tx/0xapproved')
+      cb.onToolResult(
+        'sign-swap',
+        'sign_tx',
+        false,
+        { error: 'Failed to broadcast: node unavailable', code: AgentErrorCode.TRANSACTION_FAILED },
+        'Failed to broadcast: node unavailable',
+        AgentErrorCode.TRANSACTION_FAILED
+      )
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).not.toBe(ExitCode.EXTERNAL_SERVICE)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    // The landed hash and the original diagnostic both survive for recovery.
+    expect(envelope.data.transactions[0].hash).toBe('0xapproved')
+    expect(envelope.data.original_error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+  })
+
+  // Same guard on an older backend that never emits turn_outcome — the absent
+  // outcome must not let a committed broadcast bypass the 13 slot.
+  it('failed sign after a committed broadcast with NO turn_outcome → still exit 13', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xsent', 'ethereum', 'pending', 'https://etherscan.io/tx/0xsent')
+      cb.onToolResult('sign-2', 'sign_tx', false, { error: 'receipt polling timed out' }, 'receipt polling timed out')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).not.toBe(ExitCode.NETWORK)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].hash).toBe('0xsent')
+  })
+
+  // The other direction of the lie: a failed sign that a later sign superseded.
+  // The failed result is queued and recursed so the LLM can re-emit a corrected
+  // tx (session.ts:704), so an earlier failure is not the turn's verdict.
+  it('failed sign superseded by a later successful sign → exit 0, not a false failure', async () => {
+    driver.run = cb => {
+      cb.onToolResult(
+        'sign-1',
+        'sign_tx',
+        false,
+        { error: 'gas price too low', code: AgentErrorCode.TRANSACTION_FAILED },
+        'gas price too low',
+        AgentErrorCode.TRANSACTION_FAILED
+      )
+      cb.onToolResult('sign-2', 'sign_tx', true, { tx_hash: '0xretried', chain: 'ethereum' })
+      cb.onTxStatus('0xretried', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xretried')
+      cb.onTurnOutcome?.({ kind: 'success' })
+      cb.onAssistantMessage('Sent 0.1 ETH.')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.SUCCESS)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(true)
+    expect(envelope.data.transactions[0].hash).toBe('0xretried')
+  })
+
   it('declined sign without turn_outcome → confirmation-required envelope and exit 12', async () => {
     driver.run = cb => {
       cb.onToolResult(
