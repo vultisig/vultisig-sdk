@@ -1,7 +1,7 @@
 import { bech32 } from 'bech32'
 
 import type { CosmosMsgInput } from '../../types/cosmos'
-import { CosmosMsgType } from '../../types/cosmos-msg'
+import { buildCosmosWasmExecuteMsg } from './cosmosWasmExecute'
 
 /**
  * Pure-crypto builder for an UNSIGNED CosmWasm CW-20 token transfer message.
@@ -180,7 +180,7 @@ export const buildCw20TransferMsg = (params: BuildCw20TransferMsgParams): BuildC
 
   // Amino `MsgExecuteContract` value. `msg` here is the CW-20 execute object;
   // `funds: []` (a pure transfer carries no attached coins).
-  const value = JSON.stringify({
+  const msg = buildCosmosWasmExecuteMsg({
     sender,
     contract,
     msg: { transfer: { recipient, amount } },
@@ -188,7 +188,7 @@ export const buildCw20TransferMsg = (params: BuildCw20TransferMsgParams): BuildC
   })
 
   return {
-    msg: { type: CosmosMsgType.MsgExecuteContract, value },
+    msg,
     recipient,
     contract,
     sender,

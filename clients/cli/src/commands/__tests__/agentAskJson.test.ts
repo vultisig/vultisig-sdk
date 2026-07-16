@@ -178,9 +178,8 @@ describe('agent ask --json output contract', () => {
     expect(exitCode).toBe(ExitCode.AGENT_TURN_BLOCKED)
     expect(exitCode).toBe(10)
     const envelope = JSON.parse(stdout.join(''))
-    // completed-but-blocked: success stays true (no transport/error-frame failure);
-    // the block is conveyed via outcome + the exit code, which is the contract.
-    expect(envelope.success).toBe(true)
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.AGENT_TURN_BLOCKED)
     expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
   })
 
@@ -265,6 +264,9 @@ describe('agent ask --json output contract', () => {
     const { exitCode } = await runAsk()
     expect(exitCode).toBe(ExitCode.AGENT_TURN_REFUSAL)
     expect(exitCode).toBe(11)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.AGENT_TURN_REFUSAL)
   })
 
   it('broadcast + turn_outcome=refusal → BROADCAST_COMMITTED instead of the no-action-taken contract', async () => {
@@ -292,6 +294,8 @@ describe('agent ask --json output contract', () => {
     expect(exitCode).toBe(ExitCode.USAGE)
     expect(exitCode).toBe(1)
     const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.AGENT_TURN_ERROR)
     expect(envelope.data.outcome.kind).toBe('error')
   })
 
@@ -317,6 +321,141 @@ describe('agent ask --json output contract', () => {
     expect(exitCode).toBe(0)
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.data.outcome).toBeUndefined()
+  })
+
+  it('failed sign without turn_outcome → typed error envelope and non-zero exit', async () => {
+    driver.run = cb => {
+      cb.onToolResult(
+        'sign-call',
+        'sign_tx',
+        false,
+        { error: 'Password not provided', code: AgentErrorCode.PASSWORD_REQUIRED },
+        'Password not provided',
+        AgentErrorCode.PASSWORD_REQUIRED
+      )
+      cb.onAssistantMessage('The transaction was cancelled.')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.AUTH_REQUIRED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.PASSWORD_REQUIRED)
+    expect(envelope.data.transactions).toBeUndefined()
+    expect(envelope.data.tool_calls[0]).toMatchObject({
+      action: 'sign_tx',
+      success: false,
+      code: AgentErrorCode.PASSWORD_REQUIRED,
+    })
+  })
+
+  // A failed leg AFTER one already landed must never exit on the failure's own
+  // code: TRANSACTION_FAILED→6 and TIMEOUT→3 are documented retryable, so an
+  // orchestrator honoring them would replay the request and re-broadcast the leg
+  // that succeeded. 13 is the non-retryable partial slot (#1233).
+  it('failed second sign leg after a committed broadcast → exit 13, not the leg error’s retryable code', async () => {
+    driver.run = cb => {
+      cb.onToolResult('sign-approve', 'sign_tx', true, { tx_hash: '0xapproved', chain: 'ethereum' })
+      cb.onTxStatus('0xapproved', 'ethereum', 'pending', 'https://etherscan.io/tx/0xapproved')
+      cb.onToolResult(
+        'sign-swap',
+        'sign_tx',
+        false,
+        { error: 'Failed to broadcast: node unavailable', code: AgentErrorCode.TRANSACTION_FAILED },
+        'Failed to broadcast: node unavailable',
+        AgentErrorCode.TRANSACTION_FAILED
+      )
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).not.toBe(ExitCode.EXTERNAL_SERVICE)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    // The landed hash and the original diagnostic both survive for recovery.
+    expect(envelope.data.transactions[0].hash).toBe('0xapproved')
+    expect(envelope.data.original_error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
+  })
+
+  // Same guard on an older backend that never emits turn_outcome — the absent
+  // outcome must not let a committed broadcast bypass the 13 slot.
+  it('failed sign after a committed broadcast with NO turn_outcome → still exit 13', async () => {
+    driver.run = cb => {
+      cb.onTxStatus('0xsent', 'ethereum', 'pending', 'https://etherscan.io/tx/0xsent')
+      cb.onToolResult('sign-2', 'sign_tx', false, { error: 'receipt polling timed out' }, 'receipt polling timed out')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.BROADCAST_COMMITTED)
+    expect(exitCode).not.toBe(ExitCode.NETWORK)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
+    expect(envelope.data.transactions[0].hash).toBe('0xsent')
+  })
+
+  // The other direction of the lie: a failed sign that a later sign superseded.
+  // The failed result is queued and recursed so the LLM can re-emit a corrected
+  // tx (session.ts:704), so an earlier failure is not the turn's verdict.
+  it('failed sign superseded by a later successful sign → exit 0, not a false failure', async () => {
+    driver.run = cb => {
+      cb.onToolResult(
+        'sign-1',
+        'sign_tx',
+        false,
+        { error: 'gas price too low', code: AgentErrorCode.TRANSACTION_FAILED },
+        'gas price too low',
+        AgentErrorCode.TRANSACTION_FAILED
+      )
+      cb.onToolResult('sign-2', 'sign_tx', true, { tx_hash: '0xretried', chain: 'ethereum' })
+      cb.onTxStatus('0xretried', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xretried')
+      cb.onTurnOutcome?.({ kind: 'success' })
+      cb.onAssistantMessage('Sent 0.1 ETH.')
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.SUCCESS)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(true)
+    expect(envelope.data.transactions[0].hash).toBe('0xretried')
+  })
+
+  it('declined sign without turn_outcome → confirmation-required envelope and exit 12', async () => {
+    driver.run = cb => {
+      cb.onToolResult(
+        'sign-call',
+        'sign_tx',
+        false,
+        { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED },
+        'Transaction not confirmed',
+        AgentErrorCode.CONFIRMATION_REQUIRED
+      )
+    }
+
+    const { exitCode } = await runAsk()
+    expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.success).toBe(false)
+    expect(envelope.error.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
+  })
+
+  it('failed sign human output is non-zero and error-shaped', async () => {
+    driver.run = cb => {
+      cb.onToolResult(
+        'sign-call',
+        'sign_typed_data',
+        false,
+        { error: 'Signing failed', code: AgentErrorCode.SIGNING_FAILED },
+        'Signing failed',
+        AgentErrorCode.SIGNING_FAILED
+      )
+    }
+
+    const { exitCode } = await runAsk(false)
+    expect(exitCode).toBe(ExitCode.UNKNOWN)
+    expect(stdout.join('')).toBe('')
+    expect(stderr.join('')).toContain('Signing failed')
+    expect(stderr.join('')).toContain(`[${AgentErrorCode.SIGNING_FAILED}]`)
   })
 
   it('SSE/backend error frame → error envelope on stdout with conversation_id; exit non-zero', async () => {
@@ -478,58 +617,41 @@ describe('agent ask --json output contract', () => {
     expect(output).not.toContain('Please try again.')
   })
 
-  it('stale --session fallback (SESSION_NOT_FOUND at initialize) → exit non-zero + error envelope on first turn', async () => {
-    // initialize() resolves a stale --session by starting a NEW conversation and
-    // firing onError(SESSION_NOT_FOUND) — a non-fatal signal the headless caller
-    // must see so it can persist the new id. Before the fix, ask() cleared this
-    // initialize-time error at turn start, so the turn returned a SUCCESS
-    // envelope and the signal was silently dropped. Regression guard.
-    driver.initRun = cb => {
-      cb.onError(
-        'Session stale-id could not be resumed (not found); started a new conversation conv-abc',
-        AgentErrorCode.SESSION_NOT_FOUND
+  it('stale --session fails closed before executing the first turn', async () => {
+    driver.conversationId = ''
+    driver.initRun = () => {
+      throw Object.assign(
+        new Error('Session stale-id could not be resumed (not found); refusing to execute without context'),
+        { code: AgentErrorCode.SESSION_NOT_FOUND }
       )
     }
-    // The first turn itself succeeds (new conversation answers normally).
-    driver.run = cb => {
-      cb.onAssistantMessage('You have 1.0 ETH')
-    }
+    driver.run = vi.fn()
 
     const { exitCode } = await runAsk()
-    // Non-zero: the stale-session signal must survive into the result envelope.
-    expect(exitCode).not.toBe(0)
+    expect(exitCode).toBe(ExitCode.RESOURCE_NOT_FOUND)
+    expect(driver.run).not.toHaveBeenCalled()
 
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.v).toBe(1)
     expect(envelope.error.code).toBe(AgentErrorCode.SESSION_NOT_FOUND)
     expect(envelope.error.message).toContain('could not be resumed')
-    expect(envelope.error.conversation_id).toBe('conv-abc')
+    expect(envelope.error.conversation_id).toBe('')
+    expect(envelope.data).toBeUndefined()
   })
 
-  it('stale --session fallback + REAL first-turn error → real error overrides SESSION_NOT_FOUND', async () => {
-    // The init-time SESSION_NOT_FOUND must be the LOWEST-priority signal: if the
-    // first turn hits a genuine backend/stream error, the envelope must report
-    // the REAL error, not the stale-session fallback. Before the fix, onError was
-    // first-error-wins over a pre-set this.error, so the init signal masked the
-    // real one. Now the init signal lives separately and a turn error overrides.
-    driver.initRun = cb => {
-      cb.onError(
-        'Session stale-id could not be resumed (not found); started a new conversation conv-abc',
-        AgentErrorCode.SESSION_NOT_FOUND
-      )
+  it('stale --session human output fails closed on stderr', async () => {
+    driver.initRun = () => {
+      throw Object.assign(new Error('Session stale-id could not be resumed; refusing to execute without context'), {
+        code: AgentErrorCode.SESSION_NOT_FOUND,
+      })
     }
-    driver.run = cb => {
-      cb.onError('backend stream failed', AgentErrorCode.TRANSACTION_FAILED)
-    }
+    driver.run = vi.fn()
 
-    const { exitCode } = await runAsk()
-    expect(exitCode).not.toBe(0)
-
-    const envelope = JSON.parse(stdout.join(''))
-    expect(envelope.success).toBe(false)
-    expect(envelope.error.code).toBe(AgentErrorCode.TRANSACTION_FAILED)
-    expect(envelope.error.code).not.toBe(AgentErrorCode.SESSION_NOT_FOUND)
-    expect(envelope.error.message).toContain('backend stream failed')
+    const { exitCode } = await runAsk(false)
+    expect(exitCode).toBe(ExitCode.RESOURCE_NOT_FOUND)
+    expect(driver.run).not.toHaveBeenCalled()
+    expect(stdout.join('')).toBe('')
+    expect(stderr.join('')).toContain(AgentErrorCode.SESSION_NOT_FOUND)
   })
 })

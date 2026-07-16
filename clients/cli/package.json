@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/cli",
-  "version": "2.19.18",
+  "version": "2.20.0",
   "description": "The self-custody MPC wallet CLI for AI coding agents (Claude Code, Cursor, OpenCode). Natural-language agent mode, 36+ chains, DKLS23 threshold signatures. Seedless.",
   "type": "module",
   "bin": {
@@ -87,7 +87,7 @@
     "ripple-address-codec": "^5.0.1",
     "tabtab": "^3.0.2",
     "viem": "^2.53.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/inquirer": "^9.0.10",

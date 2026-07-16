@@ -117,12 +117,29 @@ describe('initialize — fresh-conversation path (finding a)', () => {
 })
 
 describe('initialize — resume fallback + signal (findings b/c)', () => {
+  it('fails closed in ask mode instead of executing the intent in a fresh conversation', async () => {
+    const getConversation = vi.fn(async () => {
+      throw new Error('conversation not found')
+    })
+    const createConversation = vi.fn(async () => ({ id: 'must-not-run' }))
+    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+
+    await expect(initialize.call(ft, makeUi())).rejects.toMatchObject({
+      code: AgentErrorCode.SESSION_NOT_FOUND,
+    })
+    expect(createConversation).not.toHaveBeenCalled()
+    expect(ft.conversationId).toBeNull()
+  })
+
   it('falls back to a new conversation and emits SESSION_NOT_FOUND on a non-auth resume error', async () => {
     const getConversation = vi.fn(async () => {
       throw new Error('conversation not found')
     })
     const createConversation = vi.fn(async () => ({ id: 'conv-fallback' }))
-    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+    const ft = makeFakeThis({
+      config: { askMode: false, sessionId: 'stale-id' },
+      client: { getConversation, createConversation },
+    })
     const ui = makeUi()
 
     await initialize.call(ft, ui)
@@ -138,7 +155,10 @@ describe('initialize — resume fallback + signal (findings b/c)', () => {
       throw authError()
     })
     const createConversation = vi.fn(async () => ({ id: 'conv-after-401' }))
-    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+    const ft = makeFakeThis({
+      config: { askMode: false, sessionId: 'stale-id' },
+      client: { getConversation, createConversation },
+    })
     const ui = makeUi()
 
     await initialize.call(ft, ui)
