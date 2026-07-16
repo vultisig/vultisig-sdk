@@ -7,7 +7,15 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, chainFeeCoin, getChainKind, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import {
+  Chain,
+  chainFeeCoin,
+  getChainKind,
+  resolveChainReference,
+  VaultError,
+  VaultErrorCode,
+  Vultisig as VultisigSdk,
+} from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -1906,50 +1914,9 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
+/** Resolve a CLI chain name or ID through the SDK's canonical resolver. */
 export function resolveChain(name: string): Chain | null {
-  if (!name) return null
-
-  // Direct enum match
-  if (Object.values(Chain).includes(name as Chain)) {
-    return name as Chain
-  }
-
-  // Case-insensitive search
-  const lower = name.toLowerCase()
-  for (const [, value] of Object.entries(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
-      return value as Chain
-    }
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    eth: 'Ethereum',
-    btc: 'Bitcoin',
-    sol: 'Solana',
-    bnb: 'BSC',
-    avax: 'Avalanche',
-    matic: 'Polygon',
-    arb: 'Arbitrum',
-    op: 'Optimism',
-    ltc: 'Litecoin',
-    doge: 'Dogecoin',
-    dot: 'Polkadot',
-    atom: 'Cosmos',
-    rune: 'THORChain',
-    thor: 'THORChain',
-    sui: 'Sui',
-    ton: 'Ton',
-    trx: 'Tron',
-    xrp: 'Ripple',
-  }
-
-  const aliased = aliases[lower]
-  if (aliased && Object.values(Chain).includes(aliased as Chain)) {
-    return aliased as Chain
-  }
-
-  return null
+  return resolveChainReference(name) ?? null
 }
 
 /**
@@ -2207,22 +2174,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
  * Resolve a Chain from a numeric EVM chain ID.
  */
 export function resolveChainId(chainId: string | number): Chain | null {
-  const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
-  if (isNaN(id)) return null
-
-  const chainIdMap: Record<number, Chain> = {
-    1: Chain.Ethereum,
-    56: Chain.BSC,
-    137: Chain.Polygon,
-    43114: Chain.Avalanche,
-    42161: Chain.Arbitrum,
-    10: Chain.Optimism,
-    8453: Chain.Base,
-    81457: Chain.Blast,
-    324: Chain.Zksync,
-    25: Chain.CronosChain,
-  }
-  return chainIdMap[id] || null
+  return resolveChainReference(chainId) ?? null
 }
 
 // ============================================================================
