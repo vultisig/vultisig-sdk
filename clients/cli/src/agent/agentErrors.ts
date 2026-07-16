@@ -39,9 +39,14 @@ export enum AgentErrorCode {
   // and hasn't definitively failed, so signing was refused to avoid a
   // double-spend. Retry with --force to override. See broadcastJournal.ts.
   DUPLICATE_BROADCAST = 'DUPLICATE_BROADCAST',
-  // The backend already accepted this exact idempotency-keyed turn. The
-  // duplicate did not execute; inspect the conversation for the first result.
+  // The backend already accepted this exact idempotency-keyed turn (same key,
+  // same body). The duplicate did not execute; inspect the conversation for the
+  // first result.
   IDEMPOTENT_TURN_DUPLICATE = 'IDEMPOTENT_TURN_DUPLICATE',
+  // The idempotency key was already used for a DIFFERENT request body. Opposite
+  // of a duplicate: THIS operation never ran and nothing was persisted for it, so
+  // there is no original result to inspect. Caller bug — retry with a fresh key.
+  IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
   LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
   // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
@@ -145,6 +150,11 @@ export function inferAgentErrorCodeFromMessage(message: string): AgentErrorCode 
   if (/^CONFIRMATION_REQUIRED:/i.test(m)) return AgentErrorCode.CONFIRMATION_REQUIRED
   if (/password required|password not provided|use --password/i.test(m)) return AgentErrorCode.PASSWORD_REQUIRED
   if (/session not initialized/i.test(m)) return AgentErrorCode.SESSION_NOT_INITIALIZED
+  // Order matters: the reused-key message also mentions the key, so match its
+  // distinctive "different request body" phrasing BEFORE the duplicate pattern.
+  if (/already used for a different request body|idempotency key reused/i.test(m)) {
+    return AgentErrorCode.IDEMPOTENCY_KEY_REUSED
+  }
   if (/keyed turn was already accepted|idempotent turn duplicate/i.test(m)) {
     return AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE
   }
@@ -244,6 +254,12 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
       return ExitCode.DUPLICATE_BROADCAST
     case AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE:
       return ExitCode.IDEMPOTENT_TURN_DUPLICATE
+    case AgentErrorCode.IDEMPOTENCY_KEY_REUSED:
+      // NOT 14: nothing executed and no result was persisted, so the "inspect the
+      // conversation" contract of 14 would send automation to another request's
+      // result. The request itself was malformed (a key bound to a different
+      // body) — 4 already means "your request was wrong, nothing happened".
+      return ExitCode.INVALID_INPUT
     case AgentErrorCode.SESSION_NOT_FOUND:
       return ExitCode.RESOURCE_NOT_FOUND
     case AgentErrorCode.TRANSACTION_FAILED:

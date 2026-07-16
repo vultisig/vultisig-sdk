@@ -6,7 +6,7 @@
  */
 import { randomUUID } from 'node:crypto'
 
-import { IdempotentTurnDuplicateError } from '../core/errors'
+import { IdempotencyKeyReusedError, IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
 import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
@@ -27,9 +27,18 @@ import type {
   TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string; code?: string; conversation_id?: string }
+type JsonErrorBody = { error?: string; code?: string; conversation_id?: string; first_request_at?: string }
 
-/** Generate a server-valid visible-ASCII key for one agent turn POST attempt. */
+/** Generate a server-valid visible-ASCII key for one agent turn POST attempt.
+ *
+ *  Key LIFETIME belongs to the caller (AgentSession.processMessageLoop), NOT to
+ *  this client — the default below only serves one-shot callers with no replay.
+ *  Any caller that retries a POST (today: the withAuthRetry closure at
+ *  session.ts, which invokes its request twice) MUST mint the key itself and
+ *  pass it explicitly: the default re-evaluates per invocation, so relying on it
+ *  inside a retry wrapper would re-key the replay and execute a second billable,
+ *  signing-adjacent turn — the exact double-execution this feature prevents.
+ *  sessionIdempotency.test.ts pins that contract. */
 export function createTurnIdempotencyKey(): string {
   return randomUUID()
 }
@@ -799,14 +808,35 @@ export class AgentClient {
     return this.readJson<T>(res)
   }
 
-  /** Map the backend's durable keyed-turn duplicate/conflict into the CLI's
-   * dedicated typed error. Other message failures keep their existing wire and
-   * error behavior unchanged. */
+  /** Map the backend's durable keyed-turn 409s into the CLI's typed errors.
+   * Other message failures keep their existing wire and error behavior unchanged.
+   *
+   * The two keyed 409s mean OPPOSITE things and must not collapse into one code:
+   *   - idempotent_turn_duplicate: same key + same body. The turn WAS accepted and
+   *     its result is persisted — do NOT retry, go read the conversation (exit 14).
+   *   - idempotency_key_reused: same key + a DIFFERENT body. The claim belongs to
+   *     some other request; THIS operation never ran and nothing was persisted for
+   *     it. Telling the caller to "inspect the conversation for its result" would
+   *     point at a different request's result and silently drop this intent. It is
+   *     a caller protocol bug — nothing executed — so it maps to INVALID_INPUT and
+   *     the remediation is a fresh key, the opposite of duplicate's "don't retry".
+   * The CLI mints a fresh UUID per attempt, so reuse is unreachable from here today
+   * — but sendMessage/sendMessageStream take a caller-supplied key, so the contract
+   * is honored rather than assumed. */
   private throwMessageError(status: number, statusText: string, body: JsonErrorBody): void {
-    if (status === 409 && (body.code === 'idempotent_turn_duplicate' || body.code === 'idempotency_key_reused')) {
+    if (status !== 409) return
+    if (body.code === 'idempotent_turn_duplicate') {
       throw new IdempotentTurnDuplicateError(
         body.error || statusText || 'This keyed turn was already accepted',
-        body.conversation_id
+        body.conversation_id,
+        body.first_request_at
+      )
+    }
+    if (body.code === 'idempotency_key_reused') {
+      throw new IdempotencyKeyReusedError(
+        body.error || statusText || 'This idempotency key was already used for a different request body',
+        body.conversation_id,
+        body.first_request_at
       )
     }
   }

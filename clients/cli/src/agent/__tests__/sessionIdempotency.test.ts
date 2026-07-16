@@ -57,6 +57,7 @@ describe('AgentSession turn idempotency key lifetime', () => {
     await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'first', makeUi(), 0)
     await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'second', makeUi(), 0)
 
+    // sendMessageStream(conversationId, req, callbacks, signal, idempotencyKey)
     const calls = sendMessageStream.mock.calls as unknown as Array<[unknown, unknown, unknown, unknown, string]>
     const firstPostKey = calls[0]?.[4]
     const authRetryKey = calls[1]?.[4]

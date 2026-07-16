@@ -233,19 +233,49 @@ export class ConfirmationRequiredError extends VsigError {
   }
 }
 
-/** The backend already accepted the same idempotency-keyed agent turn. */
+/** The backend already accepted the same idempotency-keyed agent turn (same key,
+ *  same body). The first attempt's result IS persisted — the caller should read
+ *  it, not replay the request. */
 export class IdempotentTurnDuplicateError extends VsigError {
   readonly exitCode = ExitCode.IDEMPOTENT_TURN_DUPLICATE
   readonly code = 'IDEMPOTENT_TURN_DUPLICATE'
 
-  constructor(message: string, conversationId?: string) {
+  constructor(message: string, conversationId?: string, firstRequestAt?: string) {
     super(
       message,
       'The duplicate did not execute; inspect the conversation for the first attempt result',
       ['Retry only as a new user-initiated attempt'],
-      conversationId ? { conversationId } : undefined
+      keyedTurnContext(conversationId, firstRequestAt)
     )
   }
+}
+
+/** The idempotency key was already used for a DIFFERENT request body. Unlike a
+ *  duplicate, THIS operation never ran and nothing was persisted for it — the
+ *  claim belongs to another request, so there is no "original result" to inspect.
+ *  A caller protocol bug (the CLI mints a fresh key per attempt), hence
+ *  INVALID_INPUT: the request was malformed and nothing happened. */
+export class IdempotencyKeyReusedError extends VsigError {
+  readonly exitCode = ExitCode.INVALID_INPUT
+  readonly code = 'IDEMPOTENCY_KEY_REUSED'
+
+  constructor(message: string, conversationId?: string, firstRequestAt?: string) {
+    super(
+      message,
+      'This request did NOT execute; the key is bound to a different request body, so no result was persisted for it',
+      ['Retry this operation with a fresh idempotency key'],
+      keyedTurnContext(conversationId, firstRequestAt)
+    )
+  }
+}
+
+/** Shared context for the keyed-turn 409s. `first_request_at` locates the claim
+ *  that won the key — without it, "inspect the conversation" has no anchor. */
+function keyedTurnContext(conversationId?: string, firstRequestAt?: string): Record<string, string> | undefined {
+  const context: Record<string, string> = {}
+  if (conversationId) context.conversationId = conversationId
+  if (firstRequestAt) context.firstRequestAt = firstRequestAt
+  return Object.keys(context).length > 0 ? context : undefined
 }
 
 export class UnknownError extends VsigError {
