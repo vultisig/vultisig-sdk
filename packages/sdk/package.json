@@ -14,6 +14,9 @@
   "exports": {
     ".": {
       "types": {
+        "chrome-extension": "./dist/index.chrome-extension.d.ts",
+        "browser": "./dist/index.browser.d.ts",
+        "worker": "./dist/index.browser.d.ts",
         "react-native": "./dist/index.react-native.d.ts",
         "default": "./dist/index.d.ts"
       },
@@ -36,7 +39,7 @@
       "require": "./dist/index.node.cjs"
     },
     "./browser": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.browser.d.ts",
       "import": "./dist/index.browser.js"
     },
     "./react-native": {
@@ -64,7 +67,7 @@
       "default": "./dist/index.electron-main.cjs"
     },
     "./chrome-extension": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.chrome-extension.d.ts",
       "import": "./dist/index.chrome-extension.js"
     },
     "./vite": {

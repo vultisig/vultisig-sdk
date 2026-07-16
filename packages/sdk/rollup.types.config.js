@@ -41,6 +41,27 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // Browser platform types. This subpath exposes browser-specific storage,
+  // crypto, and polyfill implementations in addition to the public SDK surface.
+  {
+    input: 'src/platforms/browser/index.ts',
+    output: {
+      file: 'dist/index.browser.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
+  // Chrome extension platform types. Like the browser bundle, this exposes
+  // extension-specific storage/crypto/polyfill implementations on top of the
+  // shared SDK exports.
+  {
+    input: 'src/platforms/chrome-extension/index.ts',
+    output: {
+      file: 'dist/index.chrome-extension.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
   // Electron main process platform types. This entry exposes Electron-specific
   // storage, crypto, and polyfill implementations in addition to the public SDK
   // surface.
