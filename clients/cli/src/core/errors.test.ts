@@ -516,4 +516,126 @@ describe('anticipated CLI taxonomy regressions', () => {
     expect(result.exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
     expect(result.retryable).toBe(true)
   })
+
+  describe('non-EVM permanent broadcast rejections', () => {
+    const expectPermanent = (err: VaultError) => {
+      const result = classifyError(err)
+      expect(result.code).toBe('INVALID_INPUT')
+      expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+      expect(result.retryable).toBe(false)
+      expect(result.suggestions).toBeUndefined()
+    }
+
+    const expectTransient = (err: VaultError) => {
+      const result = classifyError(err)
+      expect(result.code).toBe('EXTERNAL_SERVICE')
+      expect(result.exitCode).toBe(ExitCode.EXTERNAL_SERVICE)
+      expect(result.retryable).toBe(true)
+    }
+
+    it.each([
+      ['-26', 'mandatory-script-verify-flag-failed'],
+      ['-27', 'transaction already in block chain'],
+    ])('maps a UTXO bitcoind %s rejection preserved by Blockchair to non-retryable input', (code, reason) => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: RPC error ${code}: ${reason}`
+        )
+      )
+    })
+
+    it('maps a UTXO decode rejection preserved by Blockchair to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: TX decode failed'
+        )
+      )
+    })
+
+    it('keeps a UTXO Blockchair transport failure retryable', () => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast raw transaction on Bitcoin: HTTP 503 Service Unavailable'
+        )
+      )
+    })
+
+    it('maps a Solana preflight deserialize rejection to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Solana: Simulation failed. Message: failed to deserialize transaction'
+        )
+      )
+    })
+
+    it('maps the Solana raw-broadcast base58 decoder rejection to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast raw transaction on Solana: Non-base58 character'
+        )
+      )
+    })
+
+    it('keeps a Solana blockhash miss retryable after the resolver exhausts its bounded retries', () => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Solana: Simulation failed. Message: BlockhashNotFound'
+        )
+      )
+    })
+
+    it('maps a Sui transaction-execution client rejection to non-retryable input', () => {
+      const rpcError = Object.assign(new Error('Invalid user signature: cryptographic signature verification failed'), {
+        code: -32002,
+      })
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast transaction on Sui: ${rpcError.message}`,
+          rpcError
+        )
+      )
+    })
+
+    it('maps the Sui raw-broadcast required-fields guard to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Sui broadcast requires JSON with "unsignedTx" and "signature" fields'
+        )
+      )
+    })
+
+    it('keeps a Sui server-busy JSON-RPC failure retryable', () => {
+      const rpcError = Object.assign(new Error('Server busy'), { code: -32604 })
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast transaction on Sui: ${rpcError.message}`,
+          rpcError
+        )
+      )
+    })
+
+    it('maps a Cosmos ABCI CheckTx rejection to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: sdk). Log: tx parse error'
+        )
+      )
+    })
+
+    it('keeps a Cosmos RPC transport failure retryable', () => {
+      expectTransient(
+        new VaultError(VaultErrorCode.BroadcastFailed, 'Failed to broadcast transaction on Cosmos: request timed out')
+      )
+    })
+  })
 })

@@ -1,4 +1,12 @@
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
+import {
+  Chain,
+  type ChainKind,
+  getChainKind,
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from '@vultisig/sdk'
 
 // Typed exit codes for machine-readable error handling
 // Enables agents to distinguish error types programmatically
@@ -316,11 +324,61 @@ export class DuplicateBroadcastRefusedError extends VsigError {
   }
 }
 
+const EVM_PERMANENT_BROADCAST_INPUT_RE =
+  /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i
+
+const UTXO_PERMANENT_BROADCAST_INPUT_RE = /\bTX decode failed\b|\b(?:RPC error|code|error code)\s*:?\s*-(?:26|27)\b/i
+
+const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
+  /failed to deserialize(?: transaction)?|failed to sanitize|(?:transaction )?signature verification (?:failed|failure)|non-base58 character|invalid base58/i
+
+const SUI_PERMANENT_BROADCAST_INPUT_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
+
+const COSMOS_PERMANENT_BROADCAST_INPUT_RE =
+  /Broadcasting transaction failed with code (?!0\b)\d+ \(codespace: [^)]*\)\. Log:/i
+
+type PermanentBroadcastInputClassifier = (err: VaultError, details: string) => boolean
+
+const permanentBroadcastInputClassifiers: Partial<Record<ChainKind, PermanentBroadcastInputClassifier>> = {
+  evm: (_err, details) => EVM_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  utxo: (_err, details) => UTXO_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  solana: (_err, details) => SOLANA_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  sui: (err, details) => {
+    const rpcCode = (err.originalError as (Error & { code?: unknown }) | undefined)?.code
+    return rpcCode === -32002 || SUI_PERMANENT_BROADCAST_INPUT_RE.test(details)
+  },
+  cosmos: (_err, details) => COSMOS_PERMANENT_BROADCAST_INPUT_RE.test(details),
+}
+
+function getBroadcastErrorChain(details: string): Chain | undefined {
+  const normalized = details.toLowerCase()
+  const wrappedChain = Object.values(Chain).find(chain => normalized.includes(` on ${chain.toLowerCase()}:`))
+  if (wrappedChain) return wrappedChain
+
+  // RawBroadcastService deliberately rethrows its local required-fields
+  // VaultError without the standard "on <chain>:" wrapper.
+  if (normalized.startsWith('sui broadcast ')) return Chain.Sui
+
+  return undefined
+}
+
 function isPermanentBroadcastInputError(err: VaultError): boolean {
   const details = `${err.message}\n${err.originalError?.message ?? ''}`
-  return /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i.test(
-    details
-  )
+  const chain = getBroadcastErrorChain(details)
+
+  if (chain) {
+    const classifier = permanentBroadcastInputClassifiers[getChainKind(chain)]
+    if (classifier) return classifier(err, details)
+
+    return false
+  }
+
+  // Preserve the pre-existing EVM classification for older/hand-built errors
+  // that lack the SDK's standard chain wrapper. For every new family predicate,
+  // ambiguity intentionally stays retryable: a false non-retryable result can
+  // strand a user, while a false retryable result is additionally constrained
+  // by broadcast-journal dedupe and the exit 9/13 fund-safety semantics.
+  return EVM_PERMANENT_BROADCAST_INPUT_RE.test(details)
 }
 
 // The SDK words a bad receiver differently depending on which layer rejects it:
