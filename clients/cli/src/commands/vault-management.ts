@@ -479,6 +479,15 @@ function verificationFailureError(err: Error, vaultId: string): VsigError {
       ['vultisig vaults', 'vultisig create --two-step']
     )
   }
+  // The whole verify path — verifyVault(), then setActiveVault() — sits in one try, so
+  // this also catches failures AFTER the code was already accepted. Keep the SDK's own
+  // classification when it produced a precise one, exactly as resendFailureError does:
+  // a StorageError from persisting the active-vault pointer means the code was RIGHT and
+  // the stored state is broken, so it has to surface as CORRUPT_STATE rather than "the
+  // code may be incorrect" — which would send someone to re-send an OTP that was never
+  // the problem.
+  const classified = classifyError(err)
+  if (!(classified instanceof UnknownError)) return classified
   return new InvalidInputError(
     err.message || 'Verification failed. Please check the code and try again.',
     'The code may be incorrect or expired',

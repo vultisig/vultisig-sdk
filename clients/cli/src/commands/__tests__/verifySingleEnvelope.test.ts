@@ -8,11 +8,19 @@
 //  - The failure message parroted SDK jargon ("...with createFastVault()").
 //  - Two-step vaults awaiting verification appeared nowhere in `vaults`: only the
 //    create-time output named the id, so an agent that lost it could not resume.
-import { VaultError, VaultErrorCode } from '@vultisig/sdk'
+import { StorageError, StorageErrorCode, VaultError, VaultErrorCode } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { withExit } from '../../adapters/cli-runner'
 import type { CommandContext } from '../../core'
-import { type AuthRequiredError, type ExternalServiceError, VaultNotFoundError } from '../../core/errors'
+import {
+  type AuthRequiredError,
+  CorruptStateError,
+  ExitCode,
+  type ExternalServiceError,
+  InvalidInputError,
+  VaultNotFoundError,
+} from '../../core/errors'
 import { configureOutput, resetOutput } from '../../lib/output'
 import { executeVaults, executeVerify } from '../vault-management'
 
@@ -197,5 +205,80 @@ describe('vaults pending visibility', () => {
 
     await expect(executeVaults(ctx)).resolves.toBeDefined()
     expect(JSON.parse(jsonOut()).data.pending).toEqual([])
+  })
+})
+
+// executeVerify runs verifyVault() AND setActiveVault() inside one try, so the catch also
+// sees failures that happen after the code was accepted. Those must not be reported as a
+// bad code: the whole point of the CORRUPT_STATE work is that a broken store says so.
+describe('verify failure classification after the code was accepted', () => {
+  function ctxWhereActivationFails(err: Error): CommandContext {
+    // `on` matters: executeVerify calls setupVaultEvents(vault) between verifyVault()
+    // and setActiveVault(), so a vault without it throws a TypeError before the code
+    // under test is ever reached.
+    const vault = { id: 'v1', name: 'V', chains: [], on: vi.fn() }
+    return {
+      sdk: { verifyVault: vi.fn().mockResolvedValue(vault) },
+      setActiveVault: vi.fn().mockRejectedValue(err),
+      dispose: () => {},
+    } as unknown as CommandContext
+  }
+
+  it('surfaces a corrupt store as CORRUPT_STATE, not "your code is wrong"', async () => {
+    const corrupt = new StorageError(
+      StorageErrorCode.Unknown,
+      'Failed to read value for key "activeVaultId"',
+      new SyntaxError('Unexpected end of JSON input')
+    )
+
+    const err = await executeVerify(ctxWhereActivationFails(corrupt), 'v1', { code: '123456' }).catch((e: unknown) => e)
+
+    // Was InvalidInputError/4 with "the code may be incorrect or expired" plus a --resend
+    // suggestion — advice for a problem the user does not have, since the code was correct.
+    expect(err).toBeInstanceOf(CorruptStateError)
+    expect((err as CorruptStateError).exitCode).toBe(ExitCode.CORRUPT_STATE)
+  })
+
+  it('still treats a genuinely rejected code as InvalidInputError / exit 4', async () => {
+    const ctx = {
+      sdk: { verifyVault: vi.fn().mockRejectedValue(new Error('Invalid code')) },
+      setActiveVault: vi.fn(async () => {}),
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    const err = await executeVerify(ctx, 'v1', { code: '000000' }).catch((e: unknown) => e)
+
+    expect(err).toBeInstanceOf(InvalidInputError)
+    expect((err as InvalidInputError).exitCode).toBe(ExitCode.INVALID_INPUT)
+  })
+})
+
+// The single-envelope claim is about what the CLI actually WRITES, which is withExit's job.
+// Asserting only that executeVerify throws leaves the count unproven: the old two-document
+// bug lived in the seam between the two.
+describe('verify through the real withExit wrapper', () => {
+  it('writes exactly one parseable JSON document and exits with the typed code', async () => {
+    configureOutput({ format: 'json' })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('__exit__')
+    }) as never)
+
+    const ctx = {
+      sdk: { verifyVault: vi.fn().mockRejectedValue(new Error('Invalid code')) },
+      setActiveVault: vi.fn(async () => {}),
+      dispose: () => {},
+    } as unknown as CommandContext
+
+    await expect(
+      withExit(async () => {
+        await executeVerify(ctx, 'v1', { code: '000000' })
+      })()
+    ).rejects.toThrow('__exit__')
+
+    const out = jsonOut()
+    expect(() => JSON.parse(out)).not.toThrow()
+    expect(out.trim().split(/\}\s*\{/).length).toBe(1)
+    expect(JSON.parse(out).success).toBe(false)
+    expect(exitSpy).toHaveBeenCalledWith(ExitCode.INVALID_INPUT)
   })
 })
