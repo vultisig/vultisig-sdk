@@ -8,10 +8,11 @@
 //  - The failure message parroted SDK jargon ("...with createFastVault()").
 //  - Two-step vaults awaiting verification appeared nowhere in `vaults`: only the
 //    create-time output named the id, so an agent that lost it could not resume.
+import { VaultError, VaultErrorCode } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CommandContext } from '../../core'
-import { VaultNotFoundError } from '../../core/errors'
+import { type AuthRequiredError, type ExternalServiceError, VaultNotFoundError } from '../../core/errors'
 import { configureOutput, resetOutput } from '../../lib/output'
 import { executeVaults, executeVerify } from '../vault-management'
 
@@ -87,6 +88,65 @@ describe('verify failure output', () => {
       },
       (err: unknown) => {
         expect((err as VaultNotFoundError).suggestions).toEqual(expect.arrayContaining(['vultisig verify v1 --resend']))
+      }
+    )
+  })
+})
+
+describe('verify --resend failure', () => {
+  // A resend that failed must not look like one that succeeded. When executeVerify
+  // stopped signalling failure via `return false`, this path kept returning false —
+  // and the caller no longer converts that into an error, so a rate-limited or
+  // bad-password resend reported exit 0 with empty stdout in JSON mode.
+  function makeCtx(err: Error): CommandContext {
+    return {
+      sdk: { resendVaultVerification: vi.fn().mockRejectedValue(err) },
+      dispose: () => {},
+    } as unknown as CommandContext
+  }
+
+  const resendOpts = { resend: true, email: 'e@x.io', password: 'password123' }
+
+  it('throws rather than resolving, so a failed resend is not reported as success', async () => {
+    const outcome = await executeVerify(makeCtx(new Error('rate limited')), 'v1', resendOpts).then(
+      r => `resolved:${r}`,
+      () => 'threw'
+    )
+
+    expect(outcome).toBe('threw')
+  })
+
+  it('writes no success envelope for an email that was never sent', async () => {
+    configureOutput({ format: 'json' })
+
+    await expect(executeVerify(makeCtx(new Error('rate limited')), 'v1', resendOpts)).rejects.toThrow()
+
+    expect(jsonOut()).toBe('')
+  })
+
+  it('classifies an unrecognised resend failure as retryable, hinting at rate limiting', async () => {
+    await executeVerify(makeCtx(new Error('rate limited')), 'v1', resendOpts).then(
+      () => {
+        throw new Error('expected executeVerify to throw')
+      },
+      (err: unknown) => {
+        const e = err as ExternalServiceError
+        expect(e.code).toBe('EXTERNAL_SERVICE')
+        expect(e.retryable).toBe(true)
+        expect(e.hint).toMatch(/rate-limit/i)
+      }
+    )
+  })
+
+  it('keeps the SDK classification when it is already precise (bad password -> auth)', async () => {
+    const authErr = new VaultError(VaultErrorCode.InvalidConfig, 'Failed to unlock vault: invalid password')
+
+    await executeVerify(makeCtx(authErr), 'v1', resendOpts).then(
+      () => {
+        throw new Error('expected executeVerify to throw')
+      },
+      (err: unknown) => {
+        expect((err as AuthRequiredError).code).toBe('AUTH_REQUIRED')
       }
     )
   })

@@ -9,7 +9,14 @@ import path from 'path'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
-import { InvalidInputError, VaultNotFoundError, type VsigError } from '../core/errors'
+import {
+  classifyError,
+  ExternalServiceError,
+  InvalidInputError,
+  UnknownError,
+  VaultNotFoundError,
+  type VsigError,
+} from '../core/errors'
 import {
   createSpinner,
   error,
@@ -377,8 +384,11 @@ export async function executeVerify(
       info('Check your inbox for the new verification code.')
     } catch (resendErr: any) {
       spinner.fail('Failed to resend verification email')
-      error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
-      return false
+      // Throw rather than `return false`: the caller no longer converts a false
+      // return into an error, so returning here would report the resend as a
+      // success (exit 0, and empty stdout in JSON mode) for an email that was
+      // never sent.
+      throw resendFailureError(resendErr as Error, vaultId)
     }
 
     // Non-interactive sessions can't fall through to the OTP prompt below — resend
@@ -441,6 +451,22 @@ export async function executeVerify(
   }
 }
 
+/**
+ * A resend that failed must not look like one that succeeded. Keep the SDK's own
+ * classification when it produced a precise one (a bad password is AUTH_REQUIRED,
+ * a dropped connection is NETWORK); only an otherwise-unclassifiable failure gets
+ * the resend-specific wording, since rate-limiting is the common cause.
+ */
+function resendFailureError(err: Error, vaultId: string): VsigError {
+  const classified = classifyError(err)
+  if (!(classified instanceof UnknownError)) return classified
+  return new ExternalServiceError(
+    err.message || 'Could not resend the verification email.',
+    'The server may be rate-limiting resends — you may need to wait a few minutes',
+    [`vultisig verify ${vaultId} --resend`]
+  )
+}
+
 /** The SDK words this case for library callers ("...with createFastVault()"), which
  *  is meaningless in a shell. The CLI owns its own copy. */
 const PENDING_VAULT_MISSING_RE = /no pending vault found/i
@@ -497,6 +523,12 @@ export async function executeAddPostQuantumKeys(
       },
     })
     spinner.succeed('ML-DSA keys added. Vault file updated — export a backup if needed.')
+
+    if (isJsonOutput()) {
+      outputJson({ added: true, vault: { id: vault.id, name: vault.name }, backupRecommended: true })
+      return
+    }
+
     success('Post-quantum signing is now available for this vault (where supported).')
   } catch (e) {
     spinner.fail('Failed to add ML-DSA keys')
@@ -568,11 +600,20 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   const parentDir = path.dirname(outputPath)
   await fs.mkdir(parentDir, { recursive: true })
 
-  // Write the vault file. An export carries key shares, so it gets the same
-  // owner-only mode as the SDK's vault store — `mode` only applies when the file
-  // is created, so chmod an existing path we may have just overwritten.
-  await fs.writeFile(outputPath, vultContent, { encoding: 'utf-8', mode: 0o600 })
-  await fs.chmod(outputPath, 0o600)
+  // An export carries key shares, so it gets the same owner-only mode as the SDK's
+  // vault store. Write to a fresh temp path and rename over the target, mirroring
+  // storage.ts: `mode` only applies when writeFile CREATES the file, so writing
+  // straight to an existing (or attacker-pre-created) path would put the shares in a
+  // world-readable file and only tighten it afterwards. Creating a new file first
+  // means the shares are never on disk at anything but 0600, and the rename is atomic.
+  const tempPath = `${outputPath}.${process.pid}.${Date.now()}.tmp`
+  try {
+    await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600 })
+    await fs.rename(tempPath, outputPath)
+  } catch (err) {
+    await fs.rm(tempPath, { force: true }).catch(() => {})
+    throw err
+  }
 
   spinner.succeed(`Vault exported: ${outputPath}`)
 

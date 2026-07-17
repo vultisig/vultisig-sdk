@@ -6,7 +6,7 @@
 // one-way door: rename away from such a name and you could never rename back.
 // The policy now rejects only what is genuinely unsafe for the export filename the
 // name is interpolated into: path separators and control characters.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { VaultBase } from '../../src/vault/VaultBase'
 
@@ -52,5 +52,41 @@ describe('vault name policy', () => {
     expect(validate('').isValid).toBe(false)
     expect(validate('a').isValid).toBe(false)
     expect(validate('x'.repeat(500)).isValid).toBe(false)
+  })
+})
+
+// The suite above reaches the private validator directly. Drive rename() itself too,
+// so the policy can't pass here while the real one-way door stays shut.
+describe('rename() end-to-end', () => {
+  // rename() reads vaultData.name, writes vaultData/coreVault, then persists via
+  // save(). Stub only persistence so the real validator + real rename() body run.
+  function makeVault(initialName: string) {
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault, {
+      vaultData: { name: initialName },
+      coreVault: { name: initialName },
+      save: vi.fn(async () => {}),
+      emit: vi.fn(),
+    })
+    return vault
+  }
+
+  it('accepts the ecosystem-created "#" name it used to reject', async () => {
+    const vault = makeVault('Old Name')
+
+    await expect(vault.rename('Vultisig Cluster #1')).resolves.not.toThrow()
+  })
+
+  it('lets a vault renamed away from a "#" name be renamed back — the one-way door', async () => {
+    const vault = makeVault('Vultisig Cluster #1')
+
+    await vault.rename('Temporary Name')
+    await expect(vault.rename('Vultisig Cluster #1')).resolves.not.toThrow()
+  })
+
+  it('still rejects a name carrying a path separator', async () => {
+    const vault = makeVault('Old Name')
+
+    await expect(vault.rename('../evil')).rejects.toThrow(/path separators/)
   })
 })

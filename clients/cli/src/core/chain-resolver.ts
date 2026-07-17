@@ -1,6 +1,9 @@
 import type { Chain } from '@vultisig/sdk'
 
-import { findChainByName } from '../interactive'
+// Imported from the leaf module rather than the '../interactive' barrel: the barrel
+// pulls in the shell session, which imports '../core' back, and that cycle would make
+// core transitively load the whole shell + command tree.
+import { findChainByName } from '../interactive/completer'
 import { InvalidChainError } from './errors'
 
 /**

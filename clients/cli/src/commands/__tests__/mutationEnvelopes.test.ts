@@ -9,12 +9,19 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
+import { FastVault } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CommandContext } from '../../core'
 import { configureOutput, resetOutput } from '../../lib/output'
 import { executeAddressBook, executeCurrency } from '../settings'
-import { executeExport, executeRename, executeSwitch } from '../vault-management'
+import {
+  executeAddPostQuantumKeys,
+  executeExport,
+  executeImport,
+  executeRename,
+  executeSwitch,
+} from '../vault-management'
 
 let stdout: string[]
 let writeSpy: ReturnType<typeof vi.spyOn>
@@ -122,6 +129,45 @@ describe('rename', () => {
       previousName: 'Vultisig Cluster #1',
       vault: { id: 'vault-1', name: 'Renamed Vault' },
     })
+  })
+})
+
+describe('import', () => {
+  it('emits an envelope identifying the imported vault', async () => {
+    const vault = { ...vaultStub, on: vi.fn() }
+    const ctx = {
+      sdk: { importVault: vi.fn(async () => vault) },
+      setActiveVault: vi.fn(async () => {}),
+    } as unknown as CommandContext
+
+    const file = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'vsig-import-')), 'v.vult')
+    await fs.writeFile(file, 'VULT-BYTES')
+
+    await executeImport(ctx, file, 'pw')
+
+    const env = envelope()
+    expect(env.data).toMatchObject({ imported: true, isActive: true })
+    expect(env.data.vault).toMatchObject({ id: 'vault-1', name: 'Vultisig Cluster #1' })
+  })
+})
+
+describe('add-mldsa', () => {
+  it('emits an envelope after mutating the vault file', async () => {
+    // FastVault instance check: executeAddPostQuantumKeys refuses anything else.
+    // id/name are prototype getters, so define them rather than assigning.
+    const vault = Object.create(FastVault.prototype, {
+      id: { value: vaultStub.id },
+      name: { value: vaultStub.name },
+    })
+    const ctx = {
+      ensureActiveVault: async () => vault,
+      getPassword: vi.fn(async () => 'pw'),
+      sdk: { addPostQuantumKeysToFastVault: vi.fn(async () => {}) },
+    } as unknown as CommandContext
+
+    await executeAddPostQuantumKeys(ctx, { email: 'e@x.io', password: 'pw' })
+
+    expect(envelope().data).toMatchObject({ added: true, backupRecommended: true })
   })
 })
 

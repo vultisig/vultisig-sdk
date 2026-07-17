@@ -10,9 +10,50 @@
 // (a JSON.parse SyntaxError cause) so transient IO/permission failures are NOT
 // mislabelled unrecoverable.
 import { StorageError, StorageErrorCode } from '@vultisig/sdk'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import { BaseCommandContext } from './command-context'
 import { classifyError, CorruptStateError, ExitCode, NoActiveVaultError, toErrorJson, UnknownError } from './errors'
+
+describe('ensureActiveVault throw site', () => {
+  // The tests below construct NoActiveVaultError directly, which would stay green if
+  // the throw site regressed to a plain Error. Drive the real code path too.
+  class TestContext extends BaseCommandContext {
+    get isInteractive() {
+      return false
+    }
+    async getPassword() {
+      return ''
+    }
+  }
+
+  function makeCtx(activeVault: unknown) {
+    return new TestContext({
+      getActiveVault: vi.fn(async () => activeVault),
+      dispose: vi.fn(),
+    } as never)
+  }
+
+  it('throws NoActiveVaultError — not a plain Error — when no vault is active', async () => {
+    await expect(makeCtx(null).ensureActiveVault()).rejects.toBeInstanceOf(NoActiveVaultError)
+  })
+
+  it('gives that throw exit 15 with a hint, rather than UNKNOWN_ERROR/7', async () => {
+    const err = await makeCtx(null)
+      .ensureActiveVault()
+      .catch((e: unknown) => e)
+
+    const classified = classifyError(err as Error)
+    expect(classified.code).toBe('NO_ACTIVE_VAULT')
+    expect(classified.exitCode).toBe(ExitCode.NO_ACTIVE_VAULT)
+    expect(classified.hint).toBeTruthy()
+  })
+
+  it('still returns the vault when one is active', async () => {
+    const vault = { id: 'v1', name: 'Vault' }
+    await expect(makeCtx(vault).ensureActiveVault()).resolves.toBe(vault)
+  })
+})
 
 describe('NoActiveVaultError', () => {
   it('is NO_ACTIVE_VAULT / exit 15, not UNKNOWN / 7', () => {
