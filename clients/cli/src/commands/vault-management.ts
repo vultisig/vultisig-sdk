@@ -563,7 +563,12 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
     await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
     await fs.rename(tempPath, outputPath)
   } catch (err) {
-    await fs.rm(tempPath, { force: true }).catch(() => {})
+    // Only remove the temp file if the exclusive create is what succeeded. On EEXIST we
+    // never created it — something was already at that path — so deleting it would remove
+    // a file we do not own.
+    if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST') {
+      await fs.rm(tempPath, { force: true }).catch(() => {})
+    }
     throw err
   }
 
