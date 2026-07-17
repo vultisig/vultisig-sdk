@@ -769,7 +769,7 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 }
 ```
 
-`warnings` is omitted when empty. `PROTOCOL_DRIFT` means the backend emitted an SSE frame type this CLI version does not understand; the turn continues, but automation should retain the warning because a newer CLI may be required to handle that frame.
+`warnings` is omitted when empty, and is **`--verbose`-only**: `PROTOCOL_DRIFT` is a debugging aid, not a machine contract. The backend's V1 wire evolves forward-compatibly — unknown `data-*` card kinds are expected against a newer backend and are tolerated silently — so a warning emitted by default would fire on healthy turns. Run with `--verbose` to see which frame types a turn carried that this CLI does not route.
 
 Failures use the same v1 envelope with `success:false` and a stable `error.code`. This includes
 failed/declined signing and typed blocked/refusal/error turn endings; their partial turn data remains under `data`.
@@ -831,7 +831,7 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `ACK_FAILED`                | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying                                                   |
 | `BROADCAST_COMMITTED`       | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                                                                     |
 | `AGENT_TURN_BLOCKED`        | A fund-safety guardrail blocked the requested action (exit 10)                                                                                                                |
-| `AGENT_TURN_REFUSAL`        | The model refused or requested clarification without completing the action (exit 11)                                                                                         |
+| `AGENT_TURN_REFUSAL`        | The model refused or requested clarification without completing the action (exit 11)                                                                                          |
 | `AGENT_TURN_ERROR`          | The typed turn ending reported a failure without a more specific stream error                                                                                                 |
 | `IDEMPOTENT_TURN_DUPLICATE` | The backend already accepted the same keyed turn; inspect the conversation for the original persisted result                                                                  |
 | `IDEMPOTENCY_KEY_REUSED`    | The idempotency key was already used for a _different_ request body. This request did NOT run and nothing was persisted for it — retry with a fresh key (exit code 4, not 14) |
@@ -900,7 +900,7 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 | `tx_status`   | `tx_hash, chain, status, explorer_url?`         | Transaction broadcast/confirmed/failed                                                                   |
 | `assistant`   | `content`                                       | Full assistant response                                                                                  |
 | `suggestions` | `suggestions[]`                                 | Suggested follow-up actions                                                                              |
-| `warning`     | `warning: { code, message, count, eventTypes }` | Non-fatal protocol drift; an unknown SSE frame was ignored                                               |
+| `warning`     | `warning: { code, message, count, eventTypes }` | Non-fatal protocol drift; an unrecognized SSE frame was ignored (`--verbose` only)                       |
 | `error`       | `message, code`                                 | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
 | `done`        | `{}`                                            | Response cycle complete                                                                                  |
 
@@ -961,8 +961,14 @@ VULTISIG_SILENT=1
 # Bound agent-backend connection/unary requests (default: 30000ms)
 VULTISIG_HTTP_TIMEOUT_MS=30000
 
-# Bound an established SSE stream with no complete frame (default: 60000ms)
-VULTISIG_SSE_IDLE_TIMEOUT_MS=60000
+# Bound an established SSE stream that stops making PROGRESS (default: 180000ms).
+# Measures time since the last real data frame. Keep-alive comments do NOT extend
+# it — both backends heartbeat on a timer that runs regardless of whether the turn
+# is advancing, so a clock they reset would bound only a dead connection, never a
+# wedged backend. Sized above the backend's worst-case silent stretch (a model call
+# is bounded at 90s; the swap builder is documented at 90s + 60s MCP), so a slow but
+# healthy turn is never killed.
+VULTISIG_SSE_IDLE_TIMEOUT_MS=180000
 ```
 
 ### Settings
