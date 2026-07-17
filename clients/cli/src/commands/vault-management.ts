@@ -546,8 +546,20 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   const parentDir = path.dirname(outputPath)
   await fs.mkdir(parentDir, { recursive: true })
 
-  // Write the vault file
-  await fs.writeFile(outputPath, vultContent, 'utf-8')
+  // An export carries key shares, so it gets the same owner-only mode as the SDK's
+  // vault store. Write to a fresh temp path and rename over the target, mirroring
+  // storage.ts: `mode` only applies when writeFile CREATES the file, so writing
+  // straight to an existing (or attacker-pre-created) path would put the shares in a
+  // world-readable file and only tighten it afterwards. Creating a new file first
+  // means the shares are never on disk at anything but 0600, and the rename is atomic.
+  const tempPath = `${outputPath}.${process.pid}.${Date.now()}.tmp`
+  try {
+    await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600 })
+    await fs.rename(tempPath, outputPath)
+  } catch (err) {
+    await fs.rm(tempPath, { force: true }).catch(() => {})
+    throw err
+  }
 
   spinner.succeed(`Vault exported: ${outputPath}`)
 
