@@ -308,6 +308,15 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   await ctx.setActiveVault(vault)
   spinner.succeed(`Vault imported: ${vault.name}`)
 
+  if (isJsonOutput()) {
+    outputJson({
+      imported: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
+
   success('\n+ Vault imported successfully!')
   info('\nRun "vultisig balance" to view balances')
 
@@ -567,6 +576,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 
   spinner.succeed(`Vault exported: ${outputPath}`)
 
+  if (isJsonOutput()) {
+    outputJson({ exported: true, path: outputPath, encrypted: exportPassword !== undefined })
+    return outputPath
+  }
+
   success('\n+ Vault exported successfully!')
   info(`File: ${outputPath}`)
 
@@ -672,6 +686,15 @@ export async function executeSwitch(ctx: CommandContext, vaultId: string): Promi
   setupVaultEvents(vault)
   spinner.succeed('Vault switched')
 
+  if (isJsonOutput()) {
+    outputJson({
+      switched: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
+
   success(`\n+ Switched to vault: ${vault.name}`)
   info(`  Type: ${vault.type}`)
   info(`  Chains: ${vault.chains.length}`)
@@ -690,6 +713,11 @@ export async function executeRename(ctx: CommandContext, newName: string): Promi
   const spinner = createSpinner('Renaming vault...')
   await vault.rename(newName)
   spinner.succeed('Vault renamed')
+
+  if (isJsonOutput()) {
+    outputJson({ renamed: true, vault: { id: vault.id, name: newName }, previousName: oldName })
+    return
+  }
 
   success(`\n+ Vault renamed from "${oldName}" to "${newName}"`)
 }
