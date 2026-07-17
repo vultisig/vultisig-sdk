@@ -593,12 +593,10 @@ program
     withExit(
       async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
         const context = await init(program.opts().vault)
-        const verified = await executeVerify(context, vaultId, options)
-        if (!verified) {
-          const err: any = new Error('Verification failed')
-          err.exitCode = 1
-          throw err
-        }
+        // executeVerify throws a typed error on failure; it no longer signals
+        // failure via a `false` return that this had to re-throw (which produced a
+        // second JSON document on stdout).
+        await executeVerify(context, vaultId, options)
       }
     )
   )

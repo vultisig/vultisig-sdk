@@ -9,6 +9,7 @@ import path from 'path'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
+import { InvalidInputError, VaultNotFoundError, type VsigError } from '../core/errors'
 import {
   createSpinner,
   error,
@@ -422,20 +423,32 @@ export async function executeVerify(
     return true
   } catch (err: any) {
     spinner.fail('Verification failed')
-
-    if (isJsonOutput()) {
-      outputJson({
-        verified: false,
-        error: err.message || 'Verification failed. Please check the code and try again.',
-      })
-      return false
-    }
-
-    error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
-    warn('\nTip: Use --resend to get a new verification code:')
-    info(`  vultisig verify ${vaultId} --resend`)
-    return false
+    // Throw a single typed error rather than pre-writing a result and returning
+    // false: the caller used to turn that false into a second throw, so `-o json`
+    // emitted TWO documents — a success-shaped {verified:false} envelope followed
+    // by an error envelope — and JSON.parse on the output failed. withExit renders
+    // message/hint/suggestions, so the human path keeps the same guidance.
+    throw verificationFailureError(err as Error, vaultId)
   }
+}
+
+/** The SDK words this case for library callers ("...with createFastVault()"), which
+ *  is meaningless in a shell. The CLI owns its own copy. */
+const PENDING_VAULT_MISSING_RE = /no pending vault found/i
+
+function verificationFailureError(err: Error, vaultId: string): VsigError {
+  if (PENDING_VAULT_MISSING_RE.test(err.message ?? '')) {
+    return new VaultNotFoundError(
+      `No pending vault found for ID "${vaultId}".`,
+      'It may already be verified, or the ID may be wrong',
+      ['vultisig vaults', 'vultisig create --two-step']
+    )
+  }
+  return new InvalidInputError(
+    err.message || 'Verification failed. Please check the code and try again.',
+    'The code may be incorrect or expired',
+    [`vultisig verify ${vaultId} --resend`]
+  )
 }
 
 export type AddPostQuantumKeysOptions = {
@@ -566,6 +579,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const spinner = createSpinner('Loading vaults...')
   const vaults = await ctx.sdk.listVaults()
+  // A two-step vault awaiting verification is only named in the create-time output.
+  // An agent that lost that output had no way to rediscover the id and finish
+  // verifying, so list pending vaults here too. Best-effort: a pending-store read
+  // failure must not take down `vaults`, the command used to diagnose vault state.
+  const pending = await listPendingVaultsSafely(ctx)
   spinner.succeed('Vaults loaded')
 
   if (isJsonOutput()) {
@@ -580,21 +598,42 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
         createdAt: v.createdAt,
         isActive: activeVault?.id === v.id,
       })),
+      pending: pending.map(id => ({ id, status: 'pending_verification' })),
     })
     return vaults
   }
 
-  if (vaults.length === 0) {
+  if (vaults.length === 0 && pending.length === 0) {
     warn('\nNo vaults found. Create or import a vault first.')
     return []
   }
 
   const activeVault = ctx.getActiveVault()
-  displayVaultsList(vaults, activeVault)
+  if (vaults.length > 0) {
+    displayVaultsList(vaults, activeVault)
+  }
 
-  info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  if (pending.length > 0) {
+    warn(`\nPending verification (${pending.length}):`)
+    for (const id of pending) {
+      info(`  ${id}`)
+    }
+    info(chalk.gray('Finish with "vultisig verify <id> --code <OTP>"'))
+  }
+
+  if (vaults.length > 0) {
+    info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  }
 
   return vaults
+}
+
+async function listPendingVaultsSafely(ctx: CommandContext): Promise<string[]> {
+  try {
+    return await ctx.sdk.listPendingVaults()
+  } catch {
+    return []
+  }
 }
 
 /**
