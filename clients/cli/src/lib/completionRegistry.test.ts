@@ -5,11 +5,11 @@
 // sign/broadcast/tx-status/execute/discount/agent/auth/delete/join/rujira/add-mldsa,
 // and a hand-picked subset of chains. Commands now come from Commander and chains from
 // the SDK registry, so the scripts cannot silently go stale again.
-import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
 const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'index.ts')
