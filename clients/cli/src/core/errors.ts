@@ -332,10 +332,52 @@ const UTXO_PERMANENT_BROADCAST_INPUT_RE = /\bTX decode failed\b|\b(?:RPC error|c
 const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
   /failed to deserialize(?: transaction)?|failed to sanitize|(?:transaction )?signature verification (?:failed|failure)|non-base58 character|invalid base58/i
 
-const SUI_PERMANENT_BROADCAST_INPUT_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
+// The local required-fields guard (RawBroadcastService) is always permanent —
+// it never carries an RPC code, so it's checked independently of the -32002 gate below.
+const SUI_REQUIRED_FIELDS_GUARD_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
 
-const COSMOS_PERMANENT_BROADCAST_INPUT_RE =
-  /Broadcasting transaction failed with code (?!0\b)\d+ \(codespace: [^)]*\)\. Log:/i
+// -32002 ("TransactionExecutionClientError") is a broad Sui JSON-RPC bucket covering
+// many distinct client-caused execution failures, not signature verification alone —
+// pairing the code with a message match keeps a generic/unrecognized -32002 (e.g. an
+// object-version or gas condition we can't positively identify as permanent) retryable
+// instead of a blanket match on the code.
+const SUI_PERMANENT_EXECUTION_MESSAGE_RE =
+  /invalid (?:user )?signature|signature verification (?:failed|failure)|malformed transaction|invalid transaction (?:data|bytes)/i
+
+// Cosmos SDK RootCodespace error codes (codespace "sdk") whose message is a
+// genuinely non-recoverable rejection of THIS signed tx — the identical bytes can
+// never succeed regardless of retries or waiting. See
+// https://github.com/cosmos/cosmos-sdk/blob/main/types/errors/errors.go. Deliberately
+// narrow: any other codespace, any unlisted code (notably 32 "incorrect account
+// sequence" — a transient MPC-race shape that can resolve once the intervening
+// sequence lands), or a code/message mismatch falls through to retryable.
+const COSMOS_PERMANENT_SDK_CODES: Partial<Record<number, RegExp>> = {
+  2: /tx parse error/i,
+  4: /unauthorized|signature verification failed/i,
+  5: /insufficient funds/i,
+  6: /unknown request/i,
+  7: /invalid address/i,
+  8: /invalid pubkey/i,
+  9: /unknown address/i,
+  10: /invalid coins/i,
+  12: /memo too large/i,
+  13: /insufficient fee/i,
+  14: /maximum number of signatures exceeded/i,
+  15: /no signatures supplied/i,
+  18: /invalid request/i,
+  21: /tx too large/i,
+}
+
+const COSMOS_BROADCAST_FAILURE_RE = /broadcasting transaction failed with code (\d+) \(codespace: (\w+)\)\. log: (.+)/i
+
+function isCosmosPermanentBroadcastInput(details: string): boolean {
+  const match = details.match(COSMOS_BROADCAST_FAILURE_RE)
+  if (!match) return false
+  const [, codeText, codespace, log] = match
+  if (codespace.toLowerCase() !== 'sdk') return false
+  const canonicalMessage = COSMOS_PERMANENT_SDK_CODES[Number(codeText)]
+  return canonicalMessage ? canonicalMessage.test(log) : false
+}
 
 type PermanentBroadcastInputClassifier = (err: VaultError, details: string) => boolean
 
@@ -344,10 +386,11 @@ const permanentBroadcastInputClassifiers: Partial<Record<ChainKind, PermanentBro
   utxo: (_err, details) => UTXO_PERMANENT_BROADCAST_INPUT_RE.test(details),
   solana: (_err, details) => SOLANA_PERMANENT_BROADCAST_INPUT_RE.test(details),
   sui: (err, details) => {
+    if (SUI_REQUIRED_FIELDS_GUARD_RE.test(details)) return true
     const rpcCode = (err.originalError as (Error & { code?: unknown }) | undefined)?.code
-    return rpcCode === -32002 || SUI_PERMANENT_BROADCAST_INPUT_RE.test(details)
+    return rpcCode === -32002 && SUI_PERMANENT_EXECUTION_MESSAGE_RE.test(details)
   },
-  cosmos: (_err, details) => COSMOS_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  cosmos: (_err, details) => isCosmosPermanentBroadcastInput(details),
 }
 
 function getBroadcastErrorChain(details: string): Chain | undefined {

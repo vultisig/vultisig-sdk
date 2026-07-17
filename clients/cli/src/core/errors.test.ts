@@ -623,11 +623,59 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
+    it('keeps a Sui -32002 rejection retryable when the message is not a recognized permanent signal', () => {
+      // -32002 (TransactionExecutionClientError) is a broad bucket covering more than
+      // signature failures — an unrecognized message under that code must not be
+      // blanket-matched to permanent.
+      const rpcError = Object.assign(new Error('Insufficient gas budget for this transaction'), { code: -32002 })
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast transaction on Sui: ${rpcError.message}`,
+          rpcError
+        )
+      )
+    })
+
     it('maps a Cosmos ABCI CheckTx rejection to non-retryable input', () => {
       expectPermanent(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
           'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: sdk). Log: tx parse error'
+        )
+      )
+    })
+
+    it('maps a Cosmos insufficient-funds rejection to non-retryable input', () => {
+      expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: sdk). Log: 100000uatom is smaller than 500000uatom: insufficient funds'
+        )
+      )
+    })
+
+    it('keeps a Cosmos account-sequence-mismatch rejection retryable', () => {
+      // Code 32 ("incorrect account sequence") is not in the permanent allowlist — a
+      // gap in the account's sequence is a transient MPC-race shape that can resolve
+      // once the intervening sequence lands, so the identical signed bytes may still
+      // succeed on a later attempt.
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 32 (codespace: sdk). Log: account sequence mismatch, expected 5, got 4: incorrect account sequence'
+        )
+      )
+    })
+
+    it('keeps a Cosmos rejection from a non-root codespace retryable', () => {
+      // A module-specific codespace (e.g. wasm) can reuse root-codespace-style
+      // numeric codes for unrelated conditions, so the allowlist only applies to
+      // "codespace: sdk".
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: wasm). Log: execute wasm contract failed'
         )
       )
     })
