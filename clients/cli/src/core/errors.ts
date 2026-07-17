@@ -2,6 +2,7 @@ import {
   Chain,
   type ChainKind,
   getChainKind,
+  StorageError,
   VaultError,
   VaultErrorCode,
   VaultImportError,
@@ -55,6 +56,16 @@ export enum ExitCode {
   // request did not execute or consume credits; inspect the conversation for
   // the first attempt's persisted result before starting a fresh attempt.
   IDEMPOTENT_TURN_DUPLICATE = 14,
+  // The command needs an active vault and there isn't one selected. This is an
+  // expected, actionable state (create/import/switch), NOT a failure — distinct
+  // from UNKNOWN (7) so a headless caller can tell "you have no vault yet" from
+  // "something broke". Vaults may well exist; none is selected.
+  NO_ACTIVE_VAULT = 15,
+  // On-disk CLI/vault state is present but unparseable (truncated or hand-edited
+  // JSON). Retrying cannot help and no amount of waiting fixes it — the state must
+  // be repaired or re-imported from a .vult backup. Distinct from UNKNOWN (7) so a
+  // headless caller can stop retrying and surface a recovery path.
+  CORRUPT_STATE = 16,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -76,6 +87,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
     'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
   [ExitCode.IDEMPOTENT_TURN_DUPLICATE]:
     'agent ask: duplicate keyed turn rejected — inspect the conversation for the original result',
+  [ExitCode.NO_ACTIVE_VAULT]: 'No active vault selected — create, import, or switch to one',
+  [ExitCode.CORRUPT_STATE]: 'Stored state is unreadable — repair it or re-import the vault from a .vult backup',
 }
 
 export abstract class VsigError extends Error {
@@ -295,6 +308,37 @@ function keyedTurnContext(conversationId?: string, firstRequestAt?: string): Rec
   return Object.keys(context).length > 0 ? context : undefined
 }
 
+/** A command needs an active vault and none is selected. Expected and actionable —
+ *  vaults may exist, none is current. */
+export class NoActiveVaultError extends VsigError {
+  readonly exitCode = ExitCode.NO_ACTIVE_VAULT
+  readonly code = 'NO_ACTIVE_VAULT'
+
+  constructor(message?: string) {
+    super(
+      message ?? 'No active vault. Create or import a vault first.',
+      'Select an existing vault with "vultisig switch <id>", or create/import one',
+      ['vultisig vaults', 'vultisig switch <id>', 'vultisig create', 'vultisig import <file.vult>']
+    )
+  }
+}
+
+/** Stored state exists but is unparseable. Not retryable: the bytes on disk are
+ *  broken, so the caller needs a repair/re-import path rather than another attempt. */
+export class CorruptStateError extends VsigError {
+  readonly exitCode = ExitCode.CORRUPT_STATE
+  readonly code = 'CORRUPT_STATE'
+
+  constructor(message: string, context?: Record<string, string>) {
+    super(
+      message,
+      'The stored file is present but unreadable — it was likely truncated or hand-edited',
+      ['Re-import the vault from its .vult backup: vultisig import <file.vult>', 'vultisig vaults'],
+      context
+    )
+  }
+}
+
 export class UnknownError extends VsigError {
   readonly exitCode = ExitCode.UNKNOWN
   readonly code = 'UNKNOWN_ERROR'
@@ -504,8 +548,28 @@ function classifyVaultError(err: VaultError): VsigError {
   }
 }
 
+/**
+ * A StorageError means "the read/write itself failed", which covers both broken
+ * bytes and ordinary IO trouble. Only the former is CORRUPT_STATE: retrying an
+ * unparseable file is futile, whereas a permission/IO error may well clear. The
+ * node/RN/extension backends all wrap the underlying failure as `cause`, so a
+ * JSON.parse SyntaxError there is the positive signal that the stored value is
+ * genuinely malformed. Anything else deliberately falls through to the existing
+ * classification rather than being mislabelled unrecoverable.
+ */
+function corruptStateErrorFrom(err: StorageError): CorruptStateError | undefined {
+  if (!(err.cause instanceof SyntaxError)) return undefined
+  const keyMatch = err.message.match(/key "([^"]+)"/)
+  return new CorruptStateError(err.message, keyMatch ? { key: keyMatch[1] } : undefined)
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
+
+  if (err instanceof StorageError) {
+    const corrupt = corruptStateErrorFrom(err)
+    if (corrupt) return corrupt
+  }
 
   // The journal's duplicate/concurrent refusals aren't VaultErrors — they carry
   // a stable `code === 'DUPLICATE_BROADCAST'`. Map them to exit 9 before the
