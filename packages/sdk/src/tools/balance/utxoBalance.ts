@@ -1,5 +1,7 @@
 import { UtxoChain } from '@vultisig/core-chain/Chain'
 
+import { withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
+
 /**
  * UTXO chains supported by {@link getUtxoBalance}.
  *
@@ -128,7 +130,7 @@ export const getUtxoBalance = async (
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const url = `${base.replace(/\/+$/, '')}/${blockchairPath(chain)}/dashboards/address/${encodeURIComponent(address)}`
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+  const response = await withFetchTimeout(url, {}, timeoutMs, async response => response)
   if (!response.ok) {
     throw new Error(`getUtxoBalance: Blockchair returned ${response.status} for ${chain} address ${address}.`)
   }

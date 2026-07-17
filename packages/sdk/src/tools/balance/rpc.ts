@@ -12,6 +12,8 @@
  * ever signs or broadcasts.
  */
 
+import { FetchTimeoutError, withFetchTimeout } from '../../platforms/react-native/fetchWithTimeout'
+
 /** Vultisig proxy root. Mirrors mcp-ts `ROOT_API_URL`. */
 export const ROOT_API_URL = 'https://api.vultisig.com'
 
@@ -27,6 +29,7 @@ function isRetryable(error: unknown): boolean {
   // Network-level failures retry; deterministic timeouts do not (a retry just
   // stacks more multi-second waits past the caller's budget). Mirrors mcp-ts.
   if (error instanceof TypeError) return true
+  if (error instanceof FetchTimeoutError) return true
   if (error instanceof DOMException && error.name === 'AbortError') return true
   return false
 }
@@ -39,13 +42,17 @@ function isRetryable(error: unknown): boolean {
 export async function fetchJson<T>(url: string, body?: unknown, init?: RequestInit): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, {
-        method: body ? 'POST' : 'GET',
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-        ...init,
-      })
+      const response = await withFetchTimeout(
+        url,
+        {
+          method: body ? 'POST' : 'GET',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+          ...init,
+        },
+        DEFAULT_TIMEOUT_MS,
+        async response => response,
+      )
 
       if (response.ok) {
         return response.json() as Promise<T>
