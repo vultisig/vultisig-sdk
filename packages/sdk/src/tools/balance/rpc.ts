@@ -51,7 +51,7 @@ export async function fetchJson<T>(url: string, body?: unknown, init?: RequestIn
           ...init,
         },
         DEFAULT_TIMEOUT_MS,
-        async response => response,
+        async response => response
       )
 
       if (response.ok) {

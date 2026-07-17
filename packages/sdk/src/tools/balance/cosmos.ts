@@ -220,18 +220,13 @@ const isTimeout = (error: unknown): boolean =>
 async function fetchJson<T>(url: string): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await withFetchTimeout(
-        url,
-        {},
-        DEFAULT_TIMEOUT_MS,
-        async response => {
-          if (response.ok) return response
-          if (response.status >= 400 && response.status < 500) {
-            throw new Error(`HTTP ${response.status}: ${await response.text()}`)
-          }
-          return response
+      const response = await withFetchTimeout(url, {}, DEFAULT_TIMEOUT_MS, async response => {
+        if (response.ok) return response
+        if (response.status >= 400 && response.status < 500) {
+          throw new Error(`HTTP ${response.status}: ${await response.text()}`)
         }
-      )
+        return response
+      })
       if (response.ok) return (await response.json()) as T
       if (attempt < MAX_RETRIES) {
         await delay(BASE_DELAY_MS * 2 ** attempt)
