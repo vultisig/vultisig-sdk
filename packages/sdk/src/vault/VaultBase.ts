@@ -463,8 +463,18 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       errors.push(`Vault name cannot exceed ${vaultConfig.maxNameLength} characters`)
     }
 
-    if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
-      errors.push('Vault name can only contain letters, numbers, spaces, hyphens, and underscores')
+    // Only reject what is actually unsafe. The name is interpolated into the export
+    // filename (see export()), so path separators and control characters are out —
+    // but the previous alphanumeric allowlist also rejected the `#` in ecosystem-created
+    // names like "Vultisig Cluster #1", which creation and import both accept. That made
+    // rename a one-way door: rename away from such a name, and you could never rename back.
+    if (/[/\\]/.test(name)) {
+      errors.push('Vault name cannot contain path separators')
+    }
+
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(name)) {
+      errors.push('Vault name cannot contain control characters')
     }
 
     return {
