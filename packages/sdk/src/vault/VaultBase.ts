@@ -1731,7 +1731,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } = params
+    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
+      params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
     const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
