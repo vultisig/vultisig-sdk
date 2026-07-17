@@ -3,7 +3,6 @@ import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { type Address, decodeFunctionData, getAddress, type Hex, parseAbi, parseTransaction } from 'viem'
 
 import { canonicalChainTag } from '../../utils/addressFormat'
-
 import type { Envelope } from './types'
 
 /**
