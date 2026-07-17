@@ -14,7 +14,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import { MemoryStorage, PushNotificationService, computeNotificationVaultId, type VaultBase } from '@vultisig/sdk'
+import { computeNotificationVaultId, MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
