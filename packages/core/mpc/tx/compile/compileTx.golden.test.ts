@@ -303,6 +303,11 @@ describe('compileTx golden vectors', () => {
   // updates BOTH suites' expectation at once. Both fee variants are pinned because
   // legacy-vs-EIP-1559 type selection and gas-field ordering are exactly the
   // divergence class that would split a 2-of-2 RN + WalletCore keysign.
+  //
+  // IMPORTANT: the RN side of this bind is viem-based and the fixture hashes were
+  // pinned via viem, so this test and the ERC-20 one below are the ONLY independent
+  // (WalletCore-WASM RLP) verification of the EVM fixtures. Never skip or delete
+  // them without replacing the independent reference.
   it('matches the shared cross-encoder golden vector for an EVM native transfer (legacy + eip1559)', () => {
     const fx = EVM_NATIVE_CROSS_ENCODER_FIXTURE
     const base = {

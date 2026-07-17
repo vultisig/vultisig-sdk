@@ -116,6 +116,12 @@ describe('cross-encoder binding (must match packages/core compileTx.golden.test.
   // split a 2-of-2 RN + WalletCore keysign. fromAddress below is arbitrary: an EVM
   // sender never enters the unsigned envelope (it is recovered from the signature),
   // so it is deliberately NOT part of the shared fixture.
+  //
+  // IMPORTANT: because this RN builder is itself viem-based and the fixture hashes
+  // were pinned via viem, THIS side of the EVM bind is a near-self-check. The
+  // independent teeth are the core suite's two EVM cross-encoder tests, where
+  // WalletCore's own WASM RLP recomputes the same fixture hashes. Never skip or
+  // delete those without replacing the independent reference.
   it('produces the SAME signing hash as WalletCore for the identical EVM native transfer (legacy + eip1559)', () => {
     const fx = loadCrossEncoderFixture<EvmNativeCrossEncoderFixture>('evm-native-transfer.json')
     const chain = fx.chainName as EvmChain
