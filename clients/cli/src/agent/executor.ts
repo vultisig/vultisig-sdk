@@ -7,7 +7,15 @@
  * to be flushed into the next outbound `context.recent_actions`.
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, chainFeeCoin, getChainKind, getEvmChainByChainId, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import {
+  Chain,
+  chainFeeCoin,
+  getChainKind,
+  getEvmChainByChainId,
+  VaultError,
+  VaultErrorCode,
+  Vultisig as VultisigSdk,
+} from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
