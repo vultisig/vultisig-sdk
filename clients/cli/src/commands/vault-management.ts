@@ -546,8 +546,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   const parentDir = path.dirname(outputPath)
   await fs.mkdir(parentDir, { recursive: true })
 
-  // Write the vault file
-  await fs.writeFile(outputPath, vultContent, 'utf-8')
+  // Write the vault file. An export carries key shares, so it gets the same
+  // owner-only mode as the SDK's vault store — `mode` only applies when the file
+  // is created, so chmod an existing path we may have just overwritten.
+  await fs.writeFile(outputPath, vultContent, { encoding: 'utf-8', mode: 0o600 })
+  await fs.chmod(outputPath, 0o600)
 
   spinner.succeed(`Vault exported: ${outputPath}`)
 
