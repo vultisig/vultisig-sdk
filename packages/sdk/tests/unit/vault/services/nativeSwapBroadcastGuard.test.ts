@@ -5,10 +5,18 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { assertNativeSwapReadyForBroadcast } from '../../../../src/vault/services/nativeSwapBroadcastGuard'
 
-const makeInbound = (chain: string, address: string): ThorchainInboundAddress =>
+const makeInbound = (
+  chain: string,
+  address: string,
+  halts: Partial<Pick<ThorchainInboundAddress, 'halted' | 'global_trading_paused' | 'chain_trading_paused'>> = {}
+): ThorchainInboundAddress =>
   ({
     address,
     chain,
+    halted: false,
+    global_trading_paused: false,
+    chain_trading_paused: false,
+    ...halts,
   }) as ThorchainInboundAddress
 
 const makeThorchainSwapPayload = ({
@@ -298,5 +306,37 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         now: () => 1_700_000_000_000,
       })
     ).resolves.toBeUndefined()
+  })
+
+  // sdk#1360: halt re-check at broadcast. Each of the three flags on the SAME inbound object the
+  // address check already reads must fail closed - THORChain can halt a chain between quote and
+  // broadcast while the vault address stays current, so the address match alone is not sufficient.
+  it.each([
+    ['halted', { halted: true }],
+    ['global_trading_paused', { global_trading_paused: true }],
+    ['chain_trading_paused', { chain_trading_paused: true }],
+  ] as const)(
+    'rejects a THORChain broadcast when %s even if the inbound vault address still matches',
+    async (_label, halts) => {
+      await expect(
+        assertNativeSwapReadyForBroadcast({
+          chain: Chain.Bitcoin,
+          keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'bc1qactive' }),
+          getInboundAddresses: async () => [makeInbound('BTC', 'bc1qactive', halts)],
+          now: () => 1_700_000_000_000,
+        })
+      ).rejects.toThrow(/trading is halted/)
+    }
+  )
+
+  it('rejects a MayaChain broadcast into a halted source chain', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Dash,
+        keysignPayload: makeMayachainSwapPayload({ vaultAddress: 'dash1active' }),
+        getInboundAddresses: async () => [makeInbound('DASH', 'dash1active', { halted: true })],
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/trading is halted/)
   })
 })

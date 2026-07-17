@@ -80,18 +80,34 @@ export const assertNativeSwapReadyForBroadcast = async ({
     )
   }
 
-  const activeInboundAddress = (await getInboundAddresses(native.chain)).find(
+  const activeInbound = (await getInboundAddresses(native.chain)).find(
     ({ chain }) => chain.toUpperCase() === sourceChainId
-  )?.address
+  )
 
-  if (!activeInboundAddress) {
+  if (!activeInbound?.address) {
     throw new VaultError(
       VaultErrorCode.NetworkError,
       `Cannot validate ${native.chain} inbound vault for source chain ${sourceChainId}`
     )
   }
 
-  if (activeInboundAddress.toLowerCase() !== native.vaultAddress.toLowerCase()) {
+  // sdk#1360: re-check the trading-halt flags at BROADCAST, not only at quote time
+  // (findSwapQuote via getNativeSwapTradingHalt). THORChain can HALT<CHAIN>TRADING between the
+  // quote and the broadcast (mimir halt, churn, ragnarok) while the inbound vault address stays
+  // current - so the address check below would pass and the deposit would broadcast into a halted
+  // chain (best case a delayed refund minus outbound fee, worst case stuck funds mid-migration).
+  // These flags ride the SAME already-fetched inbound object, so this is fail-closed at zero extra
+  // network cost. Any of the three halts on the source-chain inbound aborts the broadcast.
+  if (activeInbound.halted || activeInbound.global_trading_paused || activeInbound.chain_trading_paused) {
+    throw new VaultError(
+      VaultErrorCode.InvalidConfig,
+      `${native.chain} trading is halted for ${sourceChainId} (halted=${activeInbound.halted}, ` +
+        `global_paused=${activeInbound.global_trading_paused}, chain_paused=${activeInbound.chain_trading_paused}); ` +
+        `refusing to broadcast into a halted chain`
+    )
+  }
+
+  if (activeInbound.address.toLowerCase() !== native.vaultAddress.toLowerCase()) {
     throw new VaultError(
       VaultErrorCode.InvalidVault,
       `${native.chain} inbound vault address changed; refresh the swap quote before broadcasting`
