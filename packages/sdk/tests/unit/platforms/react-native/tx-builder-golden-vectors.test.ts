@@ -1,8 +1,48 @@
+import type { EvmChain } from '@vultisig/core-chain/Chain'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { encodeFunctionData, erc20Abi, keccak256, parseTransaction, serializeTransaction } from 'viem'
 import { describe, expect, it } from 'vitest'
 
-import { buildErc20TransferTx, buildEvmSendTx } from '../../../../src/platforms/react-native/chains/evm/tx'
+import {
+  buildErc20TransferTx,
+  buildEvmSendTx,
+  getEvmNumericChainId,
+} from '../../../../src/platforms/react-native/chains/evm/tx'
 import { buildSolanaSendTx } from '../../../../src/platforms/react-native/chains/solana/tx'
+
+type SolanaCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  recentBlockhash: string
+  lamports: string
+  expectedMessageHex: string
+}
+type EvmCrossEncoderFeeVariants = {
+  legacy: { gasPriceWei: string; expectedSigningHashHex: string }
+  eip1559: { maxFeePerGasWei: string; maxPriorityFeePerGasWei: string; expectedSigningHashHex: string }
+}
+type EvmNativeCrossEncoderFixture = EvmCrossEncoderFeeVariants & {
+  chainName: string
+  chainId: number
+  nonce: number
+  gasLimit: number
+  toAddress: string
+  valueWei: string
+}
+type EvmErc20CrossEncoderFixture = EvmCrossEncoderFeeVariants & {
+  chainName: string
+  chainId: number
+  nonce: number
+  gasLimit: number
+  tokenAddress: string
+  recipientAddress: string
+  amountBaseUnits: string
+}
+const loadCrossEncoderFixture = <T>(name: string): T =>
+  JSON.parse(readFileSync(resolve(__dirname, '../../../../../../testdata/cross-encoder-golden', name), 'utf8')) as T
+const loadSolanaCrossEncoderFixture = (): SolanaCrossEncoderFixture =>
+  loadCrossEncoderFixture<SolanaCrossEncoderFixture>('solana-transfer.json')
 
 const SOLANA_FROM = '4wBqpZM9xaSheZzJSMawUKKwhdpChKbZ5eu5ky4Vigw'
 const SOLANA_TO = '7ppk9w8NHnH6ehajvJyU31VcMafwZ3ybRtJWumSyD2wd'
@@ -36,6 +76,107 @@ const ERC20_TRANSFER_CALLDATA =
 const ERC20_TRANSFER_UNSIGNED_HEX =
   '0xf86a038509c765240082fde894444444444444444444444444444444444444444480b844a9059cbb00000000000000000000000055555555555555555555555555555555555555550000000000000000000000000000000000000000000000000db4da5f4415aa0081898080'
 const ERC20_TRANSFER_SIGNING_HASH = '0x6af2740817e7cf4c0980e77931a791952b11ec6416d203c3c9411d9c85d01720'
+
+// CROSS-ENCODER BINDING (Track B follow-up to VA-81's layer-1/layer-2 golden-vector
+// work): the buildSolanaSendTx suite below self-checks against @solana/web3.js (this
+// path's OWN reference) - but packages/core's compileTx.golden.test.ts independently
+// self-checks the SAME logical Solana transfer against WalletCore/WASM (the OTHER real
+// encoder the app can dispatch through). Until now the two suites never shared a single
+// fixture, so the two encoders could silently diverge with nothing catching it - each
+// path only proves itself internally consistent, not that they AGREE with each other.
+//
+// Reads testdata/cross-encoder-golden/solana-transfer.json - the SAME file packages/
+// core/mpc/tx/compile/compileTx.golden.test.ts's 'matches the shared cross-encoder
+// golden vector' test reads - via a plain readFileSync rather than an import
+// (packages/sdk doesn't depend on packages/core). Both suites assert against the SAME
+// fixture-provided expected message bytes, so editing the fixture file updates BOTH
+// suites' expectation at once - no "keep two literals in sync via a comment" drift
+// risk. senderAddress in the fixture is pre-derived from a private key via WalletCore
+// (packages/core's suite re-derives it fresh each run; this unit suite reads the
+// precomputed value directly to avoid adding a WASM wallet-core dependency here).
+describe('cross-encoder binding (must match packages/core compileTx.golden.test.ts WalletCore path)', () => {
+  it('produces the SAME message bytes as WalletCore for the identical Solana transfer', () => {
+    const fx = loadSolanaCrossEncoderFixture()
+    const tx = buildSolanaSendTx({
+      from: fx.senderAddress,
+      to: fx.recipientAddress,
+      lamports: BigInt(fx.lamports),
+      recentBlockhash: fx.recentBlockhash,
+    })
+
+    expect(tx.signingHashHex).toBe(fx.expectedMessageHex)
+  })
+
+  // EVM (sdk#1365 / plan 003): reads testdata/cross-encoder-golden/evm-native-transfer
+  // .json + evm-erc20-transfer.json - the SAME files packages/core/mpc/tx/compile/
+  // compileTx.golden.test.ts's 'matches the shared cross-encoder golden vector for an
+  // EVM ...' tests read - and builds the identical transfers via THIS package's
+  // viem-based builders. Both fee variants are exercised because legacy-vs-EIP-1559
+  // type selection and gas-field ordering are exactly the divergence class that would
+  // split a 2-of-2 RN + WalletCore keysign. fromAddress below is arbitrary: an EVM
+  // sender never enters the unsigned envelope (it is recovered from the signature),
+  // so it is deliberately NOT part of the shared fixture.
+  it('produces the SAME signing hash as WalletCore for the identical EVM native transfer (legacy + eip1559)', () => {
+    const fx = loadCrossEncoderFixture<EvmNativeCrossEncoderFixture>('evm-native-transfer.json')
+    const chain = fx.chainName as EvmChain
+    // Bind the RN chain-name -> chainId table to the fixture's chainId (the value
+    // WalletCore consumed) before relying on it below.
+    expect(getEvmNumericChainId(chain)).toBe(fx.chainId)
+
+    const common = {
+      chain,
+      fromAddress: '0x1111111111111111111111111111111111111111' as const,
+      toAddress: fx.toAddress as `0x${string}`,
+      valueWei: BigInt(fx.valueWei),
+      nonce: fx.nonce,
+      gasLimit: BigInt(fx.gasLimit),
+    }
+    const legacyTx = buildEvmSendTx({
+      ...common,
+      gasPrice: BigInt(fx.legacy.gasPriceWei),
+    })
+    expect(legacyTx.signingHashHex).toBe(fx.legacy.expectedSigningHashHex)
+
+    const eip1559Tx = buildEvmSendTx({
+      ...common,
+      maxFeePerGas: BigInt(fx.eip1559.maxFeePerGasWei),
+      maxPriorityFeePerGas: BigInt(fx.eip1559.maxPriorityFeePerGasWei),
+    })
+    expect(eip1559Tx.signingHashHex).toBe(fx.eip1559.expectedSigningHashHex)
+  })
+
+  // On top of RLP/typed-envelope encoding this also cross-checks CALLDATA
+  // construction: this path encodes transfer(recipient, amount) via viem's
+  // encodeFunctionData, while WalletCore builds the same calldata internally from
+  // its ERC20Transfer proto message - both must land on the same signing hash.
+  it('produces the SAME signing hash as WalletCore for the identical ERC-20 transfer (legacy + eip1559)', () => {
+    const fx = loadCrossEncoderFixture<EvmErc20CrossEncoderFixture>('evm-erc20-transfer.json')
+    const chain = fx.chainName as EvmChain
+    expect(getEvmNumericChainId(chain)).toBe(fx.chainId)
+
+    const common = {
+      chain,
+      fromAddress: '0x3333333333333333333333333333333333333333' as const,
+      tokenAddress: fx.tokenAddress as `0x${string}`,
+      recipient: fx.recipientAddress as `0x${string}`,
+      amount: BigInt(fx.amountBaseUnits),
+      nonce: fx.nonce,
+      gasLimit: BigInt(fx.gasLimit),
+    }
+    const legacyTx = buildErc20TransferTx({
+      ...common,
+      gasPrice: BigInt(fx.legacy.gasPriceWei),
+    })
+    expect(legacyTx.signingHashHex).toBe(fx.legacy.expectedSigningHashHex)
+
+    const eip1559Tx = buildErc20TransferTx({
+      ...common,
+      maxFeePerGas: BigInt(fx.eip1559.maxFeePerGasWei),
+      maxPriorityFeePerGas: BigInt(fx.eip1559.maxPriorityFeePerGasWei),
+    })
+    expect(eip1559Tx.signingHashHex).toBe(fx.eip1559.expectedSigningHashHex)
+  })
+})
 
 describe('React Native transaction builder golden vectors', () => {
   describe('buildSolanaSendTx', () => {

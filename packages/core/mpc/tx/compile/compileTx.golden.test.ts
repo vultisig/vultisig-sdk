@@ -19,6 +19,8 @@
  *   WalletCore cannot verify or assemble.
  */
 import { Buffer } from 'buffer'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 import { create, toBinary } from '@bufbuild/protobuf'
 import { blake2b } from '@noble/hashes/blake2b'
@@ -58,6 +60,62 @@ const EXPECTED_QBTC_SERIALIZED =
   '{"tx_bytes":"Cp4BCokBChwvY29zbW9zLmJhbmsudjFiZXRhMS5Nc2dTZW5kEmkKKnFidGMxc2VuZGVyMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBIrcWJ0YzFyZWNlaXZlcjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBoOCgRxYnRjEgYxMjM0NTYSEGNvbXBpbGVUeCBnb2xkZW4SYQpLCkEKGy9jb3Ntb3MuY3J5cHRvLm1sZHNhLlB1YktleRIiCiCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqhIECgIIARgDEhIKDAoEcWJ0YxIEMjUwMBDgpxIaQFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=","mode":"BROADCAST_MODE_SYNC"}'
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
+
+// CROSS-ENCODER BINDING (Track B follow-up to VA-81): read via a plain readFileSync
+// (not an import) from testdata/cross-encoder-golden/, the SINGLE shared source of
+// truth for the Cosmos/Solana fixtures below AND for packages/sdk/tests/unit/
+// platforms/react-native/cosmos-send-golden-vectors.test.ts + tx-builder-golden-
+// vectors.test.ts. packages/sdk does not depend on packages/core, so a file read
+// (rather than a shared code import) sidesteps the workspace dependency graph
+// entirely, while still guaranteeing both suites assert against ONE editable value
+// - no "keep two literals in sync via a comment" drift risk.
+type CosmosCrossEncoderFixture = {
+  senderPrivateKeyHex: string
+  recipientPrivateKeyHex: string
+  chainId: string
+  accountNumber: number
+  sequence: number
+  memo: string
+  denom: string
+  amount: string
+  feeAmount: string
+  gasLimit: number
+  expectedSignDocSha256Hex: string
+}
+type SolanaCrossEncoderFixture = {
+  senderPrivateKeyHex: string
+  recipientAddress: string
+  recentBlockhash: string
+  lamports: string
+  expectedMessageHex: string
+}
+type EvmCrossEncoderFeeVariants = {
+  legacy: { gasPriceWei: string; expectedSigningHashHex: string }
+  eip1559: { maxFeePerGasWei: string; maxPriorityFeePerGasWei: string; expectedSigningHashHex: string }
+}
+type EvmNativeCrossEncoderFixture = EvmCrossEncoderFeeVariants & {
+  chainName: string
+  chainId: number
+  nonce: number
+  gasLimit: number
+  toAddress: string
+  valueWei: string
+}
+type EvmErc20CrossEncoderFixture = EvmCrossEncoderFeeVariants & {
+  chainName: string
+  chainId: number
+  nonce: number
+  gasLimit: number
+  tokenAddress: string
+  recipientAddress: string
+  amountBaseUnits: string
+}
+const loadFixture = <T>(name: string): T =>
+  JSON.parse(readFileSync(join(__dirname, '../../../../../testdata/cross-encoder-golden', name), 'utf8')) as T
+const COSMOS_CROSS_ENCODER_FIXTURE = loadFixture<CosmosCrossEncoderFixture>('cosmos-msgsend.json')
+const SOLANA_CROSS_ENCODER_FIXTURE = loadFixture<SolanaCrossEncoderFixture>('solana-transfer.json')
+const EVM_NATIVE_CROSS_ENCODER_FIXTURE = loadFixture<EvmNativeCrossEncoderFixture>('evm-native-transfer.json')
+const EVM_ERC20_CROSS_ENCODER_FIXTURE = loadFixture<EvmErc20CrossEncoderFixture>('evm-erc20-transfer.json')
 
 const bytesFromHex = (value: string) => new Uint8Array(Buffer.from(value, 'hex'))
 
@@ -235,6 +293,103 @@ describe('compileTx golden vectors', () => {
     expect(rawTx).toBe(viemRaw.slice(2))
   })
 
+  // CROSS-ENCODER BINDING (sdk#1365 / plan 003): drives THIS same WalletCore path off
+  // testdata/cross-encoder-golden/evm-native-transfer.json, the SINGLE shared fixture
+  // packages/sdk/tests/unit/platforms/react-native/tx-builder-golden-vectors.test.ts's
+  // 'cross-encoder binding' describe ALSO reads (via its own readFileSync, not an
+  // import - packages/sdk doesn't depend on packages/core) to independently build the
+  // SAME transfer via the RN-JS/viem path. Both suites assert against the SAME
+  // fixture-provided expectedSigningHashHex, so a future edit to the fixture file
+  // updates BOTH suites' expectation at once. Both fee variants are pinned because
+  // legacy-vs-EIP-1559 type selection and gas-field ordering are exactly the
+  // divergence class that would split a 2-of-2 RN + WalletCore keysign.
+  it('matches the shared cross-encoder golden vector for an EVM native transfer (legacy + eip1559)', () => {
+    const fx = EVM_NATIVE_CROSS_ENCODER_FIXTURE
+    const base = {
+      chainId: bigIntBytes(BigInt(fx.chainId)),
+      nonce: bigIntBytes(BigInt(fx.nonce)),
+      gasLimit: bigIntBytes(BigInt(fx.gasLimit)),
+      toAddress: fx.toAddress,
+      transaction: TW.Ethereum.Proto.Transaction.create({
+        transfer: TW.Ethereum.Proto.Transaction.Transfer.create({
+          amount: bigIntBytes(BigInt(fx.valueWei)),
+        }),
+      }),
+    }
+
+    const legacyInput = TW.Ethereum.Proto.SigningInput.create({
+      ...base,
+      txMode: TW.Ethereum.Proto.TransactionMode.Legacy,
+      gasPrice: bigIntBytes(BigInt(fx.legacy.gasPriceWei)),
+    })
+    const [legacyHash] = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Ethereum,
+      txInputData: TW.Ethereum.Proto.SigningInput.encode(legacyInput).finish(),
+    })
+    expect(`0x${hex(legacyHash!)}`).toBe(fx.legacy.expectedSigningHashHex)
+
+    const eip1559Input = TW.Ethereum.Proto.SigningInput.create({
+      ...base,
+      txMode: TW.Ethereum.Proto.TransactionMode.Enveloped,
+      maxFeePerGas: bigIntBytes(BigInt(fx.eip1559.maxFeePerGasWei)),
+      maxInclusionFeePerGas: bigIntBytes(BigInt(fx.eip1559.maxPriorityFeePerGasWei)),
+    })
+    const [eip1559Hash] = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Ethereum,
+      txInputData: TW.Ethereum.Proto.SigningInput.encode(eip1559Input).finish(),
+    })
+    expect(`0x${hex(eip1559Hash!)}`).toBe(fx.eip1559.expectedSigningHashHex)
+  })
+
+  // CROSS-ENCODER BINDING (sdk#1365 / plan 003): same shared-fixture scheme as the
+  // native-transfer test above, off testdata/cross-encoder-golden/evm-erc20-transfer.
+  // json. On top of RLP/typed-envelope encoding this also cross-checks CALLDATA
+  // construction: WalletCore builds transfer(recipient, amount) internally from its
+  // ERC20Transfer proto message, while the RN-JS path encodes it via viem's
+  // encodeFunctionData - both must land on the same signing hash.
+  it('matches the shared cross-encoder golden vector for an ERC-20 transfer (legacy + eip1559)', () => {
+    const fx = EVM_ERC20_CROSS_ENCODER_FIXTURE
+    const base = {
+      chainId: bigIntBytes(BigInt(fx.chainId)),
+      nonce: bigIntBytes(BigInt(fx.nonce)),
+      gasLimit: bigIntBytes(BigInt(fx.gasLimit)),
+      toAddress: fx.tokenAddress,
+      transaction: TW.Ethereum.Proto.Transaction.create({
+        erc20Transfer: TW.Ethereum.Proto.Transaction.ERC20Transfer.create({
+          to: fx.recipientAddress,
+          amount: bigIntBytes(BigInt(fx.amountBaseUnits)),
+        }),
+      }),
+    }
+
+    const legacyInput = TW.Ethereum.Proto.SigningInput.create({
+      ...base,
+      txMode: TW.Ethereum.Proto.TransactionMode.Legacy,
+      gasPrice: bigIntBytes(BigInt(fx.legacy.gasPriceWei)),
+    })
+    const [legacyHash] = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Polygon,
+      txInputData: TW.Ethereum.Proto.SigningInput.encode(legacyInput).finish(),
+    })
+    expect(`0x${hex(legacyHash!)}`).toBe(fx.legacy.expectedSigningHashHex)
+
+    const eip1559Input = TW.Ethereum.Proto.SigningInput.create({
+      ...base,
+      txMode: TW.Ethereum.Proto.TransactionMode.Enveloped,
+      maxFeePerGas: bigIntBytes(BigInt(fx.eip1559.maxFeePerGasWei)),
+      maxInclusionFeePerGas: bigIntBytes(BigInt(fx.eip1559.maxPriorityFeePerGasWei)),
+    })
+    const [eip1559Hash] = getPreSigningHashes({
+      walletCore,
+      chain: Chain.Polygon,
+      txInputData: TW.Ethereum.Proto.SigningInput.encode(eip1559Input).finish(),
+    })
+    expect(`0x${hex(eip1559Hash!)}`).toBe(fx.eip1559.expectedSigningHashHex)
+  })
+
   it('matches WalletCore for a Solana transfer transaction', () => {
     const privateKey = walletCore.PrivateKey.createWithData(EDDSA_PRIVATE_KEY)
     const publicKey = privateKey.getPublicKeyEd25519()
@@ -270,6 +425,41 @@ describe('compileTx golden vectors', () => {
     )
 
     expect(compiledOutput.encoded).toEqual(signedByWalletCore.encoded)
+  })
+
+  // CROSS-ENCODER BINDING (Track B follow-up to VA-81): drives THIS same WalletCore
+  // path off testdata/cross-encoder-golden/solana-transfer.json, the SINGLE shared
+  // fixture packages/sdk/tests/unit/platforms/react-native/tx-builder-golden-vectors.
+  // test.ts's 'cross-encoder binding' describe ALSO reads (via its own readFileSync,
+  // not an import - packages/sdk doesn't depend on packages/core) to independently
+  // build the SAME transfer via the RN-JS path. Both suites assert against the SAME
+  // fixture-provided expectedMessageHex, so a future edit to the fixture file updates
+  // BOTH suites' expectation at once - no risk of updating one copy and not the other.
+  it('matches the shared cross-encoder golden vector for a Solana transfer', () => {
+    const fx = SOLANA_CROSS_ENCODER_FIXTURE
+    const privateKey = walletCore.PrivateKey.createWithData(Buffer.from(fx.senderPrivateKeyHex, 'hex'))
+    const publicKey = privateKey.getPublicKeyEd25519()
+    const sender = walletCore.AnyAddress.createWithPublicKey(publicKey, walletCore.CoinType.solana).description()
+    const signingInput = TW.Solana.Proto.SigningInput.create({
+      recentBlockhash: fx.recentBlockhash,
+      sender,
+      transferTransaction: TW.Solana.Proto.Transfer.create({
+        recipient: fx.recipientAddress,
+        value: Long.fromNumber(Number(fx.lamports)),
+      }),
+    })
+    const txInputData = TW.Solana.Proto.SigningInput.encode(signingInput).finish()
+    const { hashes } = compile({
+      walletCore,
+      chain: Chain.Solana,
+      txInputData,
+      publicKey,
+      privateKey,
+      curve: walletCore.Curve.ed25519,
+      format: 'raw',
+    })
+
+    expect(hex(hashes[0]!)).toBe(fx.expectedMessageHex)
   })
 
   it('matches WalletCore for a Cosmos protobuf MsgSend', () => {
@@ -325,6 +515,60 @@ describe('compileTx golden vectors', () => {
     )
 
     expect(compiledOutput.serialized).toBe(signedByWalletCore.serialized)
+  })
+
+  // CROSS-ENCODER BINDING (Track B follow-up to VA-81): drives THIS same WalletCore
+  // path off testdata/cross-encoder-golden/cosmos-msgsend.json, the SINGLE shared
+  // fixture packages/sdk/tests/unit/platforms/react-native/cosmos-send-golden-vectors.
+  // test.ts's 'cross-encoder binding' describe ALSO reads (via its own readFileSync,
+  // not an import - packages/sdk doesn't depend on packages/core) to independently
+  // build the SAME MsgSend via the RN-JS/cosmjs-types path. Both suites assert against
+  // the SAME fixture-provided expectedSignDocSha256Hex, so a future edit to the
+  // fixture file updates BOTH suites' expectation at once - no risk of updating one
+  // copy and not the other.
+  it('matches the shared cross-encoder golden vector for a Cosmos protobuf MsgSend', () => {
+    const fx = COSMOS_CROSS_ENCODER_FIXTURE
+    const privateKey = walletCore.PrivateKey.createWithData(Buffer.from(fx.senderPrivateKeyHex, 'hex'))
+    const publicKey = privateKey.getPublicKeySecp256k1(true)
+    const recipient = walletCore.AnyAddress.createWithPublicKey(
+      walletCore.PrivateKey.createWithData(Buffer.from(fx.recipientPrivateKeyHex, 'hex')).getPublicKeySecp256k1(true),
+      walletCore.CoinType.cosmos
+    ).description()
+    const sender = walletCore.AnyAddress.createWithPublicKey(publicKey, walletCore.CoinType.cosmos).description()
+    const signingInput = TW.Cosmos.Proto.SigningInput.create({
+      signingMode: TW.Cosmos.Proto.SigningMode.Protobuf,
+      accountNumber: Long.fromNumber(fx.accountNumber),
+      chainId: fx.chainId,
+      sequence: Long.fromNumber(fx.sequence),
+      mode: TW.Cosmos.Proto.BroadcastMode.SYNC,
+      publicKey: publicKey.data(),
+      memo: fx.memo,
+      fee: TW.Cosmos.Proto.Fee.create({
+        gas: Long.fromNumber(fx.gasLimit),
+        amounts: [TW.Cosmos.Proto.Amount.create({ denom: fx.denom, amount: fx.feeAmount })],
+      }),
+      messages: [
+        TW.Cosmos.Proto.Message.create({
+          sendCoinsMessage: TW.Cosmos.Proto.Message.Send.create({
+            fromAddress: sender,
+            toAddress: recipient,
+            amounts: [TW.Cosmos.Proto.Amount.create({ denom: fx.denom, amount: fx.amount })],
+          }),
+        }),
+      ],
+    })
+    const txInputData = TW.Cosmos.Proto.SigningInput.encode(signingInput).finish()
+    const { hashes } = compile({
+      walletCore,
+      chain: Chain.Cosmos,
+      txInputData,
+      publicKey,
+      privateKey,
+      curve: walletCore.Curve.secp256k1,
+      format: 'rawWithRecoveryId',
+    })
+
+    expect(hex(hashes[0]!)).toBe(fx.expectedSignDocSha256Hex)
   })
 
   it('pins the manual Cardano witness wrapper', () => {
