@@ -77,7 +77,9 @@ const makePayload = ({
 
 // The sui resolver is synchronous; narrow the resolver-union return type.
 const resolve = (payload: ReturnType<typeof makePayload>) =>
-  getSuiSigningInputs({ keysignPayload: payload } as Parameters<typeof getSuiSigningInputs>[0]) as TW.Sui.Proto.SigningInput[]
+  getSuiSigningInputs({ keysignPayload: payload } as Parameters<
+    typeof getSuiSigningInputs
+  >[0]) as TW.Sui.Proto.SigningInput[]
 
 describe('normalizeSuiCoinType / matching', () => {
   it('matches short and long package-address forms', () => {
@@ -116,10 +118,7 @@ describe('selectSuiInputCoins', () => {
   })
 
   it('tie-breaks equal balances by objectID ascending (deterministic across devices)', () => {
-    const tied = [
-      coinObject('0xbeta', NATIVE_TYPE, '100'),
-      coinObject('0xalpha', NATIVE_TYPE, '100'),
-    ]
+    const tied = [coinObject('0xbeta', NATIVE_TYPE, '100'), coinObject('0xalpha', NATIVE_TYPE, '100')]
     const selected = selectSuiInputCoins(tied, BigInt(150))
     expect(selected.map(c => c.coinObjectId)).toEqual(['0xalpha', '0xbeta'])
   })
@@ -142,10 +141,7 @@ describe('selectSuiGasObject', () => {
   })
 
   it('falls back to the largest object when none covers (best effort, matches iOS #4734)', () => {
-    const coins = [
-      coinObject('0xsmall', NATIVE_TYPE, '1000'),
-      coinObject('0xbigger', NATIVE_TYPE, '2000'),
-    ]
+    const coins = [coinObject('0xsmall', NATIVE_TYPE, '1000'), coinObject('0xbigger', NATIVE_TYPE, '2000')]
     expect(selectSuiGasObject(coins, BigInt(3_000_000))?.coinObjectId).toBe('0xbigger')
   })
 
@@ -271,9 +267,7 @@ describe('getSuiSigningInputs — token send selects a covering gas object (iOS 
       coinObject('0xtoken1', TOKEN_TYPE, '100'),
       coinObject('0xtoken2', TOKEN_TYPE, '200'),
     ]
-    const [input] = resolve(
-      makePayload({ isNative: false, coins, amount: BigInt(250), gasBudget: BigInt(3_000_000) })
-    )
+    const [input] = resolve(makePayload({ isNative: false, coins, amount: BigInt(250), gasBudget: BigInt(3_000_000) }))
     expect(new Set(input.pay!.inputCoins!.map(c => c!.objectId))).toEqual(new Set(['0xtoken1', '0xtoken2']))
     expect(input.pay!.gas!.objectId).toBe('0xgasCovers')
   })
