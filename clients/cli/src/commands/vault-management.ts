@@ -10,6 +10,14 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
 import {
+  classifyError,
+  ExternalServiceError,
+  InvalidInputError,
+  UnknownError,
+  VaultNotFoundError,
+  type VsigError,
+} from '../core/errors'
+import {
   createSpinner,
   error,
   info,
@@ -307,6 +315,15 @@ export async function executeImport(ctx: CommandContext, file: string, flagPassw
   await ctx.setActiveVault(vault)
   spinner.succeed(`Vault imported: ${vault.name}`)
 
+  if (isJsonOutput()) {
+    outputJson({
+      imported: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
+
   success('\n+ Vault imported successfully!')
   info('\nRun "vultisig balance" to view balances')
 
@@ -367,8 +384,11 @@ export async function executeVerify(
       info('Check your inbox for the new verification code.')
     } catch (resendErr: any) {
       spinner.fail('Failed to resend verification email')
-      error(resendErr.message || 'Could not resend email. You may need to wait a few minutes.')
-      return false
+      // Throw rather than `return false`: the caller no longer converts a false
+      // return into an error, so returning here would report the resend as a
+      // success (exit 0, and empty stdout in JSON mode) for an email that was
+      // never sent.
+      throw resendFailureError(resendErr as Error, vaultId)
     }
 
     // Non-interactive sessions can't fall through to the OTP prompt below — resend
@@ -422,20 +442,48 @@ export async function executeVerify(
     return true
   } catch (err: any) {
     spinner.fail('Verification failed')
-
-    if (isJsonOutput()) {
-      outputJson({
-        verified: false,
-        error: err.message || 'Verification failed. Please check the code and try again.',
-      })
-      return false
-    }
-
-    error(`\n✗ ${err.message || 'Verification failed. Please check the code and try again.'}`)
-    warn('\nTip: Use --resend to get a new verification code:')
-    info(`  vultisig verify ${vaultId} --resend`)
-    return false
+    // Throw a single typed error rather than pre-writing a result and returning
+    // false: the caller used to turn that false into a second throw, so `-o json`
+    // emitted TWO documents — a success-shaped {verified:false} envelope followed
+    // by an error envelope — and JSON.parse on the output failed. withExit renders
+    // message/hint/suggestions, so the human path keeps the same guidance.
+    throw verificationFailureError(err as Error, vaultId)
   }
+}
+
+/**
+ * A resend that failed must not look like one that succeeded. Keep the SDK's own
+ * classification when it produced a precise one (a bad password is AUTH_REQUIRED,
+ * a dropped connection is NETWORK); only an otherwise-unclassifiable failure gets
+ * the resend-specific wording, since rate-limiting is the common cause.
+ */
+function resendFailureError(err: Error, vaultId: string): VsigError {
+  const classified = classifyError(err)
+  if (!(classified instanceof UnknownError)) return classified
+  return new ExternalServiceError(
+    err.message || 'Could not resend the verification email.',
+    'The server may be rate-limiting resends — you may need to wait a few minutes',
+    [`vultisig verify ${vaultId} --resend`]
+  )
+}
+
+/** The SDK words this case for library callers ("...with createFastVault()"), which
+ *  is meaningless in a shell. The CLI owns its own copy. */
+const PENDING_VAULT_MISSING_RE = /no pending vault found/i
+
+function verificationFailureError(err: Error, vaultId: string): VsigError {
+  if (PENDING_VAULT_MISSING_RE.test(err.message ?? '')) {
+    return new VaultNotFoundError(
+      `No pending vault found for ID "${vaultId}".`,
+      'It may already be verified, or the ID may be wrong',
+      ['vultisig vaults', 'vultisig create --two-step']
+    )
+  }
+  return new InvalidInputError(
+    err.message || 'Verification failed. Please check the code and try again.',
+    'The code may be incorrect or expired',
+    [`vultisig verify ${vaultId} --resend`]
+  )
 }
 
 export type AddPostQuantumKeysOptions = {
@@ -475,6 +523,12 @@ export async function executeAddPostQuantumKeys(
       },
     })
     spinner.succeed('ML-DSA keys added. Vault file updated — export a backup if needed.')
+
+    if (isJsonOutput()) {
+      outputJson({ added: true, vault: { id: vault.id, name: vault.name }, backupRecommended: true })
+      return
+    }
+
     success('Post-quantum signing is now available for this vault (where supported).')
   } catch (e) {
     spinner.fail('Failed to add ML-DSA keys')
@@ -551,6 +605,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 
   spinner.succeed(`Vault exported: ${outputPath}`)
 
+  if (isJsonOutput()) {
+    outputJson({ exported: true, path: outputPath, encrypted: exportPassword !== undefined })
+    return outputPath
+  }
+
   success('\n+ Vault exported successfully!')
   info(`File: ${outputPath}`)
 
@@ -563,6 +622,11 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
 export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
   const spinner = createSpinner('Loading vaults...')
   const vaults = await ctx.sdk.listVaults()
+  // A two-step vault awaiting verification is only named in the create-time output.
+  // An agent that lost that output had no way to rediscover the id and finish
+  // verifying, so list pending vaults here too. Best-effort: a pending-store read
+  // failure must not take down `vaults`, the command used to diagnose vault state.
+  const pending = await listPendingVaultsSafely(ctx)
   spinner.succeed('Vaults loaded')
 
   if (isJsonOutput()) {
@@ -577,21 +641,42 @@ export async function executeVaults(ctx: CommandContext): Promise<VaultBase[]> {
         createdAt: v.createdAt,
         isActive: activeVault?.id === v.id,
       })),
+      pending: pending.map(id => ({ id, status: 'pending_verification' })),
     })
     return vaults
   }
 
-  if (vaults.length === 0) {
+  if (vaults.length === 0 && pending.length === 0) {
     warn('\nNo vaults found. Create or import a vault first.')
     return []
   }
 
   const activeVault = ctx.getActiveVault()
-  displayVaultsList(vaults, activeVault)
+  if (vaults.length > 0) {
+    displayVaultsList(vaults, activeVault)
+  }
 
-  info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  if (pending.length > 0) {
+    warn(`\nPending verification (${pending.length}):`)
+    for (const id of pending) {
+      info(`  ${id}`)
+    }
+    info(chalk.gray('Finish with "vultisig verify <id> --code <OTP>"'))
+  }
+
+  if (vaults.length > 0) {
+    info(chalk.gray('\nUse "vultisig switch <id>" to switch active vault'))
+  }
 
   return vaults
+}
+
+async function listPendingVaultsSafely(ctx: CommandContext): Promise<string[]> {
+  try {
+    return await ctx.sdk.listPendingVaults()
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -630,6 +715,15 @@ export async function executeSwitch(ctx: CommandContext, vaultId: string): Promi
   setupVaultEvents(vault)
   spinner.succeed('Vault switched')
 
+  if (isJsonOutput()) {
+    outputJson({
+      switched: true,
+      vault: { id: vault.id, name: vault.name, type: vault.type, chains: vault.chains.length },
+      isActive: true,
+    })
+    return vault
+  }
+
   success(`\n+ Switched to vault: ${vault.name}`)
   info(`  Type: ${vault.type}`)
   info(`  Chains: ${vault.chains.length}`)
@@ -648,6 +742,11 @@ export async function executeRename(ctx: CommandContext, newName: string): Promi
   const spinner = createSpinner('Renaming vault...')
   await vault.rename(newName)
   spinner.succeed('Vault renamed')
+
+  if (isJsonOutput()) {
+    outputJson({ renamed: true, vault: { id: vault.id, name: newName }, previousName: oldName })
+    return
+  }
 
   success(`\n+ Vault renamed from "${oldName}" to "${newName}"`)
 }
