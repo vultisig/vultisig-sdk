@@ -11,6 +11,35 @@ updates:
       vultisig:
         patterns:
           - "@vultisig/*"
+      formatjs:
+        patterns:
+          - "@formatjs/*"
+        update-types:
+          - minor
+          - patch
+      typescript-eslint:
+        patterns:
+          - "@typescript-eslint/*"
+        update-types:
+          - minor
+          - patch
+      development-dependencies:
+        dependency-type: development
+        exclude-patterns:
+          - "@typescript-eslint/*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # v18 drops Node 20, which is still used by required CI and release jobs.
+      - dependency-name: dependency-cruiser
+        update-types:
+          - version-update:semver-major
+      # The Electron example must regain a passing production build and launch
+      # smoke before adopting the Electron 43 release line.
+      - dependency-name: electron
+        versions:
+          - "43.x"
     open-pull-requests-limit: 10
   - package-ecosystem: github-actions
     directory: /
@@ -19,3 +48,10 @@ updates:
       day: monday
     labels:
       - dependencies
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

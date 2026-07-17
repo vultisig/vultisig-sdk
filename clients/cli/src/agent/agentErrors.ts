@@ -30,10 +30,29 @@ export enum AgentErrorCode {
   // double-spend); it should track/confirm the emitted hash instead. Distinct
   // from TRANSACTION_FAILED (the broadcast itself failed — safe to retry).
   ACK_FAILED = 'ACK_FAILED',
+  // One or more tx hashes were submitted on-chain, but a later typed outcome,
+  // stream error, or thrown follow-up means the overall request may be partial.
+  // Preserve the original diagnostic, but override its retry classification so
+  // callers inspect the hashes instead of replaying the request blindly.
+  BROADCAST_COMMITTED = 'BROADCAST_COMMITTED',
+  // Typed `agent ask` turn endings. These mirror process exits 10/11 and the
+  // generic non-success exit 1 so a JSON envelope never needs `success:true`
+  // to carry a blocked, refused, or failed request.
+  AGENT_TURN_BLOCKED = 'AGENT_TURN_BLOCKED',
+  AGENT_TURN_REFUSAL = 'AGENT_TURN_REFUSAL',
+  AGENT_TURN_ERROR = 'AGENT_TURN_ERROR',
   // A local broadcast-journal hit: an identical intent was broadcast recently
   // and hasn't definitively failed, so signing was refused to avoid a
   // double-spend. Retry with --force to override. See broadcastJournal.ts.
   DUPLICATE_BROADCAST = 'DUPLICATE_BROADCAST',
+  // The backend already accepted this exact idempotency-keyed turn (same key,
+  // same body). The duplicate did not execute; inspect the conversation for the
+  // first result.
+  IDEMPOTENT_TURN_DUPLICATE = 'IDEMPOTENT_TURN_DUPLICATE',
+  // The idempotency key was already used for a DIFFERENT request body. Opposite
+  // of a duplicate: THIS operation never ran and nothing was persisted for it, so
+  // there is no original result to inspect. Caller bug — retry with a fresh key.
+  IDEMPOTENCY_KEY_REUSED = 'IDEMPOTENCY_KEY_REUSED',
   SESSION_NOT_INITIALIZED = 'SESSION_NOT_INITIALIZED',
   LOOP_DEPTH_EXCEEDED = 'LOOP_DEPTH_EXCEEDED',
   // Non-fatal: a resumed --session-id could not be fetched (stale/typo'd id,
@@ -137,6 +156,14 @@ export function inferAgentErrorCodeFromMessage(message: string): AgentErrorCode 
   if (/^CONFIRMATION_REQUIRED:/i.test(m)) return AgentErrorCode.CONFIRMATION_REQUIRED
   if (/password required|password not provided|use --password/i.test(m)) return AgentErrorCode.PASSWORD_REQUIRED
   if (/session not initialized/i.test(m)) return AgentErrorCode.SESSION_NOT_INITIALIZED
+  // Order matters: the reused-key message also mentions the key, so match its
+  // distinctive "different request body" phrasing BEFORE the duplicate pattern.
+  if (/already used for a different request body|idempotency key reused/i.test(m)) {
+    return AgentErrorCode.IDEMPOTENCY_KEY_REUSED
+  }
+  if (/keyed turn was already accepted|idempotent turn duplicate/i.test(m)) {
+    return AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE
+  }
   if (
     /not implemented locally|is not yet implemented|is not implemented locally|action type .*not implemented/i.test(m)
   ) {
@@ -214,6 +241,14 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
   switch (code) {
     case AgentErrorCode.ACK_FAILED:
       return ExitCode.ACK_FAILED
+    case AgentErrorCode.BROADCAST_COMMITTED:
+      return ExitCode.BROADCAST_COMMITTED
+    case AgentErrorCode.AGENT_TURN_BLOCKED:
+      return ExitCode.AGENT_TURN_BLOCKED
+    case AgentErrorCode.AGENT_TURN_REFUSAL:
+      return ExitCode.AGENT_TURN_REFUSAL
+    case AgentErrorCode.AGENT_TURN_ERROR:
+      return ExitCode.USAGE
     case AgentErrorCode.AUTH_FAILED:
     case AgentErrorCode.VAULT_LOCKED:
     case AgentErrorCode.PASSWORD_REQUIRED:
@@ -229,6 +264,14 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
       // headless caller can branch on `$?` alone instead of conflating it with
       // generic bad input (4). --force overrides.
       return ExitCode.DUPLICATE_BROADCAST
+    case AgentErrorCode.IDEMPOTENT_TURN_DUPLICATE:
+      return ExitCode.IDEMPOTENT_TURN_DUPLICATE
+    case AgentErrorCode.IDEMPOTENCY_KEY_REUSED:
+      // NOT 14: nothing executed and no result was persisted, so the "inspect the
+      // conversation" contract of 14 would send automation to another request's
+      // result. The request itself was malformed (a key bound to a different
+      // body) — 4 already means "your request was wrong, nothing happened".
+      return ExitCode.INVALID_INPUT
     case AgentErrorCode.SESSION_NOT_FOUND:
       return ExitCode.RESOURCE_NOT_FOUND
     case AgentErrorCode.TRANSACTION_FAILED:
@@ -236,8 +279,9 @@ export function agentErrorCodeToExitCode(code: AgentErrorCode): ExitCode {
     case AgentErrorCode.ACTION_NOT_IMPLEMENTED:
     case AgentErrorCode.TOOL_UNSUPPORTED:
     case AgentErrorCode.SESSION_NOT_INITIALIZED:
-    case AgentErrorCode.CONFIRMATION_REQUIRED:
       return ExitCode.USAGE
+    case AgentErrorCode.CONFIRMATION_REQUIRED:
+      return ExitCode.CONFIRMATION_REQUIRED
     case AgentErrorCode.SIGNING_FAILED:
     case AgentErrorCode.LOOP_DEPTH_EXCEEDED:
     case AgentErrorCode.UNKNOWN_ERROR:

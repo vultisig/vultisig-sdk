@@ -1,0 +1,21 @@
+{
+  "name": "ripple-payment-with-destination-tag",
+  "description": "Deterministic XRP payment vector for cross-platform signing-input byte parity.",
+  "input": {
+    "chain": "Ripple",
+    "ticker": "XRP",
+    "decimals": 6,
+    "address": "rUaRcsApnVHudsdLD2mut2qCKWq6iLRT2D",
+    "hexPublicKey": "041b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f70beaf8f588b541507fed6a642c5ab42dfdf8120a7f639de5122d47a69a8e8d1",
+    "toAddress": "rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH",
+    "toAmount": "1000000",
+    "destinationTag": "123456",
+    "sequence": "7",
+    "fee": "12",
+    "lastLedgerSequence": "12345"
+  },
+  "expected": {
+    "serializedSigningInputHex": "080c100718b960222272556152637341706e5648756473644c44326d75743271434b577136694c52543244422c08c0843d1a22724e376e376f745144643646637a46674c645371746373415578446b7736667a524820c0c4077a41041b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f70beaf8f588b541507fed6a642c5ab42dfdf8120a7f639de5122d47a69a8e8d1",
+    "preSigningHashHex": "a7bf22e117d84f6695b64e68433173de174b3346392afac11af90200a4e17fa2"
+  }
+}

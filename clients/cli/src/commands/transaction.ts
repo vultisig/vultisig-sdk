@@ -1,6 +1,7 @@
 /**
  * Transaction Commands - thin wrapper around vault.send()
  */
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
@@ -48,6 +49,20 @@ export async function sendTransaction(
     )
   }
 
+  const rippleDestination =
+    params.chain === Chain.Ripple ? normalizeRippleDestination(params.to) : { address: params.to }
+  const to = rippleDestination.address
+  if (
+    params.destinationTag !== undefined &&
+    rippleDestination.destinationTag !== undefined &&
+    params.destinationTag !== rippleDestination.destinationTag
+  ) {
+    throw new Error(
+      `Conflicting XRP destination tags: --destination-tag=${params.destinationTag} does not match the tag embedded in the X-address (${rippleDestination.destinationTag})`
+    )
+  }
+  const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -57,6 +72,7 @@ export async function sendTransaction(
     amount: params.amount,
     symbol: params.tokenId,
     memo: params.memo,
+    destinationTag,
     dryRun: true,
   })
 
@@ -71,10 +87,11 @@ export async function sendTransaction(
     const result: SendDryRunResult = {
       dryRun: true,
       chain: params.chain,
-      to: params.to,
+      to,
       amount: params.amount,
       symbol: balance.symbol,
       balance: balance.formattedAmount,
+      destinationTag,
     }
     if (hasInsufficientBalance) {
       result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
@@ -86,6 +103,7 @@ export async function sendTransaction(
       info(`  Chain:   ${result.chain}`)
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
+      if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
       info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)
@@ -104,7 +122,16 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
-    displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
+    displayTransactionPreview(
+      address,
+      to,
+      dryResult.total,
+      balance.symbol,
+      params.chain,
+      params.memo,
+      destinationTag,
+      gas
+    )
   }
 
   // 3. Confirm (required in all output modes; the non-interactive case was
@@ -145,6 +172,7 @@ export async function sendTransaction(
         amount: params.amount,
         symbol: params.tokenId,
         memo: params.memo,
+        destinationTag,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

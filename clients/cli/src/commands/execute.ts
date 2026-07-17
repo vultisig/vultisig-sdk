@@ -7,7 +7,7 @@
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { CosmosChain, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { buildCosmosWasmExecuteMsg, Chain, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
@@ -97,7 +97,9 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
   const chainConfig = COSMOS_CHAIN_CONFIG[params.chain]
   if (!chainConfig) {
     throw new Error(
-      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(COSMOS_CHAIN_CONFIG).join(', ')}`
+      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(
+        COSMOS_CHAIN_CONFIG
+      ).join(', ')}`
     )
   }
 
@@ -257,17 +259,12 @@ async function executeContractTransaction(
       ticker: chainConfig.denom.toUpperCase(),
     }
 
-    // Build MsgExecuteContract in Amino format
-    // The type URL follows standard CosmWasm naming convention
-    const executeContractMsg = {
-      type: 'wasm/MsgExecuteContract',
-      value: JSON.stringify({
-        sender: address,
-        contract: params.contract,
-        msg: msg,
-        funds: funds.map(f => ({ denom: f.denom, amount: f.amount })),
-      }),
-    }
+    const executeContractMsg = buildCosmosWasmExecuteMsg({
+      sender: address,
+      contract: params.contract,
+      msg,
+      funds,
+    })
 
     // Build fee (THORChain has zero fees for CosmWasm)
     const fee = {

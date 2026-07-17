@@ -28,7 +28,7 @@ export const getBittensorTxStatus: TxStatusResolver<OtherChain.Bittensor> = asyn
   )
 
   if (error || !response?.data?.length) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const extrinsic = response.data[0]
