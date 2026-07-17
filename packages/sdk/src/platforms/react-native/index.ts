@@ -578,6 +578,24 @@ export async function parseKeygenQR(...args: unknown[]) {
 }
 export { ValidationHelpers } from '../../utils/validation'
 
+// Dangerous/burn-address guard. Single source of truth for "is this destination
+// a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
+// XRP. Pure address-string matching (no chain-client deps), so RN-safe as a
+// static re-export. Kept in parity with the node/browser/electron entry
+// (src/index.ts) so RN consumers (the app) get the same guard instead of
+// maintaining their own copy that can drift.
+export {
+  assertSafeDestination,
+  assertSafeEvmDestination,
+  EVM_DANGEROUS_ADDRESSES,
+  getChainDangerousReason,
+  getEvmDangerousReason,
+  isEvmBurnAddress,
+  SOLANA_DANGEROUS_ADDRESSES,
+  UTXO_DANGEROUS_ADDRESSES,
+  XRP_DANGEROUS_ADDRESSES,
+} from '../../utils/dangerousAddresses'
+
 // Storage
 export { MemoryStorage } from '../../storage/MemoryStorage'
 
