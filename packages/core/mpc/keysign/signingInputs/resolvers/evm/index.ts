@@ -13,6 +13,8 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 
 import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+import { assertKnownAggregatorRouterOnSigningPath } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
@@ -49,6 +51,22 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   const { nonce } = evmSpecific
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
+
+  // sdk#1358 fund-safety: re-assert the aggregator router allow-list HERE, on the co-signer
+  // signing-input path, not only at quote construction. quote.tx.to becomes this SigningInput's
+  // destination (getToAddress/getTransaction general arms below) AND the ERC-20 approval spender
+  // (build.ts) - a compromised initiator can hand a co-signer a payload whose tx.to was never
+  // quote-checked, and every co-signer independently rebuilds the input from that payload. Fail
+  // closed for enforced providers (1inch/kyber); log-only for the unenforced ones, matching the
+  // quote-time policy. A pure gate: it throws or no-ops, never changes the signed bytes, so it
+  // cannot desync the cross-device pre-signing hash.
+  if (swapPayload && 'general' in swapPayload) {
+    const { provider, quote } = swapPayload.general
+    const to = quote?.tx?.to
+    if (to) {
+      assertKnownAggregatorRouterOnSigningPath(provider, to, chain)
+    }
+  }
 
   // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
   // is a generic contract call (e.g. staking depositFor, whose token amount lives

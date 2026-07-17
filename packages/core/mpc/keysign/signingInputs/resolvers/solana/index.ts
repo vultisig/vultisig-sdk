@@ -1,7 +1,10 @@
 import { Buffer } from 'buffer'
+import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
+import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
+import { PublicKey } from '@solana/web3.js'
 import { TW } from '@trustwallet/wallet-core'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
@@ -37,9 +40,20 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({ keysig
   if (swapPayload) {
     return matchRecordUnion(swapPayload, {
       native: () => [getSolanaSendSigningInput({ keysignPayload, walletCore })],
-      general: swapPayload => {
+      general: async swapPayload => {
         const tx = shouldBePresent(swapPayload.quote?.tx)
         const { data } = tx
+
+        // sdk#1358 fund-safety: re-run the Jupiter program allow-list + fund-movement guard HERE, on
+        // the co-signer signing-input path, not only at quote construction. Every co-signer (e.g.
+        // VultiServer in a 2-of-2) independently rebuilds this input from the shared KeysignPayload and
+        // signs it verbatim (only recentBlockhash is overwritten below), so a compromised initiator
+        // could otherwise slip a drain instruction into swapPayload.quote.tx.data that no co-signer ever
+        // validated. This is a PURE gate - it throws (fail-closed, like the Ripple resolver) or no-ops,
+        // and never touches the bytes that get signed, so it cannot desync the cross-device pre-signing
+        // hash. userWallet is the signing vault's own Solana address (coin.address).
+        const userWallet = new PublicKey(assertField(keysignPayload, 'coin').address)
+        await assertSafeSolanaSwapTransactionBase64(data, userWallet)
 
         const decodedData = walletCore.TransactionDecoder.decode(
           getCoinType({

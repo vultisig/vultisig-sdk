@@ -57,6 +57,28 @@ const KYBER_STANDARD_ROUTER = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
 
 export type EnforcedRouterProvider = '1inch' | 'kyber'
 
+const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterProvider>(['1inch', 'kyber'])
+
+/**
+ * Signing-path re-assert (sdk#1358): the same allow-list check as {@link assertKnownAggregatorRouter},
+ * but keyed off an arbitrary provider STRING (the value carried in KeysignSwapPayload.general.provider,
+ * which is a plain `string`). Enforced providers (1inch/kyber) fail closed; unenforced providers
+ * (li.fi/swapkit/cowswap) fall through to the same log-only path they take at quote construction.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM quote construction: a compromised initiator (or server composing the
+ * intent) can hand a co-signer a KeysignPayload whose swapPayload.quote.tx.to was NEVER run through the
+ * quote-time check - every co-signer independently rebuilds the signing input from that payload, so the
+ * guard has to run HERE too, on the signing-input path, or a co-signer (e.g. VultiServer in a 2-of-2)
+ * signs a destination it never validated. Mirrors the Ripple resolver's in-resolver fail-closed binding.
+ */
+export function assertKnownAggregatorRouterOnSigningPath(provider: string, address: string, chain: Chain): void {
+  if (ENFORCED_ROUTER_PROVIDERS.has(provider)) {
+    assertKnownAggregatorRouter(provider as EnforcedRouterProvider, address, chain)
+    return
+  }
+  logUnenforcedAggregatorDestination(provider === 'li.fi' || provider === 'swapkit' ? provider : 'li.fi', address)
+}
+
 /**
  * Throws if `address` isn't the known router for `provider` on `chain`. Call this at quote
  * construction, before a GeneralSwapQuote carrying `address` as `tx.evm.to` can exist.
