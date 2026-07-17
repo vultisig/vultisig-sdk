@@ -70,6 +70,21 @@ const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterPro
  * quote-time check - every co-signer independently rebuilds the signing input from that payload, so the
  * guard has to run HERE too, on the signing-input path, or a co-signer (e.g. VultiServer in a 2-of-2)
  * signs a destination it never validated. Mirrors the Ripple resolver's in-resolver fail-closed binding.
+ *
+ * THREAT MODEL / TRUST OF `provider` (CodeRabbit security review): `provider` here is the free `provider`
+ * STRING on the OneInchSwapPayload proto (the `oneinchSwapPayload` oneof case carries 1inch/li.fi/cowswap
+ * with only this string to tell them apart; swapkit is the one general provider derived from its own
+ * oneof case). It is therefore part of the attacker-influenceable payload, NOT a trusted oneof discriminant.
+ * That is acceptable because this guard is MONOTONIC: it only ever THROWS (rejects) or no-ops - it never
+ * makes anything signable that wasn't already. So an attacker who spoofs `provider` to an UNENFORCED value
+ * (e.g. 'li.fi') to skip enforcement merely degrades this to the pre-#1358 state (no signing-path guard) -
+ * it is NOT a new bypass, and it cannot be used to sign a payload that was unsignable before. What the guard
+ * DOES buy is defense-in-depth against the realistic partial compromise the issue targets: a quote
+ * server/MITM that swaps tx.to but leaves an honestly-declared enforced provider intact - the co-signer now
+ * catches it. Complete co-signer protection for arbitrary-router providers (li.fi/swapkit route through many
+ * contracts BY DESIGN and cannot be allow-listed - see assertKnownAggregatorRouter's own note) is a larger,
+ * separate problem that predates this fix and would need a proto change (a distinct oneof case per provider)
+ * to key enforcement on the case rather than the string. Out of scope here; not a regression introduced here.
  */
 export function assertKnownAggregatorRouterOnSigningPath(provider: string, address: string, chain: Chain): void {
   if (ENFORCED_ROUTER_PROVIDERS.has(provider)) {

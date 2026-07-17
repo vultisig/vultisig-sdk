@@ -92,29 +92,22 @@ describe('getSolanaSigningInputs — sdk#1358 Jupiter swap fund-movement guard o
     walletCore = await initWasm()
   })
 
+  // Defer the resolver call into a microtask (Promise.resolve().then(...)) rather than
+  // Promise.resolve(resolver()): SigningInputsResolver's declared return is
+  // `SigningInput[] | Promise<SigningInput[]>`, so the call can either throw SYNCHRONOUSLY (a guard
+  // upstream of the async arm) or return a rejecting promise. Promise.resolve(resolver()) evaluates
+  // resolver() FIRST, so a synchronous throw would escape past .rejects and fail the test as an
+  // uncaught error instead of asserting rejection. Deferring turns both shapes into a rejected promise.
+  // (CodeRabbit functional-correctness note.)
+  const runResolver = (keysignPayload: ReturnType<typeof buildPayload>) =>
+    Promise.resolve().then(() => getSolanaSigningInputs({ keysignPayload, walletCore }))
+
   it('rejects a swapPayload.quote.tx.data carrying a spliced top-level SystemProgram.Transfer draining lamports to an attacker', async () => {
-    // Wrapped in Promise.resolve() because SigningInputsResolver's declared return type is
-    // `SigningInput[] | Promise<SigningInput[]>` — the unfixed resolver's general arm is
-    // synchronous, so `expect().rejects` needs a real promise to assert against either shape.
-    await expect(
-      Promise.resolve(
-        getSolanaSigningInputs({
-          keysignPayload: buildPayload(buildDrainSwapTxBase64()),
-          walletCore,
-        })
-      )
-    ).rejects.toThrow(/SOL_SWAP_UNSAFE_FUND_MOVEMENT/i)
+    await expect(runResolver(buildPayload(buildDrainSwapTxBase64()))).rejects.toThrow(/SOL_SWAP_UNSAFE_FUND_MOVEMENT/i)
   })
 
   it('does not over-block a benign swap tx containing only an allow-listed ComputeBudget instruction', async () => {
-    await expect(
-      Promise.resolve(
-        getSolanaSigningInputs({
-          keysignPayload: buildPayload(buildBenignSwapTxBase64()),
-          walletCore,
-        })
-      )
-    ).resolves.toBeDefined()
+    await expect(runResolver(buildPayload(buildBenignSwapTxBase64()))).resolves.toBeDefined()
   })
 
   // The Jupiter allow-list is Jupiter-specific: LiFi/SwapKit also route Solana swaps (through
@@ -124,13 +117,6 @@ describe('getSolanaSigningInputs — sdk#1358 Jupiter swap fund-movement guard o
   // exact same drain-carrying tx that Jupiter rejects must NOT be guard-rejected under provider 'li.fi'
   // (that provider's own destinations are legitimately different and out of this allow-list's scope).
   it('does NOT apply the Jupiter allow-list to a non-Jupiter (li.fi) Solana swap provider', async () => {
-    await expect(
-      Promise.resolve(
-        getSolanaSigningInputs({
-          keysignPayload: buildPayload(buildDrainSwapTxBase64(), 'li.fi'),
-          walletCore,
-        })
-      )
-    ).resolves.toBeDefined()
+    await expect(runResolver(buildPayload(buildDrainSwapTxBase64(), 'li.fi'))).resolves.toBeDefined()
   })
 })
