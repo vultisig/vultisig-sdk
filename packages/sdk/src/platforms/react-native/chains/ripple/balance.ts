@@ -1,14 +1,13 @@
-import { parseIssuedCurrencyValue, parseRippleTokenId, toXrplCurrencyCode } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+import {
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import type { CoinBalanceResolverInput } from '@vultisig/core-chain/coin/balance/resolver'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 
-import {
-  DEFAULT_XRP_RPC_URL,
-  getXrpAccountLines,
-  getXrpAccountState,
-  getXrpReserveInfo,
-} from './rpc'
+import { DEFAULT_XRP_RPC_URL, getXrpAccountLines, getXrpAccountState, getXrpReserveInfo } from './rpc'
 
 export async function getRippleCoinBalance(input: CoinBalanceResolverInput): Promise<bigint> {
   if (isFeeCoin(input)) {
