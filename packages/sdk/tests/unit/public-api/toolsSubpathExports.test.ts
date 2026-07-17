@@ -37,7 +37,11 @@ describe('public API tools subpath exports', () => {
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
 
-    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')")
-    expect(typesRollupConfig).toContain("createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')")
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')"
+    )
   })
 })
