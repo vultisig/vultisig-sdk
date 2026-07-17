@@ -57,7 +57,7 @@ import {
   executeVerify,
   resolveTxStatusParams,
 } from './commands'
-import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
@@ -1077,9 +1077,10 @@ Examples:
           decimals?: string
         }
       ) => {
+        const chain = resolveChainOrThrow(chainStr)
         const context = await init(program.opts().vault)
         await executeTokens(context, {
-          chain: findChainByName(chainStr) || (chainStr as Chain),
+          chain,
           add: options.add,
           remove: options.remove,
           discover: options.discover,
@@ -1130,10 +1131,12 @@ Examples:
       ) => {
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
+        const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+        const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
-          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          fromChain,
+          toChain,
           amount: options.max ? 'max' : parseFloat(amountStr!),
           fromToken: options.fromToken,
           toToken: options.toToken,
