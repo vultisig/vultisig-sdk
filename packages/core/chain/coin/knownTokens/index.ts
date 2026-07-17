@@ -821,9 +821,11 @@ export const knownTokens = makeRecord(Object.values(Chain), chain => {
 
 type KnownIndex = Record<Chain, Record<string, KnownCoin>>
 
-export const getKnownTokenIndexId = (chain: Chain, id: string): string => (isChainOfKind(chain, 'evm') ? id.toLowerCase() : id)
+export const getKnownTokenIndexId = (chain: Chain, id: string): string =>
+  isChainOfKind(chain, 'evm') ? id.toLowerCase() : id
 
-export const getKnownTokenById = (chain: Chain, id: string): KnownCoin | undefined => knownTokensIndex[chain]?.[getKnownTokenIndexId(chain, id)]
+export const getKnownTokenById = (chain: Chain, id: string): KnownCoin | undefined =>
+  knownTokensIndex[chain]?.[getKnownTokenIndexId(chain, id)]
 
 export const knownTokensIndex: KnownIndex = makeRecord(Object.values(Chain), chain => {
   const byId: Record<string, KnownCoin> = {}
