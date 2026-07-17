@@ -4,6 +4,7 @@
 import type { Chain, VaultBase } from '@vultisig/sdk'
 import { FastVault } from '@vultisig/sdk'
 import chalk from 'chalk'
+import { randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 import qrcode from 'qrcode-terminal'
@@ -552,9 +553,14 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   // straight to an existing (or attacker-pre-created) path would put the shares in a
   // world-readable file and only tighten it afterwards. Creating a new file first
   // means the shares are never on disk at anything but 0600, and the rename is atomic.
-  const tempPath = `${outputPath}.${process.pid}.${Date.now()}.tmp`
+  //
+  // The temp name carries random bytes and the write is exclusive ('wx') for the same
+  // reason: 'mode' applying only at creation cuts both ways, so a temp path an attacker
+  // could predict and pre-create would put the shares straight back into their 0644 file.
+  // Unpredictable name + fail-closed create means that path cannot be won.
+  const tempPath = `${outputPath}.${process.pid}.${Date.now()}.${randomBytes(6).toString('hex')}.tmp`
   try {
-    await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600 })
+    await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
     await fs.rename(tempPath, outputPath)
   } catch (err) {
     await fs.rm(tempPath, { force: true }).catch(() => {})

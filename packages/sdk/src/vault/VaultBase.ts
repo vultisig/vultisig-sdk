@@ -466,14 +466,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Only reject what is actually unsafe. The name is interpolated into the export
     // filename (see export()), so path separators and control characters are out —
     // but the previous alphanumeric allowlist also rejected the `#` in ecosystem-created
-    // names like "Vultisig Cluster #1", which creation and import both accept. That made
-    // rename a one-way door: rename away from such a name, and you could never rename back.
+    // names like "Vultisig Cluster #1". Creation and import run no name validation at all,
+    // so they already accept such names; rename was the sole validator, which made it a
+    // one-way door: rename away from such a name, and you could never rename back.
     if (/[/\\]/.test(name)) {
       errors.push('Vault name cannot contain path separators')
     }
 
+    // C0 + DEL + C1: C1 (U+0080-U+009F) includes CSI (U+009B), which a terminal can treat
+    // as an escape introducer when the name is echoed, so deny the whole range too.
     // eslint-disable-next-line no-control-regex
-    if (/[\u0000-\u001f\u007f]/.test(name)) {
+    if (/[\u0000-\u001f\u007f\u0080-\u009f]/.test(name)) {
       errors.push('Vault name cannot contain control characters')
     }
 

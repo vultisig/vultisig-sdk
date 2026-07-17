@@ -95,3 +95,57 @@ describe('export file permissions', () => {
     expect(await fs.readFile(outputPath, 'utf-8')).toBe('VULT-KEYSHARE-BYTES')
   })
 })
+
+// The temp file is the whole mechanism, so it needs the same guarantee as the target.
+// `mode` applying only at creation is exactly why writing straight to the target was
+// unsafe — and that cuts both ways: if the TEMP path already exists, writeFile truncates
+// it in place and keeps its old permissions, putting the shares right back in a
+// world-readable file. Hence random bytes in the name and an exclusive ('wx') create.
+describe('export temp file cannot be pre-empted', () => {
+  let tmpDir: string
+  let originalUmask: number
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vsig-export-temp-'))
+    originalUmask = process.umask(0o022)
+  })
+
+  afterEach(async () => {
+    process.umask(originalUmask)
+    await fs.rm(tmpDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
+    vi.resetModules()
+    resetOutput()
+  })
+
+  it('refuses rather than writing shares into a pre-created temp file', async () => {
+    // Pin the random component so the temp path is knowable, standing in for an
+    // attacker who can predict or brute-force it.
+    vi.resetModules()
+    vi.doMock('crypto', async importOriginal => ({
+      ...(await importOriginal<typeof import('crypto')>()),
+      randomBytes: () => Buffer.from('deadbeefcafe', 'hex'),
+    }))
+    const { executeExport: exportWithPinnedRandom } = await import('../vault-management')
+
+    // Pin the clock too, or the millisecond could tick between here and the export.
+    const FIXED_NOW = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+
+    const outputPath = path.join(tmpDir, 'preempt.vult')
+    const tempPath = `${outputPath}.${process.pid}.${FIXED_NOW}.deadbeefcafe.tmp`
+    await fs.writeFile(tempPath, '')
+    await fs.chmod(tempPath, 0o644)
+
+    await expect(exportWithPinnedRandom(makeCtx(), { outputPath, exportPassword: 'pw' })).rejects.toThrow()
+
+    // The decisive assertion: the shares must never reach the pre-created 0644 file.
+    // The failure path also unlinks the temp path, so absent is as good as empty —
+    // what must not happen is keyshare bytes landing in a world-readable file.
+    const leaked = await fs.readFile(tempPath, 'utf-8').catch(() => '')
+    expect(leaked).not.toContain('VULT-KEYSHARE-BYTES')
+
+    // ...and the export must not have silently succeeded to the real target either.
+    await expect(fs.access(outputPath)).rejects.toThrow()
+  })
+})

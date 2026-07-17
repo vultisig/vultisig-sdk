@@ -46,6 +46,8 @@ describe('vault name policy', () => {
     expect(validate('bad\u0000name').errors).toContain('Vault name cannot contain control characters')
     expect(validate('bad\nname').errors).toContain('Vault name cannot contain control characters')
     expect(validate('bad\u007fname').errors).toContain('Vault name cannot contain control characters')
+    // C1 range: U+009B is CSI, an escape introducer once the name is echoed to a terminal.
+    expect(validate('bad\u009bname').errors).toContain('Vault name cannot contain control characters')
   })
 
   it('keeps the pre-existing length and emptiness rules', () => {
