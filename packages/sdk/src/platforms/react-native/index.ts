@@ -575,7 +575,6 @@ export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
-export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
 export {
@@ -591,6 +590,7 @@ export {
   isKnownContract,
   knownContracts,
 } from '../../utils/knownContracts'
+export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))
