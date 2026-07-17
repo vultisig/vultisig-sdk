@@ -615,10 +615,8 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
 describe('Polymarket marker echo — dispatchClientSideTool protocol contract', () => {
   // agent-backend's autoSubmitPolymarketOrder consumes pm_order_ref +
   // __pm_auto_submit + __pm_submit_token from the recent_action data on the
-  // return leg. The CLI never interprets these — dispatchClientSideTool
-  // copies every input key starting with "__" (plus pm_order_ref) into the
-  // result data so they survive the signing roundtrip. If this echo breaks,
-  // every Polymarket auto-submit fails closed at the server's token gate.
+  // return leg. The CLI must fail closed unless the operator explicitly opted
+  // into that submit semantic; signing alone is not submission consent.
   function makeUi() {
     return {
       onToolCall: vi.fn(),
@@ -654,7 +652,11 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     __pm_submit_token: 'token-24236b30',
   }
 
-  async function dispatch(input: Record<string, unknown>, executorResult: Record<string, unknown>) {
+  async function dispatch(
+    input: Record<string, unknown>,
+    executorResult: Record<string, unknown>,
+    allowAutoSubmit = false
+  ) {
     const pendingToolResults: Array<{
       tool: string
       success: boolean
@@ -673,7 +675,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
         getPendingSummary: () => null,
         clearPendingTransaction: vi.fn(),
       },
-      config: { password: 'pw', autoApprove: true },
+      config: { password: 'pw', autoApprove: true, allowAutoSubmit },
       pendingToolResults,
       // dispatchClientSideTool routes through runPasswordGatedTool — reuse
       // the real prototype method so the gate behavior stays integrated.
@@ -689,7 +691,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     return pendingToolResults
   }
 
-  it('echoes __pm markers + pm_order_ref into the recent_action data', async () => {
+  it('strips auto-submit markers and forces auto_submit=false by default', async () => {
     const results = await dispatch(POLYMARKET_SIGN_INPUT, {
       signatures: [
         { id: 'order', signature: '0xorder' },
@@ -703,12 +705,29 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect(results[0].tool).toBe('sign_typed_data')
     expect(results[0].success).toBe(true)
     const data = results[0].data!
-    // The server-side auto-submit gate needs all three of these.
+    expect(data.__pm_submit_token).toBeUndefined()
+    expect(data.__pm_auto_submit).toBeUndefined()
+    expect(data.auto_submit).toBe(false)
+    // Correlation alone is harmless and remains available to the backend.
+    expect(data.pm_order_ref).toBe('ref-fb415704')
+    expect((data.signatures as unknown[]).length).toBe(2)
+  })
+
+  it('echoes order auto-submit markers only with an explicit local opt-in', async () => {
+    const results = await dispatch(
+      POLYMARKET_SIGN_INPUT,
+      {
+        signatures: [{ id: 'order', signature: '0xorder' }],
+        pm_order_ref: 'ref-fb415704',
+        auto_submit: true,
+      },
+      true
+    )
+
+    const data = results[0].data!
     expect(data.__pm_submit_token).toBe('token-24236b30')
     expect(data.__pm_auto_submit).toBe(true)
-    expect(data.pm_order_ref).toBe('ref-fb415704')
-    // The executor's own result fields ride along untouched.
-    expect((data.signatures as unknown[]).length).toBe(2)
+    expect(data.auto_submit).toBe(true)
   })
 
   it('echoes pm_batch_ref (+ __pm_auto_submit_batch) for Polymarket BATCH auto-submit', async () => {
@@ -723,21 +742,27 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
       ],
       pm_batch_ref: 'batch-ref-789',
       __pm_auto_submit_batch: true,
+      __pm_batch_submit_token: 'batch-token-123',
     }
     // Deliberately OMIT pm_batch_ref from the executor result so the only way
     // it can reach recent.data is the session input-echo loop under test. If
     // the mock pre-seeded it, this assertion would pass even with the echo
     // condition reverted (tautology). Mirrors the bare-result pattern below.
-    const results = await dispatch(batchInput, {
-      signatures: [{ id: 'order', signature: '0xorder' }],
-      auto_submit: true,
-    })
+    const results = await dispatch(
+      batchInput,
+      {
+        signatures: [{ id: 'order', signature: '0xorder' }],
+        auto_submit: true,
+      },
+      true
+    )
 
     const data = results[0].data!
     // bare pm_batch_ref survives the echo loop...
     expect(data.pm_batch_ref).toBe('batch-ref-789')
     // ...and the __-prefixed batch flag rides through on the __ branch.
     expect(data.__pm_auto_submit_batch).toBe(true)
+    expect(data.__pm_batch_submit_token).toBe('batch-token-123')
   })
 
   it('does NOT echo non-marker input keys (payloads stay out of the result)', async () => {
@@ -746,7 +771,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect(data).not.toHaveProperty('payloads')
   })
 
-  it('echoes markers even when the handler fails (server can still classify)', async () => {
+  it('does not leak submit markers when the signing handler fails', async () => {
     const pendingToolResults: Array<{
       tool: string
       success: boolean
@@ -760,7 +785,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
         getPendingSummary: () => null,
         clearPendingTransaction: vi.fn(),
       },
-      config: { password: 'pw', autoApprove: true },
+      config: { password: 'pw', autoApprove: true, allowAutoSubmit: false },
       pendingToolResults,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
     }
@@ -774,9 +799,8 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
 
     expect(pendingToolResults).toHaveLength(1)
     expect(pendingToolResults[0].success).toBe(false)
-    // Markers still echoed on failure — the server's gate (not the CLI)
-    // decides what a failed-sign return means.
-    expect(pendingToolResults[0].data?.__pm_submit_token).toBe('token-24236b30')
+    expect(pendingToolResults[0].data?.__pm_submit_token).toBeUndefined()
+    expect(pendingToolResults[0].data?.__pm_auto_submit).toBeUndefined()
     expect(pendingToolResults[0].data?.pm_order_ref).toBe('ref-fb415704')
   })
 })

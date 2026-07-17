@@ -100,7 +100,7 @@ export type { VultisigConfig } from '../../Vultisig'
 export { Vultisig } from '../../Vultisig'
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
-export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse } from './rpcFetch'
+export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'
 export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
 
 // RN runtime config registry — consumers inject chain RPC URLs and
@@ -579,6 +579,7 @@ export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
+export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
 export async function parseKeygenQR(...args: unknown[]) {

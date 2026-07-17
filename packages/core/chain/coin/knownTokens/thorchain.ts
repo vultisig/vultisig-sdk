@@ -6,6 +6,11 @@ export const thorchainNativeTokensMetadata: Record<string, CoinMetadata> = {
     logo: 'ruji',
     decimals: 8,
   },
+  'x/staking-x/brune': {
+    ticker: 'ybRUNE',
+    logo: 'ybrune',
+    decimals: 8,
+  },
   'thor.nami': {
     ticker: 'NAMI',
     logo: 'nami.png',

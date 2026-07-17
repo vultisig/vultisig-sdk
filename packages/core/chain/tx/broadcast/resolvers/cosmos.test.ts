@@ -1,3 +1,4 @@
+import { TimeoutError } from '@cosmjs/stargate'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -16,7 +17,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { CosmosChain } from '../../../Chain'
-import { broadcastCosmosTx } from './cosmos'
+import { broadcastCosmosTx, getCosmosBroadcastTimeoutTxId } from './cosmos'
 
 describe('broadcastCosmosTx', () => {
   const chain = CosmosChain.THORChain
@@ -71,6 +72,18 @@ describe('broadcastCosmosTx', () => {
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
+  it('returns the tx id when CosmJS accepted the tx but timed out waiting for indexing', async () => {
+    const timeout = new TimeoutError(
+      'Transaction with ID ABC123 was submitted but was not yet found on the chain.',
+      'ABC123'
+    )
+    mocks.broadcastTx.mockRejectedValue(timeout)
+
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBe('ABC123')
+
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
   it('routes other broadcast errors through hash verification', async () => {
     const rpcError = new Error('request timed out')
     mocks.broadcastTx.mockRejectedValue(rpcError)
@@ -79,5 +92,11 @@ describe('broadcastCosmosTx', () => {
     await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({ chain, tx, error: rpcError })
+  })
+
+  it('extracts only non-empty tx ids from CosmJS timeout errors', () => {
+    expect(getCosmosBroadcastTimeoutTxId(new TimeoutError('pending', 'ABC123'))).toBe('ABC123')
+    expect(getCosmosBroadcastTimeoutTxId(new TimeoutError('pending', '   '))).toBeUndefined()
+    expect(getCosmosBroadcastTimeoutTxId(new Error('pending'))).toBeUndefined()
   })
 })
