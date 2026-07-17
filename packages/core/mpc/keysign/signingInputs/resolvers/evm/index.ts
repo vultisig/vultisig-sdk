@@ -62,10 +62,9 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   // cannot desync the cross-device pre-signing hash.
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
-    const to = quote?.tx?.to
-    if (to) {
-      assertKnownAggregatorRouterOnSigningPath(provider, to, chain)
-    }
+    // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
+    // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
+    assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
   }
 
   // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)

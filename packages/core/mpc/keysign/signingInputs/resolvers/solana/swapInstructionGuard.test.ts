@@ -51,7 +51,7 @@ const buildBenignSwapTxBase64 = () => {
   return legacyTxToBase64(tx)
 }
 
-const buildPayload = (swapTxDataBase64: string) =>
+const buildPayload = (swapTxDataBase64: string, provider = 'jupiter') =>
   create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
       chain: Chain.Solana,
@@ -71,7 +71,7 @@ const buildPayload = (swapTxDataBase64: string) =>
     swapPayload: {
       case: 'oneinchSwapPayload',
       value: create(OneInchSwapPayloadSchema, {
-        provider: 'jupiter',
+        provider,
         quote: create(OneInchQuoteSchema, {
           tx: create(OneInchTransactionSchema, {
             to: '',
@@ -111,6 +111,23 @@ describe('getSolanaSigningInputs — sdk#1358 Jupiter swap fund-movement guard o
       Promise.resolve(
         getSolanaSigningInputs({
           keysignPayload: buildPayload(buildBenignSwapTxBase64()),
+          walletCore,
+        })
+      )
+    ).resolves.toBeDefined()
+  })
+
+  // The Jupiter allow-list is Jupiter-specific: LiFi/SwapKit also route Solana swaps (through
+  // Raydium/Orca/executor + fee-transfer instructions NOT in JUPITER_SWAP_ALLOWED_PROGRAM_IDS), so
+  // guarding a non-Jupiter provider here would fail-closed on a legitimate swap and BRICK the keysign
+  // (a 2-of-2's honest guarded device would refuse a valid payload). This locks the provider gate: the
+  // exact same drain-carrying tx that Jupiter rejects must NOT be guard-rejected under provider 'li.fi'
+  // (that provider's own destinations are legitimately different and out of this allow-list's scope).
+  it('does NOT apply the Jupiter allow-list to a non-Jupiter (li.fi) Solana swap provider', async () => {
+    await expect(
+      Promise.resolve(
+        getSolanaSigningInputs({
+          keysignPayload: buildPayload(buildDrainSwapTxBase64(), 'li.fi'),
           walletCore,
         })
       )

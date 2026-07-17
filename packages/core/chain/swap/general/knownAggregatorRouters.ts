@@ -73,10 +73,16 @@ const ENFORCED_ROUTER_PROVIDERS: ReadonlySet<string> = new Set<EnforcedRouterPro
  */
 export function assertKnownAggregatorRouterOnSigningPath(provider: string, address: string, chain: Chain): void {
   if (ENFORCED_ROUTER_PROVIDERS.has(provider)) {
+    // assertKnownAggregatorRouter fails closed on an unrecognized address, INCLUDING an empty/missing
+    // one - an enforced-provider swap with no destination is itself a malformed intent we won't sign.
     assertKnownAggregatorRouter(provider as EnforcedRouterProvider, address, chain)
     return
   }
-  logUnenforcedAggregatorDestination(provider === 'li.fi' || provider === 'swapkit' ? provider : 'li.fi', address)
+  // Unenforced (li.fi/swapkit/cowswap): log-only, and log the ACTUAL provider so the usage dataset the
+  // future allow-list is built from isn't poisoned by a coerced label. Skip a genuinely empty address.
+  if (address) {
+    logUnenforcedAggregatorDestination(provider, address)
+  }
 }
 
 /**
@@ -104,7 +110,7 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
  * contracts. Structured so the data is queryable (provider + address) and a future allowlist
  * is easy to build if a stable pattern emerges from real usage.
  */
-export function logUnenforcedAggregatorDestination(provider: 'li.fi' | 'swapkit', address: string): void {
+export function logUnenforcedAggregatorDestination(provider: string, address: string): void {
   console.info('[swap-router-telemetry] general-swap destination (not enforced, logged for future analysis):', {
     provider,
     address,

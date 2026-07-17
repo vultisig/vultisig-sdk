@@ -52,8 +52,17 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({ keysig
         // validated. This is a PURE gate - it throws (fail-closed, like the Ripple resolver) or no-ops,
         // and never touches the bytes that get signed, so it cannot desync the cross-device pre-signing
         // hash. userWallet is the signing vault's own Solana address (coin.address).
-        const userWallet = new PublicKey(assertField(keysignPayload, 'coin').address)
-        await assertSafeSolanaSwapTransactionBase64(data, userWallet)
+        //
+        // JUPITER-SCOPED on purpose: the allow-list (JUPITER_SWAP_ALLOWED_PROGRAM_IDS) is Jupiter's
+        // program set, and the only quote-time caller is getJupiterSwapQuote. LiFi and SwapKit also
+        // route Solana swaps (lifiSwapEnabledChains / swapKitEnabledChains include Chain.Solana) through
+        // Raydium/Orca/executor + fee-transfer instructions that are NOT in that set - guarding those
+        // here would fail-closed on a legitimate swap and brick the keysign. Mirrors the EVM arm, which
+        // only enforces the providers whose router is actually allow-listed.
+        if (swapPayload.provider === 'jupiter') {
+          const userWallet = new PublicKey(assertField(keysignPayload, 'coin').address)
+          await assertSafeSolanaSwapTransactionBase64(data, userWallet)
+        }
 
         const decodedData = walletCore.TransactionDecoder.decode(
           getCoinType({
