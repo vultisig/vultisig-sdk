@@ -422,33 +422,46 @@ export async function executeVerify(
 
   const spinner = createSpinner('Verifying email code...')
 
+  // Two phases with two different failure meanings. Only the verify call itself can mean
+  // "the code was wrong", so it is the only thing that maps to verificationFailureError.
+  let vault: VaultBase
   try {
-    // verifyVault now returns the vault directly (throws on failure)
-    const vault = await ctx.sdk.verifyVault(vaultId, code!)
-    spinner.succeed('Vault verified successfully!')
-
-    setupVaultEvents(vault)
-    await ctx.setActiveVault(vault)
-
-    if (isJsonOutput()) {
-      outputJson({
-        verified: true,
-        vault: { id: vaultId, name: vault.name, type: 'fast' },
-      })
-      return true
-    }
-
-    success(`\n+ Vault "${vault.name}" is now ready to use!`)
-    return true
+    // verifyVault returns the vault directly and throws on a bad/expired code or an
+    // unknown pending vault.
+    vault = await ctx.sdk.verifyVault(vaultId, code!)
   } catch (err: any) {
     spinner.fail('Verification failed')
-    // Throw a single typed error rather than pre-writing a result and returning
-    // false: the caller used to turn that false into a second throw, so `-o json`
-    // emitted TWO documents — a success-shaped {verified:false} envelope followed
-    // by an error envelope — and JSON.parse on the output failed. withExit renders
+    // Throw a single typed error rather than pre-writing a result and returning false:
+    // the caller used to turn that false into a second throw, so `-o json` emitted TWO
+    // documents — a success-shaped {verified:false} envelope followed by an error
+    // envelope — and JSON.parse on the output failed. withExit renders
     // message/hint/suggestions, so the human path keeps the same guidance.
     throw verificationFailureError(err as Error, vaultId)
   }
+
+  spinner.succeed('Vault verified successfully!')
+
+  // The code has already been accepted. Anything that fails from here — persisting the
+  // active-vault pointer, wiring events — is NOT a bad code, so it must carry its own
+  // classification (a corrupt store is CORRUPT_STATE, a full disk stays UNKNOWN) and must
+  // never send the user back to re-check or re-send a code that was fine.
+  try {
+    setupVaultEvents(vault)
+    await ctx.setActiveVault(vault)
+  } catch (err) {
+    throw classifyError(err as Error)
+  }
+
+  if (isJsonOutput()) {
+    outputJson({
+      verified: true,
+      vault: { id: vaultId, name: vault.name, type: 'fast' },
+    })
+    return true
+  }
+
+  success(`\n+ Vault "${vault.name}" is now ready to use!`)
+  return true
 }
 
 /**

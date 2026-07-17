@@ -208,9 +208,10 @@ describe('vaults pending visibility', () => {
   })
 })
 
-// executeVerify runs verifyVault() AND setActiveVault() inside one try, so the catch also
-// sees failures that happen after the code was accepted. Those must not be reported as a
-// bad code: the whole point of the CORRUPT_STATE work is that a broken store says so.
+// executeVerify verifies the code, then persists the active-vault pointer. A failure in the
+// second phase happens AFTER the code was accepted, so it must never be reported as a bad
+// code: it carries its own classification (a broken store says CORRUPT_STATE; anything else
+// stays a generic UNKNOWN) and never suggests re-checking or re-sending the code.
 describe('verify failure classification after the code was accepted', () => {
   function ctxWhereActivationFails(err: Error): CommandContext {
     // `on` matters: executeVerify calls setupVaultEvents(vault) between verifyVault()
@@ -237,6 +238,24 @@ describe('verify failure classification after the code was accepted', () => {
     // suggestion — advice for a problem the user does not have, since the code was correct.
     expect(err).toBeInstanceOf(CorruptStateError)
     expect((err as CorruptStateError).exitCode).toBe(ExitCode.CORRUPT_STATE)
+  })
+
+  it('does not blame the code for a non-corrupt post-accept failure either', async () => {
+    // e.g. a full disk / EACCES while writing the pointer: a StorageError whose cause is
+    // NOT a JSON SyntaxError, so it is deliberately NOT corruption. It must still not be
+    // reported as a wrong code — the code was accepted.
+    const ioFailure = new StorageError(
+      StorageErrorCode.Unknown,
+      'Failed to write value for key "activeVaultId"',
+      new Error('ENOSPC: no space left on device')
+    )
+
+    const err = await executeVerify(ctxWhereActivationFails(ioFailure), 'v1', { code: '123456' }).catch(
+      (e: unknown) => e
+    )
+
+    expect(err).not.toBeInstanceOf(InvalidInputError)
+    expect((err as { exitCode?: number }).exitCode).not.toBe(ExitCode.INVALID_INPUT)
   })
 
   it('still treats a genuinely rejected code as InvalidInputError / exit 4', async () => {
