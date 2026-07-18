@@ -174,10 +174,13 @@ export type {
   ConsolidateChain,
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -205,6 +208,17 @@ export {
   buildWithdrawRewardsMsg,
   cosmosStaking,
 } from '../../tools/prep/cosmosStaking'
+export {
+  IBC_CHAIN_HRP,
+  IBC_CHAIN_REVISION,
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  prepareSuiTokenTransferFromKeys,
+  SUI_NATIVE_COIN_TYPE,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep'
 // Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
 // WalletCore or native crypto, safe as static re-exports on the RN graph).
 // Keep this list aligned with the root entrypoint: package exports resolve
