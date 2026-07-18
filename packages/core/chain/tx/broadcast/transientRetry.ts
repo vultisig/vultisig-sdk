@@ -1,23 +1,49 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
 /**
+ * Base marker for a genuinely terminal broadcast outcome — the node (or the
+ * chain, via inclusion) made a final decision about this exact payload, so
+ * retrying would only resend identical bytes into an already-decided result.
+ * Distinct from a network-transport failure, where the node never even got
+ * to evaluate the tx. `isTransientBroadcastError` short-circuits on any
+ * subclass before the message-regex test ever runs, so a terminal failure
+ * whose chain-controlled text happens to read as transient ("aborted",
+ * "timed out", "connection reset" are all real ante-handler/contract-revert
+ * strings) can never get misclassified and retried.
+ */
+export abstract class TerminalBroadcastError extends Error {}
+
+/**
  * A transaction was included on-chain but its execution genuinely failed
  * (e.g. Cosmos DeliverTx code !== 0 — a wasm revert, out-of-gas, a
- * THORChain/Maya deposit-handler rejection). This is a terminal, non-transient
- * outcome even though the chain-controlled error text can read exactly like
- * a transient one (a cosmwasm revert's rawLog routinely says "aborted"; a
- * contract can literally say "timed out" or "connection reset" as text).
- * Retrying would just re-send the same bytes, get "tx already exists in
- * cache" back, and have that swallowed as success — reopening the false-
- * success bug the throw exists to close. Resolvers that assert on-chain
- * execution success throw this instead of a bare Error so
- * `isTransientBroadcastError` can short-circuit before the message-regex
- * test ever runs.
+ * THORChain/Maya deposit-handler rejection). Retrying would just re-send the
+ * same bytes, get "tx already exists in cache" back, and have that swallowed
+ * as success — reopening the false-success bug the throw exists to close.
+ * Resolvers that assert on-chain execution success throw this instead of a
+ * bare Error.
  */
-export class DeliverTxFailedError extends Error {
+export class DeliverTxFailedError extends TerminalBroadcastError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
     this.name = 'DeliverTxFailedError'
+  }
+}
+
+/**
+ * A node evaluated a specific broadcast payload (e.g. Cosmos CheckTx) and
+ * rejected it outright — invalid sequence, insufficient funds, a doomed
+ * contract call caught during ante-handler simulation. On a node with
+ * `keep-invalid-txs-in-cache=true`, CometBFT caches a REJECTED tx's hash the
+ * same as an accepted one, so a resend of the identical bytes can come back
+ * "tx already exists in cache" purely from the rejection's own cache entry —
+ * no peer broadcast required — and get swallowed as an idempotent success.
+ * Resolvers that see a node-level rejection throw this instead of a bare
+ * Error so the retry wrapper never resends into that trap.
+ */
+export class NodeRejectedBroadcastError extends TerminalBroadcastError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'NodeRejectedBroadcastError'
   }
 }
 
@@ -72,7 +98,7 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
   while (current != null && !seen.has(current)) {
     seen.add(current)
 
-    if (current instanceof DeliverTxFailedError) {
+    if (current instanceof TerminalBroadcastError) {
       return false
     }
 

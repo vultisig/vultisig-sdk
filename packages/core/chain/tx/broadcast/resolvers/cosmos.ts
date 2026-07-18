@@ -1,11 +1,11 @@
-import { assertIsDeliverTxSuccess, TimeoutError } from '@cosmjs/stargate'
+import { assertIsDeliverTxSuccess, BroadcastTxError, TimeoutError } from '@cosmjs/stargate'
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 
 import { BroadcastTxResolver } from '../resolver'
-import { DeliverTxFailedError } from '../transientRetry'
+import { DeliverTxFailedError, NodeRejectedBroadcastError } from '../transientRetry'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const getCosmosBroadcastTimeoutTxId = (error: unknown): string | undefined => {
@@ -52,5 +52,18 @@ export const broadcastCosmosTx: BroadcastTxResolver<CosmosChain> = async ({ chai
     return timeoutTxId
   }
 
-  await verifyBroadcastByHash({ chain, tx, error })
+  // BroadcastTxError means the node evaluated THESE bytes via CheckTx and
+  // rejected them — a deterministic, terminal outcome, not a transport
+  // failure. On a node with `keep-invalid-txs-in-cache=true`, CometBFT caches
+  // a rejected tx's hash the same as an accepted one, so if this got
+  // misclassified as transient and retried, the resend could come back "tx
+  // already exists in cache" purely from the rejection's own cache entry and
+  // get swallowed as success. Wrap it so the retry wrapper never resends;
+  // still route through hash verification, since a peer device may have
+  // independently broadcast the same signed bytes successfully in the
+  // meantime.
+  const verifyError =
+    error instanceof BroadcastTxError ? new NodeRejectedBroadcastError(error.message, { cause: error }) : error
+
+  await verifyBroadcastByHash({ chain, tx, error: verifyError })
 }
