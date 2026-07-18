@@ -421,6 +421,36 @@ describe('decodeFromToolResult — dispatch / guards', () => {
     expect(env.recipient).toBe(RECIPIENT)
   })
 
+  it('infers EVM family from canonical aliases omitted by the local subset', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 1n],
+    })
+    const env = decodeFromToolResult({ chain: 'mantle', payload: buildEvmTx(USDC, data) })
+
+    expect(env.family).toBe('evm')
+    expect(env.recipient).toBe(RECIPIENT)
+  })
+
+  it.each(['thorchain', 'cosmoshub-4', 'gaia', 'osmosis-1', 'noble-1', 'dydx-mainnet-1', 'akashnet-2'])(
+    'infers Cosmos family from supported chain hint %s',
+    chain => {
+      const from = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
+      const to = 'cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu'
+      const any = Any.fromPartial({
+        typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+        value: MsgSend.encode(
+          MsgSend.fromPartial({ fromAddress: from, toAddress: to, amount: [{ denom: 'rune', amount: '1' }] })
+        ).finish(),
+      })
+      const env = decodeFromToolResult({ chain, payload: buildCosmosTx([any]) })
+
+      expect(env.family).toBe('cosmos')
+      expect(env.recipient).toBe(to)
+    }
+  )
+
   it('fails closed when neither family nor a known chain is given', () => {
     const env = decodeFromToolResult({ payload: '0x1234' })
     expect(env.decoded).toBe(false)

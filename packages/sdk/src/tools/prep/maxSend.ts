@@ -17,6 +17,7 @@ export type GetMaxSendAmountFromKeysParams = {
   coin: AccountCoin
   receiver: string
   memo?: string
+  destinationTag?: number
   feeSettings?: FeeSettings
 }
 
@@ -72,6 +73,7 @@ export const computeMaxSendFromBalance = async (
     receiver: params.receiver,
     amount: params.balance,
     memo: params.memo,
+    destinationTag: params.destinationTag,
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     publicKey,

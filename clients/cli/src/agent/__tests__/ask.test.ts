@@ -105,6 +105,26 @@ describe('AskInterface.getCallbacks', () => {
     expect(result.response).toBe('final answer')
   })
 
+  it('collects protocol-drift warnings for the machine result', async () => {
+    const warning = {
+      code: 'PROTOCOL_DRIFT' as const,
+      message: 'Ignored 2 unknown SSE frames: data-confirmation',
+      count: 2,
+      eventTypes: ['data-confirmation'],
+    }
+    const session = {
+      getConversationId: () => 'c1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onProtocolWarning?.(warning)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('q')
+
+    expect(result.warnings).toEqual([warning])
+  })
+
   it('requestConfirmation defaults to DENY (no --yes) so a misrouted prompt cannot sign', async () => {
     const ask = createAsk() // autoApprove defaults to false
     const ui = ask.getCallbacks()

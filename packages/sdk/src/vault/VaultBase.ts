@@ -1,7 +1,6 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
 import { sha256 } from '@noble/hashes/sha2'
-import { keccak_256 } from '@noble/hashes/sha3'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
@@ -64,6 +63,7 @@ import {
 import type { ContractCallTxParams } from '../types/contractCall'
 import type { TransactionSimulationResult, TransactionValidationResult } from '../types/security'
 import type { DiscoveredToken, TokenInfo } from '../types/tokens'
+import { computePersonalSignHash } from '../utils/eip191'
 import { createVaultBackup } from '../utils/export'
 // Vault services
 import { AddressService } from './services/AddressService'
@@ -993,6 +993,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
@@ -1037,6 +1038,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     coin: AccountCoin
     receiver: string
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<MaxSendAmount> {
     const walletCore = await this.wasmProvider.getWalletCore()
@@ -1238,11 +1240,11 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * }
    * ```
    */
-  async getTxStatus(params: { chain: Chain; txHash: string }): Promise<TxStatusResult> {
-    const { chain, txHash } = params
+  async getTxStatus(params: { chain: Chain; txHash: string; lastValidBlockHeight?: number }): Promise<TxStatusResult> {
+    const { chain, txHash, lastValidBlockHeight } = params
 
     try {
-      const result = await coreTxStatus({ chain, hash: txHash })
+      const result = await coreTxStatus({ chain, hash: txHash, lastValidBlockHeight })
 
       if (result.status === 'success') {
         this.emit('transactionConfirmed', { chain, txHash, receipt: result.receipt })
@@ -1646,12 +1648,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
 
     const chainKind = getChainKind(chain)
     const algorithm = signatureAlgorithms[chainKind] === 'ecdsa' ? 'ECDSA' : 'EdDSA'
-    // EIP-191 uses UTF-8 byte length, not JS string length
     const msgBytes = new TextEncoder().encode(message)
-    const hash =
-      chainKind === 'evm'
-        ? keccak_256(new TextEncoder().encode(`\x19Ethereum Signed Message:\n${msgBytes.length}${message}`))
-        : sha256(msgBytes)
+    const hash = chainKind === 'evm' ? computePersonalSignHash(message) : sha256(msgBytes)
 
     const sig = await this.signBytes({ data: hash, chain }, options)
     return { signature: sig.signature.startsWith('0x') ? sig.signature : '0x' + sig.signature, chain, algorithm }
@@ -1677,15 +1675,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     amount: string
     symbol?: string
     memo?: string
+    destinationTag?: number
     dryRun?: boolean
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, dryRun } = params
+    const { chain, to, amount, symbol, memo, destinationTag, dryRun } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo })
+      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -1693,10 +1692,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       amountBigInt = this.parseAmount(amount, tokenInfo.decimals)
     }
 
-    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo })
+    const keysignPayload = await this.prepareSendTx({ coin, receiver: to, amount: amountBigInt, memo, destinationTag })
 
     if (dryRun) {
-      const fee = await this.transactionBuilder.estimateSendFee({ coin, receiver: to, amount: amountBigInt, memo })
+      const fee = await this.transactionBuilder.estimateSendFee({
+        coin,
+        receiver: to,
+        amount: amountBigInt,
+        memo,
+        destinationTag,
+      })
       return {
         dryRun: true,
         fee: this.formatUnits(fee, tokenInfo.decimals),
