@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../Chain'
-import { cosmosGasRecord, getCosmosFeeAmount, getFeeAmountFromGasPrice, getMinGasPriceForDenom } from './gas'
+import {
+  COSMOS_SEND_FEE_DEFAULT,
+  cosmosGasRecord,
+  getCosmosFeeAmount,
+  getCosmosSendFeeBaseUnits,
+  getFeeAmountFromGasPrice,
+  getMinGasPriceForDenom,
+} from './gas'
 
 const jsonResponse = (body: unknown, status = 200) =>
   ({
@@ -44,6 +51,17 @@ describe('getMinGasPriceForDenom', () => {
 })
 
 describe('getCosmosFeeAmount', () => {
+  it('returns the canonical static send floor for ibc-enabled chains', () => {
+    expect(getCosmosSendFeeBaseUnits(Chain.Cosmos)).toBe(cosmosGasRecord[Chain.Cosmos])
+    expect(getCosmosSendFeeBaseUnits(Chain.TerraClassic)).toBe(cosmosGasRecord[Chain.TerraClassic])
+    expect(getCosmosSendFeeBaseUnits(Chain.Dydx)).toBe(cosmosGasRecord[Chain.Dydx])
+  })
+
+  it('falls back to the shared default for vault-based cosmos chains', () => {
+    expect(getCosmosSendFeeBaseUnits(Chain.THORChain)).toBe(COSMOS_SEND_FEE_DEFAULT)
+    expect(getCosmosSendFeeBaseUnits(Chain.MayaChain)).toBe(COSMOS_SEND_FEE_DEFAULT)
+  })
+
   it('keeps the static fee floor when live min gas computes lower', async () => {
     const fee = await getCosmosFeeAmount(
       { chain: Chain.Cosmos },

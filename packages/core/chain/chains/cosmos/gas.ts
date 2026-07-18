@@ -1,4 +1,4 @@
-import { Chain, IbcEnabledCosmosChain } from '../../Chain'
+import { Chain, CosmosChain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
 import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
@@ -8,18 +8,31 @@ import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
 
 export { getFeeAmountFromGasPrice } from './cosmosDecimal'
 
-const defaultGas = 7500n
+export const COSMOS_SEND_FEE_DEFAULT = 7500n
 
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
-  [Chain.Cosmos]: defaultGas,
+  [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,
-  [Chain.Kujira]: defaultGas,
-  [Chain.Terra]: defaultGas,
+  [Chain.Kujira]: COSMOS_SEND_FEE_DEFAULT,
+  [Chain.Terra]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Dydx]: 2500000000000000n,
   [Chain.TerraClassic]: 20000000n,
   [Chain.Noble]: 30000n,
   [Chain.Akash]: 200000n,
 }
+
+/**
+ * Return the canonical signable native-send fee floor for a Cosmos-family
+ * chain. IBC-enabled chains use their exact static floor from
+ * `cosmosGasRecord`; vault-based chains (THORChain / MayaChain) fall back to
+ * the shared Cosmos Hub default because they do not participate in the
+ * `getCosmosFeeAmount()` live-fee path and do not publish a higher fixed send
+ * floor here.
+ */
+export const getCosmosSendFeeBaseUnits = (chain: CosmosChain): bigint =>
+  chain in cosmosGasRecord
+    ? cosmosGasRecord[chain as IbcEnabledCosmosChain]
+    : COSMOS_SEND_FEE_DEFAULT
 
 type FetchOpts = {
   fetchImpl?: typeof fetch
