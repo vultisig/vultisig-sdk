@@ -5,11 +5,21 @@
  * driving the fee/gas-limit split of getQBTCSignedTransaction end to end. The round-7 audit
  * SUSPECTED a P0 fee/gas conflation - that `cosmosSpecific.gas` (feared to be a gas-LIMIT-shaped
  * number) was being written as the fee AMOUNT. It is NOT: the CosmosSpecific proto documents field
- * 3 `gas` as "the fee AMOUNT (not a limit)" and field 7 `gasLimit` as the per-tx limit, exactly how
- * the WalletCore cosmos resolver splits them (Fee.amounts = feeAmount from gas; Fee.gas = the limit).
- * These vectors PIN that split so a future refactor can't silently swap them, and lock the two
- * behaviours this suite also fixes: (1) the fee coin denom+amount comes from `gas`; (2) the gas limit
- * now honours field-7 `gasLimit` when set, falling back to the 300_000 default when unset.
+ * 3 `gas` as "the fee AMOUNT (not a limit)" and field 7 `gasLimit` as the per-tx limit. These
+ * vectors PIN that split so a future refactor can't silently swap them, and lock the two behaviours
+ * this suite also fixes: (1) the fee coin denom+amount comes from `gas`; (2) the gas limit now
+ * honours field-7 `gasLimit` when set, falling back to the 300_000 default when unset.
+ *
+ * IMPORTANT for whoever populates field 7 next: QBTC's fee is DELIBERATELY FLAT. Unlike the shared
+ * standard-cosmos helper `resolveCosmosGasFee` (which SCALES the fee amount proportionally when the
+ * limit exceeds the static limit, so gas price is held constant and the tx "pays for the extra
+ * gas"), QBTC writes `fee.amount = cosmosSpecific.gas` verbatim regardless of the limit. This is
+ * intentional and consistent today: QBTC bypasses `resolveCosmosGasFee` entirely, and its fee
+ * DISPLAY (`getQbtcFeeAmount`) also returns raw `gas`, so shown == signed with no drift. So field 7
+ * is honoured as the LIMIT only; it does NOT (and must not silently) re-scale the fee. Making QBTC
+ * scale its fee would be a coordinated change across the fee-display resolver, the signing encoder,
+ * AND every co-signer (gasLimit is part of the SignDoc). QBTC is also a post-quantum TESTNET
+ * (Chain.ts) - the fee posture here is low-stakes; do not re-run the P0 fire drill over it.
  */
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
@@ -134,7 +144,27 @@ describe('QBTCHelper — fee/gas split golden vectors (sdk#1366)', () => {
     })
 
     const fee = decodeFee(serialized)
-    expect(fee.amount).toBe('2500') // fee amount still tracks gas, independent of the limit
+    // QBTC's fee is DELIBERATELY flat: it stays == cosmosSpecific.gas even as the limit grows. This
+    // is NOT the resolveCosmosGasFee rule (that scales the fee with the limit); see the file
+    // docstring. Field 7 is honoured as the LIMIT only - it must not silently re-scale the fee.
+    expect(fee.amount).toBe('2500')
     expect(fee.gasLimit).toBe('550000') // limit now tracks field-7 gasLimit
+  })
+
+  it('falls back to 300000 when field-7 gasLimit is an explicit 0 (proto3 would elide it → invalid zero-gas tx)', () => {
+    // Field 7 is `optional uint64`, so 0n is a representable value distinct from unset. Without the
+    // `> 0n` guard in buildQBTCAuthInfo, protoVarint(2, 0n) elides gas_limit entirely and the tx
+    // signs with zero gas (invalid). The guard coerces 0n (and any non-positive) back to the default.
+    const payload = buildPayload()
+    const cosmosSpecific = buildCosmosSpecific({ gas: 2500n, gasLimit: 0n })
+    const { serialized } = getQBTCSignedTransaction({
+      keysignPayload: payload,
+      cosmosSpecific,
+      signatures: SIGNATURES(payload, cosmosSpecific),
+    })
+
+    const fee = decodeFee(serialized)
+    expect(fee.amount).toBe('2500')
+    expect(fee.gasLimit).toBe('300000')
   })
 })

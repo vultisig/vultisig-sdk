@@ -127,6 +127,9 @@ const buildTxComponents = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput)
     // buildQBTCAuthInfo's 300_000n default, so this is a no-op when the caller doesn't set field 7.
     // gasLimit is part of the SignDoc, so every co-signing device MUST derive it identically - keeping
     // the same field-7-or-default rule the WalletCore cosmos path uses keeps QBTC co-signers in lockstep.
+    // NOTE: only the LIMIT tracks field 7. The fee AMOUNT below stays flat (== cosmosSpecific.gas) - QBTC
+    // deliberately does NOT scale the fee with the limit the way resolveCosmosGasFee does for standard
+    // cosmos, and its fee-display resolver returns the same raw gas, so shown == signed with no drift.
     gasLimit: cosmosSpecific.gasLimit,
     fee: {
       denom,
