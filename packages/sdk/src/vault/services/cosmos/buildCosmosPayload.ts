@@ -165,9 +165,12 @@ export async function buildSignAminoKeysignPayload(input: BuildSignAminoPayloadI
   let sequence = '0'
 
   if (!skipChainSpecificFetch) {
-    const accountInfo = await getCosmosAccountInfo({ chain, address: coin.address })
+    const accountInfo = await getCosmosAccountInfo({
+      chain,
+      address: coin.address,
+    })
     accountNumber = String(accountInfo.accountNumber)
-    sequence = String(accountInfo.sequence)
+    sequence = String(accountInfo.sequenceBigInt)
   }
 
   // Build the signData
@@ -229,8 +232,11 @@ export async function buildSignDirectKeysignPayload(input: BuildSignDirectPayloa
   let sequence = '0'
 
   if (!skipChainSpecificFetch) {
-    const accountInfo = await getCosmosAccountInfo({ chain, address: coin.address })
-    sequence = String(accountInfo.sequence)
+    const accountInfo = await getCosmosAccountInfo({
+      chain,
+      address: coin.address,
+    })
+    sequence = String(accountInfo.sequenceBigInt)
   }
 
   // Build the signData

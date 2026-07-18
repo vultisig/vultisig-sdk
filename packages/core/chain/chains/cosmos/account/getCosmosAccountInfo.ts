@@ -3,6 +3,7 @@ import { Chain, CosmosChain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
+import { parseUint64 } from '@vultisig/core-chain/chains/cosmos/parseUint64'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type LcdAccountResponse = {
@@ -34,29 +35,26 @@ type LcdAccountResponse = {
 
 // cosmjs/stargate 0.39 widened Account.accountNumber from `number` to
 // `bigint` (Cosmos SDK 0.53+ GenerateID can exceed Number.MAX_SAFE_INTEGER)
-// while keeping Account.sequence as `number`. Mirror that asymmetry here
-// so the type flows cleanly through reassignment + the LCD fallback path;
-// downstream consumers already wrap accountNumber in BigInt() and pass
-// sequence through, so no callsite needs to change.
+// while keeping Account.sequence as `number`. Keep the legacy number for
+// compatibility, but expose sequenceBigInt for signing consumers and recover
+// unsafe values from the LCD's raw uint64 string.
 type ParsedAccount = {
   accountNumber: bigint
   sequence: number
+  sequenceBigInt: bigint
 }
 
 const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
   const acc = resp.account
   if (!acc) return null
   const base = acc.base_vesting_account?.base_account ?? acc.base_account ?? acc
-  try {
-    const accountNumber = BigInt(base.account_number ?? '0')
-    const sequence = Number(base.sequence ?? '0')
-    if (!Number.isFinite(sequence)) return null
-    return { accountNumber, sequence }
-  } catch {
-    // BigInt() throws on malformed input (non-numeric string, decimal,
-    // empty). Match the old Number.isFinite gate by failing closed.
-    return null
-  }
+  const accountNumber = BigInt(base.account_number ?? '0')
+  const sequenceBigInt = parseUint64({
+    value: base.sequence ?? '0',
+    field: 'sequence',
+    context: 'Cosmos account',
+  })
+  return { accountNumber, sequence: Number(sequenceBigInt), sequenceBigInt }
 }
 
 // LCD fallback for Tendermint-RPC account lookups that return null.
@@ -99,12 +97,17 @@ const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
 }
 
 const tryLcd = async (base: string, address: string): Promise<ParsedAccount | null> => {
+  let resp: LcdAccountResponse
   try {
-    const resp = await queryUrl<LcdAccountResponse>(`${base}/cosmos/auth/v1beta1/accounts/${address}`)
-    return parseLcdAccount(resp)
+    resp = await queryUrl<LcdAccountResponse>(`${base}/cosmos/auth/v1beta1/accounts/${address}`)
   } catch {
     return null
   }
+
+  // A transport failure can try another endpoint, but a structurally present
+  // account with invalid uint64 data is a data-integrity failure. Propagate it
+  // so signing cannot silently fall through to sequence 0.
+  return parseLcdAccount(resp)
 }
 
 const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
@@ -131,6 +134,7 @@ type CosmosAccountInfo = {
   pubkey: Pubkey | null
   accountNumber: bigint
   sequence: number
+  sequenceBigInt: bigint
   latestBlock: string
 }
 
@@ -143,16 +147,20 @@ export const getCosmosAccountInfo = async ({
 
   let accountNumber: bigint | undefined = accountInfo?.accountNumber
   let sequence: number | undefined = accountInfo?.sequence
+  let sequenceBigInt: bigint | undefined
 
-  // RPC returned null. Try the LCD shape parser before falling back to
-  // sequence:0 — that fallback is correct only for accounts that have
-  // genuinely never been funded, but ships a doomed tx for the much more
-  // common case where RPC just couldn't decode an extended account type.
-  if (accountInfo === null) {
+  if (accountInfo && Number.isSafeInteger(accountInfo.sequence) && accountInfo.sequence >= 0) {
+    sequenceBigInt = BigInt(accountInfo.sequence)
+  } else {
+    // RPC returned null or a sequence that its number-based API cannot
+    // represent exactly. Prefer the LCD's raw uint64 string in both cases.
     const lcd = await fetchAccountViaLcd(chain, address)
     if (lcd) {
       accountNumber = lcd.accountNumber
       sequence = lcd.sequence
+      sequenceBigInt = lcd.sequenceBigInt
+    } else if (accountInfo) {
+      throw new Error('Cosmos account sequence cannot be represented exactly')
     }
   }
 
@@ -167,6 +175,7 @@ export const getCosmosAccountInfo = async ({
     pubkey: accountInfo?.pubkey ?? null,
     accountNumber: accountNumber ?? 0n,
     sequence: sequence ?? 0,
+    sequenceBigInt: sequenceBigInt ?? 0n,
     latestBlock,
   }
 }

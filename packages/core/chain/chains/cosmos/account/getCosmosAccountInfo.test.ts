@@ -46,6 +46,7 @@ describe('getCosmosAccountInfo', () => {
 
     expect(result.accountNumber).toBe(12n)
     expect(result.sequence).toBe(84)
+    expect(result.sequenceBigInt).toBe(84n)
     expect(queryUrl).not.toHaveBeenCalled()
   })
 
@@ -69,6 +70,7 @@ describe('getCosmosAccountInfo', () => {
 
     expect(result.accountNumber).toBe(12n)
     expect(result.sequence).toBe(84)
+    expect(result.sequenceBigInt).toBe(84n)
     expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toContain('/cosmos/auth/v1beta1/accounts/terra1real')
   })
 
@@ -96,6 +98,7 @@ describe('getCosmosAccountInfo', () => {
 
     expect(result.accountNumber).toBe(99n)
     expect(result.sequence).toBe(42)
+    expect(result.sequenceBigInt).toBe(42n)
   })
 
   it('parses nested base_account shape (non-vesting wrapper) from LCD', async () => {
@@ -120,6 +123,7 @@ describe('getCosmosAccountInfo', () => {
 
     expect(result.accountNumber).toBe(7n)
     expect(result.sequence).toBe(3)
+    expect(result.sequenceBigInt).toBe(3n)
   })
 
   it('falls through to sequence:0 when BOTH RPC and LCD return null (genuinely new account)', async () => {
@@ -135,6 +139,7 @@ describe('getCosmosAccountInfo', () => {
     // Correct behavior for a brand-new on-chain account: sequence 0
     expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
+    expect(result.sequenceBigInt).toBe(0n)
   })
 
   it('still falls through to 0 when LCD returns malformed JSON', async () => {
@@ -149,7 +154,80 @@ describe('getCosmosAccountInfo', () => {
 
     expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
+    expect(result.sequenceBigInt).toBe(0n)
   })
+
+  it('preserves an LCD sequence above Number.MAX_SAFE_INTEGER exactly', async () => {
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockResolvedValue({
+      account: {
+        account_number: '12',
+        sequence: '9007199254740993',
+      },
+    } as never)
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.Terra,
+      address: 'terra1large',
+    })
+
+    expect(result.sequence).toBe(9007199254740992)
+    expect(result.sequenceBigInt).toBe(9007199254740993n)
+  })
+
+  it('re-queries an unsafe RPC sequence through LCD to recover its exact uint64 value', async () => {
+    const client = makeClient({ accountNumber: 12n, sequence: 9007199254740992 })
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockResolvedValue({
+      account: {
+        account_number: '12',
+        sequence: '9007199254740993',
+      },
+    } as never)
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.Terra,
+      address: 'terra1large',
+    })
+
+    expect(result.sequenceBigInt).toBe(9007199254740993n)
+  })
+
+  it('rejects an unsafe RPC sequence when no exact LCD value is available', async () => {
+    const client = makeClient({ accountNumber: 12n, sequence: 9007199254740992 })
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockRejectedValue(new Error('LCD unavailable'))
+
+    await expect(
+      getCosmosAccountInfo({
+        chain: CosmosChain.Terra,
+        address: 'terra1large',
+      })
+    ).rejects.toThrow('Cosmos account sequence cannot be represented exactly')
+  })
+
+  it.each(['-1', '1.5', '18446744073709551616'])(
+    'rejects an invalid LCD uint64 sequence before signing fallback (%s)',
+    async sequence => {
+      const client = makeClient(null)
+      vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+      vi.mocked(queryUrl).mockResolvedValue({
+        account: {
+          account_number: '12',
+          sequence,
+        },
+      } as never)
+
+      await expect(
+        getCosmosAccountInfo({
+          chain: CosmosChain.Terra,
+          address: 'terra1invalid',
+        })
+      ).rejects.toThrow('Invalid Cosmos account sequence')
+      expect(queryUrl).toHaveBeenCalledTimes(1)
+    }
+  )
 })
 
 describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {

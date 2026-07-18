@@ -34,7 +34,9 @@ async function computeUstcBurnTaxAmount(toAmount: string): Promise<string> {
   if (rate === 0n) return '0'
 
   const cap = await getTerraClassicTaxCap('uusd')
-  const tax = applyTerraClassicTax(BigInt(toAmount), 'uusd', rate, { uusd: cap })
+  const tax = applyTerraClassicTax(BigInt(toAmount), 'uusd', rate, {
+    uusd: cap,
+  })
   return tax.toString()
 }
 
@@ -45,7 +47,7 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   timeoutTimestamp,
 }) => {
   const coin = getKeysignCoin<IbcEnabledCosmosChain>(keysignPayload)
-  const { accountNumber, sequence, latestBlock } = await getCosmosAccountInfo(coin)
+  const { accountNumber, sequenceBigInt, latestBlock } = await getCosmosAccountInfo(coin)
 
   // For TerraClassic USTC (uusd) sends, pre-compute the burn-tax surcharge
   // dynamically. Encoded in baseDenom so the sync signing-inputs resolver
@@ -94,13 +96,13 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
         walletCore,
         keysignPayload,
         accountNumber: BigInt(accountNumber),
-        sequence: BigInt(sequence),
+        sequence: sequenceBigInt,
       })
     : undefined
 
   return create(CosmosSpecificSchema, {
     accountNumber: BigInt(accountNumber),
-    sequence: BigInt(sequence),
+    sequence: sequenceBigInt,
     transactionType,
     gas: await getCosmosFeeAmount(coin),
     gasLimit,
