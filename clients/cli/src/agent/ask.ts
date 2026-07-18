@@ -15,7 +15,7 @@ import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
-import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -40,6 +40,7 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
    * failure (which rejects sendMessage and surfaces via the catch), an SSE
@@ -66,6 +67,7 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
   private error: AskResult['error']
   // Initialize-time error, kept SEPARATE from the turn error so it stays the
@@ -191,6 +193,11 @@ export class AskInterface {
         process.stderr.write(`[error] ${message} [${code}]\n`)
       },
 
+      onProtocolWarning: (warning: ProtocolWarning) => {
+        this.warnings.push(warning)
+        process.stderr.write(`[warning] ${warning.message} [${warning.code}]\n`)
+      },
+
       onDone: () => {
         // Nothing to do — ask() awaits sendMessage which resolves on done
       },
@@ -224,6 +231,7 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.warnings = []
     this.outcome = undefined
     // Each turn's error is turn-local — reset it every turn. The initialize-time
     // signal lives separately in initError (see partialResult's `?? initError`),
@@ -257,6 +265,7 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
+      warnings: this.warnings,
       // A real turn error wins; fall back to the init-time signal (e.g. stale
       // --session SESSION_NOT_FOUND) only when the turn produced no error.
       error: this.error ?? this.initError,
