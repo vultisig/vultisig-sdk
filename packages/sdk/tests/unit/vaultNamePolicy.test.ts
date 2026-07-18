@@ -151,4 +151,14 @@ describe('export() filename safety — pre-existing unsafe metadata', () => {
       expect(filename.endsWith('.vult')).toBe(true)
     })
   }
+
+  it('replaces a component that encodes to empty with a placeholder, never a blank segment', async () => {
+    // Exercises the `length > 0 ? encoded : '_'` fallback: a name that is empty, or is
+    // ONLY unsafe characters, must still yield a real component — otherwise the filename
+    // would begin with the "-" separator and lose a segment.
+    for (const emptyish of ['', '/', String.fromCharCode(0x00)]) {
+      const { filename } = await makeVault(emptyish, 'device-1').export()
+      expect(filename).toBe('_-device-1-share1of1.vult')
+    }
+  })
 })
