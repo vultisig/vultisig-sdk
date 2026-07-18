@@ -1,7 +1,7 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getCowSwapExplorerOrderUrl } from '@vultisig/core-chain/swap/general/cowswap/getCowSwapExplorerOrderUrl'
+import { getSwapKitTrackerUrl } from '@vultisig/core-chain/swap/general/swapkit/getSwapKitTrackerUrl'
 import { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
-import { SwapKitSourceChain } from '@vultisig/core-chain/swap/general/swapkit/SwapKitEnabledChains'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 
@@ -11,43 +11,6 @@ type GetSwapTrackingUrlInput = {
   swapPayload: KeysignSwapPayload
   txHash: string
   sourceChain: Chain
-}
-
-// Chain identifiers accepted by https://track.swapkit.dev/?tx=<hash>&chainId=<id>
-// These differ from the SwapKit API chain-prefix map (ETH, ARB, ...) used in getSwapKitQuote.ts.
-// Source: https://docs.swapkit.dev/swapkit-api/providers-request-supported-chains-by-a-swap-provider#chain-ids-and-corresponding-names
-//
-// UTXO byte-order contract: track.swapkit.dev accepts UTXO tx hashes in their
-// natural txid representation (the byte-reversed, human-readable form that block
-// explorers display). Our signing flow produces hashes in that same display form,
-// so no additional byte reversal is needed here.
-// Typed as `Partial<Record<SwapKitSourceChain, string>>` (rather than
-// `satisfies Record<SwapKitSourceChain, string>`) so lookups below can safely
-// index by any `SwapKitSourceChain` and get `string | undefined` -- adding a
-// chain to SwapKitEnabledChains without updating this map is fine (see the
-// runtime fallback below), it just degrades to a block-explorer link.
-//
-// Sui + Cardano are intentionally OMITTED: `getSwapKitQuote` explicitly rejects
-// them as a SwapKit source (no tx-build path yet), so no swap can ever
-// complete and reach this tracker for either chain today. Add their real
-// track.swapkit.dev chain-id here once source-side signing lands.
-const swapKitTrackerChainId: Partial<Record<SwapKitSourceChain, string>> = {
-  [Chain.Ethereum]: '1',
-  [Chain.Arbitrum]: '42161',
-  [Chain.Avalanche]: '43114',
-  [Chain.Base]: '8453',
-  [Chain.BSC]: '56',
-  [Chain.Optimism]: '10',
-  [Chain.Polygon]: '137',
-  [Chain.Solana]: 'solana',
-  [Chain.Bitcoin]: 'bitcoin',
-  [Chain.BitcoinCash]: 'bitcoincash',
-  [Chain.Dogecoin]: 'dogecoin',
-  [Chain.Litecoin]: 'litecoin',
-  [Chain.Ripple]: 'ripple',
-  [Chain.Ton]: 'ton',
-  [Chain.Tron]: '728126428',
-  [Chain.Zcash]: 'zcash',
 }
 
 export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwapTrackingUrlInput): string => {
@@ -75,32 +38,11 @@ export const getSwapTrackingUrl = ({ swapPayload, txHash, sourceChain }: GetSwap
         return `https://scan.li.fi/tx/${txHash}`
       }
       if (provider === 'swapkit') {
-        const chainId = swapKitTrackerChainId[sourceChain as SwapKitSourceChain]
-        if (chainId) {
-          // Guard: TON hashes are hex-encoded (see packages/core/chain/tx/hash/resolvers/ton.ts).
-          // A `0x`-prefixed TON hash indicates a misconfigured upstream -- stripHexPrefix would
-          // silently corrupt it by stripping the first two hex chars, producing a wrong hash.
-          if (sourceChain === Chain.Ton && txHash.startsWith('0x')) {
-            throw new Error(`TON tx hash must not have a 0x prefix (got: ${txHash.slice(0, 10)}...)`)
-          }
-          // `tx` remains the bare tracker identifier, while `hash` carries the
-          // original source-chain tx hash that SwapKit uses to prefill the form.
-          const searchParams = new URLSearchParams({
-            tx: stripHexPrefix(txHash),
-            chainId,
-            hash: txHash,
-          })
-          return `https://track.swapkit.dev/?${searchParams.toString()}`
-        }
-        // SwapKitSourceChain extended without updating swapKitTrackerChainId
-        // -> silent fallback to block explorer would degrade tracking
-        // without surfacing the gap. Warn so the drift shows up in logs +
-        // greppable CI output.
-        // TODO: wire to telemetry event 'swapkit_tracker_chain_missing' so
-        // mapping drift is caught in production monitoring, not just CI logs.
+        const trackerUrl = getSwapKitTrackerUrl({ chain: sourceChain, txHash })
+        if (trackerUrl) return trackerUrl
 
         console.warn(
-          `[getSwapTrackingUrl] SwapKit tracker chainId missing for ${sourceChain} — falling back to source-chain block explorer. Add a swapKitTrackerChainId entry.`
+          `[getSwapTrackingUrl] SwapKit tracker chainId missing for ${sourceChain} — falling back to source-chain block explorer. Add a swapKitTrackerChainIds entry.`
         )
       }
       return getBlockExplorerUrl({
