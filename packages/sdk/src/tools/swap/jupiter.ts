@@ -284,8 +284,17 @@ export const buildJupiterSwapTx = async ({
   // unparsable impact passes.
   assertJupiterPriceImpactWithinCeiling(quote.priceImpactPct)
 
+  // Match the canonical core Jupiter path: requesting a platform fee is NOT
+  // enough to prove one will actually be charged. Jupiter can floor
+  // `platformFee.amount` to zero for tiny swaps or routes that do not charge a
+  // fee. In that case we must omit `feeAccount` from /swap and surface the
+  // result as fee-OFF, otherwise this direct SDK tool drifts from the shared
+  // swap path and can misreport affiliate-fee state.
+  const swapFeeAmount = BigInt(quote.platformFee?.amount ?? '0')
+  const chargesFee = feeAccount !== null && swapFeeAmount > 0n
+
   // Step 2: Build the (unsigned) swap transaction. Include feeAccount only
-  // when resolved.
+  // when the quoted route actually charges the affiliate fee.
   const swapBody: Record<string, unknown> = {
     userPublicKey,
     quoteResponse: quote,
@@ -294,7 +303,7 @@ export const buildJupiterSwapTx = async ({
     asLegacyTransaction: false,
     dynamicComputeUnitLimit: true,
   }
-  if (feeAccount) {
+  if (chargesFee) {
     swapBody.feeAccount = feeAccount
   }
 
@@ -325,7 +334,7 @@ export const buildJupiterSwapTx = async ({
     minOutAmount: quote.otherAmountThreshold,
     priceImpactPct: quote.priceImpactPct,
     routeLabels: quote.routePlan.map(r => r.swapInfo.label ?? r.swapInfo.ammKey),
-    affiliateFeeApplied: Boolean(feeAccount),
+    affiliateFeeApplied: chargesFee,
     inputMint,
     outputMint,
   }
