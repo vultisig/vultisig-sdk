@@ -263,12 +263,21 @@ describe('normalizeChain', () => {
   // hand-curated additions, not a side effect of separator-stripping alone.
   describe('chain-id / marketing-name aliases', () => {
     it.each([
+      ['cosmoshub-4', Chain.Cosmos],
+      ['gaia', Chain.Cosmos],
+      ['osmosis-1', Chain.Osmosis],
+      ['thorchain-1', Chain.THORChain],
+      ['mayachain-mainnet-v1', Chain.MayaChain],
+      ['dydx-mainnet-1', Chain.Dydx],
+      ['kaiyo-1', Chain.Kujira],
       ['columbus-5', Chain.TerraClassic],
       ['columbus5', Chain.TerraClassic],
       ['Columbus-5', Chain.TerraClassic],
       ['COLUMBUS-5', Chain.TerraClassic],
       ['phoenix-1', Chain.Terra],
       ['phoenix1', Chain.Terra],
+      ['noble-1', Chain.Noble],
+      ['akashnet-2', Chain.Akash],
       ['Phoenix-1', Chain.Terra],
       ['terra v2', Chain.Terra],
       ['Terra V2', Chain.Terra],
