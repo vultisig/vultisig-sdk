@@ -93,22 +93,26 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
 // ===== Vault-name / export-filename safety policy (single source of truth) =====
 //
 // A vault's name and localPartyId are interpolated into the export filename (see
-// export()). Two independently-unsafe things must never reach a filename component:
+// export()). Three independently-unsafe things must never reach a filename component:
 //   - path separators ("/" or "\"), which would split the component across directories
 //   - control characters (C0/DEL/C1); C1 U+009B (CSI) is a terminal escape introducer
+//   - Windows-invalid filename characters (< > : " | ? *), which make the resulting
+//     file uncreatable or uncopyable on a Windows filesystem
 //
 // rename() (validateVaultName) and export() (encodeFilenameComponent) BOTH derive
-// their rules from these two regexes — one policy, two dispositions. rename() refuses
+// their rules from these regexes — one policy, two dispositions. rename() refuses
 // an unsafe name; export() cannot, so it encodes. Keep the regexes here the only
 // definition so the reject path and the encode path can never drift apart.
 const PATH_SEPARATOR_RE = /[/\\]/
+const WINDOWS_INVALID_RE = /[<>:"|?*]/
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f\u0080-\u009f]/
 
 /**
  * Encode one filename component so it stays a single safe path segment.
  *
- * Mirrors the rename-time name policy (PATH_SEPARATOR_RE, CONTROL_CHAR_RE) but
+ * Mirrors the rename-time name policy (PATH_SEPARATOR_RE, WINDOWS_INVALID_RE,
+ * CONTROL_CHAR_RE) but
  * ENCODES rather than rejects: rename() is the going-forward chokepoint, yet a vault
  * imported — or created via a path that ran no name validation — may already carry an
  * unsafe name or localPartyId. Refusing to export such a vault would strand a
@@ -119,6 +123,7 @@ const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f\u0080-\u009f]/
 function encodeFilenameComponent(component: string): string {
   const encoded = component
     .replace(new RegExp(PATH_SEPARATOR_RE.source, 'g'), '_')
+    .replace(new RegExp(WINDOWS_INVALID_RE.source, 'g'), '_')
     .replace(new RegExp(CONTROL_CHAR_RE.source, 'g'), '_')
     // A component of "." or ".." (or any leading dot-run) is a traversal / hidden-file
     // hazard once used as a filename; neutralize only the leading dots ("a..b" is fine).
@@ -500,15 +505,21 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
 
     // Only reject what is actually unsafe. The name is interpolated into the export
-    // filename (see export()), so path separators and control characters are out —
-    // but the previous alphanumeric allowlist also rejected the `#` in ecosystem-created
-    // names like "Vultisig Cluster #1". Creation and import run no name validation at all,
-    // so they already accept such names; rename was the sole validator, which made it a
-    // one-way door: rename away from such a name, and you could never rename back.
-    // The two regexes below are the shared policy that export() also enforces (by
-    // encoding rather than rejecting) — see encodeFilenameComponent.
+    // filename (see export()), so path separators, Windows-invalid characters, and
+    // control characters are out — but the previous alphanumeric allowlist also rejected
+    // the `#` in ecosystem-created names like "Vultisig Cluster #1". Creation and import
+    // run no name validation at all, so they already accept such names; rename was the
+    // sole validator, which made it a one-way door: rename away from such a name, and
+    // you could never rename back. The regexes below are the shared policy that export()
+    // also enforces (by encoding rather than rejecting) — see encodeFilenameComponent.
     if (PATH_SEPARATOR_RE.test(name)) {
       errors.push('Vault name cannot contain path separators')
+    }
+
+    // < > : " | ? * are legal on POSIX but invalid in Windows filenames; a name carrying
+    // one would export fine on macOS/Linux and then fail to create or copy on Windows.
+    if (WINDOWS_INVALID_RE.test(name)) {
+      errors.push('Vault name cannot contain the characters < > : " | ? *')
     }
 
     // C0 + DEL + C1: C1 (U+0080-U+009F) includes CSI (U+009B), which a terminal can treat

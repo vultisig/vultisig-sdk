@@ -5,7 +5,8 @@
 // "Vultisig Cluster #1" — names creation and import both accept. That made rename a
 // one-way door: rename away from such a name and you could never rename back.
 // The policy now rejects only what is genuinely unsafe for the export filename the
-// name is interpolated into: path separators and control characters.
+// name is interpolated into: path separators, Windows-invalid filename characters
+// (< > : " | ? *), and control characters.
 import { describe, expect, it, vi } from 'vitest'
 
 import { VaultBase } from '../../src/vault/VaultBase'
@@ -47,6 +48,12 @@ describe('vault name policy', () => {
     expect(validate('../etc/passwd').isValid).toBe(false)
     expect(validate('a/b').errors).toContain('Vault name cannot contain path separators')
     expect(validate('a\\b').errors).toContain('Vault name cannot contain path separators')
+  })
+
+  it('rejects Windows-invalid filename characters, which would break the export on Windows', () => {
+    for (const char of ['<', '>', ':', '"', '|', '?', '*']) {
+      expect(validate(`bad${char}name`).errors).toContain('Vault name cannot contain the characters < > : " | ? *')
+    }
   })
 
   it('rejects control characters', () => {
@@ -129,6 +136,7 @@ describe('export() filename safety — pre-existing unsafe metadata', () => {
     { label: 'backslash path separators', name: `a${BACKSLASH}b`, localPartyId: `dev${BACKSLASH}ice` },
     { label: 'control characters (incl. C1 CSI)', name: `bad${NUL}${LF}name`, localPartyId: `dev${CSI}ice` },
     { label: 'a bare dot-dot component', name: '..', localPartyId: '..' },
+    { label: 'Windows-invalid filename characters', name: 'a<b>c:d"e|f?g*h', localPartyId: 'dev:ice' },
   ]
 
   for (const { label, name, localPartyId } of cases) {
@@ -144,6 +152,8 @@ describe('export() filename safety — pre-existing unsafe metadata', () => {
         return code <= 0x1f || code === 0x7f || (code >= 0x80 && code <= 0x9f)
       })
       expect(hasControlChar).toBe(false)
+      // No character Windows refuses in filenames survives either.
+      expect(/[<>:"|?*]/.test(filename)).toBe(false)
       // No leading dot-run that could resolve to "." / ".." traversal.
       expect(filename.startsWith('.')).toBe(false)
       // The stable suffix stays intact, so the file is still a recognizable share backup.

@@ -635,14 +635,17 @@ export async function executeExport(ctx: CommandContext, options: ExportVaultOpt
   // could predict and pre-create would put the shares straight back into their 0644 file.
   // Unpredictable name + fail-closed create means that path cannot be won.
   const tempPath = `${outputPath}.${process.pid}.${Date.now()}.${randomBytes(6).toString('hex')}.tmp`
+  let tempCreated = false
   try {
     await fs.writeFile(tempPath, vultContent, { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
+    tempCreated = true
     await fs.rename(tempPath, outputPath)
   } catch (err) {
-    // Only remove the temp file if the exclusive create is what succeeded. On EEXIST we
-    // never created it — something was already at that path — so deleting it would remove
-    // a file we do not own.
-    if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST') {
+    // Only remove the temp file if the exclusive create is what succeeded — key that off
+    // the flag, not the error code: rename can also fail with EEXIST (e.g. on Windows),
+    // and then the temp file IS ours to clean up. If the create itself failed, something
+    // else already held that path and deleting it would remove a file we do not own.
+    if (tempCreated) {
       await fs.rm(tempPath, { force: true }).catch(() => {})
     }
     throw err

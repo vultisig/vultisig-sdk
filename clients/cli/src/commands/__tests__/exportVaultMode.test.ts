@@ -101,7 +101,7 @@ describe('export file permissions', () => {
 // unsafe — and that cuts both ways: if the TEMP path already exists, writeFile truncates
 // it in place and keeps its old permissions, putting the shares right back in a
 // world-readable file. Hence random bytes in the name and an exclusive ('wx') create.
-describe('export temp file cannot be pre-empted', () => {
+describe('export temp file safety', () => {
   let tmpDir: string
   let originalUmask: number
 
@@ -140,12 +140,28 @@ describe('export temp file cannot be pre-empted', () => {
     await expect(exportWithPinnedRandom(makeCtx(), { outputPath, exportPassword: 'pw' })).rejects.toThrow()
 
     // The decisive assertion: the shares must never reach the pre-created 0644 file.
-    // The failure path also unlinks the temp path, so absent is as good as empty —
-    // what must not happen is keyshare bytes landing in a world-readable file.
-    const leaked = await fs.readFile(tempPath, 'utf-8').catch(() => '')
-    expect(leaked).not.toContain('VULT-KEYSHARE-BYTES')
+    expect(await fs.readFile(tempPath, 'utf-8')).not.toContain('VULT-KEYSHARE-BYTES')
+
+    // The exclusive create failed, so we did not make that file — cleanup must leave it
+    // alone rather than deleting a file someone else put there.
+    await expect(fs.access(tempPath)).resolves.toBeUndefined()
 
     // ...and the export must not have silently succeeded to the real target either.
     await expect(fs.access(outputPath)).rejects.toThrow()
+  })
+
+  it('cleans up the temp file it created when the rename step fails, even on EEXIST', async () => {
+    // Cleanup keys off "did the exclusive create succeed", not the error code: rename
+    // can itself raise EEXIST (e.g. on Windows), and then the temp file IS ours — the
+    // old code-sniffing guard would have leaked a 0600 keyshare file next to the target.
+    const outputPath = path.join(tmpDir, 'renamefail.vult')
+    vi.spyOn(fs, 'rename').mockRejectedValueOnce(
+      Object.assign(new Error('EEXIST: file already exists'), { code: 'EEXIST' })
+    )
+
+    await expect(executeExport(makeCtx(), { outputPath, exportPassword: 'pw' })).rejects.toThrow()
+
+    // No temp file left behind, and no target either — the rename never happened.
+    expect(await fs.readdir(tmpDir)).toEqual([])
   })
 })

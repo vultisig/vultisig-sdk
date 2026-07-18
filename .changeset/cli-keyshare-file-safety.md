@@ -13,7 +13,8 @@ Tighten the handling of files that carry key shares:
 - Stop `rename` rejecting vault names the ecosystem itself creates (e.g. the `#` in
   "Vultisig Cluster #1"), which made rename a one-way door. The alphanumeric allowlist
   is replaced with a denylist of what is genuinely unsafe for the export filename the
-  name is interpolated into: path separators and control characters.
+  name is interpolated into: path separators, Windows-invalid filename characters
+  (`< > : " | ? *`), and control characters.
 - Enforce that denylist at the real lifecycle boundary — `export()` — rather than only
   at rename. A vault imported or created via a path that ran no name validation could
   otherwise carry an unsafe name or `localPartyId` (path separators, control chars, a
