@@ -46,6 +46,37 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+    expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+  })
+
+  it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
+    const sdk = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
+    expect(
+      sdk.buildCosmosWasmExecuteMsg({
+        sender: 'thor1sender',
+        contract: 'thor1contract',
+        msg: { swap: { minimum_output: '123' } },
+      })
+    ).toEqual({
+      type: 'wasm/MsgExecuteContract',
+      value: '{"sender":"thor1sender","contract":"thor1contract","msg":{"swap":{"minimum_output":"123"}},"funds":[]}',
+    })
+  })
+
+  it('exports the canonical prep constants from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe('0x2::sui::SUI')
+    expect(rn.CONSOLIDATE_CHAINS).toEqual([
+      rn.Chain.Bitcoin,
+      rn.Chain.Litecoin,
+      rn.Chain.Dogecoin,
+      rn.Chain.BitcoinCash,
+      rn.Chain.Dash,
+    ])
   })
 })
 

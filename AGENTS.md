@@ -51,7 +51,6 @@ When using `agent ask` or `--via-agent`, the agent backend proposes actions; the
 | Action | Description | Runs where |
 |--------|-------------|------------|
 | `get_balances` | Fetch balances for all chains | local |
-| `get_portfolio` | Multi-chain portfolio with fiat values | local |
 | `get_market_price` | Token price lookup | backend |
 | `search_token` | Search known token registry (SDK) | local |
 | `build_send_tx` | Build a send transaction | local |
