@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
 import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { matchDiscriminatedUnion } from '@vultisig/lib-utils/matchDiscriminatedUnion'
@@ -210,7 +211,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
           return [input]
         }
 
-        const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+        const amountHex = Buffer.from(
+          stripHexPrefix(bigIntToHex(toBoundedBigInt(keysignPayload.toAmount, { bits: 256, signed: false }))),
+          'hex'
+        )
 
         const contract = TW.Tron.Proto.TransferTRC20Contract.create({
           ownerAddress: shouldBePresent(keysignPayload?.coin?.address),
@@ -275,7 +279,10 @@ export const getTronSigningInputs: SigningInputsResolver<'tron'> = ({ keysignPay
     return [input]
   }
 
-  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+  const amountHex = Buffer.from(
+    stripHexPrefix(bigIntToHex(toBoundedBigInt(keysignPayload.toAmount, { bits: 256, signed: false }))),
+    'hex'
+  )
 
   const contract = TW.Tron.Proto.TransferTRC20Contract.create({
     ownerAddress: shouldBePresent(keysignPayload?.coin?.address),

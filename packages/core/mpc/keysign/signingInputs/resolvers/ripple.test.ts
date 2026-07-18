@@ -128,3 +128,70 @@ describe('getRippleSigningInputs -- TrustSet build path (issued currency)', () =
     expect(input.opTrustSet).toBeFalsy()
   })
 })
+
+describe('getRippleSigningInputs -- amount strict parse (#1147)', () => {
+  it("rejects an unset ('') issued-currency amount instead of a zero trust-line limit", () => {
+    // Pre-fix: BigInt('') -> 0n -> formatIssuedCurrencyValue(0n) -> a '0' limit
+    // silently co-signed.
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: buildTrustSetPayload(''),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('rejects a negative issued-currency amount', () => {
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: buildTrustSetPayload('-1'),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('still builds an issued-currency limit above 64 bits (XRPL IOU values are not 64-bit)', async () => {
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: buildTrustSetPayload((2n ** 64n).toString()),
+      walletCore,
+    })
+    // 2^64 raw units at 15 decimals.
+    expect(input.opTrustSet?.limitAmount?.value).toBe('18446.744073709551616')
+  })
+
+  it("rejects an unset ('') amount on the raw-JSON memo payment path", () => {
+    const payload = buildPaymentPayload()
+    payload.memo = 'not-a-destination-tag'
+    payload.toAmount = ''
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: payload,
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('rejects a negative amount on the raw-JSON memo payment path', () => {
+    // XRP drops are non-negative; unsigned bound throws pre-ceremony instead
+    // of building JSON that XRPL would reject post-sign.
+    const payload = buildPaymentPayload()
+    payload.memo = 'not-a-destination-tag'
+    payload.toAmount = '-1'
+    expect(() =>
+      getRippleSigningInputs({
+        keysignPayload: payload,
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('keeps the raw-JSON memo payment amount unchanged for a valid value', async () => {
+    const payload = buildPaymentPayload()
+    payload.memo = 'not-a-destination-tag'
+    const [input] = await getRippleSigningInputs({
+      keysignPayload: payload,
+      walletCore,
+    })
+    expect(JSON.parse(input.rawJson ?? '{}').Amount).toBe('1000000')
+  })
+})

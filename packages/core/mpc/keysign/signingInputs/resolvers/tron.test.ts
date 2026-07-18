@@ -156,3 +156,55 @@ describe('getTronSigningInputs -- native transfer amount bounds (#1138)', () => 
     ).toThrow(RangeError)
   })
 })
+
+describe('getTronSigningInputs -- TRC20 amount strict parse (#1147)', () => {
+  const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'
+
+  const buildTrc20Payload = (toAmount: string) =>
+    create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Tron,
+        ticker: 'USDT',
+        address: OWNER,
+        decimals: 6,
+        isNativeToken: false,
+        contractAddress: USDT_CONTRACT,
+      }),
+      toAddress: OWNER,
+      toAmount,
+      blockchainSpecific: {
+        case: 'tronSpecific',
+        value: makeTronSpecific(),
+      },
+    })
+
+  it("rejects an unset ('') TRC20 amount instead of building a zero-value transfer", () => {
+    // Pre-fix: BigInt('') -> 0n -> a 0x00 amount byte silently co-signed.
+    expect(() =>
+      getTronSigningInputs({
+        keysignPayload: buildTrc20Payload(''),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('rejects a negative TRC20 amount', () => {
+    expect(() =>
+      getTronSigningInputs({
+        keysignPayload: buildTrc20Payload('-1'),
+        walletCore,
+      })
+    ).toThrow(RangeError)
+  })
+
+  it('still builds a TRC20 transfer above 64 bits (uint256 calldata must not false-reject)', async () => {
+    // 20 tokens at 18 decimals = 2e19 > 2^64; a 64-bit bound here would
+    // false-reject a perfectly ordinary 18-decimal TRC20 transfer.
+    const [input] = await getTronSigningInputs({
+      keysignPayload: buildTrc20Payload('20000000000000000000'),
+      walletCore,
+    })
+    const amount = input.transaction?.transferTrc20Contract?.amount
+    expect(Buffer.from(amount ?? new Uint8Array()).toString('hex')).toBe('01158e460913d00000')
+  })
+})

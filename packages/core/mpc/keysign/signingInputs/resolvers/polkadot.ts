@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { bigIntToHex } from '@vultisig/lib-utils/bigint/bigIntToHex'
+import { toBoundedBigInt } from '@vultisig/lib-utils/bigint/toBoundedBigInt'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -21,7 +22,10 @@ export const getPolkadotSigningInputs: SigningInputsResolver<'polkadot'> = ({ ke
     getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'polkadotSpecific')
 
   // Amount: converted to hexadecimal, stripped of '0x'
-  const amountHex = Buffer.from(stripHexPrefix(bigIntToHex(BigInt(keysignPayload.toAmount))), 'hex')
+  const amountHex = Buffer.from(
+    stripHexPrefix(bigIntToHex(toBoundedBigInt(keysignPayload.toAmount, { bits: 128, signed: false }))),
+    'hex'
+  )
 
   // methodIndex 3 = transfer_keep_alive on Asset Hub (statemint pallet_balances).
   // method 0 = transfer_allow_death which can reap the sender's account when the

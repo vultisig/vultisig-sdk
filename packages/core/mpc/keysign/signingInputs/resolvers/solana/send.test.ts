@@ -137,3 +137,31 @@ describe('getSolanaSendSigningInput priority fee plumbing', () => {
     expect(input.priorityFeePrice?.price?.toString()).toBe('1000000')
   })
 })
+
+describe('getSolanaSendSigningInput -- amount strict parse (#1147)', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it("rejects an unset ('') amount instead of building a zero-value transfer", () => {
+    const payload = buildPayload({})
+    payload.toAmount = ''
+    // Pre-fix: BigInt('') -> 0n -> Long.fromString('0') silently co-signed.
+    expect(() => getSolanaSendSigningInput({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('rejects an amount at 2^64 instead of silently wrapping the uint64 field', () => {
+    const payload = buildPayload({})
+    payload.toAmount = (2n ** 64n).toString()
+    expect(() => getSolanaSendSigningInput({ keysignPayload: payload, walletCore })).toThrow(RangeError)
+  })
+
+  it('still builds a native transfer at the uint64 max (no false-reject)', () => {
+    const payload = buildPayload({})
+    payload.toAmount = (2n ** 64n - 1n).toString()
+    const input = getSolanaSendSigningInput({ keysignPayload: payload, walletCore })
+    expect(input.transferTransaction?.value?.toString()).toBe('18446744073709551615')
+  })
+})
