@@ -88,4 +88,14 @@ export default defineConfig([
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
+  // Server helper subpath types — additive public surface for fast-vault /
+  // relay helpers without widening the root @vultisig/sdk export.
+  {
+    input: 'src/server/index.ts',
+    output: {
+      file: 'dist/server/index.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
 ])

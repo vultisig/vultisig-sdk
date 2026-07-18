@@ -278,6 +278,43 @@ const configs = {
         },
       }),
     },
+    {
+      input: './src/server/index.ts',
+      output: {
+        file: './dist/server/index.js',
+        format: 'es',
+        sourcemap: true,
+        inlineDynamicImports: true,
+        paths: wasmPathsResolver,
+      },
+      external,
+      plugins: createPlugins({
+        preferBuiltins: true,
+        replaceOptions: {
+          'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+        },
+      }),
+      onwarn,
+    },
+    {
+      input: './src/server/index.ts',
+      output: {
+        file: './dist/server/index.cjs',
+        format: 'cjs',
+        sourcemap: true,
+        exports: 'named',
+        interop: 'auto',
+        inlineDynamicImports: true,
+        paths: wasmPathsResolver,
+      },
+      external,
+      plugins: createPlugins({
+        preferBuiltins: true,
+        replaceOptions: {
+          'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+        },
+      }),
+    },
   ],
   browser: {
     input: './src/platforms/browser/index.ts',

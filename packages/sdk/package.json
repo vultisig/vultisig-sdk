@@ -72,6 +72,12 @@
       "import": "./dist/vite/index.js",
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs",
+      "default": "./dist/server/index.cjs"
     }
   },
   "scripts": {
