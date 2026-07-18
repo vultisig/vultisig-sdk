@@ -135,6 +135,7 @@ function toSwapRequest(options: SwapOptions, amount: string, dryRun?: true) {
     toChain: options.toChain,
     toSymbol: options.toToken || '',
     amount,
+    ...(options.slippage !== undefined && { slippageTolerance: options.slippage }),
     ...(dryRun && { dryRun: true as const }),
   }
 }
