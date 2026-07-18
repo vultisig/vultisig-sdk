@@ -41,9 +41,13 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
   const buildPayload = ({
     memo,
     ibcDenomTraces,
+    accountNumber = 7n,
+    sequence = 3n,
   }: {
     memo: string
     ibcDenomTraces?: { path: string; baseDenom: string; latestBlock: string }
+    accountNumber?: bigint
+    sequence?: bigint
   }) =>
     create(KeysignPayloadSchema, {
       coin: create(CoinSchema, {
@@ -61,8 +65,8 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
       blockchainSpecific: {
         case: 'cosmosSpecific',
         value: create(CosmosSpecificSchema, {
-          accountNumber: 7n,
-          sequence: 3n,
+          accountNumber,
+          sequence,
           gas: 2500n,
           transactionType: TransactionType.IBC_TRANSFER,
           ibcDenomTraces: ibcDenomTraces ? create(CosmosIbcDenomTraceSchema, ibcDenomTraces) : undefined,
@@ -105,6 +109,29 @@ describe('getCosmosSigningInputs IBC transfer guards', () => {
     expect(transfer!.sourceChannel).toBe('channel-141')
     expect(transfer!.timeoutTimestamp.toString()).toBe('1751328000000000000')
     expect(transfer!.timeoutTimestamp.isZero()).toBe(false)
+  })
+
+  it('preserves uint64 account identifiers above the JavaScript safe-integer range', async () => {
+    const accountNumber = 9_007_199_254_740_993n
+    const sequence = 18_446_744_073_709_551_615n
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: buildPayload({
+        memo: 'transfer:channel-141',
+        ibcDenomTraces: {
+          path: 'transfer/channel-141',
+          baseDenom: 'uatom',
+          latestBlock: '12345_1751328000000000000',
+        },
+        accountNumber,
+        sequence,
+      }),
+      walletCore,
+    })
+
+    expect(input.accountNumber.toString()).toBe(accountNumber.toString())
+    expect(input.sequence.toString()).toBe(sequence.toString())
+    expect(input.accountNumber.unsigned).toBe(true)
+    expect(input.sequence.unsigned).toBe(true)
   })
 
   it('refuses to build when the memo channel is malformed (COSMOS-03)', () => {
