@@ -99,7 +99,7 @@ export async function getXrpAccountState(
     { account: address, strict: true, ledger_index: 'current' },
     signal
   )
-  if (result.error === 'actNotFound' || !result.account_data) {
+  if (result.error === 'actNotFound') {
     return {
       address,
       sequence: 0,
@@ -108,6 +108,14 @@ export async function getXrpAccountState(
       funded: false,
       ownerCount: 0,
     }
+  }
+  // A non-`actNotFound` success envelope that is missing `account_data` is a
+  // malformed / partial upstream response, NOT an unfunded account. Fail
+  // closed here (matching the core-chain resolver, which threw on the same
+  // shape) rather than reporting a real-looking `0` balance for what may be a
+  // funded account.
+  if (!result.account_data) {
+    throw new Error(`XRP account_info returned no account_data without actNotFound: ${JSON.stringify(result)}`)
   }
   return {
     address,
@@ -201,7 +209,15 @@ export async function getXrpAccountLines(
       return []
     }
 
-    lines.push(...(result.lines ?? []))
+    // A funded account with no trust lines returns `lines: []`, so a missing /
+    // non-array `lines` on a non-`actNotFound` page is a malformed response.
+    // Fail closed rather than silently degrading to "no trust line" (which
+    // would report a real-looking `0` token balance for a held token).
+    if (!Array.isArray(result.lines)) {
+      throw new Error(`XRP account_lines returned no lines array without actNotFound: ${JSON.stringify(result)}`)
+    }
+
+    lines.push(...result.lines)
     marker = result.marker
   } while (marker !== undefined)
 
