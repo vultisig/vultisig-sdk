@@ -1262,6 +1262,8 @@ Configuration is stored in `~/.vultisig/`:
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
 | 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
 | 14   | agent ask: duplicate keyed turn rejected — inspect the conversation for the original result                            |
+| 15   | No active vault selected — create, import, or switch to one                                                            |
+| 16   | Stored state is unreadable — repair it or re-import the vault from a .vult backup                                      |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

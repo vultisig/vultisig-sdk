@@ -213,6 +213,7 @@
     "form-data@npm:^4.0.5": "^4.0.6",
     "hono@npm:^4.11.4": "4.12.25",
     "undici": "^7.28.0",
-    "linkify-it": "5.0.1"
+    "linkify-it": "5.0.1",
+    "bigint-buffer@npm:^1.1.5": "patch:bigint-buffer@npm%3A1.1.5#~/.yarn/patches/bigint-buffer-npm-1.1.5-785f4ccd92.patch"
   }
 }
