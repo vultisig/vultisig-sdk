@@ -64,4 +64,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       value: '{"sender":"thor1sender","contract":"thor1contract","msg":{"swap":{"minimum_output":"123"}},"funds":[]}',
     })
   })
+
+  it('re-exports the canonical IBC + Sui prep helpers from the RN root surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const prep = await import('../../../../src/tools/prep')
+    const ibcTransfer = await import('../../../../src/tools/prep/ibcTransfer')
+    const suiTokenTransfer = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(prep.prepareIbcTransfer)
+    expect(rn.prepareIbcTransfer).toBe(ibcTransfer.prepareIbcTransfer)
+    expect(rn.supportedIbcDestinationsFrom).toBe(prep.supportedIbcDestinationsFrom)
+    expect(rn.normaliseIbcChainId).toBe(ibcTransfer.normaliseIbcChainId)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibcTransfer.IBC_MSG_TRANSFER_TYPE_URL)
+
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(prep.prepareSuiTokenTransferFromKeys)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(suiTokenTransfer.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(suiTokenTransfer.SUI_NATIVE_COIN_TYPE)
+  })
 })
