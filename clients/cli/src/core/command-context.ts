@@ -9,6 +9,8 @@
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
 
+import { NoActiveVaultError } from './errors'
+
 /**
  * Password cache entry with expiration
  */
@@ -87,7 +89,7 @@ export abstract class BaseCommandContext implements CommandContext {
     }
 
     if (!this._activeVault) {
-      throw new Error('No active vault. Create or import a vault first.')
+      throw new NoActiveVaultError()
     }
 
     return this._activeVault
