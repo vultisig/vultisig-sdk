@@ -20,6 +20,7 @@ import { findCoins } from '@vultisig/core-chain/coin/find'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
 import { scanSiteWithBlockaid } from '@vultisig/core-chain/security/blockaid/site'
 
+import type { DiscoveredToken } from '../../src/types/tokens'
 import { Vultisig } from '../../src/Vultisig'
 
 describe('Vultisig static methods', () => {
@@ -35,16 +36,18 @@ describe('Vultisig static methods', () => {
       expect(tokens.length).toBeGreaterThan(0)
     })
 
-    it('should return SDK-owned TokenInfo shape (contractAddress not id)', () => {
+    it('returns a canonical tokenId and the deprecated contractAddress alias', () => {
       const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
 
       const token = tokens[0]
+      expect(token).toHaveProperty('tokenId')
       expect(token).toHaveProperty('contractAddress')
       expect(token).toHaveProperty('chain')
       expect(token).toHaveProperty('ticker')
       expect(token).toHaveProperty('decimals')
       // Should NOT have core's `id` field
       expect(token).not.toHaveProperty('id')
+      expect(token?.contractAddress).toBe(token?.tokenId)
     })
 
     it('should return empty array for chain with no known tokens', () => {
@@ -85,6 +88,15 @@ describe('Vultisig static methods', () => {
       const token = Vultisig.getKnownToken(Chain.Bitcoin, '0x123')
 
       expect(token).toBeNull()
+    })
+
+    it('uses a non-address XRPL issued-currency token ID canonically', () => {
+      const [rlusd] = Vultisig.getKnownTokens(Chain.Ripple)
+
+      expect(rlusd?.ticker).toBe('RLUSD')
+      expect(rlusd?.tokenId).toMatch(/^[A-F0-9]{40}\.r/u)
+      expect(rlusd?.contractAddress).toBe(rlusd?.tokenId)
+      expect(Vultisig.getKnownToken(Chain.Ripple, rlusd!.tokenId!)).toEqual(rlusd)
     })
   })
 
@@ -171,6 +183,17 @@ describe('Vultisig static methods', () => {
   })
 
   describe('discoverTokens (vault-free)', () => {
+    it('keeps the legacy contractAddress-only object shape assignable', () => {
+      const legacyToken: DiscoveredToken = {
+        chain: Chain.Ethereum,
+        contractAddress: '0xlegacy',
+        ticker: 'LEGACY',
+        decimals: 18,
+      }
+
+      expect(legacyToken.tokenId).toBeUndefined()
+    })
+
     it('maps findCoins AccountCoin[] to DiscoveredToken[]', async () => {
       vi.mocked(findCoins).mockResolvedValue([
         {
@@ -200,6 +223,7 @@ describe('Vultisig static methods', () => {
       expect(result).toEqual([
         {
           chain: Chain.Ethereum,
+          tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
           contractAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
           ticker: 'USDC',
           decimals: 6,
@@ -207,6 +231,7 @@ describe('Vultisig static methods', () => {
         },
         {
           chain: Chain.Ethereum,
+          tokenId: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
           contractAddress: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
           ticker: 'USDT',
           decimals: 6,
@@ -215,7 +240,7 @@ describe('Vultisig static methods', () => {
       ])
     })
 
-    it('coerces a missing coin id to an empty contractAddress', async () => {
+    it('coerces a missing coin id to empty canonical and compatibility fields', async () => {
       vi.mocked(findCoins).mockResolvedValue([{ chain: Chain.Solana, ticker: 'SOL', decimals: 9 }] as never)
 
       const result = await Vultisig.discoverTokens({
@@ -223,6 +248,7 @@ describe('Vultisig static methods', () => {
         address: 'soL111',
       })
 
+      expect(result[0]?.tokenId).toBe('')
       expect(result[0]?.contractAddress).toBe('')
     })
 

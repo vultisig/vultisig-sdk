@@ -1856,10 +1856,12 @@ import { Vultisig, Chain } from '@vultisig/sdk'
 // Get all known tokens for a chain
 const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
 for (const token of tokens) {
-  console.log(`${token.ticker}: ${token.contractAddress}`)
+  console.log(`${token.ticker}: ${token.tokenId}`)
 }
 
-// Look up a specific token by contract address (case-insensitive)
+// contractAddress remains as a deprecated alias for existing consumers
+
+// Look up a specific token by its canonical chain-specific token ID
 const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 if (usdc) {
   console.log(`${usdc.ticker} - ${usdc.decimals} decimals`)
@@ -1893,7 +1895,7 @@ const solTokens = await vault.discoverTokens(Chain.Solana)
 
 ### Resolving Token Metadata
 
-Resolve token metadata by contract address. Checks the built-in registry first (fast, no network), then falls back to chain APIs:
+Resolve token metadata by canonical chain-specific token ID. Checks the built-in registry first (fast, no network), then falls back to chain APIs:
 
 ```typescript
 // Known token → instant, no network call
@@ -2639,7 +2641,7 @@ class Vultisig {
 
   // Token registry (static, no vault needed)
   static getKnownTokens(chain: Chain): TokenInfo[]
-  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null
+  static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null
   static getFeeCoin(chain: Chain): FeeCoinInfo
   static getBanxaSupportedChains(): Chain[]
 
@@ -2782,7 +2784,7 @@ class VaultBase {
 
   // Token Discovery & Metadata
   discoverTokens(chain: Chain): Promise<DiscoveredToken[]>
-  resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo>
+  resolveToken(chain: Chain, tokenId: string): Promise<TokenInfo>
 
   // Fiat On-Ramp
   getBuyUrl(chain: Chain, ticker?: string): Promise<string | null>

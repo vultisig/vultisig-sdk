@@ -3,6 +3,9 @@ import type { Chain } from '@vultisig/core-chain/Chain'
 /** Token metadata (SDK-owned, decoupled from core's KnownCoin) */
 export type TokenInfo = {
   chain: Chain
+  /** Canonical chain-specific token identifier. */
+  tokenId?: string
+  /** @deprecated Use `tokenId`; retained as a compatibility alias. */
   contractAddress?: string
   ticker: string
   decimals: number
@@ -22,6 +25,9 @@ export type FeeCoinInfo = {
 /** Token discovered at an address (from on-chain scan) */
 export type DiscoveredToken = {
   chain: Chain
+  /** Canonical chain-specific token identifier. */
+  tokenId?: string
+  /** @deprecated Use `tokenId`; retained as a compatibility alias. */
   contractAddress: string
   ticker: string
   decimals: number
