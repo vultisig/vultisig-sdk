@@ -59,6 +59,18 @@ export const getSolanaSigningInputs: SigningInputsResolver<'solana'> = ({ keysig
         // Raydium/Orca/executor + fee-transfer instructions that are NOT in that set - guarding those
         // here would fail-closed on a legitimate swap and brick the keysign. Mirrors the EVM arm, which
         // only enforces the providers whose router is actually allow-listed.
+        //
+        // TRUST OF `provider` (same boundary the EVM arm documents in knownAggregatorRouters.ts): this
+        // is the free `provider` STRING on the OneInchSwapPayload proto, part of the attacker-influenceable
+        // payload, NOT a trusted oneof discriminant. So an attacker can embed a Jupiter tx in
+        // quote.tx.data but relabel `provider` to a non-jupiter value (or omit it -> '') to skip this
+        // guard. That is NOT a new bypass: this gate is MONOTONIC (throws or no-ops, never mutates the
+        // signed bytes), so skipping it merely degrades to the pre-#1358 state where no Solana
+        // signing-path guard ran at all - a payload that was unsignable before is not made signable. What
+        // the guard buys is defense against the realistic partial compromise the issue targets: a quote
+        // server/MITM that swaps quote.tx.data but leaves an honestly-declared `provider: 'jupiter'`
+        // intact. Complete co-signer protection would need a proto change (a distinct oneof case per
+        // provider) to key enforcement on the case rather than the string - out of scope, not a regression.
         if (swapPayload.provider === 'jupiter') {
           const userWallet = new PublicKey(assertField(keysignPayload, 'coin').address)
           await assertSafeSolanaSwapTransactionBase64(data, userWallet)

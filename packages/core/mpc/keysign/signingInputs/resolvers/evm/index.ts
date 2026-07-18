@@ -54,12 +54,23 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
 
   // sdk#1358 fund-safety: re-assert the aggregator router allow-list HERE, on the co-signer
   // signing-input path, not only at quote construction. quote.tx.to becomes this SigningInput's
-  // destination (getToAddress/getTransaction general arms below) AND the ERC-20 approval spender
-  // (build.ts) - a compromised initiator can hand a co-signer a payload whose tx.to was never
-  // quote-checked, and every co-signer independently rebuilds the input from that payload. Fail
-  // closed for enforced providers (1inch/kyber); log-only for the unenforced ones, matching the
-  // quote-time policy. A pure gate: it throws or no-ops, never changes the signed bytes, so it
-  // cannot desync the cross-device pre-signing hash.
+  // destination (getToAddress/getTransaction general arms below) - a compromised initiator can
+  // hand a co-signer a payload whose tx.to was never quote-checked, and every co-signer
+  // independently rebuilds the input from that payload. Fail closed for enforced providers
+  // (1inch/kyber); log-only for the unenforced ones, matching the quote-time policy. A pure gate:
+  // it throws or no-ops, never changes the signed bytes, so it cannot desync the cross-device
+  // pre-signing hash.
+  //
+  // SCOPE - this guard covers the swap-leg destination ONLY, NOT the ERC-20 approval spender.
+  // On the INITIATOR, build.ts derives the approve spender from this same quote.tx.to
+  // (getSwapDestinationAddress), so the two coincide there. On THIS co-signer path the approve leg
+  // (handled in the erc20ApprovePayload branch above) is built from an INDEPENDENT wire field,
+  // erc20ApprovePayload.spender (erc20.ts), which nothing binds to quote.tx.to - so a payload can
+  // pass this router check yet still carry an approve to an arbitrary spender. That gap is
+  // pre-existing (the co-signer never validated the approve spender before #1358, so it is not a
+  // regression introduced here); binding spender===quote.tx.to for enforced providers - minding
+  // cowswap, whose spender is legitimately the GPv2VaultRelayer, not tx.to - is tracked as a
+  // separate follow-up (sdk#1358 review).
   if (swapPayload && 'general' in swapPayload) {
     const { provider, quote } = swapPayload.general
     // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
