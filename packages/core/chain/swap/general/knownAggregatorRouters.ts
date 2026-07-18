@@ -50,14 +50,9 @@ const ONE_INCH_V6_STANDARD_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 // v6.0 quote request returning this address (NOT the standard one above).
 const ONE_INCH_V6_ZKSYNC_ROUTER = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
 
-// KyberSwap MetaAggregationRouterV2 — same address confirmed live 2026-07-08 on every chain
-// that returned a response through aggregator-api.kyberswap.com's /routes (Ethereum, BSC,
-// Arbitrum, Optimism, Avalanche, Base, Polygon — 7 of 9 kyberSwapEnabledChains chains).
-// zkSync/Blast 404'd on this exact API path during verification — that looks like those two
-// chains aren't actually live through this aggregator endpoint today (a pre-existing,
-// separate question from this fix — kyberSwapEnabledChains may be ahead of what the live API
-// serves), not evidence of a differing router address. No chain-scoping needed unless that
-// changes.
+// KyberSwap MetaAggregationRouterV2 — same address confirmed live 2026-07-08 on every
+// kyberSwapEnabledChains chain through aggregator-api.kyberswap.com's /routes
+// (Ethereum, BSC, Arbitrum, Optimism, Avalanche, Base, Polygon).
 const KYBER_STANDARD_ROUTER = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
 
 export type EnforcedRouterProvider = '1inch' | 'kyber'

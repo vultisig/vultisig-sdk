@@ -16,7 +16,7 @@ const RESERVE_BASE = 1_000_000
 const EXPECTED_NETWORK_FEE = 20n
 const REQUIRE_DESTINATION_TAG = 0x00020000
 
-const accountInfo = (flags = 0) => ({
+const accountInfo = (flags = 0, ledgerCurrentIndex: number | undefined = 100) => ({
   account_data: {
     Account: SENDER,
     Balance: '1000000',
@@ -28,8 +28,14 @@ const accountInfo = (flags = 0) => ({
     PreviousTxnLgrSeq: 0,
     Sequence: 5,
   },
-  ledger_current_index: 100,
+  ledger_current_index: ledgerCurrentIndex,
 })
+
+const accountInfoWithoutLedgerCurrentIndex = () => {
+  const { ledger_current_index: _ledgerCurrentIndex, ...result } = accountInfo()
+
+  return result
+}
 
 vi.mock('@vultisig/core-chain/chains/ripple/network/info', () => ({
   getRippleNetworkInfo: vi.fn(async () => ({
@@ -68,6 +74,16 @@ describe('getRippleChainSpecific — reserve belongs on Amount, not the burned F
   it('funded destination: gas is the network fee only (no reserve added)', async () => {
     const res = await getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
     expect(res.gas).toBe(EXPECTED_NETWORK_FEE)
+    expect(res.lastLedgerSequence).toBe(160n)
+  })
+
+  it('rejects account_info responses without ledger_current_index', async () => {
+    const { getRippleAccountInfo } = await import('@vultisig/core-chain/chains/ripple/account/info')
+    vi.mocked(getRippleAccountInfo).mockResolvedValueOnce(accountInfoWithoutLedgerCurrentIndex())
+
+    await expect(
+      getRippleChainSpecific({ keysignPayload: payload(DEST_FUNDED, '1000'), walletCore: {} as never })
+    ).rejects.toThrow(/ledger_current_index/i)
   })
 
   it('unfunded destination with amount >= reserve: gas is STILL the network fee only', async () => {

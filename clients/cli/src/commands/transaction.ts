@@ -84,12 +84,18 @@ export async function sendTransaction(
   if (params.dryRun) {
     const balance = await vault.balance(params.chain, params.tokenId)
     const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+    // fee/total come straight from the build the SDK just did. They were previously
+    // dropped from the JSON result even though the human preview below prints the fee
+    // and `total` is what the insufficient-balance check compares against — so
+    // `--dry-run -o json` looked like a bare balance check with no cost information.
     const result: SendDryRunResult = {
       dryRun: true,
       chain: params.chain,
       to,
       amount: params.amount,
       symbol: balance.symbol,
+      fee: dryResult.fee,
+      total: dryResult.total,
       balance: balance.formattedAmount,
       destinationTag,
     }
@@ -104,7 +110,8 @@ export async function sendTransaction(
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
       if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
-      info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
+      info(`  Fee:     ${result.fee} ${result.symbol}`)
+      info(`  Total:   ${result.total} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)
     }
