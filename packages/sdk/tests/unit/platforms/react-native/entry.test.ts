@@ -49,6 +49,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
+  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(20_000_000n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 

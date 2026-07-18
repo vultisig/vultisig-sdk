@@ -1,4 +1,4 @@
-import { Chain, IbcEnabledCosmosChain } from '../../Chain'
+import { Chain, CosmosChain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
 import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
@@ -8,17 +8,32 @@ import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
 
 export { getFeeAmountFromGasPrice } from './cosmosDecimal'
 
-const defaultGas = 7500n
+/** Canonical signable send-fee floor for IBC-enabled Cosmos chains without a chain-specific override. */
+export const COSMOS_SEND_FEE_DEFAULT = 7500n
+
+/** Canonical fixed MayaChain native-send fee in CACAO base units. */
+export const MAYA_SEND_FEE_BASE_UNITS = 2000000000n
 
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
-  [Chain.Cosmos]: defaultGas,
+  [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,
-  [Chain.Kujira]: defaultGas,
-  [Chain.Terra]: defaultGas,
+  [Chain.Kujira]: COSMOS_SEND_FEE_DEFAULT,
+  [Chain.Terra]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Dydx]: 2500000000000000n,
   [Chain.TerraClassic]: 20000000n,
   [Chain.Noble]: 30000n,
   [Chain.Akash]: 200000n,
+}
+
+/**
+ * Returns the canonical static native-send fee in base units.
+ * THORChain returns `undefined` because its fee must be read from live
+ * `native_tx_fee_rune` network data rather than a static fallback.
+ */
+export const getCosmosSendFeeBaseUnits = (chain: CosmosChain): bigint | undefined => {
+  if (chain === Chain.THORChain) return undefined
+  if (chain === Chain.MayaChain) return MAYA_SEND_FEE_BASE_UNITS
+  return cosmosGasRecord[chain]
 }
 
 type FetchOpts = {

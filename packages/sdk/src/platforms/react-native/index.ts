@@ -69,6 +69,11 @@ export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
 
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'
