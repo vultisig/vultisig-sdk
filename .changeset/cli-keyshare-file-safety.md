@@ -14,3 +14,9 @@ Tighten the handling of files that carry key shares:
   "Vultisig Cluster #1"), which made rename a one-way door. The alphanumeric allowlist
   is replaced with a denylist of what is genuinely unsafe for the export filename the
   name is interpolated into: path separators and control characters.
+- Enforce that denylist at the real lifecycle boundary — `export()` — rather than only
+  at rename. A vault imported or created via a path that ran no name validation could
+  otherwise carry an unsafe name or `localPartyId` (path separators, control chars, a
+  bare `..`) straight into the export filename. `export()` now encodes every filename
+  component to a single safe path segment (same policy as rename), encoding rather than
+  refusing so a legitimately-imported vault is never stranded behind its own backup file.
