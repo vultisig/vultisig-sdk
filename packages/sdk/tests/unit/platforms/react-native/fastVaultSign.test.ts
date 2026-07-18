@@ -12,6 +12,8 @@ vi.mock('../../../../src/platforms/react-native/mpc/relay', () => ({
 }))
 
 const { keysign } = await import('@vultisig/core-mpc/keysign')
+const { joinRelaySession, startRelaySession, waitForParties } =
+  await import('../../../../src/platforms/react-native/mpc/relay')
 const { fastVaultSign, schnorrSign, INTERNAL_FOR_TESTING } =
   await import('../../../../src/platforms/react-native/mpc/fastVaultSign')
 
@@ -27,6 +29,113 @@ const BASE_OPTS = {
   relayUrl: 'https://api.vultisig.com/router',
   maxAttempts: 1,
 }
+
+describe('fastVaultSign — cancellation', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    vi.mocked(keysign).mockReset()
+    vi.mocked(joinRelaySession).mockClear()
+    vi.mocked(waitForParties).mockClear()
+    vi.mocked(startRelaySession).mockClear()
+  })
+
+  it('cancels a wedged VultiServer sign request without retrying', async () => {
+    const controller = new AbortController()
+    const reason = new Error('sign screen closed')
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = fastVaultSign({
+      ...BASE_OPTS,
+      maxAttempts: 2,
+      signal: controller.signal,
+      requestTimeoutMs: 10_000,
+    })
+    controller.abort(reason)
+
+    await expect(promise).rejects.toBe(reason)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(joinRelaySession).not.toHaveBeenCalled()
+    expect(keysign).not.toHaveBeenCalled()
+  })
+
+  it('supports a legacy Hermes AbortSignal without reason or throwIfAborted', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const legacySignal = {
+      aborted: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as AbortSignal
+
+    await expect(fastVaultSign({ ...BASE_OPTS, signal: legacySignal })).rejects.toThrow('Request aborted')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels a VultiServer body that stalls after response headers', async () => {
+    const controller = new AbortController()
+    const reason = new Error('cancel sign response body')
+    let notifyBodyRead!: () => void
+    const bodyRead = new Promise<void>(resolve => {
+      notifyBodyRead = resolve
+    })
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: () => {
+        notifyBodyRead()
+        return new Promise<string>(() => {})
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const promise = fastVaultSign({
+      ...BASE_OPTS,
+      maxAttempts: 2,
+      signal: controller.signal,
+      requestTimeoutMs: 10_000,
+    })
+
+    await bodyRead
+    controller.abort(reason)
+
+    await expect(promise).rejects.toBe(reason)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(joinRelaySession).not.toHaveBeenCalled()
+  })
+
+  it('threads one caller signal and request timeout through the relay ceremony', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 }))
+    )
+    vi.mocked(keysign).mockResolvedValueOnce({ r: 'aa'.repeat(32), s: 'bb'.repeat(32), recovery_id: '00' } as never)
+    const controller = new AbortController()
+
+    await fastVaultSign({ ...BASE_OPTS, signal: controller.signal, requestTimeoutMs: 12_345 })
+
+    expect(joinRelaySession).toHaveBeenCalledWith(BASE_OPTS.relayUrl, expect.any(String), BASE_OPTS.localPartyId, {
+      signal: controller.signal,
+      requestTimeoutMs: 12_345,
+    })
+    expect(waitForParties).toHaveBeenCalledWith(
+      BASE_OPTS.relayUrl,
+      expect.any(String),
+      2,
+      60_000,
+      controller.signal,
+      12_345
+    )
+    expect(startRelaySession).toHaveBeenCalledWith(BASE_OPTS.relayUrl, expect.any(String), ['local', 'server'], {
+      signal: controller.signal,
+      requestTimeoutMs: 12_345,
+    })
+  })
+})
 
 describe('fastVaultSign — ECDSA recovery_id handling', () => {
   afterEach(() => {

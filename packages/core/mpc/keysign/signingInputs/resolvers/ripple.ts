@@ -12,13 +12,12 @@ import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
 import { getKeysignTwPublicKey } from '../../tw/getKeysignTwPublicKey'
+import { getLegacyDestinationTag, resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { SigningInputsResolver } from '../resolver'
 
 export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysignPayload }) => {
-  const { gas, sequence, lastLedgerSequence } = getBlockchainSpecificValue(
-    keysignPayload.blockchainSpecific,
-    'rippleSpecific'
-  )
+  const rippleSpecific = getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'rippleSpecific')
+  const { gas, sequence, lastLedgerSequence } = rippleSpecific
 
   const coin = assertField(keysignPayload, 'coin')
 
@@ -135,42 +134,45 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
   }
 
   const getPayment = (): Pick<TW.Ripple.Proto.ISigningInput, 'opPayment' | 'rawJson'> => {
-    if (keysignPayload.memo) {
-      const destinationTag = parseInt(keysignPayload.memo, 10)
+    const memo = keysignPayload.memo || undefined
+    const destinationTag = resolveDestinationTag({
+      destinationTag: rippleSpecific.destinationTag,
+      memo,
+    })
 
-      if (!isNaN(destinationTag) && destinationTag.toString() === keysignPayload.memo) {
-        const payment = TW.Ripple.Proto.OperationPayment.create({
-          destination: keysignPayload.toAddress,
-          amount: Long.fromString(keysignPayload.toAmount),
-          destinationTag: Long.fromNumber(destinationTag) as any,
-        })
+    // Preserve Johnny's compatibility matrix: a canonical numeric memo is a
+    // legacy tag carrier when no typed field exists; when a typed field exists,
+    // only an equal memo is the echoed carrier. A different memo is independent
+    // even when it is numeric.
+    const inferredLegacyCarrier =
+      memo !== undefined &&
+      ((rippleSpecific.destinationTag === undefined && getLegacyDestinationTag(memo) !== undefined) ||
+        memo === destinationTag?.toString())
+    const distinctMemo = inferredLegacyCarrier ? undefined : memo
 
-        return {
-          opPayment: payment,
-        }
-      } else {
-        const memoDataHex = Buffer.from(keysignPayload.memo, 'utf8').toString('hex').toUpperCase()
+    if (distinctMemo) {
+      const memoDataHex = Buffer.from(distinctMemo, 'utf8').toString('hex').toUpperCase()
 
-        const txJson = {
-          TransactionType: 'Payment',
-          Account: account,
-          Destination: keysignPayload.toAddress,
-          Amount: keysignPayload.toAmount,
-          Fee: gas.toString(),
-          Sequence: Number(sequence),
-          LastLedgerSequence: Number(lastLedgerSequence),
-          Memos: [
-            {
-              Memo: {
-                MemoData: memoDataHex,
-              },
+      const txJson = {
+        TransactionType: 'Payment',
+        Account: account,
+        Destination: keysignPayload.toAddress,
+        Amount: keysignPayload.toAmount,
+        Fee: gas.toString(),
+        Sequence: Number(sequence),
+        LastLedgerSequence: Number(lastLedgerSequence),
+        ...(destinationTag === undefined ? {} : { DestinationTag: destinationTag }),
+        Memos: [
+          {
+            Memo: {
+              MemoData: memoDataHex,
             },
-          ],
-        }
+          },
+        ],
+      }
 
-        return {
-          rawJson: JSON.stringify(txJson),
-        }
+      return {
+        rawJson: JSON.stringify(txJson),
       }
     }
 
@@ -178,6 +180,7 @@ export const getRippleSigningInputs: SigningInputsResolver<'ripple'> = ({ keysig
       opPayment: TW.Ripple.Proto.OperationPayment.create({
         destination: keysignPayload.toAddress,
         amount: Long.fromString(keysignPayload.toAmount),
+        ...(destinationTag === undefined ? {} : { destinationTag: Long.fromNumber(destinationTag) as any }),
       }),
     }
   }

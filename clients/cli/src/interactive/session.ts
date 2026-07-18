@@ -721,7 +721,9 @@ export class ShellSession {
 
   private async runSend(args: string[]): Promise<void> {
     if (args.length < 3) {
-      console.log(chalk.yellow('Usage: send <chain> <to> <amount> [--token <tokenId>] [--memo <memo>]'))
+      console.log(
+        chalk.yellow('Usage: send <chain> <to> <amount> [--token <tokenId>] [--memo <memo>] [--destination-tag <tag>]')
+      )
       return
     }
 
@@ -730,20 +732,39 @@ export class ShellSession {
 
     let tokenId: string | undefined
     let memo: string | undefined
+    let destinationTag: number | undefined
 
     for (let i = 0; i < rest.length; i++) {
       if (rest[i] === '--token' && i + 1 < rest.length) {
         tokenId = rest[i + 1]
         i++
       } else if (rest[i] === '--memo' && i + 1 < rest.length) {
-        memo = rest.slice(i + 1).join(' ')
-        break
+        const nextOption = rest.findIndex(
+          (arg, index) => index > i && ['--token', '--memo', '--destination-tag'].includes(arg)
+        )
+        memo = rest.slice(i + 1, nextOption === -1 ? undefined : nextOption).join(' ')
+        i = nextOption === -1 ? rest.length : nextOption - 1
+      } else if (rest[i] === '--destination-tag') {
+        const tag = rest[i + 1]
+        const parsedTag = Number(tag)
+        if (
+          chain !== Chain.Ripple ||
+          !/^(0|[1-9]\d*)$/.test(tag ?? '') ||
+          !Number.isSafeInteger(parsedTag) ||
+          parsedTag > 4294967295
+        ) {
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+        }
+        destinationTag = parsedTag
+        i++
       }
     }
 
     try {
       // Use withAbortHandler to create an AbortSignal and pass it to executeSend
-      await this.withAbortHandler(signal => executeSend(this.ctx, { chain, to, amount, tokenId, memo, signal }))
+      await this.withAbortHandler(signal =>
+        executeSend(this.ctx, { chain, to, amount, tokenId, memo, destinationTag, signal })
+      )
     } catch (err: any) {
       if (
         err.message === 'Transaction cancelled by user' ||

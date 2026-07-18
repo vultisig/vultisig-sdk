@@ -76,21 +76,21 @@ describe('toNativeSwapAsset', () => {
     ).toBe('thor.ruji')
   })
 
-  it('maps secured-asset hyphen denoms to cross-chain swap ids', () => {
+  it('maps THORChain secured-asset hyphen denoms to secured (dash) notation', () => {
     expect(
       toNativeSwapAsset({
         chain: Chain.THORChain,
         id: 'btc-btc',
         ticker: 'BTC',
       })
-    ).toBe('BTC.BTC')
+    ).toBe('BTC-BTC')
     expect(
       toNativeSwapAsset({
         chain: Chain.THORChain,
         id: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
         ticker: 'USDC',
       })
-    ).toBe('ETH.USDC-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+    ).toBe('ETH-USDC-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
   })
 
   it('derives secured-asset denom prefixes from nativeSwapChainIds', () => {
@@ -101,7 +101,7 @@ describe('toNativeSwapAsset', () => {
           id: `${swapId.toLowerCase()}-asset`,
           ticker: 'ASSET',
         })
-      ).toBe(`${swapId}.ASSET`)
+      ).toBe(`${swapId}-ASSET`)
     }
   })
 
