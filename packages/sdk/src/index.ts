@@ -53,9 +53,11 @@ export {
   toBaseUnits,
   toHumanUnits,
 } from './utils/convertAmount'
+export { computePersonalSignHash, formatEcdsaSignature65 } from './utils/eip191'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+export { resolveChainReference } from './utils/resolveChainReference'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
@@ -637,6 +639,7 @@ export type {
   UndelegateParams,
   WithdrawRewardsParams,
 } from './tools'
+export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -653,6 +656,7 @@ export {
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
+  buildCosmosWasmExecuteMsg,
   buildCw20TransferMsg,
   buildDelegateMsg,
   buildGlifRedeemSticnt,
@@ -821,6 +825,11 @@ export {
   utxoFeeRate,
   VerifierClient,
 } from './tools'
+
+// The protobuf builder is environment-neutral despite its historical RN path.
+// Export it from the root so Node/CLI consumers share the same wire builder.
+export type { BuildCosmosWasmExecuteOptions, CosmosTxBuilderResult } from './platforms/react-native/chains/cosmos/tx'
+export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos/tx'
 
 // Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
 // The pure read-only per-chain gas price lives in `evmGasPrice` above; this
