@@ -87,6 +87,70 @@ describe('computeFingerprint', () => {
     expect(a).toBe(b)
   })
 
+  // Compatibility note: choosing blank as the canonical representation keeps
+  // fingerprints written by the old direct-send path stable. Old agent-path
+  // records fingerprinted from literal `0x` remain under their legacy fp and
+  // cannot match after this change; that upgrade exposure lasts at most the
+  // journal's 10-minute duplicate window. The fold is EVM-calldata-only
+  // (dataIsEvmCalldata) — a memo of `"0x"` is a distinct value (see the non-EVM
+  // block below), so only calldata intents collapse the two representations.
+  it.each(['', '0x', '0X', '  0x  ', '  0X  '])(
+    'normalises empty EVM calldata representation %j to the same fingerprint',
+    data => {
+      expect(computeFingerprint({ ...INTENT, data, dataIsEvmCalldata: true })).toBe(
+        computeFingerprint({ ...INTENT, data: '', dataIsEvmCalldata: true })
+      )
+    }
+  )
+
+  it('keeps non-empty calldata distinct from empty calldata', () => {
+    expect(computeFingerprint({ ...INTENT, data: '0x00', dataIsEvmCalldata: true })).not.toBe(
+      computeFingerprint({ ...INTENT, data: '0x', dataIsEvmCalldata: true })
+    )
+  })
+
+  // --- Non-EVM memo canonicalization (PR #1259, gomesalexandre) ---------------
+  // For a memo (dataIsEvmCalldata absent — the fund-safe default) a literal `"0x"`
+  // is a REAL memo and must stay distinct from an empty memo. Folding them, as the
+  // unscoped canonicalization did, falsely deduped two different memo-chain sends.
+  describe('non-EVM memo (data is a memo, not calldata)', () => {
+    // gomes's exact receipt: two THORChain intents differing only by memo.
+    const THOR_BASE = {
+      owner: 'vault123',
+      chain: 'THORChain',
+      to: 'thor1abc',
+      value: '100000000',
+      asset: 'RUNE',
+    } as const
+
+    it("keeps a '0x' memo distinct from an empty memo (no false dedup)", () => {
+      const emptyMemo = computeFingerprint({ ...THOR_BASE, data: '' })
+      const zeroXMemo = computeFingerprint({ ...THOR_BASE, data: '0x' })
+      expect(zeroXMemo).not.toBe(emptyMemo)
+    })
+
+    it("pins gomes's receipt: the empty-memo vector fingerprint is stable, the '0x'-memo vector now differs", () => {
+      // The empty-memo fingerprint is unchanged by the fix (a memo `""` normalises
+      // to `""` either way), so his receipt hash stays a committed reference.
+      const emptyMemo = computeFingerprint({ ...THOR_BASE, data: '' })
+      expect(emptyMemo).toBe('8aa2e111eb077a6d61c70e4b3c7869d4')
+      // Before the fix the '0x'-memo vector collapsed into that same hash; it must
+      // now be a different fingerprint so the two sends are not conflated.
+      const zeroXMemo = computeFingerprint({ ...THOR_BASE, data: '0x' })
+      expect(zeroXMemo).not.toBe('8aa2e111eb077a6d61c70e4b3c7869d4')
+    })
+
+    it('folds an empty EVM calldata but NOT an identical memo, on the same chain/fields', () => {
+      // Same chain + fields, data `"0x"`: calldata folds to empty, memo does not —
+      // the flag is the only difference, proving the scope is exactly EVM calldata.
+      const asCalldata = computeFingerprint({ ...THOR_BASE, data: '0x', dataIsEvmCalldata: true })
+      const asMemo = computeFingerprint({ ...THOR_BASE, data: '0x' })
+      const emptyData = computeFingerprint({ ...THOR_BASE, data: '' })
+      expect(asCalldata).toBe(emptyData)
+      expect(asMemo).not.toBe(emptyData)
+    })
+  })
+
   it('differs when any field differs', () => {
     const base = computeFingerprint(INTENT)
     expect(computeFingerprint({ ...INTENT, to: '0xOther' })).not.toBe(base)

@@ -107,8 +107,25 @@ export type BroadcastIntent = {
   to?: string
   /** Native value or token amount, stringified. */
   value?: string
-  /** EVM calldata or cosmos/UTXO memo. */
+  /** EVM calldata or cosmos/UTXO memo (see {@link BroadcastIntent.dataIsEvmCalldata}). */
   data?: string
+  /**
+   * Whether `data` is EVM calldata (true) rather than a chain memo (absent/false).
+   *
+   * This gates a single canonicalization: literal `"0x"` folds to `""` ONLY for
+   * calldata, because an EVM tx with `data: "0x"` and one with no data are the
+   * same on-chain call, so the two paths' representations must dedupe. A MEMO of
+   * `"0x"` is a real, distinct memo on a memo-routed chain (THORChain, Cosmos,
+   * UTXO OP_RETURN) and MUST NOT collapse into "no memo" — doing so would falsely
+   * treat two different sends as duplicates (fund-safety regression, PR #1259).
+   *
+   * The flag is NOT hashed; it only selects how `data` is normalised. So the only
+   * intents it can distinguish are those whose `data` is exactly `"0x"` — an EVM
+   * empty-calldata send still dedupes across paths, while a `"0x"` memo stays
+   * distinct from an empty memo. Absent = memo semantics: the fund-safe default,
+   * so a newly-added chain family never silently reintroduces the collision.
+   */
+  dataIsEvmCalldata?: boolean
   /**
    * Asset/denom discriminator for non-EVM sends, where the token identity is
    * NOT encoded in `to`/`data` (unlike EVM, whose contract address + calldata
@@ -209,8 +226,16 @@ export function journalPath(): string {
   return join(dir, 'broadcasts.jsonl')
 }
 
-function normalize(v: string | undefined): string {
-  return (v ?? '').trim().toLowerCase()
+/**
+ * Normalise a fingerprint field: trim + lowercase so cosmetic differences
+ * (checksum casing, whitespace) don't defeat a match. When
+ * `canonicalizeEmptyCalldata` is set — EVM calldata ONLY, never a memo — a
+ * literal `"0x"` folds to `""` so an empty-calldata send fingerprints the same
+ * whether a builder emitted `"0x"` or nothing (see {@link BroadcastIntent.dataIsEvmCalldata}).
+ */
+function normalize(v: string | undefined, canonicalizeEmptyCalldata = false): string {
+  const normalized = (v ?? '').trim().toLowerCase()
+  return canonicalizeEmptyCalldata && normalized === '0x' ? '' : normalized
 }
 
 /** Stable fingerprint for a broadcast intent (sha256 → short hex). */
@@ -220,7 +245,10 @@ export function computeFingerprint(intent: BroadcastIntent): string {
     normalize(intent.chain),
     normalize(intent.to),
     normalize(intent.value),
-    normalize(intent.data),
+    // Fold empty `"0x"` calldata to `""` for EVM only. For a memo (the default)
+    // `"0x"` is a real, distinct value and must survive — collapsing it would
+    // falsely dedupe two different memo-chain sends (PR #1259).
+    normalize(intent.data, intent.dataIsEvmCalldata === true),
     normalize(intent.asset),
   ].join('|')
   return createHash('sha256').update(canonical).digest('hex').slice(0, 32)
