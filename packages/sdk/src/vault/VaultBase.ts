@@ -1654,16 +1654,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   }
 
   /**
-   * Resolve token metadata by contract address.
+   * Resolve token metadata by canonical chain-specific token ID.
    * Checks known tokens registry first, then resolves from chain APIs.
    * Supported: EVM, Solana, Cosmos, TRON.
    *
    * @param chain - The chain the token is on
-   * @param contractAddress - The token's contract address
+   * @param tokenId - The token's canonical chain-specific identifier
    * @returns Token metadata (ticker, decimals, logo, priceProviderId)
    */
-  async resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo> {
-    return this.tokenDiscoveryService.resolveToken(chain, contractAddress)
+  async resolveToken(chain: Chain, tokenId: string): Promise<TokenInfo> {
+    return this.tokenDiscoveryService.resolveToken(chain, tokenId)
   }
 
   // ===== SECURITY SCANNING =====
