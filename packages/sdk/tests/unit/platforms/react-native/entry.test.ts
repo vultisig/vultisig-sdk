@@ -154,6 +154,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
+  it('exports XRP destination normalization helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const taggedXAddress = 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV'
+
+    expect(typeof rn.normalizeRippleDestination).toBe('function')
+    expect(typeof rn.decodeRippleXAddress).toBe('function')
+    expect(typeof rn.encodeRippleXAddress).toBe('function')
+    expect(typeof rn.isValidRippleXAddress).toBe('function')
+    expect(rn.isValidRippleXAddress(taggedXAddress)).toBe(true)
+    expect(rn.normalizeRippleDestination(taggedXAddress)).toEqual({
+      address: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY',
+      destinationTag: 495,
+    })
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 
