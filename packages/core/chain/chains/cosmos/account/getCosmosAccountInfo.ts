@@ -4,6 +4,7 @@ import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { getCosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/getCosmosRpcUrl'
 import { parseUint64 } from '@vultisig/core-chain/chains/cosmos/parseUint64'
+import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 type LcdAccountResponse = {
@@ -39,24 +40,49 @@ type LcdAccountResponse = {
 // compatibility, but expose sequenceBigInt for signing consumers and recover
 // unsafe values from the LCD's raw uint64 string.
 type ParsedAccount = {
+  address: string
   accountNumber: bigint
   sequence: number
   sequenceBigInt: bigint
 }
 
-const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
+const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount => {
   const acc = resp.account
-  if (!acc) return null
-  const base = acc.base_vesting_account?.base_account ?? acc.base_account ?? acc
-  if (typeof base.account_number !== 'string' || typeof base.sequence !== 'string') return null
+  // An HTTP-success response without the auth account envelope is malformed,
+  // not authoritative evidence that the account does not exist. Only a
+  // transport-level not-found result (handled by tryLcd) may fall through to
+  // the new-account sequence-zero default.
+  if (!acc) throw new Error('Invalid Cosmos account data: missing account')
+  const nestedBase = acc.base_vesting_account?.base_account ?? acc.base_account
+  if (!nestedBase && acc['@type'] && acc['@type'] !== '/cosmos.auth.v1beta1.BaseAccount') {
+    throw new Error(`Invalid Cosmos account data: unsupported account type ${acc['@type']}`)
+  }
+  const base = nestedBase ?? acc
+  if (typeof base.address !== 'string' || base.address.length === 0) {
+    throw new Error('Invalid Cosmos account data: missing address')
+  }
 
-  const accountNumber = BigInt(base.account_number)
-  const sequenceBigInt = parseUint64({
-    value: base.sequence,
-    field: 'sequence',
-    context: 'Cosmos account',
-  })
-  return { accountNumber, sequence: Number(sequenceBigInt), sequenceBigInt }
+  // ProtoJSON omits implicit-presence uint64 fields when their value is zero.
+  // Once a supported account envelope/base-account shape is established,
+  // absence therefore means 0n. Present malformed or out-of-range values must
+  // still fail closed through parseUint64.
+  const accountNumber =
+    base.account_number === undefined
+      ? 0n
+      : parseUint64({
+          value: base.account_number,
+          field: 'account_number',
+          context: 'Cosmos account',
+        })
+  const sequenceBigInt =
+    base.sequence === undefined
+      ? 0n
+      : parseUint64({
+          value: base.sequence,
+          field: 'sequence',
+          context: 'Cosmos account',
+        })
+  return { address: base.address, accountNumber, sequence: Number(sequenceBigInt), sequenceBigInt }
 }
 
 // LCD fallback for Tendermint-RPC account lookups that return null.
@@ -98,32 +124,50 @@ const COSMOS_LCD_FALLBACK_URLS: Partial<Record<CosmosChain, string>> = {
   [Chain.Akash]: 'https://akash-api.polkachu.com',
 }
 
-const tryLcd = async (base: string, address: string): Promise<ParsedAccount | null> => {
+type LcdAttempt =
+  | { status: 'found'; account: ParsedAccount }
+  | { status: 'not-found' }
+  | { status: 'unavailable'; error: unknown }
+
+const tryLcd = async (base: string, address: string): Promise<LcdAttempt> => {
   let resp: LcdAccountResponse
   try {
     resp = await queryUrl<LcdAccountResponse>(`${base}/cosmos/auth/v1beta1/accounts/${address}`)
-  } catch {
-    return null
+  } catch (error) {
+    if (error instanceof HttpResponseError && error.status === 404) {
+      return { status: 'not-found' }
+    }
+    return { status: 'unavailable', error }
   }
 
-  // A transport failure can try another endpoint, but a structurally present
-  // account with invalid uint64 data is a data-integrity failure. Propagate it
-  // so signing cannot silently fall through to sequence 0.
-  return parseLcdAccount(resp)
+  // A transport failure can try another endpoint, but malformed response data
+  // is an integrity failure. Propagate it so signing cannot silently fall
+  // through to sequence 0.
+  const account = parseLcdAccount(resp)
+  if (account.address !== address) {
+    throw new Error(`Invalid Cosmos account data: address mismatch (${account.address})`)
+  }
+  return { status: 'found', account }
 }
 
 const fetchAccountViaLcd = async (chain: CosmosChain, address: string): Promise<ParsedAccount | null> => {
   const base = getCosmosRpcUrl(chain)
   if (!base) return null
   const primary = await tryLcd(base, address)
-  if (primary) return primary
-  // Primary failed (network / 5xx / shape mismatch). Try the registered
-  // fallback for this chain. Both-failed surfaces as null and the caller
-  // ships with sequence:0 default — same legacy behaviour, but only after
-  // we've actually exhausted both endpoints.
+  if (primary.status === 'found') return primary.account
+  // A structured 404 is authoritative evidence that the account is absent;
+  // this is the only LCD outcome allowed to use the new-account zero default.
+  if (primary.status === 'not-found') return null
+
+  // Network/5xx failure is not evidence that the account is absent. Try the
+  // registered fallback, then propagate the failure if exact data is still
+  // unavailable instead of silently constructing a sequence-zero payload.
   const fallback = COSMOS_LCD_FALLBACK_URLS[chain]
-  if (!fallback) return null
-  return tryLcd(fallback, address)
+  if (!fallback) throw primary.error
+  const secondary = await tryLcd(fallback, address)
+  if (secondary.status === 'found') return secondary.account
+  if (secondary.status === 'not-found') return null
+  throw secondary.error
 }
 
 // Explicit return type so TS doesn't have to name the deeply-nested
@@ -161,7 +205,16 @@ export const getCosmosAccountInfo = async ({
   } else {
     // RPC returned null or a sequence that its number-based API cannot
     // represent exactly. Prefer the LCD's raw uint64 string in both cases.
-    const lcd = await fetchAccountViaLcd(chain, address)
+    let lcd: ParsedAccount | null
+    try {
+      lcd = await fetchAccountViaLcd(chain, address)
+    } catch (error) {
+      if (accountResult.error) throw accountResult.error
+      if (accountInfo) {
+        throw new Error('Cosmos account sequence cannot be represented exactly', { cause: error })
+      }
+      throw error
+    }
     if (lcd) {
       accountNumber = lcd.accountNumber
       sequence = lcd.sequence
