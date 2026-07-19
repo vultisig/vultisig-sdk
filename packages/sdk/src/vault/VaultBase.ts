@@ -90,6 +90,42 @@ function determineVaultType(signers: string[]): 'fast' | 'secure' {
   return signers.some(signer => signer.startsWith('Server-')) ? 'fast' : 'secure'
 }
 
+// ===== Vault-name / export-filename safety policy (single source of truth) =====
+//
+// A vault's name and localPartyId are interpolated into the export filename (see
+// export()). Two independently-unsafe things must never reach a filename component:
+//   - path separators ("/" or "\"), which would split the component across directories
+//   - control characters (C0/DEL/C1); C1 U+009B (CSI) is a terminal escape introducer
+//
+// rename() (validateVaultName) and export() (encodeFilenameComponent) BOTH derive
+// their rules from these two regexes — one policy, two dispositions. rename() refuses
+// an unsafe name; export() cannot, so it encodes. Keep the regexes here the only
+// definition so the reject path and the encode path can never drift apart.
+const PATH_SEPARATOR_RE = /[/\\]/
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f\u0080-\u009f]/
+
+/**
+ * Encode one filename component so it stays a single safe path segment.
+ *
+ * Mirrors the rename-time name policy (PATH_SEPARATOR_RE, CONTROL_CHAR_RE) but
+ * ENCODES rather than rejects: rename() is the going-forward chokepoint, yet a vault
+ * imported — or created via a path that ran no name validation — may already carry an
+ * unsafe name or localPartyId. Refusing to export such a vault would strand a
+ * legitimate user behind their own backup file, so we replace the unsafe bytes with
+ * "_" instead. The result is always a single component that cannot escape the target
+ * directory, while staying recognizable enough for a human to identify the vault.
+ */
+function encodeFilenameComponent(component: string): string {
+  const encoded = component
+    .replace(new RegExp(PATH_SEPARATOR_RE.source, 'g'), '_')
+    .replace(new RegExp(CONTROL_CHAR_RE.source, 'g'), '_')
+    // A component of "." or ".." (or any leading dot-run) is a traversal / hidden-file
+    // hazard once used as a filename; neutralize only the leading dots ("a..b" is fine).
+    .replace(/^\.+/, '_')
+  return encoded.length > 0 ? encoded : '_'
+}
+
 /**
  * VaultBase - Abstract base class for all vault types
  *
@@ -463,8 +499,22 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       errors.push(`Vault name cannot exceed ${vaultConfig.maxNameLength} characters`)
     }
 
-    if (!/^[a-zA-Z0-9\s\-_]+$/.test(name)) {
-      errors.push('Vault name can only contain letters, numbers, spaces, hyphens, and underscores')
+    // Only reject what is actually unsafe. The name is interpolated into the export
+    // filename (see export()), so path separators and control characters are out —
+    // but the previous alphanumeric allowlist also rejected the `#` in ecosystem-created
+    // names like "Vultisig Cluster #1". Creation and import run no name validation at all,
+    // so they already accept such names; rename was the sole validator, which made it a
+    // one-way door: rename away from such a name, and you could never rename back.
+    // The two regexes below are the shared policy that export() also enforces (by
+    // encoding rather than rejecting) — see encodeFilenameComponent.
+    if (PATH_SEPARATOR_RE.test(name)) {
+      errors.push('Vault name cannot contain path separators')
+    }
+
+    // C0 + DEL + C1: C1 (U+0080-U+009F) includes CSI (U+009B), which a terminal can treat
+    // as an escape introducer when the name is echoed, so deny the whole range too.
+    if (CONTROL_CHAR_RE.test(name)) {
+      errors.push('Vault name cannot contain control characters')
     }
 
     return {
@@ -754,7 +804,16 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const localPartyIndex = this.vaultData.signers.indexOf(this.vaultData.localPartyId) + 1
 
     // Format: {vaultName}-{localPartyId}-share{index}of{total}.vult
-    const filename = `${this.vaultData.name}-${this.vaultData.localPartyId}-share${localPartyIndex}of${totalSigners}.vult`
+    //
+    // Encode name and localPartyId rather than trusting them: rename() enforces the
+    // name policy going forward, but a vault imported — or created via a path that ran
+    // no validation — may already carry an unsafe name or localPartyId (path separators,
+    // control chars, a bare ".."). Refusing to export such a vault would strand the user
+    // behind their own backup, so we encode to a safe single path component (same policy
+    // as rename, see encodeFilenameComponent) instead of throwing.
+    const safeName = encodeFilenameComponent(this.vaultData.name)
+    const safeLocalPartyId = encodeFilenameComponent(this.vaultData.localPartyId)
+    const filename = `${safeName}-${safeLocalPartyId}-share${localPartyIndex}of${totalSigners}.vult`
 
     // Generate base64-encoded backup (possibly encrypted)
     const data = await createVaultBackup(this.coreVault, password)
@@ -1722,12 +1781,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     toChain: Chain
     toSymbol: string
     amount: string
+    recipient?: string
+    slippageTolerance?: number
+    excludeProviders?: import('./swap-types').SwapQuoteParams['excludeProviders']
     dryRun?: boolean
   }): Promise<CompoundSwapResult> {
-    const { fromChain, fromSymbol, toChain, toSymbol, amount, dryRun } = params
+    const { fromChain, fromSymbol, toChain, toSymbol, amount, recipient, slippageTolerance, excludeProviders, dryRun } =
+      params
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
-    const [fromAddress, toAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
+    const toAddress = recipient ?? defaultToAddress
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
@@ -1739,7 +1803,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
     const normalizedAmount = this.validateHumanSwapAmount(resolvedAmount, fromToken.decimals)
 
-    const quote = await this.getSwapQuote({ fromCoin, toCoin, amount: normalizedAmount })
+    const quote = await this.getSwapQuote({
+      fromCoin,
+      toCoin,
+      amount: normalizedAmount,
+      recipient,
+      slippageTolerance,
+      excludeProviders,
+    })
     if (dryRun) return { dryRun: true, quote }
 
     const { keysignPayload, approvalPayload } = await this.prepareSwapTx({

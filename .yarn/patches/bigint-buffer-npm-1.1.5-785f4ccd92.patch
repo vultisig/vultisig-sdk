@@ -1,0 +1,18 @@
+diff --git a/dist/node.js b/dist/node.js
+index 513168c89e387668a79b6beb109587b3eb41a7d0..73d35813858e8fda34541200d0ecff0977a8683c 100644
+--- a/dist/node.js
++++ b/dist/node.js
+@@ -7,7 +7,12 @@ let converter;
+         converter = require('bindings')('bigint_buffer');
+     }
+     catch (e) {
+-        console.warn('bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)');
++        // Patched by vultisig-sdk: the native binding has no darwin-arm64 (and most
++        // other) prebuild, so this fires on EVERY process start and printed
++        // "bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)"
++        // to stderr on every CLI invocation, including --version. The pure-JS fallback
++        // below is fully functional, "npm run rebuild" is meaningless advice for a
++        // globally installed CLI, and the noise made a working CLI look broken.
+     }
+ }
+ /**
