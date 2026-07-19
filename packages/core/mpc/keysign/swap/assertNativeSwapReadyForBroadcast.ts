@@ -8,20 +8,35 @@ import {
   nativeSwapApiBaseUrl,
   type NativeSwapChain,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
-import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
-import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-import { VaultError, VaultErrorCode } from '../VaultError'
+import type { KeysignPayload } from '../../types/vultisig/keysign/v1/keysign_message_pb'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from './getKeysignSwapPayload'
 
 type GetNativeSwapInboundAddresses = (nativeChain: NativeSwapChain) => Promise<ThorchainInboundAddress[]>
 
-type NativeSwapBroadcastGuardInput = {
+export type NativeSwapBroadcastGuardInput = {
   chain: Chain
   keysignPayload: KeysignPayload
   getInboundAddresses?: GetNativeSwapInboundAddresses
   now?: () => number
+}
+
+export type NativeSwapBroadcastGuardErrorCode =
+  | 'invalid_config'
+  | 'invalid_vault'
+  | 'network_error'
+  | 'unsupported_chain'
+
+export class NativeSwapBroadcastGuardError extends Error {
+  constructor(
+    readonly code: NativeSwapBroadcastGuardErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'NativeSwapBroadcastGuardError'
+  }
 }
 
 const getDefaultNativeSwapInboundAddresses: GetNativeSwapInboundAddresses = nativeChain => {
@@ -32,6 +47,13 @@ const getDefaultNativeSwapInboundAddresses: GetNativeSwapInboundAddresses = nati
   return queryUrl(`${nativeSwapApiBaseUrl[nativeChain]}/inbound_addresses`)
 }
 
+/**
+ * Revalidate a native-swap payload immediately before signing or broadcast.
+ *
+ * This helper is intentionally owned by core-mpc: shipping wallets already
+ * consume the keysign payload and core packages directly, while the SDK facade
+ * delegates here to keep one guard implementation across every client.
+ */
 export const assertNativeSwapReadyForBroadcast = async ({
   chain,
   keysignPayload,
@@ -53,15 +75,15 @@ export const assertNativeSwapReadyForBroadcast = async ({
   const currentSeconds = BigInt(Math.floor(now() / 1000))
 
   if (typeof native.expirationTime !== 'bigint' || native.expirationTime <= 0n) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
+    throw new NativeSwapBroadcastGuardError(
+      'invalid_config',
       'Native swap quote has a missing or invalid expiration; refresh the quote before broadcasting'
     )
   }
 
   if (native.expirationTime <= currentSeconds) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
+    throw new NativeSwapBroadcastGuardError(
+      'invalid_config',
       'Native swap quote is expired; refresh the quote before broadcasting'
     )
   }
@@ -72,8 +94,8 @@ export const assertNativeSwapReadyForBroadcast = async ({
 
   const sourceChainId = getNativeSwapChainId(chain)
   if (!sourceChainId) {
-    throw new VaultError(
-      VaultErrorCode.UnsupportedChain,
+    throw new NativeSwapBroadcastGuardError(
+      'unsupported_chain',
       `Cannot validate ${native.chain} inbound vault for unsupported source chain ${chain}`
     )
   }
@@ -84,8 +106,8 @@ export const assertNativeSwapReadyForBroadcast = async ({
   const activeInbound = inboundByChainId.get(sourceChainId.toUpperCase())
 
   if (!activeInbound?.address) {
-    throw new VaultError(
-      VaultErrorCode.NetworkError,
+    throw new NativeSwapBroadcastGuardError(
+      'network_error',
       `Cannot validate ${native.chain} inbound vault for source chain ${sourceChainId}`
     )
   }
@@ -115,8 +137,8 @@ export const assertNativeSwapReadyForBroadcast = async ({
       continue
     }
     if (inbound.halted || globalTradingPaused || inbound.chain_trading_paused) {
-      throw new VaultError(
-        VaultErrorCode.InvalidConfig,
+      throw new NativeSwapBroadcastGuardError(
+        'invalid_config',
         `${native.chain} trading is halted for ${chainId} (halted=${inbound.halted}, ` +
           `global_paused=${globalTradingPaused}, chain_paused=${inbound.chain_trading_paused}); ` +
           `refusing to broadcast into a halted chain`
@@ -125,8 +147,8 @@ export const assertNativeSwapReadyForBroadcast = async ({
   }
 
   if (activeInbound.address.toLowerCase() !== native.vaultAddress.toLowerCase()) {
-    throw new VaultError(
-      VaultErrorCode.InvalidVault,
+    throw new NativeSwapBroadcastGuardError(
+      'invalid_vault',
       `${native.chain} inbound vault address changed; refresh the swap quote before broadcasting`
     )
   }
