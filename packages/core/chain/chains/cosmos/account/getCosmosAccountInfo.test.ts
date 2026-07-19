@@ -194,6 +194,46 @@ describe('getCosmosAccountInfo', () => {
     expect(result.sequenceBigInt).toBe(9007199254740993n)
   })
 
+  it('recovers an exact LCD sequence when Stargate rejects unsafe uint64 decoding', async () => {
+    const decodeError = new RangeError('Number can only safely store up to 53 bits')
+    const client = {
+      getAccount: vi.fn().mockRejectedValue(decodeError),
+      getBlock: vi.fn().mockResolvedValue(baseBlock),
+    }
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockResolvedValue({
+      account: {
+        account_number: '12',
+        sequence: '9007199254740993',
+      },
+    } as never)
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.Terra,
+      address: 'terra1large',
+    })
+
+    expect(result.accountNumber).toBe(12n)
+    expect(result.sequenceBigInt).toBe(9007199254740993n)
+  })
+
+  it('preserves the Stargate decode error when exact LCD recovery fails', async () => {
+    const decodeError = new RangeError('Number can only safely store up to 53 bits')
+    const client = {
+      getAccount: vi.fn().mockRejectedValue(decodeError),
+      getBlock: vi.fn().mockResolvedValue(baseBlock),
+    }
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockRejectedValue(new Error('LCD unavailable'))
+
+    await expect(
+      getCosmosAccountInfo({
+        chain: CosmosChain.Terra,
+        address: 'terra1large',
+      })
+    ).rejects.toBe(decodeError)
+  })
+
   it('rejects an unsafe RPC sequence when no exact LCD value is available', async () => {
     const client = makeClient({ accountNumber: 12n, sequence: 9007199254740992 })
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)

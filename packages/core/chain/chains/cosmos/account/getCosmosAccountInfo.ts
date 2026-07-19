@@ -143,7 +143,12 @@ export const getCosmosAccountInfo = async ({
   address,
 }: ChainAccount<CosmosChain>): Promise<CosmosAccountInfo> => {
   const client = await getCosmosClient(chain)
-  const [accountInfo, block] = await Promise.all([client.getAccount(address), client.getBlock()])
+  const accountResultPromise = client.getAccount(address).then(
+    value => ({ value, error: undefined }),
+    (error: unknown) => ({ value: null, error })
+  )
+  const [accountResult, block] = await Promise.all([accountResultPromise, client.getBlock()])
+  const accountInfo = accountResult.value
 
   let accountNumber: bigint | undefined = accountInfo?.accountNumber
   let sequence: number | undefined = accountInfo?.sequence
@@ -159,6 +164,12 @@ export const getCosmosAccountInfo = async ({
       accountNumber = lcd.accountNumber
       sequence = lcd.sequence
       sequenceBigInt = lcd.sequenceBigInt
+    } else if (accountResult.error) {
+      // CosmJS decodes sequence through Uint64.toNumber(), which rejects
+      // before getAccount() can return when the chain value exceeds the
+      // safe-number range. Recover through LCD, but retain the original RPC
+      // failure when exact recovery is unavailable.
+      throw accountResult.error
     } else if (accountInfo) {
       throw new Error('Cosmos account sequence cannot be represented exactly')
     }
