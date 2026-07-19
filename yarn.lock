@@ -8333,13 +8333,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bigint-buffer@npm:^1.1.5":
+"bigint-buffer@npm:1.1.5":
   version: 1.1.5
   resolution: "bigint-buffer@npm:1.1.5"
   dependencies:
     bindings: "npm:^1.3.0"
     node-gyp: "npm:latest"
   checksum: 10c0/aa41e53d38242a2f05f85b08eaf592635f92e5328822784cda518232b1644efdbf29ab3664951b174cc645848add4605488e25c9439bcc749660c885b4ff6118
+  languageName: node
+  linkType: hard
+
+"bigint-buffer@patch:bigint-buffer@npm%3A1.1.5#~/.yarn/patches/bigint-buffer-npm-1.1.5-785f4ccd92.patch":
+  version: 1.1.5
+  resolution: "bigint-buffer@patch:bigint-buffer@npm%3A1.1.5#~/.yarn/patches/bigint-buffer-npm-1.1.5-785f4ccd92.patch::version=1.1.5&hash=3d0962"
+  dependencies:
+    bindings: "npm:^1.3.0"
+    node-gyp: "npm:latest"
+  checksum: 10c0/5efb16aacaaf49a110f3803bdb83bd34fb457bcee2fab9488fb6c24bbf425773d0a3c2fed0d3221da6d37e9a80ddf5af9633bc62edda7cac02c5226c18b3a80a
   languageName: node
   linkType: hard
 
