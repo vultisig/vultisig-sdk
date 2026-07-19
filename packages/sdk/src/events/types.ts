@@ -57,6 +57,8 @@ export type VaultEvents = {
   transactionSigned: {
     signature: Signature
     payload: SigningPayload
+    /** Secure-signing session ID. Fast-vault signing does not set this. */
+    sessionId?: string
   }
 
   /** Emitted when a chain is added to the vault */
@@ -103,6 +105,20 @@ export type VaultEvents = {
   /** Emitted during transaction signing with progress updates */
   signingProgress: {
     step: SigningStep
+    /** Secure-signing session ID. Fast-vault signing does not set this. */
+    sessionId?: string
+  }
+
+  /** Emitted when a secure-signing ceremony fails before completion. */
+  signingFailed: {
+    sessionId: string
+    error: Error
+  }
+
+  /** Emitted when a secure-signing ceremony is cancelled. */
+  signingCancelled: {
+    sessionId: string
+    error: Error
   }
 
   /** Emitted when a transaction is successfully broadcast to the blockchain network */
@@ -183,6 +199,8 @@ export type VaultEvents = {
     totalJoined: number
     /** Total devices required */
     required: number
+    /** Session ID for the signing operation */
+    sessionId: string
   }
 
   /** Emitted when all required devices have joined (SecureVault) */
