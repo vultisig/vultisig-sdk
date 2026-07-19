@@ -129,4 +129,5 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/chains/ton/index.ts', 'dist/chains/ton/index.d.ts'),
 ])

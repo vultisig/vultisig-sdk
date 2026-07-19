@@ -347,6 +347,10 @@ const configs = {
       input: './src/tx/index.ts',
       distBase: 'tx',
     }),
+    ...createSubpathConfigs({
+      input: './src/chains/ton/index.ts',
+      distBase: 'chains/ton',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
