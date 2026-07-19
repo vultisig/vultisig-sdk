@@ -48,9 +48,11 @@ const parseLcdAccount = (resp: LcdAccountResponse): ParsedAccount | null => {
   const acc = resp.account
   if (!acc) return null
   const base = acc.base_vesting_account?.base_account ?? acc.base_account ?? acc
-  const accountNumber = BigInt(base.account_number ?? '0')
+  if (typeof base.account_number !== 'string' || typeof base.sequence !== 'string') return null
+
+  const accountNumber = BigInt(base.account_number)
   const sequenceBigInt = parseUint64({
-    value: base.sequence ?? '0',
+    value: base.sequence,
     field: 'sequence',
     context: 'Cosmos account',
   })

@@ -234,6 +234,25 @@ describe('getCosmosAccountInfo', () => {
     ).rejects.toBe(decodeError)
   })
 
+  it('preserves the Stargate decode error when LCD account data is incomplete', async () => {
+    const decodeError = new RangeError('Number can only safely store up to 53 bits')
+    const client = {
+      getAccount: vi.fn().mockRejectedValue(decodeError),
+      getBlock: vi.fn().mockResolvedValue(baseBlock),
+    }
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl).mockResolvedValue({
+      account: { account_number: '12' },
+    } as never)
+
+    await expect(
+      getCosmosAccountInfo({
+        chain: CosmosChain.Terra,
+        address: 'terra1large',
+      })
+    ).rejects.toBe(decodeError)
+  })
+
   it('rejects an unsafe RPC sequence when no exact LCD value is available', async () => {
     const client = makeClient({ accountNumber: 12n, sequence: 9007199254740992 })
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)
