@@ -1,9 +1,8 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { ThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
+import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { describe, expect, it, vi } from 'vitest'
-
-import { assertNativeSwapReadyForBroadcast } from '../../../../src/vault/services/nativeSwapBroadcastGuard'
 
 const makeInbound = (chain: string, address: string): ThorchainInboundAddress =>
   ({
