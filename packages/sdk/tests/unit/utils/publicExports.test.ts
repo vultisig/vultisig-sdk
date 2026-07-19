@@ -100,8 +100,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.VaultBase).toBe('function')
   })
 
+  it('exports Blockaid-supported EVM chain canonicals for downstream security scans', () => {
+    expect(Array.isArray(sdk.blockaidSupportedEvmChains)).toBe(true)
+    expect(sdk.blockaidSupportedEvmChains).toContain('Base')
+    expect(sdk.blockaidSupportedEvmChains).toContain('Hyperliquid')
+    expect(sdk.blockaidEvmChain.Base).toBe('base')
+    expect(sdk.blockaidEvmChain.Hyperliquid).toBe('hyperevm')
+  })
+
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
-    expect(typeof sdk.getChainKind).toBe('function')
     expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
