@@ -8,6 +8,7 @@ class LocalStorageDouble implements Storage {
   private readonly values = new Map<string, string>()
   failReads = false
   failWrites = false
+  failMarkerWrites = false
 
   get length(): number {
     return this.values.size
@@ -36,7 +37,7 @@ class LocalStorageDouble implements Storage {
   }
 
   setItem(key: string, value: string): void {
-    if (this.failWrites) {
+    if (this.failWrites || (this.failMarkerWrites && key === '__vultisig_storage_backend__')) {
       throw new DOMException('quota exceeded', 'QuotaExceededError')
     }
     this.values.set(key, value)
@@ -102,6 +103,21 @@ describe('BrowserStorage backend selection', () => {
     expect(local.getItem('__vultisig_storage_backend__')).toBe('indexeddb')
   })
 
+  it('fails closed after an IndexedDB version change instead of switching to localStorage', async () => {
+    const storage = new BrowserStorage()
+    await storage.set('vault:indexeddb', { name: 'indexeddb' })
+    local.setItem('vault:fallback-only', stored({ name: 'fallback' }))
+    const database = (storage as any).db as IDBDatabase
+
+    database.onversionchange?.({} as IDBVersionChangeEvent)
+
+    expect((storage as any).db).toBeUndefined()
+    await expect(storage.get('vault:fallback-only')).rejects.toMatchObject({
+      code: StorageErrorCode.StorageUnavailable,
+    })
+    expect(local.getItem('__vultisig_storage_backend__')).toBe('indexeddb')
+  })
+
   it('uses localStorage only when IndexedDB is absent and keeps that choice across reloads', async () => {
     vi.stubGlobal('indexedDB', undefined)
     const first = new BrowserStorage()
@@ -124,6 +140,14 @@ describe('BrowserStorage backend selection', () => {
     const storage = new BrowserStorage()
 
     await expect(storage.get('vault:legacy')).resolves.toEqual({ name: 'legacy' })
+    expect(local.getItem('__vultisig_storage_backend__')).toBe('localstorage')
+  })
+
+  it('recovers an unmarked legacy record with an arbitrary public storage key', async () => {
+    local.setItem('custom', stored({ name: 'legacy' }))
+    const storage = new BrowserStorage()
+
+    await expect(storage.get('custom')).resolves.toEqual({ name: 'legacy' })
     expect(local.getItem('__vultisig_storage_backend__')).toBe('localstorage')
   })
 
@@ -169,6 +193,21 @@ describe('BrowserStorage backend selection', () => {
     await expect(storage.get('vault:new')).resolves.toBeNull()
   })
 
+  it('retries localStorage selection on the same instance after marker persistence fails', async () => {
+    vi.stubGlobal('indexedDB', undefined)
+    local.failMarkerWrites = true
+    const storage = new BrowserStorage()
+
+    await expect(storage.list()).rejects.toMatchObject({
+      code: StorageErrorCode.StorageUnavailable,
+    })
+
+    local.failMarkerWrites = false
+    await storage.set('custom', { name: 'recovered' })
+    await expect(storage.get('custom')).resolves.toEqual({ name: 'recovered' })
+    expect(local.getItem('__vultisig_storage_backend__')).toBe('localstorage')
+  })
+
   it('fails closed when IndexedDB is blocked instead of exposing a partial localStorage view', async () => {
     local.setItem('vault:fallback-only', stored({ name: 'fallback' }))
     vi.stubGlobal('indexedDB', {
@@ -186,7 +225,7 @@ describe('BrowserStorage backend selection', () => {
     expect(local.getItem('vault:fallback-only')).not.toBeNull()
   })
 
-  it('does not abandon a persisted IndexedDB store after a transient open failure', async () => {
+  it('retries a persisted IndexedDB store on the same instance after a transient open failure', async () => {
     local.setItem('__vultisig_storage_backend__', 'indexeddb')
     local.setItem('vault:partial-fallback', stored({ name: 'partial' }))
     vi.stubGlobal('indexedDB', {
@@ -198,19 +237,18 @@ describe('BrowserStorage backend selection', () => {
         return request
       },
     })
-    const degraded = new BrowserStorage()
+    const storage = new BrowserStorage()
 
-    await expect(degraded.get('vault:partial-fallback')).rejects.toMatchObject({
+    await expect(storage.get('vault:partial-fallback')).rejects.toMatchObject({
       code: StorageErrorCode.StorageUnavailable,
     })
 
     vi.stubGlobal('indexedDB', new IDBFactory())
-    const recovered = new BrowserStorage()
-    await recovered.set('vault:canonical', { name: 'canonical' })
-    await expect(recovered.get('vault:canonical')).resolves.toEqual({
+    await storage.set('vault:canonical', { name: 'canonical' })
+    await expect(storage.get('vault:canonical')).resolves.toEqual({
       name: 'canonical',
     })
-    await expect(recovered.get('vault:partial-fallback')).resolves.toBeNull()
+    await expect(storage.get('vault:partial-fallback')).resolves.toBeNull()
   })
 
   it('surfaces malformed localStorage records as typed serialization failures', async () => {

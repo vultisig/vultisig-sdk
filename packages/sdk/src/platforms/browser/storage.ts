@@ -12,23 +12,14 @@ const BACKEND_MARKER_KEY = '__vultisig_storage_backend__'
 export class BrowserStorage implements Storage {
   private db?: IDBDatabase
   private mode?: StorageMode
-  private initializationError?: StorageError
-  private readonly initialization: Promise<void>
+  private backendError?: StorageError
+  private initialization?: Promise<void>
   private readonly dbName = 'vultisig-vaults'
   private readonly storeName = 'vaults'
   private readonly dbVersion = 1
 
   constructor() {
-    this.initialization = this.initializeAsync().catch(error => {
-      this.initializationError =
-        error instanceof StorageError
-          ? error
-          : new StorageError(
-              StorageErrorCode.StorageUnavailable,
-              'Browser storage initialization failed',
-              error as Error
-            )
-    })
+    void this.startInitialization().catch(() => undefined)
   }
 
   private async initializeAsync(): Promise<void> {
@@ -46,14 +37,14 @@ export class BrowserStorage implements Storage {
 
       if (!persistedMode) {
         const indexedDBKeys = await this.listFromIndexedDB()
-        const legacyLocalKeys = this.listLocalStorageSdkKeys()
+        const legacyLocalKeys = this.listLegacyLocalStorageKeys()
 
         if (legacyLocalKeys.length > 0 && indexedDBKeys.length === 0) {
           this.db?.close()
           this.db = undefined
           this.tryLocalStorage()
-          this.mode = 'localstorage'
           this.persistMode('localstorage')
+          this.mode = 'localstorage'
           return
         }
 
@@ -73,18 +64,46 @@ export class BrowserStorage implements Storage {
     }
 
     this.tryLocalStorage()
-    this.mode = 'localstorage'
     this.persistMode('localstorage')
+    this.mode = 'localstorage'
   }
 
   private async ensureInitialized(): Promise<void> {
-    await this.initialization
-    if (this.initializationError) {
-      throw this.initializationError
+    if (this.backendError) {
+      throw this.backendError
+    }
+
+    try {
+      await this.startInitialization()
+    } catch (error) {
+      throw error instanceof StorageError
+        ? error
+        : new StorageError(StorageErrorCode.StorageUnavailable, 'Browser storage initialization failed', error as Error)
+    }
+
+    if (this.backendError) {
+      throw this.backendError
     }
     if (!this.mode) {
       throw new StorageError(StorageErrorCode.StorageUnavailable, 'Browser storage backend was not selected')
     }
+  }
+
+  private startInitialization(): Promise<void> {
+    if (this.mode) return Promise.resolve()
+    if (this.initialization) return this.initialization
+
+    const initialization = this.initializeAsync()
+    this.initialization = initialization
+    void initialization
+      .finally(() => {
+        if (this.initialization === initialization) {
+          this.initialization = undefined
+        }
+      })
+      .catch(() => undefined)
+
+    return initialization
   }
 
   private readPersistedMode(): StorageMode | undefined {
@@ -149,7 +168,14 @@ export class BrowserStorage implements Storage {
         }
         settled = true
         this.db = request.result
-        this.db.onversionchange = () => this.db?.close()
+        this.db.onversionchange = () => {
+          this.db?.close()
+          this.db = undefined
+          this.backendError = new StorageError(
+            StorageErrorCode.StorageUnavailable,
+            'IndexedDB connection was closed due to a version change'
+          )
+        }
         resolve()
       }
 
@@ -428,21 +454,31 @@ export class BrowserStorage implements Storage {
     return keys
   }
 
-  private listLocalStorageSdkKeys(): string[] {
+  private listLegacyLocalStorageKeys(): string[] {
     if (typeof localStorage === 'undefined') return []
 
     try {
-      return this.listFromLocalStorage().filter(
-        key =>
-          key.startsWith('vault:') ||
-          key.startsWith('pending:') ||
-          key.startsWith('cache:') ||
-          key.startsWith('addressBook:') ||
-          key === 'activeVaultId' ||
-          key === 'pushNotificationRegistrations' ||
-          key === 'config:defaultCurrency' ||
-          key === 'config:defaultChains'
-      )
+      return this.listFromLocalStorage().filter(key => {
+        const rawValue = localStorage.getItem(key)
+        if (rawValue === null) return false
+
+        try {
+          const storedValue = JSON.parse(rawValue) as Partial<StoredValue<unknown>>
+          const metadata = storedValue?.metadata
+
+          return (
+            typeof storedValue === 'object' &&
+            storedValue !== null &&
+            typeof metadata === 'object' &&
+            metadata !== null &&
+            typeof metadata.version === 'number' &&
+            typeof metadata.createdAt === 'number' &&
+            typeof metadata.lastModified === 'number'
+          )
+        } catch {
+          return false
+        }
+      })
     } catch (error) {
       throw new StorageError(
         StorageErrorCode.StorageUnavailable,
