@@ -60,7 +60,11 @@ const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
  * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
  *   (`USDC-0X...`) is stripped because SDK swap callers take the ticker.
  * - `destAddress` is the user-supplied destination on the destination chain.
- *   May be empty when the memo omits it.
+ *   May be empty when the memo omits it (THORChain treats this as "refund to
+ *   source"). FUND-SAFETY: callers MUST validate this against the vault's own
+ *   destination address before broadcasting — `vault.swap` silently
+ *   substitutes its own address into the broadcast memo, so a mismatch here
+ *   means funds would route somewhere the caller did not verify.
  * - `toChain` is the resolved SDK Chain enum destination.
  */
 export type ParsedThorSwapMemo = {
