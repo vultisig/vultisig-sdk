@@ -1638,6 +1638,11 @@
       "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
       "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
     },
+    "./swap/general/lifi/api/lifiSlippage": {
+      "types": "./dist/swap/general/lifi/api/lifiSlippage.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
+      "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
