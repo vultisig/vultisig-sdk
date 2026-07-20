@@ -101,6 +101,37 @@ export function assertKnownAggregatorRouterOnSigningPath(provider: string, addre
 }
 
 /**
+ * Signing-path approval-spender bind (sdk#1358 review follow-up, requested by neavra). The
+ * follow-on to {@link assertKnownAggregatorRouterOnSigningPath}: that guard validates the swap-leg
+ * destination (`quote.tx.to`), but a general swap that needs an allowance also carries a SEPARATE,
+ * independent wire field - `erc20ApprovePayload.spender` - which the approve resolver (erc20.ts)
+ * reads verbatim and nothing binds to `quote.tx.to`. So a payload can pass the router check with a
+ * genuine 1inch/kyber `tx.to` yet still carry an approve granting an ATTACKER an allowance over the
+ * user's token (a classic approval-drain the co-signer would otherwise sign blind).
+ *
+ * On the initiator these coincide by construction (build.ts sets the approve spender to
+ * `getSwapDestinationAddress` === `tx.to`), so this only ever fires on a hand-built/tampered payload.
+ * Enforced providers (1inch/kyber) MUST have `spender === routerDestination`; unenforced providers are
+ * NOT bound - notably cowswap, whose spender is legitimately the GPv2VaultRelayer, not `tx.to`. Like
+ * its sibling this is a MONOTONIC gate: it only throws or no-ops, never changes the signed bytes.
+ */
+export function assertEnforcedSwapApprovalSpenderBound(
+  provider: string,
+  spender: string,
+  routerDestination: string,
+  chain: Chain
+): void {
+  if (!ENFORCED_ROUTER_PROVIDERS.has(provider)) {
+    return
+  }
+  if (spender.toLowerCase() !== routerDestination.toLowerCase()) {
+    throw new Error(
+      `${provider} swap approval spender (${spender}) does not match the verified swap router (${routerDestination}) on ${chain} — refusing to sign an approval to an unbound spender.`
+    )
+  }
+}
+
+/**
  * Throws if `address` isn't the known router for `provider` on `chain`. Call this at quote
  * construction, before a GeneralSwapQuote carrying `address` as `tx.evm.to` can exist.
  */

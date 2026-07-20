@@ -13,7 +13,10 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 
 import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
-import { assertKnownAggregatorRouterOnSigningPath } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+import {
+  assertEnforcedSwapApprovalSpenderBound,
+  assertKnownAggregatorRouterOnSigningPath,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
@@ -33,6 +36,22 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   const { erc20ApprovePayload, ...restOfKeysignPayload } = keysignPayload
 
   if (erc20ApprovePayload) {
+    // sdk#1358 review follow-up: bind the approve spender to the verified swap router HERE, where
+    // erc20ApprovePayload is still present (the recursion below strips it, so the router guard's
+    // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
+    // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
+    // a payload can't pass the router check yet still approve an attacker. cowswap (relayer spender)
+    // and other unenforced providers are intentionally not bound. See assertEnforcedSwapApprovalSpenderBound.
+    const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
+    if (approveSwapPayload && 'general' in approveSwapPayload) {
+      assertEnforcedSwapApprovalSpenderBound(
+        approveSwapPayload.general.provider,
+        erc20ApprovePayload.spender,
+        approveSwapPayload.general.quote?.tx?.to ?? '',
+        chain
+      )
+    }
+
     const approveSigningInput = getErc20ApproveSigningInput({
       keysignPayload,
       walletCore,
