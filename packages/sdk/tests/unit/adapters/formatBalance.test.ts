@@ -343,6 +343,64 @@ describe('formatBalance', () => {
     })
   })
 
+  describe('High-decimal precision (SDK-CORRECTNESS class: BigInt(10 ** decimals) float divisor)', () => {
+    // The old implementation computed the divisor via `BigInt(10 ** decimals)`.
+    // `10 ** decimals` is a float64 power, exact only up to decimals=22; past
+    // that it silently rounds, corrupting every digit after the drift point.
+    // These pin the CORRECT output at decimals=24 and decimals=30, and
+    // document what the old float-divisor path would have produced instead.
+
+    it('formats a decimals=24 balance exactly (old float divisor drifted after 16 significant digits)', () => {
+      const result = formatBalance(1234567890123456789012345n, Chain.Ethereum, '0xhighdecimals24', {
+        Ethereum: [
+          { id: '0xhighdecimals24', symbol: 'HD24', name: 'HighDecimals24', decimals: 24, chainId: Chain.Ethereum },
+        ],
+      })
+
+      expect(result.formattedAmount).toBe('1.234567890123456789012345')
+      // Old `BigInt(10 ** 24)` divisor was 999999999999999983222784 (should be
+      // 1000000000000000000000000) — the corrupted output would have been
+      // '1.234567890123456805789561'.
+    })
+
+    it('formats a decimals=30 balance exactly (old float divisor drifted across whole+fraction)', () => {
+      const result = formatBalance(5123456789012345678901234567890n, Chain.Ethereum, '0xhighdecimals30', {
+        Ethereum: [
+          { id: '0xhighdecimals30', symbol: 'HD30', name: 'HighDecimals30', decimals: 30, chainId: Chain.Ethereum },
+        ],
+      })
+
+      expect(result.formattedAmount).toBe('5.12345678901234567890123456789')
+      // Old `BigInt(10 ** 30)` divisor was 1000000000000000019884624838656
+      // (should be 10^30 exactly) — the corrupted output would have been
+      // '5.12345678901234557947811037461'.
+    })
+
+    it('formats a dust amount at decimals=24 (fraction-only, no whole part)', () => {
+      const result = formatBalance(1n, Chain.Ethereum, '0xdust24', {
+        Ethereum: [{ id: '0xdust24', symbol: 'DUST24', name: 'Dust24', decimals: 24, chainId: Chain.Ethereum }],
+      })
+
+      expect(result.formattedAmount).toBe('0.000000000000000000000001')
+    })
+
+    it('trims trailing fraction zeros at decimals=24', () => {
+      const result = formatBalance(1000000000000000000000100n, Chain.Ethereum, '0xtz24', {
+        Ethereum: [{ id: '0xtz24', symbol: 'TZ24', name: 'TrailingZero24', decimals: 24, chainId: Chain.Ethereum }],
+      })
+
+      expect(result.formattedAmount).toBe('1.0000000000000000000001')
+    })
+
+    it('still returns "0" for a zero balance at decimals=24', () => {
+      const result = formatBalance(0n, Chain.Ethereum, '0xzero24', {
+        Ethereum: [{ id: '0xzero24', symbol: 'ZERO24', name: 'Zero24', decimals: 24, chainId: Chain.Ethereum }],
+      })
+
+      expect(result.formattedAmount).toBe('0')
+    })
+  })
+
   describe('Type Compatibility', () => {
     it('should return Balance type with all required fields', () => {
       const result = formatBalance(1000000n, Chain.Ethereum)

@@ -1,0 +1,17 @@
+{
+  "_description": "Shared golden vector for a QBTC bank.MsgSend SignDoc. Read via a plain readFileSync (not an import) by packages/core/mpc/tx/compile/compileTx.golden.test.ts (the hand-rolled protobuf encoder in packages/core/mpc/chains/cosmos/qbtc/QBTCTx.ts + QBTCHelper.ts, which bypasses WalletCore because MLDSA keys are secp256k1-incompatible) AND packages/sdk/tests/unit/platforms/react-native/qbtc-golden-vectors.test.ts (an independent cosmjs-types re-encode). Both assert the SAME expectedSignDocSha256Hex, so the two encoders cannot silently diverge. This is the SINGLE source of truth - do not duplicate these values as literals in either test file.",
+  "senderAddress": "qbtc1sender0000000000000000000000000000000",
+  "recipientAddress": "qbtc1receiver000000000000000000000000000000",
+  "_pubKeyNote": "MLDSA public key placeholder (0xaa * 32). The MLDSA PubKey proto is { key: bytes } at field 1 - identical wire shape to secp256k1 PubKey - only the Any typeUrl (/cosmos.crypto.mldsa.PubKey) differs, which is exactly what the two encoders must agree on.",
+  "pubKeyHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "chainId": "qbtc",
+  "denom": "qbtc",
+  "amount": "123456",
+  "memo": "compileTx golden",
+  "accountNumber": 7,
+  "sequence": 3,
+  "feeAmount": "2500",
+  "gasLimit": 300000,
+  "expectedSignDocSha256Hex": "4178ccc8f66d353cecc76f1d36a344952fbdd53360c60cb9a85ab80b59457252",
+  "expectedSerialized": "{\"tx_bytes\":\"Cp4BCokBChwvY29zbW9zLmJhbmsudjFiZXRhMS5Nc2dTZW5kEmkKKnFidGMxc2VuZGVyMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBIrcWJ0YzFyZWNlaXZlcjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBoOCgRxYnRjEgYxMjM0NTYSEGNvbXBpbGVUeCBnb2xkZW4SYQpLCkEKGy9jb3Ntb3MuY3J5cHRvLm1sZHNhLlB1YktleRIiCiCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqhIECgIIARgDEhIKDAoEcWJ0YxIEMjUwMBDgpxIaQFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=\",\"mode\":\"BROADCAST_MODE_SYNC\"}"
+}
