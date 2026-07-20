@@ -120,6 +120,17 @@ const buildTxComponents = ({ keysignPayload, cosmosSpecific }: QBTCKeysignInput)
   const authInfoBytes = buildQBTCAuthInfo({
     pubKeyData,
     sequence: cosmosSpecific.sequence,
+    // cosmosSpecific.gas is the fee AMOUNT (proto field 3 - "the fee AMOUNT (not a limit)"), NOT the
+    // gas limit. The gas limit is proto field 7 (cosmosSpecific.gasLimit), the per-tx /simulate
+    // estimate; thread it through so a QBTC tx that needs more headroom than the flat default (e.g. an
+    // IBC transfer) uses the simulated limit. Undefined (the common case today) falls back to
+    // buildQBTCAuthInfo's 300_000n default, so this is a no-op when the caller doesn't set field 7.
+    // gasLimit is part of the SignDoc, so every co-signing device MUST derive it identically - keeping
+    // the same field-7-or-default rule the WalletCore cosmos path uses keeps QBTC co-signers in lockstep.
+    // NOTE: only the LIMIT tracks field 7. The fee AMOUNT below stays flat (== cosmosSpecific.gas) - QBTC
+    // deliberately does NOT scale the fee with the limit the way resolveCosmosGasFee does for standard
+    // cosmos, and its fee-display resolver returns the same raw gas, so shown == signed with no drift.
+    gasLimit: cosmosSpecific.gasLimit,
     fee: {
       denom,
       amount: cosmosSpecific.gas.toString(),
