@@ -40,9 +40,12 @@ vi.mock('@vultisig/core-mpc/keysign/utils/getKeysignChain', () => ({
 const { TransactionBuilder } = await import('../../src/vault/services/TransactionBuilder')
 
 const buildSubject = () =>
-  new TransactionBuilder({} as never, {
-    getWalletCore: async () => ({}) as never,
-  } as never)
+  new TransactionBuilder(
+    {} as never,
+    {
+      getWalletCore: async () => ({}) as never,
+    } as never
+  )
 
 describe('TransactionBuilder.extractMessageHashes ordering', () => {
   it('returns hashes sorted even when the resolver emits them unsorted', async () => {
