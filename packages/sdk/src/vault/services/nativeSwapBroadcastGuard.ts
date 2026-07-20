@@ -4,9 +4,9 @@ import {
   type ThorchainInboundAddress,
 } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 import {
+  getNativeSwapChainId,
   nativeSwapApiBaseUrl,
   type NativeSwapChain,
-  nativeSwapChainIds,
 } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '@vultisig/core-mpc/keysign/swap/getKeysignSwapPayload'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -23,9 +23,6 @@ type NativeSwapBroadcastGuardInput = {
   getInboundAddresses?: GetNativeSwapInboundAddresses
   now?: () => number
 }
-
-const getNativeSwapChainId = (chain: Chain): string | undefined =>
-  nativeSwapChainIds[chain as keyof typeof nativeSwapChainIds]
 
 const getDefaultNativeSwapInboundAddresses: GetNativeSwapInboundAddresses = nativeChain => {
   if (nativeChain === Chain.THORChain) {
