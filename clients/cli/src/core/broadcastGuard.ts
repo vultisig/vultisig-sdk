@@ -36,8 +36,10 @@ import {
   type BroadcastIntent,
   computeFingerprint,
   recordBroadcast,
+  recordResolution,
   reserveBroadcast,
 } from '../agent/broadcastJournal'
+import { matchCosmosDeliverTxFailure } from './cosmosDeliverTx'
 
 /**
  * Stable, non-empty journal namespace for the vault. Prefer the ECDSA public key
@@ -172,6 +174,23 @@ export async function guardedBroadcast<T extends { txHash: string }>(
     // fresh process) recognises this intent and refuses to double-send.
     recordBroadcast(fingerprint, result.txHash, intent.chain)
     return result
+  } catch (error) {
+    // A Cosmos DeliverTx failure means the signed tx WAS included on-chain and then
+    // failed execution — terminal: the sequence is consumed and the gas is spent, so
+    // the identical bytes can never re-land. cosmjs embeds the tx hash in the thrown
+    // message; journal it as a broadcast + a FAILED resolution so the terminal hash is
+    // on the record (tx-status / explorer / audit) rather than discarded, and the guard
+    // RE-OPENS: recording `failed` is what clears the intent for a legitimate
+    // fresh-sequence rebuild (see broadcastJournal isRetryableResolution). Any other
+    // throw broadcast nothing durable we can name here, so it is left to the reservation
+    // lock and the error classifier.
+    const message = error instanceof Error ? error.message : String(error)
+    const deliverTxHash = matchCosmosDeliverTxFailure(message)?.hash
+    if (deliverTxHash) {
+      recordBroadcast(fingerprint, deliverTxHash, intent.chain)
+      recordResolution(deliverTxHash, 'failed')
+    }
+    throw error
   } finally {
     reservation.release()
   }

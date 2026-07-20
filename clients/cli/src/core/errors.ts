@@ -9,6 +9,8 @@ import {
   VaultImportErrorCode,
 } from '@vultisig/sdk'
 
+import { matchCosmosDeliverTxFailure } from './cosmosDeliverTx'
+
 // Typed exit codes for machine-readable error handling
 // Enables agents to distinguish error types programmatically
 
@@ -560,13 +562,30 @@ function classifyVaultError(err: VaultError): VsigError {
       return new VaultNotFoundError(err.message)
     case VaultErrorCode.UnsupportedToken:
       return new TokenNotFoundError(err.message)
-    case VaultErrorCode.BroadcastFailed:
+    case VaultErrorCode.BroadcastFailed: {
+      // A Cosmos DeliverTx failure — the tx was INCLUDED in a block and then failed
+      // execution (code !== 0) — is checked FIRST and separately from the CheckTx /
+      // encoding permanent path below. It is terminal and non-retryable regardless of
+      // the code: the tx is on-chain, the account sequence is consumed and the gas is
+      // spent, so the identical signed bytes can never re-land. (A CheckTx rejection
+      // with the SAME sdk code stays retryable — see COSMOS_PERMANENT_SDK_CODES — because
+      // it never touched the chain. This is the opposite, and correct, posture.)
+      const broadcastDetails = `${err.message}\n${err.originalError?.message ?? ''}`
+      if (matchCosmosDeliverTxFailure(broadcastDetails)) {
+        return new InvalidInputError(
+          err.message,
+          'This transaction was included on-chain and then failed during execution (non-zero DeliverTx code): ' +
+            'the account sequence is consumed and the gas is spent, so re-broadcasting the identical signed bytes ' +
+            'cannot succeed. Inspect the on-chain result via the hash in the message, then build and sign a new transaction.'
+        )
+      }
       if (isPermanentBroadcastInputError(err)) {
         return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
       }
       return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
         'Retry the transaction',
       ])
+    }
     case VaultErrorCode.GasEstimationFailed:
       return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
     case VaultErrorCode.SigningFailed:

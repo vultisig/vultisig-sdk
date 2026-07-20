@@ -767,4 +767,53 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
   })
+
+  // A Cosmos tx that is INCLUDED in a block but FAILS execution (DeliverTx code !== 0)
+  // is a fundamentally different animal from a CheckTx rejection: it is on-chain, the
+  // account sequence is CONSUMED and the gas is spent, so the identical signed bytes can
+  // never re-land. cosmjs surfaces it as `Error when broadcasting tx <hash> at height
+  // <N>. Code: <c>; Raw log: <log>` (verbatim from @cosmjs/stargate), wrapped by
+  // BroadcastService. It must be non-retryable regardless of the SDK code — the opposite
+  // posture from the same code on the CheckTx path.
+  describe('Cosmos DeliverTx on-chain execution failure', () => {
+    const deliverTxError = (chain: string, hash: string, code: number, rawLog: string) =>
+      new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Failed to broadcast transaction on ${chain}: Error when broadcasting tx ${hash} at height 1234567. Code: ${code}; Raw log: ${rawLog}`
+      )
+
+    it('classifies a DeliverTx failure as non-retryable input, not a retryable node error', () => {
+      const result = classifyError(deliverTxError('Cosmos', 'A1B2C3D4', 5, 'insufficient funds'))
+      expect(result.code).toBe('INVALID_INPUT')
+      expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+      expect(result.retryable).toBe(false)
+    })
+
+    it('gives an honest, on-chain-aware message (not "node may be temporarily unavailable / Retry")', () => {
+      const result = classifyError(deliverTxError('THORChain', 'FEED0001', 99, 'refund reason 108: memo error'))
+      // The hint must tell the truth about a terminal on-chain failure, and must NOT be
+      // the transient-node hint or invite a plain retry of the same bytes.
+      expect(result.hint).toMatch(/on-chain/i)
+      expect(result.hint).not.toMatch(/temporarily unavailable/i)
+      expect(result.suggestions ?? []).not.toContain('Retry the transaction')
+      // The cosmjs message (hash/height/code/rawLog) is preserved verbatim.
+      expect(result.message).toContain('FEED0001')
+    })
+
+    // The crux: SDK code 5 ("insufficient funds") is deliberately RETRYABLE on the
+    // CheckTx path (it never touched the chain — see COSMOS_PERMANENT_SDK_CODES), but
+    // the SAME code on the DeliverTx path is PERMANENT (the tx executed and failed).
+    it('treats DeliverTx code 5 as permanent even though CheckTx code 5 stays retryable', () => {
+      const deliverTx = classifyError(deliverTxError('Cosmos', 'DEAD01', 5, 'insufficient funds'))
+      expect(deliverTx.retryable).toBe(false)
+
+      const checkTx = classifyError(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: sdk). Log: insufficient funds'
+        )
+      )
+      expect(checkTx.retryable).toBe(true)
+    })
+  })
 })
