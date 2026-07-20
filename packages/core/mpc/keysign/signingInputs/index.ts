@@ -3,6 +3,7 @@ import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/key
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
+import { assertSafeSwapSigningPayload } from '../swap/assertSafeSwapSigningPayload'
 import { getKeysignChain } from '../utils/getKeysignChain'
 import { signingInputClasses } from './core'
 import { SigningInputsResolver } from './resolver'
@@ -44,6 +45,11 @@ export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsRe
 export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[]> => {
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
+
+  // Fund-safety: validate the aggregator swap payload the signature will cover,
+  // at the single choke point every signer (initiating device AND co-signer)
+  // funnels through. See assertSafeSwapSigningPayload.
+  await assertSafeSwapSigningPayload(input.keysignPayload)
 
   const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)
 

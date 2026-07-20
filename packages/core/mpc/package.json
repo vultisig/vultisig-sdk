@@ -576,6 +576,11 @@
       "import": "./dist/keysign/suiCoinSelection.js",
       "default": "./dist/keysign/suiCoinSelection.js"
     },
+    "./keysign/swap/assertSafeSwapSigningPayload": {
+      "types": "./dist/keysign/swap/assertSafeSwapSigningPayload.d.ts",
+      "import": "./dist/keysign/swap/assertSafeSwapSigningPayload.js",
+      "default": "./dist/keysign/swap/assertSafeSwapSigningPayload.js"
+    },
     "./keysign/swap/build": {
       "types": "./dist/keysign/swap/build.d.ts",
       "import": "./dist/keysign/swap/build.js",

@@ -62,7 +62,11 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
                 : undefined,
             }
           : undefined,
-        provider: '1inch',
+        // Honor the fixture's real provider. Older recovered device payloads
+        // predate the `provider` field and carry none — normalize to '' rather
+        // than assuming '1inch', which would mislabel a LiFi/Kyber/Jupiter swap
+        // (e.g. lifiswap.json routes through the LiFi Diamond, not a 1inch router).
+        provider: o.provider ?? o.Provider ?? '',
       },
     }
 
