@@ -365,6 +365,11 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/qbtc/waitForQbtcTxInclusion": {
+      "types": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js",
+      "default": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js"
+    },
     "./chains/cosmos/resolveCosmosGasFee": {
       "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
       "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
