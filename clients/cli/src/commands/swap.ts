@@ -183,8 +183,10 @@ async function confirmSwapIfNeeded(options: SwapOptions): Promise<void> {
   }
   const confirmed = await confirmSwap()
   if (!confirmed) {
-    warn('Swap cancelled')
-    throw new Error('Swap cancelled by user')
+    // Same contract as `send`: an interactive decline exits 12
+    // CONFIRMATION_REQUIRED (matching the non-interactive refusal), never the
+    // old swallowed exit 0.
+    throw new ConfirmationRequiredError('Swap declined at the confirmation prompt')
   }
 }
 

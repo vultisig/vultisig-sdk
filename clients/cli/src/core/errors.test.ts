@@ -1,4 +1,4 @@
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
+import { Chain, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -411,6 +411,19 @@ describe('classifyError with VaultError', () => {
     expect(result.exitCode).toBe(ExitCode.UNKNOWN)
   })
 
+  it('maps a 32-byte SigningFailed to InvalidInputError (exit 4), not UnknownError', () => {
+    // A wrong-length sign input surfaces as VaultError(SigningFailed) because
+    // FastVault.signBytes wraps the inner error (FastVault.ts) — this is the ONLY
+    // path that maps that shape to INVALID_INPUT/4 (task finding #3); the plain-Error
+    // 32-byte heuristic covers only non-VaultError errors. Pins the branch that was
+    // previously unreachable from any test.
+    const err = new VaultError(VaultErrorCode.SigningFailed, 'signBytes failed: message must be 32 bytes')
+    const result = classifyError(err)
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+  })
+
   it('maps unhandled codes to UnknownError', () => {
     const err = new VaultError(VaultErrorCode.InvalidVault, 'bad vault')
     const result = classifyError(err)
@@ -533,23 +546,56 @@ describe('anticipated CLI taxonomy regressions', () => {
       expect(result.retryable).toBe(true)
     }
 
-    it.each([
-      ['-26', 'mandatory-script-verify-flag-failed'],
-      ['-27', 'transaction already in block chain'],
-    ])('maps a UTXO bitcoind %s rejection preserved by Blockchair to non-retryable input', (code, reason) => {
+    // Verbatim `context.error` captured from api.blockchair.com/bitcoin/push/transaction
+    // (2026-07-17) by pushing an undecodable payload. Blockchair reformats bitcoind's
+    // reply and drops the numeric reject code, so this sentence — not `RPC error -26:` —
+    // is what actually reaches the classifier.
+    const BLOCKCHAIR_DECODE_FAILURE =
+      'Invalid transaction. Error: TX decode failed. Make sure the tx has at least one input.'
+
+    it('maps the real Blockchair decode rejection to non-retryable input', () => {
       expectPermanent(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: RPC error ${code}: ${reason}`
+          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: ${BLOCKCHAIR_DECODE_FAILURE}`
         )
       )
     })
 
-    it('maps a UTXO decode rejection preserved by Blockchair to non-retryable input', () => {
+    it('maps the same decode rejection through the signed-resolver wrapper too', () => {
       expectPermanent(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: TX decode failed'
+          `Failed to broadcast transaction on Bitcoin: Failed to broadcast transaction: ${BLOCKCHAIR_DECODE_FAILURE}`
+        )
+      )
+    })
+
+    // bitcoind's -26 is a bucket ("rejected by network rules"), not a verdict: it also
+    // covers cases where the identical signed bytes succeed later. Blockchair never
+    // surfaces the code anyway, so matching the bucket would only ever strand these.
+    it.each([
+      ['non-final', 'locktime has not yet been reached'],
+      ['too-long-mempool-chain', 'unconfirmed ancestors still in the mempool'],
+      ['min relay fee not met', 'mempool min fee falls as congestion clears'],
+    ])('keeps a recoverable UTXO rejection (%s) retryable', (reason, _why) => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: Invalid transaction. Error: ${reason}`
+        )
+      )
+    })
+
+    // "Already in block chain" means the tx LANDED. It must never be reported as invalid
+    // input — telling a user their encoding is bad about a confirmed tx can push them to
+    // rebuild and pay twice. The signed path swallows this via verifyBroadcastByHash;
+    // if it ever reaches the CLI, retryable is the lesser evil (an idempotent no-op).
+    it('never calls an already-confirmed UTXO tx invalid input', () => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: Invalid transaction. Error: Transaction already in block chain'
         )
       )
     })
@@ -646,11 +692,18 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    it('maps a Cosmos insufficient-funds rejection to non-retryable input', () => {
-      expectPermanent(
+    // A CheckTx rejection never increments the account sequence, so a tx rejected on
+    // mutable chain state stays replayable verbatim once that state changes. These are
+    // recoverable and must not be declared permanent.
+    it.each([
+      [5, '100000uatom is smaller than 500000uatom: insufficient funds', 'the account can be funded'],
+      [13, 'insufficient fee: got 100uatom, required 500uatom', 'min-gas-prices is node-local config'],
+      [9, 'account vultisig1abc does not exist: unknown address', 'the account materializes on first receipt'],
+    ])('keeps a state-dependent Cosmos rejection (code %i) retryable', (code, log, _why) => {
+      expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: sdk). Log: 100000uatom is smaller than 500000uatom: insufficient funds'
+          `Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code ${code} (codespace: sdk). Log: ${log}`
         )
       )
     })
@@ -669,13 +722,27 @@ describe('anticipated CLI taxonomy regressions', () => {
     })
 
     it('keeps a Cosmos rejection from a non-root codespace retryable', () => {
-      // A module-specific codespace (e.g. wasm) can reuse root-codespace-style
-      // numeric codes for unrelated conditions, so the allowlist only applies to
-      // "codespace: sdk".
+      // A module-specific codespace (e.g. wasm) can reuse root-codespace-style numeric
+      // codes for unrelated conditions, so the allowlist only applies to "codespace: sdk".
+      // The code AND log below both match an allowlist entry, so the codespace gate is the
+      // only thing keeping this retryable — delete that gate and this test goes red.
       expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: wasm). Log: execute wasm contract failed'
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: wasm). Log: tx parse error'
+        )
+      )
+    })
+
+    it('keeps a Cosmos rejection whose log contradicts its code retryable', () => {
+      // Code 2 is allowlisted, but its canonical message is "tx parse error". A log that
+      // reports something else means we have not positively identified the failure, so it
+      // stays retryable. The code/log pairing requirement is the only thing keeping this
+      // retryable — drop the log match and this test goes red.
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: sdk). Log: insufficient fee: got 100uatom, required 500uatom'
         )
       )
     })
@@ -684,6 +751,122 @@ describe('anticipated CLI taxonomy regressions', () => {
       expectTransient(
         new VaultError(VaultErrorCode.BroadcastFailed, 'Failed to broadcast transaction on Cosmos: request timed out')
       )
+    })
+
+    // Chains whose kind has no family predicate (ripple/ton/tron/polkadot/cardano/...)
+    // must fall through to retryable rather than borrow another family's vocabulary.
+    it.each([Chain.Ripple, Chain.Tron, Chain.Polkadot])(
+      'keeps a rejection on a family without a classifier (%s) retryable',
+      chain => {
+        expectTransient(
+          new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Failed to broadcast transaction on ${chain}: invalid signature`
+          )
+        )
+      }
+    )
+
+    it('resolves the chain from the SDK wrapper, not from chain-labelled text inside the payload', () => {
+      // Solana folds program logs into the message and a program controls its own `msg!`
+      // text. A log mentioning another chain must not hand this error to that chain's
+      // predicate — here the EVM one, whose vocabulary would match "invalid signature"
+      // and wrongly strand a Solana failure as permanent.
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Solana: Simulation failed. Message: Error processing Instruction 0. Logs: ["Program log: bridged on Ethereum: invalid signature"]'
+        )
+      )
+    })
+  })
+
+  // A Cosmos tx that is INCLUDED in a block but FAILS execution (DeliverTx code !== 0)
+  // is a fundamentally different animal from a CheckTx rejection: it is on-chain, the
+  // account sequence is CONSUMED and the gas is spent, so the identical signed bytes can
+  // never re-land. cosmjs surfaces it as `Error when broadcasting tx <hash> at height
+  // <N>. Code: <c>; Raw log: <log>` (verbatim from @cosmjs/stargate), wrapped by
+  // BroadcastService. It must be non-retryable regardless of the SDK code — the opposite
+  // posture from the same code on the CheckTx path.
+  describe('Cosmos DeliverTx on-chain execution failure', () => {
+    // A real Cosmos tx hash is 64 uppercase hex chars (SHA-256). The classifier now
+    // requires that exact shape so chain-controlled text can't fake the marker.
+    const HASH = 'A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0C1D2E3F4A5B6C7D8E9F0A1B2'
+    const deliverTxError = (chain: string, hash: string, code: number, rawLog: string) =>
+      new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Failed to broadcast transaction on ${chain}: Error when broadcasting tx ${hash} at height 1234567. Code: ${code}; Raw log: ${rawLog}`
+      )
+
+    it('classifies a DeliverTx failure as non-retryable input, not a retryable node error', () => {
+      const result = classifyError(deliverTxError('Cosmos', HASH, 5, 'insufficient funds'))
+      expect(result.code).toBe('INVALID_INPUT')
+      expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+      expect(result.retryable).toBe(false)
+    })
+
+    it('gives an honest, on-chain-aware message (not "node may be temporarily unavailable / Retry")', () => {
+      const result = classifyError(deliverTxError('THORChain', HASH, 99, 'refund reason 108: memo error'))
+      // The hint must tell the truth about an on-chain failure, and must NOT be the
+      // transient-node hint or invite a plain retry of the same bytes.
+      expect(result.hint).toMatch(/on-chain/i)
+      expect(result.hint).not.toMatch(/temporarily unavailable/i)
+      expect(result.suggestions ?? []).not.toContain('Retry the transaction')
+      // Honest about the stage-dependent reality: it must NOT claim the sequence was
+      // consumed as universal fact (an ante-stage failure leaves it intact).
+      expect(result.hint).not.toMatch(/sequence is consumed|sequence was consumed/i)
+      // The cosmjs message (hash/height/code/rawLog) is preserved verbatim.
+      expect(result.message).toContain(HASH)
+    })
+
+    // SDK code 5 ("insufficient funds") is RETRYABLE on the CheckTx path (it never touched
+    // the chain — see COSMOS_PERMANENT_SDK_CODES). A DeliverTx failure has an authoritative
+    // on-chain result, so it is classified non-retryable and routed to inspect-the-hash.
+    it('classifies DeliverTx code 5 non-retryable while CheckTx code 5 stays retryable', () => {
+      const deliverTx = classifyError(deliverTxError('Cosmos', HASH, 5, 'insufficient funds'))
+      expect(deliverTx.retryable).toBe(false)
+
+      const checkTx = classifyError(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: sdk). Log: insufficient funds'
+        )
+      )
+      expect(checkTx.retryable).toBe(true)
+    })
+
+    // Chain identity is resolved from the SDK wrapper on the error's own message, never
+    // from wrapped payload text. A Solana program controls its own log text and it is
+    // folded into the broadcast message; a program log echoing the cosmjs DeliverTx
+    // skeleton must NOT be classified as a (non-retryable) Cosmos DeliverTx failure and
+    // strand a genuinely-retryable Solana error.
+    it('does not let a Solana program log spoof the Cosmos DeliverTx marker', () => {
+      const spoof = new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Failed to broadcast transaction on Solana: Simulation failed. Logs: ["Program log: Error when broadcasting tx ${HASH} at height 1. Code: 5; Raw log: gotcha"]`
+      )
+      const result = classifyError(spoof)
+      // Solana has no permanent match for this text → stays retryable, not exit-4 stranded.
+      expect(result.retryable).toBe(true)
+      expect(result.code).toBe('EXTERNAL_SERVICE')
+    })
+
+    // A hash of the wrong shape (not 64 hex) is not a genuine cosmjs DeliverTx message;
+    // the marker must not fire on it.
+    it('requires a full 64-hex Cosmos hash before treating it as a DeliverTx failure', () => {
+      const result = classifyError(deliverTxError('Cosmos', 'DEADBEEF', 5, 'insufficient funds'))
+      expect(result.retryable).toBe(true)
+    })
+
+    // The committed-tx direction: a DeliverTx code of 0 is a SUCCESS, and cosmjs only
+    // throws assertIsDeliverTxSuccess on code !== 0 — so a `Code: 0` message never reaches
+    // the classifier in practice. But the `[1-9]\d*` nonzero-code anchor must hold: if it
+    // were ever loosened to `\d+`, a success-shaped message would be mis-flagged as a
+    // non-retryable on-chain failure. A genuinely-committed tx must never be mis-classified.
+    it('does not treat a Code: 0 (success-shaped) message as a DeliverTx failure', () => {
+      const result = classifyError(deliverTxError('Cosmos', HASH, 0, 'ok'))
+      expect(result.retryable).toBe(true)
+      expect(result.code).toBe('EXTERNAL_SERVICE')
     })
   })
 })

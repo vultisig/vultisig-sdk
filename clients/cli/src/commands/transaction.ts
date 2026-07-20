@@ -146,8 +146,12 @@ export async function sendTransaction(
   if (!params.yes) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // A human declining at the prompt is the interactive twin of the
+      // non-interactive refusal (confirmTransaction → requireInteractive →
+      // ConfirmationRequiredError): both must exit 12 CONFIRMATION_REQUIRED /
+      // success:false. The old plain Error was swallowed to exit 0 in index.ts,
+      // telling a scripted caller a declined send had "succeeded".
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 
