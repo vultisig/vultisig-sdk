@@ -1,37 +1,9 @@
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+
+import { normalizeChain } from '../../utils/normalizeChain'
 import { decodeCosmosTx } from './cosmos'
 import { decodeEvmTx } from './evm'
 import type { ChainFamily, DecodeFromToolResultInput, Envelope } from './types'
-
-const EVM_CHAINS = new Set([
-  'ethereum',
-  'eth',
-  'base',
-  'arbitrum',
-  'polygon',
-  'optimism',
-  'bsc',
-  'bnb',
-  'avalanche',
-  'avax',
-])
-
-const COSMOS_CHAINS = new Set([
-  'cosmos',
-  'cosmoshub-4',
-  'gaia',
-  'osmosis',
-  'osmosis-1',
-  'terra',
-  'phoenix-1',
-  'terraclassic',
-  'columbus-5',
-  'noble',
-  'noble-1',
-  'dydx',
-  'dydx-mainnet-1',
-  'akash',
-  'akashnet-2',
-])
 
 function failed(chain: string, family: ChainFamily | undefined, reason: string): Envelope {
   return {
@@ -65,8 +37,12 @@ function inferFamily(input: DecodeFromToolResultInput, args: Record<string, unkn
     .toString()
     .toLowerCase()
     .trim()
-  if (EVM_CHAINS.has(chain)) return 'evm'
-  if (COSMOS_CHAINS.has(chain)) return 'cosmos'
+  try {
+    const kind = getChainKind(normalizeChain(chain))
+    if (kind === 'evm' || kind === 'cosmos') return kind
+  } catch {
+    // Preserve the decoder's fail-closed result for unknown or unsupported families.
+  }
   return undefined
 }
 
