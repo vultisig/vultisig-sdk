@@ -411,6 +411,19 @@ describe('classifyError with VaultError', () => {
     expect(result.exitCode).toBe(ExitCode.UNKNOWN)
   })
 
+  it('maps a 32-byte SigningFailed to InvalidInputError (exit 4), not UnknownError', () => {
+    // A wrong-length sign input surfaces as VaultError(SigningFailed) because
+    // FastVault.signBytes wraps the inner error (FastVault.ts) — this is the ONLY
+    // path that maps that shape to INVALID_INPUT/4 (task finding #3); the plain-Error
+    // 32-byte heuristic covers only non-VaultError errors. Pins the branch that was
+    // previously unreachable from any test.
+    const err = new VaultError(VaultErrorCode.SigningFailed, 'signBytes failed: message must be 32 bytes')
+    const result = classifyError(err)
+    expect(result).toBeInstanceOf(InvalidInputError)
+    expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
+    expect(result.retryable).toBe(false)
+  })
+
   it('maps unhandled codes to UnknownError', () => {
     const err = new VaultError(VaultErrorCode.InvalidVault, 'bad vault')
     const result = classifyError(err)
