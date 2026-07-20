@@ -215,3 +215,38 @@ describe('getOneInchSwapQuote — affiliateFee display (AGG-05)', () => {
     expect('evm' in quote.tx ? quote.tx.evm.affiliateFee : undefined).toBeUndefined()
   })
 })
+
+describe('getOneInchSwapQuote — token-source tx.value guard (P3 hardening)', () => {
+  const REAL_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+
+  it('REJECTS a non-zero tx.value for a token-source swap (native-value injection)', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000',
+      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xswap', value: '1000000000000000000', gasPrice: '1', gas: 210000 },
+    })
+
+    await expect(
+      getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
+    ).rejects.toThrow(/non-zero tx\.value .* token-source swap/)
+  })
+
+  it('accepts a non-zero tx.value for a NATIVE-source swap (value is the sell amount)', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000',
+      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xswap', value: '1000000000000000000', gasPrice: '1', gas: 210000 },
+    })
+
+    const quote = await getOneInchSwapQuote({ account, fromCoinId: undefined, toCoinId: '0xdst', amount: 1_000_000n })
+    expect('evm' in quote.tx ? quote.tx.evm.value : undefined).toBe('1000000000000000000')
+  })
+
+  it('accepts a zero tx.value for a token-source swap', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      dstAmount: '1000000',
+      tx: { from: '0xsender', to: REAL_ROUTER, data: '0xswap', value: '0', gasPrice: '1', gas: 210000 },
+    })
+
+    const quote = await getOneInchSwapQuote({ account, fromCoinId: '0xsrc', toCoinId: '0xdst', amount: 1_000_000n })
+    expect('evm' in quote.tx ? quote.tx.evm.value : undefined).toBe('0')
+  })
+})
