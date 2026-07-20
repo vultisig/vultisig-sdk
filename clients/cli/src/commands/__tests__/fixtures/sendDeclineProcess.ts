@@ -4,14 +4,10 @@
  * so it reaches the interactive confirm prompt with no network. Driven under a
  * pseudo-terminal (see sendDeclinePty.test.ts) that feeds "n": the human declines,
  * `sendTransaction` throws `ConfirmationRequiredError`, and `withExit` exits 12.
+ * The test reads the child's real exit code from node-pty's `onExit`.
  *
- * The real exit code is captured via a `process.on('exit')` sentinel file so the
- * assertion never depends on the PTY wrapper's own exit-status propagation.
- *
- * argv: <sentinelPath> [table|json]
+ * argv: [table|json]
  */
-import { writeFileSync } from 'node:fs'
-
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 
@@ -19,18 +15,7 @@ import { withExit } from '../../../adapters/cli-runner'
 import { initOutputMode } from '../../../lib/output'
 import { sendTransaction } from '../../transaction'
 
-const [sentinelPath, mode = 'table'] = process.argv.slice(2)
-if (!sentinelPath) throw new Error('sentinel path is required')
-
-// Capture the code withExit hands to process.exit — robust against `script`'s
-// exit-status quirks. Runs synchronously on the exit event.
-process.on('exit', code => {
-  try {
-    writeFileSync(sentinelPath, String(code))
-  } catch {
-    // best effort — the test reads whatever landed
-  }
-})
+const [mode = 'table'] = process.argv.slice(2)
 
 initOutputMode({ output: mode })
 

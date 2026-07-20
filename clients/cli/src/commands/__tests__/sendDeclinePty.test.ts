@@ -20,16 +20,27 @@ import { ExitCode } from '../../core/errors'
 const FIXTURE = fileURLToPath(new URL('./fixtures/sendDeclineProcess.ts', import.meta.url))
 const REPO_ROOT = fileURLToPath(new URL('../../../../..', import.meta.url))
 
-// yarn's prebuild unpack strips the executable bit off node-pty's `spawn-helper`,
-// so posix_spawnp fails at pty.spawn. Restore +x on this platform's prebuild
-// before spawning — cross-platform and idempotent (a no-op where it's absent).
+// yarn's prebuild unpack can strip the executable bit off node-pty's
+// `spawn-helper` (→ posix_spawnp fails at pty.spawn). Restore +x on both the
+// bundled prebuild (macOS/Windows tarball) AND the node-gyp build output (the
+// path linux CI compiles to, since node-pty ships no linux prebuild). Idempotent
+// and best-effort — a missing path is fine.
 beforeAll(() => {
   try {
     const req = createRequire(import.meta.url)
     const root = dirname(req.resolve('node-pty/package.json'))
-    chmodSync(join(root, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'), 0o755)
+    for (const p of [
+      join(root, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'),
+      join(root, 'build', 'Release', 'spawn-helper'),
+    ]) {
+      try {
+        chmodSync(p, 0o755)
+      } catch {
+        // path absent on this platform/layout — nothing to fix
+      }
+    }
   } catch {
-    // Windows (conpty, no helper) or a layout without prebuilds — nothing to fix.
+    // node-pty not resolvable — the spawn itself will surface it
   }
 })
 
@@ -61,7 +72,7 @@ function runUnderPty(mode: 'table' | 'json'): Promise<{ code: number; output: st
   delete env.COMP_POINT
   delete env.COMP_CWORD
 
-  const child = pty.spawn(process.execPath, ['--import', 'tsx', FIXTURE, join(dir, 'exit-code'), mode], {
+  const child = pty.spawn(process.execPath, ['--import', 'tsx', FIXTURE, mode], {
     name: 'xterm-color',
     cols: 100,
     rows: 30,
