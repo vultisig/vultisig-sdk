@@ -562,6 +562,14 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
+//
+// Exact base-units -> human decimal-string conversion (pure bigint string
+// arithmetic, no float64 round-trip) and the chain-native block explorer URL
+// builder (a const chain->URL map + match). Both were added to the generic
+// entry (src/index.ts) but the RN allow-list omitted them — same
+// hand-curated-gap class as the rest of this section (sdk#1224) — so RN
+// consumers (Station) couldn't format high-decimal balances exactly or link
+// out to a block explorer without deep-importing core-chain.
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
@@ -578,6 +586,8 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
+export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
