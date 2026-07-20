@@ -844,5 +844,16 @@ describe('anticipated CLI taxonomy regressions', () => {
       const result = classifyError(deliverTxError('Cosmos', 'DEADBEEF', 5, 'insufficient funds'))
       expect(result.retryable).toBe(true)
     })
+
+    // The committed-tx direction: a DeliverTx code of 0 is a SUCCESS, and cosmjs only
+    // throws assertIsDeliverTxSuccess on code !== 0 — so a `Code: 0` message never reaches
+    // the classifier in practice. But the `[1-9]\d*` nonzero-code anchor must hold: if it
+    // were ever loosened to `\d+`, a success-shaped message would be mis-flagged as a
+    // non-retryable on-chain failure. A genuinely-committed tx must never be mis-classified.
+    it('does not treat a Code: 0 (success-shaped) message as a DeliverTx failure', () => {
+      const result = classifyError(deliverTxError('Cosmos', HASH, 0, 'ok'))
+      expect(result.retryable).toBe(true)
+      expect(result.code).toBe('EXTERNAL_SERVICE')
+    })
   })
 })
