@@ -8,6 +8,7 @@ import {
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/1inch_swap_payload_pb'
 import { EthereumSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/coin_pb'
+import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -83,5 +84,43 @@ describe('getEvmSigningInputs — sdk#1358 aggregator router guard on the signin
     })
 
     expect(inputs[0]?.toAddress).toBe(ONE_INCH_V6_ROUTER)
+  })
+})
+
+// sdk#1358 review follow-up (neavra): the router guard covers quote.tx.to, but the ERC-20 approval
+// spender is an INDEPENDENT wire field (erc20ApprovePayload.spender) the approve resolver reads
+// verbatim. A payload can pass the router check with a genuine router yet still approve an attacker -
+// a classic approval-drain the co-signer would sign blind. Bind spender === router for enforced providers.
+const buildApprovePayload = ({ routerTo, spender }: { routerTo: string; spender: string }) => {
+  const payload = buildPayload(routerTo)
+  payload.erc20ApprovePayload = create(Erc20ApprovePayloadSchema, { amount: '1000000', spender })
+  return payload
+}
+
+describe('getEvmSigningInputs — sdk#1358 approval-spender bind on the signing-input path', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  it('throws when a 1inch swap carries a valid router but the approve spender is an attacker address', async () => {
+    await expect(
+      getEvmSigningInputs({
+        keysignPayload: buildApprovePayload({ routerTo: ONE_INCH_V6_ROUTER, spender: ATTACKER_ROUTER }),
+        walletCore,
+      })
+    ).rejects.toThrow(/approval spender .* does not match the verified swap router/i)
+  })
+
+  it('signs cleanly when the approve spender matches the verified router (approve + swap legs)', async () => {
+    const inputs = await getEvmSigningInputs({
+      keysignPayload: buildApprovePayload({ routerTo: ONE_INCH_V6_ROUTER, spender: ONE_INCH_V6_ROUTER }),
+      walletCore,
+    })
+
+    // [0] = ERC-20 approve leg, [1] = the swap leg targeting the router.
+    expect(inputs).toHaveLength(2)
+    expect(inputs[1]?.toAddress).toBe(ONE_INCH_V6_ROUTER)
   })
 })
