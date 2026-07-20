@@ -131,6 +131,26 @@ describe('initialize — resume fallback + signal (findings b/c)', () => {
     expect(ft.conversationId).toBeNull()
   })
 
+  it('ask mode: an auth failure surviving retry fails closed as AUTH_FAILED (exit 2), not SESSION_NOT_FOUND', async () => {
+    // A persistent 401 at resume is an AUTH problem, not a missing session — it must
+    // classify to AUTH_FAILED (→ exit 2) so a headless caller re-auths rather than
+    // treating the (valid) session id as stale (→ exit 5). Still fails closed: no new
+    // conversation, nothing dispatched.
+    const getConversation = vi.fn(async () => {
+      throw authError()
+    })
+    const createConversation = vi.fn(async () => ({ id: 'must-not-run' }))
+    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+
+    await expect(initialize.call(ft, makeUi())).rejects.toMatchObject({
+      code: AgentErrorCode.AUTH_FAILED,
+    })
+    expect(getConversation).toHaveBeenCalledTimes(2) // original + one auth retry
+    expect(authenticateVault).toHaveBeenCalled()
+    expect(createConversation).not.toHaveBeenCalled()
+    expect(ft.conversationId).toBeNull()
+  })
+
   it('falls back to a new conversation and emits SESSION_NOT_FOUND on a non-auth resume error', async () => {
     const getConversation = vi.fn(async () => {
       throw new Error('conversation not found')

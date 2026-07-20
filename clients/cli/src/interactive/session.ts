@@ -50,6 +50,7 @@ import {
   executeVaults,
 } from '../commands'
 import { loadActiveVaultSafely, shouldAutoSelectActiveVault } from '../core'
+import { ConfirmationRequiredError } from '../core/errors'
 import { stopAllSpinners } from '../lib/output'
 import { createCompleter, findChainByName } from './completer'
 import { EventBuffer } from './event-buffer'
@@ -766,8 +767,10 @@ export class ShellSession {
         executeSend(this.ctx, { chain, to, amount, tokenId, memo, destinationTag, signal })
       )
     } catch (err: any) {
+      // A decline now throws ConfirmationRequiredError (the one-shot CLI exits 12
+      // on it); in the REPL a decline just returns to the prompt, never exits.
       if (
-        err.message === 'Transaction cancelled by user' ||
+        err instanceof ConfirmationRequiredError ||
         err.message === 'Operation cancelled' ||
         err.message === 'Operation aborted'
       ) {
@@ -913,8 +916,9 @@ export class ShellSession {
         executeSwap(this.ctx, { fromChain, toChain, amount, fromToken, toToken, slippage, signal })
       )
     } catch (err: any) {
+      // See the send handler: a REPL decline returns to the prompt, not exit 12.
       if (
-        err.message === 'Swap cancelled by user' ||
+        err instanceof ConfirmationRequiredError ||
         err.message === 'Operation cancelled' ||
         err.message === 'Operation aborted'
       ) {

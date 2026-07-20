@@ -4,10 +4,12 @@ import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'
 import { getTwPublicKeyType } from '@vultisig/core-chain/publicKey/tw/getTwPublicKeyType'
 import { match } from '@vultisig/lib-utils/match'
-import { WalletCore } from '@trustwallet/wallet-core'
+import { TW, WalletCore } from '@trustwallet/wallet-core'
+import base58 from 'bs58'
 
 import { KeysignSignature } from '../../../../keysign/KeysignSignature'
 import { getEncodedSigningInputs } from '../../../../keysign/signingInputs'
+import { spliceSolanaSignature } from '../../../../keysign/signingInputs/resolvers/solana/rawTx'
 import { getKeysignTwPublicKey } from '../../../../keysign/tw/getKeysignTwPublicKey'
 import { getKeysignChain } from '../../../../keysign/utils/getKeysignChain'
 import { KeysignPayload } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
@@ -59,6 +61,18 @@ export const getCompiledTxsForBlockaidInput = async ({ payload, walletCore }: In
   })
 
   return inputs.map(txInputData => {
+    // dApp-supplied raw Solana transaction (sdk#1204): txInputData is the
+    // ORIGINAL serialized transaction, not a TW SigningInput — WalletCore's
+    // TransactionCompiler can't consume it. The zero-signature scan preview
+    // is the original bytes with a zeroed fee-payer signature slot, wrapped
+    // in the same SigningOutput shape (base58 encoded) the consumers decode.
+    if (chainKind === 'solana' && payload.signData.case === 'signSolana') {
+      const zeroSigned = spliceSolanaSignature(txInputData, new Uint8Array(64))
+      return TW.Solana.Proto.SigningOutput.encode(
+        TW.Solana.Proto.SigningOutput.create({ encoded: base58.encode(zeroSigned) })
+      ).finish()
+    }
+
     const preHashes = getPreSigningHashes({
       walletCore,
       txInputData,
