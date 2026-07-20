@@ -1,0 +1,18 @@
+{
+  "_description": "Shared Layer-1 (WalletCore/WASM, packages/core) / Layer-2 (RN-JS, packages/sdk) golden vector for a Cosmos Hub bank.MsgSend. Read via a plain readFileSync (not an import) by packages/core/mpc/tx/compile/compileTx.golden.test.ts AND packages/sdk/tests/unit/platforms/react-native/cosmos-send-golden-vectors.test.ts, since packages/sdk does not depend on packages/core and a file read sidesteps the workspace dependency graph entirely. This is the SINGLE source of truth for this fixture - do not duplicate these values as literals in either test file.",
+  "senderPrivateKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "recipientPrivateKeyHex": "0202020202020202020202020202020202020202020202020202020202020202",
+  "_derivedNote": "senderCosmosAddress/recipientCosmosAddress/senderPubKeyHex below are deterministically derived from the private keys above via WalletCore.AnyAddress.createWithPublicKey (secp256k1, compressed pubkey). packages/core's suite re-derives them fresh via its own already-loaded WalletCore/WASM instance (proving live agreement every run); packages/sdk's unit suite reads them directly here instead, to avoid adding a WASM wallet-core dependency to an otherwise pure-JS/fast unit test file. Anyone can independently re-verify these three fields from the private keys above.",
+  "senderCosmosAddress": "cosmos10xcqpzrky6eff2g52qdye53xkk9jxkvrpq6uqr",
+  "recipientCosmosAddress": "cosmos1a0qwuze2h85zw7nqpsj3ga0z9geyrgwphl8j6w",
+  "senderPubKeyHex": "031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
+  "chainId": "cosmoshub-4",
+  "accountNumber": 7,
+  "sequence": 3,
+  "memo": "compileTx golden",
+  "denom": "uatom",
+  "amount": "12345",
+  "feeAmount": "2500",
+  "gasLimit": 200000,
+  "expectedSignDocSha256Hex": "fd6f6f8d78322b881c8f9f4753272adb0143d6d9c6556b076b61d5a9b701a916"
+}
