@@ -1,3 +1,4 @@
+import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
@@ -272,6 +273,24 @@ export class RawBroadcastService {
     }
 
     if (!result) throw new Error('No broadcast result returned')
+
+    // `StargateClient.broadcastTx` RESOLVES (does not throw) once the tx is included in a block,
+    // even when execution failed (DeliverTx `code !== 0` — out-of-gas, wasm revert, a THORChain/Maya
+    // deposit-handler rejection). The tx is on-chain but nothing moved, so returning its hash here
+    // would be a false success. The signing-input broadcast resolver (tx/broadcast/resolvers/cosmos.ts,
+    // #1316) already asserts this; this raw path — reachable via the public `vault.broadcastRawTx` —
+    // must fail closed the same way.
+    try {
+      assertIsDeliverTxSuccess(result)
+    } catch (deliverTxError) {
+      const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Cosmos transaction was included but execution failed: ${message}`,
+        deliverTxError instanceof Error ? deliverTxError : new Error(message)
+      )
+    }
+
     return result.transactionHash
   }
 
