@@ -107,4 +107,39 @@ describe('buildCowSwapOrderTypedData', () => {
 
     expect(digestOf(base)).not.toBe(digestOf(arbitrum))
   })
+
+  // sdk#1358 class: assertValidCustomRecipient rejects a zero/burn/malformed receiver at QUOTE
+  // time, but the co-signer builds this digest from a decoded keysign blob that never re-runs that
+  // check. Bind it here — the digest-construction choke point — so a hand-built burn receiver can't
+  // be signed into an unrecoverable order.
+  it('refuses to build a digest for a burn-address receiver', () => {
+    expect(() =>
+      buildCowSwapOrderTypedData({
+        order: { ...order, receiver: '0x000000000000000000000000000000000000dEaD' },
+        chainId: ETHEREUM_CHAIN_ID,
+      })
+    ).toThrow(/zero\/burn address/i)
+  })
+
+  it('refuses to build a digest for the zero-address receiver', () => {
+    expect(() =>
+      buildCowSwapOrderTypedData({
+        order: { ...order, receiver: '0x0000000000000000000000000000000000000000' },
+        chainId: ETHEREUM_CHAIN_ID,
+      })
+    ).toThrow(/zero\/burn address/i)
+  })
+
+  it('refuses to build a digest for a malformed (non-EVM) receiver', () => {
+    expect(() =>
+      buildCowSwapOrderTypedData({
+        order: { ...order, receiver: 'not-an-address' },
+        chainId: ETHEREUM_CHAIN_ID,
+      })
+    ).toThrow(/not a valid EVM address/i)
+  })
+
+  it('still builds for a normal explicit receiver (no over-block)', () => {
+    expect(() => buildCowSwapOrderTypedData({ order, chainId: ETHEREUM_CHAIN_ID })).not.toThrow()
+  })
 })

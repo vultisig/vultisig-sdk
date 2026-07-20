@@ -13,16 +13,7 @@ import qrcode from 'qrcode-terminal'
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
-import {
-  createSpinner,
-  info,
-  isJsonOutput,
-  isNonInteractive,
-  isSilent,
-  outputJson,
-  printResult,
-  warn,
-} from '../lib/output'
+import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
 /**
@@ -204,8 +195,10 @@ async function executeContractTransaction(
   if (!params.yes) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // Same contract as `send`: an interactive decline exits 12
+      // CONFIRMATION_REQUIRED (matching the non-interactive refusal), never the
+      // old swallowed exit 0.
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 

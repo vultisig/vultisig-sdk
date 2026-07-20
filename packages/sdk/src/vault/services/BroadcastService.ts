@@ -109,6 +109,11 @@ export class BroadcastService {
           signatures: keysignSignatures,
           chain,
           walletCore,
+          // Required for payload-keyed compile branches (signSolana raw
+          // transactions splice the signature into the original bytes,
+          // sdk#1204 — matches the keysignPayload extractMessageHashes
+          // already passes to getPreSigningHashes).
+          keysignPayload,
         })
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)

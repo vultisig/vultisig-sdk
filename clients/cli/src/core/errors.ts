@@ -9,6 +9,8 @@ import {
   VaultImportErrorCode,
 } from '@vultisig/sdk'
 
+import { matchCosmosDeliverTxFailure } from './cosmosDeliverTx'
+
 // Typed exit codes for machine-readable error handling
 // Enables agents to distinguish error types programmatically
 
@@ -371,7 +373,21 @@ export class DuplicateBroadcastRefusedError extends VsigError {
 const EVM_PERMANENT_BROADCAST_INPUT_RE =
   /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i
 
-const UTXO_PERMANENT_BROADCAST_INPUT_RE = /\bTX decode failed\b|\b(?:RPC error|code|error code)\s*:?\s*-(?:26|27)\b/i
+// Blockchair is the only UTXO broadcast backend on both the signed resolver and the
+// raw path, and it does NOT preserve bitcoind's numeric reject code: it reformats the
+// node's reply as `Invalid transaction. Error: <reason>` and drops the code entirely.
+// (Probed 2026-07-17 against api.blockchair.com/bitcoin/push/transaction: an undecodable
+// payload returns "Invalid transaction. Error: TX decode failed. Make sure the tx has at
+// least one input." — no code, no "RPC error" prefix.) So only the reason text is
+// matchable here.
+//
+// Deliberately limited to the one reason we have actually observed. bitcoind's -26
+// ("rejected by network rules") is a bucket, not a verdict: it also covers `non-final`
+// (locktime not yet reached), `too-long-mempool-chain`, and `min relay fee not met`,
+// where the identical signed bytes succeed later. Matching the bucket would strand those.
+// Extending this list requires a captured Blockchair response for the reason — not a
+// guess at bitcoind's wording, which never reaches us verbatim.
+const UTXO_PERMANENT_BROADCAST_INPUT_RE = /\bTX decode failed\b/i
 
 const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
   /failed to deserialize(?: transaction)?|failed to sanitize|(?:transaction )?signature verification (?:failed|failure)|non-base58 character|invalid base58/i
@@ -388,24 +404,30 @@ const SUI_REQUIRED_FIELDS_GUARD_RE = /Sui broadcast requires JSON with "unsigned
 const SUI_PERMANENT_EXECUTION_MESSAGE_RE =
   /invalid (?:user )?signature|signature verification (?:failed|failure)|malformed transaction|invalid transaction (?:data|bytes)/i
 
-// Cosmos SDK RootCodespace error codes (codespace "sdk") whose message is a
-// genuinely non-recoverable rejection of THIS signed tx — the identical bytes can
-// never succeed regardless of retries or waiting. See
-// https://github.com/cosmos/cosmos-sdk/blob/main/types/errors/errors.go. Deliberately
-// narrow: any other codespace, any unlisted code (notably 32 "incorrect account
-// sequence" — a transient MPC-race shape that can resolve once the intervening
-// sequence lands), or a code/message mismatch falls through to retryable.
+// Cosmos SDK RootCodespace error codes (codespace "sdk") whose rejection is intrinsic
+// to THIS signed tx — the fault is in the bytes themselves, so no amount of retrying or
+// waiting makes them valid. See
+// https://github.com/cosmos/cosmos-sdk/blob/main/types/errors/errors.go.
+//
+// The line is bytes-intrinsic vs state-dependent, and it matters: a CheckTx rejection
+// does NOT increment the account sequence, so a tx rejected on mutable chain state stays
+// replayable verbatim once that state changes. Codes excluded for that reason —
+// 5 "insufficient funds" (fund the account and the identical bytes land), 13
+// "insufficient fee" (min-gas-prices is node-local config; another node accepts the same
+// bytes), 9 "unknown address" (the account materializes on first receipt) — are
+// recoverable and must stay retryable. So is 32 "incorrect account sequence", a transient
+// MPC-race shape that resolves once the intervening sequence lands.
+//
+// Any other codespace, any unlisted code, or a code/message mismatch falls through to
+// retryable.
 const COSMOS_PERMANENT_SDK_CODES: Partial<Record<number, RegExp>> = {
   2: /tx parse error/i,
   4: /unauthorized|signature verification failed/i,
-  5: /insufficient funds/i,
   6: /unknown request/i,
   7: /invalid address/i,
   8: /invalid pubkey/i,
-  9: /unknown address/i,
   10: /invalid coins/i,
   12: /memo too large/i,
-  13: /insufficient fee/i,
   14: /maximum number of signatures exceeded/i,
   15: /no signatures supplied/i,
   18: /invalid request/i,
@@ -437,21 +459,32 @@ const permanentBroadcastInputClassifiers: Partial<Record<ChainKind, PermanentBro
   cosmos: (_err, details) => isCosmosPermanentBroadcastInput(details),
 }
 
-function getBroadcastErrorChain(details: string): Chain | undefined {
-  const normalized = details.toLowerCase()
-  const wrappedChain = Object.values(Chain).find(chain => normalized.includes(` on ${chain.toLowerCase()}:`))
-  if (wrappedChain) return wrappedChain
+// Matches only the SDK's own wrapper phrasing (BroadcastService / RawBroadcastService),
+// and only its FIRST occurrence, which is always the genuine outermost wrapper.
+// Both matter: chain-labelled text can also appear DOWNSTREAM inside the wrapped payload
+// — Solana folds program logs into the message, and a program controls its own `msg!`
+// text — so a bare " on <chain>:" scan over the whole string lets foreign text pick the
+// classifier family.
+const BROADCAST_CHAIN_WRAPPER_RE = /failed to broadcast (?:raw )?transaction on (.+?):/i
+
+function getBroadcastErrorChain(message: string): Chain | undefined {
+  const wrappedChain = message.match(BROADCAST_CHAIN_WRAPPER_RE)?.[1]?.toLowerCase()
+  if (wrappedChain) {
+    return Object.values(Chain).find(chain => chain.toLowerCase() === wrappedChain)
+  }
 
   // RawBroadcastService deliberately rethrows its local required-fields
   // VaultError without the standard "on <chain>:" wrapper.
-  if (normalized.startsWith('sui broadcast ')) return Chain.Sui
+  if (/^sui broadcast /i.test(message)) return Chain.Sui
 
   return undefined
 }
 
 function isPermanentBroadcastInputError(err: VaultError): boolean {
   const details = `${err.message}\n${err.originalError?.message ?? ''}`
-  const chain = getBroadcastErrorChain(details)
+  // Chain identity comes from the wrapper on the error's OWN message, never from the
+  // wrapped originalError text.
+  const chain = getBroadcastErrorChain(err.message)
 
   if (chain) {
     const classifier = permanentBroadcastInputClassifiers[getChainKind(chain)]
@@ -529,13 +562,42 @@ function classifyVaultError(err: VaultError): VsigError {
       return new VaultNotFoundError(err.message)
     case VaultErrorCode.UnsupportedToken:
       return new TokenNotFoundError(err.message)
-    case VaultErrorCode.BroadcastFailed:
+    case VaultErrorCode.BroadcastFailed: {
+      // A Cosmos DeliverTx failure — the tx was INCLUDED in a block and then failed
+      // execution (code !== 0: out-of-gas, a wasm revert, a THORChain/Maya deposit-handler
+      // rejection) — is checked FIRST, separately from the CheckTx / encoding permanent
+      // path below, and classified non-retryable. Unlike a CheckTx rejection (which never
+      // touched the chain, so the identical bytes stay replayable — #1355 keeps those
+      // retryable), a DeliverTx failure has an authoritative on-chain result to inspect.
+      //
+      // Chain identity comes from the SDK wrapper on the error's OWN message (mirrors
+      // isPermanentBroadcastInputError / #1355), never from wrapped payload text — a
+      // Solana program folds program-controlled logs into the message and could otherwise
+      // spoof the DeliverTx skeleton and strand a genuinely-retryable error here.
+      const broadcastChain = getBroadcastErrorChain(err.message)
+      const isCosmosBroadcast = broadcastChain !== undefined && getChainKind(broadcastChain) === 'cosmos'
+      if (isCosmosBroadcast && matchCosmosDeliverTxFailure(err.message)) {
+        // Deliberately does NOT assert "sequence consumed / gas spent" as universal fact:
+        // an ANTE-stage failure (e.g. code 5 when the fee can't be deducted because the
+        // account was drained after CheckTx) aborts before IncrementSequenceDecorator, so
+        // the sequence is NOT consumed there and the identical bytes could land once funded.
+        // The honest, stage-agnostic guidance holds either way: the on-chain result is
+        // authoritative — inspect it, and rebuild rather than blindly re-broadcasting.
+        return new InvalidInputError(
+          err.message,
+          'This transaction was included on-chain and its execution failed (non-zero DeliverTx code). ' +
+            'The on-chain result is authoritative — inspect it using the transaction hash in the message. ' +
+            'Do not blindly re-broadcast the identical signed bytes; if you retry, resolve the underlying cause ' +
+            '(e.g. fund the account, adjust gas/slippage) and rebuild the transaction first.'
+        )
+      }
       if (isPermanentBroadcastInputError(err)) {
         return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
       }
       return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
         'Retry the transaction',
       ])
+    }
     case VaultErrorCode.GasEstimationFailed:
       return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
     case VaultErrorCode.SigningFailed:
