@@ -22,9 +22,11 @@ const makeInbound = (
 const makeThorchainSwapPayload = ({
   vaultAddress = 'bc1qactive',
   expirationTime = 1_700_000_100n,
+  toChain,
 }: {
   vaultAddress?: string
   expirationTime?: bigint
+  toChain?: Chain
 } = {}): KeysignPayload =>
   ({
     swapPayload: {
@@ -32,6 +34,7 @@ const makeThorchainSwapPayload = ({
       value: {
         vaultAddress,
         expirationTime,
+        ...(toChain ? { toCoin: { chain: toChain } } : {}),
       },
     },
   }) as KeysignPayload
@@ -335,6 +338,61 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         chain: Chain.Dash,
         keysignPayload: makeMayachainSwapPayload({ vaultAddress: 'dash1active' }),
         getInboundAddresses: async () => [makeInbound('DASH', 'dash1active', { halted: true })],
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/trading is halted/)
+  })
+
+  // sdk#1360 follow-up: the re-check must mirror quote-time's BOTH-ends evaluation, not just the
+  // source. A destination halting between quote and broadcast lets the deposit land while the
+  // outbound cannot leave (stuck funds). Source healthy + destination halted must still reject.
+  it('rejects a THORChain broadcast when the DESTINATION chain is halted (source healthy)', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'bc1qactive', toChain: Chain.Solana }),
+        getInboundAddresses: async () => [
+          makeInbound('BTC', 'bc1qactive'),
+          makeInbound('SOL', 'sol1active', { halted: true, chain_trading_paused: true }),
+        ],
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/trading is halted for SOL/)
+  })
+
+  it('passes when both route ends are healthy (source + destination)', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'bc1qactive', toChain: Chain.Solana }),
+        getInboundAddresses: async () => [makeInbound('BTC', 'bc1qactive'), makeInbound('SOL', 'sol1active')],
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  // Tolerance mirrors getNativeSwapTradingHalt: a route leg with no inbound entry (RUNE/CACAO, or a
+  // destination absent from the feed) is not haltable here, so it must be skipped, not false-blocked.
+  it('does not false-block when the destination has no inbound entry', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'bc1qactive', toChain: Chain.THORChain }),
+        getInboundAddresses: async () => [makeInbound('BTC', 'bc1qactive')],
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects when global_trading_paused is set on any inbound entry, not only the source', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.Bitcoin,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'bc1qactive', toChain: Chain.Solana }),
+        getInboundAddresses: async () => [
+          makeInbound('BTC', 'bc1qactive'),
+          makeInbound('SOL', 'sol1active', { global_trading_paused: true }),
+        ],
         now: () => 1_700_000_000_000,
       })
     ).rejects.toThrow(/trading is halted/)
