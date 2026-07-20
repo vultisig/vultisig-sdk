@@ -176,6 +176,30 @@ describe('findSwapQuote external recipient', () => {
     }
   )
 
+  it('rejects a 0X-prefixed (uppercase-X) burn recipient on a cross-chain native route', async () => {
+    // Regression: the case-sensitive isEvmAddress gate let `0X…dead` bypass the zero/burn
+    // check. On a BTC→ETH THORChain route the CowSwap path is unreachable, so the bypassed
+    // burn was passed straight through as the swap destination — an unrecoverable sink.
+    // assertValidCustomRecipient runs before any provider, so this throws up front.
+    vi.mocked(getNativeSwapQuote).mockResolvedValue({
+      expected_amount_out: '10000000',
+      swapChain: Chain.THORChain,
+    } as never)
+
+    await expect(
+      findSwapQuote({
+        from: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        to: { chain: Chain.Ethereum, address: '0xowner', decimals: 18, ticker: 'ETH' },
+        amount: 1_000_000n,
+        recipient: '0X000000000000000000000000000000000000dEaD',
+      })
+    ).rejects.toMatchObject({
+      code: SwapErrorCode.InvalidConfig,
+      message: expect.stringContaining('zero/burn address'),
+    })
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
   it('accepts a valid 40-hex EVM address and forwards it to CowSwap as receiver', async () => {
     vi.mocked(getCowSwapQuote).mockResolvedValue(generalQuote)
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))

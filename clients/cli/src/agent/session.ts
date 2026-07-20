@@ -10,10 +10,6 @@
  *   `tool-output-available` channel is buffered then signed — the sole sign source)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-
 import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
@@ -24,6 +20,13 @@ import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSumm
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import {
+  type AgentTokenCacheScope,
+  clearCachedToken,
+  getCachedTokenEntry,
+  loadCachedToken,
+  saveCachedToken,
+} from './tokenCache'
 import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, payloadLooksSignable } from './toolOutputSigning'
 import type {
   AgentConfig,
@@ -38,6 +41,12 @@ import type {
 // reached via the tool-output signing path (not a registry tool name) but uses
 // the same gate via `runPasswordGatedTool('sign_tx', …)` below.
 const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+const AUTO_SUBMIT_MARKERS = new Set([
+  '__pm_auto_submit',
+  '__pm_auto_submit_batch',
+  '__pm_submit_token',
+  '__pm_batch_submit_token',
+])
 
 // Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
 // entry maps an inbound `tool-input-available` toolName to the matching per-tool
@@ -157,6 +166,14 @@ export class AgentSession {
   private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
   private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
+  private get tokenCacheScope(): AgentTokenCacheScope {
+    return {
+      publicKey: this.publicKey,
+      backendUrl: this.config.backendUrl,
+      profile: this.config.profile,
+    }
+  }
+
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
     this.config = config
@@ -266,13 +283,13 @@ export class AgentSession {
     try {
       await this.unlockEncryptedVault(ui)
 
-      const cached = loadCachedToken(this.publicKey)
+      const cached = await loadCachedToken(this.tokenCacheScope).catch(() => null)
       if (cached) {
         this.client.setAuthToken(cached)
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken)
+        await saveCachedToken(this.tokenCacheScope, auth.token, auth.expiresAt, auth.refreshToken).catch(() => {})
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
@@ -398,11 +415,16 @@ export class AgentSession {
       // authenticateVault (MPC re-sign) may not return a refreshToken; capture
       // the previously cached one before clearing so it survives the re-auth and
       // the later /auth/refresh path stays available.
-      const previousRefreshToken = readTokenStore()[this.publicKey]?.refreshToken
-      clearCachedToken(this.publicKey)
+      const previousRefreshToken = getCachedTokenEntry(this.tokenCacheScope)?.refreshToken
+      await clearCachedToken(this.tokenCacheScope).catch(() => {})
       const auth = await authenticateVault(this.client, this.vault, this.config.password)
       this.client.setAuthToken(auth.token)
-      saveCachedToken(this.publicKey, auth.token, auth.expiresAt, auth.refreshToken ?? previousRefreshToken)
+      await saveCachedToken(
+        this.tokenCacheScope,
+        auth.token,
+        auth.expiresAt,
+        auth.refreshToken ?? previousRefreshToken
+      ).catch(() => {})
       return await request()
     }
   }
@@ -666,6 +688,10 @@ export class AgentSession {
         this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
       }
       throw err
+    }
+
+    for (const warning of streamResult.protocolWarnings ?? []) {
+      ui.onProtocolWarning?.(warning)
     }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
@@ -1257,7 +1283,23 @@ export class AgentSession {
     // has no __ prefix and isn't the order ref, so it must be named here or
     // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
+    const requestedAutoSubmit =
+      input.auto_submit === true || input.__pm_auto_submit === true || input.__pm_auto_submit_batch === true
+    if (!this.config.allowAutoSubmit) {
+      // The executor may have derived auto_submit=true from the signed input.
+      // Override that result and withhold the one-time submit tokens: a backend
+      // can request a signature, but only this explicit local flag authorizes it
+      // to turn that signature into a live order.
+      recent.data.auto_submit = false
+      for (const marker of AUTO_SUBMIT_MARKERS) delete recent.data[marker]
+      if (requestedAutoSubmit) {
+        process.stderr.write(
+          '[session] backend requested Polymarket auto-submit; signed payload returned without submit authorization (pass --allow-auto-submit to opt in)\n'
+        )
+      }
+    }
     for (const key of Object.keys(input)) {
+      if (AUTO_SUBMIT_MARKERS.has(key) && !this.config.allowAutoSubmit) continue
       if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
@@ -1365,108 +1407,4 @@ function hasSignableToolPart(parts: ConversationMessage['parts']): boolean {
 export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? '')
   return /\b(401|403)\b/.test(msg)
-}
-
-// ============================================================================
-// Agent Token Cache
-//
-// Persists JWT tokens to ~/.vultisig/agent-tokens.json keyed by vault public key.
-// Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
-// ============================================================================
-
-type TokenEntry = { token: string; expiresAt: number; refreshToken?: string }
-type TokenStore = Record<string, TokenEntry>
-
-function getTokenCachePath(): string {
-  const dir = process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
-  return join(dir, 'agent-tokens.json')
-}
-
-function readTokenStore(): TokenStore {
-  try {
-    const path = getTokenCachePath()
-    if (!existsSync(path)) return {}
-    return JSON.parse(readFileSync(path, 'utf-8'))
-  } catch {
-    return {}
-  }
-}
-
-function writeTokenStore(store: TokenStore): void {
-  const path = getTokenCachePath()
-  const dir = join(path, '..')
-  // 0o700 dir / 0o600 file: the store holds bearer access + refresh tokens.
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 })
-  // mkdirSync's `mode` is honored only when the dir is CREATED; a pre-existing
-  // dir (e.g. ~/.vultisig from an older release) keeps its old perms. chmod
-  // every write so it can't retain looser perms now that refresh tokens live here.
-  try {
-    chmodSync(dir, 0o700)
-  } catch {
-    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
-  }
-  writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
-  // writeFileSync's `mode` is honored only when the file is CREATED; an existing
-  // file keeps its old perms. chmod every write so a pre-existing (or
-  // out-of-band) agent-tokens.json can't retain looser perms now that a
-  // longer-lived refresh token lives here.
-  try {
-    chmodSync(path, 0o600)
-  } catch {
-    /* best-effort: non-POSIX FS (e.g. Windows) ignores perms */
-  }
-}
-
-/**
- * Load a cached token for a vault if it exists and hasn't expired.
- * Adds a 60-second buffer to avoid using tokens right at expiry.
- */
-function loadCachedToken(publicKey: string): string | null {
-  const store = readTokenStore()
-  const entry = store[publicKey]
-  if (!entry) return null
-
-  const now = Date.now()
-  const expiresMs = entry.expiresAt * (entry.expiresAt < 1e12 ? 1000 : 1)
-  if (now >= expiresMs - 60_000) {
-    // Expired or about to expire - clean it up
-    delete store[publicKey]
-    try {
-      writeTokenStore(store)
-    } catch {
-      /* ignore */
-    }
-    return null
-  }
-
-  return entry.token
-}
-
-// Persists the access token (and optional refresh token) under 0o600 perms.
-// The refresh token is captured for a future POST /auth/refresh exchange. A
-// prior entry's refreshToken is preserved when this call doesn't carry one
-// (e.g. a backend that stops returning refresh_token shouldn't drop the
-// still-valid token we already hold).
-function saveCachedToken(publicKey: string, token: string, expiresAt: number, refreshToken?: string): void {
-  const store = readTokenStore()
-  store[publicKey] = {
-    token,
-    expiresAt,
-    refreshToken: refreshToken ?? store[publicKey]?.refreshToken,
-  }
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearCachedToken(publicKey: string): void {
-  const store = readTokenStore()
-  delete store[publicKey]
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
 }

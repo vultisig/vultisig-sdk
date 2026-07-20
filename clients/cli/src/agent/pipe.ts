@@ -185,6 +185,10 @@ export class PipeInterface {
         this.emit({ type: 'error', message, code })
       },
 
+      onProtocolWarning: warning => {
+        this.emit({ type: 'warning', warning })
+      },
+
       onReconnecting: () => {
         this.emit({ type: 'reconnecting' })
       },
