@@ -313,11 +313,15 @@ export class AgentSession {
         if (this.config.askMode) {
           this.conversationId = null
           this.historyMessages = []
+          // An auth failure that survived withAuthRetry's single retry is an AUTH
+          // problem (→ exit 2), not a missing session (→ exit 5): classify by cause
+          // so a headless caller re-auths rather than treating the session id as
+          // stale. Any other resume failure stays SESSION_NOT_FOUND.
           throw Object.assign(
             new Error(
               `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
             ),
-            { code: AgentErrorCode.SESSION_NOT_FOUND }
+            { code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND }
           )
         }
 
