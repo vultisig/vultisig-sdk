@@ -3,6 +3,7 @@ import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { BroadcastTxResolver } from '../resolver'
+import { DeliverTxFailedError } from '../transientRetry'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chain, tx }) => {
@@ -26,12 +27,21 @@ export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chai
     return
   }
 
-  // Mirror the status resolver (status/resolvers/sui.ts): a 'failure' effects status is a
-  // genuinely-failed Move, so throw instead of returning a digest as a successful broadcast. Thrown
+  // Mirror the status resolver (status/resolvers/sui.ts): ONLY an explicit 'success' effects status
+  // is execution success. A 'failure' (MoveAbort / InsufficientGas) — or a missing/unknown status —
+  // must NOT be returned as a digest-carrying successful broadcast (that's the sdk#1398 bug). Thrown
   // outside the RPC-error path above so it isn't fed back into verifyBroadcastByHash — the tx is
   // on-chain and failed, not un-broadcast.
-  if (response.effects?.status?.status === 'failure') {
-    throw new Error(`Sui transaction failed on-chain: ${response.effects.status.error ?? 'transaction aborted'}`)
+  //
+  // Throw DeliverTxFailedError (not a bare Error) so isTransientBroadcastError short-circuits on the
+  // `instanceof` BEFORE its message-regex runs: a Sui abort error string routinely contains
+  // "aborted"/"timed out", which the transient patterns match — a bare Error would be misclassified
+  // as transient and the aborted tx re-sent by withTransientBroadcastRetry.
+  const effectsStatus = response.effects?.status?.status
+  if (effectsStatus !== 'success') {
+    throw new DeliverTxFailedError(
+      `Sui transaction failed on-chain: ${response.effects?.status?.error ?? effectsStatus ?? 'no effects status returned'}`
+    )
   }
 
   return response
