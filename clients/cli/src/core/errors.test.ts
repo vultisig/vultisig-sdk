@@ -1,4 +1,4 @@
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
+import { Chain, VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -546,23 +546,56 @@ describe('anticipated CLI taxonomy regressions', () => {
       expect(result.retryable).toBe(true)
     }
 
-    it.each([
-      ['-26', 'mandatory-script-verify-flag-failed'],
-      ['-27', 'transaction already in block chain'],
-    ])('maps a UTXO bitcoind %s rejection preserved by Blockchair to non-retryable input', (code, reason) => {
+    // Verbatim `context.error` captured from api.blockchair.com/bitcoin/push/transaction
+    // (2026-07-17) by pushing an undecodable payload. Blockchair reformats bitcoind's
+    // reply and drops the numeric reject code, so this sentence — not `RPC error -26:` —
+    // is what actually reaches the classifier.
+    const BLOCKCHAIR_DECODE_FAILURE =
+      'Invalid transaction. Error: TX decode failed. Make sure the tx has at least one input.'
+
+    it('maps the real Blockchair decode rejection to non-retryable input', () => {
       expectPermanent(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: RPC error ${code}: ${reason}`
+          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: ${BLOCKCHAIR_DECODE_FAILURE}`
         )
       )
     })
 
-    it('maps a UTXO decode rejection preserved by Blockchair to non-retryable input', () => {
+    it('maps the same decode rejection through the signed-resolver wrapper too', () => {
       expectPermanent(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: TX decode failed'
+          `Failed to broadcast transaction on Bitcoin: Failed to broadcast transaction: ${BLOCKCHAIR_DECODE_FAILURE}`
+        )
+      )
+    })
+
+    // bitcoind's -26 is a bucket ("rejected by network rules"), not a verdict: it also
+    // covers cases where the identical signed bytes succeed later. Blockchair never
+    // surfaces the code anyway, so matching the bucket would only ever strand these.
+    it.each([
+      ['non-final', 'locktime has not yet been reached'],
+      ['too-long-mempool-chain', 'unconfirmed ancestors still in the mempool'],
+      ['min relay fee not met', 'mempool min fee falls as congestion clears'],
+    ])('keeps a recoverable UTXO rejection (%s) retryable', (reason, _why) => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: Invalid transaction. Error: ${reason}`
+        )
+      )
+    })
+
+    // "Already in block chain" means the tx LANDED. It must never be reported as invalid
+    // input — telling a user their encoding is bad about a confirmed tx can push them to
+    // rebuild and pay twice. The signed path swallows this via verifyBroadcastByHash;
+    // if it ever reaches the CLI, retryable is the lesser evil (an idempotent no-op).
+    it('never calls an already-confirmed UTXO tx invalid input', () => {
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast raw transaction on Bitcoin: Failed to broadcast transaction: Invalid transaction. Error: Transaction already in block chain'
         )
       )
     })
@@ -659,11 +692,18 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    it('maps a Cosmos insufficient-funds rejection to non-retryable input', () => {
-      expectPermanent(
+    // A CheckTx rejection never increments the account sequence, so a tx rejected on
+    // mutable chain state stays replayable verbatim once that state changes. These are
+    // recoverable and must not be declared permanent.
+    it.each([
+      [5, '100000uatom is smaller than 500000uatom: insufficient funds', 'the account can be funded'],
+      [13, 'insufficient fee: got 100uatom, required 500uatom', 'min-gas-prices is node-local config'],
+      [9, 'account vultisig1abc does not exist: unknown address', 'the account materializes on first receipt'],
+    ])('keeps a state-dependent Cosmos rejection (code %i) retryable', (code, log, _why) => {
+      expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: sdk). Log: 100000uatom is smaller than 500000uatom: insufficient funds'
+          `Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code ${code} (codespace: sdk). Log: ${log}`
         )
       )
     })
@@ -682,13 +722,27 @@ describe('anticipated CLI taxonomy regressions', () => {
     })
 
     it('keeps a Cosmos rejection from a non-root codespace retryable', () => {
-      // A module-specific codespace (e.g. wasm) can reuse root-codespace-style
-      // numeric codes for unrelated conditions, so the allowlist only applies to
-      // "codespace: sdk".
+      // A module-specific codespace (e.g. wasm) can reuse root-codespace-style numeric
+      // codes for unrelated conditions, so the allowlist only applies to "codespace: sdk".
+      // The code AND log below both match an allowlist entry, so the codespace gate is the
+      // only thing keeping this retryable — delete that gate and this test goes red.
       expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
-          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 5 (codespace: wasm). Log: execute wasm contract failed'
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: wasm). Log: tx parse error'
+        )
+      )
+    })
+
+    it('keeps a Cosmos rejection whose log contradicts its code retryable', () => {
+      // Code 2 is allowlisted, but its canonical message is "tx parse error". A log that
+      // reports something else means we have not positively identified the failure, so it
+      // stays retryable. The code/log pairing requirement is the only thing keeping this
+      // retryable — drop the log match and this test goes red.
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Cosmos: Broadcasting transaction failed with code 2 (codespace: sdk). Log: insufficient fee: got 100uatom, required 500uatom'
         )
       )
     })
@@ -696,6 +750,33 @@ describe('anticipated CLI taxonomy regressions', () => {
     it('keeps a Cosmos RPC transport failure retryable', () => {
       expectTransient(
         new VaultError(VaultErrorCode.BroadcastFailed, 'Failed to broadcast transaction on Cosmos: request timed out')
+      )
+    })
+
+    // Chains whose kind has no family predicate (ripple/ton/tron/polkadot/cardano/...)
+    // must fall through to retryable rather than borrow another family's vocabulary.
+    it.each([Chain.Ripple, Chain.Tron, Chain.Polkadot])(
+      'keeps a rejection on a family without a classifier (%s) retryable',
+      chain => {
+        expectTransient(
+          new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Failed to broadcast transaction on ${chain}: invalid signature`
+          )
+        )
+      }
+    )
+
+    it('resolves the chain from the SDK wrapper, not from chain-labelled text inside the payload', () => {
+      // Solana folds program logs into the message and a program controls its own `msg!`
+      // text. A log mentioning another chain must not hand this error to that chain's
+      // predicate — here the EVM one, whose vocabulary would match "invalid signature"
+      // and wrongly strand a Solana failure as permanent.
+      expectTransient(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          'Failed to broadcast transaction on Solana: Simulation failed. Message: Error processing Instruction 0. Logs: ["Program log: bridged on Ethereum: invalid signature"]'
+        )
       )
     })
   })
