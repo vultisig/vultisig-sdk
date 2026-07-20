@@ -9,6 +9,8 @@ import {
   VaultImportErrorCode,
 } from '@vultisig/sdk'
 
+import { matchCosmosDeliverTxFailure } from './cosmosDeliverTx'
+
 // Typed exit codes for machine-readable error handling
 // Enables agents to distinguish error types programmatically
 
@@ -560,13 +562,42 @@ function classifyVaultError(err: VaultError): VsigError {
       return new VaultNotFoundError(err.message)
     case VaultErrorCode.UnsupportedToken:
       return new TokenNotFoundError(err.message)
-    case VaultErrorCode.BroadcastFailed:
+    case VaultErrorCode.BroadcastFailed: {
+      // A Cosmos DeliverTx failure — the tx was INCLUDED in a block and then failed
+      // execution (code !== 0: out-of-gas, a wasm revert, a THORChain/Maya deposit-handler
+      // rejection) — is checked FIRST, separately from the CheckTx / encoding permanent
+      // path below, and classified non-retryable. Unlike a CheckTx rejection (which never
+      // touched the chain, so the identical bytes stay replayable — #1355 keeps those
+      // retryable), a DeliverTx failure has an authoritative on-chain result to inspect.
+      //
+      // Chain identity comes from the SDK wrapper on the error's OWN message (mirrors
+      // isPermanentBroadcastInputError / #1355), never from wrapped payload text — a
+      // Solana program folds program-controlled logs into the message and could otherwise
+      // spoof the DeliverTx skeleton and strand a genuinely-retryable error here.
+      const broadcastChain = getBroadcastErrorChain(err.message)
+      const isCosmosBroadcast = broadcastChain !== undefined && getChainKind(broadcastChain) === 'cosmos'
+      if (isCosmosBroadcast && matchCosmosDeliverTxFailure(err.message)) {
+        // Deliberately does NOT assert "sequence consumed / gas spent" as universal fact:
+        // an ANTE-stage failure (e.g. code 5 when the fee can't be deducted because the
+        // account was drained after CheckTx) aborts before IncrementSequenceDecorator, so
+        // the sequence is NOT consumed there and the identical bytes could land once funded.
+        // The honest, stage-agnostic guidance holds either way: the on-chain result is
+        // authoritative — inspect it, and rebuild rather than blindly re-broadcasting.
+        return new InvalidInputError(
+          err.message,
+          'This transaction was included on-chain and its execution failed (non-zero DeliverTx code). ' +
+            'The on-chain result is authoritative — inspect it using the transaction hash in the message. ' +
+            'Do not blindly re-broadcast the identical signed bytes; if you retry, resolve the underlying cause ' +
+            '(e.g. fund the account, adjust gas/slippage) and rebuild the transaction first.'
+        )
+      }
       if (isPermanentBroadcastInputError(err)) {
         return new InvalidInputError(err.message, 'Check the signed transaction encoding and signature')
       }
       return new ExternalServiceError(err.message, 'Broadcast failed — the node may be temporarily unavailable', [
         'Retry the transaction',
       ])
+    }
     case VaultErrorCode.GasEstimationFailed:
       return new InvalidInputError(err.message, 'Gas estimation failed — check balance and transaction params')
     case VaultErrorCode.SigningFailed:
