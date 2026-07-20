@@ -176,16 +176,21 @@ export async function guardedBroadcast<T extends { txHash: string }>(
     return result
   } catch (error) {
     // A Cosmos DeliverTx failure means the signed tx WAS included on-chain and then
-    // failed execution — terminal: the sequence is consumed and the gas is spent, so
-    // the identical bytes can never re-land. cosmjs embeds the tx hash in the thrown
-    // message; journal it as a broadcast + a FAILED resolution so the terminal hash is
-    // on the record (tx-status / explorer / audit) rather than discarded, and the guard
-    // RE-OPENS: recording `failed` is what clears the intent for a legitimate
-    // fresh-sequence rebuild (see broadcastJournal isRetryableResolution). Any other
-    // throw broadcast nothing durable we can name here, so it is left to the reservation
-    // lock and the error classifier.
+    // failed execution. cosmjs embeds the tx hash in the thrown message; journal it as a
+    // broadcast + a FAILED resolution so the on-chain hash is on the record (tx-status /
+    // explorer / audit) rather than discarded, and the guard RE-OPENS: recording `failed`
+    // is what clears the intent for a legitimate retry (see broadcastJournal
+    // isRetryableResolution). Re-opening is fund-safe — a DeliverTx failure moves nothing
+    // (state reverts on non-zero code), so the worst case is a harmless resend.
+    //
+    // Gate on the intent's OWN chain (which we control and trust — it is the chain we are
+    // broadcasting on), not on the error text: without this, a non-Cosmos error whose
+    // message embedded the DeliverTx skeleton (a program-controlled Solana log) would get
+    // an attacker-chosen hash journaled. Any other throw broadcast nothing durable we can
+    // name here, so it is left to the reservation lock and the error classifier.
+    const isCosmosIntent = getChainKind(intent.chain as Chain) === 'cosmos'
     const message = error instanceof Error ? error.message : String(error)
-    const deliverTxHash = matchCosmosDeliverTxFailure(message)?.hash
+    const deliverTxHash = isCosmosIntent ? matchCosmosDeliverTxFailure(message)?.hash : undefined
     if (deliverTxHash) {
       recordBroadcast(fingerprint, deliverTxHash, intent.chain)
       recordResolution(deliverTxHash, 'failed')

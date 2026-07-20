@@ -776,6 +776,9 @@ describe('anticipated CLI taxonomy regressions', () => {
   // BroadcastService. It must be non-retryable regardless of the SDK code — the opposite
   // posture from the same code on the CheckTx path.
   describe('Cosmos DeliverTx on-chain execution failure', () => {
+    // A real Cosmos tx hash is 64 uppercase hex chars (SHA-256). The classifier now
+    // requires that exact shape so chain-controlled text can't fake the marker.
+    const HASH = 'A1B2C3D4E5F6A7B8C9D0E1F2A3B4C5D6E7F8A9B0C1D2E3F4A5B6C7D8E9F0A1B2'
     const deliverTxError = (chain: string, hash: string, code: number, rawLog: string) =>
       new VaultError(
         VaultErrorCode.BroadcastFailed,
@@ -783,28 +786,31 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
 
     it('classifies a DeliverTx failure as non-retryable input, not a retryable node error', () => {
-      const result = classifyError(deliverTxError('Cosmos', 'A1B2C3D4', 5, 'insufficient funds'))
+      const result = classifyError(deliverTxError('Cosmos', HASH, 5, 'insufficient funds'))
       expect(result.code).toBe('INVALID_INPUT')
       expect(result.exitCode).toBe(ExitCode.INVALID_INPUT)
       expect(result.retryable).toBe(false)
     })
 
     it('gives an honest, on-chain-aware message (not "node may be temporarily unavailable / Retry")', () => {
-      const result = classifyError(deliverTxError('THORChain', 'FEED0001', 99, 'refund reason 108: memo error'))
-      // The hint must tell the truth about a terminal on-chain failure, and must NOT be
-      // the transient-node hint or invite a plain retry of the same bytes.
+      const result = classifyError(deliverTxError('THORChain', HASH, 99, 'refund reason 108: memo error'))
+      // The hint must tell the truth about an on-chain failure, and must NOT be the
+      // transient-node hint or invite a plain retry of the same bytes.
       expect(result.hint).toMatch(/on-chain/i)
       expect(result.hint).not.toMatch(/temporarily unavailable/i)
       expect(result.suggestions ?? []).not.toContain('Retry the transaction')
+      // Honest about the stage-dependent reality: it must NOT claim the sequence was
+      // consumed as universal fact (an ante-stage failure leaves it intact).
+      expect(result.hint).not.toMatch(/sequence is consumed|sequence was consumed/i)
       // The cosmjs message (hash/height/code/rawLog) is preserved verbatim.
-      expect(result.message).toContain('FEED0001')
+      expect(result.message).toContain(HASH)
     })
 
-    // The crux: SDK code 5 ("insufficient funds") is deliberately RETRYABLE on the
-    // CheckTx path (it never touched the chain — see COSMOS_PERMANENT_SDK_CODES), but
-    // the SAME code on the DeliverTx path is PERMANENT (the tx executed and failed).
-    it('treats DeliverTx code 5 as permanent even though CheckTx code 5 stays retryable', () => {
-      const deliverTx = classifyError(deliverTxError('Cosmos', 'DEAD01', 5, 'insufficient funds'))
+    // SDK code 5 ("insufficient funds") is RETRYABLE on the CheckTx path (it never touched
+    // the chain — see COSMOS_PERMANENT_SDK_CODES). A DeliverTx failure has an authoritative
+    // on-chain result, so it is classified non-retryable and routed to inspect-the-hash.
+    it('classifies DeliverTx code 5 non-retryable while CheckTx code 5 stays retryable', () => {
+      const deliverTx = classifyError(deliverTxError('Cosmos', HASH, 5, 'insufficient funds'))
       expect(deliverTx.retryable).toBe(false)
 
       const checkTx = classifyError(
@@ -814,6 +820,29 @@ describe('anticipated CLI taxonomy regressions', () => {
         )
       )
       expect(checkTx.retryable).toBe(true)
+    })
+
+    // Chain identity is resolved from the SDK wrapper on the error's own message, never
+    // from wrapped payload text. A Solana program controls its own log text and it is
+    // folded into the broadcast message; a program log echoing the cosmjs DeliverTx
+    // skeleton must NOT be classified as a (non-retryable) Cosmos DeliverTx failure and
+    // strand a genuinely-retryable Solana error.
+    it('does not let a Solana program log spoof the Cosmos DeliverTx marker', () => {
+      const spoof = new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Failed to broadcast transaction on Solana: Simulation failed. Logs: ["Program log: Error when broadcasting tx ${HASH} at height 1. Code: 5; Raw log: gotcha"]`
+      )
+      const result = classifyError(spoof)
+      // Solana has no permanent match for this text → stays retryable, not exit-4 stranded.
+      expect(result.retryable).toBe(true)
+      expect(result.code).toBe('EXTERNAL_SERVICE')
+    })
+
+    // A hash of the wrong shape (not 64 hex) is not a genuine cosmjs DeliverTx message;
+    // the marker must not fire on it.
+    it('requires a full 64-hex Cosmos hash before treating it as a DeliverTx failure', () => {
+      const result = classifyError(deliverTxError('Cosmos', 'DEADBEEF', 5, 'insufficient funds'))
+      expect(result.retryable).toBe(true)
     })
   })
 })

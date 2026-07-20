@@ -17,18 +17,28 @@
  * touch the chain — the sequence is consumed and the gas is spent — so the identical
  * signed bytes can never re-land, whatever the code.
  *
- * Anchored on the `at height <digits>. Code: <digits>; Raw log:` skeleton (not the
- * chain-controlled hash or rawLog) so a rawLog that happens to echo the phrasing can't
- * spoof a match: `.match` returns the FIRST occurrence, which is always the genuine
- * outermost message (the rawLog is appended last).
+ * Anchored tightly on the cosmjs skeleton so chain-controlled text can't spoof it:
+ * - the hash is exactly 64 hex chars (a Cosmos SHA-256 tx hash — cosmjs's
+ *   `transactionHash`), not an open `[0-9a-f]+` a program log could fake;
+ * - the code is a nonzero integer (`isDeliverTxFailure` fires only on `code !== 0`);
+ * - `.match` returns the FIRST occurrence, which is always the genuine outermost
+ *   message (a rawLog echoing the phrasing is appended last).
+ *
+ * This is only the SHAPE test. Callers additionally chain-gate — the classifier off
+ * the SDK wrapper on the error's own message, the guard off the intent's own chain —
+ * so a foreign chain's program log (Solana folds program-controlled logs into the
+ * broadcast error) can never route through this path. Mirrors #1355's rule that chain
+ * identity comes from the wrapper, never from wrapped payload text.
  */
-const COSMOS_DELIVERTX_FAILURE_RE = /error when broadcasting tx ([0-9a-f]+) at height \d+\. code: \d+; raw log:/i
+const COSMOS_DELIVERTX_FAILURE_RE =
+  /error when broadcasting tx ([0-9a-f]{64}) at height \d+\. code: [1-9]\d*; raw log:/i
 
 /**
  * If `text` carries a cosmjs DeliverTx-failure message, return the on-chain tx hash
  * cosmjs embedded in it; otherwise `undefined`. `text` may be the wrapped VaultError
  * message, the raw cosmjs message, or the two concatenated — the regex locates the
- * substring either way.
+ * substring either way. NOT sufficient on its own: the caller must have already
+ * established the error belongs to a Cosmos-family broadcast (see the note above).
  */
 export function matchCosmosDeliverTxFailure(text: string): { hash: string } | undefined {
   const match = text.match(COSMOS_DELIVERTX_FAILURE_RE)
