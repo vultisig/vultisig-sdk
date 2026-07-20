@@ -688,26 +688,21 @@ See also: balance, tx-status`
           throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
         }
         const context = await init(program.opts().vault)
-        try {
-          await executeSend(context, {
-            chain,
-            to,
-            amount: amount ?? 'max',
-            tokenId: options.token,
-            memo: options.memo,
-            destinationTag,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12), which withExit
+        // surfaces as a success:false envelope — the interactive twin of the
+        // non-interactive refusal. No local swallow (which used to force exit 0).
+        await executeSend(context, {
+          chain,
+          to,
+          amount: amount ?? 'max',
+          tokenId: options.token,
+          memo: options.memo,
+          destinationTag,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -737,24 +732,17 @@ Examples:
         options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault, options.password)
-        try {
-          await executeExecute(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
-            contract,
-            msg,
-            funds: options.funds,
-            memo: options.memo,
-            dryRun: options.dryRun,
-            yes: options.yes,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeExecute(context, {
+          chain: findChainByName(chainStr) || (chainStr as Chain),
+          contract,
+          msg,
+          funds: options.funds,
+          memo: options.memo,
+          dryRun: options.dryRun,
+          yes: options.yes,
+          password: options.password,
+        })
       }
     )
   )
@@ -1187,26 +1175,19 @@ See also: swap-quote, swap-chains, balance`
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
-        try {
-          await executeSwap(context, {
-            fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-            toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: options.max ? 'max' : parseFloat(amountStr!),
-            fromToken: options.fromToken,
-            toToken: options.toToken,
-            slippage: options.slippage ? parseFloat(options.slippage) : undefined,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Swap cancelled by user') {
-            warn('\nx Swap cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeSwap(context, {
+          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
+          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          amount: options.max ? 'max' : parseFloat(amountStr!),
+          fromToken: options.fromToken,
+          toToken: options.toToken,
+          slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
