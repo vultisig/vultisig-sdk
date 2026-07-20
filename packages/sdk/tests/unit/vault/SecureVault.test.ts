@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { RelaySigningService } from '../../../src/services/RelaySigningService'
+import type { VaultData } from '../../../src/types'
 import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -44,6 +46,35 @@ vi.mock('../../../src/services/RelaySigningService', () => ({
     })
   }),
 }))
+
+const makeMockContext = () =>
+  ({
+    storage: {} as any,
+    config: {},
+    serverManager: {} as any,
+    passwordCache: {} as any,
+    wasmProvider: {} as any,
+  }) as any
+
+const makeSecureVaultData = (signers: string[]): VaultData => ({
+  id: 'test-id',
+  name: 'Secure Vault',
+  type: 'secure',
+  vultFileContent: '',
+  isEncrypted: false,
+  signers,
+  localPartyId: signers[0],
+  publicKeys: { ecdsa: 'abc', eddsa: 'def' },
+  hexChainCode: 'abc',
+  libType: 'DKLS',
+  createdAt: Date.now(),
+  isBackedUp: false,
+  order: 0,
+  lastModified: Date.now(),
+  currency: 'usd',
+  chains: [],
+  tokens: {},
+})
 
 describe('SecureVault', () => {
   describe('static properties', () => {
@@ -172,22 +203,29 @@ describe('SecureVault', () => {
   })
 
   describe('instance properties', () => {
-    // Test the expected interface of SecureVault instances
-    it('should define availableSigningModes', () => {
-      // SecureVault.availableSigningModes returns [] until signing is implemented
-      // This is a design check - actual instance testing requires more setup
-      expect(true).toBe(true) // Placeholder for now
+    it('should expose relay signing mode on stored secure vaults', () => {
+      const vault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+
+      expect(vault.availableSigningModes).toEqual(['relay'])
     })
 
-    it('should calculate threshold correctly', () => {
-      // Threshold formula: ceil((n+1)/2)
-      const thresholdFor2 = Math.ceil((2 + 1) / 2) // 2
-      const thresholdFor3 = Math.ceil((3 + 1) / 2) // 2
-      const thresholdFor5 = Math.ceil((5 + 1) / 2) // 3
+    it('should calculate stored secure vault threshold from signer count', () => {
+      const twoSignerVault = SecureVault.fromStorage(makeSecureVaultData(['device-1', 'device-2']), makeMockContext())
+      const threeSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+      const fiveSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      )
 
-      expect(thresholdFor2).toBe(2)
-      expect(thresholdFor3).toBe(2)
-      expect(thresholdFor5).toBe(3)
+      expect(twoSignerVault.threshold).toBe(2)
+      expect(threeSignerVault.threshold).toBe(2)
+      expect(fiveSignerVault.threshold).toBe(4)
     })
   })
 })
@@ -254,6 +292,37 @@ describe('SecureVault type safety', () => {
 })
 
 describe('SecureVault signing', () => {
+  const customRelayUrl = 'https://relay.example.test/router'
+
+  const makeSecureVault = () =>
+    new (SecureVault as any)(
+      'secure-vault-id',
+      'Secure Vault',
+      '',
+      {
+        storage: {} as any,
+        config: {},
+        serverManager: { messageRelay: customRelayUrl },
+        passwordCache: {} as any,
+        wasmProvider: {
+          getWalletCore: vi.fn().mockResolvedValue({}),
+        },
+        pushNotificationService: {} as any,
+      },
+      {
+        name: 'Secure Vault',
+        publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        signers: ['local-party-1', 'remote-party-2', 'remote-party-3'],
+        hexChainCode: 'b'.repeat(64),
+        localPartyId: 'local-party-1',
+        createdAt: Date.now(),
+        libType: 'DKLS',
+        isBackedUp: true,
+        order: 0,
+        keyShares: { ecdsa: 'ecdsa-key-share', eddsa: 'eddsa-key-share' },
+      }
+    ) as SecureVault
+
   describe('sign() method interface', () => {
     it('should accept SigningPayload with messageHashes', () => {
       const payload = {
@@ -297,6 +366,18 @@ describe('SecureVault signing', () => {
       const options = {}
       expect(options).toBeDefined()
     })
+
+    it('passes the configured relay URL to the relay signing service', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().sign({
+        chain: 'Ethereum',
+        transaction: { to: '0x123', value: '1000000000000000000' },
+        messageHashes: ['abc123def456'],
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
+    })
   })
 
   describe('signBytes() method interface', () => {
@@ -338,6 +419,17 @@ describe('SecureVault signing', () => {
 
       expect(typeof signingOptions.onQRCodeReady).toBe('function')
       expect(typeof signingOptions.onDeviceJoined).toBe('function')
+    })
+
+    it('passes the configured relay URL to raw-bytes relay signing', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().signBytes({
+        data: '0xabcdef123456',
+        chain: 'Ethereum',
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
     })
   })
 
@@ -473,10 +565,16 @@ describe('SecureVault vs FastVault signing differences', () => {
 
   describe('threshold', () => {
     it('SecureVault has variable threshold based on signers', () => {
-      // (n+1)/2 threshold
-      const threshold3of5 = Math.ceil((5 + 1) / 2) // 3
-      const threshold2of3 = Math.ceil((3 + 1) / 2) // 2
-      expect(threshold3of5).toBe(3)
+      const threshold3of5 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      ).threshold
+      const threshold2of3 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      ).threshold
+
+      expect(threshold3of5).toBe(4)
       expect(threshold2of3).toBe(2)
     })
 

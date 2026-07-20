@@ -12,6 +12,7 @@ export type SendParams = {
   amount: string // Human-readable amount (e.g., "1.5")
   tokenId?: string
   memo?: string
+  destinationTag?: number
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard
@@ -28,7 +29,12 @@ export type SendDryRunResult = {
   to: string
   amount: string
   symbol: string
+  /** Network fee the build estimated for this transaction. */
+  fee: string
+  /** amount + fee — what the send actually costs, and what `balance` is checked against. */
+  total: string
   balance: string
+  destinationTag?: number
   warning?: string
 }
 

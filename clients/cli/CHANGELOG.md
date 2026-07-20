@@ -1,5 +1,42 @@
 # @vultisig/cli
 
+## 2.20.0
+
+### Minor Changes
+
+- [#1284](https://github.com/vultisig/vultisig-sdk/pull/1284) [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose generic CosmWasm Amino and protobuf execute builders from the root SDK and reuse the canonical Amino envelope in the CLI.
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1234](https://github.com/vultisig/vultisig-sdk/pull/1234) [`3f4ead5`](https://github.com/vultisig/vultisig-sdk/commit/3f4ead52fe5722a9c22ebf0aa517fba41c1c86a9) Thanks [@neavra](https://github.com/neavra)! - Support JSON-formatted per-vault passwords for names with spaces and document the complete headless credential setup flow.
+
+- [#1259](https://github.com/vultisig/vultisig-sdk/pull/1259) [`955486c`](https://github.com/vultisig/vultisig-sdk/commit/955486cd3c749888ce9d37a0b8a0b59eabc8ac0d) Thanks [@neavra](https://github.com/neavra)! - Persist direct transaction confirmation and failure resolutions in the shared broadcast journal.
+
+- [#1304](https://github.com/vultisig/vultisig-sdk/pull/1304) [`63f7b6c`](https://github.com/vultisig/vultisig-sdk/commit/63f7b6c4d01b5bec5552c7002ee936b9486908fa) Thanks [@neavra](https://github.com/neavra)! - Report failed or declined agent signing, non-success turn outcomes, stale sessions, invalid command input, and permanent raw-broadcast validation errors with truthful non-success envelopes and typed exit codes.
+
+  Exit codes change for previously-mis-reported paths, so callers branching on `$?` should re-check: a declined/failed agent sign now exits non-zero (`CONFIRMATION_REQUIRED`/12 for a decline) instead of 0; a failure that follows an on-chain broadcast exits `BROADCAST_COMMITTED`/13 (never a retryable code); `send` to a malformed address now exits `INVALID_ADDRESS`/4 instead of `USAGE_ERROR`/1, matching the documented table and `address-book`.
+
+- [#1280](https://github.com/vultisig/vultisig-sdk/pull/1280) [`5b99730`](https://github.com/vultisig/vultisig-sdk/commit/5b99730019a462bb8489dd32d154483f705b2a23) Thanks [@neavra](https://github.com/neavra)! - Give `tx-status` a dedicated `INVALID_HASH` error before vault access and expose consistent CLI-facing statuses: `pending`, `not_found`, `confirmed`, and `failed`.
+
+- [#1233](https://github.com/vultisig/vultisig-sdk/pull/1233) [`88f0ee6`](https://github.com/vultisig/vultisig-sdk/commit/88f0ee617627fa85b0ff5057c4adcd7f1927e81d) Thanks [@neavra](https://github.com/neavra)! - Classify agent errors that occur after a transaction broadcast as a non-retryable partial success, preserving transaction hashes and original diagnostics while warning callers not to blindly retry.
+
+- [#1259](https://github.com/vultisig/vultisig-sdk/pull/1259) [`955486c`](https://github.com/vultisig/vultisig-sdk/commit/955486cd3c749888ce9d37a0b8a0b59eabc8ac0d) Thanks [@neavra](https://github.com/neavra)! - Scope the broadcast-journal empty-calldata canonicalization (`"0x"` → `""`) to EVM calldata only. `intent.data` also carries non-EVM memos, so canonicalizing it for every intent made a real memo of `"0x"` collide with an empty memo and falsely dedupe two different memo-chain sends inside the double-spend guard window. The fingerprint now folds `"0x"` only when the intent marks its data as EVM calldata, and every intent builder derives that mark from the chain kind (`getChainKind(chain) === 'evm'`): an EVM `"0x"` memo is empty calldata and still folds (so cross-path dedup is preserved), while a `"0x"` memo on a memo-routed chain stays distinct from an empty memo.
+
+- [#1308](https://github.com/vultisig/vultisig-sdk/pull/1308) [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose one SDK chain-reference resolver and use it for CLI and MCP chain names, aliases, and IDs.
+
+- Updated dependencies [[`747b6c6`](https://github.com/vultisig/vultisig-sdk/commit/747b6c68a81e14f3242003f39a4b58499ef44a21), [`b6fbbe3`](https://github.com/vultisig/vultisig-sdk/commit/b6fbbe3705d6aae02b483de0b7dd1b8a097acd6b), [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad), [`9e366db`](https://github.com/vultisig/vultisig-sdk/commit/9e366db273e87e62d260867ea6702466b325d7fc), [`c3168e2`](https://github.com/vultisig/vultisig-sdk/commit/c3168e24a32d733da85b2f6038e7e55c4dbe8d72), [`7bb79ba`](https://github.com/vultisig/vultisig-sdk/commit/7bb79ba9ef968bc20ba88e1bdd189ca8864b0221), [`a8e873e`](https://github.com/vultisig/vultisig-sdk/commit/a8e873e41a41693dcdee575c5271422fe6c6b6e3), [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60), [`30b76c6`](https://github.com/vultisig/vultisig-sdk/commit/30b76c6d0fbe7f0ad3015fee9bc77b5ee9fa7927), [`421e8da`](https://github.com/vultisig/vultisig-sdk/commit/421e8da0b11a35bcc95351e7b644318fe171c5ec), [`846d6c2`](https://github.com/vultisig/vultisig-sdk/commit/846d6c24e96ba4f8133721f1030dd9d023376570), [`6de79ab`](https://github.com/vultisig/vultisig-sdk/commit/6de79ab1ec6e3566ea8511a0a6c7afde87752c48), [`21ca074`](https://github.com/vultisig/vultisig-sdk/commit/21ca07454d5ac462882317da4f49d5f80ef32837), [`72da781`](https://github.com/vultisig/vultisig-sdk/commit/72da781743fad0664edfc5ffcd72720ac7f0d0bd), [`32aaf40`](https://github.com/vultisig/vultisig-sdk/commit/32aaf40edb28ea46f8275341ce4205411197a652), [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd), [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5), [`eb11e50`](https://github.com/vultisig/vultisig-sdk/commit/eb11e50b2f478fbb21db2970f8616d5f296b49f5), [`4815346`](https://github.com/vultisig/vultisig-sdk/commit/4815346d794f4a198e84a562c503b3bdd5ae10b8), [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58)]:
+  - @vultisig/core-chain@2.26.0
+  - @vultisig/sdk@2.20.0
+  - @vultisig/rujira@53.0.0
+
+## 2.19.18
+
+### Patch Changes
+
+- [#1223](https://github.com/vultisig/vultisig-sdk/pull/1223) [`6296248`](https://github.com/vultisig/vultisig-sdk/commit/62962482d8499f697e0634260a2e6083b944e649) Thanks [@neavra](https://github.com/neavra)! - Fix `agent ask` headless signing so a vault unlocked via `VAULT_PASSWORD` (or the OS keyring) can sign without also passing `--password`. The sign-time gate now keys off whether a password is actually needed — an encrypted vault that is still locked with no password in hand — and retries the same non-interactive chain (cache → keyring → `VAULT_PASSWORDS`/`VAULT_PASSWORD`) before prompting, instead of always re-prompting when `--password` was absent. Unencrypted vaults skip the gate entirely. The transaction confirmation gate is unchanged. Also corrects the `VAULT_PASSWORD` help text.
+
 ## 2.19.14
 
 ### Patch Changes

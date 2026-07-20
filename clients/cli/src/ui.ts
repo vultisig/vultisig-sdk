@@ -143,6 +143,7 @@ export function displayTransactionPreview(
   symbol: string,
   chain: Chain,
   memo?: string,
+  destinationTag?: number,
   gas?: GasInfo
 ): void {
   if (gas) {
@@ -157,6 +158,9 @@ export function displayTransactionPreview(
   printResult(`  Chain:  ${chain}`)
   if (memo) {
     printResult(`  Memo:   ${memo}`)
+  }
+  if (destinationTag !== undefined) {
+    printResult(`  Destination tag: ${destinationTag}`)
   }
 }
 

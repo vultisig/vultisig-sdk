@@ -377,14 +377,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Check in-memory pending vaults first, then fall back to disk
     let pendingVault = this.pendingVaults.get(vaultId)
-    let fromDisk = false
-
     if (!pendingVault) {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
         pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
-        fromDisk = true
       }
     }
 
@@ -407,9 +404,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Clean up pending state
     this.pendingVaults.delete(vaultId)
-    if (fromDisk) {
-      await this.context.storage.remove(`pending:${vaultId}`)
-    }
+    await this.context.storage.remove(`pending:${vaultId}`)
 
     this.emit('vaultChanged', { vaultId })
 
@@ -1015,13 +1010,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Clear all stored vaults
+   * Clear all SDK-owned vault data while preserving unrelated values in a
+   * shared custom storage adapter.
    */
   async clearVaults(): Promise<void> {
     await this.ensureInitialized()
     await this.vaultManager.clearVaults()
-    await this.storage.clear()
-    this.addressBookManager.clear()
+    this.pendingVaults.clear()
+    await this.addressBookManager.clear()
     this.emit('vaultChanged', { vaultId: '' })
   }
 

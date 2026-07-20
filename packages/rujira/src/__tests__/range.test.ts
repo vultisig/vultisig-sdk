@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { RujiraClient } from '../client.js'
 import { RujiraError } from '../errors.js'
@@ -22,6 +22,40 @@ const validConfig = {
   skew: '0.000000000000',
   fee: '0.030000000000',
 }
+
+const pairEdge = (address: string, baseSymbol = 'RUJI', quoteSymbol = 'RUNE') => ({
+  node: {
+    address,
+    assetBase: { metadata: { symbol: baseSymbol }, variants: { native: { denom: `x/${baseSymbol.toLowerCase()}` } } },
+    assetQuote: {
+      metadata: { symbol: quoteSymbol },
+      variants: { native: { denom: `thor.${quoteSymbol.toLowerCase()}` } },
+    },
+  },
+})
+
+const mockPairFetch = (...edgeSets: Array<ReturnType<typeof pairEdge>[]>) => {
+  const fetchMock = vi.fn()
+  for (const edges of edgeSets) {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: {
+          finV3: {
+            pairs: { edges },
+          },
+        },
+      }),
+    })
+  }
+  vi.stubGlobal('fetch', fetchMock)
+  return fetchMock
+}
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
 describe('RujiraRange builders', () => {
   describe('buildCreatePosition', () => {
@@ -207,5 +241,117 @@ describe('RujiraRange builders', () => {
       expect(tx.msgs.every(m => m.contractAddress === validPair)).toBe(true)
       expect(tx.msgs.every(m => m.funds.length === 0)).toBe(true)
     })
+  })
+})
+
+describe('RujiraRange queries', () => {
+  it('caches the FIN pair list across pair-address lookups', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const fetchMock = mockPairFetch([pairEdge(validPair)])
+    const localRange = new RujiraRange(client)
+
+    const first = await localRange.getPairAddress('RUJI', 'RUNE')
+    const second = await localRange.getPairAddress('x/ruji', 'thor.rune')
+
+    expect(first?.address).toBe(validPair)
+    expect(second?.address).toBe(validPair)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares an in-flight FIN pair list fetch across concurrent pair-address lookups', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    let resolveFetch!: (response: Response) => void
+    const fetchPromise = new Promise<Response>(resolve => {
+      resolveFetch = resolve
+    })
+    const fetchMock = vi.fn(() => fetchPromise)
+    vi.stubGlobal('fetch', fetchMock)
+    const localRange = new RujiraRange(client)
+
+    const first = localRange.getPairAddress('RUJI', 'RUNE')
+    const second = localRange.getPairAddress('x/ruji', 'thor.rune')
+
+    await Promise.resolve()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    resolveFetch({
+      ok: true,
+      json: async () => ({
+        data: {
+          finV3: {
+            pairs: { edges: [pairEdge(validPair)] },
+          },
+        },
+      }),
+    } as Response)
+
+    const results = await Promise.all([first, second])
+    expect(results.map(result => result?.address)).toEqual([validPair, validPair])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes the FIN pair list after the cache TTL expires', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const refreshedPair = 'thor1ezh0vln0axp6r45vhwjdyrhsq3xezh7pfyqqla'
+    const fetchMock = mockPairFetch([pairEdge(validPair)], [pairEdge(refreshedPair)])
+    const localRange = new RujiraRange(client)
+
+    const first = await localRange.getPairAddress('RUJI', 'RUNE')
+    vi.setSystemTime(1_000 + 5 * 60 * 1000 + 1)
+    const second = await localRange.getPairAddress('RUJI', 'RUNE')
+
+    expect(first?.address).toBe(validPair)
+    expect(second?.address).toBe(refreshedPair)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cache a malformed FIN pair-list response', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { finV3: { pairs: {} } } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { finV3: { pairs: { edges: [pairEdge(validPair)] } } },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const localRange = new RujiraRange(client)
+
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+    })
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).resolves.toMatchObject({ address: validPair })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cache malformed FIN pair edges', async () => {
+    vi.useFakeTimers({ now: 1_000 })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { finV3: { pairs: { edges: [{ node: { address: validPair, assetBase: {} } }] } } },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: { finV3: { pairs: { edges: [pairEdge(validPair)] } } },
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const localRange = new RujiraRange(client)
+
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+    })
+    await expect(localRange.getPairAddress('RUJI', 'RUNE')).resolves.toMatchObject({ address: validPair })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

@@ -313,6 +313,48 @@ describe('Integration: Swap Quote', () => {
       console.log(`✅ Quote requires approval for ${quote.approvalInfo?.requiredAmount} units`)
     })
 
+    it('should forward recipient, slippageTolerance, and excludeProviders to the core quote resolver', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      const mockQuote = {
+        quote: {
+          general: {
+            dstAmount: '100000000',
+            provider: 'li.fi' as const,
+            tx: {
+              transfer: {
+                approvalAddress: '0x1111111254fb6c44bAC0beD2854e76F90643097d',
+              },
+            },
+          },
+        },
+        discounts: [],
+      }
+
+      vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
+
+      const result = await vault.swap({
+        fromChain: Chain.Ethereum,
+        fromSymbol: 'ETH',
+        toChain: Chain.Bitcoin,
+        toSymbol: 'BTC',
+        amount: '1',
+        recipient: 'bc1qrecipienttest0000000000000000000000000000',
+        slippageTolerance: 2.5,
+        excludeProviders: ['CowSwap', 'KyberSwap'],
+        dryRun: true,
+      })
+
+      expect(result.dryRun).toBe(true)
+      expect(vi.mocked(findSwapQuote)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipient: 'bc1qrecipienttest0000000000000000000000000000',
+          slippageTolerance: 2.5,
+          excludeProviders: ['CowSwap', 'KyberSwap'],
+        })
+      )
+    })
+
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 

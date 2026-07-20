@@ -42,11 +42,11 @@ function getChangedFiles() {
     .filter(Boolean)
 }
 
-function isBundledSourceFile(file) {
+export function isBundledSourceFile(file) {
   if (!bundledSourcePrefixes.some(prefix => file.startsWith(prefix))) return false
   if (ignoredSuffixes.some(suffix => file.endsWith(suffix))) return false
   // Test files are not bundled into the SDK - they don't affect published artifacts
-  if (/\.(test|spec)\.(c|m)?(t|j)sx?$/.test(file)) return false
+  if (/\.(test|spec)(?:\.(c|m)?(t|j)sx?|\.json)$/.test(file)) return false
   return /\.(c|m)?(t|j)sx?$/.test(file) || file.endsWith('.json')
 }
 
@@ -61,21 +61,25 @@ function hasSdkChangeset() {
   return false
 }
 
-const bundledChanges = getChangedFiles().filter(isBundledSourceFile)
+export function main() {
+  const bundledChanges = getChangedFiles().filter(isBundledSourceFile)
 
-if (bundledChanges.length > 0 && !hasSdkChangeset()) {
-  console.error(
-    [
-      'SDK release guard failed.',
-      '',
-      'This PR changes source files that are bundled into @vultisig/sdk, but no changeset bumps @vultisig/sdk.',
-      'Add @vultisig/sdk to the changeset so consumers receive a new SDK tarball.',
-      '',
-      'Bundled source changes:',
-      ...bundledChanges.map(file => `- ${file}`),
-    ].join('\n')
-  )
-  process.exit(1)
+  if (bundledChanges.length > 0 && !hasSdkChangeset()) {
+    console.error(
+      [
+        'SDK release guard failed.',
+        '',
+        'This PR changes source files that are bundled into @vultisig/sdk, but no changeset bumps @vultisig/sdk.',
+        'Add @vultisig/sdk to the changeset so consumers receive a new SDK tarball.',
+        '',
+        'Bundled source changes:',
+        ...bundledChanges.map(file => `- ${file}`),
+      ].join('\n')
+    )
+    process.exit(1)
+  }
+
+  console.log('SDK bundled changeset guard passed.')
 }
 
-console.log('SDK bundled changeset guard passed.')
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()

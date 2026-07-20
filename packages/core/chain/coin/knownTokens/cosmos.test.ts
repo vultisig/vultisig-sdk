@@ -89,3 +89,15 @@ describe('knownCosmosTokens[Chain.Osmosis]', () => {
     }
   })
 })
+
+describe('knownCosmosTokens[Chain.THORChain]', () => {
+  const thorchain = knownCosmosTokens[Chain.THORChain]
+
+  it('registers bRUNE (bonded RUNE) priced against RUNE', () => {
+    expect(thorchain['x/brune']).toMatchObject({
+      ticker: 'bRUNE',
+      decimals: 8,
+      priceProviderId: 'thorchain',
+    })
+  })
+})

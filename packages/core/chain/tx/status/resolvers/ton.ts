@@ -27,7 +27,7 @@ export const getTonTxStatus: TxStatusResolver<OtherChain.Ton> = async ({ hash })
   const { data: response, error } = await attempt(queryUrl<TonTransactionsResponse>(url))
 
   if (error || !response || response.transactions.length === 0) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: false }
   }
 
   const tx = response.transactions[0]
