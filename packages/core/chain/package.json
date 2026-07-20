@@ -365,6 +365,11 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/qbtc/waitForQbtcTxInclusion": {
+      "types": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js",
+      "default": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js"
+    },
     "./chains/cosmos/resolveCosmosGasFee": {
       "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
       "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
@@ -1637,6 +1642,11 @@
       "types": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.d.ts",
       "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
       "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
+    },
+    "./swap/general/lifi/api/lifiSlippage": {
+      "types": "./dist/swap/general/lifi/api/lifiSlippage.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
+      "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
     },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
