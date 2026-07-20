@@ -507,7 +507,12 @@ const assertValidSlippageTolerance = (slippageTolerance: number | undefined): vo
 }
 
 // Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
-const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
+// Case-insensitive on the `0x` prefix too (`/i`) so a `0X…`-prefixed burn can't slip the
+// gate: without it, `0X…dead` failed this shape check, skipped the zero/burn branch, and —
+// on a native THOR/Maya cross-chain route where the CowSwap path is unreachable — passed
+// straight through as the swap destination (an unspendable sink). The burn comparison below
+// already lowercases, so tolerating the uppercase prefix only closes the bypass.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/i.test(address)
 
 // Validate a custom swap recipient is a properly-formatted EVM address before it
 // reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —

@@ -82,6 +82,7 @@
     "cli": "yarn workspace @vultisig/cli dev",
     "cli:build": "yarn workspace @vultisig/cli build",
     "cli:smoke": "node clients/cli/dist/index.js --help > /dev/null",
+    "sdk:smoke:subpaths": "node scripts/smoke-sdk-subpath-exports.mjs",
     "quality:contracts": "node scripts/quality-contracts.mjs",
     "cli:interactive": "yarn workspace @vultisig/cli repl",
     "mcp:build": "yarn workspace @vultisig/mcp build",
