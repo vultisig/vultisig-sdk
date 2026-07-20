@@ -1,0 +1,19 @@
+{
+  "_description": "Shared Layer-1 (WalletCore/WASM, packages/core) / Layer-2 (RN-JS/viem, packages/sdk) golden vector for an Ethereum native-coin transfer, in BOTH legacy and EIP-1559 form. Read via a plain readFileSync (not an import) by packages/core/mpc/tx/compile/compileTx.golden.test.ts AND packages/sdk/tests/unit/platforms/react-native/tx-builder-golden-vectors.test.ts, since packages/sdk does not depend on packages/core and a file read sidesteps the workspace dependency graph entirely. This is the SINGLE source of truth for this fixture - do not duplicate these values as literals in either test file.",
+  "_variantNote": "Both fee variants are pinned on purpose: legacy-vs-EIP-1559 type selection and gas-field ordering are exactly the divergence class that would split a 2-of-2 keysign between an RN device and a WalletCore device (each side hashing different bytes for the same logical transfer). expectedSigningHashHex is keccak-256 of the unsigned RLP/typed envelope - the value fed to MPC signing by both families.",
+  "chainName": "Ethereum",
+  "chainId": 1,
+  "nonce": 7,
+  "gasLimit": 21000,
+  "toAddress": "0x2222222222222222222222222222222222222222",
+  "valueWei": "123456789012345678",
+  "legacy": {
+    "gasPriceWei": "20000000000",
+    "expectedSigningHashHex": "0x86a0ef6284e0bf0ed21fd7b12eb291b69b69f6fd2e0119c8b9993d60524c7df9"
+  },
+  "eip1559": {
+    "maxFeePerGasWei": "30000000000",
+    "maxPriorityFeePerGasWei": "1500000000",
+    "expectedSigningHashHex": "0x8bb93443f4486451fbc9c7dcad660929f8a0c8bdc30e97e07837bad55d467000"
+  }
+}
