@@ -67,9 +67,7 @@ const buildReferenceSignDoc = (fx: QbtcCrossEncoderFixture): Uint8Array => {
     Any.fromPartial({ typeUrl: '/cosmos.bank.v1beta1.MsgSend', value: msgSendBytes })
   ).finish()
 
-  const txBodyBytes = TxBody.encode(
-    TxBody.fromPartial({ messages: [Any.decode(anyBytes)], memo: fx.memo })
-  ).finish()
+  const txBodyBytes = TxBody.encode(TxBody.fromPartial({ messages: [Any.decode(anyBytes)], memo: fx.memo })).finish()
 
   const pubKeyAnyBytes = Any.encode(
     Any.fromPartial({
