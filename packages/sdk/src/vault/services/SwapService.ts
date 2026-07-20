@@ -92,6 +92,9 @@ export class SwapService {
         amount: chainAmount,
         referral: params.referral,
         vultDiscountTier,
+        recipient: params.recipient,
+        slippageTolerance: params.slippageTolerance,
+        excludeProviders: params.excludeProviders,
       }
 
       const quote = await findSwapQuote(quoteInput)

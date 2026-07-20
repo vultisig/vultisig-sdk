@@ -1,3 +1,4 @@
+import { Chain } from '@vultisig/core-chain/Chain'
 import { CoinKey } from '@vultisig/core-chain/coin/Coin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -51,7 +52,14 @@ const normalizeNativeSwapChainDenom = ({
     const swapId = getSecuredAssetSwapId(segments[0])
     if (swapId) {
       const rest = segments.slice(1).join('-')
-      return `${swapId}.${formatSecuredAssetRest(rest)}`
+      // THORChain secured assets settle on THORChain (a thor1 destination), so
+      // they must use secured-asset notation `CHAIN-ASSET`, not L1 pool
+      // notation `CHAIN.ASSET`. With the dot form THORNode reads the target as
+      // the L1 asset and rejects the swap ("swap destination address is not the
+      // same chain as the target asset"). MayaChain has no secured assets, so
+      // keep its existing dot notation.
+      const separator = chain === Chain.THORChain ? '-' : '.'
+      return `${swapId}${separator}${formatSecuredAssetRest(rest)}`
     }
   }
 

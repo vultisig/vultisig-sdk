@@ -165,6 +165,27 @@ describe('RawBroadcastService', () => {
     expect(mockGetCosmosClient).toHaveBeenCalledWith(Chain.Osmosis)
   })
 
+  // Fund-safety: StargateClient.broadcastTx RESOLVES (does not throw) on a tx that was included but
+  // failed execution (DeliverTx code !== 0). The raw path must not report that as a success hash.
+  it('throws instead of returning a hash when the Cosmos tx is included but DeliverTx-fails', async () => {
+    mockCosmosBroadcastTx.mockResolvedValueOnce({
+      transactionHash: 'reverted-hash',
+      code: 5,
+      height: 100,
+      rawLog: 'out of gas: gasWanted: 200000, gasUsed: 250000',
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: JSON.stringify({ tx_bytes: Buffer.from([1, 2, 3]).toString('base64') }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('execution failed'),
+    })
+  })
+
   it('rejects Sui payload missing unsignedTx or signature', async () => {
     await expect(
       service.broadcastRawTx({
