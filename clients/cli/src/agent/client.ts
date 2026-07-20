@@ -21,6 +21,7 @@ import type {
   ListConversationsRequest,
   ListConversationsResponse,
   MessagesSinceResponse,
+  ProtocolWarning,
   SendMessageRequest,
   SendMessageResponse,
   Suggestion,
@@ -46,6 +47,10 @@ export function createTurnIdempotencyKey(): string {
 /** Default per-request timeout (ms) for agent-backend HTTP calls. Bounds a
  *  stalled TCP connection so a headless `vsig agent` run can't hang forever. */
 const DEFAULT_HTTP_TIMEOUT_MS = 30_000
+const DEFAULT_SSE_IDLE_TIMEOUT_MS = 180_000
+/** Bounds on the backend-controlled frame types recorded in a PROTOCOL_DRIFT warning. */
+const MAX_DRIFT_EVENT_TYPES = 10
+const MAX_DRIFT_TYPE_LENGTH = 64
 
 /** Resolve the per-request timeout from VULTISIG_HTTP_TIMEOUT_MS, falling back
  *  to the default. Non-positive / non-numeric values are ignored so a typo
@@ -55,6 +60,39 @@ export function resolveHttpTimeoutMs(): number {
   if (raw === undefined || raw.trim() === '') return DEFAULT_HTTP_TIMEOUT_MS
   const n = Number(raw)
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
+}
+
+/** Maximum time an established SSE stream may go without PROGRESS — a completed
+ * data frame. Keep-alive comments do NOT extend it: both backends emit those
+ * from a ticker that runs independently of turn progress (Go
+ * `internal/api/message.go`, a `safego.Go` heartbeat writing `": ping"` every
+ * 15s; Mastra `uiStream.ts` `withSseHeartbeat(resp, 15_000)`), so a backend
+ * wedged in a model/MCP call heartbeats forever. A comment-reset clock therefore
+ * bounds only a DEAD TRANSPORT, never the hung backend this deadline exists to
+ * catch.
+ *
+ * The default is sized against the backend's own worst-case SILENT stretch, not
+ * its heartbeat cadence: a single model call is bounded by `claudeRequestTimeout`
+ * (90s, `agent.go`) and the swap builder is documented at "90s + 60s MCP timeout"
+ * (`message.go`) — ~150s during which a healthy turn emits no frame at all. 180s
+ * clears that with margin while still sitting below the backend's own
+ * `agentTurnMaxDuration` (5min, `detach.go`), so a wedged turn is bounded here
+ * rather than never. Raising this from the previous 60s is required by the
+ * semantic change: 60s of no-frames was safe only because comments reset it. */
+export function resolveSseIdleTimeoutMs(): number {
+  const raw = process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+  if (raw === undefined || raw.trim() === '') return DEFAULT_SSE_IDLE_TIMEOUT_MS
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_SSE_IDLE_TIMEOUT_MS
+}
+
+export class AgentStreamIdleTimeoutError extends Error {
+  readonly code = AgentErrorCode.TIMEOUT
+
+  constructor(readonly timeoutMs: number) {
+    super(`SSE stream idle timeout after ${timeoutMs}ms without progress`)
+    this.name = 'AgentStreamIdleTimeoutError'
+  }
 }
 
 type StreamCallbacks = {
@@ -109,7 +147,13 @@ function v1StatusFromType(type: string | null): 'running' | 'done' | undefined {
     case 'tool-input-available':
     case 'tool-input-delta':
       return 'running'
+    // Both terminal frames close the tool call. `tool-output-error` is the
+    // backend's explicit failure terminal (`V1ToolOutputError`): without it the
+    // call has no terminal frame at all, so the tool card stays 'running'
+    // forever and the turn reports no failure — "which lets the LLM's same-turn
+    // prose claim success even though no action ever ran" (protocol_v1.go).
     case 'tool-output-available':
+    case 'tool-output-error':
       return 'done'
     default:
       return undefined
@@ -125,15 +169,25 @@ function isErrorPayloadObject(o: Record<string, unknown>): boolean {
 }
 
 /**
- * Derive real tool success from the terminal-frame output payload
- * (fund-safety bug #B). Returns false when the payload signals an error
- * ({"status":"error"} / {"error":...} / stringified), true on a clean
- * result, and undefined when there's nothing to judge (not the 'done'
- * frame, or no output — older backends) so the consumer keeps its prior
- * optimistic default. Extracted from handleSSEEvent to keep that
+ * Derive real tool success from the terminal frame (fund-safety bug #B).
+ * Returns false for an explicit `tool-output-error` frame or an output payload
+ * that signals an error ({"status":"error"} / {"error":...} / stringified),
+ * true on a clean result, and undefined when there's nothing to judge (not a
+ * terminal frame, or no output — older backends) so the consumer keeps its
+ * prior optimistic default. Extracted from handleSSEEvent to keep that
  * function under the cognitive-complexity budget.
  */
-function deriveToolDoneOk(status: 'running' | 'done' | undefined, output: unknown): boolean | undefined {
+function deriveToolDoneOk(
+  status: 'running' | 'done' | undefined,
+  output: unknown,
+  v1Type: string | null
+): boolean | undefined {
+  // A `tool-output-error` frame IS the failure signal. It carries `errorText`
+  // and never `output`, so the payload heuristics below have nothing to judge
+  // and would return undefined — which the consumer reads as the optimistic
+  // `ok ?? true` default, i.e. it would report a FAILED tool as successful.
+  // Decide from the frame type itself, before any payload inspection.
+  if (v1Type === 'tool-output-error') return false
   if (status !== 'done' || output == null) return undefined
   if (typeof output === 'object') {
     return !isErrorPayloadObject(output as Record<string, unknown>)
@@ -154,6 +208,37 @@ function deriveToolDoneOk(status: 'running' | 'done' | undefined, output: unknow
     return !(/"status"\s*:\s*"error"/i.test(s) || /"error"\s*:/i.test(s))
   }
   return true
+}
+
+/**
+ * Per-stream text-part accumulator. The V1 text protocol streams prose as
+ * ordered parts — `text-start` / `text-delta` / `text-end`, each carrying an
+ * `id` (`protocol_v1.go` V1TextStart/V1TextDelta) — and `text-replace` RETRACTS
+ * one of those parts, supplying corrected text. Its contract is explicit: a
+ * client "MUST locate the existing part with id==replaces and overwrite its
+ * text, discarding the rejected text". Tracking parts by id is what lets that
+ * overwrite land in place, mirroring the backend's own composition
+ * (`unified_loop.go`), instead of appending a second contradictory bubble — or,
+ * as before this fix, silently keeping the retracted text as the turn's answer.
+ */
+type TextParts = {
+  byId: Map<string, string>
+  order: string[]
+  /** False once any `text-delta` arrived without an `id`. Such a stream cannot
+   *  be recomposed from parts without dropping the un-keyed prose, so a
+   *  `text-replace` against it is DEGRADED (logged, not applied) rather than
+   *  half-applied. */
+  allIdentified: boolean
+}
+
+function newTextParts(): TextParts {
+  return { byId: new Map(), order: [], allIdentified: true }
+}
+
+function recomposeText(parts: TextParts): string {
+  let out = ''
+  for (const id of parts.order) out += parts.byId.get(id) ?? ''
+  return out
 }
 
 function sseErrorToMessage(value: unknown): string {
@@ -200,10 +285,12 @@ export class AgentClient {
   // stalled connection so a headless run can't hang indefinitely. Overridable
   // via the constructor (tests pass a tiny value) or VULTISIG_HTTP_TIMEOUT_MS.
   private readonly timeoutMs: number
+  private readonly sseIdleTimeoutMs: number
 
-  constructor(baseUrl: string, timeoutMs?: number) {
+  constructor(baseUrl: string, timeoutMs?: number, sseIdleTimeoutMs?: number) {
     this.baseUrl = baseUrl.replace(/\/+$/, '')
     this.timeoutMs = timeoutMs ?? resolveHttpTimeoutMs()
+    this.sseIdleTimeoutMs = sseIdleTimeoutMs ?? resolveSseIdleTimeoutMs()
   }
 
   /** Build the AbortSignal for a unary request: a fresh timeout, combined with
@@ -390,11 +477,10 @@ export class AgentClient {
     signal?: AbortSignal,
     idempotencyKey: string = createTurnIdempotencyKey()
   ): Promise<SSEStreamResult> {
-    // Bound only the initial connect, not the (intentionally unbounded)
-    // long-lived SSE body read — an idle stream sends keep-alive pings, so a
-    // body-level timeout would kill healthy turns. A dedicated controller fires
-    // the connect deadline; it's cleared once headers arrive. The caller signal
-    // (Ctrl+C) is combined in so cancellation still aborts the whole request.
+    // Bound the initial connect separately from the long-lived body read. A
+    // dedicated controller fires the connect deadline and is cleared once
+    // headers arrive; the read loop below uses a frame-idle deadline that healthy
+    // keep-alive comments reset. The caller signal (Ctrl+C) remains combined in.
     const connectController = new AbortController()
     let connectTimedOut = false
     // `settled` flips the moment the fetch promise resolves/rejects. clearTimeout
@@ -432,8 +518,8 @@ export class AgentClient {
       }
       throw err
     } finally {
-      // Headers received (or fetch failed) — stop bounding; the body read below
-      // runs against `signal` only, so SSE streaming is not time-limited.
+      // Headers received (or fetch failed) — stop the connect deadline. The body
+      // is bounded independently by the frame-idle deadline below.
       settled = true
       clearTimeout(connectTimer)
     }
@@ -454,6 +540,7 @@ export class AgentClient {
       message: null,
       finished: false,
       disconnected: false,
+      protocolWarnings: [],
       // A-C2 contract: the backend stamps server-side wall-clock (epoch ms) on
       // the SSE response headers before the first chunk, so the recovery poll
       // anchors /messages/since to the server clock instead of Date.now()
@@ -467,16 +554,29 @@ export class AgentClient {
     // terminal 'done' callback still carries the tool name.
     const toolNameByCallId = new Map<string, string>()
 
+    // Ordered text parts, so a `text-replace` can overwrite what it retracts.
+    const textParts = newTextParts()
+
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     let currentEvent = ''
     let currentData = ''
+    let lastFrameAt = Date.now()
 
     /** Strip optional single leading space from an SSE field value per spec. */
     const stripLeadingSpace = (v: string): string => (v.length > 0 && v[0] === ' ' ? v.slice(1) : v)
 
-    const processLine = (raw: string): void => {
+    /**
+     * Returns true only when the line completed a real data frame — i.e. the
+     * backend made PROGRESS. That is the sole signal allowed to defer the idle
+     * deadline. Keep-alive comments and blank separators return false: they
+     * prove the TRANSPORT is alive (and are still consumed normally, so the
+     * connection is never torn down for carrying them), but they say nothing
+     * about whether the agent loop is advancing, because both backends emit
+     * them from progress-independent tickers.
+     */
+    const processLine = (raw: string): boolean => {
       const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw
       if (line.startsWith('event:')) {
         currentEvent = stripLeadingSpace(line.slice(6)).trim()
@@ -484,22 +584,25 @@ export class AgentClient {
         currentData += (currentData ? '\n' : '') + stripLeadingSpace(line.slice(5))
       } else if (line === '') {
         // Empty line = end of event
+        const completedFrame = currentData.length > 0
         if (currentData) {
           // SSE spec: default event type is "message" when no event: field is present
-          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
+          this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId, textParts)
         }
         currentEvent = ''
         currentData = ''
-      } else if (line[0] === ':') {
-        // SSE comment (keep-alive ping) - ignore
+        return completedFrame
       }
-      // Unknown fields (id:, retry:, etc.) silently ignored - no reconnection support.
+      // SSE comments (`:` keep-alive pings), unknown fields (id:, retry:, etc.)
+      // and blank separators are consumed but are NOT progress.
       // Bare \r line endings are unsupported (only \n and \r\n).
+      return false
     }
 
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        const idleRemaining = this.sseIdleTimeoutMs - (Date.now() - lastFrameAt)
+        const { done, value } = await this.readWithIdleDeadline(reader, idleRemaining)
 
         buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
 
@@ -510,20 +613,24 @@ export class AgentClient {
         buffer = done ? '' : trailing
 
         for (const rawLine of lines) {
-          processLine(rawLine)
+          if (processLine(rawLine)) lastFrameAt = Date.now()
         }
 
         if (done) {
           // Process any trailing content that wasn't newline-terminated
-          if (trailing) processLine(trailing)
+          if (trailing && processLine(trailing)) lastFrameAt = Date.now()
           // Flush any pending event (stream ended without final blank line)
           if (currentData) {
-            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId)
+            this.handleSSEEvent(currentEvent || 'message', currentData, result, callbacks, toolNameByCallId, textParts)
           }
           break
         }
       }
     } catch (err) {
+      if (err instanceof AgentStreamIdleTimeoutError) {
+        await reader.cancel(err).catch(() => {})
+        throw err
+      }
       // A user-initiated cancel (Ctrl+C → AbortController.abort()) is a
       // deliberate stop, not a dropped connection — re-throw so the caller
       // surfaces "[cancelled]" and does NOT try to recover the turn.
@@ -543,12 +650,33 @@ export class AgentClient {
     return result
   }
 
+  private readWithIdleDeadline(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    remainingMs: number
+  ): ReturnType<ReadableStreamDefaultReader<Uint8Array>['read']> {
+    if (remainingMs <= 0) return Promise.reject(new AgentStreamIdleTimeoutError(this.sseIdleTimeoutMs))
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new AgentStreamIdleTimeoutError(this.sseIdleTimeoutMs)), remainingMs)
+      reader.read().then(
+        value => {
+          clearTimeout(timer)
+          resolve(value)
+        },
+        err => {
+          clearTimeout(timer)
+          reject(err)
+        }
+      )
+    })
+  }
+
   private handleSSEEvent(
     event: string,
     data: string,
     result: SSEStreamResult,
     callbacks: StreamCallbacks,
-    toolNameByCallId: Map<string, string>
+    toolNameByCallId: Map<string, string>,
+    textParts: TextParts
   ): void {
     try {
       const parsed = JSON.parse(data)
@@ -565,7 +693,10 @@ export class AgentClient {
 
       switch (routingEvent) {
         case 'text_delta':
-          this.handleTextDelta(parsed, result, callbacks)
+          this.handleTextDelta(parsed, result, callbacks, textParts)
+          break
+        case 'text_replace':
+          this.handleTextReplace(parsed, result, textParts)
           break
         case 'tool_progress':
           this.handleToolProgress(parsed, data, callbacks, toolNameByCallId, v1Type)
@@ -610,6 +741,17 @@ export class AgentClient {
           // Terminal finish frame — the turn completed cleanly, no recovery needed.
           result.finished = true
           break
+        case 'ignore':
+          break
+        case 'tolerated':
+          // An unknown `data-*` card. The backend evolves these forward-compatibly
+          // and emits some from a dynamic site, so this is expected traffic
+          // against a newer backend, not a defect: visible to a developer under
+          // --verbose, invisible to machine callers.
+          if (this.verbose) process.stderr.write(`[SSE] tolerated unknown data frame: ${v1Type}\n`)
+          break
+        default:
+          this.recordProtocolDrift(v1Type ?? event, result)
       }
     } catch (e) {
       if (e instanceof SyntaxError) {
@@ -620,10 +762,88 @@ export class AgentClient {
     }
   }
 
-  private handleTextDelta(parsed: SSEPayload, result: SSEStreamResult, callbacks: StreamCallbacks): void {
+  // PROTOCOL_DRIFT is a DEBUG signal, not a machine-consumer contract, so it
+  // rides the result envelope only under --verbose. The backend deliberately
+  // evolves the wire forward-compatibly; warning by default therefore fires on
+  // healthy turns against a newer backend, and a drift detector that fires on
+  // ~every healthy turn is one machine consumers learn to filter out — worse
+  // than not shipping it. Unknown `data-*` cards never reach here at all (they
+  // route to 'tolerated'); this is now only for genuinely unexpected
+  // protocol-level frames.
+  //
+  // `type` is backend-controlled wire content, so it stays bounded on both axes:
+  // a malformed backend emitting many long, distinct types would otherwise grow
+  // `eventTypes` without limit and re-join it on every frame. `count` stays
+  // exact — only the type list is capped.
+  private recordProtocolDrift(rawType: string, result: SSEStreamResult): void {
+    if (!this.verbose) return
+    const type = rawType.length > MAX_DRIFT_TYPE_LENGTH ? `${rawType.slice(0, MAX_DRIFT_TYPE_LENGTH)}…` : rawType
+    process.stderr.write(`[SSE] unknown frame type: ${type}\n`)
+    let warning = result.protocolWarnings[0]
+    if (!warning) {
+      warning = { code: 'PROTOCOL_DRIFT', message: '', count: 0, eventTypes: [] }
+      result.protocolWarnings.push(warning)
+    }
+    warning.count += 1
+    if (!warning.eventTypes.includes(type) && warning.eventTypes.length < MAX_DRIFT_EVENT_TYPES) {
+      warning.eventTypes.push(type)
+    }
+    const noun = warning.count === 1 ? 'frame' : 'frames'
+    warning.message = `Ignored ${warning.count} unknown SSE ${noun}: ${warning.eventTypes.join(', ')}`
+  }
+
+  private handleTextDelta(
+    parsed: SSEPayload,
+    result: SSEStreamResult,
+    callbacks: StreamCallbacks,
+    textParts: TextParts
+  ): void {
     if (typeof parsed.delta !== 'string') return
+    // Live append is unchanged — the TTY streams as it arrives. The part map is
+    // kept in parallel purely so a later `text-replace` can rewrite `fullText`
+    // (the turn's authoritative answer, see session.ts `responseText`).
     result.fullText += parsed.delta
     callbacks.onTextDelta?.(parsed.delta)
+
+    const id = typeof parsed.id === 'string' && parsed.id.length > 0 ? parsed.id : null
+    if (!id) {
+      textParts.allIdentified = false
+      return
+    }
+    if (!textParts.byId.has(id)) textParts.order.push(id)
+    textParts.byId.set(id, (textParts.byId.get(id) ?? '') + parsed.delta)
+  }
+
+  /**
+   * Apply a `text-replace`: overwrite the retracted part in place and recompose
+   * `fullText` from the ordered parts. This is the truthful-outcome case — the
+   * backend emits this frame precisely when it has decided the streamed prose is
+   * WRONG, so keeping the retracted text means `agent ask` answers with the
+   * claim the backend just withdrew.
+   *
+   * The live TTY has already printed the retracted text and cannot unprint it,
+   * but the corrected `fullText` still lands: session.ts renders the final
+   * assistant message from it after the stream, and it is the `response` field
+   * of `agent ask --output json`.
+   */
+  private handleTextReplace(parsed: SSEPayload, result: SSEStreamResult, textParts: TextParts): void {
+    const replaces = typeof parsed.replaces === 'string' ? parsed.replaces : ''
+    const text = typeof parsed.text === 'string' ? parsed.text : null
+    // Degrade safely rather than half-apply. Recomposing a stream that carried
+    // un-keyed deltas would DROP that prose, and replacing a part we never saw
+    // would invent ordering — both are worse than leaving the text as streamed,
+    // which is at least something the backend actually said.
+    if (text === null || !replaces || !textParts.allIdentified || !textParts.byId.has(replaces)) {
+      if (this.verbose) {
+        process.stderr.write(
+          `[SSE] text-replace not applied (replaces=${replaces || '<missing>'}); text left as streamed\n`
+        )
+      }
+      return
+    }
+    textParts.byId.set(replaces, text)
+    result.fullText = recomposeText(textParts)
+    if (this.verbose) process.stderr.write(`[SSE] text-replace applied to part ${replaces}\n`)
   }
 
   private handleToolProgress(
@@ -645,9 +865,9 @@ export class AgentClient {
     const label = typeof parsed.label === 'string' ? parsed.label : undefined
     this.maybeEmitClientSideToolCall(parsed, callbacks, v1Type, callId, toolName)
 
-    const ok = deriveToolDoneOk(status, parsed.output)
+    const ok = deriveToolDoneOk(status, parsed.output, v1Type)
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
-    this.maybeSignToolOutput(status, toolName, parsed.output, callbacks)
+    this.maybeSignToolOutput(status, toolName, parsed.output, callbacks, v1Type)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
   }
 
@@ -664,8 +884,15 @@ export class AgentClient {
     status: 'running' | 'done' | undefined,
     toolName: string | undefined,
     output: unknown,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    v1Type: string | null
   ): void {
+    // `tool-output-error` is a terminal ('done') frame, so it reaches here — but
+    // it reports a tool that FAILED and carries no output. deriveToolOutputCandidate
+    // would return null for its absent payload anyway; this guard is explicit so
+    // the fail-closed property is stated at the signing boundary rather than
+    // resting on a null-check three calls away.
+    if (v1Type === 'tool-output-error') return
     if (status !== 'done' || !toolName || !callbacks.onToolOutputTx) return
     if (!CLI_SIGNABLE_FLAT_TOOLS.has(toolName) && !CLI_SIGNABLE_PREP_TOOLS.has(toolName)) return
     const candidate = deriveToolOutputCandidate(toolName, output)
@@ -711,20 +938,39 @@ export class AgentClient {
     callbacks.onError?.(msg, codeFromBackend)
   }
 
-  // Maps a V1 `type` field to the legacy event bucket used by handleSSEEvent's
-  // switch. Frame-level types (start, text-start, text-end, finish-step) and
-  // non-critical telemetry (data-tokens, data-usage, data-confirmation) route
-  // to 'ignore' which is a no-op. `data-tx_ready` also routes to 'ignore':
-  // #927 Phase 2 signs purely from `tool-output-available`, and production emits
-  // `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI doesn't use.
+  // Maps a V1 `type` field to the event bucket used by handleSSEEvent's switch.
+  //
+  // This enumerates what the CLI HANDLES, not what the backends can emit — the
+  // inverse of the original design. Enumerating the latter is unwinnable by
+  // construction: the frames are produced by two independently-evolving backends
+  // including a DYNAMIC site, `V1Data(streamSurface, …)` (agent.go) over the
+  // mutable `genericCardSurfaces` map (response_validator.go), and three
+  // successive enumeration passes each found types the last had missed. The
+  // backend's V1 contract also treats unknown data kinds as forward-compatible
+  // by design (`v1_wire_schema_test.go`), so a `data-*` kind this CLI has no
+  // surface for is simply a card it does not render — not drift. Those fall to
+  // `default` → 'tolerated' and stay quiet; no list here pretends to be complete.
+  //
+  // What must be explicit instead is the small set of KNOWN-DANGEROUS frames —
+  // the ones whose omission is not a display gap but a false turn result:
+  //   • `tool-output-error` — the tool-failure terminal. Ignored, a failed tool
+  //     never closes and the turn reports success.
+  //   • `text-replace` — retracts prose the backend has decided is wrong.
+  //     Ignored, the RETRACTED text stays as the turn's answer.
+  // `data-tx_ready` routes to 'ignore' deliberately: #927 Phase 2 signs purely
+  // from `tool-output-available`, and production emits `data-tx_ready` only as a
+  // hollow `{typed_confirm}` marker the CLI doesn't use.
   private mapV1EventType(type: string): string {
     switch (type) {
       case 'text-delta':
         return 'text_delta'
+      case 'text-replace':
+        return 'text_replace'
       case 'tool-input-start':
       case 'tool-input-available':
       case 'tool-input-delta':
       case 'tool-output-available':
+      case 'tool-output-error':
         return 'tool_progress'
       case 'data-title':
         return 'title'
@@ -740,8 +986,30 @@ export class AgentClient {
         return 'error'
       case 'finish':
         return 'done'
-      default:
+      // Frame-level lifecycle the CLI has no surface for. These are NOT data
+      // cards, so they can't ride the forward-compatible `data-*` tolerance —
+      // they must be named to stay quiet.
+      case 'start':
+      case 'start-step':
+      case 'text-start':
+      case 'text-end':
+      case 'finish-step':
         return 'ignore'
+      // Known per-turn telemetry cards. These WOULD be tolerated by the
+      // `data-*` rule below, so naming them is not load-bearing — unlike the old
+      // design, forgetting one costs a --verbose log line, not a PROTOCOL_DRIFT
+      // stamped on a healthy turn. They are named only because they arrive on
+      // essentially every turn and calling them "unknown" in the verbose log
+      // would be both noisy and untrue.
+      case 'data-tokens':
+      case 'data-usage':
+      case 'data-tx_ready':
+        return 'ignore'
+      default:
+        // Unknown `data-*` card → tolerated by the backend's forward-compat
+        // contract. Anything else is a protocol-level frame we genuinely did not
+        // expect → drift (verbose only; see recordProtocolDrift).
+        return type.startsWith('data-') ? 'tolerated' : 'unknown'
     }
   }
 
@@ -876,6 +1144,8 @@ export type SSEStreamResult = {
    *  dropped connection, not a user abort). Signals the caller to recover the
    *  persisted answer via /messages/since. */
   disconnected: boolean
+  /** Non-fatal unknown wire frames observed during this stream. */
+  protocolWarnings: ProtocolWarning[]
   /** X-Server-Now (epoch millis as a string) captured from the SSE response
    *  headers — the server-clock bootstrap anchor for the recovery poll.
    *  null when the header is absent (older backend). */

@@ -1,5 +1,26 @@
 import { HttpResponseError } from '@vultisig/lib-utils/fetch/HttpResponseError'
 
+/**
+ * A transaction was included on-chain but its execution genuinely failed
+ * (e.g. Cosmos DeliverTx code !== 0 — a wasm revert, out-of-gas, a
+ * THORChain/Maya deposit-handler rejection). This is a terminal, non-transient
+ * outcome even though the chain-controlled error text can read exactly like
+ * a transient one (a cosmwasm revert's rawLog routinely says "aborted"; a
+ * contract can literally say "timed out" or "connection reset" as text).
+ * Retrying would just re-send the same bytes, get "tx already exists in
+ * cache" back, and have that swallowed as success — reopening the false-
+ * success bug the throw exists to close. Resolvers that assert on-chain
+ * execution success throw this instead of a bare Error so
+ * `isTransientBroadcastError` can short-circuit before the message-regex
+ * test ever runs.
+ */
+export class DeliverTxFailedError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'DeliverTxFailedError'
+  }
+}
+
 export const broadcastRetryMaxAttempts = 3
 const broadcastRetryBaseDelayMs = 250
 
@@ -50,6 +71,10 @@ export const isTransientBroadcastError = (error: unknown): boolean => {
 
   while (current != null && !seen.has(current)) {
     seen.add(current)
+
+    if (current instanceof DeliverTxFailedError) {
+      return false
+    }
 
     if (current instanceof HttpResponseError) {
       return current.status === 429 || (current.status >= 500 && current.status <= 599)

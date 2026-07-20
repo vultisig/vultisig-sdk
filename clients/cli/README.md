@@ -719,7 +719,12 @@ vultisig agent ask "Check my portfolio" --json
 
 # Fallback only — exposes the secret to `ps`/shell history (emits a warning)
 vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
+
+# Signing does not authorize backend order submission unless this is also set
+vultisig agent ask "Place the order" --yes --allow-auto-submit
 ```
+
+`--yes` authorizes unattended signing and transaction broadcast. It does not authorize the backend to submit a signed Polymarket order: that separate behavior is fail-closed unless `--allow-auto-submit` is present.
 
 **Text output (default):**
 
@@ -751,10 +756,20 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
       }
     ],
     "transactions": [],
+    "warnings": [
+      {
+        "code": "PROTOCOL_DRIFT",
+        "message": "Ignored 1 unknown SSE frame: data-future-critical",
+        "count": 1,
+        "eventTypes": ["data-future-critical"]
+      }
+    ],
     "outcome": { "kind": "success" }
   }
 }
 ```
+
+`warnings` is omitted when empty, and is **`--verbose`-only**: `PROTOCOL_DRIFT` is a debugging aid, not a machine contract. The backend's V1 wire evolves forward-compatibly — unknown `data-*` card kinds are expected against a newer backend and are tolerated silently — so a warning emitted by default would fire on healthy turns. Run with `--verbose` to see which frame types a turn carried that this CLI does not route.
 
 Failures use the same v1 envelope with `success:false` and a stable `error.code`. This includes
 failed/declined signing and typed blocked/refusal/error turn endings; their partial turn data remains under `data`.
@@ -810,13 +825,13 @@ Orchestrators should branch on `code`. The message in `error` / `message` stays 
 | `ACTION_NOT_IMPLEMENTED`    | Local executor does not implement this action type                                                                                                                            |
 | `INVALID_INPUT`             | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                                                                   |
 | `NETWORK_ERROR`             | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                                                                         |
-| `TIMEOUT`                   | Deadline exceeded, or abort where the message indicates a timeout                                                                                                             |
+| `TIMEOUT`                   | HTTP deadline or SSE frame-idle deadline exceeded (process exit 3, retryable)                                                                                                 |
 | `TRANSACTION_FAILED`        | Build/broadcast/gas errors mapped from the SDK                                                                                                                                |
 | `SIGNING_FAILED`            | MPC/signing failed                                                                                                                                                            |
 | `ACK_FAILED`                | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying                                                   |
 | `BROADCAST_COMMITTED`       | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                                                                     |
 | `AGENT_TURN_BLOCKED`        | A fund-safety guardrail blocked the requested action (exit 10)                                                                                                                |
-| `AGENT_TURN_REFUSAL`        | The model refused or requested clarification without completing the action (exit 11)                                                                                         |
+| `AGENT_TURN_REFUSAL`        | The model refused or requested clarification without completing the action (exit 11)                                                                                          |
 | `AGENT_TURN_ERROR`          | The typed turn ending reported a failure without a more specific stream error                                                                                                 |
 | `IDEMPOTENT_TURN_DUPLICATE` | The backend already accepted the same keyed turn; inspect the conversation for the original persisted result                                                                  |
 | `IDEMPOTENCY_KEY_REUSED`    | The idempotency key was already used for a _different_ request body. This request did NOT run and nothing was persisted for it — retry with a fresh key (exit code 4, not 14) |
@@ -832,6 +847,9 @@ SSE `error` events may optionally include a `code` field from the backend; if it
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env — see **Password resolution** above)
 - `--verbose` - Show tool calls and debug info on stderr
 - `--json` - Output structured JSON
+- `--yes` - Authorize unattended signing/broadcast
+- `--allow-auto-submit` - Separately allow backend submission of signed Polymarket orders (requires `--yes` to sign)
+- `--force` - Bypass the duplicate-broadcast guard
 
 #### Agent Chat (Interactive/Pipe Mode)
 
@@ -855,6 +873,7 @@ The vault password is resolved from the keyring/env chain (`vsig auth setup` or 
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env)
 - `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
 - `--session-id <id>` - Resume an existing session
+- `--allow-auto-submit` - Allow backend submission of signed Polymarket orders after local confirmation
 
 #### Pipe Protocol (`--via-agent`)
 
@@ -870,19 +889,20 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 
 **Output events** (emitted on stdout):
 
-| Type          | Fields                                      | When                                                                                                     |
-| ------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `ready`       | `vault, addresses`                          | Session initialized, addresses for all chains                                                            |
-| `session`     | `id`                                        | Conversation ID for resuming later                                                                       |
-| `history`     | `messages[]`                                | Previous messages when resuming a session                                                                |
-| `text_delta`  | `delta`                                     | Streaming text chunk from the agent                                                                      |
-| `tool_call`   | `id, action, params?, status`               | Action started (`running`)                                                                               |
-| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false)                                                        |
-| `tx_status`   | `tx_hash, chain, status, explorer_url?`     | Transaction broadcast/confirmed/failed                                                                   |
-| `assistant`   | `content`                                   | Full assistant response                                                                                  |
-| `suggestions` | `suggestions[]`                             | Suggested follow-up actions                                                                              |
-| `error`       | `message, code`                             | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
-| `done`        | `{}`                                        | Response cycle complete                                                                                  |
+| Type          | Fields                                          | When                                                                                                     |
+| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ready`       | `vault, addresses`                              | Session initialized, addresses for all chains                                                            |
+| `session`     | `id`                                            | Conversation ID for resuming later                                                                       |
+| `history`     | `messages[]`                                    | Previous messages when resuming a session                                                                |
+| `text_delta`  | `delta`                                         | Streaming text chunk from the agent                                                                      |
+| `tool_call`   | `id, action, params?, status`                   | Action started (`running`)                                                                               |
+| `tool_result` | `id, action, success, data?, error?, code?`     | Action completed (`code` when `success` is false)                                                        |
+| `tx_status`   | `tx_hash, chain, status, explorer_url?`         | Transaction broadcast/confirmed/failed                                                                   |
+| `assistant`   | `content`                                       | Full assistant response                                                                                  |
+| `suggestions` | `suggestions[]`                                 | Suggested follow-up actions                                                                              |
+| `warning`     | `warning: { code, message, count, eventTypes }` | Non-fatal protocol drift; an unrecognized SSE frame was ignored (`--verbose` only)                       |
+| `error`       | `message, code`                                 | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
+| `done`        | `{}`                                            | Response cycle complete                                                                                  |
 
 **Example session:**
 
@@ -937,6 +957,18 @@ VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 
 # Suppress spinners and info messages
 VULTISIG_SILENT=1
+
+# Bound agent-backend connection/unary requests (default: 30000ms)
+VULTISIG_HTTP_TIMEOUT_MS=30000
+
+# Bound an established SSE stream that stops making PROGRESS (default: 180000ms).
+# Measures time since the last real data frame. Keep-alive comments do NOT extend
+# it — both backends heartbeat on a timer that runs regardless of whether the turn
+# is advancing, so a clock they reset would bound only a dead connection, never a
+# wedged backend. Sized above the backend's worst-case silent stretch (a model call
+# is bounded at 90s; the swap builder is documented at 90s + 60s MCP), so a slow but
+# healthy turn is never killed.
+VULTISIG_SSE_IDLE_TIMEOUT_MS=180000
 ```
 
 ### Settings
@@ -1230,6 +1262,8 @@ Configuration is stored in `~/.vultisig/`:
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
 | 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
 | 14   | agent ask: duplicate keyed turn rejected — inspect the conversation for the original result                            |
+| 15   | No active vault selected — create, import, or switch to one                                                            |
+| 16   | Stored state is unreadable — repair it or re-import the vault from a .vult backup                                      |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

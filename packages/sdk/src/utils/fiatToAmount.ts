@@ -1,6 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
-import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
@@ -95,14 +94,7 @@ export const fiatToAmount = async (params: FiatToAmountParams): Promise<string> 
         // Non-EVM chains (Cosmos, Solana, TON, Polkadot, etc.) identify tokens by
         // denom / mint / asset-id, not a contract address. Resolve via the curated
         // knownTokens registry which already maps these to CoinGecko ids.
-        // For Cosmos chains, also accept the native fee-coin denom (e.g. "uluna" on
-        // TerraClassic, "uatom" on Cosmos) which identifies the native coin by its
-        // on-chain denomination rather than the absence of a tokenId.
-        const nativeCosmosDenom = cosmosFeeCoinDenom[chain as keyof typeof cosmosFeeCoinDenom]
-        const isNativeCosmosDenom = nativeCosmosDenom != null && tokenId.toLowerCase() === nativeCosmosDenom
-        const priceId =
-          resolveTokenPriceId(chain, tokenId) ??
-          (isNativeCosmosDenom ? chainFeeCoin[chain]?.priceProviderId : undefined)
+        const priceId = resolveTokenPriceId(chain, tokenId)
         if (!priceId) {
           throw new FiatToAmountError(
             `Could not resolve a price provider id for token "${tokenId}" on chain "${chain}". ` +

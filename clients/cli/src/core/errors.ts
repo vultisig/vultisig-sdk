@@ -1,4 +1,13 @@
-import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from '@vultisig/sdk'
+import {
+  Chain,
+  type ChainKind,
+  getChainKind,
+  StorageError,
+  VaultError,
+  VaultErrorCode,
+  VaultImportError,
+  VaultImportErrorCode,
+} from '@vultisig/sdk'
 
 // Typed exit codes for machine-readable error handling
 // Enables agents to distinguish error types programmatically
@@ -47,6 +56,16 @@ export enum ExitCode {
   // request did not execute or consume credits; inspect the conversation for
   // the first attempt's persisted result before starting a fresh attempt.
   IDEMPOTENT_TURN_DUPLICATE = 14,
+  // The command needs an active vault and there isn't one selected. This is an
+  // expected, actionable state (create/import/switch), NOT a failure — distinct
+  // from UNKNOWN (7) so a headless caller can tell "you have no vault yet" from
+  // "something broke". Vaults may well exist; none is selected.
+  NO_ACTIVE_VAULT = 15,
+  // On-disk CLI/vault state is present but unparseable (truncated or hand-edited
+  // JSON). Retrying cannot help and no amount of waiting fixes it — the state must
+  // be repaired or re-imported from a .vult backup. Distinct from UNKNOWN (7) so a
+  // headless caller can stop retrying and surface a recovery path.
+  CORRUPT_STATE = 16,
 }
 
 export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
@@ -68,6 +87,8 @@ export const EXIT_CODE_DESCRIPTIONS: Record<ExitCode, string> = {
     'agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry',
   [ExitCode.IDEMPOTENT_TURN_DUPLICATE]:
     'agent ask: duplicate keyed turn rejected — inspect the conversation for the original result',
+  [ExitCode.NO_ACTIVE_VAULT]: 'No active vault selected — create, import, or switch to one',
+  [ExitCode.CORRUPT_STATE]: 'Stored state is unreadable — repair it or re-import the vault from a .vult backup',
 }
 
 export abstract class VsigError extends Error {
@@ -287,6 +308,37 @@ function keyedTurnContext(conversationId?: string, firstRequestAt?: string): Rec
   return Object.keys(context).length > 0 ? context : undefined
 }
 
+/** A command needs an active vault and none is selected. Expected and actionable —
+ *  vaults may exist, none is current. */
+export class NoActiveVaultError extends VsigError {
+  readonly exitCode = ExitCode.NO_ACTIVE_VAULT
+  readonly code = 'NO_ACTIVE_VAULT'
+
+  constructor(message?: string) {
+    super(
+      message ?? 'No active vault. Create or import a vault first.',
+      'Select an existing vault with "vultisig switch <id>", or create/import one',
+      ['vultisig vaults', 'vultisig switch <id>', 'vultisig create', 'vultisig import <file.vult>']
+    )
+  }
+}
+
+/** Stored state exists but is unparseable. Not retryable: the bytes on disk are
+ *  broken, so the caller needs a repair/re-import path rather than another attempt. */
+export class CorruptStateError extends VsigError {
+  readonly exitCode = ExitCode.CORRUPT_STATE
+  readonly code = 'CORRUPT_STATE'
+
+  constructor(message: string, context?: Record<string, string>) {
+    super(
+      message,
+      'The stored file is present but unreadable — it was likely truncated or hand-edited',
+      ['Re-import the vault from its .vult backup: vultisig import <file.vult>', 'vultisig vaults'],
+      context
+    )
+  }
+}
+
 export class UnknownError extends VsigError {
   readonly exitCode = ExitCode.UNKNOWN
   readonly code = 'UNKNOWN_ERROR'
@@ -316,11 +368,104 @@ export class DuplicateBroadcastRefusedError extends VsigError {
   }
 }
 
+const EVM_PERMANENT_BROADCAST_INPUT_RE =
+  /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i
+
+const UTXO_PERMANENT_BROADCAST_INPUT_RE = /\bTX decode failed\b|\b(?:RPC error|code|error code)\s*:?\s*-(?:26|27)\b/i
+
+const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
+  /failed to deserialize(?: transaction)?|failed to sanitize|(?:transaction )?signature verification (?:failed|failure)|non-base58 character|invalid base58/i
+
+// The local required-fields guard (RawBroadcastService) is always permanent —
+// it never carries an RPC code, so it's checked independently of the -32002 gate below.
+const SUI_REQUIRED_FIELDS_GUARD_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
+
+// -32002 ("TransactionExecutionClientError") is a broad Sui JSON-RPC bucket covering
+// many distinct client-caused execution failures, not signature verification alone —
+// pairing the code with a message match keeps a generic/unrecognized -32002 (e.g. an
+// object-version or gas condition we can't positively identify as permanent) retryable
+// instead of a blanket match on the code.
+const SUI_PERMANENT_EXECUTION_MESSAGE_RE =
+  /invalid (?:user )?signature|signature verification (?:failed|failure)|malformed transaction|invalid transaction (?:data|bytes)/i
+
+// Cosmos SDK RootCodespace error codes (codespace "sdk") whose message is a
+// genuinely non-recoverable rejection of THIS signed tx — the identical bytes can
+// never succeed regardless of retries or waiting. See
+// https://github.com/cosmos/cosmos-sdk/blob/main/types/errors/errors.go. Deliberately
+// narrow: any other codespace, any unlisted code (notably 32 "incorrect account
+// sequence" — a transient MPC-race shape that can resolve once the intervening
+// sequence lands), or a code/message mismatch falls through to retryable.
+const COSMOS_PERMANENT_SDK_CODES: Partial<Record<number, RegExp>> = {
+  2: /tx parse error/i,
+  4: /unauthorized|signature verification failed/i,
+  5: /insufficient funds/i,
+  6: /unknown request/i,
+  7: /invalid address/i,
+  8: /invalid pubkey/i,
+  9: /unknown address/i,
+  10: /invalid coins/i,
+  12: /memo too large/i,
+  13: /insufficient fee/i,
+  14: /maximum number of signatures exceeded/i,
+  15: /no signatures supplied/i,
+  18: /invalid request/i,
+  21: /tx too large/i,
+}
+
+const COSMOS_BROADCAST_FAILURE_RE = /broadcasting transaction failed with code (\d+) \(codespace: (\w+)\)\. log: (.+)/i
+
+function isCosmosPermanentBroadcastInput(details: string): boolean {
+  const match = details.match(COSMOS_BROADCAST_FAILURE_RE)
+  if (!match) return false
+  const [, codeText, codespace, log] = match
+  if (codespace.toLowerCase() !== 'sdk') return false
+  const canonicalMessage = COSMOS_PERMANENT_SDK_CODES[Number(codeText)]
+  return canonicalMessage ? canonicalMessage.test(log) : false
+}
+
+type PermanentBroadcastInputClassifier = (err: VaultError, details: string) => boolean
+
+const permanentBroadcastInputClassifiers: Partial<Record<ChainKind, PermanentBroadcastInputClassifier>> = {
+  evm: (_err, details) => EVM_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  utxo: (_err, details) => UTXO_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  solana: (_err, details) => SOLANA_PERMANENT_BROADCAST_INPUT_RE.test(details),
+  sui: (err, details) => {
+    if (SUI_REQUIRED_FIELDS_GUARD_RE.test(details)) return true
+    const rpcCode = (err.originalError as (Error & { code?: unknown }) | undefined)?.code
+    return rpcCode === -32002 && SUI_PERMANENT_EXECUTION_MESSAGE_RE.test(details)
+  },
+  cosmos: (_err, details) => isCosmosPermanentBroadcastInput(details),
+}
+
+function getBroadcastErrorChain(details: string): Chain | undefined {
+  const normalized = details.toLowerCase()
+  const wrappedChain = Object.values(Chain).find(chain => normalized.includes(` on ${chain.toLowerCase()}:`))
+  if (wrappedChain) return wrappedChain
+
+  // RawBroadcastService deliberately rethrows its local required-fields
+  // VaultError without the standard "on <chain>:" wrapper.
+  if (normalized.startsWith('sui broadcast ')) return Chain.Sui
+
+  return undefined
+}
+
 function isPermanentBroadcastInputError(err: VaultError): boolean {
   const details = `${err.message}\n${err.originalError?.message ?? ''}`
-  return /failed to decode signed transaction|could not decode (?:signed )?transaction|invalid raw transaction|invalid transaction encoding|invalid (?:transaction )?signature|invalid sender|invalid rlp|rlp:|unsupported transaction type/i.test(
-    details
-  )
+  const chain = getBroadcastErrorChain(details)
+
+  if (chain) {
+    const classifier = permanentBroadcastInputClassifiers[getChainKind(chain)]
+    if (classifier) return classifier(err, details)
+
+    return false
+  }
+
+  // Preserve the pre-existing EVM classification for older/hand-built errors
+  // that lack the SDK's standard chain wrapper. For every new family predicate,
+  // ambiguity intentionally stays retryable: a false non-retryable result can
+  // strand a user, while a false retryable result is additionally constrained
+  // by broadcast-journal dedupe and the exit 9/13 fund-safety semantics.
+  return EVM_PERMANENT_BROADCAST_INPUT_RE.test(details)
 }
 
 // The SDK words a bad receiver differently depending on which layer rejects it:
@@ -403,8 +548,28 @@ function classifyVaultError(err: VaultError): VsigError {
   }
 }
 
+/**
+ * A StorageError means "the read/write itself failed", which covers both broken
+ * bytes and ordinary IO trouble. Only the former is CORRUPT_STATE: retrying an
+ * unparseable file is futile, whereas a permission/IO error may well clear. The
+ * node/RN/extension backends all wrap the underlying failure as `cause`, so a
+ * JSON.parse SyntaxError there is the positive signal that the stored value is
+ * genuinely malformed. Anything else deliberately falls through to the existing
+ * classification rather than being mislabelled unrecoverable.
+ */
+function corruptStateErrorFrom(err: StorageError): CorruptStateError | undefined {
+  if (!(err.cause instanceof SyntaxError)) return undefined
+  const keyMatch = err.message.match(/key "([^"]+)"/)
+  return new CorruptStateError(err.message, keyMatch ? { key: keyMatch[1] } : undefined)
+}
+
 export function classifyError(err: Error): VsigError {
   if (err instanceof VsigError) return err
+
+  if (err instanceof StorageError) {
+    const corrupt = corruptStateErrorFrom(err)
+    if (corrupt) return corrupt
+  }
 
   // The journal's duplicate/concurrent refusals aren't VaultErrors — they carry
   // a stable `code === 'DUPLICATE_BROADCAST'`. Map them to exit 9 before the
