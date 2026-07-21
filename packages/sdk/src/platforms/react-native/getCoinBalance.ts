@@ -23,8 +23,7 @@ const resolverLoaders: Record<ChainKind, () => Promise<BalanceResolver>> = {
     ),
   qbtc: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/qbtc').then(m => m.getQbtcCoinBalance as BalanceResolver),
-  ripple: () =>
-    import('@vultisig/core-chain/coin/balance/resolvers/ripple').then(m => m.getRippleCoinBalance as BalanceResolver),
+  ripple: () => import('./chains/ripple/balance').then(m => m.getRippleCoinBalance as BalanceResolver),
   solana: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/solana').then(m => m.getSolanaCoinBalance as BalanceResolver),
   sui: () =>
