@@ -576,6 +576,8 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
+export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
+export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
 //
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip) and the chain-native block explorer URL
@@ -606,6 +608,10 @@ export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
+export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
+export type { NormalizeArgs, NormalizedTx } from '../../tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
