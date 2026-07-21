@@ -346,6 +346,13 @@ export {
   resolveEns,
 } from '../../tools/evm'
 
+// EVM chainId ↔ chain mapping. Same single source of truth exported from the
+// generic entry (src/index.ts) — the RN allow-list omitted these so RN
+// consumers (Station) had to hand-maintain their own chainId table, risking
+// the Hyperliquid 998/999 client↔server chainId drift class. Pure lookup
+// tables, no chain-client deps, so safe as a static re-export.
+export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+
 // Gas / fee primitives (read-only — uses global `fetch` + a type-only
 // `UtxoChain` import, no heavy chain client). The RN allow-list omitted
 // these so RN consumers (vultiagent-app) couldn't resolve a current
