@@ -1,0 +1,5 @@
+---
+'@vultisig/core-chain': patch
+---
+
+Close a co-signer swap-guard gap where enforcement was keyed purely on the untrusted `provider` string (sdk#1457). CowSwap is now an enforced provider - its swap-leg destination and ERC-20 approval spender are always the same fixed GPv2VaultRelayer contract, so it is exactly as allow-listable as 1inch/Kyber's routers, and a payload can no longer relabel itself `cowswap` to dodge a router check. The log-only fallback for unenforced providers is now a closed list of the values the codebase actually produces (`li.fi`, `swapkit`, and the legacy unattributed `''` some historical mobile payloads carry) instead of accepting any string - a `provider` outside every known value is rejected fail-closed. `li.fi`/`swapkit` remain the one residual gap (they legitimately route through many different contracts and cannot be address-allow-listed); fully closing that needs the provider identity to be a trusted proto oneof discriminant rather than a free string, which is a larger cross-repo, cross-consumer schema change tracked separately in sdk#1457.
