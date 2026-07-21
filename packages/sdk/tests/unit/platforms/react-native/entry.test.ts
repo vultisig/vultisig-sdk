@@ -118,3 +118,19 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     )
   })
 })
+
+// Same parity guard for the hardened human-amount -> base-units parser: the RN
+// allow-list entry re-exports it separately from the root barrel, so deleting
+// the RN line leaves the app resolving `undefined` while publicExports.test.ts
+// (node condition only) stays green.
+describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
+  it('resolves the parser and its error class from the RN entry, not just the root barrel', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.toChainAmount).toBe('function')
+    expect(rn.toChainAmount('1.2345e-3', 8)).toBe(123450n)
+
+    expect(typeof rn.ChainAmountParseError).toBe('function')
+    expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
+  })
+})
