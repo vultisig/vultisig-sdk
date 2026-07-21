@@ -46,15 +46,6 @@ describe('broadcastPolkadotTx', () => {
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
     })
 
-    it('swallows "Transaction is temporarily banned"', async () => {
-      mocks.queryUrl.mockResolvedValue({
-        error: { code: 1010, message: 'Transaction is temporarily banned' },
-      })
-
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
-      expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
-    })
-
     it('swallows generic "Already known" Pool error variants', async () => {
       mocks.queryUrl.mockResolvedValue({
         error: { code: 1013, message: 'Already known' },
@@ -68,6 +59,50 @@ describe('broadcastPolkadotTx', () => {
       mocks.queryUrl.mockResolvedValue({
         error: { code: 1013, message: 'TRANSACTION ALREADY IMPORTED' },
       })
+
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+    })
+  })
+
+  describe('"temporarily banned" is ambiguous — hash-verify, never assume success', () => {
+    // Substrate bans a tx hash after it is removed from the pool, which covers
+    // BOTH a benign already-processed duplicate AND a genuine rejection. The
+    // string cannot disambiguate, so it must be routed through
+    // verifyBroadcastByHash rather than swallowed outright (#1136).
+
+    it('routes "temporarily banned" through verifyBroadcastByHash instead of swallowing it', async () => {
+      mocks.queryUrl.mockResolvedValue({
+        error: { code: 1010, message: 'Transaction is temporarily banned' },
+      })
+      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+      await broadcastPolkadotTx({ chain, tx })
+
+      expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+      const callArg = mocks.verifyBroadcastByHash.mock.calls[0]![0]
+      expect((callArg.error as Error).message).toContain('temporarily banned')
+    })
+
+    it('surfaces "temporarily banned" as a failure when the tx is NOT observed on chain', async () => {
+      // A genuinely-rejected-then-banned extrinsic: verifyBroadcastByHash
+      // cannot confirm the hash and re-throws — the caller must see failure,
+      // not a false success.
+      const bannedErr = new Error('Polkadot broadcast failed: Transaction is temporarily banned')
+      mocks.queryUrl.mockResolvedValue({
+        error: { code: 1010, message: 'Transaction is temporarily banned' },
+      })
+      mocks.verifyBroadcastByHash.mockRejectedValue(bannedErr)
+
+      await expect(broadcastPolkadotTx({ chain, tx })).rejects.toThrow(/temporarily banned/)
+    })
+
+    it('swallows "temporarily banned" when verifyBroadcastByHash confirms the tx on chain', async () => {
+      // The benign duplicate sub-case: the tx really did land, so the slow MPC
+      // peer must not see an error.
+      mocks.queryUrl.mockResolvedValue({
+        error: { code: 1010, message: 'Transaction is temporarily banned' },
+      })
+      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 
       await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
     })
