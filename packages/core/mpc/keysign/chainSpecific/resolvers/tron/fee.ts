@@ -7,6 +7,7 @@ import base58 from 'bs58'
 import { getEnergyPrice } from './energyPrice'
 
 type TriggerContractResponse = {
+  result?: { result?: boolean; code?: string; message?: string }
   energy_used?: number
   energy_penalty?: number
 }
@@ -53,6 +54,17 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
     },
   })
 
+  // triggerconstantcontract can return a 200 with an empty/malformed body or a
+  // reverted simulation (result.result === false) without ever surfacing an
+  // HTTP error. Trusting energy_used=0 in that case silently produces
+  // feeLimit=0 downstream, which guarantees OUT_OF_ENERGY at broadcast. Throw
+  // instead so it bubbles through the same throw-bubbling contract as network
+  // errors above.
+  if (!responseData.result || responseData.result.result !== true) {
+    const reason = responseData.result?.message ?? 'empty or malformed response (possible TronGrid indexing lag)'
+    throw new Error(`[tron] triggerconstantcontract did not return a successful estimate: ${reason}`)
+  }
+
   const energyUsed = responseData.energy_used ?? 0
   const energyPenalty = responseData.energy_penalty ?? 0
   const totalEnergy = BigInt(energyUsed) + BigInt(energyPenalty)
@@ -86,5 +98,13 @@ export const getTrc20TransferFee = async ({ coin, receiver, amount }: GetTrc20Tr
   const energyPrice = await getEnergyPrice()
   const totalSun = energyToBurn * energyPrice
 
-  return totalSun
+  // feeLimit is a spending CEILING, not an expected cost. Pad for drift during the
+  // 10-60s MPC ceremony (dynamic energy pricing, concurrent staked-energy use),
+  // cap so a pathological estimate can't runaway. 100 TRX cap matches the existing
+  // send-service ceiling (packages/sdk/src/chains/tron/tx.ts:121).
+  const FEE_LIMIT_MARGIN_BPS = 5_000n // +50%
+  const FEE_LIMIT_CAP_SUN = 100_000_000n // 100 TRX
+  const withMargin = totalSun + (totalSun * FEE_LIMIT_MARGIN_BPS) / 10_000n
+
+  return withMargin > FEE_LIMIT_CAP_SUN ? FEE_LIMIT_CAP_SUN : withMargin
 }

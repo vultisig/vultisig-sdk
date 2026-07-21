@@ -1,6 +1,7 @@
 /**
- * Tests for getTrc20TransferFee — correct endpoint, negative energy guard,
- * and sender's staked energy subtraction before computing the fee.
+ * Tests for getTrc20TransferFee - correct endpoint, response-shape validation,
+ * negative energy guard, sender's staked energy subtraction, and the
+ * feeLimit margin/cap applied before returning.
  *
  * Mirrors iOS TronService.swift:117-126 intent.
  */
@@ -33,6 +34,21 @@ const mockGetEnergyPrice = vi.mocked(getEnergyPrice)
 // ---------------------------------------------------------------------------
 
 const ENERGY_PRICE = 280n
+
+// feeLimit is a ceiling, not the expected cost - mirrors the +50% margin /
+// 100 TRX cap applied in fee.ts so tests assert the actual returned value.
+const FEE_LIMIT_MARGIN_BPS = 5_000n
+const FEE_LIMIT_CAP_SUN = 100_000_000n
+function withMargin(exactSun: bigint): bigint {
+  const padded = exactSun + (exactSun * FEE_LIMIT_MARGIN_BPS) / 10_000n
+  return padded > FEE_LIMIT_CAP_SUN ? FEE_LIMIT_CAP_SUN : padded
+}
+
+// triggerconstantcontract successful-simulation envelope. Real TronGrid
+// responses nest energy_used/energy_penalty alongside a result.result flag.
+function successResult(overrides: { energy_used?: number; energy_penalty?: number } = {}) {
+  return { result: { result: true }, energy_used: 0, energy_penalty: 0, ...overrides }
+}
 
 function makeResources(available: number) {
   return {
@@ -74,7 +90,7 @@ describe('getTrc20TransferFee', () => {
   })
 
   it('calls /wallet/triggerconstantcontract, not /walletsolidity/...', async () => {
-    mockQueryUrl.mockResolvedValue({ energy_used: 100, energy_penalty: 0 })
+    mockQueryUrl.mockResolvedValue(successResult({ energy_used: 100, energy_penalty: 0 }))
 
     await getTrc20TransferFee(baseInput)
 
@@ -83,22 +99,33 @@ describe('getTrc20TransferFee', () => {
     expect(calledUrl).not.toMatch(/walletsolidity/)
   })
 
-  it('returns (energy_used + energy_penalty) * energyPrice as fee when no staked energy', async () => {
-    mockQueryUrl.mockResolvedValue({ energy_used: 30000, energy_penalty: 5000 })
+  it('returns (energy_used + energy_penalty) * energyPrice with feeLimit margin applied, when no staked energy', async () => {
+    mockQueryUrl.mockResolvedValue(successResult({ energy_used: 30000, energy_penalty: 5000 }))
     mockGetTronAccountResources.mockResolvedValue(makeResources(0))
 
     const fee = await getTrc20TransferFee(baseInput)
 
-    // (30000 + 5000) * 280 = 9_800_000
-    expect(fee).toBe(9_800_000n)
+    // (30000 + 5000) * 280 = 9_800_000 exact estimate, +50% margin, under the 100 TRX cap
+    const exact = 9_800_000n
+    expect(fee).toBe(withMargin(exact))
+    expect(fee).toBeGreaterThan(exact)
+    expect(fee).toBeLessThanOrEqual(FEE_LIMIT_CAP_SUN)
   })
 
-  it('defaults missing energy fields to 0', async () => {
+  it('throws when triggerconstantcontract returns an empty/malformed response (no result field)', async () => {
     mockQueryUrl.mockResolvedValue({})
 
-    const fee = await getTrc20TransferFee(baseInput)
+    await expect(getTrc20TransferFee(baseInput)).rejects.toThrow(/did not return a successful estimate/)
+  })
 
-    expect(fee).toBe(0n)
+  it('throws when triggerconstantcontract simulation reverts (result.result === false)', async () => {
+    mockQueryUrl.mockResolvedValue({
+      result: { result: false, message: 'REVERT opcode executed' },
+      energy_used: 0,
+      energy_penalty: 0,
+    })
+
+    await expect(getTrc20TransferFee(baseInput)).rejects.toThrow('REVERT opcode executed')
   })
 
   it('propagates queryUrl errors (throw-bubbling contract)', async () => {
@@ -112,7 +139,7 @@ describe('getTrc20TransferFee', () => {
     // negative bigint flows as `gasEstimation` into protobuf `feeLimit` via
     // `Long.fromString(gasEstimation.toString())`, encoding a negative int64
     // which TronGrid rejects at broadcast.
-    mockQueryUrl.mockResolvedValue({ energy_used: -5000, energy_penalty: -1000 })
+    mockQueryUrl.mockResolvedValue(successResult({ energy_used: -5000, energy_penalty: -1000 }))
 
     const fee = await getTrc20TransferFee(baseInput)
 
@@ -120,12 +147,25 @@ describe('getTrc20TransferFee', () => {
     expect(fee).toBe(0n)
   })
 
+  it('caps feeLimit at 100 TRX for pathological estimates', async () => {
+    // 1_000_000 energy * 280 sun = 280_000_000 exact; +50% margin would be
+    // 420_000_000, well past the 100 TRX (100_000_000 sun) ceiling.
+    mockQueryUrl.mockResolvedValue(successResult({ energy_used: 1_000_000, energy_penalty: 0 }))
+    mockGetTronAccountResources.mockResolvedValue(makeResources(0))
+
+    const fee = await getTrc20TransferFee(baseInput)
+
+    expect(fee).toBe(FEE_LIMIT_CAP_SUN)
+  })
+
   describe('staked energy subtraction', () => {
     beforeEach(() => {
-      mockQueryUrl.mockResolvedValue({
-        energy_used: CONTRACT_ENERGY_USED,
-        energy_penalty: CONTRACT_ENERGY_PENALTY,
-      })
+      mockQueryUrl.mockResolvedValue(
+        successResult({
+          energy_used: CONTRACT_ENERGY_USED,
+          energy_penalty: CONTRACT_ENERGY_PENALTY,
+        })
+      )
     })
 
     it('returns 0 when sender has more staked energy than needed (fully covered)', async () => {
@@ -144,43 +184,45 @@ describe('getTrc20TransferFee', () => {
       expect(fee).toBe(0n)
     })
 
-    it('returns partial burn when sender has less energy than needed', async () => {
+    it('returns partial burn with feeLimit margin applied when sender has less energy than needed', async () => {
       mockGetTronAccountResources.mockResolvedValue(makeResources(30_000))
 
       const fee = await getTrc20TransferFee(baseInput)
 
       // only 35_000 energy needs to be burned
-      expect(fee).toBe(35_000n * ENERGY_PRICE)
+      expect(fee).toBe(withMargin(35_000n * ENERGY_PRICE))
     })
 
-    it('returns full burn when sender has zero staked energy', async () => {
+    it('returns full burn with feeLimit margin applied when sender has zero staked energy', async () => {
       mockGetTronAccountResources.mockResolvedValue(makeResources(0))
 
       const fee = await getTrc20TransferFee(baseInput)
 
-      expect(fee).toBe(TOTAL_ENERGY * ENERGY_PRICE)
+      expect(fee).toBe(withMargin(TOTAL_ENERGY * ENERGY_PRICE))
     })
 
-    it('falls back to full burn when resources fetch throws (no crash)', async () => {
+    it('falls back to full burn with feeLimit margin applied when resources fetch throws (no crash)', async () => {
       mockGetTronAccountResources.mockRejectedValue(new Error('network error'))
 
       const fee = await getTrc20TransferFee(baseInput)
 
-      // worst-case — same as before the fix
-      expect(fee).toBe(TOTAL_ENERGY * ENERGY_PRICE)
+      // worst-case - same as before the fix, now with margin applied
+      expect(fee).toBe(withMargin(TOTAL_ENERGY * ENERGY_PRICE))
     })
 
     it('accounts for energy_penalty in the total energy needed', async () => {
-      mockQueryUrl.mockResolvedValue({
-        energy_used: 65_000,
-        energy_penalty: 10_000,
-      })
+      mockQueryUrl.mockResolvedValue(
+        successResult({
+          energy_used: 65_000,
+          energy_penalty: 10_000,
+        })
+      )
       // 50k available, 75k needed -> 25k burned
       mockGetTronAccountResources.mockResolvedValue(makeResources(50_000))
 
       const fee = await getTrc20TransferFee(baseInput)
 
-      expect(fee).toBe(25_000n * ENERGY_PRICE)
+      expect(fee).toBe(withMargin(25_000n * ENERGY_PRICE))
     })
   })
 })

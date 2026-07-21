@@ -1,7 +1,9 @@
 import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
-const FALLBACK_ENERGY_PRICE = 280n
+// Live-verified via `curl -sX POST https://api.trongrid.io/wallet/getchainparameters`
+// (getEnergyFee=100 as of 2026-07-21). Only used on a TronGrid outage.
+const FALLBACK_ENERGY_PRICE = 100n
 
 const CHAIN_PARAMS_URL = 'https://api.trongrid.io/wallet/getchainparameters'
 
@@ -38,9 +40,9 @@ const memoizedFetchEnergyPrice = memoizeAsync(fetchEnergyPriceRaw, { cacheTime: 
 
 /**
  * Returns the current energy price in sun/energy from Tron chain params.
- * Successful fetches cached for 5 min. Falls back to 280 sun/energy (2023
- * governance default) if the endpoint is unreachable - recovery is immediate
- * once TronGrid comes back (errors are never cached).
+ * Successful fetches cached for 5 min. Falls back to 100 sun/energy (live
+ * TronGrid getEnergyFee value) if the endpoint is unreachable - recovery is
+ * immediate once TronGrid comes back (errors are never cached).
  */
 export const getEnergyPrice = async (): Promise<bigint> => {
   try {
