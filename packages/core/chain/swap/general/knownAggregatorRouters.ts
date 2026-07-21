@@ -1,5 +1,7 @@
+import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+
 import { Chain } from '../../Chain'
-import { COW_VAULT_RELAYER_ADDRESS } from './cowswap/config'
+import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 
 /**
  * Fund-safety allowlist for the general-purpose EVM swap aggregators (AGG-02, round-2
@@ -180,7 +182,15 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
     provider === 'kyber'
       ? normalized === KYBER_STANDARD_ROUTER
       : provider === 'cowswap'
-        ? normalized === COW_VAULT_RELAYER_ADDRESS.toLowerCase()
+        ? // CHAIN-SCOPED, same reason the 1inch arm is: the relayer is a deterministic address, so it
+          // resolves on EVERY EVM chain, but CoW has only deployed the GPv2 stack on
+          // cowSwapSupportedChains (findSwapQuote gates quotes to exactly those). Accepting it
+          // chain-agnostically would let a tampered payload relabelled 'cowswap' on e.g. CronosChain /
+          // Zksync / Blast — where eth_getCode at this address is literally `0x`, verified 2026-07-21 —
+          // pass BOTH this guard and assertEnforcedSwapApprovalSpenderBound, so the co-signer would
+          // sign an ERC-20 approve to a codeless address anyone can later claim via the deterministic
+          // deployment proxy. Fail closed off the supported set.
+          isOneOf(chain, cowSwapSupportedChains) && normalized === COW_VAULT_RELAYER_ADDRESS.toLowerCase()
         : chain === Chain.Zksync
           ? normalized === ONE_INCH_V6_ZKSYNC_ROUTER
           : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../Chain'
-import { COW_VAULT_RELAYER_ADDRESS } from './cowswap/config'
+import { COW_VAULT_RELAYER_ADDRESS, cowSwapSupportedChains } from './cowswap/config'
 import {
   assertKnownAggregatorRouter,
   assertKnownAggregatorRouterOnSigningPath,
@@ -115,6 +115,25 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
         /unrecognized router address/
       )
     })
+
+    // sdk#1457 review: the relayer is a DETERMINISTIC address, so it resolves on every EVM chain -
+    // but CoW has only deployed the GPv2 stack on cowSwapSupportedChains. Accepting it
+    // chain-agnostically let a tampered payload relabelled 'cowswap' on an unsupported chain pass
+    // both this guard AND the approval-spender bind, so the co-signer would sign an ERC-20 approve
+    // to an address with no code (verified live 2026-07-21: eth_getCode is `0x` on CronosChain /
+    // Zksync / Blast) that anyone can later claim via the public deterministic deployment proxy.
+    it.each(cowSwapSupportedChains)('accepts the relayer on the supported chain %s', chain => {
+      expect(() => assertKnownAggregatorRouter('cowswap', COW_VAULT_RELAYER_ADDRESS, chain)).not.toThrow()
+    })
+
+    it.each([Chain.CronosChain, Chain.Zksync, Chain.Blast, Chain.Polygon, Chain.BSC, Chain.Sei, Chain.Hyperliquid])(
+      'REJECTS the relayer on %s — CowSwap is not deployed there, so an approve to it is unbacked',
+      chain => {
+        expect(() => assertKnownAggregatorRouter('cowswap', COW_VAULT_RELAYER_ADDRESS, chain)).toThrow(
+          /unrecognized router address/
+        )
+      }
+    )
   })
 })
 
