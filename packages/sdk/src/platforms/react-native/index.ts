@@ -70,6 +70,20 @@ export {
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 
+// XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
+// the RN graph and should stay in parity with the root SDK entrypoint.
+export {
+  formatIssuedCurrencyValue,
+  isValidXrplCurrencyCode,
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  rippleIssuedCurrencyDecimals,
+  rippleKnownIssuedTokens,
+  rippleOwnerReserveDrops,
+  rippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'
 

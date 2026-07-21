@@ -200,6 +200,20 @@ export { Chain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
+// `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
+export {
+  formatIssuedCurrencyValue,
+  isValidXrplCurrencyCode,
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  rippleIssuedCurrencyDecimals,
+  rippleKnownIssuedTokens,
+  rippleOwnerReserveDrops,
+  rippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'

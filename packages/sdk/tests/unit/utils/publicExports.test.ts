@@ -67,6 +67,31 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z')
   })
 
+  it('exports XRPL issued-currency canonicals from the root SDK entrypoint', () => {
+    expect(typeof sdk.toXrplCurrencyCode).toBe('function')
+    expect(typeof sdk.rippleTokenId).toBe('function')
+    expect(typeof sdk.parseRippleTokenId).toBe('function')
+    expect(typeof sdk.isValidXrplCurrencyCode).toBe('function')
+    expect(typeof sdk.parseIssuedCurrencyValue).toBe('function')
+    expect(typeof sdk.formatIssuedCurrencyValue).toBe('function')
+    expect(sdk.rippleIssuedCurrencyDecimals).toBe(15)
+    expect(sdk.rippleOwnerReserveDrops).toBe(200000n)
+    // Identity pin, not just a shape check: an XRPL `USD`/`RLUSD` is only unique
+    // per ISSUER, so a substituted (or dropped) issuer would silently publish a
+    // worthless lookalike token carrying the real ticker, logo and price feed.
+    // `Array.isArray(...)` alone stays green through both mutations.
+    expect(sdk.rippleKnownIssuedTokens.map(token => token.id)).toEqual([
+      '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+    ])
+    expect(sdk.rippleTokenId({ currency: 'RLUSD', issuer: 'rIssuer' })).toBe(
+      '524C555344000000000000000000000000000000.rIssuer'
+    )
+    expect(sdk.parseRippleTokenId('524C555344000000000000000000000000000000.rIssuer')).toEqual({
+      currency: '524C555344000000000000000000000000000000',
+      issuer: 'rIssuer',
+    })
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
