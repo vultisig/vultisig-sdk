@@ -153,6 +153,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
+  it('exports XRP destination normalization helpers for first-party consumers', () => {
+    const taggedXAddress = 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV'
+
+    expect(typeof sdk.decodeRippleXAddress).toBe('function')
+    expect(typeof sdk.encodeRippleXAddress).toBe('function')
+    expect(typeof sdk.isValidRippleXAddress).toBe('function')
+    expect(typeof sdk.normalizeRippleDestination).toBe('function')
+    expect(sdk.isValidRippleXAddress(taggedXAddress)).toBe(true)
+    expect(sdk.normalizeRippleDestination(taggedXAddress)).toEqual({
+      address: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY',
+      destinationTag: 495,
+    })
+    expect(sdk.encodeRippleXAddress('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', 495)).toBe(taggedXAddress)
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)

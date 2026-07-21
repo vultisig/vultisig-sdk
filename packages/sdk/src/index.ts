@@ -104,6 +104,7 @@ export {
   isSolanaAddress,
   supportedChainTags,
 } from './utils/addressFormat'
+export { decodeRippleXAddress, encodeRippleXAddress, isValidRippleXAddress, normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
 export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
