@@ -103,6 +103,11 @@ describe('RelaySigningService', () => {
       expect(params1.sessionId).not.toBe(params2.sessionId)
     })
 
+    it('should preserve a caller-supplied session ID', () => {
+      const params = service.generateSessionParams('caller-session-id')
+      expect(params.sessionId).toBe('caller-session-id')
+    })
+
     it('should return all required fields', () => {
       const params = service.generateSessionParams()
       expect(params).toHaveProperty('sessionId')
@@ -176,6 +181,18 @@ describe('RelaySigningService', () => {
   })
 
   describe('signWithRelay validation', () => {
+    it('preserves an explicit abort identity', async () => {
+      const abortController = new AbortController()
+      abortController.abort('test cancellation')
+
+      await expect(
+        service.signWithRelay({} as any, {} as any, mockWalletCore, { signal: abortController.signal })
+      ).rejects.toMatchObject({
+        name: 'AbortError',
+        message: 'Operation aborted',
+      })
+    })
+
     it('should require messageHashes in payload', async () => {
       const mockVault = {
         keyShares: { ecdsa: 'mock-key-share' },
