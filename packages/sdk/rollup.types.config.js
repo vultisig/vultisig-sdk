@@ -102,4 +102,7 @@ export default defineConfig([
   // declarations instead of the root index type graph.
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
+  createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
+  createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
+  createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
 ])
