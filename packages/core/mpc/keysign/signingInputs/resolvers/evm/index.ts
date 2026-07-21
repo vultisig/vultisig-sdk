@@ -13,6 +13,11 @@ import { assertField } from '@vultisig/lib-utils/record/assertField'
 import { TW } from '@trustwallet/wallet-core'
 
 import { KeysignPayloadSchema } from '../../../../types/vultisig/keysign/v1/keysign_message_pb'
+import {
+  assertEnforcedSwapApprovalSpenderBound,
+  assertKnownAggregatorRouterOnSigningPath,
+} from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
+
 import { getBlockchainSpecificValue } from '../../../chainSpecific/KeysignChainSpecific'
 import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
 import { KeysignSwapPayload } from '../../../swap/KeysignSwapPayload'
@@ -31,6 +36,24 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   const { erc20ApprovePayload, ...restOfKeysignPayload } = keysignPayload
 
   if (erc20ApprovePayload) {
+    // sdk#1358 review follow-up: bind the approve spender to the verified swap router HERE, where
+    // erc20ApprovePayload is still present (the recursion below strips it, so the router guard's
+    // sibling can't see the spender). The router allow-list runs on quote.tx.to in that recursion;
+    // this binds the INDEPENDENT erc20ApprovePayload.spender field to it for enforced providers, so
+    // a payload can't pass the router check yet still approve an attacker. sdk#1457: cowswap is now
+    // bound too (its spender IS its tx.to — both the fixed GPv2VaultRelayer); only the genuinely
+    // unenforceable li.fi/swapkit (and the legacy `''`) stay unbound. See
+    // assertEnforcedSwapApprovalSpenderBound.
+    const approveSwapPayload = getKeysignSwapPayload(keysignPayload)
+    if (approveSwapPayload && 'general' in approveSwapPayload) {
+      assertEnforcedSwapApprovalSpenderBound(
+        approveSwapPayload.general.provider,
+        erc20ApprovePayload.spender,
+        approveSwapPayload.general.quote?.tx?.to ?? '',
+        chain
+      )
+    }
+
     const approveSigningInput = getErc20ApproveSigningInput({
       keysignPayload,
       walletCore,
@@ -49,6 +72,31 @@ export const getEvmSigningInputs: SigningInputsResolver<'evm'> = async ({ keysig
   const { nonce } = evmSpecific
 
   const swapPayload = getKeysignSwapPayload(keysignPayload)
+
+  // sdk#1358 fund-safety: re-assert the aggregator router allow-list HERE, on the co-signer
+  // signing-input path, not only at quote construction. quote.tx.to becomes this SigningInput's
+  // destination (getToAddress/getTransaction general arms below) - a compromised initiator can
+  // hand a co-signer a payload whose tx.to was never quote-checked, and every co-signer
+  // independently rebuilds the input from that payload. Fail closed for enforced providers
+  // (1inch/kyber); log-only for the unenforced ones, matching the quote-time policy. A pure gate:
+  // it throws or no-ops, never changes the signed bytes, so it cannot desync the cross-device
+  // pre-signing hash.
+  //
+  // SCOPE - this guard covers the swap-leg destination ONLY, NOT the ERC-20 approval spender.
+  // On the INITIATOR, build.ts derives the approve spender from this same quote.tx.to
+  // (getSwapDestinationAddress), so the two coincide there. On THIS co-signer path the approve leg
+  // (handled in the erc20ApprovePayload branch above) is built from an INDEPENDENT wire field,
+  // erc20ApprovePayload.spender (erc20.ts), which nothing binds to quote.tx.to - so a payload can
+  // pass this router check yet still carry an approve to an arbitrary spender. That gap is now
+  // closed for enforced providers by assertEnforcedSwapApprovalSpenderBound in the branch above
+  // (sdk#1358 review follow-up; sdk#1457 extended it to cowswap, whose spender IS its tx.to). It
+  // remains open for li.fi/swapkit and the legacy `''` provider, which cannot be address-bound.
+  if (swapPayload && 'general' in swapPayload) {
+    const { provider, quote } = swapPayload.general
+    // Pass the raw (possibly empty) destination unconditionally: for an enforced provider an empty
+    // `to` must ALSO fail closed (the helper rejects it as unrecognized), not be silently skipped.
+    assertKnownAggregatorRouterOnSigningPath(provider, quote?.tx?.to ?? '', chain)
+  }
 
   // A token coin carrying raw `0x` calldata with a zero `toAmount` (and no swap)
   // is a generic contract call (e.g. staking depositFor, whose token amount lives
