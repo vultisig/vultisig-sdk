@@ -151,4 +151,13 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.ChainAmountParseError).toBe('function')
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
+
+  it('exports the EVM chainId helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getEvmChainId).toBe('function')
+    expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
+    expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+  })
 })
