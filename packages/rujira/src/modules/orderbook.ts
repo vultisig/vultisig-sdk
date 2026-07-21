@@ -12,6 +12,7 @@ import { RujiraError, RujiraErrorCode } from '../errors.js'
 import type {
   ContractSide,
   FinExecuteMsg,
+  FinOrderExecuteMsg,
   FinQueryMsg,
   LimitOrderParams,
   Order,
@@ -241,7 +242,7 @@ export class RujiraOrderbook {
    */
   async buildPlaceOrder(params: LimitOrderParams): Promise<{
     contractAddress: string
-    msg: FinExecuteMsg
+    msg: FinOrderExecuteMsg
     funds: Coin[]
   }> {
     this.validateOrderParams(params)
@@ -262,7 +263,7 @@ export class RujiraOrderbook {
     const offerAmount = this.calculateOfferAmount(params)
     const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, offerAmount]
 
-    const msg: FinExecuteMsg = {
+    const msg: FinOrderExecuteMsg = {
       order: [[orderTarget], null],
     }
 
