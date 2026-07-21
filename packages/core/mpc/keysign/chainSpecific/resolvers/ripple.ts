@@ -7,20 +7,46 @@ import { attempt } from '@vultisig/lib-utils/attempt'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { maxBigInt } from '@vultisig/lib-utils/math/maxBigInt'
 
+import { BuildKeysignPayloadError } from '../../error'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
+import { resolveDestinationTag } from '../../utils/rippleDestinationTag'
 import { GetChainSpecificResolver } from '../resolver'
 
 const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
+const rippleRequireDestinationTagFlag = 0x00020000
+const lastLedgerSequenceOffset = 60
 
-export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({ keysignPayload }) => {
-  const { address } = getKeysignCoin(keysignPayload)
-  const toAddress = shouldBePresent(keysignPayload.toAddress)
+export const getRippleLastLedgerSequence = (ledgerCurrentIndex: number | undefined): bigint => {
+  if (ledgerCurrentIndex === undefined || !Number.isSafeInteger(ledgerCurrentIndex) || ledgerCurrentIndex <= 0) {
+    throw new Error('Ripple account_info response is missing a valid ledger_current_index.')
+  }
+
+  return BigInt(ledgerCurrentIndex + lastLedgerSequenceOffset)
+}
+
+export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({
+  keysignPayload,
+  destinationTag,
+}) => {
+  const coin = getKeysignCoin(keysignPayload)
+  const { address } = coin
+
+  // A dApp-supplied transaction (OfferCreate, OfferCancel, …) carries no
+  // `toAddress`: the base-reserve check below is specific to a Payment that
+  // funds a destination, so skip the destination fetch when there isn't one.
+  // Fee and sequence come from the sender account and are unaffected.
+  const toAddress = keysignPayload.toAddress || undefined
+
+  const effectiveDestinationTag = resolveDestinationTag({
+    destinationTag,
+    memo: keysignPayload.memo,
+  })
 
   const [senderAccount, networkInfo, destinationAccountResult] = await Promise.all([
     getRippleAccountInfo(address),
     getRippleNetworkInfo(),
-    attempt(getRippleAccountInfo(toAddress)),
+    toAddress ? attempt(getRippleAccountInfo(toAddress)) : undefined,
   ])
 
   const { validated_ledger, load_factor, load_base } = networkInfo
@@ -38,7 +64,27 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
   // nothing, on top of the actual send amount. Reserve spec:
   // https://xrpl.org/docs/concepts/accounts/reserves
   const destinationUnfunded =
-    'error' in destinationAccountResult && isInError(destinationAccountResult.error, 'Account not found')
+    destinationAccountResult !== undefined &&
+    'error' in destinationAccountResult &&
+    isInError(destinationAccountResult.error, 'Account not found')
+
+  // XRP Ledger rejects a Payment to an account with lsfRequireDestTag when no
+  // tag is present. Fail closed on lookup errors other than an unfunded
+  // destination: without an account object there is no RequireDestTag flag.
+  if (toAddress && destinationAccountResult !== undefined && !coin.id && effectiveDestinationTag === undefined) {
+    if ('error' in destinationAccountResult) {
+      if (!destinationUnfunded) {
+        // This lookup can fail transiently, so keep it retryable. Only
+        // deterministic user-input failures use BuildKeysignPayloadError.
+        throw new Error(`Unable to verify whether XRP destination ${toAddress} requires a DestinationTag`)
+      }
+    } else if ((destinationAccountResult.data.account_data.Flags & rippleRequireDestinationTagFlag) !== 0) {
+      throw new BuildKeysignPayloadError(
+        'ripple-destination-tag-required',
+        `XRP destination ${toAddress} requires a DestinationTag`
+      )
+    }
+  }
 
   if (destinationUnfunded) {
     const toAmount = BigInt(shouldBePresent(keysignPayload.toAmount))
@@ -52,12 +98,13 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     }
   }
 
-  const { account_data, ledger_current_index } = senderAccount
+  const { account_data, ledger_current_index: ledgerCurrentIndex } = senderAccount
 
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
-    lastLedgerSequence: BigInt((ledger_current_index ?? 0) + 60),
+    lastLedgerSequence: getRippleLastLedgerSequence(ledgerCurrentIndex),
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
+    ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),
   })
 }

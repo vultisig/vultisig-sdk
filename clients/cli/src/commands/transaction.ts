@@ -1,6 +1,7 @@
 /**
  * Transaction Commands - thin wrapper around vault.send()
  */
+import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
@@ -48,6 +49,20 @@ export async function sendTransaction(
     )
   }
 
+  const rippleDestination =
+    params.chain === Chain.Ripple ? normalizeRippleDestination(params.to) : { address: params.to }
+  const to = rippleDestination.address
+  if (
+    params.destinationTag !== undefined &&
+    rippleDestination.destinationTag !== undefined &&
+    params.destinationTag !== rippleDestination.destinationTag
+  ) {
+    throw new Error(
+      `Conflicting XRP destination tags: --destination-tag=${params.destinationTag} does not match the tag embedded in the X-address (${rippleDestination.destinationTag})`
+    )
+  }
+  const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
+
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
 
@@ -57,6 +72,7 @@ export async function sendTransaction(
     amount: params.amount,
     symbol: params.tokenId,
     memo: params.memo,
+    destinationTag,
     dryRun: true,
   })
 
@@ -68,13 +84,20 @@ export async function sendTransaction(
   if (params.dryRun) {
     const balance = await vault.balance(params.chain, params.tokenId)
     const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+    // fee/total come straight from the build the SDK just did. They were previously
+    // dropped from the JSON result even though the human preview below prints the fee
+    // and `total` is what the insufficient-balance check compares against — so
+    // `--dry-run -o json` looked like a bare balance check with no cost information.
     const result: SendDryRunResult = {
       dryRun: true,
       chain: params.chain,
-      to: params.to,
+      to,
       amount: params.amount,
       symbol: balance.symbol,
+      fee: dryResult.fee,
+      total: dryResult.total,
       balance: balance.formattedAmount,
+      destinationTag,
     }
     if (hasInsufficientBalance) {
       result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
@@ -86,7 +109,9 @@ export async function sendTransaction(
       info(`  Chain:   ${result.chain}`)
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
-      info(`  Fee:     ${dryResult.fee} ${result.symbol}`)
+      if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
+      info(`  Fee:     ${result.fee} ${result.symbol}`)
+      info(`  Total:   ${result.total} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)
     }
@@ -104,7 +129,16 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
-    displayTransactionPreview(address, params.to, dryResult.total, balance.symbol, params.chain, params.memo, gas)
+    displayTransactionPreview(
+      address,
+      to,
+      dryResult.total,
+      balance.symbol,
+      params.chain,
+      params.memo,
+      destinationTag,
+      gas
+    )
   }
 
   // 3. Confirm (required in all output modes; the non-interactive case was
@@ -112,8 +146,12 @@ export async function sendTransaction(
   if (!params.yes) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // A human declining at the prompt is the interactive twin of the
+      // non-interactive refusal (confirmTransaction → requireInteractive →
+      // ConfirmationRequiredError): both must exit 12 CONFIRMATION_REQUIRED /
+      // success:false. The old plain Error was swallowed to exit 0 in index.ts,
+      // telling a scripted caller a declined send had "succeeded".
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 
@@ -145,6 +183,7 @@ export async function sendTransaction(
         amount: params.amount,
         symbol: params.tokenId,
         memo: params.memo,
+        destinationTag,
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

@@ -6,10 +6,16 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import {
+  Chain,
+  chainFeeCoin,
+  getChainKind,
+  resolveChainReference,
+  VaultError,
+  VaultErrorCode,
+  Vultisig as VultisigSdk,
+} from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
@@ -172,6 +178,15 @@ export class AgentExecutor {
     this.password = password
   }
 
+  /**
+   * Whether a password is already held (set at unlock via the keyring/env chain
+   * or `--password`). The sign gate consults this so a session unlocked
+   * non-interactively doesn't get re-prompted for a secret it already has.
+   */
+  hasPassword(): boolean {
+    return this.password != null
+  }
+
   /** Opt out of the persistent broadcast-journal duplicate guard (`--force`). */
   setForceBroadcast(force: boolean): void {
     this.forceBroadcast = force
@@ -187,6 +202,15 @@ export class AgentExecutor {
    */
   private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
     const source = overrideTx ?? payload
+    // `data` is EVM calldata iff the chain is an EVM chain — the single authority
+    // that decides whether an empty `"0x"` folds (calldata) or stays literal (a
+    // memo on a memo-routed chain, PR #1259). Derived from chain kind, never
+    // hardcoded per branch, so a new chain family can't silently reintroduce the
+    // memo collision. The nested-tx branch is EVM by construction (extractNestedTx
+    // only yields EVM `tx`/`send_tx` shapes); the flat branch is a non-EVM memo —
+    // but if an EVM send ever reaches it, its `0x` memo is still calldata, so gate
+    // both on the same rule rather than assuming which branch runs.
+    const dataIsEvmCalldata = getChainKind(chain) === 'evm'
     const nested = extractNestedTx(source)
     if (nested && (nested.to || nested.value || nested.data)) {
       return {
@@ -195,6 +219,7 @@ export class AgentExecutor {
         to: nested.to != null ? String(nested.to) : undefined,
         value: nested.value != null ? String(nested.value) : undefined,
         data: nested.data != null ? String(nested.data) : undefined,
+        dataIsEvmCalldata,
       }
     }
     const txArgs = source?.txArgs ?? source
@@ -209,6 +234,7 @@ export class AgentExecutor {
       to: txArgs?.to != null ? String(txArgs.to) : undefined,
       value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
       data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      dataIsEvmCalldata,
       asset: asset != null ? String(asset) : undefined,
     }
   }
@@ -1888,50 +1914,9 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
+/** Resolve a CLI chain name or ID through the SDK's canonical resolver. */
 export function resolveChain(name: string): Chain | null {
-  if (!name) return null
-
-  // Direct enum match
-  if (Object.values(Chain).includes(name as Chain)) {
-    return name as Chain
-  }
-
-  // Case-insensitive search
-  const lower = name.toLowerCase()
-  for (const [, value] of Object.entries(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
-      return value as Chain
-    }
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    eth: 'Ethereum',
-    btc: 'Bitcoin',
-    sol: 'Solana',
-    bnb: 'BSC',
-    avax: 'Avalanche',
-    matic: 'Polygon',
-    arb: 'Arbitrum',
-    op: 'Optimism',
-    ltc: 'Litecoin',
-    doge: 'Dogecoin',
-    dot: 'Polkadot',
-    atom: 'Cosmos',
-    rune: 'THORChain',
-    thor: 'THORChain',
-    sui: 'Sui',
-    ton: 'Ton',
-    trx: 'Tron',
-    xrp: 'Ripple',
-  }
-
-  const aliased = aliases[lower]
-  if (aliased && Object.values(Chain).includes(aliased as Chain)) {
-    return aliased as Chain
-  }
-
-  return null
+  return resolveChainReference(name) ?? null
 }
 
 /**
@@ -2189,22 +2174,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
  * Resolve a Chain from a numeric EVM chain ID.
  */
 export function resolveChainId(chainId: string | number): Chain | null {
-  const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
-  if (isNaN(id)) return null
-
-  const chainIdMap: Record<number, Chain> = {
-    1: Chain.Ethereum,
-    56: Chain.BSC,
-    137: Chain.Polygon,
-    43114: Chain.Avalanche,
-    42161: Chain.Arbitrum,
-    10: Chain.Optimism,
-    8453: Chain.Base,
-    81457: Chain.Blast,
-    324: Chain.Zksync,
-    25: Chain.CronosChain,
-  }
-  return chainIdMap[id] || null
+  return resolveChainReference(chainId) ?? null
 }
 
 // ============================================================================

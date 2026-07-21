@@ -38,6 +38,12 @@ export const knownCosmosTokens: Record<CosmosChain, Record<string, KnownCoinMeta
       decimals: 8,
       priceProviderId: 'tcy',
     },
+    'x/brune': {
+      ticker: 'bRUNE',
+      logo: 'brune',
+      decimals: 8,
+      priceProviderId: 'thorchain',
+    },
     'x/ruji': {
       ticker: 'RUJI',
       logo: 'ruji',

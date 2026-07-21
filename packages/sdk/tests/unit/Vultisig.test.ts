@@ -343,6 +343,69 @@ describe('Vultisig', () => {
       expect(initializeSpy).toHaveBeenCalled()
       expect(sdk.initialized).toBe(true)
     })
+
+    describe('verifyVault pending cleanup', () => {
+      const vaultId = 'pending-vault-id'
+      const pendingKey = `pending:${vaultId}`
+      const pendingData = { id: vaultId, name: 'Pending vault' }
+
+      const configureVerification = (subject: Vultisig) => {
+        const internals = subject as any
+        vi.spyOn(internals.context.serverManager, 'verifyVault').mockResolvedValue(true)
+        vi.spyOn(internals.vaultManager, 'setActiveVault').mockResolvedValue(undefined)
+        return internals
+      }
+
+      it('removes a persisted pending record after same-process verification succeeds', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const pendingVault = { save: vi.fn().mockResolvedValue(undefined) }
+        const internals = configureVerification(subject)
+        internals.pendingVaults.set(vaultId, pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+
+        expect(pendingVault.save).toHaveBeenCalledOnce()
+        expect(await storage.get(pendingKey)).toBeNull()
+        expect(internals.pendingVaults.has(vaultId)).toBe(false)
+      })
+
+      it('retains pending state when final vault persistence fails and removes it on retry', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const persistenceError = new Error('final persistence failed')
+        const pendingVault = {
+          save: vi.fn().mockRejectedValueOnce(persistenceError).mockResolvedValueOnce(undefined),
+        }
+        const internals = configureVerification(subject)
+        internals.pendingVaults.set(vaultId, pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).rejects.toThrow(persistenceError)
+        expect(await storage.get(pendingKey)).toEqual(pendingData)
+        expect(internals.pendingVaults.get(vaultId)).toBe(pendingVault)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+        expect(await storage.get(pendingKey)).toBeNull()
+        expect(internals.pendingVaults.has(vaultId)).toBe(false)
+      })
+
+      it('cleans up idempotently after loading pending state in a fresh process', async () => {
+        const storage = new MemoryStorage()
+        const subject = new Vultisig({ autoInit: false, storage })
+        const pendingVault = { save: vi.fn().mockResolvedValue(undefined) }
+        const internals = configureVerification(subject)
+        vi.spyOn(internals.vaultManager, 'createVaultInstance').mockReturnValue(pendingVault)
+        await storage.set(pendingKey, pendingData)
+
+        await expect(subject.verifyVault(vaultId, '123456')).resolves.toBe(pendingVault)
+
+        expect(await storage.get(pendingKey)).toBeNull()
+        await expect(storage.remove(pendingKey)).resolves.toBeUndefined()
+        expect(await storage.get(pendingKey)).toBeNull()
+      })
+    })
   })
 
   describe('error handling', () => {
@@ -380,6 +443,67 @@ describe('Vultisig', () => {
       })
 
       expect(sdkWithCustomStorage).toBeDefined()
+    })
+
+    it('clearVaults preserves unrelated data in a shared storage adapter', async () => {
+      const storage = new MemoryStorage()
+      await storage.set('host:preferences', { theme: 'dark' })
+      await storage.set('vault:test-vault', 'encrypted-vault')
+      await storage.set('pending:test-vault', 'pending-vault')
+      await storage.set('cache:test-vault:balances', { Bitcoin: '1' })
+      await storage.set('addressBook:saved', [{ name: 'Recipient' }])
+      await storage.set('addressBook:vaults', [{ name: 'Vault' }])
+      await storage.set('pushNotificationRegistrations', { 'test-vault': { partyName: 'device' } })
+      await storage.set('config:defaultCurrency', 'EUR')
+      await storage.set('config:defaultChains', [Chain.Bitcoin])
+      await storage.set('activeVaultId', 'test-vault')
+
+      const sdkWithSharedStorage = new Vultisig({ storage, autoInit: false })
+      await sdkWithSharedStorage.clearVaults()
+
+      expect(await storage.get('host:preferences')).toEqual({ theme: 'dark' })
+      expect(await storage.get('vault:test-vault')).toBeNull()
+      expect(await storage.get('pending:test-vault')).toBeNull()
+      expect(await storage.get('cache:test-vault:balances')).toBeNull()
+      expect(await storage.get('addressBook:saved')).toBeNull()
+      expect(await storage.get('addressBook:vaults')).toBeNull()
+      expect(await storage.get('pushNotificationRegistrations')).toBeNull()
+      expect(await storage.get('activeVaultId')).toBeNull()
+      expect(await storage.get('config:defaultCurrency')).toBe('EUR')
+      expect(await storage.get('config:defaultChains')).toEqual([Chain.Bitcoin])
+    })
+
+    it('awaits asynchronous SDK-owned cleanup before resolving', async () => {
+      const storage = new MemoryStorage()
+      await storage.set('addressBook:saved', [{ name: 'Recipient' }])
+      const remove = storage.remove.bind(storage)
+      let releaseRemoval!: () => void
+      const removalGate = new Promise<void>(resolve => {
+        releaseRemoval = resolve
+      })
+      vi.spyOn(storage, 'remove').mockImplementation(async key => {
+        if (key === 'addressBook:saved') await removalGate
+        await remove(key)
+      })
+      const sdkWithSharedStorage = new Vultisig({ storage, autoInit: false })
+      let resolved = false
+      const clearing = sdkWithSharedStorage.clearVaults().then(() => {
+        resolved = true
+      })
+
+      await vi.waitFor(() => expect(storage.remove).toHaveBeenCalledWith('addressBook:saved'))
+      expect(resolved).toBe(false)
+      releaseRemoval()
+      await clearing
+      expect(await storage.get('addressBook:saved')).toBeNull()
+    })
+
+    it('propagates custom-adapter cleanup failures', async () => {
+      const storage = new MemoryStorage()
+      vi.spyOn(storage, 'remove').mockRejectedValueOnce(new Error('adapter remove failed'))
+      const sdkWithSharedStorage = new Vultisig({ storage, autoInit: false })
+
+      await expect(sdkWithSharedStorage.clearVaults()).rejects.toThrow('adapter remove failed')
     })
   })
 
@@ -430,7 +554,10 @@ describe('Vultisig', () => {
   describe('concurrent operations', () => {
     it('should handle concurrent initialization calls without race condition', async () => {
       // Create a fresh SDK for this test
-      const concurrentSdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
+      const concurrentSdk = new Vultisig({
+        storage: new MemoryStorage(),
+        autoInit: false,
+      })
 
       // Track calls to the mock
       mockGetWalletCore.mockClear()
@@ -452,7 +579,10 @@ describe('Vultisig', () => {
     })
 
     it('should retry initialization on failure', async () => {
-      const retrySdk = new Vultisig({ storage: new MemoryStorage(), autoInit: false })
+      const retrySdk = new Vultisig({
+        storage: new MemoryStorage(),
+        autoInit: false,
+      })
 
       // First call fails, second succeeds
       mockGetWalletCore.mockRejectedValueOnce(new Error('First attempt failed')).mockResolvedValueOnce({})

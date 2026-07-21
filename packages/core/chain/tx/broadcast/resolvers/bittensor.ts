@@ -31,5 +31,14 @@ export const broadcastBittensorTx: BroadcastTxResolver<OtherChain.Bittensor> = a
     }
     const err = new Error(`Bittensor broadcast failed: ${message || `code ${response.error.code}`}`)
     await verifyBroadcastByHash({ chain, tx, error: err })
+    return
+  }
+
+  // Per JSON-RPC 2.0 a valid response carries exactly one of `result` / `error`. Neither present
+  // (malformed / truncated gateway body) must NOT be assumed a success — force hash verification.
+  // Mirrors the polkadot resolver's guard; without it a truncated body returned `undefined` = success.
+  if (!response.result) {
+    const err = new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    await verifyBroadcastByHash({ chain, tx, error: err })
   }
 }

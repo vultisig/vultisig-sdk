@@ -22,21 +22,21 @@ describe('getTronTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({ id: hash })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result).toEqual({ status: 'pending' })
+    expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns pending when blockNumber is 0', async () => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 0 })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result).toEqual({ status: 'pending' })
+    expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns pending when receipt is absent (mined but receipt object missing)', async () => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345 })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result).toEqual({ status: 'pending' })
+    expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns success when receipt is present but result is absent', async () => {
@@ -121,13 +121,20 @@ describe('getTronTxStatus', () => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, result: 'SUCCESS' })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result.status).toBe('pending') // no receipt → pending, not success
+    expect(result).toEqual({ status: 'pending', isKnown: true }) // no receipt → pending, not success
   })
 
-  it('returns pending on network error', async () => {
+  it('returns isKnown:false on network error', async () => {
     mocks.queryUrl.mockRejectedValue(new Error('network failure'))
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result).toEqual({ status: 'pending' })
+    expect(result).toEqual({ status: 'pending', isKnown: false })
+  })
+
+  it('returns not_found when Tron RPC returns an empty unknown-hash payload', async () => {
+    mocks.queryUrl.mockResolvedValue({})
+
+    const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(result).toEqual({ status: 'not_found', isKnown: false })
   })
 })

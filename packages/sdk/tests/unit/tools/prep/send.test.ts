@@ -172,4 +172,28 @@ describe('prepareSendTxFromKeys', () => {
       })
     )
   })
+
+  it('forwards an XRP DestinationTag independently from memo', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.Ripple,
+        address: 'rFrom',
+        decimals: 6,
+        ticker: 'XRP',
+        isNativeToken: true,
+      } as any,
+      receiver: 'rDestination',
+      amount: 1_000_000n,
+      destinationTag: 12345,
+      memo: 'invoice 12345',
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        receiver: 'rDestination',
+        destinationTag: 12345,
+        memo: 'invoice 12345',
+      })
+    )
+  })
 })
