@@ -72,7 +72,10 @@ describe('RawBroadcastService', () => {
       broadcastTx: mockCosmosBroadcastTx,
     })
     mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash' })
-    mockExecuteSuiTx.mockResolvedValue({ digest: 'sui-digest' })
+    mockExecuteSuiTx.mockResolvedValue({
+      digest: 'sui-digest',
+      effects: { status: { status: 'success' } },
+    })
     mockRippleRequest.mockResolvedValue({
       result: { tx_json: { hash: 'xrp-hash' } },
     })
@@ -207,8 +210,49 @@ describe('RawBroadcastService', () => {
     expect(mockExecuteSuiTx).toHaveBeenCalledWith({
       transactionBlock: 'tx-block',
       signature: ['sig-bytes'],
+      options: { showEffects: true },
     })
   })
+
+  it('rejects finalized Sui transactions with failed execution effects', async () => {
+    mockExecuteSuiTx.mockResolvedValue({
+      digest: 'sui-digest',
+      effects: { status: { status: 'failure', error: 'MoveAbort(42)' } },
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({
+          unsignedTx: 'tx-block',
+          signature: 'sig-bytes',
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Sui transaction failed on-chain: MoveAbort(42)'),
+    })
+  })
+
+  it.each([{ digest: 'sui-digest' }, { digest: 'sui-digest', effects: { status: {} } }])(
+    'rejects Sui responses without explicit successful execution effects',
+    async response => {
+      mockExecuteSuiTx.mockResolvedValue(response)
+
+      await expect(
+        service.broadcastRawTx({
+          chain: Chain.Sui,
+          rawTx: JSON.stringify({
+            unsignedTx: 'tx-block',
+            signature: 'sig-bytes',
+          }),
+        })
+      ).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining('no effects status returned'),
+      })
+    }
+  )
 
   it('broadcasts TON BOC via root API', async () => {
     mockQueryUrl.mockResolvedValue({ result: { hash: 'ton-hash' } })
