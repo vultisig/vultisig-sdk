@@ -26,6 +26,7 @@ export {
   estimateUtxoTxFee,
   getSighashBIP143,
   getSighashLegacy,
+  getSighashZcash,
   getUtxoChainSpec,
   ZCASH_BRANCH_ID_NU6_1,
   ZCASH_BRANCH_ID_NU6_2,

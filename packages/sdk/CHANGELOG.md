@@ -1,5 +1,74 @@
 # @vultisig/sdk
 
+## 2.20.0
+
+### Minor Changes
+
+- [#1317](https://github.com/vultisig/vultisig-sdk/pull/1317) [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Register the Rujira liquid-bond THORChain tokens bRUNE (`x/brune`) and ybRUNE (`x/staking-x/brune`), and add the `bruneBondConfig` staking-contract config. bRUNE is auto-discovered as a normal wallet token priced against RUNE (`priceProviderId: 'thorchain'`); the ybRUNE auto-compounding staking receipt is excluded from wallet discovery and carries native-token metadata for backfill.
+
+- [#1284](https://github.com/vultisig/vultisig-sdk/pull/1284) [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose generic CosmWasm Amino and protobuf execute builders from the root SDK and reuse the canonical Amino envelope in the CLI.
+
+- [#1308](https://github.com/vultisig/vultisig-sdk/pull/1308) [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose one SDK chain-reference resolver and use it for CLI and MCP chain names, aliases, and IDs.
+
+- [#1269](https://github.com/vultisig/vultisig-sdk/pull/1269) [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Allow Solana status checks to return terminal `not_found` for unknown
+  signatures whose `lastValidBlockHeight` has expired.
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1313](https://github.com/vultisig/vultisig-sdk/pull/1313) [`c3168e2`](https://github.com/vultisig/vultisig-sdk/commit/c3168e24a32d733da85b2f6038e7e55c4dbe8d72) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove persisted pending vault state after successful same-process verification.
+
+- [#1309](https://github.com/vultisig/vultisig-sdk/pull/1309) [`7bb79ba`](https://github.com/vultisig/vultisig-sdk/commit/7bb79ba9ef968bc20ba88e1bdd189ca8864b0221) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep `clearVaults` scoped to SDK-owned keys in shared storage adapters.
+
+- [#1031](https://github.com/vultisig/vultisig-sdk/pull/1031) [`a8e873e`](https://github.com/vultisig/vultisig-sdk/commit/a8e873e41a41693dcdee575c5271422fe6c6b6e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Document the public SDK chain metadata boundary used by CLI consumers.
+
+- [#1029](https://github.com/vultisig/vultisig-sdk/pull/1029) [`421e8da`](https://github.com/vultisig/vultisig-sdk/commit/421e8da0b11a35bcc95351e7b644318fe171c5ec) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject secure vault creation and import sessions when more relay peers join than the requested device count.
+
+- [#1270](https://github.com/vultisig/vultisig-sdk/pull/1270) [`6de79ab`](https://github.com/vultisig/vultisig-sdk/commit/6de79ab1ec6e3566ea8511a0a6c7afde87752c48) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical Cosmos fee-denom helpers from the React Native entrypoint.
+
+- [#1314](https://github.com/vultisig/vultisig-sdk/pull/1314) [`21ca074`](https://github.com/vultisig/vultisig-sdk/commit/21ca07454d5ac462882317da4f49d5f80ef32837) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make React Native EVM raw broadcast idempotent for known or hash-confirmed transactions.
+
+- [#1318](https://github.com/vultisig/vultisig-sdk/pull/1318) [`72da781`](https://github.com/vultisig/vultisig-sdk/commit/72da781743fad0664edfc5ffcd72720ac7f0d0bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add bounded timeouts and caller cancellation to React Native RPC and Fast Vault network flows.
+
+## 2.19.19
+
+### Patch Changes
+
+- [#1190](https://github.com/vultisig/vultisig-sdk/pull/1190) [`4fcce4d`](https://github.com/vultisig/vultisig-sdk/commit/4fcce4d4b9bc40efdacd5d1754f3b2adb7a42985) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Support signing dApp-supplied XRPL transactions via the new `SignRipple` keysign payload.
+
+  - `getRippleSigningInputs` signs `signData.signRipple.rawJson` verbatim, so transaction types the keysign payload cannot otherwise express — offers (DEX swaps), cross-currency payments, trust lines — round-trip. Every signer rebuilds its input from the same JSON, so each party signs identical bytes. Native XRP sends and issued-currency `TrustSet` are unchanged.
+  - Fail closed on rawJson `Payment` transactions: `Account`, `Destination` and `Amount` must match the reviewed keysign metadata (`coin.address`, `toAddress`, `toAmount`), so the review surface and the signed bytes cannot diverge even for same-account payments. Non-Payment types still pass on the `Account` check alone.
+  - `getRippleChainSpecific` now skips the base-reserve destination check when the payload has no `toAddress` (a dApp offer has none); fee and sequence come from the sender account and are unaffected.
+  - Regenerated the keysign protos for the `SignRipple` variant added in commondata.
+
+## 2.19.17
+
+### Patch Changes
+
+- [#1039](https://github.com/vultisig/vultisig-sdk/pull/1039) [`44b2903`](https://github.com/vultisig/vultisig-sdk/commit/44b2903a4dd6ccc935ebfdecb8be16f4f5996563) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor the configured message relay URL for secure vault transaction and raw-byte signing, including signing QR payloads.
+
+- [#972](https://github.com/vultisig/vultisig-sdk/pull/972) [`13c3b65`](https://github.com/vultisig/vultisig-sdk/commit/13c3b654d0bbdec698d385b72cea50bf428161b3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed before broadcasting native swap payloads that do not carry a positive quote expiration, while preserving secured-asset withdrawal deposits with a shared classifier.
+
+## 2.19.16
+
+### Patch Changes
+
+- [#1175](https://github.com/vultisig/vultisig-sdk/pull/1175) [`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Fix 1inch swap quotes to native ETH (and other EVM chains' native assets) failing route resolution.
+
+  `findSwapQuote`'s 1inch fetcher passed `from.id ?? from.ticker` / `to.id ?? to.ticker` into
+  `getOneInchSwapQuote`, so a native asset (no `.id`) fell back to its ticker string (e.g. `"ETH"`).
+  `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to detect the native asset and
+  substitute 1inch's `0xEeee...` sentinel address (EIP-7528) — a truthy ticker string defeated that
+  check, so 1inch received `dst=ETH` (or `src=ETH`) instead of the sentinel and rejected the request
+  with `dst must be an Ethereum address`. This silently removed 1inch as a route for any swap
+  involving a chain's native asset (e.g. USDC→ETH), even though 1inch could otherwise fill it.
+
+  Now `findSwapQuote` forwards the coin's raw `.id` (`undefined` for the native asset) so
+  `getOneInchSwapQuote`'s existing sentinel-mapping logic works as designed. ERC-20↔ERC-20 quotes
+  are unaffected; other providers (Kyber, LiFi, SwapKit) construct their own requests and are not
+  touched by this change.
+
 ## 2.19.15
 
 ### Patch Changes

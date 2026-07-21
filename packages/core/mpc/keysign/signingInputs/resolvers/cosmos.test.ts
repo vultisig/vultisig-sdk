@@ -127,4 +127,212 @@ describe('getCosmosSigningInputs gas limit', () => {
 
     expect(input.fee?.gas.toString()).toBe('20000000')
   })
+
+  it('encodes secured withdrawals with the L1 asset from the auxiliary payload', async () => {
+    // Reference: https://dev.thorchain.org/concepts/secured-assets.html#withdrawing-secured-assets
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '10000000',
+        memo: 'SECURE-:bc1qp8278yutn09r2wu3jrc8xg2a7hgdgwv2gvsdyw',
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+        swapPayload: {
+          case: 'thorchainSwapPayload',
+          value: {
+            fromCoin: {
+              chain: Chain.Bitcoin,
+              ticker: 'BTC',
+              contractAddress: '',
+              decimals: 8,
+            },
+            fromAmount: '10000000',
+            vaultAddress: '',
+            routerAddress: '',
+            expirationTime: 0n,
+          },
+        },
+      }),
+      walletCore,
+    })
+
+    const deposit = input.messages[0]?.thorchainDepositMessage
+    const depositCoin = deposit?.coins?.[0]
+    expect(input.memo).toBe('')
+    expect(deposit).toBeDefined()
+    expect(deposit?.memo).toBe('SECURE-:bc1qp8278yutn09r2wu3jrc8xg2a7hgdgwv2gvsdyw')
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'BTC',
+      symbol: 'BTC',
+      ticker: 'BTC',
+      secured: true,
+    })
+    expect(depositCoin?.amount).toBe('10000000')
+    expect(depositCoin?.decimals.toString()).toBe('0')
+  })
+
+  it('keeps standard liquidity withdrawals on the native THOR asset path', async () => {
+    const memo = '-:BTC.BTC:10000'
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '1',
+        memo,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    const deposit = input.messages[0]?.thorchainDepositMessage
+    const depositCoin = deposit?.coins?.[0]
+    expect(input.memo).toBe(memo)
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'THOR',
+      symbol: 'RUNE',
+      ticker: 'RUNE',
+      secured: false,
+    })
+    expect(depositCoin?.decimals.toString()).toBe('8')
+  })
+
+  it('encodes a secured-asset swap deposit with the L1 secured asset (native)', async () => {
+    const memo = `=:ETH-USDC:${thorSender}`
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '200000000',
+        memo,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+        swapPayload: {
+          case: 'thorchainSwapPayload',
+          value: {
+            fromCoin: {
+              chain: Chain.THORChain,
+              ticker: 'XRP',
+              contractAddress: 'xrp-xrp',
+              decimals: 8,
+            },
+            fromAmount: '200000000',
+            vaultAddress: '',
+            routerAddress: '',
+            expirationTime: 0n,
+          },
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'XRP',
+      symbol: 'XRP',
+      ticker: 'XRP',
+      secured: true,
+    })
+    expect(depositCoin?.amount).toBe('200000000')
+    expect(depositCoin?.decimals.toString()).toBe('8')
+  })
+
+  it('encodes a secured-asset swap deposit with the contract symbol (token)', async () => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '41391997',
+        memo: `=:XRP-XRP:${thorSender}`,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+        swapPayload: {
+          case: 'thorchainSwapPayload',
+          value: {
+            fromCoin: {
+              chain: Chain.THORChain,
+              ticker: 'USDC',
+              contractAddress: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              decimals: 8,
+            },
+            fromAmount: '41391997',
+            vaultAddress: '',
+            routerAddress: '',
+            expirationTime: 0n,
+          },
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'ETH',
+      symbol: 'USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+      ticker: 'USDC',
+      secured: true,
+    })
+    expect(depositCoin?.decimals.toString()).toBe('8')
+  })
 })

@@ -370,24 +370,24 @@ Swap quotes and previews show your VULT discount tier when affiliate fees are ap
 
 #### Transaction Status
 
-Check whether a transaction has confirmed on-chain. By default, polls every 5 seconds until the transaction reaches a final state (success or error):
+Check whether a transaction has confirmed on-chain. The CLI reports `pending`, `not_found`, `confirmed`, or `failed`. A recently broadcast hash may briefly be `not_found`, so the default mode polls every 5 seconds for up to 120 seconds. Use `--no-wait` for one read:
 
 ```bash
 # Poll until confirmed (default)
-vultisig tx-status ethereum 0x9f8e7d6c...
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c...
 
 # Check current status without polling
-vultisig tx-status ethereum 0x9f8e7d6c... --no-wait
+vultisig tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 
 # JSON output
-vultisig tx-status ethereum 0x9f8e7d6c... -o json
+vultisig --output json tx-status --chain Ethereum --tx-hash 0x9f8e7d6c... --no-wait
 ```
 
 **Output:**
 
 ```
-✓ Transaction status: success
-Status: success
+✓ Transaction status: confirmed
+Status: confirmed
 Fee: 0.00042 ETH
 Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 ```
@@ -396,17 +396,25 @@ Explorer: https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "chain": "ethereum",
-  "txHash": "0x9f8e7d6c...",
-  "status": "success",
-  "receipt": {
-    "feeAmount": "420000000000000",
-    "feeDecimals": 18,
-    "feeTicker": "ETH"
-  },
-  "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  "success": true,
+  "v": 1,
+  "data": {
+    "chain": "Ethereum",
+    "txHash": "0x9f8e7d6c...",
+    "status": "confirmed",
+    "receipt": {
+      "feeAmount": "420000000000000",
+      "feeDecimals": 18,
+      "feeTicker": "ETH"
+    },
+    "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+  }
 }
 ```
+
+A malformed hash fails before vault access or RPC with exit code `4`. JSON output uses error code `INVALID_HASH` and includes `error.context.status: "invalid_hash"`. A well-formed hash unknown to the node reports `not_found` in `--no-wait` mode; default polling exits `5` with `TX_NOT_FOUND` if it remains unseen for the wait budget. A known, unconfirmed transaction remains `pending`; if it is still `pending` when the wait budget is exhausted, default polling exits `3` with `TX_STATUS_TIMEOUT` (retryable) rather than reporting a false terminal status.
+
+EVM RPCs can distinguish a missing receipt from a hash the node does not know, so they report `not_found` explicitly. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those chains conservatively remain `pending` with an unknown-presence signal, and default CLI polling is still bounded by `--timeout`.
 
 #### Signing Arbitrary Bytes
 
@@ -647,18 +655,61 @@ JSON output for two-step create:
 
 Send a single natural-language message and get a structured response. Designed for AI-to-AI communication.
 
-**Password resolution:** `agent ask` unlocks the vault from the keyring/env chain before prompting, so a headless operator never has to put the password on argv. Set it up **once** — store it in the OS keyring with `vsig auth setup` (recommended), or export `VAULT_PASSWORD` (or `VAULT_PASSWORDS="VaultName:pw ..."` for multiple vaults) — then run `agent ask` with **no** `--password`. The `--password` flag still works as a fallback but is discouraged: it exposes the secret to `ps` and shell history, and triggers a stderr warning.
+#### Headless Password and Credential Chain
+
+`agent ask` resolves the vault password before prompting, so automation does not need to put a secret on argv. The lookup order is:
+
+1. In-memory cache (an explicit `--password` or a password already resolved in this process)
+2. Stored credentials from `vsig auth setup` (OS keyring, or the encrypted-file backend)
+3. `VAULT_PASSWORDS` by vault name, then by vault ID
+4. `VAULT_PASSWORD`, then its namespaced alias `VULTISIG_PASSWORD`
+5. Interactive prompt, or an error in non-interactive mode
+
+The five password-related environment variables have distinct roles:
+
+| Variable                          | Purpose                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VAULT_PASSWORD`                  | Single fallback vault/server-signing password. It is also the server password required by `auth setup --non-interactive`.                                     |
+| `VULTISIG_PASSWORD`               | Namespaced alias for the single-password fallback during normal vault unlock. `auth setup` still requires `VAULT_PASSWORD`.                                   |
+| `VAULT_PASSWORDS`                 | Per-vault passwords keyed by vault name or ID. Use the JSON form for names containing spaces.                                                                 |
+| `VAULT_DECRYPT_PASSWORD`          | Password for decrypting an encrypted `.vult` backup during `auth setup`; it is not part of the normal signing-password lookup chain.                          |
+| `VULTISIG_CREDENTIALS_PASSPHRASE` | Passphrase for the AES-256-GCM `credentials.enc` backend used instead of an OS keyring in Docker/CI. It must be set again when later commands read that file. |
+
+`VAULT_PASSWORDS` accepts a JSON object (recommended) or the legacy whitespace-separated form:
 
 ```bash
-# Recommended: store the password once, then no --password on each call
-vsig auth setup                 # stores in the OS keyring
-# or: export VAULT_PASSWORD="..."
+# Unambiguous: supports spaces and other punctuation in vault names
+export VAULT_PASSWORDS='{"Vultisig Cluster #1":"pw","vault-id":"other-pw"}'
 
-# Simple query (password resolved from keyring/env)
+# Backward-compatible for space-free keys; passwords may contain colons
+export VAULT_PASSWORDS='MyVault:pw vault-id:other:pw'
+```
+
+Vault-ID keys are the most deterministic choice. If a JSON-looking value is malformed, the CLI warns on stderr and falls back to legacy parsing.
+
+For a keychain-less container, provide all setup secrets once, persist the config directory, then remove the vault passwords from the environment. Keep the credentials-file passphrase available to later CLI processes:
+
+```bash
+export VULTISIG_CONFIG_DIR=/var/lib/vultisig
+export VAULT_DECRYPT_PASSWORD='backup-file-password'
+export VAULT_PASSWORD='server-signing-password'
+export VULTISIG_CREDENTIALS_PASSPHRASE='credentials-file-passphrase'
+
+vsig auth setup --non-interactive --vault-file /run/secrets/vault.vult
+
+# Setup stored both passwords in $VULTISIG_CONFIG_DIR/credentials.enc (mode 0600).
+unset VAULT_DECRYPT_PASSWORD VAULT_PASSWORD
+vsig auth status
+
+# No vault password on argv or in the environment. --yes authorizes signing/broadcast.
+vsig agent ask 'Send 0.01 ETH to 0x742d...' --yes
+```
+
+Omit `VAULT_DECRYPT_PASSWORD` when the `.vult` file is not encrypted. Mount `VULTISIG_CONFIG_DIR` persistently and provide the same `VULTISIG_CREDENTIALS_PASSPHRASE` to each new container. The `--password` flag remains available as a fallback, but it exposes the secret to `ps` and shell history and emits a stderr warning.
+
+```bash
+# Simple query (password resolved from stored credentials or environment)
 vultisig agent ask "What is my ETH balance?"
-
-# Execute a transaction
-vultisig agent ask "Send 0.01 ETH to 0x742d..."
 
 # Continue a conversation (multi-turn)
 vultisig agent ask "Now swap it to USDC" --session abc123
@@ -668,7 +719,12 @@ vultisig agent ask "Check my portfolio" --json
 
 # Fallback only — exposes the secret to `ps`/shell history (emits a warning)
 vultisig agent ask "What is my ETH balance?" --password "$VAULT_PASSWORD"
+
+# Signing does not authorize backend order submission unless this is also set
+vultisig agent ask "Place the order" --yes --allow-auto-submit
 ```
+
+`--yes` authorizes unattended signing and transaction broadcast. It does not authorize the backend to submit a signed Polymarket order: that separate behavior is fail-closed unless `--allow-auto-submit` is present.
 
 **Text output (default):**
 
@@ -685,41 +741,71 @@ explorer:https://etherscan.io/tx/0x9f8e7d6c...
 
 ```json
 {
-  "session_id": "abc123-def456",
-  "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
-  "tool_calls": [
-    {
-      "action": "get_balances",
-      "success": true,
-      "data": {
-        "balances": [
-          {
-            "chain": "Ethereum",
-            "symbol": "ETH",
-            "amount": "1.5",
-            "decimals": 18,
-            "raw_amount": "1500000000000000000"
-          }
-        ]
+  "success": true,
+  "v": 1,
+  "data": {
+    "conversation_id": "abc123-def456",
+    "session_id": "abc123-def456",
+    "response": "Your ETH balance is 1.5 ETH ($3,750.00 USD).",
+    "tool_calls": [
+      {
+        "id": "tool-call-1",
+        "action": "get_balances",
+        "success": true,
+        "data": { "balances": [] }
       }
-    }
-  ],
-  "transactions": [
-    {
-      "hash": "0x9f8e7d6c...",
-      "chain": "ethereum",
-      "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
-    }
-  ]
+    ],
+    "transactions": [],
+    "warnings": [
+      {
+        "code": "PROTOCOL_DRIFT",
+        "message": "Ignored 1 unknown SSE frame: data-future-critical",
+        "count": 1,
+        "eventTypes": ["data-future-critical"]
+      }
+    ],
+    "outcome": { "kind": "success" }
+  }
 }
 ```
 
-On failure, stdout is a single JSON object with both a human `error` string and a stable `code` (the `error` field is unchanged for older parsers):
+`warnings` is omitted when empty, and is **`--verbose`-only**: `PROTOCOL_DRIFT` is a debugging aid, not a machine contract. The backend's V1 wire evolves forward-compatibly — unknown `data-*` card kinds are expected against a newer backend and are tolerated silently — so a warning emitted by default would fire on healthy turns. Run with `--verbose` to see which frame types a turn carried that this CLI does not route.
+
+Failures use the same v1 envelope with `success:false` and a stable `error.code`. This includes
+failed/declined signing and typed blocked/refusal/error turn endings; their partial turn data remains under `data`.
+If `--session` cannot be resumed, ask mode exits `5` before sending the message and does not fall back to a fresh
+conversation.
+If a transaction hash has already been submitted and a later backend outcome/error prevents the overall request
+from completing, the CLI exits `13` with `BROADCAST_COMMITTED`. This is deliberately **not** overall success:
+an approval or other first leg may have landed while a swap or follow-up step did not. Inspect every hash and do
+not blindly retry the original request.
 
 ```json
 {
-  "error": "Agent backend unreachable at https://example.invalid",
-  "code": "BACKEND_UNREACHABLE"
+  "success": false,
+  "v": 1,
+  "error": {
+    "message": "A transaction was broadcast, but the overall agent request may be incomplete. Inspect the transaction status before continuing.",
+    "code": "BROADCAST_COMMITTED",
+    "conversation_id": "abc123-def456"
+  },
+  "data": {
+    "transactions": [
+      {
+        "hash": "0x9f8e7d6c...",
+        "chain": "ethereum",
+        "status": "broadcast",
+        "explorerUrl": "https://etherscan.io/tx/0x9f8e7d6c..."
+      }
+    ],
+    "tool_calls": [],
+    "response": "",
+    "outcome": { "kind": "error", "code": "follow_up_failed" },
+    "original_error": {
+      "message": "Confirmation indexer failed after broadcast",
+      "code": "TRANSACTION_FAILED"
+    }
+  }
 }
 ```
 
@@ -729,31 +815,41 @@ Each entry in `tool_calls` may include `code` when `success` is false (same valu
 
 Orchestrators should branch on `code`. The message in `error` / `message` stays human-readable and may change between releases.
 
-| Code                      | Typical meaning                                                                                                              |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `BACKEND_UNREACHABLE`     | Agent health check failed or backend not responding                                                                          |
-| `AUTH_FAILED`             | Auth/token failure, HTTP 401/403, or wrong vault password                                                                    |
-| `VAULT_LOCKED`            | Encrypted vault needs unlock (password)                                                                                      |
-| `PASSWORD_REQUIRED`       | Password was not supplied when required (e.g. pipe mode or signing)                                                          |
-| `CONFIRMATION_REQUIRED`   | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`)                                                |
-| `ACTION_NOT_IMPLEMENTED`  | Local executor does not implement this action type                                                                           |
-| `INVALID_INPUT`           | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                  |
-| `NETWORK_ERROR`           | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                        |
-| `TIMEOUT`                 | Deadline exceeded, or abort where the message indicates a timeout                                                            |
-| `TRANSACTION_FAILED`      | Build/broadcast/gas errors mapped from the SDK                                                                               |
-| `SIGNING_FAILED`          | MPC/signing failed                                                                                                           |
-| `SESSION_NOT_INITIALIZED` | Internal session state error                                                                                                 |
-| `UNKNOWN_ERROR`           | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here. |
+| Code                        | Typical meaning                                                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BACKEND_UNREACHABLE`       | Agent health check failed or backend not responding                                                                                                                           |
+| `AUTH_FAILED`               | Auth/token failure, HTTP 401/403, or wrong vault password                                                                                                                     |
+| `VAULT_LOCKED`              | Encrypted vault needs unlock (password)                                                                                                                                       |
+| `PASSWORD_REQUIRED`         | Password was not supplied when required (e.g. pipe mode or signing)                                                                                                           |
+| `CONFIRMATION_REQUIRED`     | User confirmation needed (pipe mode; message prefix `CONFIRMATION_REQUIRED:`); also returned by `agent ask` on a declined sign (no `--yes`), exit 12                          |
+| `ACTION_NOT_IMPLEMENTED`    | Local executor does not implement this action type                                                                                                                            |
+| `INVALID_INPUT`             | Bad parameters, unknown chain, malformed NDJSON input, etc.                                                                                                                   |
+| `NETWORK_ERROR`             | RPC/fetch connectivity (includes many SDK `VaultError` network cases)                                                                                                         |
+| `TIMEOUT`                   | HTTP deadline or SSE frame-idle deadline exceeded (process exit 3, retryable)                                                                                                 |
+| `TRANSACTION_FAILED`        | Build/broadcast/gas errors mapped from the SDK                                                                                                                                |
+| `SIGNING_FAILED`            | MPC/signing failed                                                                                                                                                            |
+| `ACK_FAILED`                | Transaction broadcast, but its immediate acknowledgement/report failed; hash is valid and must be inspected before retrying                                                   |
+| `BROADCAST_COMMITTED`       | At least one transaction broadcast, but the overall agent request may be incomplete; do not blindly retry                                                                     |
+| `AGENT_TURN_BLOCKED`        | A fund-safety guardrail blocked the requested action (exit 10)                                                                                                                |
+| `AGENT_TURN_REFUSAL`        | The model refused or requested clarification without completing the action (exit 11)                                                                                          |
+| `AGENT_TURN_ERROR`          | The typed turn ending reported a failure without a more specific stream error                                                                                                 |
+| `IDEMPOTENT_TURN_DUPLICATE` | The backend already accepted the same keyed turn; inspect the conversation for the original persisted result                                                                  |
+| `IDEMPOTENCY_KEY_REUSED`    | The idempotency key was already used for a _different_ request body. This request did NOT run and nothing was persisted for it — retry with a fresh key (exit code 4, not 14) |
+| `SESSION_NOT_INITIALIZED`   | Internal session state error                                                                                                                                                  |
+| `UNKNOWN_ERROR`             | Unclassified failure (default for opaque SSE `error` events). Plain `AbortError` without “timeout” in the message maps here.                                                  |
 
 SSE `error` events may optionally include a `code` field from the backend; if it matches one of the values above, it is passed through unchanged. Otherwise the CLI infers a code from the message.
 
 **Agent ask options:**
 
-- `--session <id>` - Continue an existing conversation
+- `--session <id>` - Continue an existing conversation; a stale ID fails closed before the message is sent
 - `--backend-url <url>` - Agent backend URL (default: https://abe.vultisig.com)
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env — see **Password resolution** above)
 - `--verbose` - Show tool calls and debug info on stderr
 - `--json` - Output structured JSON
+- `--yes` - Authorize unattended signing/broadcast
+- `--allow-auto-submit` - Separately allow backend submission of signed Polymarket orders (requires `--yes` to sign)
+- `--force` - Bypass the duplicate-broadcast guard
 
 #### Agent Chat (Interactive/Pipe Mode)
 
@@ -777,6 +873,7 @@ The vault password is resolved from the keyring/env chain (`vsig auth setup` or 
 - `--password <password>` - Vault password (fallback only; prefer the keyring/`VAULT_PASSWORD` env)
 - `--password-ttl <ms>` - Password cache TTL (default: 5min, 24h for `--via-agent`)
 - `--session-id <id>` - Resume an existing session
+- `--allow-auto-submit` - Allow backend submission of signed Polymarket orders after local confirmation
 
 #### Pipe Protocol (`--via-agent`)
 
@@ -792,19 +889,20 @@ The pipe interface uses NDJSON (one JSON object per line) on stdin/stdout. Desig
 
 **Output events** (emitted on stdout):
 
-| Type          | Fields                                      | When                                                                                                     |
-| ------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `ready`       | `vault, addresses`                          | Session initialized, addresses for all chains                                                            |
-| `session`     | `id`                                        | Conversation ID for resuming later                                                                       |
-| `history`     | `messages[]`                                | Previous messages when resuming a session                                                                |
-| `text_delta`  | `delta`                                     | Streaming text chunk from the agent                                                                      |
-| `tool_call`   | `id, action, params?, status`               | Action started (`running`)                                                                               |
-| `tool_result` | `id, action, success, data?, error?, code?` | Action completed (`code` when `success` is false)                                                        |
-| `tx_status`   | `tx_hash, chain, status, explorer_url?`     | Transaction broadcast/confirmed/failed                                                                   |
-| `assistant`   | `content`                                   | Full assistant response                                                                                  |
-| `suggestions` | `suggestions[]`                             | Suggested follow-up actions                                                                              |
-| `error`       | `message, code`                             | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
-| `done`        | `{}`                                        | Response cycle complete                                                                                  |
+| Type          | Fields                                          | When                                                                                                     |
+| ------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `ready`       | `vault, addresses`                              | Session initialized, addresses for all chains                                                            |
+| `session`     | `id`                                            | Conversation ID for resuming later                                                                       |
+| `history`     | `messages[]`                                    | Previous messages when resuming a session                                                                |
+| `text_delta`  | `delta`                                         | Streaming text chunk from the agent                                                                      |
+| `tool_call`   | `id, action, params?, status`                   | Action started (`running`)                                                                               |
+| `tool_result` | `id, action, success, data?, error?, code?`     | Action completed (`code` when `success` is false)                                                        |
+| `tx_status`   | `tx_hash, chain, status, explorer_url?`         | Transaction broadcast/confirmed/failed                                                                   |
+| `assistant`   | `content`                                       | Full assistant response                                                                                  |
+| `suggestions` | `suggestions[]`                                 | Suggested follow-up actions                                                                              |
+| `warning`     | `warning: { code, message, count, eventTypes }` | Non-fatal protocol drift; an unrecognized SSE frame was ignored (`--verbose` only)                       |
+| `error`       | `message, code`                                 | Error or control signal (`PASSWORD_REQUIRED`, `CONFIRMATION_REQUIRED: …`; always includes stable `code`) |
+| `done`        | `{}`                                            | Response cycle complete                                                                                  |
 
 **Example session:**
 
@@ -855,10 +953,22 @@ VULTISIG_VAULT=MyWallet
 VAULT_PASSWORD=mypassword
 
 # Multiple vault passwords
-VAULT_PASSWORDS="Vault1:pass1 Vault2:pass2"
+VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 
 # Suppress spinners and info messages
 VULTISIG_SILENT=1
+
+# Bound agent-backend connection/unary requests (default: 30000ms)
+VULTISIG_HTTP_TIMEOUT_MS=30000
+
+# Bound an established SSE stream that stops making PROGRESS (default: 180000ms).
+# Measures time since the last real data frame. Keep-alive comments do NOT extend
+# it — both backends heartbeat on a timer that runs regardless of whether the turn
+# is advancing, so a clock they reset would bound only a dead connection, never a
+# wedged backend. Sized above the backend's worst-case silent stretch (a model call
+# is bounded at 90s; the swap builder is documented at 90s + 60s MCP), so a slow but
+# healthy turn is never killed.
+VULTISIG_SSE_IDLE_TIMEOUT_MS=180000
 ```
 
 ### Settings
@@ -1100,7 +1210,7 @@ VULTISIG_NO_UPDATE_CHECK=1
 VAULT_PASSWORD=mypassword
 
 # Multiple vault passwords
-VAULT_PASSWORDS="Vault1:pass1 Vault2:pass2"
+VAULT_PASSWORDS='{"Vault 1":"pass1","vault-id-2":"pass2"}'
 ```
 
 ### Config Directory
@@ -1109,9 +1219,10 @@ Configuration is stored in `~/.vultisig/`:
 
 ```
 ~/.vultisig/
-├── config.json      # User preferences
-├── vaults/          # Vault data
-├── cache/           # Version checks, etc.
+├── config.json       # User preferences and registered vaults
+├── credentials.enc   # Optional encrypted-file credential backend
+├── vaults/           # Vault data
+├── cache/            # Version checks, etc.
 └── address-book.json
 ```
 
@@ -1149,6 +1260,10 @@ Configuration is stored in `~/.vultisig/`:
 | 10   | agent ask: a fund-safety guardrail blocked the requested action                                                        |
 | 11   | agent ask: the model refused or asked a clarifying question (no action taken)                                          |
 | 12   | Interactive confirmation/input required but the session is non-interactive — pass --yes/--confirm or the required flag |
+| 13   | agent ask: transaction broadcast but the overall request may be incomplete — inspect the hash, do NOT blindly retry    |
+| 14   | agent ask: duplicate keyed turn rejected — inspect the conversation for the original result                            |
+| 15   | No active vault selected — create, import, or switch to one                                                            |
+| 16   | Stored state is unreadable — repair it or re-import the vault from a .vult backup                                      |
 
 > These are generated from the `ExitCode` enum in `src/core/errors.ts` (the single source of
 > truth) and are covered by a doc-lint test that fails if this table drifts from the code. Run

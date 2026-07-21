@@ -98,6 +98,11 @@ async function parseKeysignQrUrl(url: string) {
   return fromBinary(KeysignMessageSchema, await decompressData(match[1]))
 }
 
+function getQrQueryParam(url: string, param: string): string | undefined {
+  const match = url.match(new RegExp(`[?&]${param}=([^&]+)`))
+  return match ? decodeURIComponent(match[1]) : undefined
+}
+
 /** Poll GET /start/{sessionId} until the session starts. */
 async function waitForSessionStart(serverUrl: string, sessionId: string, timeoutMs = 120_000): Promise<string[]> {
   const t0 = Date.now()
@@ -135,7 +140,8 @@ async function main() {
   console.log(`   Session: ${keysignMsg.sessionId}`)
   console.log(`   Relay: ${keysignMsg.useVultisigRelay}`)
 
-  const serverUrl = keysignMsg.useVultisigRelay ? relayUrl : 'http://localhost:18080'
+  const qrRelayUrl = getQrQueryParam(qrUrl, 'serverUrl')
+  const serverUrl = keysignMsg.useVultisigRelay ? (qrRelayUrl ?? relayUrl) : 'http://localhost:18080'
 
   let keysignPayload = keysignMsg.keysignPayload
   if (!keysignPayload && keysignMsg.payloadId) {

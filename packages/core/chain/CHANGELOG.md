@@ -1,5 +1,52 @@
 # @vultisig/core-chain
 
+## 2.26.0
+
+### Minor Changes
+
+- [#1265](https://github.com/vultisig/vultisig-sdk/pull/1265) [`b6fbbe3`](https://github.com/vultisig/vultisig-sdk/commit/b6fbbe3705d6aae02b483de0b7dd1b8a097acd6b) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Retry transient broadcast transport failures at the dispatcher for non-EVM,
+  non-Solana chains with a bounded retry budget.
+
+- [#1317](https://github.com/vultisig/vultisig-sdk/pull/1317) [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Register the Rujira liquid-bond THORChain tokens bRUNE (`x/brune`) and ybRUNE (`x/staking-x/brune`), and add the `bruneBondConfig` staking-contract config. bRUNE is auto-discovered as a normal wallet token priced against RUNE (`priceProviderId: 'thorchain'`); the ybRUNE auto-compounding staking receipt is excluded from wallet discovery and carries native-token metadata for backfill.
+
+- [#1269](https://github.com/vultisig/vultisig-sdk/pull/1269) [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Allow Solana status checks to return terminal `not_found` for unknown
+  signatures whose `lastValidBlockHeight` has expired.
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1306](https://github.com/vultisig/vultisig-sdk/pull/1306) [`747b6c6`](https://github.com/vultisig/vultisig-sdk/commit/747b6c68a81e14f3242003f39a4b58499ef44a21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve full uint64 Cosmos account numbers and sequences through additive exact QBTC bigint fields and WalletCore signing inputs while retaining the legacy numeric account fields.
+
+- [#1272](https://github.com/vultisig/vultisig-sdk/pull/1272) [`9e366db`](https://github.com/vultisig/vultisig-sdk/commit/9e366db273e87e62d260867ea6702466b325d7fc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Retry Cardano current-slot lookup before broadcast and submit when the tip guard is temporarily unavailable, while still blocking genuinely stale signed transactions.
+
+- [#1324](https://github.com/vultisig/vultisig-sdk/pull/1324) [`30b76c6`](https://github.com/vultisig/vultisig-sdk/commit/30b76c6d0fbe7f0ad3015fee9bc77b5ee9fa7927) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix broken Hyperliquid block-explorer links by pointing them at hypurrscan's `/evm/` section (`https://hypurrscan.io/evm/tx/<hash>` and `/evm/address/<addr>`). The bare `/tx/` path returned a hypurrscan server error.
+
+- [#1261](https://github.com/vultisig/vultisig-sdk/pull/1261) [`846d6c2`](https://github.com/vultisig/vultisig-sdk/commit/846d6c24e96ba4f8133721f1030dd9d023376570) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Treat XRPL `terQUEUED` submit results as in-flight instead of hard broadcast failures while preserving rejection behavior for other engine results.
+
+- [#1260](https://github.com/vultisig/vultisig-sdk/pull/1260) [`eb11e50`](https://github.com/vultisig/vultisig-sdk/commit/eb11e50b2f478fbb21db2970f8616d5f296b49f5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Mark Sui, Ton, Tron, Bittensor, and QBTC status lookup misses as `isKnown:false` so broadcast verification rethrows rejected sends instead of reporting false success.
+
+- [#1326](https://github.com/vultisig/vultisig-sdk/pull/1326) [`4815346`](https://github.com/vultisig/vultisig-sdk/commit/4815346d794f4a198e84a562c503b3bdd5ae10b8) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix native swaps from THORChain secured assets. Swap quotes now emit secured-asset notation (`CHAIN-ASSET`, e.g. `XRP-XRP`, `ETH-USDC-0x…`) instead of the L1 pool notation (`CHAIN.ASSET`) that THORNode rejects for `thor1`-settling swaps, and the spent secured asset is encoded correctly in the `MsgDeposit` (L1 chain and symbol derived from the denom, `secured` flag set). Applies to all secured assets and swap directions.
+
+## 2.25.1
+
+### Patch Changes
+
+- [#1175](https://github.com/vultisig/vultisig-sdk/pull/1175) [`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Fix 1inch swap quotes to native ETH (and other EVM chains' native assets) failing route resolution.
+
+  `findSwapQuote`'s 1inch fetcher passed `from.id ?? from.ticker` / `to.id ?? to.ticker` into
+  `getOneInchSwapQuote`, so a native asset (no `.id`) fell back to its ticker string (e.g. `"ETH"`).
+  `getOneInchSwapQuote`'s `isFeeCoin` check relies on `undefined` to detect the native asset and
+  substitute 1inch's `0xEeee...` sentinel address (EIP-7528) — a truthy ticker string defeated that
+  check, so 1inch received `dst=ETH` (or `src=ETH`) instead of the sentinel and rejected the request
+  with `dst must be an Ethereum address`. This silently removed 1inch as a route for any swap
+  involving a chain's native asset (e.g. USDC→ETH), even though 1inch could otherwise fill it.
+
+  Now `findSwapQuote` forwards the coin's raw `.id` (`undefined` for the native asset) so
+  `getOneInchSwapQuote`'s existing sentinel-mapping logic works as designed. ERC-20↔ERC-20 quotes
+  are unaffected; other providers (Kyber, LiFi, SwapKit) construct their own requests and are not
+  touched by this change.
+
 ## 2.25.0
 
 ### Minor Changes

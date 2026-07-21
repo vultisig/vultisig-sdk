@@ -1,5 +1,50 @@
 # @vultisig/core-mpc
 
+## 1.12.0
+
+### Minor Changes
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1306](https://github.com/vultisig/vultisig-sdk/pull/1306) [`747b6c6`](https://github.com/vultisig/vultisig-sdk/commit/747b6c68a81e14f3242003f39a4b58499ef44a21) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve full uint64 Cosmos account numbers and sequences through additive exact QBTC bigint fields and WalletCore signing inputs while retaining the legacy numeric account fields.
+
+- [#1264](https://github.com/vultisig/vultisig-sdk/pull/1264) [`3b4da09`](https://github.com/vultisig/vultisig-sdk/commit/3b4da09c85b784276ea99cd8a399377a21dae245) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed when Ripple account info is missing a valid `ledger_current_index` instead of building an already-expired transaction.
+
+- [#1326](https://github.com/vultisig/vultisig-sdk/pull/1326) [`4815346`](https://github.com/vultisig/vultisig-sdk/commit/4815346d794f4a198e84a562c503b3bdd5ae10b8) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Fix native swaps from THORChain secured assets. Swap quotes now emit secured-asset notation (`CHAIN-ASSET`, e.g. `XRP-XRP`, `ETH-USDC-0x…`) instead of the L1 pool notation (`CHAIN.ASSET`) that THORNode rejects for `thor1`-settling swaps, and the spent secured asset is encoded correctly in the `MsgDeposit` (L1 chain and symbol derived from the denom, `secured` flag set). Applies to all secured assets and swap directions.
+
+- Updated dependencies [[`747b6c6`](https://github.com/vultisig/vultisig-sdk/commit/747b6c68a81e14f3242003f39a4b58499ef44a21), [`b6fbbe3`](https://github.com/vultisig/vultisig-sdk/commit/b6fbbe3705d6aae02b483de0b7dd1b8a097acd6b), [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad), [`9e366db`](https://github.com/vultisig/vultisig-sdk/commit/9e366db273e87e62d260867ea6702466b325d7fc), [`30b76c6`](https://github.com/vultisig/vultisig-sdk/commit/30b76c6d0fbe7f0ad3015fee9bc77b5ee9fa7927), [`846d6c2`](https://github.com/vultisig/vultisig-sdk/commit/846d6c24e96ba4f8133721f1030dd9d023376570), [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5), [`eb11e50`](https://github.com/vultisig/vultisig-sdk/commit/eb11e50b2f478fbb21db2970f8616d5f296b49f5), [`4815346`](https://github.com/vultisig/vultisig-sdk/commit/4815346d794f4a198e84a562c503b3bdd5ae10b8), [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58)]:
+  - @vultisig/core-chain@2.26.0
+
+## 1.11.0
+
+### Minor Changes
+
+- [#1190](https://github.com/vultisig/vultisig-sdk/pull/1190) [`4fcce4d`](https://github.com/vultisig/vultisig-sdk/commit/4fcce4d4b9bc40efdacd5d1754f3b2adb7a42985) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Support signing dApp-supplied XRPL transactions via the new `SignRipple` keysign payload.
+
+  - `getRippleSigningInputs` signs `signData.signRipple.rawJson` verbatim, so transaction types the keysign payload cannot otherwise express — offers (DEX swaps), cross-currency payments, trust lines — round-trip. Every signer rebuilds its input from the same JSON, so each party signs identical bytes. Native XRP sends and issued-currency `TrustSet` are unchanged.
+  - Fail closed on rawJson `Payment` transactions: `Account`, `Destination` and `Amount` must match the reviewed keysign metadata (`coin.address`, `toAddress`, `toAmount`), so the review surface and the signed bytes cannot diverge even for same-account payments. Non-Payment types still pass on the `Account` check alone.
+  - `getRippleChainSpecific` now skips the base-reserve destination check when the payload has no `toAddress` (a dApp offer has none); fee and sequence come from the sender account and are unaffected.
+  - Regenerated the keysign protos for the `SignRipple` variant added in commondata.
+
+## 1.10.0
+
+### Minor Changes
+
+- [#972](https://github.com/vultisig/vultisig-sdk/pull/972) [`13c3b65`](https://github.com/vultisig/vultisig-sdk/commit/13c3b654d0bbdec698d385b72cea50bf428161b3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail closed before broadcasting native swap payloads that do not carry a positive quote expiration, while preserving secured-asset withdrawal deposits with a shared classifier.
+
+### Patch Changes
+
+- [#1039](https://github.com/vultisig/vultisig-sdk/pull/1039) [`44b2903`](https://github.com/vultisig/vultisig-sdk/commit/44b2903a4dd6ccc935ebfdecb8be16f4f5996563) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Honor the configured message relay URL for secure vault transaction and raw-byte signing, including signing QR payloads.
+
+## 1.9.5
+
+### Patch Changes
+
+- Updated dependencies [[`e70ddf0`](https://github.com/vultisig/vultisig-sdk/commit/e70ddf0258e22d27d208f02d104d0bc1b5562132)]:
+  - @vultisig/core-chain@2.25.1
+
 ## 1.9.4
 
 ### Patch Changes
