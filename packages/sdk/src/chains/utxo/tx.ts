@@ -22,6 +22,7 @@
  *     `signingHashesHex[]`, `unsignedRawHex`, and `finalize(sigHexes)`.
  *   - `getSighashBIP143(opts)` — standalone BIP143 segwit sighash.
  *   - `getSighashLegacy(opts)` — standalone legacy P2PKH / BCH / Zcash sighash.
+ *   - `getSighashZcash(...)` — standalone ZIP-243 Zcash transparent sighash.
  *   - `decodeAddressToPubKeyHash(addr, chain)` — address → {pubKeyHash, type}.
  */
 import { secp256k1 as secp } from '@noble/curves/secp256k1.js'
@@ -489,7 +490,14 @@ function blake2b256(data: Uint8Array, personalization: Uint8Array): Uint8Array {
   return blake2b(data, { dkLen: 32, personalization })
 }
 
-function getSighashZcash(
+/**
+ * ZIP-243 sighash for Zcash's v4 Sapling-framed transparent send path
+ * (BLAKE2b personalization, consensus-branch-id-parametrized). Exported
+ * (alongside `getSighashBIP143` / `getSighashLegacy`) so golden-vector tests
+ * can pin it directly against an authoritative reference implementation,
+ * independent of `buildUtxoSendTx`'s fee/address-decoding logic.
+ */
+export function getSighashZcash(
   inputs: UtxoInput[],
   outputsRaw: Uint8Array,
   inputIndex: number,
