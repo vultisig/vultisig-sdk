@@ -6,6 +6,23 @@ import { BroadcastTxResolver } from '../resolver'
 import { DeliverTxFailedError } from '../transientRetry'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
+type SuiExecutionEffects = {
+  status?: {
+    status?: string
+    error?: string | null
+  }
+}
+
+export const assertSuiTxSucceeded = (effects: SuiExecutionEffects | null | undefined): void => {
+  const executionStatus = effects?.status?.status
+
+  if (executionStatus === 'success') return
+
+  throw new DeliverTxFailedError(
+    `Sui transaction failed on-chain: ${effects?.status?.error ?? executionStatus ?? 'no effects status returned'}`
+  )
+}
+
 export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chain, tx }) => {
   const { data: response, error } = await attempt(
     getSuiClient().executeTransactionBlock({
@@ -37,12 +54,7 @@ export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chai
   // `instanceof` BEFORE its message-regex runs: a Sui abort error string routinely contains
   // "aborted"/"timed out", which the transient patterns match — a bare Error would be misclassified
   // as transient and the aborted tx re-sent by withTransientBroadcastRetry.
-  const effectsStatus = response.effects?.status?.status
-  if (effectsStatus !== 'success') {
-    throw new DeliverTxFailedError(
-      `Sui transaction failed on-chain: ${response.effects?.status?.error ?? effectsStatus ?? 'no effects status returned'}`
-    )
-  }
+  assertSuiTxSucceeded(response.effects)
 
   return response
 }
