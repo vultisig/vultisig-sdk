@@ -58,6 +58,7 @@ export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
+export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
@@ -200,6 +201,20 @@ export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
+// `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
+export {
+  formatIssuedCurrencyValue,
+  isValidXrplCurrencyCode,
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  rippleIssuedCurrencyDecimals,
+  rippleKnownIssuedTokens,
+  rippleOwnerReserveDrops,
+  rippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
@@ -318,6 +333,14 @@ export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
 // share one tested implementation instead of independently-maintained copies
 // that can drift from each other (the mcp-ts #384 bug class).
 export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
+
+// EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
+// chainId table so consumers (app, agent-backend-ts) import it instead of
+// hand-maintaining their own copies that can drift (the Hyperliquid 998/999
+// client↔server chainId bug class). Native tickers are already exported via
+// `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
+// resolves a hex chainId back to its EvmChain.
+export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.

@@ -16,6 +16,8 @@
  *       ref_block_bytes:  bytes  (field 1, last 2 bytes of block number, BE)
  *       ref_block_hash:   bytes  (field 4, bytes 8..16 of block id hash)
  *       expiration:       int64  (field 8, unix ms)
+ *       data:             bytes  (field 10, optional memo — exchange deposit tags,
+ *                                 THORChain swap memos)
  *       contract:         Contract[] (field 11)
  *       timestamp:        int64  (field 14, unix ms)
  *       fee_limit:        int64  (field 18, optional, only for TRC-20)
@@ -87,13 +89,13 @@ export type BuildTronSendOptions = {
   /** Transaction timestamp (ms). Required — typically `BigInt(Date.now())`. */
   timestamp: bigint
   /**
-   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   * Optional memo / data bytes encoded into raw_data.data (proto field 10).
    *
    * IMPORTANT: this is the *Transaction-level* memo on `raw_data.data`, NOT
    * any contract-call data. For native TRX sends the memo is the free-form
    * payload most exchanges and THORChain expect.
    *
-   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   * Empty Uint8Array is treated as absent — no field 10 is emitted.
    *
    * Used by:
    *   - THORChain swap memos (`SWAP:CHAIN.ASSET:dest:limit`)
@@ -101,8 +103,10 @@ export type BuildTronSendOptions = {
    *   - Any flow that needs to attach an arbitrary identifier to a transfer
    *
    * Parity: iOS sets `TronTransaction.memo = memoString` which WalletCore
-   * encodes identically as field 12; the legacy keysign resolver wires
-   * `memo: keysignPayload.memo` on the TW proto for the same effect.
+   * encodes to the same `raw_data.data` field 10; the legacy keysign
+   * resolver wires `memo: keysignPayload.memo` on the TW proto for the same
+   * effect. Cross-checked byte-for-byte against WalletCore's own output in
+   * `tron-tx.test.ts` ("WalletCore cross-check").
    */
   data?: Uint8Array
 }
@@ -132,14 +136,14 @@ export type BuildTrc20TransferOptions = {
   /** Timestamp (ms). Required — see `BuildTronSendOptions`. */
   timestamp: bigint
   /**
-   * Optional memo / data bytes encoded into raw_data.data (proto field 12).
+   * Optional memo / data bytes encoded into raw_data.data (proto field 10).
    *
    * IMPORTANT: this is the *Transaction-level* memo on the WRAPPING
    * Transaction, NOT the TRC-20 contract call data. The contract call data
    * (4-byte selector + 32-byte recipient + 32-byte amount) is built
    * separately and lives on the inner `TriggerSmartContract.data` field.
    *
-   * Empty Uint8Array is treated as absent — no field 12 is emitted.
+   * Empty Uint8Array is treated as absent — no field 10 is emitted.
    *
    * Used by:
    *   - Exchange deposit memos for TRC-20 USDT / USDC user-tag identifiers
@@ -148,8 +152,9 @@ export type BuildTrc20TransferOptions = {
    *     transfer
    *
    * Parity: iOS sets `TronTransaction.memo = memoString` for both native
-   * and TRC-20 paths; WalletCore encodes it as field 12 on the wrapping
-   * Transaction in both cases.
+   * and TRC-20 paths; WalletCore encodes it as field 10 on the wrapping
+   * Transaction in both cases. Cross-checked byte-for-byte against
+   * WalletCore's own output in `tron-tx.test.ts` ("WalletCore cross-check").
    */
   data?: Uint8Array
 }
@@ -278,21 +283,31 @@ function buildRawData(opts: {
 
   // Raw: we write the fields in ascending field-number order as Tron does.
   // The spec allows any order, but tronweb/core emit this exact ordering, so
-  // matching it helps byte parity checks against external signers.
+  // matching it helps byte parity checks against external signers — and is
+  // required for byte-identical output vs WalletCore (verified in
+  // tron-tx.test.ts's "WalletCore cross-check").
   let raw = concatProtoBytes(
     fieldBytes(1, opts.refBlockBytes),
     fieldBytes(4, opts.refBlockHash),
-    fieldInt64(8, opts.expiration),
-    fieldBytes(11, contract)
+    fieldInt64(8, opts.expiration)
   )
 
-  // Field 12: data (proto field 12, wire type 2 = length-delimited bytes).
-  // Encodes swap memos, exchange deposit memos, etc. Matches the behaviour of
-  // WalletCore's TronTransaction.memo field and the legacy keysign resolver.
+  // Field 10: data (proto field 10, wire type 2 = length-delimited bytes).
+  // This is the REAL Tron memo field — encodes swap memos, exchange deposit
+  // memos, etc. Matches WalletCore's TronTransaction.memo field and the
+  // legacy keysign resolver. Field 10 sorts BEFORE field 11 (contract), so it
+  // must be written here to match Tron's canonical ascending field order.
+  //
+  // Field 12 (`scripts`) is a different, deprecated field entirely (legacy
+  // VM scripts, unrelated to memos) — writing the memo there means it never
+  // reaches `raw_data.data`, and the memo is silently dropped on broadcast.
+  //
   // Empty arrays are treated as absent — Tron nodes reject zero-length data.
   if (opts.data != null && opts.data.length > 0) {
-    raw = concatProtoBytes(raw, fieldBytes(12, opts.data))
+    raw = concatProtoBytes(raw, fieldBytes(10, opts.data))
   }
+
+  raw = concatProtoBytes(raw, fieldBytes(11, contract))
 
   raw = concatProtoBytes(raw, fieldInt64(14, opts.timestamp))
 
