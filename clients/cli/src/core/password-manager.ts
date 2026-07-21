@@ -3,14 +3,14 @@
  *
  * Priority order:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
- * 2. OS keyring (stored by `vsig auth setup`)
- * 3. VAULT_PASSWORDS env var (format: "VaultName:password VaultId:password")
- * 4. VAULT_PASSWORD env var (single fallback password)
+ * 2. Stored credentials (OS keyring or encrypted file, set by `vsig auth setup`)
+ * 3. VAULT_PASSWORDS env var (JSON object or whitespace-separated key:password entries)
+ * 4. VAULT_PASSWORD env var (single fallback password; VULTISIG_PASSWORD is an alias)
  * 5. Interactive prompt (if no env password found and not in silent/JSON mode)
  */
 import { isJsonOutput, isNonInteractive, isSilent, requireInteractive } from '../lib/output'
 import { prompt } from '../lib/prompt'
-import { getServerPassword as getKeyringPassword } from './credential-store'
+import { getStoredServerPassword as getStoredPassword } from './credential-store'
 
 /**
  * In-memory password cache
@@ -48,22 +48,44 @@ export function clearCachedPassword(vaultIdOrName?: string): void {
 }
 
 /**
- * Parse VAULT_PASSWORDS env var into a Map
- * Format: "VaultName:password VaultId:password"
+ * Parse VAULT_PASSWORDS env var into a Map.
+ *
+ * Accepted formats:
+ * - JSON object (recommended for vault names containing spaces)
+ * - Legacy whitespace-separated key:password entries
+ *
+ * Legacy entries preserve the original first-colon separator, so passwords may
+ * contain colons. Use the JSON form whenever a key contains whitespace or colons.
  */
 export function parseVaultPasswords(): Map<string, string> {
   const passwordMap = new Map<string, string>()
-  const passwordsEnv = process.env.VAULT_PASSWORDS
+  const passwordsEnv = process.env.VAULT_PASSWORDS?.trim()
 
-  if (passwordsEnv) {
-    const pairs = passwordsEnv.trim().split(/\s+/)
-    for (const pair of pairs) {
-      const colonIndex = pair.indexOf(':')
-      if (colonIndex > 0) {
-        const vaultKey = pair.substring(0, colonIndex)
-        const password = pair.substring(colonIndex + 1)
-        passwordMap.set(vaultKey, password)
+  if (!passwordsEnv) return passwordMap
+
+  if (passwordsEnv.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(passwordsEnv)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const entries = Object.entries(parsed)
+        if (entries.every(([vaultKey, password]) => vaultKey.length > 0 && typeof password === 'string')) {
+          return new Map(entries as Array<[string, string]>)
+        }
       }
+      throw new Error('expected an object with string values')
+    } catch {
+      process.stderr.write(
+        'Warning: VAULT_PASSWORDS is not a valid JSON object with string values; falling back to legacy key:password parsing.\n'
+      )
+    }
+  }
+
+  for (const pair of passwordsEnv.split(/\s+/)) {
+    const colonIndex = pair.indexOf(':')
+    if (colonIndex > 0) {
+      const vaultKey = pair.substring(0, colonIndex)
+      const password = pair.substring(colonIndex + 1)
+      passwordMap.set(vaultKey, password)
     }
   }
 
@@ -100,7 +122,7 @@ export function getPasswordFromEnv(vaultId: string, vaultName?: string): string 
  */
 export async function promptForPassword(vaultName?: string, vaultId?: string): Promise<string> {
   requireInteractive(
-    'Use --password flag, VAULT_PASSWORD env var, or "vsig auth setup" to store credentials in keyring.'
+    'Use --password, a vault password environment variable, or "vsig auth setup" to store credentials.'
   )
   const displayName = vaultName || vaultId || 'vault'
   const { password } = await prompt([
@@ -117,8 +139,8 @@ export async function promptForPassword(vaultName?: string, vaultId?: string): P
 /**
  * Resolve a password from the NON-INTERACTIVE chain only:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
- * 2. OS keyring (stored by `vsig auth setup`)
- * 3. Environment variables
+ * 2. Stored credentials (OS keyring or encrypted file, set by `vsig auth setup`)
+ * 3. Environment variables (`VAULT_PASSWORDS`, then the single-password fallback)
  *
  * Returns null when none of these is configured — it never prompts. Use this
  * when the caller has its own interactive prompt to fall back to (e.g. the
@@ -133,16 +155,16 @@ export async function resolvePasswordNonInteractive(vaultId: string, vaultName?:
     return cachedPassword
   }
 
-  // 2. Check OS keyring (stored by `vsig auth setup`)
+  // 2. Check stored credentials (OS keyring or encrypted file)
   try {
-    const keyringPassword = await getKeyringPassword(vaultId)
-    if (keyringPassword) {
-      cachePassword(vaultId, keyringPassword)
-      if (vaultName) cachePassword(vaultName, keyringPassword)
-      return keyringPassword
+    const storedPassword = await getStoredPassword(vaultId)
+    if (storedPassword) {
+      cachePassword(vaultId, storedPassword)
+      if (vaultName) cachePassword(vaultName, storedPassword)
+      return storedPassword
     }
   } catch {
-    // keyring not available or access failed — fall through
+    // credential store not available or access failed — fall through
   }
 
   // 3. Try environment variables
@@ -160,8 +182,8 @@ export async function resolvePasswordNonInteractive(vaultId: string, vaultName?:
 /**
  * Get password using the standard resolution order:
  * 1. In-memory cache (set by CLI --password flag or previous prompt)
- * 2. OS keyring (stored by `vsig auth setup`)
- * 3. Environment variables
+ * 2. Stored credentials (OS keyring or encrypted file, set by `vsig auth setup`)
+ * 3. Environment variables (`VAULT_PASSWORDS`, then the single-password fallback)
  * 4. Interactive prompt (only if not in silent/JSON mode)
  *
  * Passwords are cached after resolution to avoid re-prompting in interactive mode.

@@ -65,6 +65,10 @@ configureDefaultStorage(() => new ReactNativeStorage())
 
 // Chain enum and types
 export { Chain } from '@vultisig/core-chain/Chain'
+export {
+  getCosmosAllowedFeeDenoms,
+  isCosmosFeeDenomAllowed,
+} from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'
@@ -96,7 +100,7 @@ export type { VultisigConfig } from '../../Vultisig'
 export { Vultisig } from '../../Vultisig'
 
 // RN-safe fetch-based RPC helpers (no Node net/tls/http/ws dependency)
-export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse } from './rpcFetch'
+export type { JsonRpcCallOptions, JsonRpcParams, JsonRpcResponse, QueryUrlOptions } from './rpcFetch'
 export { jsonRpcCall, JsonRpcError, queryUrl } from './rpcFetch'
 
 // RN runtime config registry — consumers inject chain RPC URLs and
@@ -201,8 +205,12 @@ export {
   buildWithdrawRewardsMsg,
   cosmosStaking,
 } from '../../tools/prep/cosmosStaking'
-// Pure CW-20 transfer msg builder (only depends on bech32 — no WalletCore /
-// native crypto, safe as a static re-export on the RN graph).
+// Pure CosmWasm Amino message builders (only depend on JSON/bech32 — no
+// WalletCore or native crypto, safe as static re-exports on the RN graph).
+// Keep this list aligned with the root entrypoint: package exports resolve
+// React Native consumers to this hand-curated module.
+export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from '../../tools/prep/cosmosWasmExecute'
+export { buildCosmosWasmExecuteMsg } from '../../tools/prep/cosmosWasmExecute'
 export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // `preparePolkadotAssetSend` is pure-crypto (@polkadot/util + @polkadot/util-crypto,
 // both RN-safe) with no MPC/wasm dependency, so it ships as a static re-export
@@ -210,6 +218,9 @@ export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
 // Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
 export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
+export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
+export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
+export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 
 export async function getMaxSendAmountFromKeys(...args: unknown[]) {
   const mod = await import('../../tools/prep/maxSend')
@@ -551,6 +562,14 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
+//
+// Exact base-units -> human decimal-string conversion (pure bigint string
+// arithmetic, no float64 round-trip) and the chain-native block explorer URL
+// builder (a const chain->URL map + match). Both were added to the generic
+// entry (src/index.ts) but the RN allow-list omitted them — same
+// hand-curated-gap class as the rest of this section (sdk#1224) — so RN
+// consumers (Station) couldn't format high-decimal balances exactly or link
+// out to a block explorer without deep-importing core-chain.
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
@@ -567,11 +586,15 @@ export {
   toHumanUnits,
 } from '../../utils/convertAmount'
 export { FiatToAmountError } from '../../utils/fiatToAmount'
+export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
+export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
+export { resolveChainReference } from '../../utils/resolveChainReference'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))

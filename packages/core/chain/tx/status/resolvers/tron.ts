@@ -45,8 +45,16 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     })
   )
 
-  if (error || !tx || tx.blockNumber === undefined || tx.blockNumber === 0) {
-    return { status: 'pending' }
+  if (error || !tx) {
+    return { status: 'pending', isKnown: false }
+  }
+
+  if (!tx.id) {
+    return { status: 'not_found', isKnown: false }
+  }
+
+  if (tx.blockNumber === undefined || tx.blockNumber === 0) {
+    return { status: 'pending', isKnown: true }
   }
 
   // 1. top-level result === "FAILED" → error
@@ -59,7 +67,7 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
 
   // 2. receipt absent → pending (native TRX transfers or tx still processing)
   if (!tx.receipt) {
-    return { status: 'pending' }
+    return { status: 'pending', isKnown: true }
   }
 
   // 3. receipt.result in terminal failure set → error

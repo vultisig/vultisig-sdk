@@ -63,6 +63,7 @@ export class TransactionBuilder {
    * @param params.receiver - The recipient's address
    * @param params.amount - Amount to send in base units (as bigint)
    * @param params.memo - Optional transaction memo (for chains that support it)
+   * @param params.destinationTag - Optional XRP DestinationTag, independent from memo
    * @param params.feeSettings - Optional custom fee settings (FeeSettings - chain-specific)
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
@@ -87,6 +88,7 @@ export class TransactionBuilder {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
@@ -131,6 +133,7 @@ export class TransactionBuilder {
     receiver: string
     amount: bigint
     memo?: string
+    destinationTag?: number
     feeSettings?: FeeSettings
   }): Promise<bigint> {
     try {
@@ -168,6 +171,7 @@ export class TransactionBuilder {
         receiver: params.receiver,
         amount: params.amount,
         memo: params.memo,
+        destinationTag: params.destinationTag,
         vaultId: this.vaultData.publicKeys.ecdsa,
         localPartyId: this.vaultData.localPartyId,
         publicKey,
@@ -294,7 +298,24 @@ export class TransactionBuilder {
         allMessageHashes.push(...hexHashes)
       }
 
-      return allMessageHashes
+      // Sort so the initiating device drives messages in the same order as the
+      // joining devices. The joiner in this repo already sorts — see
+      // `keysign/cosigner.ts` — as do the Android app
+      // (`SigningHelper.getKeysignMessages` -> `messages.sorted()`) and the
+      // extension (`useKeysignMutation` -> `.sort()`); all three sign a
+      // multi-message keysign in lexicographic hash order. Returning
+      // resolver order here meant that whenever the order differed — e.g. an
+      // ERC-20 approve + swap where approveHash > swapHash — the initiator and the
+      // joiner drove different messages at the same step, and the joiner polled
+      // `GET /setup-message/{sessionId}` for a hash the initiator never uploaded,
+      // failing with "HTTP 404: Not Found" after its retries. Single-message
+      // keysigns (plain transfers) were unaffected, which is why this only showed
+      // up on approve+swap flows.
+      //
+      // Safe to sort here: the signing loop, `messagesToSign` and the signature
+      // pairing all read this same array, and the resulting signature map is keyed
+      // by message hash rather than by index.
+      return allMessageHashes.sort()
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.SigningFailed,
