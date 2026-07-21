@@ -12,6 +12,7 @@
  *   - the guard is cross-process (the journal is file-backed) and cross-PATH: a
  *     `send` and an identical `agent ask` intent dedupe against the SAME journal.
  */
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -234,10 +235,14 @@ function execVault(): VaultBase {
 let home: string
 let saved: string | undefined
 
+function journalPathForTest(): string {
+  return join(home, 'broadcasts.jsonl')
+}
+
 beforeEach(() => {
   saved = process.env.VULTISIG_BROADCAST_JOURNAL_PATH
   home = mkdtempSync(join(tmpdir(), 'vultisig-sendguard-'))
-  process.env.VULTISIG_BROADCAST_JOURNAL_PATH = join(home, 'broadcasts.jsonl')
+  process.env.VULTISIG_BROADCAST_JOURNAL_PATH = journalPathForTest()
 })
 
 afterEach(() => {
@@ -251,6 +256,73 @@ afterEach(() => {
 
 describe('send — broadcast dedupe guard', () => {
   const params = { chain: Chain.Ethereum, to: '0xrecipient', amount: '1', yes: true } as const
+
+  it('includes an XRP DestinationTag in a dry-run result', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rRecipient', '1000000'),
+      txHash: 'xrp-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'rRecipient',
+      amount: '1',
+      destinationTag: 123,
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({ dryRun: true, destinationTag: 123 })
+    expect(realSends.count).toBe(0)
+  })
+
+  it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
+    const realSends = { count: 0 }
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-x-address-dry-run',
+      realSends,
+    })
+
+    const result = await sendTransaction(vault, {
+      chain: Chain.Ripple,
+      to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+      amount: '1',
+      dryRun: true,
+    })
+
+    expect(result).toMatchObject({
+      dryRun: true,
+      to: 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY',
+      destinationTag: 495,
+    })
+    expect(vault.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        destinationTag: 495,
+      })
+    )
+    expect(realSends.count).toBe(0)
+  })
+
+  it('rejects an explicit DestinationTag that conflicts with an X-address', async () => {
+    const vault = makeSendVault({
+      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      txHash: 'xrp-conflicting-tag',
+      realSends: { count: 0 },
+    })
+
+    await expect(
+      sendTransaction(vault, {
+        chain: Chain.Ripple,
+        to: 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV',
+        amount: '1',
+        destinationTag: 123,
+        dryRun: true,
+      })
+    ).rejects.toThrow(/Conflicting XRP destination tags/)
+  })
 
   it('refuses an identical second send within the window (no second broadcast, exit 9)', async () => {
     const realSends = { count: 0 }
@@ -288,6 +360,29 @@ describe('send — broadcast dedupe guard', () => {
     await sendTransaction(vault, { ...params, force: true })
     expect(realSends.count).toBe(2) // forced through
   })
+
+  it('persists across separate CLI processes and exits 9 unless --force is used', () => {
+    const fixture = new URL('./fixtures/sendProcess.ts', import.meta.url)
+    const run = (amount = '1', force = false) =>
+      spawnSync(
+        'yarn',
+        ['workspace', '@vultisig/cli', 'exec', 'tsx', fixture.pathname, journalPathForTest(), amount, String(force)],
+        { cwd: new URL('../../../../..', import.meta.url), encoding: 'utf8' }
+      )
+
+    const first = run()
+    expect(first.status, first.stderr).toBe(0)
+
+    const duplicate = run()
+    expect(duplicate.status).toBe(ExitCode.DUPLICATE_BROADCAST)
+    expect(duplicate.stderr).toMatch(/Refusing to broadcast: an identical transaction/)
+
+    const distinct = run('2')
+    expect(distinct.status, distinct.stderr).toBe(0)
+
+    const forced = run('1', true)
+    expect(forced.status, forced.stderr).toBe(0)
+  }, 30_000)
 
   it('does not block a genuinely distinct intent', async () => {
     const realSends = { count: 0 }
@@ -343,6 +438,88 @@ describe('send — broadcast dedupe guard', () => {
     expect(agentResult.success).toBe(false)
     expect(agentResult.data?.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
     expect(signSpy).not.toHaveBeenCalled() // never double-signed across paths
+  })
+
+  it('cross-PATH: both real builders fingerprint empty EVM calldata identically', () => {
+    const vault = makeSendVault({
+      ecdsa: OWNER,
+      payload: nativeSendPayload('0xrecipient', '17000000000000000'),
+      txHash: '0xunused',
+      realSends: { count: 0 },
+    })
+    const directIntent = buildSendBroadcastIntent(
+      vault,
+      Chain.Polygon,
+      nativeSendPayload('0xrecipient', '17000000000000000')
+    )
+    const executor = new AgentExecutor(execVault(), false, OWNER)
+    const agentIntent = (
+      executor as unknown as {
+        buildBroadcastIntent: (payload: unknown, chain: Chain) => Parameters<typeof computeFingerprint>[0]
+      }
+    ).buildBroadcastIntent(
+      {
+        send_tx: { to: '0xrecipient', value: '17000000000000000', data: '0x' },
+      },
+      Chain.Polygon
+    )
+
+    expect(directIntent.data).toBeUndefined()
+    expect(agentIntent.data).toBe('0x')
+    expect(computeFingerprint(directIntent)).toBe(computeFingerprint(agentIntent))
+  })
+
+  it('cross-PATH: an EVM `--memo 0x` send folds to empty calldata and still dedupes across paths', () => {
+    // On EVM the signer encodes a `0x`-prefixed memo AS calldata (memoToTxData),
+    // so `--memo 0x` is empty calldata — identical to a no-memo native transfer.
+    // buildSendBroadcastIntent must therefore mark it EVM calldata so it folds to
+    // "" and matches (a) the same send with no memo and (b) the agent path's empty
+    // `"0x"` calldata. Without the chain-kind gate this regressed (PR #1259 review).
+    const vault = makeSendVault({
+      ecdsa: OWNER,
+      payload: nativeSendPayload('0xrecipient', '17000000000000000'),
+      txHash: '0xunused',
+      realSends: { count: 0 },
+    })
+    const withZeroXMemo = buildSendBroadcastIntent(vault, Chain.Ethereum, {
+      ...nativeSendPayload('0xrecipient', '17000000000000000'),
+      memo: '0x',
+    } as unknown as KeysignPayload)
+    const noMemo = buildSendBroadcastIntent(
+      vault,
+      Chain.Ethereum,
+      nativeSendPayload('0xrecipient', '17000000000000000')
+    )
+    const executor = new AgentExecutor(execVault(), false, OWNER)
+    const agentIntent = (
+      executor as unknown as {
+        buildBroadcastIntent: (payload: unknown, chain: Chain) => Parameters<typeof computeFingerprint>[0]
+      }
+    ).buildBroadcastIntent({ send_tx: { to: '0xrecipient', value: '17000000000000000', data: '0x' } }, Chain.Ethereum)
+
+    expect(withZeroXMemo.dataIsEvmCalldata).toBe(true)
+    // All three describe the same empty-calldata EVM native send → one fingerprint.
+    expect(computeFingerprint(withZeroXMemo)).toBe(computeFingerprint(noMemo))
+    expect(computeFingerprint(withZeroXMemo)).toBe(computeFingerprint(agentIntent))
+  })
+
+  it('non-EVM `--memo 0x` stays distinct from no memo (memo is a real value, not calldata)', () => {
+    // The mirror of the EVM case: on a memo-routed chain `"0x"` is a genuine memo
+    // and must NOT fold to empty, or two different sends would falsely dedupe.
+    const vault = makeSendVault({
+      ecdsa: OWNER,
+      payload: memoSendPayload('thor1recipient', '100000000', '0x'),
+      txHash: '0xunused',
+      realSends: { count: 0 },
+    })
+    const withZeroXMemo = buildSendBroadcastIntent(
+      vault,
+      Chain.THORChain,
+      memoSendPayload('thor1recipient', '100000000', '0x')
+    )
+    const noMemo = buildSendBroadcastIntent(vault, Chain.THORChain, memoSendPayload('thor1recipient', '100000000', ''))
+    expect(withZeroXMemo.dataIsEvmCalldata).toBe(false)
+    expect(computeFingerprint(withZeroXMemo)).not.toBe(computeFingerprint(noMemo))
   })
 
   it('token (ERC-20) sends: identical refused, a different token to the same recipient allowed', async () => {
@@ -516,6 +693,26 @@ describe('send — broadcast dedupe guard', () => {
 describe('swap — broadcast dedupe guard', () => {
   const ctxFor = (vault: VaultBase) => ({ ensureActiveVault: async () => vault }) as never
   const opts = { fromChain: Chain.Ethereum, toChain: Chain.Bitcoin, amount: 0.1, yes: true } as const
+
+  it('forwards CLI slippage into vault.swap preview and execution requests', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xslippage', realSwaps })
+
+    const result = await executeSwap(ctxFor(vault), { ...opts, slippage: 2.5, dryRun: true })
+
+    expect(result).toMatchObject({ dryRun: true, provider: 'thorchain' })
+    expect(vault.swap).toHaveBeenCalledTimes(1)
+    expect(vault.swap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromChain: Chain.Ethereum,
+        toChain: Chain.Bitcoin,
+        amount: '0.1',
+        slippageTolerance: 2.5,
+        dryRun: true,
+      })
+    )
+    expect(realSwaps.count).toBe(0)
+  })
 
   it('refuses an identical second swap (no second broadcast)', async () => {
     const realSwaps = { count: 0 }

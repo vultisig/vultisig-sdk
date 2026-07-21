@@ -366,7 +366,11 @@ export const buildSwapKeysignPayload = async ({
   }
 
   if (isChainOfKind(chain, 'evm') && fromCoin.id) {
-    const spender = keysignPayload.toAddress
+    const approvalAddress = matchRecordUnion<SwapQuoteResult, string | undefined>(swapQuote.quote, {
+      native: () => undefined,
+      general: ({ tx }) => ('evm' in tx ? tx.evm.approvalAddress : undefined),
+    })
+    const spender = approvalAddress ?? keysignPayload.toAddress
     const allowance = await getErc20Allowance({
       chain,
       id: fromCoin.id,

@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.25.1",
+  "version": "2.26.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -365,6 +365,11 @@
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
     },
+    "./chains/cosmos/qbtc/waitForQbtcTxInclusion": {
+      "types": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js",
+      "default": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js"
+    },
     "./chains/cosmos/resolveCosmosGasFee": {
       "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
       "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
@@ -389,6 +394,11 @@
       "types": "./dist/chains/cosmos/terraClassicTax.d.ts",
       "import": "./dist/chains/cosmos/terraClassicTax.js",
       "default": "./dist/chains/cosmos/terraClassicTax.js"
+    },
+    "./chains/cosmos/thor/brune-bond/config": {
+      "types": "./dist/chains/cosmos/thor/brune-bond/config.d.ts",
+      "import": "./dist/chains/cosmos/thor/brune-bond/config.js",
+      "default": "./dist/chains/cosmos/thor/brune-bond/config.js"
     },
     "./chains/cosmos/thor/getThorchainInboundAddress": {
       "types": "./dist/chains/cosmos/thor/getThorchainInboundAddress.d.ts",
@@ -674,6 +684,11 @@
       "types": "./dist/chains/ripple/account/lines.d.ts",
       "import": "./dist/chains/ripple/account/lines.js",
       "default": "./dist/chains/ripple/account/lines.js"
+    },
+    "./chains/ripple/address": {
+      "types": "./dist/chains/ripple/address.d.ts",
+      "import": "./dist/chains/ripple/address.js",
+      "default": "./dist/chains/ripple/address.js"
     },
     "./chains/ripple/client": {
       "types": "./dist/chains/ripple/client.d.ts",
@@ -1628,6 +1643,11 @@
       "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
       "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
     },
+    "./swap/general/lifi/api/lifiSlippage": {
+      "types": "./dist/swap/general/lifi/api/lifiSlippage.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
+      "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
@@ -1883,6 +1903,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/transientRetry": {
+      "types": "./dist/tx/broadcast/transientRetry.d.ts",
+      "import": "./dist/tx/broadcast/transientRetry.js",
+      "default": "./dist/tx/broadcast/transientRetry.js"
+    },
     "./tx/broadcast/verifyBroadcastByHash": {
       "types": "./dist/tx/broadcast/verifyBroadcastByHash.d.ts",
       "import": "./dist/tx/broadcast/verifyBroadcastByHash.js",
@@ -2110,7 +2135,7 @@
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
     "@lifi/sdk": "^4.1.0",
-    "@mysten/sui": "^2.20.1",
+    "@mysten/sui": "^2.20.3",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
@@ -2130,6 +2155,7 @@
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
     "long": "^5.3.2",
+    "ripple-address-codec": "^5.0.1",
     "tiny-secp256k1": "^2.2.4",
     "viem": "^2.53.1",
     "xrpl": "^5.0.0"

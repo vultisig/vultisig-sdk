@@ -21,10 +21,10 @@ export type TxStatusResult = {
   receipt?: TxReceiptInfo
 }
 
-export type TxStatusResolver<T extends Chain = Chain> = Resolver<
-  {
-    chain: T
-    hash: string
-  },
-  Promise<TxStatusResult>
->
+export type TxStatusInput<T extends Chain = Chain> = {
+  chain: T
+  hash: string
+  lastValidBlockHeight?: number
+}
+
+export type TxStatusResolver<T extends Chain = Chain> = Resolver<TxStatusInput<T>, Promise<TxStatusResult>>
