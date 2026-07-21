@@ -100,7 +100,15 @@ export const assertNativeSwapReadyForBroadcast = async ({
     )
   }
 
-  const inboundAddresses = await getInboundAddresses(native.chain)
+  let inboundAddresses: ThorchainInboundAddress[]
+  try {
+    inboundAddresses = await getInboundAddresses(native.chain)
+  } catch {
+    throw new NativeSwapBroadcastGuardError(
+      'network_error',
+      `Cannot fetch ${native.chain} inbound vaults for source chain ${sourceChainId}`
+    )
+  }
   const inboundByChainId = new Map(inboundAddresses.map(info => [info.chain.toUpperCase(), info]))
 
   const activeInbound = inboundByChainId.get(sourceChainId.toUpperCase())

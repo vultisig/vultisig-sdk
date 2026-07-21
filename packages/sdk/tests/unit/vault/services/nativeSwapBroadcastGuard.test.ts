@@ -1,6 +1,9 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { ThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
-import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
+import {
+  assertNativeSwapReadyForBroadcast,
+  NativeSwapBroadcastGuardError,
+} from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -308,6 +311,20 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         now: () => 1_700_000_000_000,
       })
     ).resolves.toBeUndefined()
+  })
+
+  it('maps inbound lookup failures to the typed network_error', async () => {
+    const failure = assertNativeSwapReadyForBroadcast({
+      chain: Chain.Bitcoin,
+      keysignPayload: makeThorchainSwapPayload(),
+      getInboundAddresses: async () => {
+        throw new Error('provider unavailable')
+      },
+      now: () => 1_700_000_000_000,
+    })
+
+    await expect(failure).rejects.toBeInstanceOf(NativeSwapBroadcastGuardError)
+    await expect(failure).rejects.toMatchObject({ code: 'network_error' })
   })
 
   // sdk#1360: halt re-check at broadcast. Each of the three flags on the SAME inbound object the
