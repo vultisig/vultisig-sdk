@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getXrpAccountInfo,
+  getXrpAccountLines,
   getXrpBalance,
   submitXrpTx,
   XrpSubmitRejectedError,
@@ -107,6 +108,30 @@ describe('ripple/rpc — account_info error handling', () => {
     })
 
     await expect(getXrpAccountInfo(FUNDED, RPC_URL)).rejects.toThrow(/invalidParams/)
+  })
+
+  it('fails closed (throws) on a non-actNotFound response missing account_data instead of reporting funded:false', async () => {
+    mockFetchOnce({
+      result: {
+        status: 'success',
+      },
+    })
+
+    // A malformed / partial success envelope must NOT be misread as an
+    // unfunded account, which would surface a real-looking 0 balance.
+    await expect(getXrpAccountInfo(FUNDED, RPC_URL)).rejects.toThrow(/no account_data/)
+  })
+
+  it('fails closed (throws) on an account_lines page missing a lines array instead of returning no trust lines', async () => {
+    mockFetchOnce({
+      result: {
+        status: 'success',
+      },
+    })
+
+    // A missing `lines` array on a non-actNotFound page must NOT degrade to
+    // "no trust line" (a real-looking 0 token balance for a held token).
+    await expect(getXrpAccountLines(FUNDED, RPC_URL)).rejects.toThrow(/no lines array/)
   })
 })
 
