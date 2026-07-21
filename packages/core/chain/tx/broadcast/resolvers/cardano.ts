@@ -3,6 +3,7 @@ import { getCardanoTxTtl } from '@vultisig/core-chain/chains/cardano/cip30/carda
 import { getCardanoCurrentSlot } from '@vultisig/core-chain/chains/cardano/client/currentSlot'
 import { cardanoBroadcastTtlSafetyMargin } from '@vultisig/core-chain/chains/cardano/config'
 import { getCardanoTxHash } from '@vultisig/core-chain/tx/hash/resolvers/cardano'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 import { submitCardanoCbor } from '../../../chains/cardano/submit/submitCardanoCbor'
 import { BroadcastTxResolver } from '../resolver'
@@ -15,15 +16,45 @@ import { selectEncodedBytes } from './utxo'
  */
 const alreadyCommittedCode = 3117
 
-const assertCardanoTtlFreshForBroadcast = async (encodedBytes: Uint8Array) => {
-  const ttl = getCardanoTxTtl(encodedBytes)
-  const currentSlot = await getCardanoCurrentSlot()
+const getCardanoCurrentSlotForBroadcast = async (): Promise<bigint | null> => {
+  const first = await attempt(getCardanoCurrentSlot())
+  if (!('error' in first)) return first.data
+
+  const second = await attempt(getCardanoCurrentSlot())
+  if (!('error' in second)) return second.data
+
+  return null
+}
+
+export const getCardanoTtlFreshnessError = ({
+  currentSlot,
+  ttl,
+}: {
+  currentSlot: bigint | null
+  ttl: bigint
+}): Error | null => {
+  if (currentSlot === null) {
+    return null
+  }
+
   const minimumFreshTtl = currentSlot + BigInt(cardanoBroadcastTtlSafetyMargin)
 
   if (ttl <= minimumFreshTtl) {
-    throw new Error(
+    return new Error(
       `Cardano transaction TTL is expired or too close to expiry; rebuild the transaction and retry (ttl=${ttl}, currentSlot=${currentSlot}, safetyMargin=${cardanoBroadcastTtlSafetyMargin} slots)`
     )
+  }
+
+  return null
+}
+
+export const assertCardanoTtlFreshForBroadcast = async (encodedBytes: Uint8Array) => {
+  const ttl = getCardanoTxTtl(encodedBytes)
+  const currentSlot = await getCardanoCurrentSlotForBroadcast()
+
+  const freshnessError = getCardanoTtlFreshnessError({ currentSlot, ttl })
+  if (freshnessError) {
+    throw freshnessError
   }
 }
 

@@ -35,6 +35,14 @@ import type { Signature, SigningMode, SigningPayload, SigningStep } from '../typ
 // Default relay server URL
 const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
 
+const createAbortError = (signal: AbortSignal): Error => {
+  const error = new Error('Operation aborted', { cause: signal.reason })
+  error.name = 'AbortError'
+  return error
+}
+
+const isAbortError = (error: unknown): error is Error => error instanceof Error && error.name === 'AbortError'
+
 /**
  * Progress step during relay signing
  */
@@ -50,6 +58,8 @@ export type RelaySigningStep =
  * Options for relay signing
  */
 export type RelaySigningOptions = {
+  /** Existing operation ID to use instead of generating one internally. */
+  sessionId?: string
   /** AbortSignal for cancellation */
   signal?: AbortSignal
   /** Progress callback - maps to SigningStep for consistency */
@@ -77,13 +87,13 @@ export class RelaySigningService {
   /**
    * Generate session parameters for a signing session
    */
-  generateSessionParams(): {
+  generateSessionParams(sessionId?: string): {
     sessionId: string
     hexEncryptionKey: string
     localPartyId: string
   } {
     return {
-      sessionId: randomUUID(),
+      sessionId: sessionId?.trim() || randomUUID(),
       hexEncryptionKey: generateHexEncryptionKey(),
       localPartyId: generateLocalPartyId('sdk'),
     }
@@ -110,6 +120,7 @@ export class RelaySigningService {
     // - Consistent behavior with other Vultisig relay clients
     return getJoinKeysignUrl({
       serverType: 'relay',
+      serverUrl: this.relayUrl,
       serviceName: params.localPartyId,
       sessionId: params.sessionId,
       hexEncryptionKey: params.hexEncryptionKey,
@@ -140,7 +151,7 @@ export class RelaySigningService {
     while (Date.now() - startTime < timeout) {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
 
       try {
@@ -176,7 +187,7 @@ export class RelaySigningService {
         }
       } catch (error) {
         // Re-throw abort errors
-        if (error instanceof Error && error.message === 'Operation aborted') {
+        if (isAbortError(error)) {
           throw error
         }
         // Ignore other polling errors, continue waiting
@@ -209,7 +220,7 @@ export class RelaySigningService {
     const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
       onProgress?.({
         step,
@@ -241,7 +252,7 @@ export class RelaySigningService {
 
       // Step 2: Generate session params
       reportProgress('preparing', 10, 'Generating session parameters')
-      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
+      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams(options.sessionId)
 
       // Step 3: Get chain signing info (signature algorithm and derivation path)
       const chain = payload.chain as Chain
@@ -371,8 +382,11 @@ export class RelaySigningService {
 
       return formattedSignature
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : 'Unknown error during signing'
-      throw new Error(`Relay signing failed: ${message}`)
+      throw new Error(`Relay signing failed: ${message}`, { cause: error })
     }
   }
 
@@ -400,7 +414,7 @@ export class RelaySigningService {
     const reportProgress = (step: StepType, progress: number, message: string, participantsReady = 0) => {
       // Check for abort via signal
       if (signal?.aborted) {
-        throw new Error('Operation aborted')
+        throw createAbortError(signal)
       }
       onProgress?.({
         step,
@@ -424,7 +438,7 @@ export class RelaySigningService {
 
       // Generate session params
       reportProgress('preparing', 10, 'Generating session parameters')
-      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams()
+      const { sessionId, hexEncryptionKey, localPartyId } = this.generateSessionParams(options.sessionId)
 
       // Determine signature algorithm and derivation path
       const { signatureAlgorithm, chainPath } = getChainSigningInfo({ chain: bytesOptions.chain }, walletCore)
@@ -542,8 +556,11 @@ export class RelaySigningService {
 
       return formattedSignature
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
       const message = error instanceof Error ? error.message : 'Unknown error during signing'
-      throw new Error(`Relay bytes signing failed: ${message}`)
+      throw new Error(`Relay bytes signing failed: ${message}`, { cause: error })
     }
   }
 }

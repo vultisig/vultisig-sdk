@@ -9,7 +9,7 @@
  * import directly from './lib/output' which respects silent mode.
  */
 import type { Balance, Chain, FiatCurrency, GasInfo, SwapQuoteResult, VaultBase } from '@vultisig/sdk'
-import { fiatCurrencyNameRecord, Vultisig } from '@vultisig/sdk'
+import { fiatCurrencyNameRecord, fromChainAmountExact, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 // Re-export types from core for backwards compatibility
@@ -143,6 +143,7 @@ export function displayTransactionPreview(
   symbol: string,
   chain: Chain,
   memo?: string,
+  destinationTag?: number,
   gas?: GasInfo
 ): void {
   if (gas) {
@@ -157,6 +158,9 @@ export function displayTransactionPreview(
   printResult(`  Chain:  ${chain}`)
   if (memo) {
     printResult(`  Memo:   ${memo}`)
+  }
+  if (destinationTag !== undefined) {
+    printResult(`  Destination tag: ${destinationTag}`)
   }
 }
 
@@ -265,23 +269,22 @@ export function setupVaultEvents(vault: VaultBase): void {
 // ============================================================================
 
 /**
- * Format bigint amount to human-readable string
+ * Format bigint amount to human-readable string.
+ *
+ * Delegates to the SDK's pure-bigint `fromChainAmountExact` (no float64
+ * round-trip) and trims trailing fraction zeros to keep this function's
+ * existing display contract. The prior `BigInt(10 ** decimals)` divisor was
+ * only exact up to decimals=22 — a float64 power past that silently
+ * corrupted the divisor for higher-decimal assets.
  */
 export function formatBigintAmount(amount: bigint, decimals: number): string {
   if (amount === 0n) return '0'
 
-  const divisor = BigInt(10 ** decimals)
-  const whole = amount / divisor
-  const fraction = amount % divisor
+  const [whole, fraction] = fromChainAmountExact(amount, decimals).split('.')
+  if (!fraction) return whole
 
-  if (fraction === 0n) {
-    return whole.toString()
-  }
-
-  const fractionStr = fraction.toString().padStart(decimals, '0')
-  // Trim trailing zeros
-  const trimmed = fractionStr.replace(/0+$/, '')
-  return `${whole}.${trimmed}`
+  const trimmed = fraction.replace(/0+$/, '')
+  return trimmed ? `${whole}.${trimmed}` : whole
 }
 
 /**

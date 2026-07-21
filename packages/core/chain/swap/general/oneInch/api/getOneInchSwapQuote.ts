@@ -109,6 +109,17 @@ export const getOneInchSwapQuote = async ({
   // on zkSync Era. See knownAggregatorRouters.ts.
   assertKnownAggregatorRouter('1inch', tx.to, chain)
 
+  // Fund-safety: 1inch's `tx.value` flows through from the untrusted response VERBATIM (spread
+  // below), unlike Kyber which constructs `value` itself. For a TOKEN-source swap the sell token is
+  // pulled via ERC-20 allowance (approve/transferFrom), so `value` MUST be 0 — a non-zero value
+  // would move native chain gas-coin the user never authorized alongside the swap. A native-source
+  // swap (no `fromCoinId`) legitimately carries `value` == the sell amount, so only guard tokens.
+  if (!isFeeCoin({ id: fromCoinId, chain }) && tx.value && tx.value !== '0') {
+    throw new Error(
+      `1inch quote returned a non-zero tx.value (${tx.value}) for a token-source swap on ${chain} — a token swap pulls the sell token via allowance and must not move native value; refusing to sign.`
+    )
+  }
+
   return {
     dstAmount,
     provider: '1inch',

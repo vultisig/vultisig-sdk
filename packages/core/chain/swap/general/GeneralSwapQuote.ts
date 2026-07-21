@@ -13,6 +13,22 @@ export type GeneralSwapTx =
         value: string
         gasLimit?: bigint
         affiliateFee?: SwapFee
+        /**
+         * The address that will be called as `transferFrom` spender for the
+         * input ERC-20 token. Set by LI.FI quotes from `estimate.approvalAddress`
+         * when it differs from `to` (e.g. when 1inch or another inner executor
+         * does the token pull directly instead of the Diamond/router).
+         *
+         * On-chain proof of the gap: tx 0xa3aadf17 (Ethereum, block 25415989)
+         * reverted with "ERC20: transfer amount exceeds allowance" because the
+         * vault had 9.41 USDC approved to the Diamond (`to` = 0x9025B8ff…) but
+         * zero allowance to the 1inch executor (`approvalAddress`). The Diamond
+         * being approved is not sufficient when an inner executor does the pull.
+         *
+         * Consumers building an ERC-20 approve leg MUST use this field as the
+         * spender when present, falling back to `to` only when absent.
+         */
+        approvalAddress?: string
       }
     }
   | {
