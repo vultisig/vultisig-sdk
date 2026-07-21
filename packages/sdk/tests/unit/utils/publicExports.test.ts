@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import * as dangerousAddresses from '../../../src/utils/dangerousAddresses'
 
 describe('@vultisig/sdk public exports', () => {
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
@@ -43,6 +44,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isCanonicalTronContract).toBe('function')
     expect(sdk.canonicalEvmContracts instanceof Set).toBe(true)
     expect(typeof sdk.knownContracts.isKnownContract).toBe('function')
+  })
+
+  it('exports the canonical dangerous-address helpers and constants', () => {
+    expect(sdk.EVM_DANGEROUS_ADDRESSES).toBe(dangerousAddresses.EVM_DANGEROUS_ADDRESSES)
+    expect(sdk.SOLANA_DANGEROUS_ADDRESSES).toBe(dangerousAddresses.SOLANA_DANGEROUS_ADDRESSES)
+    expect(sdk.getEvmDangerousReason).toBe(dangerousAddresses.getEvmDangerousReason)
+    expect(sdk.isEvmBurnAddress).toBe(dangerousAddresses.isEvmBurnAddress)
+    expect(sdk.getChainDangerousReason).toBe(dangerousAddresses.getChainDangerousReason)
+    expect(sdk.assertSafeEvmDestination).toBe(dangerousAddresses.assertSafeEvmDestination)
+    expect(sdk.assertSafeDestination).toBe(dangerousAddresses.assertSafeDestination)
   })
 
   it('exports findSwapQuote, abiEncode, evmCheckAllowance (already consumed by mcp-ts)', () => {
