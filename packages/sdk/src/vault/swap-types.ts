@@ -6,7 +6,7 @@
 
 import type { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import type { SwapAffiliateConfig } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+import type { SwapAffiliateConfig, SwapQuoteProviderExcludeName } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 import type { SwapQuote } from '@vultisig/core-chain/swap/quote/SwapQuote'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -57,6 +57,12 @@ export type SwapQuoteParams = {
    * every provider falls back to core's built-in vultisig-0-family defaults.
    */
   affiliateConfig?: SwapAffiliateConfig
+  /** Optional external recipient for the swapped output */
+  recipient?: string
+  /** Optional max slippage tolerance in PERCENT (e.g. `0.5` = 0.5%, `3` = 3%) */
+  slippageTolerance?: number
+  /** Optional opt-in list of swap providers to exclude from best-quote selection */
+  excludeProviders?: SwapQuoteProviderExcludeName[]
 }
 
 /**

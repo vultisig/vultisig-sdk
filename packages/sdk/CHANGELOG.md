@@ -1,5 +1,36 @@
 # @vultisig/sdk
 
+## 2.20.0
+
+### Minor Changes
+
+- [#1317](https://github.com/vultisig/vultisig-sdk/pull/1317) [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Register the Rujira liquid-bond THORChain tokens bRUNE (`x/brune`) and ybRUNE (`x/staking-x/brune`), and add the `bruneBondConfig` staking-contract config. bRUNE is auto-discovered as a normal wallet token priced against RUNE (`priceProviderId: 'thorchain'`); the ybRUNE auto-compounding staking receipt is excluded from wallet discovery and carries native-token metadata for backfill.
+
+- [#1284](https://github.com/vultisig/vultisig-sdk/pull/1284) [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose generic CosmWasm Amino and protobuf execute builders from the root SDK and reuse the canonical Amino envelope in the CLI.
+
+- [#1308](https://github.com/vultisig/vultisig-sdk/pull/1308) [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose one SDK chain-reference resolver and use it for CLI and MCP chain names, aliases, and IDs.
+
+- [#1269](https://github.com/vultisig/vultisig-sdk/pull/1269) [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Allow Solana status checks to return terminal `not_found` for unknown
+  signatures whose `lastValidBlockHeight` has expired.
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1313](https://github.com/vultisig/vultisig-sdk/pull/1313) [`c3168e2`](https://github.com/vultisig/vultisig-sdk/commit/c3168e24a32d733da85b2f6038e7e55c4dbe8d72) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Remove persisted pending vault state after successful same-process verification.
+
+- [#1309](https://github.com/vultisig/vultisig-sdk/pull/1309) [`7bb79ba`](https://github.com/vultisig/vultisig-sdk/commit/7bb79ba9ef968bc20ba88e1bdd189ca8864b0221) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep `clearVaults` scoped to SDK-owned keys in shared storage adapters.
+
+- [#1031](https://github.com/vultisig/vultisig-sdk/pull/1031) [`a8e873e`](https://github.com/vultisig/vultisig-sdk/commit/a8e873e41a41693dcdee575c5271422fe6c6b6e3) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Document the public SDK chain metadata boundary used by CLI consumers.
+
+- [#1029](https://github.com/vultisig/vultisig-sdk/pull/1029) [`421e8da`](https://github.com/vultisig/vultisig-sdk/commit/421e8da0b11a35bcc95351e7b644318fe171c5ec) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject secure vault creation and import sessions when more relay peers join than the requested device count.
+
+- [#1270](https://github.com/vultisig/vultisig-sdk/pull/1270) [`6de79ab`](https://github.com/vultisig/vultisig-sdk/commit/6de79ab1ec6e3566ea8511a0a6c7afde87752c48) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Export the canonical Cosmos fee-denom helpers from the React Native entrypoint.
+
+- [#1314](https://github.com/vultisig/vultisig-sdk/pull/1314) [`21ca074`](https://github.com/vultisig/vultisig-sdk/commit/21ca07454d5ac462882317da4f49d5f80ef32837) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Make React Native EVM raw broadcast idempotent for known or hash-confirmed transactions.
+
+- [#1318](https://github.com/vultisig/vultisig-sdk/pull/1318) [`72da781`](https://github.com/vultisig/vultisig-sdk/commit/72da781743fad0664edfc5ffcd72720ac7f0d0bd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add bounded timeouts and caller cancellation to React Native RPC and Fast Vault network flows.
+
 ## 2.19.19
 
 ### Patch Changes

@@ -14,10 +14,10 @@ import { nativeSwapEnabledChains } from '@vultisig/core-chain/swap/native/Native
 // Swap primary action). Correctness-by-construction beats a hidden invariant.
 export const swapEnabledChains = [
   ...nativeSwapEnabledChains,
-  ...oneInchSwapEnabledChains,
+  ...cowSwapSupportedChains,
   ...kyberSwapEnabledChains,
+  ...oneInchSwapEnabledChains,
+  ...jupiterSwapEnabledChains,
   ...lifiSwapEnabledChains,
   ...swapKitEnabledChains,
-  ...jupiterSwapEnabledChains,
-  ...cowSwapSupportedChains,
 ] as const

@@ -17,9 +17,8 @@
  * `numberToHex`.
  */
 import type { Chain } from '@vultisig/core-chain/Chain'
-import { getCosmosChainByChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
-import { getEvmChainByChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
-import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
+
+import { resolveChainIdReference } from '../../../utils/resolveChainReference'
 
 /**
  * Skip chain_id → Vultisig Chain. Returns `undefined` for chains the SDK has no
@@ -29,11 +28,5 @@ import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
  * "osmosis-1", "columbus-5", …).
  */
 export function skipChainIdToChainName(skipChainId: string): Chain | undefined {
-  // EVM ids arrive as decimal strings; the SDK keys EVM chains by 0x-hex.
-  if (/^[1-9][0-9]*$/.test(skipChainId)) {
-    const hex = numberToHex(Number(skipChainId))
-    const evm = getEvmChainByChainId(hex)
-    if (evm) return evm as Chain
-  }
-  return getCosmosChainByChainId(skipChainId) as Chain | undefined
+  return resolveChainIdReference(skipChainId)
 }

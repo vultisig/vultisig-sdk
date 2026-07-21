@@ -372,6 +372,60 @@ describe('SwapService', () => {
       expect(result.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')
     })
 
+    it('should use the quote approvalAddress as the ERC-20 spender when it differs from the router', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+      const router = '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE'
+      const approvalAddress = '0x2222222222222222222222222222222222222222'
+      const owner = '0x1234567890abcdef1234567890abcdef12345678'
+      const token = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '50000000000000000',
+            provider: 'li.fi' as const,
+            tx: {
+              evm: {
+                from: owner,
+                to: router,
+                approvalAddress,
+                data: '0x...',
+                value: '0',
+              },
+            },
+          },
+        },
+        discounts: [],
+      })
+      vi.mocked(getErc20Allowance).mockResolvedValue(0n)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Ethereum,
+          address: owner,
+          id: token,
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: owner,
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 100,
+      })
+
+      expect(getErc20Allowance).toHaveBeenCalledWith({
+        chain: Chain.Ethereum,
+        id: token,
+        address: owner,
+        spender: approvalAddress,
+      })
+      expect(result.approvalInfo?.spender).toBe(approvalAddress)
+    })
+
     it('should not require approval when allowance is sufficient', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
       const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
