@@ -3,12 +3,21 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '../../../src/index'
 
 describe('@vultisig/sdk public exports', () => {
-  it('exports fiatToAmount and chain-reference normalization utilities', () => {
+  it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
+    expect(typeof sdk.toChainAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
     expect(typeof sdk.resolveChainReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
+    expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
+  })
+
+  it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
+    expect(sdk.toChainAmount('1.2345e-3', 8)).toBe(123450n)
+
+    expect(() => sdk.toChainAmount('   ', 8)).toThrow(sdk.ChainAmountParseError)
+    expect(sdk.ChainAmountParseError.prototype).toBeInstanceOf(Error)
   })
 
   it('exports fromChainAmountExact and getBlockExplorerUrl', () => {
