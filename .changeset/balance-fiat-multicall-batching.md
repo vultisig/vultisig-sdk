@@ -19,6 +19,14 @@ values concurrently. `getTotalValue` now fetches chains' values concurrently
 with a bounded number in flight (no unbounded RPC burst on many-chain vaults)
 instead of awaiting them one chain at a time.
 
+`getEvmChainBalances` now OMITS a coin whose balance it could not read (a reverted/failed
+Multicall3 sub-call, or a per-coin failure in the no-multicall3 fallback) instead of decoding it
+as `0n`. A present `0n` means a genuine zero balance; an absent key means "unknown". Callers can
+therefore tell the two apart and refetch instead of persisting a fabricated zero.
+
+`FiatValueService.updateValues('all')` now bounds its per-chain fan-out with the same concurrency
+cap as `getTotalValue` instead of a raw `Promise.all`.
+
 Fix: a coin OMITTED from the EVM multicall result (a transient RPC hiccup /
 partial Multicall3 aggregate) is no longer cached as a fabricated `0n` (5-min
 TTL) and no longer emitted as a real `balanceUpdated` — which would have shown a

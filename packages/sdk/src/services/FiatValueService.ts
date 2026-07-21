@@ -452,9 +452,10 @@ export class FiatValueService {
     await this.clearPrices()
 
     if (chain === 'all') {
-      // Fetch values for all chains (triggers fresh price fetch)
+      // Fetch values for all chains (triggers fresh price fetch), bounded like getTotalValue —
+      // a raw Promise.all here would re-introduce the unbounded per-chain RPC burst on a many-chain vault.
       const chains = this.getChains()
-      await Promise.all(chains.map(c => this.getValues(c)))
+      await mapWithConcurrency(chains, TOTAL_VALUE_CONCURRENCY, chain => this.getValues(chain))
     } else {
       // Fetch values for specific chain
       await this.getValues(chain)

@@ -144,6 +144,52 @@ describe('balance/fiat batching benchmark (call-count A/B)', () => {
     // Sequential (old) would cap in-flight balance fetches at 1; parallel chains overlap.
     expect(maxConcurrent).toBeGreaterThan(1)
   })
+
+  it("bounds the fan-out of updateValues('all') the same way getTotalValue does", async () => {
+    // More chains than TOTAL_VALUE_CONCURRENCY (8), so an unbounded Promise.all is observable.
+    const chains = [
+      Chain.Ethereum,
+      Chain.Base,
+      Chain.Arbitrum,
+      Chain.Optimism,
+      Chain.Polygon,
+      Chain.Avalanche,
+      Chain.BSC,
+      Chain.Blast,
+      Chain.CronosChain,
+      Chain.Zksync,
+      Chain.Bitcoin,
+      Chain.Litecoin,
+    ]
+
+    let inFlight = 0
+    let maxConcurrent = 0
+    const getBalance = vi.fn(async (chain: Chain) => {
+      inFlight += 1
+      maxConcurrent = Math.max(maxConcurrent, inFlight)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      inFlight -= 1
+      return { amount: '1', formattedAmount: '1', decimals: 18, symbol: 'ETH', chainId: chain }
+    })
+
+    vi.mocked(getCoinPrices).mockResolvedValue({})
+    vi.mocked(getCoinValue).mockReturnValue(1)
+
+    const service = new FiatValueService(
+      new CacheService(new MemoryStorage()),
+      () => 'usd',
+      () => ({}),
+      () => chains,
+      getBalance
+    )
+
+    await service.updateValues('all')
+
+    // Every chain is visited, but never more than the cap at once. A raw Promise.all would reach 12.
+    expect(getBalance).toHaveBeenCalledTimes(chains.length)
+    expect(maxConcurrent).toBeGreaterThan(1)
+    expect(maxConcurrent).toBeLessThanOrEqual(8)
+  })
 })
 
 describe('balance batching — graceful degradation preserved', () => {
