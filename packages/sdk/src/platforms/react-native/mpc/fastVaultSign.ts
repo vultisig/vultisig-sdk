@@ -13,6 +13,12 @@
 
 import { keysign } from '@vultisig/core-mpc/keysign'
 
+import {
+  DEFAULT_RN_FETCH_TIMEOUT_MS,
+  delayWithSignal,
+  throwIfSignalAborted,
+  withFetchTimeout,
+} from '../fetchWithTimeout'
 import { getConfiguredRelayUrl, getConfiguredVultiServerUrl } from '../runtime'
 import { joinRelaySession, startRelaySession, waitForParties } from './relay'
 
@@ -27,6 +33,10 @@ export type FastVaultSignOptions = {
   chain?: string
   isEcdsa?: boolean
   maxAttempts?: number
+  /** Cancels VultiServer, relay coordination, retry delays, and pre-keysign work. */
+  signal?: AbortSignal
+  /** Per-request network timeout. Defaults to 30 seconds; relay party wait remains 60 seconds overall. */
+  requestTimeoutMs?: number
   /** Override the VultiServer URL configured via configureRuntime / SDK default. */
   vultiServerUrl?: string
   /** Override the relay URL configured via configureRuntime / SDK default. */
@@ -81,8 +91,6 @@ function randomUUID(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-
 /**
  * Validate a URL before POSTing the vault password to it. `configureRuntime`
  * already validates values installed via the registry, but `opts.vultiServerUrl`
@@ -108,10 +116,14 @@ export async function fastVaultSign(opts: FastVaultSignOptions): Promise<string>
   const maxAttempts = opts.maxAttempts ?? 2
   let lastErr: Error | undefined
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    throwIfSignalAborted(opts.signal)
     try {
       return await fastVaultSignAttempt(opts)
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err))
+      if (opts.signal?.aborted) {
+        throwIfSignalAborted(opts.signal)
+      }
       const msg = lastErr.message.toLowerCase()
       // Use word-boundary regex for HTTP 5xx so error strings like
       // "port 5001 closed" or "txid ...5000..." don't accidentally match.
@@ -123,7 +135,7 @@ export async function fastVaultSign(opts: FastVaultSignOptions): Promise<string>
         has5xx ||
         msg.includes('keysign failed')
       if (attempt < maxAttempts && retryable) {
-        await sleep(2000)
+        await delayWithSignal(2000, opts.signal)
         continue
       }
       throw lastErr
@@ -164,23 +176,34 @@ async function fastVaultSignAttempt(opts: FastVaultSignOptions): Promise<string>
     chain,
   }
 
-  const res = await fetch(`${vultiServerUrl}/sign`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(signPayload),
-  })
-  if (!res.ok) {
-    const errBody = await res.text()
-    throw new Error(`VultiServer sign failed: ${res.status} - ${errBody.substring(0, 200)}`)
-  }
-  await res.text()
+  const requestTimeoutMs = opts.requestTimeoutMs ?? DEFAULT_RN_FETCH_TIMEOUT_MS
+  await withFetchTimeout(
+    `${vultiServerUrl}/sign`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(signPayload),
+      signal: opts.signal,
+    },
+    requestTimeoutMs,
+    async res => {
+      if (!res.ok) {
+        const errBody = await res.text()
+        throw new Error(`VultiServer sign failed: ${res.status} - ${errBody.substring(0, 200)}`)
+      }
+      await res.text()
+    }
+  )
 
-  await joinRelaySession(relayUrl, sessionId, localPartyId)
-  const parties = await waitForParties(relayUrl, sessionId, 2, 60_000)
-  await startRelaySession(relayUrl, sessionId, parties)
+  const relayOptions = { signal: opts.signal, requestTimeoutMs }
+  await joinRelaySession(relayUrl, sessionId, localPartyId, relayOptions)
+  const parties = await waitForParties(relayUrl, sessionId, 2, 60_000, opts.signal, requestTimeoutMs)
+  await startRelaySession(relayUrl, sessionId, parties, relayOptions)
 
   const serverPartyId = parties.find(p => p !== localPartyId) ?? parties[0]!
   const mpcChainPath = localDerivePath.replaceAll("'", '')
+
+  throwIfSignalAborted(opts.signal)
 
   const result = await keysign({
     keyShare: keyshareBase64,

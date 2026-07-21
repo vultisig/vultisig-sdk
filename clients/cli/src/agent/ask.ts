@@ -15,7 +15,7 @@ import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
-import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -40,6 +40,7 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
    * failure (which rejects sendMessage and surfaces via the catch), an SSE
@@ -66,24 +67,13 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
   private error: AskResult['error']
-  // Initialize-time error, kept SEPARATE from the turn error so it stays the
-  // LOWEST-priority signal. initialize() drives getCallbacks() BEFORE the first
-  // ask() — a stale --session fallback fires onError(SESSION_NOT_FOUND) there.
-  // A real first-turn error must override it, so we never pre-set `this.error`
-  // with the init signal; instead partialResult() falls back to `initError` only
-  // when the turn produced no error of its own. Cleared after the first turn so
-  // later turns don't carry the init signal.
-  private initError: AskResult['error']
   // Tracks whether the currently-latched `error` is a terminal one (e.g. the
   // depth cap). A terminal error may overwrite a prior non-terminal one; once a
   // terminal error is recorded, later frames cannot replace it. See onError.
   private errorIsTerminal = false
-  // Whether ask() has run at least once. Distinguishes init-time onError (sets
-  // initError) from turn onError (sets error), and gates clearing initError so
-  // the init signal only carries into the FIRST turn.
-  private hasAsked = false
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
@@ -174,21 +164,22 @@ export class AskInterface {
       },
 
       onError: (message: string, code: AgentErrorCode) => {
-        // An onError fired BEFORE the first ask() (hasAsked === false) is an
-        // initialize-time signal (e.g. SESSION_NOT_FOUND from a stale --session
-        // fallback). Keep it in initError as the lowest-priority fallback so a
-        // real turn error can still override it. For turn errors: latch the first
-        // error, but let a terminal code overwrite a previously-recorded non-terminal
-        // one (LOOP_DEPTH_EXCEEDED etc.); once a terminal error is latched, later
-        // frames cannot replace it. Keep the stderr breadcrumb either way.
+        // Latch the first error, but let a terminal code overwrite a previously
+        // recorded non-terminal one (LOOP_DEPTH_EXCEEDED etc.); once a terminal
+        // error is latched, later frames cannot replace it. Keep the stderr
+        // breadcrumb either way. (Ask mode's initialize() fails closed by THROWING
+        // on a resume error, so no onError ever fires before the first ask().)
         const isTerminal = isTerminalAgentErrorCode(code)
-        if (!this.hasAsked) {
-          this.initError = { message, code }
-        } else if (!this.error || (isTerminal && !this.errorIsTerminal)) {
+        if (!this.error || (isTerminal && !this.errorIsTerminal)) {
           this.error = { message, code }
           this.errorIsTerminal = isTerminal
         }
         process.stderr.write(`[error] ${message} [${code}]\n`)
+      },
+
+      onProtocolWarning: (warning: ProtocolWarning) => {
+        this.warnings.push(warning)
+        process.stderr.write(`[warning] ${warning.message} [${warning.code}]\n`)
       },
 
       onDone: () => {
@@ -224,17 +215,11 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.warnings = []
     this.outcome = undefined
-    // Each turn's error is turn-local — reset it every turn. The initialize-time
-    // signal lives separately in initError (see partialResult's `?? initError`),
-    // so clearing error here can't drop it. initError carries ONLY into the first
-    // turn, so drop it once a prior turn has run.
+    // Each turn's error (and its terminal flag) is turn-local — reset every turn.
     this.error = undefined
-    if (this.hasAsked) {
-      this.initError = undefined
-      this.errorIsTerminal = false
-    }
-    this.hasAsked = true
+    this.errorIsTerminal = false
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
@@ -257,9 +242,8 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
-      // A real turn error wins; fall back to the init-time signal (e.g. stale
-      // --session SESSION_NOT_FOUND) only when the turn produced no error.
-      error: this.error ?? this.initError,
+      warnings: this.warnings,
+      error: this.error,
       ...(this.outcome ? { outcome: this.outcome } : {}),
     }
   }

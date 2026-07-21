@@ -17,8 +17,19 @@ live in agent-backend-ts; 004/008 in vultiagent-poc).
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore) | P1 | M | — | TODO |
+| 003  | Golden-vector-bind the two tx-encoder families (RN pure-JS vs WalletCore) | P1 | M | — | DONE — see note |
 | 005  | Add amount↔quote + expiry checks to the agent-reachable vault-free swap helper | P1 | S | — | DONE (partial) — see note |
+
+## Plan 003 outcome note (2026-07-17, branch fix_encoder_parity_cross_check)
+
+Landed as shared readFileSync fixtures under `testdata/cross-encoder-golden/` asserted by BOTH
+`packages/core/mpc/tx/compile/compileTx.golden.test.ts` (WalletCore/WASM family) and
+`packages/sdk/tests/unit/platforms/react-native/{tx-builder,cosmos-send}-golden-vectors.test.ts`
+(RN pure-JS family), in the default non-skipped test path. Coverage: EVM native (legacy +
+eip1559), ERC-20 transfer (legacy + eip1559, incl. calldata construction), Solana transfer,
+Cosmos bank MsgSend (+ derivation cross-bind). The cosmos/solana half resurrects PR #1044,
+which had merged into the never-landed `feat_golden_vector_gaps` feature branch; the EVM half
+is new. All parity assertions PASS — no live divergence between the families was found.
 
 ## Plan 005 outcome note (2026-07-08, branch advisor/005-vault-free-swap-safety-checks)
 

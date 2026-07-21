@@ -11,7 +11,7 @@ import {
   Chain,
   chainFeeCoin,
   getChainKind,
-  getEvmChainByChainId,
+  resolveChainReference,
   VaultError,
   VaultErrorCode,
   Vultisig as VultisigSdk,
@@ -202,6 +202,15 @@ export class AgentExecutor {
    */
   private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
     const source = overrideTx ?? payload
+    // `data` is EVM calldata iff the chain is an EVM chain — the single authority
+    // that decides whether an empty `"0x"` folds (calldata) or stays literal (a
+    // memo on a memo-routed chain, PR #1259). Derived from chain kind, never
+    // hardcoded per branch, so a new chain family can't silently reintroduce the
+    // memo collision. The nested-tx branch is EVM by construction (extractNestedTx
+    // only yields EVM `tx`/`send_tx` shapes); the flat branch is a non-EVM memo —
+    // but if an EVM send ever reaches it, its `0x` memo is still calldata, so gate
+    // both on the same rule rather than assuming which branch runs.
+    const dataIsEvmCalldata = getChainKind(chain) === 'evm'
     const nested = extractNestedTx(source)
     if (nested && (nested.to || nested.value || nested.data)) {
       return {
@@ -210,6 +219,7 @@ export class AgentExecutor {
         to: nested.to != null ? String(nested.to) : undefined,
         value: nested.value != null ? String(nested.value) : undefined,
         data: nested.data != null ? String(nested.data) : undefined,
+        dataIsEvmCalldata,
       }
     }
     const txArgs = source?.txArgs ?? source
@@ -224,6 +234,7 @@ export class AgentExecutor {
       to: txArgs?.to != null ? String(txArgs.to) : undefined,
       value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
       data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      dataIsEvmCalldata,
       asset: asset != null ? String(asset) : undefined,
     }
   }
@@ -1903,50 +1914,9 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
+/** Resolve a CLI chain name or ID through the SDK's canonical resolver. */
 export function resolveChain(name: string): Chain | null {
-  if (!name) return null
-
-  // Direct enum match
-  if (Object.values(Chain).includes(name as Chain)) {
-    return name as Chain
-  }
-
-  // Case-insensitive search
-  const lower = name.toLowerCase()
-  for (const [, value] of Object.entries(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
-      return value as Chain
-    }
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    eth: 'Ethereum',
-    btc: 'Bitcoin',
-    sol: 'Solana',
-    bnb: 'BSC',
-    avax: 'Avalanche',
-    matic: 'Polygon',
-    arb: 'Arbitrum',
-    op: 'Optimism',
-    ltc: 'Litecoin',
-    doge: 'Dogecoin',
-    dot: 'Polkadot',
-    atom: 'Cosmos',
-    rune: 'THORChain',
-    thor: 'THORChain',
-    sui: 'Sui',
-    ton: 'Ton',
-    trx: 'Tron',
-    xrp: 'Ripple',
-  }
-
-  const aliased = aliases[lower]
-  if (aliased && Object.values(Chain).includes(aliased as Chain)) {
-    return aliased as Chain
-  }
-
-  return null
+  return resolveChainReference(name) ?? null
 }
 
 /**
@@ -2204,12 +2174,7 @@ export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
  * Resolve a Chain from a numeric EVM chain ID.
  */
 export function resolveChainId(chainId: string | number): Chain | null {
-  const normalized = typeof chainId === 'string' ? chainId.trim().toLowerCase() : String(chainId)
-  const id = Number.parseInt(normalized, normalized.startsWith('0x') ? 16 : 10)
-  if (Number.isNaN(id)) return null
-
-  const canonicalChainId = normalized.startsWith('0x') ? normalized : `0x${id.toString(16)}`
-  return (getEvmChainByChainId(canonicalChainId) as Chain | undefined) ?? null
+  return resolveChainReference(chainId) ?? null
 }
 
 // ============================================================================

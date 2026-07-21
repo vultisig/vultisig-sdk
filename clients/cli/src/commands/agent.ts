@@ -25,7 +25,13 @@ import {
   isAuthError,
   PipeInterface,
 } from '../agent'
-import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agent/agentErrors'
+import {
+  AgentErrorCode,
+  agentErrorCodeToExitCode,
+  inferAgentErrorCodeFromMessage,
+  isAgentErrorCode,
+  normalizeAgentError,
+} from '../agent/agentErrors'
 import type { AskResult } from '../agent/ask'
 import { renderBalanceSummaryCard } from '../agent/cards'
 import type { CommandContext } from '../core'
@@ -40,6 +46,7 @@ export type AgentCommandOptions = {
   verbose?: boolean
   notificationUrl?: string
   profile?: string
+  allowAutoSubmit?: boolean
 }
 
 export async function executeAgent(ctx: CommandContext, options: AgentCommandOptions): Promise<void> {
@@ -55,6 +62,7 @@ export async function executeAgent(ctx: CommandContext, options: AgentCommandOpt
     verbose: options.verbose,
     notificationUrl: options.notificationUrl || process.env.VULTISIG_NOTIFICATION_URL || '',
     profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
+    allowAutoSubmit: options.allowAutoSubmit,
   }
 
   const session = new AgentSession(vault, config)
@@ -102,6 +110,8 @@ export type AgentAskOptions = {
   profile?: string
   /** Opt in to unattended signing/broadcast (`--yes`). Default: deny + report the proposed tx. */
   autoApprove?: boolean
+  /** Permit the backend to submit a signed Polymarket order. */
+  allowAutoSubmit?: boolean
   /** Bypass the broadcast-journal duplicate guard (`--force`). */
   force?: boolean
 }
@@ -147,6 +157,7 @@ function outputAskError(
     if (result?.transactions.length) data.transactions = result.transactions
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
+    if (result?.warnings.length) data.warnings = result.warnings
     // a2a-02: the typed turn ending, when the backend advertised it. Placed under
     // `data` so a caller reads `data.outcome` on BOTH the success and error
     // envelopes (the success envelope wraps its fields under `data` via outputJson).
@@ -158,6 +169,14 @@ function outputAskError(
       ...(Object.keys(data).length > 0 ? { data } : {}),
     })
   } else {
+    if (result) {
+      process.stderr.write(`session:${result.sessionId}\n`)
+      if (result.outcome) {
+        const { kind, code: outcomeCode } = result.outcome
+        process.stderr.write(`outcome:${kind}${outcomeCode ? `:${outcomeCode}` : ''}\n`)
+      }
+      if (result.response) process.stderr.write(`${result.response}\n`)
+    }
     process.stderr.write(`Error: ${message} [${code}]\n`)
   }
 }
@@ -171,6 +190,32 @@ const ACK_FAILED_MESSAGE =
 
 function hasCommittedBroadcast(result: AskResult | undefined): boolean {
   return !!result?.transactions.some(tx => tx.hash.trim().length > 0 && tx.status !== 'failed')
+}
+
+const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data'])
+
+/**
+ * The turn's signing verdict, or undefined if it signed cleanly (or never tried).
+ *
+ * Only the LAST signing call decides. A failed sign is queued and recursed so the
+ * LLM learns it refused (session.ts:704) and can re-emit a corrected tx_ready — so
+ * an earlier failure superseded by a later successful sign is not a turn failure,
+ * and reporting one would be its own lie.
+ */
+function failedSigningError(result: AskResult): { message: string; code: AgentErrorCode } | undefined {
+  const failed = [...result.toolCalls].reverse().find(call => SIGNING_TOOLS.has(call.action))
+  if (!failed || failed.success) return undefined
+
+  const message =
+    failed.error ??
+    (typeof failed.data?.error === 'string' ? failed.data.error : undefined) ??
+    `${failed.action} failed`
+  const dataCode = failed.data?.code
+  const code =
+    failed.code ??
+    (typeof dataCode === 'string' && isAgentErrorCode(dataCode) ? dataCode : inferAgentErrorCodeFromMessage(message))
+
+  return { message, code }
 }
 
 /**
@@ -192,6 +237,7 @@ function outputPostBroadcastFailure(
       transactions: result.transactions,
       tool_calls: result.toolCalls,
       response: result.response,
+      ...(result.warnings.length ? { warnings: result.warnings } : {}),
       ...(result.outcome ? { outcome: result.outcome } : {}),
       ...(originalError ? { original_error: originalError } : {}),
     }
@@ -266,8 +312,12 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
  * human rendering. Computes the confirmation-required / proposed signals once.
  */
 function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId: string): void {
-  // Machine-detectable signal that a signing step was proposed but denied (no
-  // --yes): callers expecting a broadcast must check this, not infer from exit 0.
+  // Defensive only: in ask mode a declined sign_tx/sign_typed_data always carries
+  // success:false + code:CONFIRMATION_REQUIRED on its own toolCall (session.ts:1105-1113),
+  // so failedSigningError() intercepts it in executeAgentAsk before this success
+  // renderer ever runs. This branch can't currently fire from an ask-mode declined
+  // sign, it stays as a guard against a future toolCall shape where CONFIRMATION_REQUIRED
+  // rides along on an otherwise-successful turn.
   const confirmationRequired = result.toolCalls.some(tc => tc.code === AgentErrorCode.CONFIRMATION_REQUIRED)
   // The same summary the gate showed the user (or would have, in --yes mode).
   const proposedCall = result.toolCalls.find(
@@ -283,11 +333,11 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       tool_calls: result.toolCalls,
       transactions: result.transactions,
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+      ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
       // a2a-02: the typed turn ending (success | blocked | refusal | error) at
       // `data.outcome` — the same relative slot as on the error envelope. Present
       // only against a backend that honored the advertised turn_outcome surface;
-      // headless callers should branch on this (and the exit code), not `success`
-      // (which stays true for a completed-but-blocked/refused turn).
+      // headless callers can inspect it without parsing response prose.
       ...(result.outcome ? { outcome: result.outcome } : {}),
       ...(confirmationRequired ? { confirmation_required: true } : {}),
       ...(proposed ? { proposed } : {}),
@@ -297,23 +347,24 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
   outputAskHuman(result, confirmationRequired, proposed)
 }
 
-/**
- * Map a typed turn-outcome to an exit code (a2a-02). STRICTLY ADDITIVE to the #952
- * taxonomy: success stays 0; blocked/refusal take the first free dedicated slots
- * (10/11); an infra error with no dedicated stream `error` frame collapses to the
- * generic failure code (1) so it can't read as a false success. Returns undefined
- * when there is no outcome (older backend) so the caller keeps its prior default.
- */
-function outcomeToExitCode(outcome: AskResult['outcome']): ExitCode | undefined {
+/** Convert a typed non-success turn ending into its stable envelope code. */
+function outcomeError(outcome: AskResult['outcome']): { message: string; code: AgentErrorCode } | undefined {
   switch (outcome?.kind) {
     case 'blocked':
-      return ExitCode.AGENT_TURN_BLOCKED
+      return {
+        message: 'The agent request was blocked by a safety guardrail.',
+        code: AgentErrorCode.AGENT_TURN_BLOCKED,
+      }
     case 'refusal':
-      return ExitCode.AGENT_TURN_REFUSAL
+      return {
+        message: 'The agent did not complete the requested action. Refine or clarify the request.',
+        code: AgentErrorCode.AGENT_TURN_REFUSAL,
+      }
     case 'error':
-      return ExitCode.USAGE // 1 — generic failure; a stream error-frame path sets a more specific code first
-    case 'success':
-      return ExitCode.SUCCESS
+      return {
+        message: 'The agent could not complete the requested action.',
+        code: AgentErrorCode.AGENT_TURN_ERROR,
+      }
     default:
       return undefined
   }
@@ -354,6 +405,7 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
       askMode: true,
       profile: options.profile ?? process.env.VULTISIG_AGENT_PROFILE ?? '',
       force: options.force,
+      allowAutoSubmit: options.allowAutoSubmit,
     }
 
     const session = new AgentSession(vault, config)
@@ -382,18 +434,30 @@ export async function executeAgentAsk(ctx: CommandContext, message: string, opti
         exitCode = agentErrorCodeToExitCode(result.error.code)
         outputAskError(wantsJson, result.error.message, result.error.code, conversationId, result)
       }
-    } else if (hasCommittedBroadcast(result) && result.outcome && result.outcome.kind !== 'success') {
-      // Any typed non-success ending can arrive after an approval/send/swap leg
-      // already landed. Do not turn that partial execution into overall success or
-      // claim that a refusal/clarification means no action was taken.
-      exitCode = ExitCode.BROADCAST_COMMITTED
-      outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED)
     } else {
-      // a2a-02: no stream error frame — the turn ending is the typed turn_outcome
-      // (when the backend emitted one). success→0, blocked→10, refusal→11, a
-      // frame-less error→1. Absent outcome (older backend) keeps the prior exit 0.
-      exitCode = outcomeToExitCode(result.outcome) ?? 0
-      outputAskSuccess(wantsJson, result, conversationId)
+      // A failed signing leg or any typed non-success ending. Either can arrive
+      // after an approval/send/swap leg already landed.
+      const failure = failedSigningError(result) ?? outcomeError(result.outcome)
+
+      if (failure && hasCommittedBroadcast(result)) {
+        // A live hash exists, so the request is PARTIAL, not merely failed. The
+        // failure's own code must not reach the exit — TRANSACTION_FAILED (6) and
+        // TIMEOUT (3) are documented retryable, and replaying the request would
+        // re-broadcast the leg that landed. 13 is the non-retryable partial slot;
+        // the original diagnostic rides along as data.original_error. Checked
+        // regardless of whether the backend emitted an outcome, so an older
+        // backend (outcome undefined) cannot bypass the guard.
+        exitCode = ExitCode.BROADCAST_COMMITTED
+        outputPostBroadcastFailure(wantsJson, result, conversationId, AgentErrorCode.BROADCAST_COMMITTED, failure)
+      } else if (failure) {
+        exitCode = agentErrorCodeToExitCode(failure.code)
+        outputAskError(wantsJson, failure.message, failure.code, conversationId, result)
+      } else {
+        // A successful typed outcome, or an older backend with no outcome and
+        // no failed signing action, remains the ordinary exit-0 success path.
+        exitCode = ExitCode.SUCCESS
+        outputAskSuccess(wantsJson, result, conversationId)
+      }
     }
   } catch (err: unknown) {
     const normalized = normalizeAgentError(err)
