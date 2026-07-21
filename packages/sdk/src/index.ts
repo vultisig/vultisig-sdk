@@ -59,6 +59,12 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 
+// Pure-bigint exact base-units -> human decimal-string conversion (no float64
+// round-trip, so it's safe for high-decimal assets). Exported at the root so
+// downstream consumers (CLI, app) can share this instead of hand-rolling
+// their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
+export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
+
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
 // Use `parseChain` / `parseTicker` to validate strings from LLM output,
@@ -315,6 +321,9 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 // chain-only explorer URLs when rendering swap tx history.
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
+// Chain-native block explorer URL builder (address/tx) for the non-swap case.
+export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
 
 // Skip Go routing-eligibility predicates. Single source of truth for "does this
 // from/to chain pair route through Skip Go?" — consolidated here so consumers
@@ -683,6 +692,7 @@ export {
   coinGeckoIdToSymbol,
   compareCosts,
   computeAstroportMinReceive,
+  CONSOLIDATE_CHAINS,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
@@ -816,12 +826,14 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
 } from './tools'

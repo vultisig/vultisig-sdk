@@ -79,4 +79,42 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(Array.isArray(rn.rippleKnownIssuedTokens)).toBe(true)
     expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
   })
+
+  it('exports the canonical prep constants from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe('0x2::sui::SUI')
+    expect(rn.CONSOLIDATE_CHAINS).toEqual([
+      rn.Chain.Bitcoin,
+      rn.Chain.Litecoin,
+      rn.Chain.Dogecoin,
+      rn.Chain.BitcoinCash,
+      rn.Chain.Dash,
+    ])
+  })
+})
+
+// RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
+// via the node condition) is a wildcard-ish re-export surface, but this RN
+// entry is a hand-curated allow-list — adding something to the root does NOT
+// make it reachable from the app (Metro resolves the react-native condition
+// to this file, never the node one). publicExports.test.ts only resolves the
+// node condition and can't see a gap here; this test resolves the RN entry
+// FILE directly so an omission fails loudly instead of shipping unreachable
+// in the app. This partially addresses the recurring sdk#1224 allow-list-gap
+// class (see e.g. the cosmosStaking / preparePolkadotAssetSend comments above
+// in the source file) — it does not prevent future gaps, just catches this one.
+describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
+  it('resolves both as functions from the RN entry, not just the root barrel', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.fromChainAmountExact).toBe('function')
+    expect(rn.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
+
+    expect(typeof rn.getBlockExplorerUrl).toBe('function')
+    expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
+      'https://etherscan.io/address/0xabc'
+    )
+  })
 })

@@ -95,6 +95,9 @@ export const nativeSwapChainIds = {
 } satisfies Record<NativeSwapEnabledChain, string>
 export type NativeSwapChainId = (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
 
+export const getNativeSwapChainId = (chain: Chain): NativeSwapChainId | null =>
+  nativeSwapChainIds[chain as NativeSwapEnabledChain] ?? null
+
 type NativeSwapPayloadCase = 'thorchainSwapPayload' | 'mayachainSwapPayload'
 
 export const nativeSwapPayloadCase: Record<NativeSwapChain, NativeSwapPayloadCase> = {

@@ -236,6 +236,46 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
+const createToolsSubpathConfigs = ({ input, distBase }) => [
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.js`,
+      format: 'es',
+      sourcemap: true,
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+    onwarn,
+  },
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.cjs`,
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+      interop: 'auto',
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+  },
+]
+
 // Get target from environment variable
 const target = process.env.BUILD_TARGET || 'all'
 
@@ -278,6 +318,14 @@ const configs = {
         },
       }),
     },
+    ...createToolsSubpathConfigs({
+      input: './src/tools/parse/index.ts',
+      distBase: 'tools/parse',
+    }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/defi/index.ts',
+      distBase: 'tools/defi',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
