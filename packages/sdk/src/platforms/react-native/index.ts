@@ -70,6 +70,20 @@ export {
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 
+// XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
+// the RN graph and should stay in parity with the root SDK entrypoint.
+export {
+  formatIssuedCurrencyValue,
+  isValidXrplCurrencyCode,
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  rippleIssuedCurrencyDecimals,
+  rippleKnownIssuedTokens,
+  rippleOwnerReserveDrops,
+  rippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
 // WalletCore type compatible with both @trustwallet/wallet-core and @vultisig/walletcore-native
 export type { WalletCoreLike } from '@vultisig/walletcore-native'
 
@@ -562,6 +576,8 @@ export type { SolBalance, SplTokenBalance } from '../../tools/balance/solana'
 export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 
 // Pure helpers — no chain client deps
+export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
+export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
 //
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip) and the chain-native block explorer URL
@@ -592,9 +608,14 @@ export async function fiatToAmount(...args: unknown[]) {
   const mod = await import('../../utils/fiatToAmount')
   return mod.fiatToAmount(...(args as Parameters<typeof mod.fiatToAmount>))
 }
+export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
+export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
+export type { NormalizeArgs, NormalizedTx } from '../../tx'
+export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
+export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
   return mod.parseKeygenQR(...(args as Parameters<typeof mod.parseKeygenQR>))

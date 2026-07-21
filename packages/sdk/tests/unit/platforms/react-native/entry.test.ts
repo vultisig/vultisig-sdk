@@ -65,6 +65,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     })
   })
 
+  it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.toXrplCurrencyCode).toBe('function')
+    expect(typeof rn.rippleTokenId).toBe('function')
+    expect(typeof rn.parseRippleTokenId).toBe('function')
+    expect(typeof rn.isValidXrplCurrencyCode).toBe('function')
+    expect(typeof rn.parseIssuedCurrencyValue).toBe('function')
+    expect(typeof rn.formatIssuedCurrencyValue).toBe('function')
+    expect(rn.rippleIssuedCurrencyDecimals).toBe(15)
+    expect(rn.rippleOwnerReserveDrops).toBe(200000n)
+    expect(Array.isArray(rn.rippleKnownIssuedTokens)).toBe(true)
+    expect(rn.toXrplCurrencyCode('RLUSD')).toBe('524C555344000000000000000000000000000000')
+  })
+
   it('exports the canonical prep constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
@@ -101,5 +116,39 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.getBlockExplorerUrl({ chain: rn.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+  })
+
+  it('re-exports the recent pure parse/normalize/decode helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const parse = await import('../../../../src/tools/parse')
+    const tx = await import('../../../../src/tx')
+    const decode = await import('../../../../src/tools/decode')
+
+    expect(rn.parseChain).toBe(parse.parseChain)
+    expect(rn.parseTicker).toBe(parse.parseTicker)
+    expect(rn.chainSchema).toBe(parse.chainSchema)
+    expect(rn.tickerSchema).toBe(parse.tickerSchema)
+    expect(rn.normalizeTx).toBe(tx.normalizeTx)
+    expect(rn.splitMultiTx).toBe(tx.splitMultiTx)
+    expect(rn.TxNormalizeError).toBe(tx.TxNormalizeError)
+    expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
+    expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
+    expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+  })
+})
+
+// Same parity guard for the hardened human-amount -> base-units parser: the RN
+// allow-list entry re-exports it separately from the root barrel, so deleting
+// the RN line leaves the app resolving `undefined` while publicExports.test.ts
+// (node condition only) stays green.
+describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
+  it('resolves the parser and its error class from the RN entry, not just the root barrel', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.toChainAmount).toBe('function')
+    expect(rn.toChainAmount('1.2345e-3', 8)).toBe(123450n)
+
+    expect(typeof rn.ChainAmountParseError).toBe('function')
+    expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
   })
 })
