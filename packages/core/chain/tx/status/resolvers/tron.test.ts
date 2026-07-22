@@ -99,11 +99,14 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('success')
   })
 
-  it('returns success for unknown receipt.result value (future-proof: unknown codes treated as success)', async () => {
+  // Inverted from a deny-list to an allowlist: an unrecognized receipt.result must never be
+  // narrated as success just because it isn't on the known-failure list. SUCCESS/absent still
+  // resolve to success (see tests above); a truly unknown code now falls to pending instead.
+  it('returns pending (never success) for an unrecognized receipt.result value', async () => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: 'UNKNOWN_FUTURE_CODE' } })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result.status).toBe('success')
+    expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns error when top-level result is FAILED and receipt is absent (iOS parity)', async () => {

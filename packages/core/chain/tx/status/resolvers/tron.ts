@@ -70,11 +70,6 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     return { status: 'pending', isKnown: true }
   }
 
-  // 3. receipt.result in terminal failure set → error
-  //    receipt.result == null → success (native TRX send, no contract result)
-  //    receipt.result == 'SUCCESS' → success (TRC20/smart-contract success, protobuf3 non-default enum)
-  //    receipt.result unknown → treat as success (safer than false-failure for user)
-  const status = tx.receipt.result != null && TRON_RECEIPT_FAILURE_RESULTS.has(tx.receipt.result) ? 'error' : 'success'
   const feeCoin = chainFeeCoin[Chain.Tron]
   const receipt =
     tx.fee != null
@@ -85,5 +80,22 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
         }
       : undefined
 
-  return { status, receipt }
+  // 3. receipt.result decides success vs failure vs unknown - an ALLOWLIST, not a deny-list:
+  //    - in the known terminal failure set → error
+  //    - null → success (native TRX send, no contract result)
+  //    - 'SUCCESS' → success (TRC20/smart-contract success, protobuf3 non-default enum;
+  //      pinned against NeO's live mainnet tx 1540b1b3, see tron.test.ts)
+  //    - anything else (a receipt.result value we've never seen) → pending, NEVER success.
+  //      The block is already final at this point, so this isn't "still processing" - it's an
+  //      unrecognized terminal outcome, and a new Tron enum value must not be silently narrated
+  //      as a successful fund movement just because it isn't on the known-failure list.
+  if (tx.receipt.result != null && TRON_RECEIPT_FAILURE_RESULTS.has(tx.receipt.result)) {
+    return { status: 'error', receipt }
+  }
+
+  if (tx.receipt.result == null || tx.receipt.result === 'SUCCESS') {
+    return { status: 'success', receipt }
+  }
+
+  return { status: 'pending', isKnown: true, receipt }
 }
