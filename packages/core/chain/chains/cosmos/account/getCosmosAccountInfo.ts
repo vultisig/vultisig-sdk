@@ -129,12 +129,32 @@ type LcdAttempt =
   | { status: 'not-found' }
   | { status: 'unavailable'; error: unknown }
 
+const isAuthoritativeCosmosAccountNotFound = (error: HttpResponseError) => {
+  if (error.status !== 404) return false
+
+  const body = error.body
+  if (typeof body === 'string') {
+    return /account[^\n]*not found|no account found/i.test(body)
+  }
+
+  if (!body || typeof body !== 'object') return false
+
+  const message =
+    typeof (body as { message?: unknown }).message === 'string'
+      ? (body as { message: string }).message
+      : typeof (body as { error?: unknown }).error === 'string'
+        ? (body as { error: string }).error
+        : null
+
+  return message !== null && /account[^\n]*not found|no account found/i.test(message)
+}
+
 const tryLcd = async (base: string, address: string): Promise<LcdAttempt> => {
   let resp: LcdAccountResponse
   try {
     resp = await queryUrl<LcdAccountResponse>(`${base}/cosmos/auth/v1beta1/accounts/${address}`)
   } catch (error) {
-    if (error instanceof HttpResponseError && error.status === 404) {
+    if (error instanceof HttpResponseError && isAuthoritativeCosmosAccountNotFound(error)) {
       return { status: 'not-found' }
     }
     return { status: 'unavailable', error }

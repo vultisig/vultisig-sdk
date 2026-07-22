@@ -19,13 +19,13 @@ const baseBlock = {
   header: { time: '2026-05-27T00:00:00.000Z', height: '12345' },
 }
 
-const httpError = (status: number) =>
+const httpError = (status: number, body: unknown = {}) =>
   new HttpResponseError({
     message: `HTTP ${status}`,
     status,
     statusText: status === 404 ? 'Not Found' : 'Error',
     url: 'https://lcd.example.test/cosmos/auth/v1beta1/accounts/test',
-    body: {},
+    body,
   })
 
 // cosmjs/stargate 0.39 widened Account.accountNumber to `bigint`; sequence
@@ -139,7 +139,7 @@ describe('getCosmosAccountInfo', () => {
   it('falls through to sequence:0 when BOTH RPC and LCD return null (genuinely new account)', async () => {
     const client = makeClient(null)
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)
-    vi.mocked(queryUrl).mockRejectedValue(httpError(404))
+    vi.mocked(queryUrl).mockRejectedValue(httpError(404, { message: 'account not found' }))
 
     const result = await getCosmosAccountInfo({
       chain: CosmosChain.Terra,
@@ -449,15 +449,12 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
   })
 
   it('does not retry a structured 404 because it authoritatively means account not found', async () => {
-    // A 404 means the primary endpoint understood the request and returned
-    // no account. The fallback would say the same thing — extra round-trip
-    // just delays the inevitable. Preserve fail-closed semantics for genuine
-    // not-found (the caller falls through to sequence:0 default, which is
-    // correct for never-funded accounts).
-    //
+    // A real auth-account 404 is authoritative evidence that the endpoint
+    // understood the request and the account is absent. Preserve the direct
+    // fallthrough to sequence:0 for genuinely never-funded accounts.
     const client = makeClient(null)
     vi.mocked(getCosmosClient).mockResolvedValue(client as never)
-    vi.mocked(queryUrl).mockRejectedValueOnce(httpError(404))
+    vi.mocked(queryUrl).mockRejectedValueOnce(httpError(404, { message: 'account not found' }))
 
     const result = await getCosmosAccountInfo({
       chain: CosmosChain.TerraClassic,
@@ -467,6 +464,30 @@ describe('getCosmosAccountInfo — LCD fallback URL on primary failure', () => {
     expect(result.accountNumber).toBe(0n)
     expect(result.sequence).toBe(0)
     expect(queryUrl).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries an ambiguous 404 on the fallback LCD instead of treating it as account absence', async () => {
+    const client = makeClient(null)
+    vi.mocked(getCosmosClient).mockResolvedValue(client as never)
+    vi.mocked(queryUrl)
+      .mockRejectedValueOnce(httpError(404, {}))
+      .mockResolvedValueOnce({
+        account: {
+          address: 'terra1existing',
+          account_number: '12',
+          sequence: '34',
+        },
+      } as never)
+
+    const result = await getCosmosAccountInfo({
+      chain: CosmosChain.TerraClassic,
+      address: 'terra1existing',
+    })
+
+    expect(result.accountNumber).toBe(12n)
+    expect(result.sequence).toBe(34)
+    expect(result.sequenceBigInt).toBe(34n)
+    expect(queryUrl).toHaveBeenCalledTimes(2)
   })
 
   it('fails closed on an unavailable LCD when the chain has no registered mirror', async () => {
