@@ -30,7 +30,9 @@ describe('version config-dir wiring', () => {
     rmSync(tmpConfigDir, { recursive: true, force: true })
   })
 
-  it('writes the version cache under VULTISIG_CONFIG_DIR', async () => {
+  // Generous timeout: the dynamic import pulls the client-shared barrel (and through
+  // auth-setup, the SDK graph), whose cold vitest transform alone can exceed the 5s default.
+  it('writes the version cache under VULTISIG_CONFIG_DIR', { timeout: 20000 }, async () => {
     const version = await import('../version')
 
     const result = await version.checkForUpdates()
