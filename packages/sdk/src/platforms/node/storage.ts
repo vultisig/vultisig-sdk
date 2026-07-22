@@ -2,6 +2,7 @@
  * Node.js filesystem storage implementation
  * Direct implementation without runtime detection
  */
+import { randomBytes } from 'crypto'
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
@@ -84,18 +85,34 @@ export class FileStorage implements Storage {
 
     try {
       const filePath = this.getFilePath(key)
-      // Use unique temp file to avoid race conditions with concurrent writes
-      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
+      // Every stored vault carries key shares, so the write has to be owner-only from the
+      // moment the bytes exist. `mode` is honored only when writeFile CREATES the file, so
+      // the temp path needs an unpredictable name (random bytes, not Math.random) and an
+      // exclusive create ('wx'). Without those, a temp path an attacker can predict and
+      // pre-create is either reused as their 0644 file (shares left world-readable) or
+      // followed as their symlink (shares written to a target of their choosing). This
+      // mirrors the hardening already applied to the vault export path.
+      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${randomBytes(6).toString('hex')}.tmp`
 
       // Ensure parent directory exists right before writing
-      await fs.mkdir(path.dirname(filePath), { recursive: true })
+      await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 })
 
-      await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
-        encoding: 'utf-8',
-        mode: 0o600,
-      })
-
-      await fs.rename(tempPath, filePath)
+      try {
+        await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
+          encoding: 'utf-8',
+          mode: 0o600,
+          flag: 'wx',
+        })
+        await fs.rename(tempPath, filePath)
+      } catch (error) {
+        // Only clean up the temp file when the exclusive create is what succeeded. EEXIST
+        // means we never created it — something else was already there — and unlinking a
+        // file we do not own would be the same mistake in reverse.
+        if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') {
+          await fs.rm(tempPath, { force: true }).catch(() => {})
+        }
+        throw error
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
         throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
