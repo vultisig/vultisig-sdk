@@ -190,8 +190,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
   })
 
-  it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
+  it('exports Chain enum, cosmos chain subsets, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
+    expect(sdk.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(sdk.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(sdk.IbcEnabledCosmosChain)).not.toContain(sdk.Chain.THORChain)
+    expect(Object.values(sdk.VaultBasedCosmosChain)).toEqual([sdk.Chain.THORChain, sdk.Chain.MayaChain])
     expect(typeof sdk.getChainKind).toBe('function')
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
