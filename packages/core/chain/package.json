@@ -1693,6 +1693,11 @@
       "import": "./dist/swap/general/swapkit/config.js",
       "default": "./dist/swap/general/swapkit/config.js"
     },
+    "./swap/general/swapkit/getSwapKitTrackerUrl": {
+      "types": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.d.ts",
+      "import": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js",
+      "default": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js"
+    },
     "./swap/general/swapkit/SwapKitEnabledChains": {
       "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
       "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
@@ -1882,6 +1887,11 @@
       "types": "./dist/tx/broadcast/resolvers/solana.d.ts",
       "import": "./dist/tx/broadcast/resolvers/solana.js",
       "default": "./dist/tx/broadcast/resolvers/solana.js"
+    },
+    "./tx/broadcast/resolvers/substrate": {
+      "types": "./dist/tx/broadcast/resolvers/substrate.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/substrate.js",
+      "default": "./dist/tx/broadcast/resolvers/substrate.js"
     },
     "./tx/broadcast/resolvers/sui": {
       "types": "./dist/tx/broadcast/resolvers/sui.d.ts",
