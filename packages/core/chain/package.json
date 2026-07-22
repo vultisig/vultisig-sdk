@@ -1883,6 +1883,11 @@
       "import": "./dist/tx/broadcast/resolvers/solana.js",
       "default": "./dist/tx/broadcast/resolvers/solana.js"
     },
+    "./tx/broadcast/resolvers/substrate": {
+      "types": "./dist/tx/broadcast/resolvers/substrate.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/substrate.js",
+      "default": "./dist/tx/broadcast/resolvers/substrate.js"
+    },
     "./tx/broadcast/resolvers/sui": {
       "types": "./dist/tx/broadcast/resolvers/sui.d.ts",
       "import": "./dist/tx/broadcast/resolvers/sui.js",
