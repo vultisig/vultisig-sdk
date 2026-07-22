@@ -40,7 +40,7 @@ describe('getCosmosSigningInputs gas limit', () => {
     publicKeyHex = Buffer.from(publicKey.data()).toString('hex')
   })
 
-  const buildPayload = ({ gasLimit }: { gasLimit?: bigint }) =>
+  const buildPayload = ({ gasLimit, sequence = 3n }: { gasLimit?: bigint; sequence?: bigint }) =>
     create(KeysignPayloadSchema, {
       coin: create(CoinSchema, {
         chain: Chain.Cosmos,
@@ -58,7 +58,7 @@ describe('getCosmosSigningInputs gas limit', () => {
         case: 'cosmosSpecific',
         value: create(CosmosSpecificSchema, {
           accountNumber: 7n,
-          sequence: 3n,
+          sequence,
           gas: 2500n,
           gasLimit,
           transactionType: TransactionType.UNSPECIFIED,
@@ -77,6 +77,16 @@ describe('getCosmosSigningInputs gas limit', () => {
       gas: input.fee?.gas.toString(),
     }
   }
+
+  it('preserves a uint64 sequence above the JavaScript safe-integer limit in WalletCore input', async () => {
+    const sequence = 9_007_199_254_740_993n
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: buildPayload({ sequence }),
+      walletCore,
+    })
+
+    expect(input.sequence.toString()).toBe(sequence.toString())
+  })
 
   it('honors a positive relayed CosmosSpecific gas limit', async () => {
     await expect(feeFor(345_678n)).resolves.toEqual({

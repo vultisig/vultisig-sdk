@@ -265,6 +265,11 @@
       "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
       "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
     },
+    "./chains/cosmos/parseUint64": {
+      "types": "./dist/chains/cosmos/parseUint64.d.ts",
+      "import": "./dist/chains/cosmos/parseUint64.js",
+      "default": "./dist/chains/cosmos/parseUint64.js"
+    },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/protoEncoding.js",
@@ -1693,6 +1698,11 @@
       "import": "./dist/swap/general/swapkit/config.js",
       "default": "./dist/swap/general/swapkit/config.js"
     },
+    "./swap/general/swapkit/getSwapKitTrackerUrl": {
+      "types": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.d.ts",
+      "import": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js",
+      "default": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js"
+    },
     "./swap/general/swapkit/SwapKitEnabledChains": {
       "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
       "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
@@ -1882,6 +1892,11 @@
       "types": "./dist/tx/broadcast/resolvers/solana.d.ts",
       "import": "./dist/tx/broadcast/resolvers/solana.js",
       "default": "./dist/tx/broadcast/resolvers/solana.js"
+    },
+    "./tx/broadcast/resolvers/substrate": {
+      "types": "./dist/tx/broadcast/resolvers/substrate.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/substrate.js",
+      "default": "./dist/tx/broadcast/resolvers/substrate.js"
     },
     "./tx/broadcast/resolvers/sui": {
       "types": "./dist/tx/broadcast/resolvers/sui.d.ts",

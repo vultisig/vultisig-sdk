@@ -14,12 +14,12 @@ export const getThorchainChainSpecific: GetChainSpecificResolver<'thorchainSpeci
   isDeposit,
 }) => {
   const coin = getKeysignCoin<CosmosChain>(keysignPayload)
-  const { accountNumber, sequence } = await getCosmosAccountInfo(coin)
+  const { accountNumber, sequenceBigInt } = await getCosmosAccountInfo(coin)
   const { native_tx_fee_rune } = await getThorNetworkInfo()
 
   return create(THORChainSpecificSchema, {
     accountNumber: BigInt(accountNumber),
-    sequence: BigInt(sequence),
+    sequence: sequenceBigInt,
     transactionType,
     fee: BigInt(native_tx_fee_rune),
     isDeposit,

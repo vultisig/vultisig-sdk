@@ -79,9 +79,9 @@ export type GeneralSwapTx =
  * Consumers building a "View on Explorer" link should call
  * `getSwapExplorerUrl({ provider, txHash, fromChain })` from
  * `@vultisig/core-chain/swap/utils/getSwapExplorerUrl` instead of routing
- * by hand — the helper covers the LI.FI / Helius scanners and falls back to
- * the source-chain explorer for `1inch` / `jupiter` / `kyber` / `swapkit` (none of which
- * expose a per-tx aggregator page).
+ * by hand — the helper covers LI.FI / Helius and SwapKit scanners, accepts the
+ * provider-specific CoW order UID for pending CowSwap orders, and falls back to
+ * the source-chain explorer for `1inch` / `jupiter` / `kyber`.
  */
 export type GeneralSwapQuote = {
   dstAmount: string
