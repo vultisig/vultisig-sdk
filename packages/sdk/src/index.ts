@@ -192,7 +192,7 @@ export type { SdkEvents, VaultEvents } from './events/types'
 
 // Chain enums and types
 export type { Chain as ChainType, CosmosChain, EvmChain, OtherChain, UtxoChain } from './types'
-export { Chain } from './types'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from './types'
 
 // Chain-kind classification — the canonical 12-family dispatch key. Exposed so
 // downstream consumers (mcp-ts, agent-backend) route through the SDK instead of
