@@ -48,14 +48,16 @@ describe('getThorchainMemoAsset', () => {
   })
 
   describe('THORChain-held assets', () => {
-    it('returns a secured asset denom verbatim', () => {
+    // Secured assets use `CHAIN-ASSET` notation, matching `toNativeSwapAsset`.
+    // The dotted form makes THORNode read the target as the L1 asset instead.
+    it('encodes a secured asset in CHAIN-ASSET notation', () => {
       expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'USDC', id: `eth-usdc-${usdcContract}` })).toBe(
-        `eth-usdc-${usdcContract}`
+        `ETH-USDC-${usdcContract}`
       )
     })
 
-    it('returns a short secured denom verbatim rather than applying the 6-char suffix rule', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' })).toBe('xrp-xrp')
+    it('leaves a secured asset un-abbreviated -- its trailing address identifies it', () => {
+      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' })).toBe('XRP-XRP')
     })
 
     it.each([
@@ -65,8 +67,12 @@ describe('getThorchainMemoAsset', () => {
       expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker, id })).toBe(expected)
     })
 
-    it('treats an x/ synth as a normal THORChain token, not a secured asset', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'sBTC', id: 'x/btc-btc' })).toBe('THOR.sBTC')
+    // Synths are not a supported limit-swap asset either way: whatever notation
+    // is produced here is rejected downstream by `buildLimitSwapMemo`, so this
+    // fails closed rather than building a memo for an asset THORChain would not
+    // route.
+    it('strips the x/ prefix from a synth, matching toNativeSwapAsset', () => {
+      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'sBTC', id: 'x/btc-btc' })).toBe('BTC-BTC')
     })
   })
 
@@ -124,6 +130,31 @@ describe('prefix map consistency', () => {
   it('assigns a unique prefix per chain', () => {
     const prefixes = Object.values(thorchainMemoAssetChainPrefix)
     expect(new Set(prefixes).size).toBe(prefixes.length)
+  })
+
+  // Documents a gap that predates this helper: `buildLimitSwapMemo` validates
+  // dotted `CHAIN.ASSET` pool ids, so the `CHAIN-ASSET` form a secured asset
+  // requires is rejected before the shared map lookup. Pinned so the day
+  // validation learns secured denoms, this test fails and gets updated rather
+  // than the limitation silently persisting.
+  it('produces secured-asset notation the limit-swap memo builder does not yet accept', () => {
+    const securedAsset = getThorchainMemoAsset({
+      chain: Chain.THORChain,
+      ticker: 'XRP',
+      id: 'xrp-xrp',
+    })
+
+    expect(securedAsset).toBe('XRP-XRP')
+    expect(() =>
+      buildLimitSwapMemo({
+        source_asset: securedAsset,
+        source_amount: 100_000_000,
+        target_asset: 'BTC.BTC',
+        dest_addr: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh',
+        target_price: 0.001,
+        expiry_hours: 24,
+      })
+    ).toThrow(/not a valid THORChain pool id/)
   })
 
   it('produces assets the limit-swap memo builder accepts', () => {

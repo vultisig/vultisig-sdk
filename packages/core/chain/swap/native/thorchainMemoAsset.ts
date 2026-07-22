@@ -3,6 +3,7 @@ import { toEntries } from '@vultisig/lib-utils/record/toEntries'
 import { Chain } from '../../Chain'
 import { thorchainLpChainCode } from '../../chains/cosmos/thor/thorchainLp'
 import { Coin } from '../../coin/Coin'
+import { toNativeSwapAsset } from './asset/toNativeSwapAsset'
 import { nativeSwapChainIds, thorChainSwapEnabledChains } from './NativeSwapChain'
 
 /**
@@ -80,22 +81,53 @@ export const isThorchainSecuredAssetId = (id: string): boolean => !id.startsWith
 export type ThorchainMemoAssetInput = Pick<Coin, 'chain' | 'id' | 'ticker'>
 
 /**
+ * Abbreviate a trailing contract address to its last {@link contractSuffixLength}
+ * characters, uppercased. Leaves an asset with no contract segment untouched.
+ */
+const abbreviateContractSuffix = (asset: string): string => {
+  const separatorIndex = asset.indexOf('-')
+  if (separatorIndex === -1) {
+    return asset
+  }
+
+  const contract = asset.slice(separatorIndex + 1)
+  if (contract.length < contractSuffixLength) {
+    throw new Error(
+      `getThorchainMemoAsset: contract segment ${JSON.stringify(contract)} is shorter than ${contractSuffixLength} characters`
+    )
+  }
+
+  return `${asset.slice(0, separatorIndex)}-${contract.slice(-contractSuffixLength).toUpperCase()}`
+}
+
+/**
  * Build the THORChain memo-asset string for a coin — the `source_asset` /
  * `target_asset` a limit-swap memo is built from.
  *
  * - native → `CHAIN.TICKER` (`BTC.BTC`, `THOR.RUNE`)
- * - THORChain secured asset → its denom verbatim (`eth-usdc-0x…`), since that is
- *   what identifies the pool; encoding one as a normal token targets the wrong one
- * - other THORChain tokens → `THOR.TICKER` (`THOR.TCY`, `THOR.RUJI`)
- * - any other token → `CHAIN.TICKER-<last 6 of id, uppercased>` (`ETH.USDC-06EB48`)
+ * - THORChain tokens → `THOR.TICKER` (`THOR.TCY`, `THOR.RUJI`)
+ * - THORChain secured assets → `CHAIN-ASSET` (`XRP-XRP`, `ETH-USDC-0x…`)
+ * - any other token → `CHAIN.TICKER-<last 6 of contract, uppercased>` (`ETH.USDC-06EB48`)
  *
- * Throws for chains THORChain cannot route, empty tickers, and ids too short to
- * form a suffix — a malformed asset segment must fail here rather than at
- * broadcast time, once funds are committed.
+ * Notation comes from {@link toNativeSwapAsset}, the converter the market-swap
+ * path already uses, so this package has exactly one definition of what a
+ * THORChain asset string looks like. The only thing added on top is the contract
+ * abbreviation: memo bytes are scarce (UTXO sources cap at 80) and THORChain
+ * resolves the shortened form against its pool list, whereas the swap API is
+ * given the full address. Secured assets are deliberately left un-abbreviated —
+ * the trailing address is part of the denom that identifies them.
+ *
+ * NOTE: `buildLimitSwapMemo` does not currently accept secured assets — its
+ * `assertValidPoolId` check requires dotted `CHAIN.ASSET` notation and rejects
+ * the `CHAIN-ASSET` form. That gap predates this helper and is tracked
+ * separately; the value returned here is the correct notation for when it lands.
+ *
+ * Throws for chains THORChain cannot route, empty tickers, and contract segments
+ * too short to abbreviate — a malformed asset segment must fail here rather than
+ * at broadcast time, once funds are committed.
  */
 export const getThorchainMemoAsset = ({ chain, id, ticker }: ThorchainMemoAssetInput): string => {
-  const prefix = thorchainMemoAssetChainPrefix[chain]
-  if (!prefix) {
+  if (!isThorchainRoutable(chain)) {
     throw new Error(`getThorchainMemoAsset: ${chain} is not routable through THORChain`)
   }
 
@@ -104,20 +136,10 @@ export const getThorchainMemoAsset = ({ chain, id, ticker }: ThorchainMemoAssetI
     throw new Error(`getThorchainMemoAsset: ticker must be a non-empty string for ${chain}`)
   }
 
-  const normalizedId = id?.trim() ?? ''
-  if (!normalizedId) {
-    return `${prefix}.${normalizedTicker}`
-  }
+  const normalizedId = id?.trim()
+  const asset = toNativeSwapAsset({ chain, id: normalizedId || undefined, ticker: normalizedTicker })
 
-  if (chain === Chain.THORChain) {
-    return isThorchainSecuredAssetId(normalizedId) ? normalizedId : `${prefix}.${normalizedTicker}`
-  }
-
-  if (normalizedId.length < contractSuffixLength) {
-    throw new Error(
-      `getThorchainMemoAsset: ${chain} token id ${JSON.stringify(normalizedId)} is shorter than ${contractSuffixLength} characters`
-    )
-  }
-
-  return `${prefix}.${normalizedTicker}-${normalizedId.slice(-contractSuffixLength).toUpperCase()}`
+  // THORChain-held assets (secured denoms, `THOR.TCY`) carry no L1 contract to
+  // shorten -- the trailing address of a secured denom identifies the asset.
+  return chain === Chain.THORChain ? asset : abbreviateContractSuffix(asset)
 }
