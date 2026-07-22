@@ -24,8 +24,9 @@ describe('FileStorage.set file permissions', () => {
 
   beforeEach(async () => {
     basePath = await fs.mkdtemp(path.join(os.tmpdir(), 'vsig-storage-mode-'))
-    // Force a permissive umask. A developer/CI umask of 0077 would mask the bug by
-    // landing 0600 by accident, so the assertions below would pass unhardened.
+    // Force a permissive umask so these read as real assertions about the write rather
+    // than about the ambient umask: under a 0077 developer/CI umask a file lands 0600
+    // by accident, and the mode assertions below would hold no matter what the code did.
     originalUmask = process.umask(0o022)
   })
 
@@ -74,6 +75,18 @@ describe('FileStorage.set file permissions', () => {
 
   it('leaves no temp file behind', async () => {
     await new FileStorage({ basePath }).set(KEY, { keyshare: SECRET })
+
+    expect((await fs.readdir(basePath)).filter(f => f.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('cleans up its own temp file when the rename fails', async () => {
+    // The temp file holds the key shares, so a failure after it is created must not
+    // strand it: nothing else reaps `.tmp` (neither `list()` nor `clear()` looks at
+    // them). A directory sitting where the vault file goes makes the rename fail.
+    await fs.mkdir(path.join(basePath, `${KEY}.json`))
+    await fs.writeFile(path.join(basePath, `${KEY}.json`, 'occupied'), 'x')
+
+    await expect(new FileStorage({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toThrow()
 
     expect((await fs.readdir(basePath)).filter(f => f.endsWith('.tmp'))).toEqual([])
   })
@@ -129,7 +142,12 @@ describe('FileStorage.set temp file cannot be pre-empted', () => {
     await fs.writeFile(tempPath, '', { mode: 0o644 })
     await fs.chmod(tempPath, 0o644)
 
-    await expect(storage.set(KEY, { keyshare: SECRET })).rejects.toThrow()
+    // Assert the cause, not just "it threw": `set()` does other work before the temp
+    // write, so a bare rejection would let an unrelated early failure satisfy every
+    // assertion below while the path under attack went untested.
+    await expect(storage.set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      cause: { code: 'EEXIST' },
+    })
 
     // The decisive assertion: the shares must never reach the pre-created 0644 file.
     const leaked = await fs.readFile(tempPath, 'utf-8').catch(() => '')
@@ -146,7 +164,11 @@ describe('FileStorage.set temp file cannot be pre-empted', () => {
     await fs.writeFile(attackerTarget, 'empty', { mode: 0o644 })
     await fs.symlink(attackerTarget, tempPath)
 
-    await expect(storage.set(KEY, { keyshare: SECRET })).rejects.toThrow()
+    // An exclusive create refuses a symlink with EEXIST rather than following it —
+    // asserting the code keeps an unrelated early failure from standing in for it.
+    await expect(storage.set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      cause: { code: 'EEXIST' },
+    })
 
     // The shares must not have been redirected through the symlink...
     expect(await fs.readFile(attackerTarget, 'utf-8')).toBe('empty')

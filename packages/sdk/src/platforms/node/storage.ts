@@ -97,18 +97,22 @@ export class FileStorage implements Storage {
       // Ensure parent directory exists right before writing
       await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 })
 
+      // Track the create rather than inferring it from the error code: only a temp file
+      // this call created may be cleaned up. If the exclusive create refused (something
+      // was already at that path), unlinking it would be the same mistake in reverse —
+      // and a later failure still has to clean up, or key shares are left behind in a
+      // stray temp file that nothing else reaps.
+      let createdTemp = false
       try {
         await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
           encoding: 'utf-8',
           mode: 0o600,
           flag: 'wx',
         })
+        createdTemp = true
         await fs.rename(tempPath, filePath)
       } catch (error) {
-        // Only clean up the temp file when the exclusive create is what succeeded. EEXIST
-        // means we never created it — something else was already there — and unlinking a
-        // file we do not own would be the same mistake in reverse.
-        if ((error as NodeJS.ErrnoException)?.code !== 'EEXIST') {
+        if (createdTemp) {
           await fs.rm(tempPath, { force: true }).catch(() => {})
         }
         throw error
