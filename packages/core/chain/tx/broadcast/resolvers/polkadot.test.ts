@@ -46,15 +46,6 @@ describe('broadcastPolkadotTx', () => {
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
     })
 
-    it('swallows "Transaction is temporarily banned"', async () => {
-      mocks.queryUrl.mockResolvedValue({
-        error: { code: 1010, message: 'Transaction is temporarily banned' },
-      })
-
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
-      expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
-    })
-
     it('swallows generic "Already known" Pool error variants', async () => {
       mocks.queryUrl.mockResolvedValue({
         error: { code: 1013, message: 'Already known' },
@@ -74,6 +65,20 @@ describe('broadcastPolkadotTx', () => {
   })
 
   describe('genuine broadcast failures (MUST surface)', () => {
+    it('hash-verifies ambiguous temporarily-banned responses', async () => {
+      mocks.queryUrl.mockResolvedValue({
+        error: { code: 1010, message: 'Transaction is temporarily banned' },
+      })
+      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+      await broadcastPolkadotTx({ chain, tx })
+
+      expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+      expect((mocks.verifyBroadcastByHash.mock.calls[0]![0].error as Error).message).toBe(
+        'Polkadot broadcast failed: Transaction is temporarily banned'
+      )
+    })
+
     it('forwards BadProof to verifyBroadcastByHash and includes the data field', async () => {
       mocks.queryUrl.mockResolvedValue({
         error: {
