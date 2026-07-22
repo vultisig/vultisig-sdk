@@ -166,6 +166,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
   })
 
+  it('exports canonical token-id validation for non-address token families', () => {
+    expect(typeof sdk.isValidTokenId).toBe('function')
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: '0x2::sui::SUI', walletCore: {} as never })).toBe(true)
+    expect(sdk.isValidTokenId({ chain: sdk.Chain.Sui, id: 'not-a-struct-tag', walletCore: {} as never })).toBe(false)
+  })
+
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
     expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
     expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
