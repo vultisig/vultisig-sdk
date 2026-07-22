@@ -150,6 +150,58 @@
       "import": "./dist/tx/index.js",
       "require": "./dist/tx/index.cjs",
       "default": "./dist/tx/index.cjs"
+    },
+    "./tools/gas": {
+      "types": "./dist/tools/gas/index.d.ts",
+      "browser": "./dist/tools/gas/index.js",
+      "worker": "./dist/tools/gas/index.js",
+      "react-native": "./dist/tools/gas/index.js",
+      "node": {
+        "import": "./dist/tools/gas/index.js",
+        "require": "./dist/tools/gas/index.cjs"
+      },
+      "import": "./dist/tools/gas/index.js",
+      "require": "./dist/tools/gas/index.cjs",
+      "default": "./dist/tools/gas/index.cjs"
+    },
+    "./tools/policy": {
+      "types": "./dist/tools/policy/index.d.ts",
+      "browser": "./dist/tools/policy/index.js",
+      "worker": "./dist/tools/policy/index.js",
+      "react-native": "./dist/tools/policy/index.js",
+      "node": {
+        "import": "./dist/tools/policy/index.js",
+        "require": "./dist/tools/policy/index.cjs"
+      },
+      "import": "./dist/tools/policy/index.js",
+      "require": "./dist/tools/policy/index.cjs",
+      "default": "./dist/tools/policy/index.cjs"
+    },
+    "./tools/swap": {
+      "types": "./dist/tools/swap/index.d.ts",
+      "browser": "./dist/tools/swap/index.js",
+      "worker": "./dist/tools/swap/index.js",
+      "react-native": "./dist/tools/swap/index.js",
+      "node": {
+        "import": "./dist/tools/swap/index.js",
+        "require": "./dist/tools/swap/index.cjs"
+      },
+      "import": "./dist/tools/swap/index.js",
+      "require": "./dist/tools/swap/index.cjs",
+      "default": "./dist/tools/swap/index.cjs"
+    },
+    "./tools/prep": {
+      "types": "./dist/tools/prep/index.d.ts",
+      "browser": "./dist/tools/prep/index.js",
+      "worker": "./dist/tools/prep/index.js",
+      "react-native": "./dist/tools/prep/index.js",
+      "node": {
+        "import": "./dist/tools/prep/index.js",
+        "require": "./dist/tools/prep/index.cjs"
+      },
+      "import": "./dist/tools/prep/index.js",
+      "require": "./dist/tools/prep/index.cjs",
+      "default": "./dist/tools/prep/index.cjs"
     }
   },
   "scripts": {

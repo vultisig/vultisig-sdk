@@ -347,6 +347,22 @@ const configs = {
       input: './src/tx/index.ts',
       distBase: 'tx',
     }),
+    ...createSubpathConfigs({
+      input: './src/tools/gas/index.ts',
+      distBase: 'tools/gas',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/policy/index.ts',
+      distBase: 'tools/policy',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/swap/index.ts',
+      distBase: 'tools/swap',
+    }),
+    ...createSubpathConfigs({
+      input: './src/tools/prep/index.ts',
+      distBase: 'tools/prep',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',

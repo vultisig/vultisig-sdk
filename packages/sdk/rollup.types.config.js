@@ -129,4 +129,8 @@ export default defineConfig([
   createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
   createSubpathTypesConfig('src/tools/decode/index.ts', 'dist/tools/decode/index.d.ts'),
   createSubpathTypesConfig('src/tx/index.ts', 'dist/tx/index.d.ts'),
+  createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
+  createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
+  createSubpathTypesConfig('src/tools/swap/index.ts', 'dist/tools/swap/index.d.ts'),
+  createSubpathTypesConfig('src/tools/prep/index.ts', 'dist/tools/prep/index.d.ts'),
 ])
