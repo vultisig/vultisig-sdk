@@ -89,6 +89,26 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('error')
   })
 
+  // sdk#1505 should-fix (S1): completes the documented core/Tron.proto contractResult enum
+  // (values 3-9, 12, 14) so every KNOWN failure resolves promptly to 'error' instead of
+  // falling to the allowlist's 'pending' branch and waiting out the poll timeout.
+  it.each([
+    'TRANSFER_FAILED',
+    'BAD_JUMP_DESTINATION',
+    'OUT_OF_MEMORY',
+    'STACK_OVERFLOW',
+    'STACK_TOO_SMALL',
+    'STACK_TOO_LARGE',
+    'ILLEGAL_OPERATION',
+    'PRECOMPILE_CONTRACT_ERROR',
+    'JVM_STACK_OVER_FLOW',
+  ])('returns error for %s (completed contractResult allowlist)', async (result) => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result } })
+
+    const status = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(status.status).toBe('error')
+  })
+
   // NeO's live mainnet canary: real USDT TRC20 transfer emits receipt.result='SUCCESS'.
   // protobuf3 serializes non-default contractResult enum values by name — value=1 (SUCCESS) is
   // non-default so it appears as "SUCCESS" in the JSON response. Must NOT be treated as error.

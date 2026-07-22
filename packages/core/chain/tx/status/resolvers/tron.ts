@@ -10,6 +10,12 @@ import { TxStatusResolver } from '../resolver'
 // Protobuf3 JSON serializes non-default enum values by name: successful TRC20 calls emit
 // receipt.result="SUCCESS" (non-default, value=1). Native TRX transfers emit no receipt at all.
 // Known failure codes verified against Tron protocol and live mainnet responses.
+//
+// sdk#1505 should-fix (S1): the allowlist-inversion below correctly means an UNKNOWN result
+// never reads as false-success, but an unlisted contractResult still resolves 'pending' until
+// the poll times out rather than promptly 'error'. The 9 codes below complete the documented
+// core/Tron.proto contractResult enum (values 3-9, 12, 14) so every KNOWN failure surfaces
+// immediately instead of waiting out the poll.
 const TRON_RECEIPT_FAILURE_RESULTS = new Set([
   'FAILED',
   'OUT_OF_ENERGY',
@@ -17,6 +23,15 @@ const TRON_RECEIPT_FAILURE_RESULTS = new Set([
   'OUT_OF_TIME',
   'BANDWIDTH_ERROR',
   'ACCOUNT_FREEZED',
+  'TRANSFER_FAILED',
+  'BAD_JUMP_DESTINATION',
+  'OUT_OF_MEMORY',
+  'STACK_OVERFLOW',
+  'STACK_TOO_SMALL',
+  'STACK_TOO_LARGE',
+  'ILLEGAL_OPERATION',
+  'PRECOMPILE_CONTRACT_ERROR',
+  'JVM_STACK_OVER_FLOW',
 ])
 
 type TronTxInfoResponse = {
