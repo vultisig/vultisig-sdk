@@ -1225,6 +1225,11 @@
       "import": "./dist/coin/token/metadata/resolvers/evm.js",
       "default": "./dist/coin/token/metadata/resolvers/evm.js"
     },
+    "./coin/token/metadata/resolvers/ripple": {
+      "types": "./dist/coin/token/metadata/resolvers/ripple.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/ripple.js",
+      "default": "./dist/coin/token/metadata/resolvers/ripple.js"
+    },
     "./coin/token/metadata/resolvers/solana": {
       "types": "./dist/coin/token/metadata/resolvers/solana.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/solana.js",
