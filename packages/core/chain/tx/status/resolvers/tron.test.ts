@@ -107,7 +107,7 @@ describe('getTronTxStatus', () => {
     'JVM_STACK_OVER_FLOW',
     'UNKNOWN',
     'INVALID_CODE',
-  ])('returns error for %s (completed contractResult allowlist)', async (result) => {
+  ])('returns error for %s (completed contractResult allowlist)', async result => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result } })
 
     const status = await getTronTxStatus({ chain: OtherChain.Tron, hash })
