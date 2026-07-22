@@ -33,7 +33,29 @@ describe('FileStorage.set file permissions', () => {
   afterEach(async () => {
     process.umask(originalUmask)
     await fs.rm(basePath, { recursive: true, force: true })
+    vi.doUnmock('fs/promises')
+    vi.resetModules()
   })
+
+  // Load `FileStorage` against a patched `fs/promises` so a specific step of the write
+  // can be failed. The temp file the cleanup has to remove only exists at runtime, so
+  // there is no way to reach these paths from the outside.
+  async function loadStorageWithFailing(
+    overrides: (actual: typeof import('fs/promises')) => Record<string, unknown>
+  ): Promise<typeof FileStorage> {
+    vi.resetModules()
+    vi.doMock('fs/promises', async importOriginal => {
+      const actual = await importOriginal<typeof import('fs/promises')>()
+      return { ...actual, default: actual, ...overrides(actual) }
+    })
+    return (await import('../../../../src/platforms/node/storage')).FileStorage
+  }
+
+  function errnoError(message: string, code: string): NodeJS.ErrnoException {
+    const error: NodeJS.ErrnoException = new Error(message)
+    error.code = code
+    return error
+  }
 
   it('persists the vault owner-only under a permissive umask', async () => {
     const storage = new FileStorage({ basePath })
@@ -79,16 +101,46 @@ describe('FileStorage.set file permissions', () => {
     expect((await fs.readdir(basePath)).filter(f => f.endsWith('.tmp'))).toEqual([])
   })
 
-  it('cleans up its own temp file when the rename fails', async () => {
-    // The temp file holds the key shares, so a failure after it is created must not
-    // strand it: nothing else reaps `.tmp` (neither `list()` nor `clear()` looks at
-    // them). A directory sitting where the vault file goes makes the rename fail.
-    await fs.mkdir(path.join(basePath, `${KEY}.json`))
-    await fs.writeFile(path.join(basePath, `${KEY}.json`, 'occupied'), 'x')
+  it('cleans up its own temp file when the write fails after the file exists', async () => {
+    // Creating the temp file and filling it are separate steps. A failure in between —
+    // a full disk is the realistic one — leaves a temp file holding a partial vault that
+    // only this call can remove, so the cleanup must key on "we created it", not on the
+    // write having completed. Fail the write, keep the real open, and watch the residue.
+    const StorageWithFailingWrite = await loadStorageWithFailing(actual => ({
+      open: async (...args: Parameters<typeof actual.open>) => {
+        const handle = await actual.open(...args)
+        handle.writeFile = async () => {
+          throw errnoError('no space left on device', 'ENOSPC')
+        }
+        return handle
+      },
+    }))
 
-    await expect(new FileStorage({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toThrow()
+    // ENOSPC still maps to the quota error, so the new structure did not swallow it.
+    await expect(new StorageWithFailingWrite({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      code: 'QUOTA_EXCEEDED',
+    })
 
-    expect((await fs.readdir(basePath)).filter(f => f.endsWith('.tmp'))).toEqual([])
+    expect(await fs.readdir(basePath)).toEqual(['cache'])
+  })
+
+  it('cleans up its own temp file when the rename fails with EEXIST', async () => {
+    // EEXIST specifically: it is the code that means "not ours" for the exclusive create,
+    // and rename can raise it too (a directory in the way, or Windows). Cleanup must
+    // follow who created the file, not the error code — otherwise this path strands a
+    // temp file full of key shares, and nothing else reaps `.tmp` (neither `list()` nor
+    // `clear()` looks at them).
+    const StorageWithFailingRename = await loadStorageWithFailing(() => ({
+      rename: async () => {
+        throw errnoError('file exists', 'EEXIST')
+      },
+    }))
+
+    await expect(new StorageWithFailingRename({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      cause: { code: 'EEXIST' },
+    })
+
+    expect(await fs.readdir(basePath)).toEqual(['cache'])
   })
 })
 

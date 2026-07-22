@@ -86,8 +86,8 @@ export class FileStorage implements Storage {
     try {
       const filePath = this.getFilePath(key)
       // Every stored vault carries key shares, so the write has to be owner-only from the
-      // moment the bytes exist. `mode` is honored only when writeFile CREATES the file, so
-      // the temp path needs an unpredictable name (random bytes, not Math.random) and an
+      // moment the bytes exist. `mode` is honored only when the file is CREATED, so the
+      // temp path needs an unpredictable name (random bytes, not Math.random) and an
       // exclusive create ('wx'). Without those, a temp path an attacker can predict and
       // pre-create is either reused as their 0644 file (shares left world-readable) or
       // followed as their symlink (shares written to a target of their choosing). This
@@ -97,24 +97,21 @@ export class FileStorage implements Storage {
       // Ensure parent directory exists right before writing
       await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 })
 
-      // Track the create rather than inferring it from the error code: only a temp file
-      // this call created may be cleaned up. If the exclusive create refused (something
-      // was already at that path), unlinking it would be the same mistake in reverse —
-      // and a later failure still has to clean up, or key shares are left behind in a
-      // stray temp file that nothing else reaps.
-      let createdTemp = false
+      // The exclusive open is the ownership boundary. Before it, the path may be someone
+      // else's file and must not be touched — unlinking it would be the same mistake in
+      // reverse. After it, the temp file is ours and EVERY failure has to remove it: even
+      // a half-finished write leaves key-share bytes on disk, and nothing else reaps
+      // `.tmp` (neither `list()` nor `clear()` looks at them).
+      const tempFile = await fs.open(tempPath, 'wx', 0o600)
       try {
-        await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
-          encoding: 'utf-8',
-          mode: 0o600,
-          flag: 'wx',
-        })
-        createdTemp = true
+        try {
+          await tempFile.writeFile(JSON.stringify(stored, null, 2), 'utf-8')
+        } finally {
+          await tempFile.close().catch(() => {})
+        }
         await fs.rename(tempPath, filePath)
       } catch (error) {
-        if (createdTemp) {
-          await fs.rm(tempPath, { force: true }).catch(() => {})
-        }
+        await fs.rm(tempPath, { force: true }).catch(() => {})
         throw error
       }
     } catch (error) {
