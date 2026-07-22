@@ -1693,6 +1693,11 @@
       "import": "./dist/swap/general/swapkit/config.js",
       "default": "./dist/swap/general/swapkit/config.js"
     },
+    "./swap/general/swapkit/getSwapKitTrackerUrl": {
+      "types": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.d.ts",
+      "import": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js",
+      "default": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js"
+    },
     "./swap/general/swapkit/SwapKitEnabledChains": {
       "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
       "import": "./dist/swap/general/swapkit/SwapKitEnabledChains.js",
