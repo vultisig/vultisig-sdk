@@ -265,6 +265,11 @@
       "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
       "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
     },
+    "./chains/cosmos/parseUint64": {
+      "types": "./dist/chains/cosmos/parseUint64.d.ts",
+      "import": "./dist/chains/cosmos/parseUint64.js",
+      "default": "./dist/chains/cosmos/parseUint64.js"
+    },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/protoEncoding.js",
