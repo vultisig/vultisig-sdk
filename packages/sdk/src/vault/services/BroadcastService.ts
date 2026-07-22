@@ -16,6 +16,29 @@ import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
+ * Broadcast resolvers return `Promise<unknown>` and are inconsistent in shape: utxo/cardano
+ * resolve a bare hash string, tron resolves the raw RPC response object (`{ txid, ... }`), and
+ * most others (evm/cosmos/sui/ripple/ton/polkadot/bittensor) resolve void. When the resolver DID
+ * echo back a hash, prefer it over a locally re-derived one - it is the node's own authoritative
+ * value, not a client-side guess about what the node will have computed.
+ */
+const extractResolverTxHash = (broadcastResult: unknown): string | undefined => {
+  if (typeof broadcastResult === 'string' && broadcastResult.length > 0) {
+    return broadcastResult
+  }
+  if (
+    broadcastResult &&
+    typeof broadcastResult === 'object' &&
+    'txid' in broadcastResult &&
+    typeof (broadcastResult as { txid?: unknown }).txid === 'string' &&
+    (broadcastResult as { txid: string }).txid.length > 0
+  ) {
+    return (broadcastResult as { txid: string }).txid
+  }
+  return undefined
+}
+
+/**
  * BroadcastService
  *
  * Handles transaction broadcasting to blockchain networks.
@@ -118,12 +141,12 @@ export class BroadcastService {
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
 
-        await coreBroadcastTx({
+        const broadcastResult = await coreBroadcastTx({
           chain,
           tx: signingOutput,
         })
 
-        txHash = await getTxHash({ chain, tx: signingOutput })
+        txHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
       }
 
       return txHash
