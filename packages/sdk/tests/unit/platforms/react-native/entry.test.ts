@@ -260,6 +260,7 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     const parse = await import('../../../../src/tools/parse')
     const tx = await import('../../../../src/tx')
     const decode = await import('../../../../src/tools/decode')
+    const pairing = await import('../../../../src/services/buildKeygenPairingQrPayload')
 
     expect(rn.parseChain).toBe(parse.parseChain)
     expect(rn.parseTicker).toBe(parse.parseTicker)
@@ -271,6 +272,7 @@ describe('RN entry exposes pure chain helpers and registry', () => {
     expect(rn.decodeFromToolResult).toBe(decode.decodeFromToolResult)
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
+    expect(rn.buildKeygenPairingQrPayload).toBe(pairing.buildKeygenPairingQrPayload)
   })
 
   it('re-exports canonical swap tracker URL helpers from the RN entrypoint', async () => {
