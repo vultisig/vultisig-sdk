@@ -10,6 +10,7 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
@@ -439,6 +440,7 @@ export class RawBroadcastService {
       client.executeTransactionBlock({
         transactionBlock: unsignedTx,
         signature: [signature],
+        options: { showEffects: true },
       })
     )
 
@@ -455,6 +457,7 @@ export class RawBroadcastService {
     }
 
     if (!result) throw new Error('No broadcast result returned')
+    assertSuiTxSucceeded(result.effects)
     return result.digest
   }
 

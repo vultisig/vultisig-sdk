@@ -35,6 +35,7 @@ const accountInfoFixture = {
   pubkey: null,
   accountNumber: 7,
   sequence: 3,
+  sequenceBigInt: 3n,
   latestBlock: '100_0',
 }
 
@@ -232,6 +233,38 @@ describe('buildCosmosPayload', () => {
         ticker: 'ATOM',
       })
     })
+
+    it('preserves a uint64 sequence above the JavaScript safe-integer limit', async () => {
+      const sequence = 9_007_199_254_740_993n
+      mockGetCosmosAccountInfo.mockResolvedValueOnce({
+        ...accountInfoFixture,
+        sequence: Number(sequence),
+        sequenceBigInt: sequence,
+      })
+
+      const payload = await buildSignAminoKeysignPayload({
+        chain: Chain.Cosmos,
+        coin: {
+          chain: Chain.Cosmos,
+          address: 'cosmos1abcdef',
+          decimals: 6,
+          ticker: 'ATOM',
+        },
+        msgs: [],
+        fee: {
+          amount: [{ denom: 'uatom', amount: '5000' }],
+          gas: '200000',
+        },
+        vaultId: 'vault-ecdsa',
+        localPartyId: 'device-1',
+        publicKey: fakePublicKey,
+        libType,
+        skipChainSpecificFetch: false,
+      })
+
+      expect(payload.blockchainSpecific?.case).toBe('cosmosSpecific')
+      expect((payload.blockchainSpecific?.value as { sequence: bigint }).sequence).toBe(sequence)
+    })
   })
 
   describe('buildSignDirectKeysignPayload', () => {
@@ -290,6 +323,24 @@ describe('buildCosmosPayload', () => {
       }
       expect(directFetch.accountNumber).toBe(42n)
       expect(directFetch.sequence).toBe(3n)
+    })
+
+    it('preserves a uint64 sequence above the JavaScript safe-integer limit', async () => {
+      const sequence = 9_007_199_254_740_993n
+      mockGetCosmosAccountInfo.mockResolvedValueOnce({
+        ...accountInfoFixture,
+        sequence: Number(sequence),
+        sequenceBigInt: sequence,
+      })
+
+      const payload = await buildSignDirectKeysignPayload({
+        ...directBase,
+        chain: Chain.Cosmos,
+        skipChainSpecificFetch: false,
+      })
+
+      expect(payload.blockchainSpecific?.case).toBe('cosmosSpecific')
+      expect((payload.blockchainSpecific?.value as { sequence: bigint }).sequence).toBe(sequence)
     })
   })
 })
