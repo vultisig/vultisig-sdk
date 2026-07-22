@@ -19,6 +19,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo', () =>
   getCosmosAccountInfo: vi.fn().mockResolvedValue({
     accountNumber: 7n,
     sequence: 3,
+    sequenceBigInt: 3n,
     latestBlock: '1234567_0',
   }),
 }))
@@ -75,7 +76,11 @@ const buildPayload = ({
 }
 
 const resolve = (payload: ReturnType<typeof buildPayload>, transactionType = TransactionType.UNSPECIFIED) =>
-  getCosmosChainSpecific({ keysignPayload: payload, walletCore, transactionType })
+  getCosmosChainSpecific({
+    keysignPayload: payload,
+    walletCore,
+    transactionType,
+  })
 
 describe('getCosmosChainSpecific — isNativeSend gate', () => {
   beforeEach(() => {
@@ -111,7 +116,11 @@ describe('getCosmosChainSpecific — isNativeSend gate', () => {
   })
 
   it('leaves gas_limit unset when a dapp relays signData', async () => {
-    const result = await resolve(buildPayload({ signData: { case: 'signAmino', value: create(SignAminoSchema, {}) } }))
+    const result = await resolve(
+      buildPayload({
+        signData: { case: 'signAmino', value: create(SignAminoSchema, {}) },
+      })
+    )
 
     expect(estimateCosmosGasLimit).not.toHaveBeenCalled()
     expect(result.gasLimit).toBeUndefined()
