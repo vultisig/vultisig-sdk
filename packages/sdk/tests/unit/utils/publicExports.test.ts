@@ -166,6 +166,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
   })
 
+  it('exports the pairing-QR payload builder from the root SDK surface', async () => {
+    const services = await import('../../../src/services/buildKeygenPairingQrPayload')
+
+    expect(typeof sdk.buildKeygenPairingQrPayload).toBe('function')
+    expect(sdk.buildKeygenPairingQrPayload).toBe(services.buildKeygenPairingQrPayload)
+  })
+
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
     expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
     expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')
