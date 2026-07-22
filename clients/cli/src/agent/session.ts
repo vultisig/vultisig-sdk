@@ -10,7 +10,7 @@
  *   `tool-output-available` channel is buffered then signed — the sole sign source)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
+import { computeNotificationVaultId, MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
 import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
@@ -364,9 +364,10 @@ export class AgentSession {
 
         const token = crypto.randomUUID()
         this.pushService = new PushNotificationService(new MemoryStorage(), this.config.notificationUrl)
+        const notificationVaultId = await computeNotificationVaultId(this.publicKey, this.vault.hexChainCode)
 
         await this.pushService.registerDevice({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
           deviceType: 'electron',
@@ -378,7 +379,7 @@ export class AgentSession {
         })
 
         this.pushService.connect({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
         })
