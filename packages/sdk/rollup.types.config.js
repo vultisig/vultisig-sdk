@@ -31,7 +31,7 @@ const createSubpathTypesConfig = (input, file) => ({
   plugins: [dts(dtsPluginOptions)],
 })
 
-export default defineConfig([
+const baseTypeConfigs = [
   // Main types (platform-agnostic)
   {
     input: 'src/index.ts',
@@ -102,4 +102,32 @@ export default defineConfig([
   // declarations instead of the root index type graph.
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
-])
+]
+
+const standardToolTypeConfigs = [
+  createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts'),
+  createSubpathTypesConfig('src/tools/gas/index.ts', 'dist/tools/gas/index.d.ts'),
+  createSubpathTypesConfig('src/tools/policy/index.ts', 'dist/tools/policy/index.d.ts'),
+]
+
+const swapTypeConfigs = [createSubpathTypesConfig('src/tools/swap/index.ts', 'dist/tools/swap/index.d.ts')]
+
+const prepTypeConfigs = [createSubpathTypesConfig('src/tools/prep/index.ts', 'dist/tools/prep/index.d.ts')]
+
+const typeConfigGroups = {
+  base: baseTypeConfigs,
+  tools: standardToolTypeConfigs,
+  swap: swapTypeConfigs,
+  prep: prepTypeConfigs,
+}
+
+const typeTarget = process.env.BUILD_TYPES_TARGET ?? 'all'
+const selectedTypeConfigs = typeTarget === 'all' ? Object.values(typeConfigGroups).flat() : typeConfigGroups[typeTarget]
+
+if (!selectedTypeConfigs) {
+  throw new Error(
+    `Unknown types build target: ${typeTarget}. Available targets: ${Object.keys(typeConfigGroups).join(', ')}, all`
+  )
+}
+
+export default defineConfig(selectedTypeConfigs)

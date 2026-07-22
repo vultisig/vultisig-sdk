@@ -98,6 +98,71 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./tools/bridge": {
+      "types": "./dist/tools/bridge/index.d.ts",
+      "browser": "./dist/tools/bridge/index.js",
+      "worker": "./dist/tools/bridge/index.js",
+      "react-native": "./dist/tools/bridge/index.js",
+      "node": {
+        "import": "./dist/tools/bridge/index.js",
+        "require": "./dist/tools/bridge/index.cjs"
+      },
+      "import": "./dist/tools/bridge/index.js",
+      "require": "./dist/tools/bridge/index.cjs",
+      "default": "./dist/tools/bridge/index.cjs"
+    },
+    "./tools/gas": {
+      "types": "./dist/tools/gas/index.d.ts",
+      "browser": "./dist/tools/gas/index.js",
+      "worker": "./dist/tools/gas/index.js",
+      "react-native": "./dist/tools/gas/index.js",
+      "node": {
+        "import": "./dist/tools/gas/index.js",
+        "require": "./dist/tools/gas/index.cjs"
+      },
+      "import": "./dist/tools/gas/index.js",
+      "require": "./dist/tools/gas/index.cjs",
+      "default": "./dist/tools/gas/index.cjs"
+    },
+    "./tools/policy": {
+      "types": "./dist/tools/policy/index.d.ts",
+      "browser": "./dist/tools/policy/index.js",
+      "worker": "./dist/tools/policy/index.js",
+      "react-native": "./dist/tools/policy/index.js",
+      "node": {
+        "import": "./dist/tools/policy/index.js",
+        "require": "./dist/tools/policy/index.cjs"
+      },
+      "import": "./dist/tools/policy/index.js",
+      "require": "./dist/tools/policy/index.cjs",
+      "default": "./dist/tools/policy/index.cjs"
+    },
+    "./tools/swap": {
+      "types": "./dist/tools/swap/index.d.ts",
+      "browser": "./dist/tools/swap/index.js",
+      "worker": "./dist/tools/swap/index.js",
+      "react-native": "./dist/tools/swap/index.js",
+      "node": {
+        "import": "./dist/tools/swap/index.js",
+        "require": "./dist/tools/swap/index.cjs"
+      },
+      "import": "./dist/tools/swap/index.js",
+      "require": "./dist/tools/swap/index.cjs",
+      "default": "./dist/tools/swap/index.cjs"
+    },
+    "./tools/prep": {
+      "types": "./dist/tools/prep/index.d.ts",
+      "browser": "./dist/tools/prep/index.js",
+      "worker": "./dist/tools/prep/index.js",
+      "react-native": "./dist/tools/prep/index.js",
+      "node": {
+        "import": "./dist/tools/prep/index.js",
+        "require": "./dist/tools/prep/index.cjs"
+      },
+      "import": "./dist/tools/prep/index.js",
+      "require": "./dist/tools/prep/index.cjs",
+      "default": "./dist/tools/prep/index.cjs"
     }
   },
   "scripts": {
@@ -105,7 +170,7 @@
     "clean": "rm -rf dist",
     "build": "yarn clean && yarn build:platforms && yarn build:types",
     "build:js": "yarn build:platforms",
-    "build:types": "rollup -c rollup.types.config.js",
+    "build:types": "concurrently --max-processes 1 -n types-base,types-tools,types-swap,types-prep \"BUILD_TYPES_TARGET=base rollup -c rollup.types.config.js\" \"BUILD_TYPES_TARGET=tools rollup -c rollup.types.config.js\" \"BUILD_TYPES_TARGET=swap rollup -c rollup.types.config.js\" \"BUILD_TYPES_TARGET=prep rollup -c rollup.types.config.js\"",
     "dev": "BUILD_TARGET=node rollup -c rollup.platforms.config.js -w",
     "_____PLATFORM_BUILDS_____": "",
     "build:platforms": "concurrently \"yarn build:platform:node\" \"yarn build:platform:browser\" \"yarn build:platform:electron\" \"yarn build:platform:chrome-extension\" \"yarn build:platform:react-native\" \"yarn build:platform:vite\"",
