@@ -124,6 +124,55 @@ describe('FileStorage.set file permissions', () => {
     expect(await fs.readdir(basePath)).toEqual(['cache'])
   })
 
+  it('does not publish the vault when closing the temp file fails', async () => {
+    // A filesystem can defer a write failure to close. Treating close as best-effort
+    // would rename a possibly-truncated temp file over a good vault and report success.
+    const StorageWithFailingClose = await loadStorageWithFailing(actual => ({
+      open: async (...args: Parameters<typeof actual.open>) => {
+        const handle = await actual.open(...args)
+        const close = handle.close.bind(handle)
+        handle.close = async () => {
+          await close()
+          throw errnoError('input/output error', 'EIO')
+        }
+        return handle
+      },
+    }))
+
+    await expect(new StorageWithFailingClose({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      cause: { code: 'EIO' },
+    })
+
+    // No vault file published, and no temp residue holding the key shares.
+    expect(await fs.readdir(basePath)).toEqual(['cache'])
+  })
+
+  it('reports the write failure, not the close failure, when both fail', async () => {
+    // The write error is the one that says what actually went wrong; a close error piled
+    // on top of it must not replace it (here: the quota mapping would be lost).
+    const StorageWithBothFailing = await loadStorageWithFailing(actual => ({
+      open: async (...args: Parameters<typeof actual.open>) => {
+        const handle = await actual.open(...args)
+        const close = handle.close.bind(handle)
+        handle.writeFile = async () => {
+          throw errnoError('no space left on device', 'ENOSPC')
+        }
+        handle.close = async () => {
+          await close()
+          throw errnoError('input/output error', 'EIO')
+        }
+        return handle
+      },
+    }))
+
+    await expect(new StorageWithBothFailing({ basePath }).set(KEY, { keyshare: SECRET })).rejects.toMatchObject({
+      code: 'QUOTA_EXCEEDED',
+      cause: { code: 'ENOSPC' },
+    })
+
+    expect(await fs.readdir(basePath)).toEqual(['cache'])
+  })
+
   it('cleans up its own temp file when the rename fails with EEXIST', async () => {
     // EEXIST specifically: it is the code that means "not ours" for the exclusive create,
     // and rename can raise it too (a directory in the way, or Windows). Cleanup must

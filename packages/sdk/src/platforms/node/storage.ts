@@ -104,11 +104,27 @@ export class FileStorage implements Storage {
       // `.tmp` (neither `list()` nor `clear()` looks at them).
       const tempFile = await fs.open(tempPath, 'wx', 0o600)
       try {
+        let failure: unknown
         try {
           await tempFile.writeFile(JSON.stringify(stored, null, 2), 'utf-8')
-        } finally {
-          await tempFile.close().catch(() => {})
+        } catch (error) {
+          failure = error
         }
+        // Close always, and let its error count: a filesystem may defer a write failure
+        // to close, and publishing the rename on a close we ignored would replace a good
+        // vault with a truncated one. The write error wins when both fail — it is the
+        // one that says what went wrong.
+        try {
+          await tempFile.close()
+        } catch (error) {
+          if (failure === undefined) {
+            failure = error
+          }
+        }
+        if (failure !== undefined) {
+          throw failure
+        }
+
         await fs.rename(tempPath, filePath)
       } catch (error) {
         await fs.rm(tempPath, { force: true }).catch(() => {})
