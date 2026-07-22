@@ -90,8 +90,11 @@ describe('getTronTxStatus', () => {
   })
 
   // sdk#1505 should-fix (S1): completes the documented core/Tron.proto contractResult enum
-  // (values 3-9, 12, 14) so every KNOWN failure resolves promptly to 'error' instead of
-  // falling to the allowlist's 'pending' branch and waiting out the poll timeout.
+  // (every non-DEFAULT, non-SUCCESS member) so every KNOWN failure resolves promptly to 'error'
+  // instead of falling to the allowlist's 'pending' branch and waiting out the poll timeout.
+  // Names are the exact protobuf enum spellings (PRECOMPILED_CONTRACT, not *_ERROR) and stay in
+  // parity with the app's TRON_TERMINAL_FAILURE_RESULTS. 'UNKNOWN' here is the enum member
+  // (value 14) — distinct from a genuinely unrecognized code, which still buckets pending below.
   it.each([
     'TRANSFER_FAILED',
     'BAD_JUMP_DESTINATION',
@@ -100,8 +103,10 @@ describe('getTronTxStatus', () => {
     'STACK_TOO_SMALL',
     'STACK_TOO_LARGE',
     'ILLEGAL_OPERATION',
-    'PRECOMPILE_CONTRACT_ERROR',
+    'PRECOMPILED_CONTRACT',
     'JVM_STACK_OVER_FLOW',
+    'UNKNOWN',
+    'INVALID_CODE',
   ])('returns error for %s (completed contractResult allowlist)', async (result) => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result } })
 
