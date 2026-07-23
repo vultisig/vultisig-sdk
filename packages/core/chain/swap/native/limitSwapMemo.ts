@@ -250,18 +250,69 @@ export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
  */
 export const limitSwapMemoPrefix = '=<:'
 
+/** `<LIM>/<interval>/<quantity>`, the segment that makes the order a limit order. */
+const limitSwapMemoTradeTargetPattern = /^\d+\/\d+\/\d+$/
+
+/** Basis points are a bare integer; the affiliate name is a printable, separator-free token. */
+const limitSwapMemoAffiliateBpsPattern = /^\d+$/
+
 /**
- * Fail closed on a memo that is not a THORChain limit-swap memo.
+ * Fail closed on anything that is not a well-formed THORChain limit-swap memo.
  *
- * Guards the signing path: the limit deposit builder accepts a pre-built memo
- * string, and a market (`=>`) or unrelated memo reaching it would sign a
- * value-bearing deposit that executes with completely different semantics.
+ * Guards the signing path. The limit deposit builder accepts a pre-built memo
+ * string, so a market (`=>`) memo, an unrelated action, or a truncated/corrupted
+ * limit memo would otherwise sign a value-bearing deposit that executes with
+ * completely different semantics — or with no price protection at all.
+ *
+ * Validates the shape `=<:TARGET:DEST:LIM/INTERVAL/QUANTITY[:AFFILIATE:BPS]`
+ * rather than only the prefix, because it is the trade-target segment that
+ * carries the order's price floor: a memo whose LIM is missing or non-numeric is
+ * exactly the case that must never reach a signer.
  */
 export const assertLimitSwapMemo = (memo: string): void => {
   if (!memo.startsWith(limitSwapMemoPrefix)) {
     throw new Error(
       `memo is not a THORChain limit-swap memo (expected a "${limitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
     )
+  }
+
+  const segments = memo.slice(limitSwapMemoPrefix.length).split(':')
+  if (segments.length !== 3 && segments.length !== 5) {
+    throw new Error(
+      `limit-swap memo must have 3 segments (or 5 with an affiliate) after the prefix, got ${segments.length}: ${JSON.stringify(memo)}`
+    )
+  }
+
+  const [targetAsset, destAddress, tradeTarget, affiliate, affiliateBps] = segments
+
+  if (!targetAsset) {
+    throw new Error(`limit-swap memo is missing its target asset: ${JSON.stringify(memo)}`)
+  }
+
+  if (!destAddress) {
+    throw new Error(`limit-swap memo is missing its destination address: ${JSON.stringify(memo)}`)
+  }
+
+  if (!limitSwapMemoTradeTargetPattern.test(tradeTarget)) {
+    throw new Error(
+      `limit-swap memo trade target must be "<limit>/<interval>/<quantity>", got ${JSON.stringify(tradeTarget)}`
+    )
+  }
+
+  const [limit] = tradeTarget.split('/')
+  if (BigInt(limit) === 0n) {
+    // THORChain reads a zero trade target as an unprotected market order.
+    throw new Error(`limit-swap memo has a zero minimum-received (LIM), which THORChain treats as a market order`)
+  }
+
+  if (segments.length === 5) {
+    if (!affiliate) {
+      throw new Error(`limit-swap memo has an empty affiliate segment: ${JSON.stringify(memo)}`)
+    }
+
+    if (!limitSwapMemoAffiliateBpsPattern.test(affiliateBps)) {
+      throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
+    }
   }
 }
 

@@ -82,6 +82,17 @@ describe('findLimitSwapInbound', () => {
     )
   })
 
+  // The selected row's address becomes the deposit's toAddress; an empty one
+  // would sign funds to nowhere.
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   '],
+  ])('refuses an inbound with an %s vault address', (_, address) => {
+    expect(() => findLimitSwapInbound({ inbounds: [inbound('BTC', { address })], chain: Chain.Bitcoin })).toThrow(
+      /no live, tradeable THORChain inbound/
+    )
+  })
+
   it('throws when the chain has no inbound row at all', () => {
     expect(() => findLimitSwapInbound({ inbounds: [inbound('ETH')], chain: Chain.Bitcoin })).toThrow(
       /no live, tradeable THORChain inbound/

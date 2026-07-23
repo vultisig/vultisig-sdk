@@ -6,9 +6,16 @@ import { thorchainMemoAssetChainPrefix } from './thorchainMemoAsset'
  * Whether an inbound row is usable right now.
  *
  * Missing pause flags read as "not paused", matching the market swap's halt gate.
+ * The vault address must also be present: it becomes the deposit's `toAddress`,
+ * and an empty one would sign funds to nowhere.
  */
-const isTradeable = ({ halted, global_trading_paused, chain_trading_paused }: ThorchainInboundAddress): boolean =>
-  !halted && !global_trading_paused && !chain_trading_paused
+const isTradeable = ({
+  address,
+  halted,
+  global_trading_paused,
+  chain_trading_paused,
+}: ThorchainInboundAddress): boolean =>
+  Boolean(address?.trim()) && !halted && !global_trading_paused && !chain_trading_paused
 
 /**
  * Whether THORChain has globally paused trading, per a live `inbound_addresses`

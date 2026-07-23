@@ -1,5 +1,6 @@
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
+import { fromChainAmountDisplay } from '@vultisig/core-chain/amount/fromChainAmountExact'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
@@ -11,6 +12,7 @@ import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getAdvancedSwapQueueEnabled } from '@vultisig/core-chain/swap/native/limitSwapAvailability'
 import { findLimitSwapInbound, shouldBlockRuneDeposit } from '@vultisig/core-chain/swap/native/limitSwapInbound'
 import { assertLimitSwapMemo } from '@vultisig/core-chain/swap/native/limitSwapMemo'
+import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
@@ -48,10 +50,15 @@ export type BuildLimitSwapKeysignPayloadInput = {
   libType: KeysignLibType
   walletCore: WalletCore
   /**
-   * The order's guaranteed-minimum output in the target's natural units, for
-   * cross-device "you receive" display only. Never influences signing.
+   * The order's guaranteed-minimum output (the memo's LIM) in the target's
+   * smallest units, for cross-device "you receive" display only. Never
+   * influences signing.
+   *
+   * Taken as a chain amount rather than a decimal so it is formatted the same
+   * way the market path formats its expected output — `Number#toString()` would
+   * emit scientific notation for dust values and render as `1e-8` on a co-signer.
    */
-  expectedToAmountDecimal?: number
+  expectedToAmount?: bigint
   /** Epoch milliseconds; parameterised so the router expiry is deterministic under test. */
   now?: number
 }
@@ -103,7 +110,7 @@ export const buildLimitSwapKeysignPayload = async ({
   toPublicKey,
   libType,
   walletCore,
-  expectedToAmountDecimal = 0,
+  expectedToAmount = 0n,
   now = Date.now(),
 }: BuildLimitSwapKeysignPayloadInput) => {
   assertLimitSwapMemo(memo)
@@ -165,7 +172,7 @@ export const buildLimitSwapKeysignPayload = async ({
         fromAmount: amount.toString(),
         // Display-only, for the co-signer's "you receive" row. The order's real
         // floor is the LIM inside the memo; these fields are never read here.
-        toAmountDecimal: expectedToAmountDecimal.toString(),
+        toAmountDecimal: fromChainAmountDisplay(expectedToAmount, getNativeSwapDecimals(toCoin)),
         toAmountLimit: '0',
         streamingInterval: '0',
         streamingQuantity: '0',
