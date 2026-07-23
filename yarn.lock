@@ -5654,15 +5654,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/buffer-layout-utils@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "@solana/buffer-layout-utils@npm:0.2.0"
+"@solana/buffer-layout-utils@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "@solana/buffer-layout-utils@npm:0.3.0"
   dependencies:
     "@solana/buffer-layout": "npm:^4.0.0"
     "@solana/web3.js": "npm:^1.32.0"
     bigint-buffer: "npm:^1.1.5"
     bignumber.js: "npm:^9.0.1"
-  checksum: 10c0/ed093999d7c0f93527a9b261a9a2a59e10b5ef78fc416fa896b86036fb4dadf923d17db68bffdc3e91eadecdb8b8cddd8ee37f12429980fcaba321e7b8a35d27
+  checksum: 10c0/5240f0903dc8f226fe7c16531383bb23166190a0b9f784c4c9355d25f7804f82270d5722e66953ab669d364c8ac3e6e512889eb9e84e8a224c948ea188ecf3fa
   languageName: node
   linkType: hard
 
@@ -5828,18 +5828,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@solana/spl-token@npm:^0.4.14":
-  version: 0.4.14
-  resolution: "@solana/spl-token@npm:0.4.14"
+"@solana/spl-token@npm:^0.4.15":
+  version: 0.4.15
+  resolution: "@solana/spl-token@npm:0.4.15"
   dependencies:
     "@solana/buffer-layout": "npm:^4.0.0"
-    "@solana/buffer-layout-utils": "npm:^0.2.0"
+    "@solana/buffer-layout-utils": "npm:^0.3.0"
     "@solana/spl-token-group": "npm:^0.0.7"
     "@solana/spl-token-metadata": "npm:^0.1.6"
     buffer: "npm:^6.0.3"
   peerDependencies:
     "@solana/web3.js": ^1.95.5
-  checksum: 10c0/aaa0b03859c45a8e917e14a8d0703de13ca16cfab31b72685ef148dcd2dc9a6fd37ac8842b1ca9609aea8407d51bf98e69bc7a4f9e2dc86f440b5bd8c0c70bfe
+  checksum: 10c0/78b4a77c138a920965e00511c52dd1726b4a2c7c8d64ad9ea889e69d9db512baf255dc2905a4fd905929a375721505c933a77bcfe05c38caf6c388095261ced7
   languageName: node
   linkType: hard
 
@@ -7080,7 +7080,7 @@ __metadata:
     "@polkadot/api": "npm:^16.5.6"
     "@polkadot/util": "npm:^14.0.3"
     "@polkadot/util-crypto": "npm:^14.0.3"
-    "@solana/spl-token": "npm:^0.4.14"
+    "@solana/spl-token": "npm:^0.4.15"
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
@@ -7335,7 +7335,7 @@ __metadata:
     "@rollup/plugin-typescript": "npm:^12.3.0"
     "@scure/base": "npm:^1.2.5"
     "@scure/bip39": "npm:^1.6.0"
-    "@solana/spl-token": "npm:^0.4.14"
+    "@solana/spl-token": "npm:^0.4.15"
     "@solana/web3.js": "npm:^1.98.4"
     "@ton/core": "npm:^0.63.1"
     "@ton/crypto": "npm:^3.3.0"
