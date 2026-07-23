@@ -443,7 +443,7 @@ export {
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
-// the full defi namespace (arkis + balancer + glif + pendle + 3jane).
+// the full defi namespace (arkis + balancer + glif + pendle + 3jane + stakekit).
 export type {
   BalancerTokenApi,
   BalancerV3SwapCalldata,
@@ -471,6 +471,38 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from '../../tools/defi/threeJane'
+export type {
+  EvmScanRequest,
+  PendingAction,
+  ScanRequest,
+  UnsupportedScanRequest,
+  Validator,
+  YieldActionResponse,
+  YieldArgs,
+  YieldBalance,
+  YieldDiscoverMetadata,
+  YieldDiscoverOpportunity,
+  YieldDiscoverToken,
+  YieldListResponse,
+  YieldMetadata,
+  YieldProduct,
+  YieldToken,
+  YieldTransaction,
+} from '../../tools/defi/stakekit'
+export {
+  buildYieldActionScanRequest,
+  buildYieldStepScanRequest,
+  parseActionDisplay,
+  stakekit,
+  stakekitBalances,
+  stakekitBuildEnter,
+  stakekitBuildExit,
+  stakekitBuildManage,
+  stakekitDetails,
+  stakekitSearch,
+  validateStakekitActionAddress,
+  validateStakekitActionInput,
+} from '../../tools/defi/stakekit'
 
 // Cosmos staking + distribution module (LCD queries — read-only,
 // vault-free, generic over every ibcEnabled cosmos chain). Mirrors the
