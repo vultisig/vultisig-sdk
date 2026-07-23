@@ -257,7 +257,7 @@ export class RawBroadcastService {
     const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
     const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
 
-    const { data: signature, error } = await attempt(
+    const { data: sentSignature, error } = await attempt(
       client.sendRawTransaction(txBytes, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
@@ -265,11 +265,16 @@ export class RawBroadcastService {
       })
     )
 
+    let signature = sentSignature
     if (error) {
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        return deriveSolanaRawTxSignature(rawTx)
+        // "AlreadyProcessed" only proves the node has seen and executed this signature before -
+        // not that the original execution succeeded. It must go through the same on-chain-failure
+        // check below as a fresh send, not be handed back as a hash unconditionally.
+        signature = deriveSolanaRawTxSignature(rawTx)
+      } else {
+        throw error
       }
-      throw error
     }
 
     if (!signature) throw new Error('No transaction signature returned')
@@ -283,6 +288,8 @@ export class RawBroadcastService {
     // this bounded, non-blocking status check catches that without adding real broadcast
     // latency: it never blocks/throws on "not yet confirmed" (the normal state right after
     // submission), only on an explicit on-chain error already attached to this signature.
+    // This also covers the "already been processed" idempotent-retry path above: a duplicate
+    // signature that already failed on-chain must still fail closed here, not report success.
     const { data: statuses } = await attempt(
       client.getSignatureStatuses([signature], { searchTransactionHistory: true })
     )

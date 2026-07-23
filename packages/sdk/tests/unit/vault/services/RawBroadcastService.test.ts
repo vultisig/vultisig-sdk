@@ -210,6 +210,28 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe(base58.encode(signature))
   })
 
+  // Fund-safety: "AlreadyProcessed" only proves the node executed this signature before, not
+  // that the execution succeeded. The idempotent-retry path must run through the same
+  // on-chain-failure status check as a fresh send, not report success unconditionally.
+  it('fails closed on a duplicate-style Solana broadcast error when the signature already failed on-chain', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] } }],
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Solana,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
     const txB64 = Buffer.from([1, 2, 3]).toString('base64')
     const hash = await service.broadcastRawTx({
