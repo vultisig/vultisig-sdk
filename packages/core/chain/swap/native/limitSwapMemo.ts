@@ -244,10 +244,31 @@ export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
   getLimitSwapIntervalBlocks(inputs.expiry_hours)
 }
 
+/**
+ * THORChain memo prefix selecting the advanced swap queue — what makes a deposit
+ * a resting limit order rather than a market swap (`=>`).
+ */
+export const limitSwapMemoPrefix = '=<:'
+
+/**
+ * Fail closed on a memo that is not a THORChain limit-swap memo.
+ *
+ * Guards the signing path: the limit deposit builder accepts a pre-built memo
+ * string, and a market (`=>`) or unrelated memo reaching it would sign a
+ * value-bearing deposit that executes with completely different semantics.
+ */
+export const assertLimitSwapMemo = (memo: string): void => {
+  if (!memo.startsWith(limitSwapMemoPrefix)) {
+    throw new Error(
+      `memo is not a THORChain limit-swap memo (expected a "${limitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
+    )
+  }
+}
+
 const buildMemo = (inputs: LimitSwapMemoInput, includeAffiliate: boolean): string => {
   const limit = getLimitSwapLimitAmount(inputs)
   const interval = getLimitSwapIntervalBlocks(inputs.expiry_hours)
-  const memo = `=<:${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
+  const memo = `${limitSwapMemoPrefix}${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
 
   return includeAffiliate ? `${memo}:${nativeSwapAffiliateConfig.affiliateFeeAddress}:${baseAffiliateBps}` : memo
 }
