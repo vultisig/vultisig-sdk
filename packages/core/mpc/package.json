@@ -591,6 +591,11 @@
       "import": "./dist/keysign/swap/build.js",
       "default": "./dist/keysign/swap/build.js"
     },
+    "./keysign/swap/buildLimitSwapKeysignPayload": {
+      "types": "./dist/keysign/swap/buildLimitSwapKeysignPayload.d.ts",
+      "import": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js",
+      "default": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js"
+    },
     "./keysign/swap/cowswap/buildCowSwapApprovalSigningInput": {
       "types": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.d.ts",
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",

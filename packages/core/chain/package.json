@@ -1743,6 +1743,16 @@
       "import": "./dist/swap/native/halts/getNativeSwapTradingHalt.js",
       "default": "./dist/swap/native/halts/getNativeSwapTradingHalt.js"
     },
+    "./swap/native/limitSwapAvailability": {
+      "types": "./dist/swap/native/limitSwapAvailability.d.ts",
+      "import": "./dist/swap/native/limitSwapAvailability.js",
+      "default": "./dist/swap/native/limitSwapAvailability.js"
+    },
+    "./swap/native/limitSwapInbound": {
+      "types": "./dist/swap/native/limitSwapInbound.d.ts",
+      "import": "./dist/swap/native/limitSwapInbound.js",
+      "default": "./dist/swap/native/limitSwapInbound.js"
+    },
     "./swap/native/limitSwapMemo": {
       "types": "./dist/swap/native/limitSwapMemo.d.ts",
       "import": "./dist/swap/native/limitSwapMemo.js",
