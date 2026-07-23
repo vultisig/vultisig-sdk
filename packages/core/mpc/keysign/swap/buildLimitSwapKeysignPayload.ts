@@ -10,7 +10,11 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getAdvancedSwapQueueEnabled } from '@vultisig/core-chain/swap/native/limitSwapAvailability'
-import { findLimitSwapInbound, shouldBlockRuneDeposit } from '@vultisig/core-chain/swap/native/limitSwapInbound'
+import {
+  findLimitSwapInbound,
+  isLimitSwapDestinationHalted,
+  shouldBlockRuneDeposit,
+} from '@vultisig/core-chain/swap/native/limitSwapInbound'
 import { assertLimitSwapMemo } from '@vultisig/core-chain/swap/native/limitSwapMemo'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -89,7 +93,9 @@ export type BuildLimitSwapKeysignPayloadInput = {
  * - The memo must actually be a limit memo.
  * - RUNE deposits are blocked on THORChain's global trading pause (they bypass
  *   the per-chain inbound halt filter entirely), including when the inbound list
- *   is unverifiable.
+ *   is unverifiable — and on a halted destination chain: with no swap payload
+ *   attached, the broadcast guard's destination-leg re-check never runs for
+ *   them, so sign time is their only destination gate.
  * - External sources must resolve a live, non-halted, non-paused inbound row,
  *   and the destination is taken from that same live view rather than a cache.
  *
@@ -141,6 +147,12 @@ export const buildLimitSwapKeysignPayload = async ({
       if (shouldBlockRuneDeposit(inbounds)) {
         throw new Error(
           'THORChain has globally paused trading (or its inbound list is unverifiable); refusing to sign a RUNE limit-order deposit'
+        )
+      }
+
+      if (isLimitSwapDestinationHalted({ inbounds, chain: toCoin.chain })) {
+        throw new Error(
+          `THORChain has halted ${toCoin.chain} trading; refusing to sign a RUNE limit-order deposit whose outbound could not leave`
         )
       }
 

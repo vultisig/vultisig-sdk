@@ -37,6 +37,32 @@ export const isThorchainGloballyPaused = (inbounds: ThorchainInboundAddress[]): 
 export const shouldBlockRuneDeposit = (inbounds: ThorchainInboundAddress[]): boolean =>
   inbounds.length === 0 || isThorchainGloballyPaused(inbounds)
 
+type IsLimitSwapDestinationHaltedInput = {
+  inbounds: ThorchainInboundAddress[]
+  chain: Chain
+}
+
+/**
+ * Whether a limit order's destination chain is halted or trading-paused, per the
+ * live inbound list.
+ *
+ * The market path re-checks both route legs at broadcast through the native swap
+ * payload, but a RUNE `MsgDeposit` never carries one — this sign-time gate is
+ * its only destination check. Mirrors the broadcast guard's tolerance: a leg
+ * with no memo prefix or no inbound row (THORChain-native assets; the feed lists
+ * no row for THORChain itself) is not haltable via this feed and reads as live.
+ */
+export const isLimitSwapDestinationHalted = ({ inbounds, chain }: IsLimitSwapDestinationHaltedInput): boolean => {
+  const chainSymbol = thorchainMemoAssetChainPrefix[chain]
+  if (!chainSymbol) {
+    return false
+  }
+
+  const inbound = inbounds.find(entry => entry.chain.trim().toUpperCase() === chainSymbol)
+
+  return Boolean(inbound && (inbound.halted || inbound.global_trading_paused || inbound.chain_trading_paused))
+}
+
 type FindLimitSwapInboundInput = {
   inbounds: ThorchainInboundAddress[]
   chain: Chain

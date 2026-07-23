@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { Chain } from '../../Chain'
 import { ThorchainInboundAddress } from '../../chains/cosmos/thor/getThorchainInboundAddress'
-import { findLimitSwapInbound, isThorchainGloballyPaused, shouldBlockRuneDeposit } from './limitSwapInbound'
+import {
+  findLimitSwapInbound,
+  isLimitSwapDestinationHalted,
+  isThorchainGloballyPaused,
+  shouldBlockRuneDeposit,
+} from './limitSwapInbound'
 
 const inbound = (chain: string, overrides: Partial<ThorchainInboundAddress> = {}): ThorchainInboundAddress => ({
   address: `${chain.toLowerCase()}-vault`,
@@ -50,6 +55,38 @@ describe('shouldBlockRuneDeposit', () => {
   // RUNE has no inbound vault, so a halted BTC row must not block a RUNE deposit.
   it('ignores a single halted chain', () => {
     expect(shouldBlockRuneDeposit([inbound('BTC', { halted: true }), inbound('ETH')])).toBe(false)
+  })
+})
+
+describe('isLimitSwapDestinationHalted', () => {
+  it.each([
+    ['halted', { halted: true }],
+    ['globally paused', { global_trading_paused: true }],
+    ['chain paused', { chain_trading_paused: true }],
+  ])('flags a %s destination', (_, overrides) => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('BTC', overrides)], chain: Chain.Bitcoin })).toBe(true)
+  })
+
+  it('reads a live destination as not halted', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('BTC'), inbound('ETH')], chain: Chain.Bitcoin })).toBe(
+      false
+    )
+  })
+
+  it('matches the destination row case-insensitively and ignores surrounding whitespace', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound(' btc ', { halted: true })], chain: Chain.Bitcoin })).toBe(
+      true
+    )
+  })
+
+  // The feed lists no row for THORChain itself, so a THORChain-native
+  // destination (RUNE, TCY, secured assets) is not haltable via it.
+  it('skips a destination with no inbound row rather than false-blocking it', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('BTC')], chain: Chain.THORChain })).toBe(false)
+  })
+
+  it('skips a destination the memo builder cannot encode', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('BTC')], chain: Chain.Cardano })).toBe(false)
   })
 })
 

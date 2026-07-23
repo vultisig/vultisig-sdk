@@ -114,6 +114,22 @@ describe('buildLimitSwapKeysignPayload', () => {
         /globally paused trading|unverifiable/
       )
     })
+
+    // With no swap payload attached, the broadcast guard's destination-leg
+    // re-check never runs for a RUNE deposit — sign time is its only
+    // destination gate, or RUNE->BTC signs while BTC's outbound cannot leave.
+    it.each([
+      ['halted', { halted: true }],
+      ['trading-paused', { chain_trading_paused: true }],
+    ])('refuses to sign into a %s destination chain', async (_, overrides) => {
+      mocks.getThorchainInboundAddress.mockResolvedValue([inbound('BTC', overrides), inbound('ETH')])
+
+      await expect(buildLimitSwapKeysignPayload({ ...baseInput, fromCoin: runeCoin, toCoin: btcCoin })).rejects.toThrow(
+        /halted Bitcoin trading/
+      )
+      expect(mocks.getChainSpecific).not.toHaveBeenCalled()
+    })
+
   })
 
   describe('native gas asset (inbound vault transfer)', () => {
