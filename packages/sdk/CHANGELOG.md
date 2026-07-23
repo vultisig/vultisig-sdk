@@ -1,5 +1,49 @@
 # @vultisig/sdk
 
+## 2.21.1
+
+### Patch Changes
+
+- [#1435](https://github.com/vultisig/vultisig-sdk/pull/1435) [`69e2fc2`](https://github.com/vultisig/vultisig-sdk/commit/69e2fc2f92c053294b0276440306be5871988be9) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep browser vault storage on the backend selected during initialization. IndexedDB failures and quota errors now surface without silently switching to a partial localStorage or in-memory view, while legacy localStorage vaults retain their backend across reloads.
+
+- [#1179](https://github.com/vultisig/vultisig-sdk/pull/1179) [`0c80a06`](https://github.com/vultisig/vultisig-sdk/commit/0c80a062bde65c4938a29ce8c1fb6052028615e1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Route the CLI version cache, version output, and VaultStateStore local state through `VULTISIG_CONFIG_DIR` so they stay co-located with SDK vault storage and other shared CLI state.
+
+- [#1518](https://github.com/vultisig/vultisig-sdk/pull/1518) [`aa47b4a`](https://github.com/vultisig/vultisig-sdk/commit/aa47b4a03c7391d13c738cba68b13a1526d1c502) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add `buildLimitSwapKeysignPayload`, the step that turns a THORChain `=<` limit-order memo into a signable transaction.
+
+  `buildLimitSwapMemo` produced the memo and `getThorchainMemoAsset` the asset notation, but nothing carried either into a `KeysignPayload` — limit orders could be composed and never placed. This builder branches on the source asset, mirroring iOS `LimitSwapPayloadAssembler`:
+
+  - **Native RUNE** — `MsgDeposit` on THORChain itself; no inbound vault, `toAddress` carries the signer's own address as the placeholder the Cosmos signer ignores.
+  - **Native gas asset** — transfer to the live Asgard inbound vault with the memo in tx `data` / `OP_RETURN`, no swap payload.
+  - **ERC20** — the router's `depositWithExpiry` call plus an `approve` when allowance is short, both in one ceremony. A token source signed without a swap payload would fall through to a plain ERC-20 transfer, dropping the memo and stranding the tokens on the router.
+
+  Every gate fails closed: the `EnableAdvSwapQueue` mimir is re-checked at sign time (it can flip while the user sits on Verify, and a `=<` order on a network with the queue off can execute as an unprotected market swap), the memo must actually be a limit memo, RUNE deposits are blocked on THORChain's global trading pause — including when the inbound list is unverifiable, since RUNE bypasses the per-chain halt filter entirely — and external sources must resolve a live, non-halted inbound whose address is then used as the destination.
+
+  Also exports `getAdvancedSwapQueueEnabled` (the mimir gate), `findLimitSwapInbound` / `shouldBlockRuneDeposit` (pure inbound selection), and `assertLimitSwapMemo`.
+
+  `assertValidThorchainDepositMemo` is deliberately unchanged: it guards the standalone `prepareThorchainMsgDepositTxFromKeys` tool and is not on the keysign-payload path, so excluding swap-shaped memos there stays correct.
+
+  No EVM gas-limit override is applied. iOS pins a native-EVM limit deposit to 120000 to match its own market path, but here both paths put the memo on `keysignPayload.memo` and neither sets a general swap payload, so both already floor at `deriveEvmGasLimit`'s 600000 data-tx limit. Forcing 120000 would make the limit path diverge from the market path and risk under-gassing.
+
+- [#1505](https://github.com/vultisig/vultisig-sdk/pull/1505) [`32e5d36`](https://github.com/vultisig/vultisig-sdk/commit/32e5d369ae4723299a6cb8f694da1782dbf207c2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(sdk): raw broadcast paths fail closed instead of reporting false success
+
+  Three raw-broadcast/status hardening fixes, all fail-closed (throw/pending on
+  ambiguity, never fabricate success):
+
+  - `RawBroadcastService.broadcastRawTx`: Polkadot/Bittensor no longer return
+    `undefined` as a success hash when the RPC response has neither `result`
+    nor `error`; Tron now also checks `result === false` (not only `code`),
+    matching the guard the core resolver already has; Solana adds a bounded,
+    non-blocking signature-status check so a signature the node already knows
+    failed is not handed back as a hash. Cosmos and Sui raw paths already had
+    assert guards from prior PRs and are untouched.
+  - `getTronTxStatus` (status resolver): an unrecognized `receipt.result` value
+    is no longer narrated as `success` just because it isn't on the known
+    failure list - it now resolves to `pending`. `SUCCESS` and absent
+    `receipt.result` are unchanged (still `success`).
+  - `BroadcastService.broadcastTx`: prefers the resolver-returned hash (utxo/
+    cardano/tron echo the node's own hash) over a locally re-derived one,
+    falling back to the local computation only when the resolver returns none.
+
 ## 2.21.0
 
 ### Minor Changes
