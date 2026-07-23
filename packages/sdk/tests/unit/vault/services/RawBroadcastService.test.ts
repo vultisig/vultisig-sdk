@@ -12,6 +12,7 @@ const {
   mockGetEvmClient,
   mockGetBlockchairBaseUrl,
   mockSendSolanaRawTx,
+  mockGetSolanaSignatureStatuses,
   mockGetCosmosClient,
   mockCosmosBroadcastTx,
   mockExecuteSuiTx,
@@ -21,6 +22,7 @@ const {
   mockGetEvmClient: vi.fn(),
   mockGetBlockchairBaseUrl: vi.fn(),
   mockSendSolanaRawTx: vi.fn(),
+  mockGetSolanaSignatureStatuses: vi.fn(),
   mockGetCosmosClient: vi.fn(),
   mockCosmosBroadcastTx: vi.fn(),
   mockExecuteSuiTx: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl', () => ({
 vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
   getSolanaClient: () => ({
     sendRawTransaction: mockSendSolanaRawTx,
+    getSignatureStatuses: mockGetSolanaSignatureStatuses,
   }),
 }))
 
@@ -68,11 +71,15 @@ describe('RawBroadcastService', () => {
     vi.clearAllMocks()
     mockGetBlockchairBaseUrl.mockReturnValue('https://mock.blockchair.test/bitcoin')
     mockSendSolanaRawTx.mockResolvedValue('sol-signature')
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
     mockGetCosmosClient.mockResolvedValue({
       broadcastTx: mockCosmosBroadcastTx,
     })
     mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash' })
-    mockExecuteSuiTx.mockResolvedValue({ digest: 'sui-digest' })
+    mockExecuteSuiTx.mockResolvedValue({
+      digest: 'sui-digest',
+      effects: { status: { status: 'success' } },
+    })
     mockRippleRequest.mockResolvedValue({
       result: { tx_json: { hash: 'xrp-hash' } },
     })
@@ -145,6 +152,45 @@ describe('RawBroadcastService', () => {
     expect(mockSendSolanaRawTx).toHaveBeenCalled()
   })
 
+  // sendRawTransaction is fire-and-forget (accepted-into-queue, not execution result), so the
+  // raw path cannot assert success from the send response the way Cosmos/Sui do. This bounded
+  // status check catches the case where the node already knows the signature failed on-chain.
+  it('throws instead of returning a signature when Solana reports an on-chain error for it', async () => {
+    mockGetSolanaSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] } }],
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Solana,
+        rawTx: 'YQ==',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
+  it('still returns the signature when the status check finds no record yet (normal, not yet confirmed)', async () => {
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx: 'YQ==',
+    })
+    expect(hash).toBe('sol-signature')
+  })
+
+  it('still returns the signature when the status check itself errors (verification is best-effort, not a new failure mode)', async () => {
+    mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx: 'YQ==',
+    })
+    expect(hash).toBe('sol-signature')
+  })
+
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
     const txB64 = Buffer.from([1, 2, 3]).toString('base64')
     const hash = await service.broadcastRawTx({
@@ -163,6 +209,27 @@ describe('RawBroadcastService', () => {
       rawTx: rawB64,
     })
     expect(mockGetCosmosClient).toHaveBeenCalledWith(Chain.Osmosis)
+  })
+
+  // Fund-safety: StargateClient.broadcastTx RESOLVES (does not throw) on a tx that was included but
+  // failed execution (DeliverTx code !== 0). The raw path must not report that as a success hash.
+  it('throws instead of returning a hash when the Cosmos tx is included but DeliverTx-fails', async () => {
+    mockCosmosBroadcastTx.mockResolvedValueOnce({
+      transactionHash: 'reverted-hash',
+      code: 5,
+      height: 100,
+      rawLog: 'out of gas: gasWanted: 200000, gasUsed: 250000',
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: JSON.stringify({ tx_bytes: Buffer.from([1, 2, 3]).toString('base64') }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('execution failed'),
+    })
   })
 
   it('rejects Sui payload missing unsignedTx or signature', async () => {
@@ -186,8 +253,49 @@ describe('RawBroadcastService', () => {
     expect(mockExecuteSuiTx).toHaveBeenCalledWith({
       transactionBlock: 'tx-block',
       signature: ['sig-bytes'],
+      options: { showEffects: true },
     })
   })
+
+  it('rejects finalized Sui transactions with failed execution effects', async () => {
+    mockExecuteSuiTx.mockResolvedValue({
+      digest: 'sui-digest',
+      effects: { status: { status: 'failure', error: 'MoveAbort(42)' } },
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({
+          unsignedTx: 'tx-block',
+          signature: 'sig-bytes',
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Sui transaction failed on-chain: MoveAbort(42)'),
+    })
+  })
+
+  it.each([{ digest: 'sui-digest' }, { digest: 'sui-digest', effects: { status: {} } }])(
+    'rejects Sui responses without explicit successful execution effects',
+    async response => {
+      mockExecuteSuiTx.mockResolvedValue(response)
+
+      await expect(
+        service.broadcastRawTx({
+          chain: Chain.Sui,
+          rawTx: JSON.stringify({
+            unsignedTx: 'tx-block',
+            signature: 'sig-bytes',
+          }),
+        })
+      ).rejects.toMatchObject({
+        code: VaultErrorCode.BroadcastFailed,
+        message: expect.stringContaining('no effects status returned'),
+      })
+    }
+  )
 
   it('broadcasts TON BOC via root API', async () => {
     mockQueryUrl.mockResolvedValue({ result: { hash: 'ton-hash' } })
@@ -232,6 +340,19 @@ describe('RawBroadcastService', () => {
     )
   })
 
+  // JSON-RPC 2.0 requires exactly one of `result` / `error`. A malformed gateway response with
+  // NEITHER must not fall through to `return response.result` and hand back `undefined` as a hash.
+  it('throws on a malformed Polkadot response with neither result nor error', async () => {
+    mockQueryUrl.mockResolvedValue({})
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Polkadot,
+        rawTx: '0xabc',
+      })
+    ).rejects.toThrow(/missing extrinsic hash/)
+  })
+
   it('broadcasts Bittensor extrinsic via JSON-RPC', async () => {
     mockQueryUrl.mockResolvedValue({ result: '0xbtensor' })
 
@@ -246,6 +367,17 @@ describe('RawBroadcastService', () => {
         body: expect.objectContaining({ method: 'author_submitExtrinsic' }),
       })
     )
+  })
+
+  it('throws on a malformed Bittensor response with neither result nor error', async () => {
+    mockQueryUrl.mockResolvedValue({})
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Bittensor,
+        rawTx: 'beef',
+      })
+    ).rejects.toThrow(/missing extrinsic hash/)
   })
 
   it('broadcasts Tron transaction JSON', async () => {
@@ -274,6 +406,20 @@ describe('RawBroadcastService', () => {
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('already been submitted'),
     })
+  })
+
+  // `result: false` is Tron's own explicit failure signal, independent of `code`. Only checking
+  // `code !== 'SUCCESS'` misses a response that carries `result: false` without a `code` at all -
+  // that must not fall through to the txid check and be reported as a success.
+  it('throws on a Tron response with result:false and no code', async () => {
+    mockQueryUrl.mockResolvedValue({ result: false, txid: 'tron-id' })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: '{}',
+      })
+    ).rejects.toThrow(/Tron broadcast failed/)
   })
 
   it('broadcasts Ripple tx blob', async () => {

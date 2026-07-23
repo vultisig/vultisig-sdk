@@ -77,8 +77,6 @@ const EXPECTED_CARDANO_SIGNED_CBOR =
   '84a40081825820111111111111111111111111111111111111111111111111111111111111111100018282581d61008b47844d92812fc30d1f0ac9b6fbf38778ccba9db8312ad90790791a000f424082581d610d6a577e9441ad8ed9663931906e4d43ece8f82c712b1d0235affb061a000caa30021a00029810031a0007a120a100818258208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c584056aafae4672f72f973dcec2d8f2ba6f632ee29e8df842ff4ccb7b5cbccd7af1d20db8f68d90d9fda0aab60490cf8e276abea888caf9be913f55384f0ad8a960df5f6'
 const EXPECTED_BITTENSOR_EXTRINSIC =
   '2d0284008a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c00e86599818c154d1b4e6ce0bca1e46a0bf39aab36908b067efc08474a1e005cc72e2770e37b1e8c3c246d4972ba4f1dff5e054a2fe1d0ad091c211db81bc0f90a250200000500008a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c04'
-const EXPECTED_QBTC_SERIALIZED =
-  '{"tx_bytes":"Cp4BCokBChwvY29zbW9zLmJhbmsudjFiZXRhMS5Nc2dTZW5kEmkKKnFidGMxc2VuZGVyMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBIrcWJ0YzFyZWNlaXZlcjAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBoOCgRxYnRjEgYxMjM0NTYSEGNvbXBpbGVUeCBnb2xkZW4SYQpLCkEKGy9jb3Ntb3MuY3J5cHRvLm1sZHNhLlB1YktleRIiCiCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqhIECgIIARgDEhIKDAoEcWJ0YxIEMjUwMBDgpxIaQFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=","mode":"BROADCAST_MODE_SYNC"}'
 
 const EXPECTED_BCH_RAW_TX =
   '01000000012222222222222222222222222222222222222222222222222222222222222222000000006a47304402205cc7b73d7f848464b886c1262e876e9d5a080563dd3be2721d3786f3c3272c43022024b68bde9094789eddeffb05291886d3ed8fe177001bc261a1922fdea5ee22874121031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078fffffffff0250c30000000000001976a914ebc0ee0b2ab9e8277a600c251475e22a3241a1c188acaac00000000000001976a91479b000887626b294a914501a4cd226b58b23598388ac00000000'
@@ -156,9 +154,25 @@ type EvmErc20CrossEncoderFixture = EvmCrossEncoderFeeVariants & {
   recipientAddress: string
   amountBaseUnits: string
 }
+type QbtcCrossEncoderFixture = {
+  senderAddress: string
+  recipientAddress: string
+  pubKeyHex: string
+  chainId: string
+  denom: string
+  amount: string
+  memo: string
+  accountNumber: number
+  sequence: number
+  feeAmount: string
+  gasLimit: number
+  expectedSignDocSha256Hex: string
+  expectedSerialized: string
+}
 const loadFixture = <T>(name: string): T =>
   JSON.parse(readFileSync(join(__dirname, '../../../../../testdata/cross-encoder-golden', name), 'utf8')) as T
 const COSMOS_CROSS_ENCODER_FIXTURE = loadFixture<CosmosCrossEncoderFixture>('cosmos-msgsend.json')
+const QBTC_CROSS_ENCODER_FIXTURE = loadFixture<QbtcCrossEncoderFixture>('qbtc-msgsend.json')
 const SOLANA_CROSS_ENCODER_FIXTURE = loadFixture<SolanaCrossEncoderFixture>('solana-transfer.json')
 const EVM_NATIVE_CROSS_ENCODER_FIXTURE = loadFixture<EvmNativeCrossEncoderFixture>('evm-native-transfer.json')
 const EVM_ERC20_CROSS_ENCODER_FIXTURE = loadFixture<EvmErc20CrossEncoderFixture>('evm-erc20-transfer.json')
@@ -1120,27 +1134,35 @@ describe('compileTx golden vectors', () => {
     expect(hex(compiledOutput.encoded)).toBe(EXPECTED_BITTENSOR_EXTRINSIC)
   })
 
-  it('pins the QBTC MLDSA Cosmos TxRaw assembly', () => {
+  // Reads testdata/cross-encoder-golden/qbtc-msgsend.json - the SAME shared fixture
+  // packages/sdk/tests/unit/platforms/react-native/qbtc-golden-vectors.test.ts reads
+  // (via its own readFileSync) to re-encode the identical SignDoc with cosmjs-types.
+  // QBTC has no WalletCore encoder (MLDSA keys are secp256k1-incompatible), so the
+  // cross-check binds this hand-rolled protobuf (QBTCTx.ts / QBTCHelper.ts) against
+  // cosmjs-types' canonical wire encoders via one shared expectedSignDocSha256Hex -
+  // neither side can drift without the other's assertion firing.
+  it('pins the QBTC MLDSA Cosmos SignDoc hash + TxRaw assembly against the shared cross-encoder vector', () => {
+    const fx = QBTC_CROSS_ENCODER_FIXTURE
     const coin = create(CoinSchema, {
       chain: Chain.QBTC,
       ticker: 'QBTC',
-      address: 'qbtc1sender0000000000000000000000000000000',
+      address: fx.senderAddress,
       contractAddress: '',
       decimals: 8,
       isNativeToken: true,
-      hexPublicKey: 'aa'.repeat(32),
+      hexPublicKey: fx.pubKeyHex,
     })
     const cosmosSpecific = create(CosmosSpecificSchema, {
-      accountNumber: 7n,
-      sequence: 3n,
-      gas: 2500n,
+      accountNumber: BigInt(fx.accountNumber),
+      sequence: BigInt(fx.sequence),
+      gas: BigInt(fx.feeAmount),
       transactionType: TransactionType.UNSPECIFIED,
     })
     const keysignPayload = create(KeysignPayloadSchema, {
       coin,
-      toAddress: 'qbtc1receiver000000000000000000000000000000',
-      toAmount: '123456',
-      memo: 'compileTx golden',
+      toAddress: fx.recipientAddress,
+      toAmount: fx.amount,
+      memo: fx.memo,
       blockchainSpecific: {
         case: 'cosmosSpecific',
         value: cosmosSpecific,
@@ -1152,6 +1174,10 @@ describe('compileTx golden vectors', () => {
       chain: Chain.QBTC,
       txInputData,
     })
+
+    // The signing pre-image the MPC parties actually sign - bound to the shared fixture.
+    expect(hex(hash)).toBe(fx.expectedSignDocSha256Hex)
+
     const compiled = compileTx({
       txInputData,
       signatures: {
@@ -1168,7 +1194,7 @@ describe('compileTx golden vectors', () => {
 
     const compiledOutput = TW.Cosmos.Proto.SigningOutput.decode(compiled)
 
-    expect(compiledOutput.serialized).toBe(EXPECTED_QBTC_SERIALIZED)
+    expect(compiledOutput.serialized).toBe(fx.expectedSerialized)
   })
 })
 

@@ -144,6 +144,43 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.amount).toBe('7')
   })
 
+  it('resolves typed tx chain ids through the canonical SDK registry for newer EVM chains', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 9n],
+    })
+
+    const hyperliquid = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 999),
+    })
+    expect(hyperliquid.decoded).toBe(true)
+    expect(hyperliquid.chain).toBe('hyperliquid')
+    expect(hyperliquid.recipient).toBe(RECIPIENT)
+    expect(hyperliquid.amount).toBe('9')
+
+    const sei = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 1329),
+    })
+    expect(sei.decoded).toBe(true)
+    expect(sei.chain).toBe('sei')
+    expect(sei.recipient).toBe(RECIPIENT)
+    expect(sei.amount).toBe('9')
+  })
+
+  it('falls back to the raw numeric chain id for unknown typed EVM chains', () => {
+    const payload = buildEvmTx(RECIPIENT, '0x', 1n, 31337)
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+    expect(env.decoded).toBe(true)
+    expect(env.chain).toBe('31337')
+    expect(env.recipient).toBe(RECIPIENT)
+    expect(env.amount).toBe('1')
+  })
+
   it('fails closed (decoded=false) on malformed EVM bytes — never throws', () => {
     const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload: '0xabcd' })
     expect(env.decoded).toBe(false)

@@ -7,6 +7,7 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
 import { getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
 import { getTerraClassicTaxRate, getTerraClassicTaxCap } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 
@@ -16,8 +17,11 @@ import { getTerraClassicTaxRate, getTerraClassicTaxCap } from '@vultisig/core-ch
 
 vi.mock('@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo', () => ({
   getCosmosAccountInfo: vi.fn().mockResolvedValue({
-    accountNumber: '42',
-    sequence: '7',
+    address: 'terra1abc',
+    pubkey: null,
+    accountNumber: 42n,
+    sequence: 7,
+    sequenceBigInt: 7n,
     latestBlock: '1234567_0',
   }),
 }))
@@ -84,6 +88,26 @@ describe('getCosmosChainSpecific — USTC burn-tax baseDenom encoding', () => {
     vi.mocked(getTerraClassicTaxRate).mockReset()
     vi.mocked(getTerraClassicTaxCap).mockReset()
     vi.mocked(getCosmosFeeAmount).mockResolvedValue(7500n)
+  })
+
+  it('preserves a uint64 sequence above the JavaScript safe-integer limit', async () => {
+    const sequence = 9_007_199_254_740_993n
+    vi.mocked(getCosmosAccountInfo).mockResolvedValueOnce({
+      address: 'terra1abc',
+      pubkey: null,
+      accountNumber: 42n,
+      sequence: Number(sequence),
+      sequenceBigInt: sequence,
+      latestBlock: '1234567_0',
+    })
+
+    const result = await getCosmosChainSpecific({
+      keysignPayload: makeLuncPayload('1'),
+      transactionType: 0 as any,
+      walletCore: mockWalletCore,
+    })
+
+    expect(result.sequence).toBe(sequence)
   })
 
   it('sets baseDenom to "0" when burn-tax rate is zero (current chain state)', async () => {

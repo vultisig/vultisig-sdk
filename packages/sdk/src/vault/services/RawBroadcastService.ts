@@ -1,3 +1,4 @@
+import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
@@ -9,6 +10,7 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
@@ -234,6 +236,27 @@ export class RawBroadcastService {
     }
 
     if (!signature) throw new Error('No transaction signature returned')
+
+    // sendRawTransaction only confirms the node ACCEPTED the payload into its queue - it is
+    // fire-and-forget by protocol design and never returns an execution result inline (unlike
+    // Cosmos/Sui's broadcast RPCs, which block until inclusion). Full confirmation is out of
+    // scope here and remains the caller's job via a status poll (mirrors the core resolver's
+    // documented trade-off, packages/core/chain/tx/broadcast/resolvers/solana.ts). But a
+    // signature the node already knows to have failed must not be handed back as a "hash" -
+    // this bounded, non-blocking status check catches that without adding real broadcast
+    // latency: it never blocks/throws on "not yet confirmed" (the normal state right after
+    // submission), only on an explicit on-chain error already attached to this signature.
+    const { data: statuses } = await attempt(
+      client.getSignatureStatuses([signature], { searchTransactionHistory: true })
+    )
+    const signatureStatus = statuses?.value?.[0]
+    if (signatureStatus?.err) {
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Solana transaction was submitted but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
+      )
+    }
+
     return signature
   }
 
@@ -272,6 +295,24 @@ export class RawBroadcastService {
     }
 
     if (!result) throw new Error('No broadcast result returned')
+
+    // `StargateClient.broadcastTx` RESOLVES (does not throw) once the tx is included in a block,
+    // even when execution failed (DeliverTx `code !== 0` — out-of-gas, wasm revert, a THORChain/Maya
+    // deposit-handler rejection). The tx is on-chain but nothing moved, so returning its hash here
+    // would be a false success. The signing-input broadcast resolver (tx/broadcast/resolvers/cosmos.ts,
+    // #1316) already asserts this; this raw path — reachable via the public `vault.broadcastRawTx` —
+    // must fail closed the same way.
+    try {
+      assertIsDeliverTxSuccess(result)
+    } catch (deliverTxError) {
+      const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Cosmos transaction was included but execution failed: ${message}`,
+        deliverTxError instanceof Error ? deliverTxError : new Error(message)
+      )
+    }
+
     return result.transactionHash
   }
 
@@ -332,6 +373,13 @@ export class RawBroadcastService {
       throw new Error(`Polkadot broadcast failed: ${response.error.message}`)
     }
 
+    // Per JSON-RPC 2.0 a valid response must have exactly one of `result` / `error`. If both
+    // are missing (malformed gateway response, truncated body, ...) do not silently return
+    // `undefined` as a success hash - fail closed instead.
+    if (!response.result) {
+      throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
+    }
+
     return response.result
   }
 
@@ -363,6 +411,12 @@ export class RawBroadcastService {
 
     if (response.error) {
       throw new Error(`Bittensor broadcast failed: ${response.error.message}`)
+    }
+
+    // Same JSON-RPC 2.0 invariant as Polkadot: a response with neither `result` nor `error`
+    // is malformed, not a success - fail closed instead of returning `undefined` as a hash.
+    if (!response.result) {
+      throw new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response')
     }
 
     return response.result
@@ -420,6 +474,7 @@ export class RawBroadcastService {
       client.executeTransactionBlock({
         transactionBlock: unsignedTx,
         signature: [signature],
+        options: { showEffects: true },
       })
     )
 
@@ -436,6 +491,7 @@ export class RawBroadcastService {
     }
 
     if (!result) throw new Error('No broadcast result returned')
+    assertSuiTxSucceeded(result.effects)
     return result.digest
   }
 
@@ -460,8 +516,12 @@ export class RawBroadcastService {
 
     if (!response) throw new Error('No response returned')
 
-    if (response.code && response.code !== 'SUCCESS') {
-      const errorMsg = response.message || response.code
+    // `result === false` is Tron's own explicit failure signal, independent of `code` (which
+    // core/chain/tx/broadcast/resolvers/tron.ts also checks separately) - a response carrying
+    // `result: false` without a `code` must not fall through to the txid check below and be
+    // reported as a success.
+    if (response.result === false || (response.code && response.code !== 'SUCCESS')) {
+      const errorMsg = response.message || response.code || 'Unknown error'
       if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
         throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
       }

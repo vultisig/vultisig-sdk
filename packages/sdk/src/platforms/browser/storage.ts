@@ -5,37 +5,134 @@
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
 
-type StorageMode = 'indexeddb' | 'localstorage' | 'memory'
+type StorageMode = 'indexeddb' | 'localstorage'
+
+const BACKEND_MARKER_KEY = '__vultisig_storage_backend__'
 
 export class BrowserStorage implements Storage {
   private db?: IDBDatabase
-  private mode: StorageMode = 'memory'
-  private memoryStore = new Map<string, StoredValue>()
+  private mode?: StorageMode
+  private backendError?: StorageError
+  private initialization?: Promise<void>
   private readonly dbName = 'vultisig-vaults'
   private readonly storeName = 'vaults'
   private readonly dbVersion = 1
 
   constructor() {
-    this.initializeAsync().catch(err => console.warn('BrowserStorage initialization warning:', err))
+    void this.startInitialization().catch(() => undefined)
   }
 
   private async initializeAsync(): Promise<void> {
-    try {
-      await this.tryIndexedDB()
-      this.mode = 'indexeddb'
-    } catch {
-      try {
-        this.tryLocalStorage()
-        this.mode = 'localstorage'
-      } catch {
-        this.mode = 'memory'
-      }
+    const persistedMode = this.readPersistedMode()
+
+    if (persistedMode === 'localstorage') {
+      this.tryLocalStorage()
+      this.mode = 'localstorage'
+      return
     }
+
+    if (persistedMode === 'indexeddb' || typeof indexedDB !== 'undefined') {
+      await this.tryIndexedDB()
+      await this.verifyIndexedDB()
+
+      if (!persistedMode) {
+        const indexedDBKeys = await this.listFromIndexedDB()
+        const legacyLocalKeys = this.listLegacyLocalStorageKeys()
+
+        if (legacyLocalKeys.length > 0 && indexedDBKeys.length === 0) {
+          this.db?.close()
+          this.db = undefined
+          this.tryLocalStorage()
+          this.persistMode('localstorage')
+          this.mode = 'localstorage'
+          return
+        }
+
+        if (legacyLocalKeys.length > 0 && indexedDBKeys.length > 0) {
+          this.db?.close()
+          this.db = undefined
+          throw new StorageError(
+            StorageErrorCode.StorageUnavailable,
+            'Browser storage contains unverified data in both IndexedDB and localStorage'
+          )
+        }
+      }
+
+      this.mode = 'indexeddb'
+      this.persistMode('indexeddb')
+      return
+    }
+
+    this.tryLocalStorage()
+    this.persistMode('localstorage')
+    this.mode = 'localstorage'
   }
 
   private async ensureInitialized(): Promise<void> {
-    if (this.mode === 'memory' && !this.db) {
-      await this.initializeAsync()
+    if (this.backendError) {
+      throw this.backendError
+    }
+
+    try {
+      await this.startInitialization()
+    } catch (error) {
+      throw error instanceof StorageError
+        ? error
+        : new StorageError(StorageErrorCode.StorageUnavailable, 'Browser storage initialization failed', error as Error)
+    }
+
+    if (this.backendError) {
+      throw this.backendError
+    }
+    if (!this.mode) {
+      throw new StorageError(StorageErrorCode.StorageUnavailable, 'Browser storage backend was not selected')
+    }
+  }
+
+  private startInitialization(): Promise<void> {
+    if (this.mode) return Promise.resolve()
+    if (this.initialization) return this.initialization
+
+    const initialization = this.initializeAsync()
+    this.initialization = initialization
+    void initialization
+      .finally(() => {
+        if (this.initialization === initialization) {
+          this.initialization = undefined
+        }
+      })
+      .catch(() => undefined)
+
+    return initialization
+  }
+
+  private readPersistedMode(): StorageMode | undefined {
+    if (typeof localStorage === 'undefined') return undefined
+
+    try {
+      const value = localStorage.getItem(BACKEND_MARKER_KEY)
+      return value === 'indexeddb' || value === 'localstorage' ? value : undefined
+    } catch (error) {
+      throw new StorageError(
+        StorageErrorCode.StorageUnavailable,
+        'Browser storage backend marker could not be read',
+        error as Error
+      )
+    }
+  }
+
+  private persistMode(mode: StorageMode): void {
+    if (typeof localStorage === 'undefined') return
+
+    try {
+      localStorage.setItem(BACKEND_MARKER_KEY, mode)
+    } catch {
+      // IndexedDB remains authoritative even when localStorage cannot retain the
+      // advisory marker. A localStorage backend has already passed its health
+      // check, so failure here is treated as initialization failure below.
+      if (mode === 'localstorage') {
+        throw new StorageError(StorageErrorCode.StorageUnavailable, 'Failed to persist browser storage backend')
+      }
     }
   }
 
@@ -46,11 +143,39 @@ export class BrowserStorage implements Storage {
 
     return new Promise<void>((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion)
+      let settled = false
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => {
+        settled = true
+        reject(
+          new StorageError(
+            StorageErrorCode.StorageUnavailable,
+            'IndexedDB could not be opened',
+            request.error ?? undefined
+          )
+        )
+      }
+
+      request.onblocked = () => {
+        settled = true
+        reject(new StorageError(StorageErrorCode.StorageUnavailable, 'IndexedDB open was blocked'))
+      }
 
       request.onsuccess = () => {
+        if (settled) {
+          request.result.close()
+          return
+        }
+        settled = true
         this.db = request.result
+        this.db.onversionchange = () => {
+          this.db?.close()
+          this.db = undefined
+          this.backendError = new StorageError(
+            StorageErrorCode.StorageUnavailable,
+            'IndexedDB connection was closed due to a version change'
+          )
+        }
         resolve()
       }
 
@@ -62,6 +187,16 @@ export class BrowserStorage implements Storage {
         }
       }
     })
+  }
+
+  private async verifyIndexedDB(): Promise<void> {
+    try {
+      await this.listFromIndexedDB()
+    } catch (error) {
+      this.db?.close()
+      this.db = undefined
+      throw new StorageError(StorageErrorCode.StorageUnavailable, 'IndexedDB health check failed', error as Error)
+    }
   }
 
   private tryLocalStorage(): void {
@@ -84,12 +219,11 @@ export class BrowserStorage implements Storage {
     try {
       if (this.mode === 'indexeddb' && this.db) {
         return await this.getFromIndexedDB<T>(key)
-      } else if (this.mode === 'localstorage') {
-        return this.getFromLocalStorage<T>(key)
       } else {
-        return this.getFromMemory<T>(key)
+        return this.getFromLocalStorage<T>(key)
       }
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to get value for key "${key}"`, error as Error)
     }
   }
@@ -108,17 +242,15 @@ export class BrowserStorage implements Storage {
     try {
       if (this.mode === 'indexeddb' && this.db) {
         await this.setToIndexedDB(key, stored)
-      } else if (this.mode === 'localstorage') {
-        this.setToLocalStorage(key, stored)
       } else {
-        this.setToMemory(key, stored)
+        this.setToLocalStorage(key, stored)
       }
     } catch (error) {
       if ((error as Error).name === 'QuotaExceededError') {
-        await this.handleQuotaExceeded(key, stored)
-      } else {
-        throw new StorageError(StorageErrorCode.Unknown, `Failed to set value for key "${key}"`, error as Error)
+        throw new StorageError(StorageErrorCode.QuotaExceeded, 'Browser storage quota exceeded', error as Error)
       }
+      if (error instanceof StorageError) throw error
+      throw new StorageError(StorageErrorCode.Unknown, `Failed to set value for key "${key}"`, error as Error)
     }
   }
 
@@ -128,12 +260,11 @@ export class BrowserStorage implements Storage {
     try {
       if (this.mode === 'indexeddb' && this.db) {
         await this.removeFromIndexedDB(key)
-      } else if (this.mode === 'localstorage') {
-        localStorage.removeItem(key)
       } else {
-        this.memoryStore.delete(key)
+        localStorage.removeItem(key)
       }
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
@@ -144,12 +275,11 @@ export class BrowserStorage implements Storage {
     try {
       if (this.mode === 'indexeddb' && this.db) {
         return await this.listFromIndexedDB()
-      } else if (this.mode === 'localstorage') {
-        return this.listFromLocalStorage()
       } else {
-        return Array.from(this.memoryStore.keys())
+        return this.listFromLocalStorage()
       }
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to list keys', error as Error)
     }
   }
@@ -160,18 +290,19 @@ export class BrowserStorage implements Storage {
     try {
       if (this.mode === 'indexeddb' && this.db) {
         await this.clearIndexedDB()
-      } else if (this.mode === 'localstorage') {
+      } else {
         const keys = this.listFromLocalStorage()
         keys.forEach(key => localStorage.removeItem(key))
-      } else {
-        this.memoryStore.clear()
       }
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }
 
   async getUsage(): Promise<number> {
+    await this.ensureInitialized()
+
     if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
       try {
         const estimate = await navigator.storage.estimate()
@@ -192,6 +323,8 @@ export class BrowserStorage implements Storage {
   }
 
   async getQuota(): Promise<number | undefined> {
+    await this.ensureInitialized()
+
     if (this.mode === 'indexeddb' && typeof navigator !== 'undefined' && navigator.storage) {
       try {
         const estimate = await navigator.storage.estimate()
@@ -237,25 +370,17 @@ export class BrowserStorage implements Storage {
   }
 
   private async setToIndexedDB<T>(key: string, value: StoredValue<T>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.storeName, 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.put(value, key)
-
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
+    const transaction = this.db!.transaction(this.storeName, 'readwrite')
+    const completion = this.waitForTransaction(transaction)
+    transaction.objectStore(this.storeName).put(value, key)
+    return completion
   }
 
   private async removeFromIndexedDB(key: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.storeName, 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.delete(key)
-
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
+    const transaction = this.db!.transaction(this.storeName, 'readwrite')
+    const completion = this.waitForTransaction(transaction)
+    transaction.objectStore(this.storeName).delete(key)
+    return completion
   }
 
   private async listFromIndexedDB(): Promise<string[]> {
@@ -270,13 +395,31 @@ export class BrowserStorage implements Storage {
   }
 
   private async clearIndexedDB(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(this.storeName, 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.clear()
+    const transaction = this.db!.transaction(this.storeName, 'readwrite')
+    const completion = this.waitForTransaction(transaction)
+    transaction.objectStore(this.storeName).clear()
+    return completion
+  }
 
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
+  private waitForTransaction(transaction: IDBTransaction): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const rejectOnce = (error: DOMException | null | undefined) => {
+        if (settled) return
+        settled = true
+        reject(error ?? new DOMException('IndexedDB transaction failed', 'UnknownError'))
+      }
+
+      transaction.oncomplete = () => {
+        if (settled) return
+        settled = true
+        resolve()
+      }
+      transaction.onerror = event => {
+        const requestError = (event.target as IDBRequest | null)?.error
+        rejectOnce(requestError ?? transaction.error)
+      }
+      transaction.onabort = () => rejectOnce(transaction.error)
     })
   }
 
@@ -289,8 +432,12 @@ export class BrowserStorage implements Storage {
     try {
       const parsed = JSON.parse(stored) as StoredValue<T>
       return parsed.value
-    } catch {
-      return null
+    } catch (error) {
+      throw new StorageError(
+        StorageErrorCode.SerializationFailed,
+        `Stored value for key "${key}" is invalid`,
+        error as Error
+      )
     }
   }
 
@@ -302,43 +449,42 @@ export class BrowserStorage implements Storage {
     const keys: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key) keys.push(key)
+      if (key && key !== BACKEND_MARKER_KEY) keys.push(key)
     }
     return keys
   }
 
-  // ===== Memory Operations =====
+  private listLegacyLocalStorageKeys(): string[] {
+    if (typeof localStorage === 'undefined') return []
 
-  private getFromMemory<T>(key: string): T | null {
-    const stored = this.memoryStore.get(key)
-    return stored ? (stored.value as T) : null
-  }
+    try {
+      return this.listFromLocalStorage().filter(key => {
+        const rawValue = localStorage.getItem(key)
+        if (rawValue === null) return false
 
-  private setToMemory<T>(key: string, value: StoredValue<T>): void {
-    this.memoryStore.set(key, value)
-  }
+        try {
+          const storedValue = JSON.parse(rawValue) as Partial<StoredValue<unknown>>
+          const metadata = storedValue?.metadata
 
-  // ===== Fallback Handling =====
-
-  private async handleQuotaExceeded<T>(key: string, value: StoredValue<T>): Promise<void> {
-    if (this.mode === 'indexeddb') {
-      try {
-        this.tryLocalStorage()
-        this.mode = 'localstorage'
-        this.setToLocalStorage(key, value)
-        return
-      } catch {
-        // Fall through to memory
-      }
+          return (
+            typeof storedValue === 'object' &&
+            storedValue !== null &&
+            typeof metadata === 'object' &&
+            metadata !== null &&
+            typeof metadata.version === 'number' &&
+            typeof metadata.createdAt === 'number' &&
+            typeof metadata.lastModified === 'number'
+          )
+        } catch {
+          return false
+        }
+      })
+    } catch (error) {
+      throw new StorageError(
+        StorageErrorCode.StorageUnavailable,
+        'Legacy browser storage keys could not be inspected',
+        error as Error
+      )
     }
-
-    if (this.mode === 'localstorage') {
-      this.mode = 'memory'
-      this.setToMemory(key, value)
-      console.warn('Storage quota exceeded, falling back to memory storage')
-      return
-    }
-
-    throw new StorageError(StorageErrorCode.QuotaExceeded, 'Storage quota exceeded in all storage modes')
   }
 }

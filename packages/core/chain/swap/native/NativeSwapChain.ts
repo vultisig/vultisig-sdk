@@ -95,6 +95,17 @@ export const nativeSwapChainIds = {
 } satisfies Record<NativeSwapEnabledChain, string>
 export type NativeSwapChainId = (typeof nativeSwapChainIds)[NativeSwapEnabledChain]
 
+export const getNativeSwapChainId = (chain: Chain): NativeSwapChainId | null =>
+  nativeSwapChainIds[chain as NativeSwapEnabledChain] ?? null
+
+const nativeSwapChainIdByDenomPrefix = new Map<string, NativeSwapChainId>(
+  (Object.values(nativeSwapChainIds) as NativeSwapChainId[]).map(chainId => [chainId.toLowerCase(), chainId])
+)
+
+/** Resolves a secured-asset denom prefix to its canonical native-swap chain ID. */
+export const getNativeSwapChainIdFromDenomPrefix = (prefix: string): NativeSwapChainId | undefined =>
+  nativeSwapChainIdByDenomPrefix.get(prefix.toLowerCase())
+
 type NativeSwapPayloadCase = 'thorchainSwapPayload' | 'mayachainSwapPayload'
 
 export const nativeSwapPayloadCase: Record<NativeSwapChain, NativeSwapPayloadCase> = {

@@ -106,10 +106,13 @@ function encodeRawData(opts: {
   w.tag(1, WireType.LengthDelimited).bytes(opts.refBlockBytes)
   w.tag(4, WireType.LengthDelimited).bytes(opts.refBlockHash)
   w.tag(8, WireType.Varint).int64(opts.expiration)
-  w.tag(11, WireType.LengthDelimited).bytes(contractBytes)
+  // Field 10: `raw_data.data`, the real Tron memo field. Sorts before field 11
+  // (contract) in ascending field-number order, matching Tron's own encoder
+  // and WalletCore's output (see the cross-check in tron-tx.test.ts).
   if (opts.data && opts.data.length > 0) {
-    w.tag(12, WireType.LengthDelimited).bytes(opts.data)
+    w.tag(10, WireType.LengthDelimited).bytes(opts.data)
   }
+  w.tag(11, WireType.LengthDelimited).bytes(contractBytes)
   w.tag(14, WireType.Varint).int64(opts.timestamp)
   if (opts.feeLimit != null && opts.feeLimit > 0n) {
     w.tag(18, WireType.Varint).int64(opts.feeLimit)
@@ -151,7 +154,7 @@ describe('Tron / buildTronSendTx — TransferContract golden vectors', () => {
     expect(result.signingHashHex).toBe(bytesToHex(sha256(referenceRawData)))
   })
 
-  it('embeds the transaction-level memo (field 12) identically to the reference encoding', () => {
+  it('embeds the transaction-level memo (field 10) identically to the reference encoding', () => {
     const memo = new TextEncoder().encode('SWAP:THOR.RUNE:thor1abc:0')
     const result = buildTronSendTx({
       from: FX.from,

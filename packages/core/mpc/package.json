@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-mpc",
-  "version": "1.12.0",
+  "version": "1.12.1",
   "description": "MPC, keysign, and vault types shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -536,6 +536,11 @@
       "import": "./dist/keysign/signingInputs/resolvers/solana/index.js",
       "default": "./dist/keysign/signingInputs/resolvers/solana/index.js"
     },
+    "./keysign/signingInputs/resolvers/solana/rawTx": {
+      "types": "./dist/keysign/signingInputs/resolvers/solana/rawTx.d.ts",
+      "import": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js",
+      "default": "./dist/keysign/signingInputs/resolvers/solana/rawTx.js"
+    },
     "./keysign/signingInputs/resolvers/solana/send": {
       "types": "./dist/keysign/signingInputs/resolvers/solana/send.d.ts",
       "import": "./dist/keysign/signingInputs/resolvers/solana/send.js",
@@ -575,6 +580,11 @@
       "types": "./dist/keysign/suiCoinSelection.d.ts",
       "import": "./dist/keysign/suiCoinSelection.js",
       "default": "./dist/keysign/suiCoinSelection.js"
+    },
+    "./keysign/swap/assertNativeSwapReadyForBroadcast": {
+      "types": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.d.ts",
+      "import": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.js",
+      "default": "./dist/keysign/swap/assertNativeSwapReadyForBroadcast.js"
     },
     "./keysign/swap/build": {
       "types": "./dist/keysign/swap/build.d.ts",
@@ -1059,7 +1069,7 @@
     "@noble/hashes": "^1.8.0",
     "@solana/web3.js": "^1.98.4",
     "@trustwallet/wallet-core": "^4.7.0",
-    "@vultisig/core-chain": "2.26.0",
+    "@vultisig/core-chain": "2.27.0",
     "@vultisig/core-config": "0.9.1",
     "@vultisig/lib-dkls": "0.9.0",
     "@vultisig/lib-mldsa": "0.9.0",

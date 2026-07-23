@@ -21,7 +21,7 @@ const usdc = '0x00000000000000000000000000000000000000bb'
 const badToken = '0x00000000000000000000000000000000000000cc'
 
 describe('getEvmChainBalances', () => {
-  it('fetches native and ERC20 balances in one multicall and decodes failed calls as zero', async () => {
+  it('fetches native and ERC20 balances in one multicall and OMITS failed calls', async () => {
     const multicall = vi.fn().mockResolvedValue([
       { status: 'success', result: 10n },
       { status: 'success', result: 20n },
@@ -69,11 +69,40 @@ describe('getEvmChainBalances', () => {
         ],
       })
     )
+    // The reverted sub-call is ABSENT, not 0n — an unread balance must not be reported as a real zero.
     expect(balances).toEqual({
       [`${EvmChain.Ethereum}:${address}`]: 10n,
       [`${EvmChain.Ethereum}:${usdc}:${address}`]: 20n,
-      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 0n,
     })
+    expect(`${EvmChain.Ethereum}:${badToken}:${address}` in balances).toBe(false)
+  })
+
+  it('keeps a genuine zero balance (status success, result 0n) as a present key', async () => {
+    const multicall = vi.fn().mockResolvedValue([
+      { status: 'success', result: 0n },
+      { status: 'failure', error: new Error('bad token') },
+    ])
+    vi.mocked(getEvmClient).mockReturnValue({
+      chain: {
+        contracts: {
+          multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
+        },
+      },
+      multicall,
+    } as any)
+
+    const balances = await getEvmChainBalances({
+      chain: EvmChain.Ethereum,
+      address,
+      coins: [
+        { chain: EvmChain.Ethereum, address, id: usdc },
+        { chain: EvmChain.Ethereum, address, id: badToken },
+      ],
+    })
+
+    // Genuine zero is KEPT (present), failed read is DROPPED (absent) — the two must stay distinguishable.
+    expect(balances[`${EvmChain.Ethereum}:${usdc}:${address}`]).toBe(0n)
+    expect(`${EvmChain.Ethereum}:${badToken}:${address}` in balances).toBe(false)
   })
 
   it('falls back to existing per-coin resolver when the chain has no Multicall3 metadata', async () => {
@@ -92,9 +121,9 @@ describe('getEvmChainBalances', () => {
     })
 
     expect(getEvmCoinBalance).toHaveBeenCalledTimes(2)
+    // The per-coin failure is OMITTED, not zeroed.
     expect(balances).toEqual({
       [`${EvmChain.Hyperliquid}:${address}`]: 11n,
-      [`${EvmChain.Hyperliquid}:${badToken}:${address}`]: 0n,
     })
   })
 
@@ -119,9 +148,9 @@ describe('getEvmChainBalances', () => {
     })
 
     expect(getEvmCoinBalance).toHaveBeenCalledTimes(2)
+    // The per-coin failure is OMITTED, not zeroed.
     expect(balances).toEqual({
       [`${EvmChain.Ethereum}:${address}`]: 12n,
-      [`${EvmChain.Ethereum}:${badToken}:${address}`]: 0n,
     })
   })
 })

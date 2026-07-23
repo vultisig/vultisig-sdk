@@ -375,6 +375,8 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareThorchainMsgDepositTxFromKeys,
+  type PrepareThorchainMsgDepositTxFromKeysParams,
   prepareTrc20TransferFromKeys,
   type PrepareTrc20TransferFromKeysParams,
   type PrepareUtxoConsolidateResult,
