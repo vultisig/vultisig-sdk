@@ -10,8 +10,8 @@ import { keccak256 } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hashes as xrplHashes } from 'xrpl'
 
-import { RawBroadcastService } from '../../../../src/vault/services/RawBroadcastService'
-import { VaultError, VaultErrorCode } from '../../../../src/vault/VaultError'
+import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
+import { VaultError, VaultErrorCode } from '@/vault/VaultError'
 
 const {
   mockQueryUrl,
