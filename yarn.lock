@@ -7076,7 +7076,7 @@ __metadata:
     "@cosmjs/stargate": "npm:^0.39.0"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.3"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.2.0"
     "@polkadot/api": "npm:^16.5.6"
     "@polkadot/util": "npm:^14.0.3"
     "@polkadot/util-crypto": "npm:^14.0.3"
@@ -7116,7 +7116,7 @@ __metadata:
     "@bufbuild/protobuf": "npm:^2.12.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@mysten/sui": "npm:^2.20.3"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.2.0"
     "@solana/web3.js": "npm:^1.98.4"
     "@trustwallet/wallet-core": "npm:^4.7.0"
     "@vultisig/core-chain": "npm:2.28.0"
@@ -7323,7 +7323,7 @@ __metadata:
     "@formatjs/intl-pluralrules": "npm:^6.3.10"
     "@lifi/sdk": "npm:^4.1.0"
     "@mysten/sui": "npm:^2.20.3"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.2.0"
     "@polkadot/api": "npm:^16.5.6"
     "@rollup/plugin-alias": "npm:^6.0.0"
     "@rollup/plugin-commonjs": "npm:^29.0.3"
@@ -7417,7 +7417,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/walletcore-native@workspace:packages/walletcore-native"
   dependencies:
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/hashes": "npm:^2.2.0"
     expo: "npm:>=56.0.12"
   peerDependencies:
     expo: ">=56.0.8"
