@@ -79,8 +79,8 @@ describe('parseUsdcAmount', () => {
 describe('buildCctpBridge', () => {
   it('builds a 2-tx approve+burn sequence (base -> arbitrum)', () => {
     const res = buildCctpBridge({
-      sourceChain: 'Base',
-      destinationChain: 'Arbitrum',
+      sourceChain: 'base',
+      destinationChain: 'arb',
       amount: '10',
       from: SENDER,
     })
@@ -116,8 +116,8 @@ describe('buildCctpBridge', () => {
     expect((decodedBurn.args[3] as string).toLowerCase()).toBe(base.usdc.toLowerCase())
   })
 
-  it('rejects identical source/destination chains', () => {
-    expect(() => buildCctpBridge({ sourceChain: 'Base', destinationChain: 'Base', amount: '1', from: SENDER })).toThrow(
+  it('rejects identical source/destination chains even when aliases differ', () => {
+    expect(() => buildCctpBridge({ sourceChain: 'Base', destinationChain: 'base', amount: '1', from: SENDER })).toThrow(
       /must be different/
     )
   })
@@ -176,7 +176,7 @@ describe('buildCctpClaim', () => {
     const message = '0x' + 'ab'.repeat(200) // arbitrary even-length hex
     const attestation = '0x' + 'cd'.repeat(65) // exactly 65 bytes (valid V1)
 
-    const res = buildCctpClaim({ destinationChain: 'Arbitrum', message, attestation })
+    const res = buildCctpClaim({ destinationChain: 'arb', message, attestation })
 
     const arb = getCctpChain('Arbitrum')!
     expect(res.chain).toBe('Arbitrum')
@@ -201,6 +201,16 @@ describe('buildCctpClaim', () => {
   it('rejects malformed hex', () => {
     expect(() => normalizeHexBytes('0xZZ', 'message')).toThrow(/not valid hex/)
     expect(() => normalizeHexBytes('0xabc', 'message')).toThrow(/odd hex length/)
+  })
+})
+
+describe('getCctpChain', () => {
+  it('normalizes canonical aliases before indexing the registry', () => {
+    expect(getCctpChain('base')?.chain).toBe('Base')
+    expect(getCctpChain('arb')?.chain).toBe('Arbitrum')
+    expect(getCctpChain('matic')?.chain).toBe('Polygon')
+    expect(getCctpChain('  Ethereum  ')?.chain).toBe('Ethereum')
+    expect(getCctpChain('solana')).toBeUndefined()
   })
 })
 

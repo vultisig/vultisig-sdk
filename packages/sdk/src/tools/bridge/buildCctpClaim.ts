@@ -98,11 +98,11 @@ export const normalizeHexBytes = (input: string, fieldName: string): `0x${string
  * ```
  */
 export const buildCctpClaim = (params: BuildCctpClaimParams): CctpClaimResult => {
-  const dstChainName = params.destinationChain.trim()
-  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainName)
+  const dstChainInput = params.destinationChain.trim()
+  const dstCctp: CctpChainConfig | undefined = getCctpChain(dstChainInput)
   if (!dstCctp) {
     throw new Error(
-      `destination chain ${JSON.stringify(dstChainName)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
+      `destination chain ${JSON.stringify(dstChainInput)} is not supported by CCTP. Supported: ${cctpSupportedChains.join(', ')}`
     )
   }
 
@@ -130,7 +130,7 @@ export const buildCctpClaim = (params: BuildCctpClaimParams): CctpClaimResult =>
   })
 
   return {
-    chain: dstChainName,
+    chain: dstCctp.chain,
     chainId: dstCctp.evmChainId,
     tx: {
       to: getAddress(dstCctp.messageTransmitter),
