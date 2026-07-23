@@ -5,7 +5,10 @@ import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveC
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
-import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { THORChainSpecific, TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { fromBase64 } from '@cosmjs/encoding'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -81,10 +84,14 @@ const isSecuredAssetSwapCoin = (assetCoin: { chain: string; contractAddress?: st
 // secured asset referenced by the server-issued swap memo (`=:ETH-USDC:…`).
 const getSecuredAssetDepositAsset = (assetCoin: { contractAddress: string; ticker: string }) => {
   const [chainPrefix, ...symbolParts] = assetCoin.contractAddress.split('-')
+  const chainId = getNativeSwapChainIdFromDenomPrefix(chainPrefix)
+  if (!chainId) {
+    throw new Error(`Unsupported secured asset chain prefix: "${chainPrefix}"`)
+  }
   const symbol = symbolParts.join('-')
 
   return TW.Cosmos.Proto.THORChainAsset.create({
-    chain: chainPrefix.toUpperCase(),
+    chain: chainId,
     symbol: (symbol || assetCoin.ticker).toUpperCase(),
     ticker: assetCoin.ticker.toUpperCase().replace(/X\//g, ''),
     synth: false,
