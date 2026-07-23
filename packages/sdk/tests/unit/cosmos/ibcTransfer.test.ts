@@ -101,6 +101,11 @@ describe('prepareIbcTransfer', () => {
     expect(normaliseIbcChainId('not-a-chain')).toBe('not-a-chain')
   })
 
+  it('lets supportedIbcDestinationsFrom accept Vultisig canonical chain names too', () => {
+    expect(supportedIbcDestinationsFrom('osmosis-1')).toEqual(supportedIbcDestinationsFrom('Osmosis'))
+    expect(supportedIbcDestinationsFrom('Osmosis')).toContain('cosmoshub-4')
+  })
+
   it('resolves destination from sourceChannel alone', () => {
     const r = prepareIbcTransfer({
       fromChain: 'phoenix-1',
