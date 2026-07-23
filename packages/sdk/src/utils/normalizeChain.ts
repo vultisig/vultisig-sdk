@@ -99,11 +99,21 @@ const claimStripped = (alias: string, chain: Chain) => {
 for (const [alias, chain] of Object.entries(aliasToChain)) {
   claimStripped(alias, chain)
 }
-// Chain-id / marketing-name aliases that carry no separator-free form anywhere above.
-// Kept in sync with agent-backend-ts's zodHelpers.ts CHAIN_ALIAS_TABLE.
+// Chain-id / marketing-name / provider-label aliases that carry no separator-free
+// form anywhere above. Kept in sync with the known app + agent-backend-ts local
+// compatibility shims so chain canonicalization can live in the SDK instead of
+// drifting in downstream alias maps.
 claimStripped('columbus-5', Chain.TerraClassic) // Terra Classic's chain-id
 claimStripped('phoenix-1', Chain.Terra) // Terra v2's chain-id
 claimStripped('terra v2', Chain.Terra) // common marketing name for post-fork Terra
+claimStripped('cosmos hub', Chain.Cosmos) // app/abts natural-language form for Cosmos Hub
+claimStripped('gaia', Chain.Cosmos) // Cosmos Hub validator / hub nickname used by abts
+claimStripped('ustc', Chain.TerraClassic) // Terra Classic-native stablecoin used as a chain hint in abts
+claimStripped('bnb smart chain', Chain.BSC) // provider / model phrasing seen in app shims
+claimStripped('bnb chain', Chain.BSC) // provider / model phrasing seen in app shims
+claimStripped('bsc-mainnet', Chain.BSC) // provider network label seen in app shims
+claimStripped('arbitrum one', Chain.Arbitrum) // provider network label seen in app shims
+claimStripped('ethereum-mainnet', Chain.Ethereum) // provider network label seen in app shims
 for (const [key, owners] of strippedOwnersByAlias) {
   if (owners.size !== 1) continue
   for (const only of owners) {
