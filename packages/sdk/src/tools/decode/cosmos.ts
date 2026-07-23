@@ -1,9 +1,83 @@
+import { bech32 } from 'bech32'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { MsgDelegate, MsgUndelegate } from 'cosmjs-types/cosmos/staking/v1beta1/tx'
 import { TxBody, TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import { MsgExecuteContract } from 'cosmjs-types/cosmwasm/wasm/v1/tx'
 
 import type { Envelope } from './types'
+
+type Cw20Transfer = {
+  amount: string
+  recipient: string
+}
+
+const CW20_UINT128_MAX = (1n << 128n) - 1n
+
+const decodeStrictUtf8 = (bytes: Uint8Array): string | undefined => {
+  const decoded = Buffer.from(bytes).toString('utf8')
+  const reencoded = Buffer.from(decoded, 'utf8')
+  if (reencoded.length !== bytes.length || reencoded.some((byte, index) => byte !== bytes[index])) {
+    return undefined
+  }
+  return decoded
+}
+
+const decodeAccountPrefix = (address: string): string | undefined => {
+  let decoded: ReturnType<typeof bech32.decode>
+  try {
+    decoded = bech32.decode(address)
+  } catch {
+    return undefined
+  }
+  if (decoded.prefix.endsWith('valoper') || decoded.prefix.endsWith('valcons')) return undefined
+
+  try {
+    const payload = bech32.fromWords(decoded.words)
+    if (payload.length !== 20 && payload.length !== 32) return undefined
+  } catch {
+    return undefined
+  }
+  return decoded.prefix
+}
+
+const decodeCw20Transfer = (bytes: Uint8Array, contract: string): Cw20Transfer | undefined => {
+  const json = decodeStrictUtf8(bytes)
+  if (json === undefined) return undefined
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(json)
+  } catch {
+    return undefined
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined
+  const payloadRecord = payload as Record<string, unknown>
+  if (Object.keys(payloadRecord).length !== 1 || !('transfer' in payloadRecord)) return undefined
+
+  const transfer = payloadRecord.transfer
+  if (!transfer || typeof transfer !== 'object' || Array.isArray(transfer)) return undefined
+  const transferRecord = transfer as Record<string, unknown>
+  const transferKeys = Object.keys(transferRecord).sort()
+  if (transferKeys.length !== 2 || transferKeys[0] !== 'amount' || transferKeys[1] !== 'recipient') {
+    return undefined
+  }
+
+  const { amount, recipient } = transferRecord
+  if (typeof recipient !== 'string' || typeof amount !== 'string') return undefined
+
+  // The SDK builder emits this exact serialization. Requiring byte-for-byte
+  // canonical JSON rejects duplicate keys, alternate key ordering, whitespace,
+  // escapes, and parser-dependent ambiguity before lifting a transfer.
+  if (json !== JSON.stringify({ transfer: { recipient, amount } })) return undefined
+
+  const contractPrefix = decodeAccountPrefix(contract)
+  if (!contractPrefix || decodeAccountPrefix(recipient) !== contractPrefix) return undefined
+  if (!/^\d+$/.test(amount)) return undefined
+  const amountValue = BigInt(amount)
+  if (amountValue <= 0n || amountValue > CW20_UINT128_MAX) return undefined
+  return { amount, recipient }
+}
 
 /**
  * Decode Cosmos proto3 tx bytes (TxRaw) into an Envelope.
@@ -101,7 +175,18 @@ export function decodeCosmosTx(bytes: Uint8Array, chainHint: string): Envelope {
       case '/cosmwasm.wasm.v1.MsgExecuteContract': {
         const msg = MsgExecuteContract.decode(any.value)
         // CW20 transfers live inside the JSON `msg`; the on-wire recipient is
-        // the contract being executed. Lift a single attached fund if present.
+        // the contract being executed. Recognize only the SDK builder's direct
+        // transfer shape with no attached native funds; any extra action/value
+        // remains a generic contract call so no hidden effect rides through.
+        const transfer = msg.funds.length === 0 ? decodeCw20Transfer(msg.msg, msg.contract) : undefined
+        if (transfer) {
+          env.kind = 'transfer'
+          env.recipient = transfer.recipient
+          env.amount = transfer.amount
+          env.asset.contract = msg.contract
+          return env
+        }
+
         env.kind = 'contractCall'
         env.recipient = msg.contract
         if (msg.funds.length === 1) {
