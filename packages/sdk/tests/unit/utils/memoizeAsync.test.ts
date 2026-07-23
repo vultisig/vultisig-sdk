@@ -1,6 +1,5 @@
+import { memoizeAsync } from '@vultisig/lib-utils/memoizeAsync'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-import { memoizeAsync } from '../../../src/utils/memoizeAsync'
 
 describe('memoizeAsync', () => {
   beforeEach(() => {
