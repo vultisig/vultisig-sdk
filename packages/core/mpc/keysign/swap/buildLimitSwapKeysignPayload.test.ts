@@ -129,7 +129,6 @@ describe('buildLimitSwapKeysignPayload', () => {
       )
       expect(mocks.getChainSpecific).not.toHaveBeenCalled()
     })
-
   })
 
   describe('native gas asset (inbound vault transfer)', () => {

@@ -73,6 +73,22 @@ describe('isLimitSwapDestinationHalted', () => {
     )
   })
 
+  // A partial or stale feed that drops a row would otherwise let an order be
+  // signed into a destination whose halt status was never verified.
+  it('fails closed when a mapped destination has no inbound row', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('ETH')], chain: Chain.Bitcoin })).toBe(true)
+  })
+
+  it('fails closed on an empty inbound feed', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [], chain: Chain.Bitcoin })).toBe(true)
+  })
+
+  // THORChain has no Asgard vault, so it never appears in the feed -- treating a
+  // missing row as halted there would block every RUNE-denominated destination.
+  it('treats THORChain itself as live despite having no inbound row', () => {
+    expect(isLimitSwapDestinationHalted({ inbounds: [inbound('BTC')], chain: Chain.THORChain })).toBe(false)
+  })
+
   it('matches the destination row case-insensitively and ignores surrounding whitespace', () => {
     expect(isLimitSwapDestinationHalted({ inbounds: [inbound(' btc ', { halted: true })], chain: Chain.Bitcoin })).toBe(
       true

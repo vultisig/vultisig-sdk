@@ -48,19 +48,27 @@ type IsLimitSwapDestinationHaltedInput = {
  *
  * The market path re-checks both route legs at broadcast through the native swap
  * payload, but a RUNE `MsgDeposit` never carries one — this sign-time gate is
- * its only destination check. Mirrors the broadcast guard's tolerance: a leg
- * with no memo prefix or no inbound row (THORChain-native assets; the feed lists
- * no row for THORChain itself) is not haltable via this feed and reads as live.
+ * its only destination check, so it fails closed.
+ *
+ * Two legs are genuinely not haltable through this feed and read as live: a
+ * chain with no memo prefix (nothing this builder can encode reaches here), and
+ * THORChain itself, which never appears in `inbound_addresses` because it has no
+ * Asgard vault. Every other mapped chain **must** produce a row: a partial or
+ * stale feed that silently drops one would otherwise let an order be signed into
+ * a destination whose halt status was never verified.
  */
 export const isLimitSwapDestinationHalted = ({ inbounds, chain }: IsLimitSwapDestinationHaltedInput): boolean => {
   const chainSymbol = thorchainMemoAssetChainPrefix[chain]
-  if (!chainSymbol) {
+  if (!chainSymbol || chain === Chain.THORChain) {
     return false
   }
 
   const inbound = inbounds.find(entry => entry.chain.trim().toUpperCase() === chainSymbol)
+  if (!inbound) {
+    return true
+  }
 
-  return Boolean(inbound && (inbound.halted || inbound.global_trading_paused || inbound.chain_trading_paused))
+  return inbound.halted || inbound.global_trading_paused || inbound.chain_trading_paused
 }
 
 type FindLimitSwapInboundInput = {
