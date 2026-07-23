@@ -5,31 +5,37 @@ import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
+import { formatSubstrateRpcError, isIdempotentSubstrateBroadcastError, SubstrateRpcError } from './substrate'
 
 type RpcResponse = {
   result?: string
-  error?: { code: number; message: string }
+  error?: SubstrateRpcError
 }
 
 export const broadcastBittensorTx: BroadcastTxResolver<OtherChain.Bittensor> = async ({ chain, tx }) => {
   const hexWithPrefix = ensureHexPrefix(Buffer.from(tx.encoded).toString('hex'))
 
-  const response = await queryUrl<RpcResponse>(bittensorRpcUrl, {
-    body: {
-      jsonrpc: '2.0',
-      method: 'author_submitExtrinsic',
-      params: [hexWithPrefix],
-      id: 1,
-    },
-  })
+  try {
+    const response = await queryUrl<RpcResponse>(bittensorRpcUrl, {
+      body: {
+        jsonrpc: '2.0',
+        method: 'author_submitExtrinsic',
+        params: [hexWithPrefix],
+        id: 1,
+      },
+    })
 
-  if (response.error) {
-    const message = response.error.message ?? ''
-    // "Already Imported" means another device already broadcast this tx — not an error
-    if (message.includes('Already Imported')) {
-      return
+    if (response.error) {
+      if (isIdempotentSubstrateBroadcastError(response.error)) {
+        return
+      }
+      throw new Error(`Bittensor broadcast failed: ${formatSubstrateRpcError(response.error)}`)
     }
-    const err = new Error(`Bittensor broadcast failed: ${message || `code ${response.error.code}`}`)
-    await verifyBroadcastByHash({ chain, tx, error: err })
+
+    if (!response.result) {
+      throw new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    }
+  } catch (error) {
+    await verifyBroadcastByHash({ chain, tx, error })
   }
 }

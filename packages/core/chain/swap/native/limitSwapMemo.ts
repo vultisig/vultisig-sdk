@@ -3,11 +3,10 @@ import { PublicKey } from '@solana/web3.js'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
-import { lpChainMap } from '../../chains/cosmos/thor/lp/lpChainMap'
 import { assertValidPoolId } from '../../chains/cosmos/thor/lp/pools'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
-import { nativeSwapChainIds, thorChainSwapEnabledChains } from './NativeSwapChain'
+import { thorchainAssetPrefixToChain } from './thorchainMemoAsset'
 
 export const limitSwapExpiryHours = [12, 24, 72] as const
 export type LimitSwapExpiryHours = (typeof limitSwapExpiryHours)[number]
@@ -56,29 +55,6 @@ const assertMemoSegmentSafe = (value: string, fieldName: string): void => {
 const getAssetChainPrefix = (asset: string): string => {
   const [prefix] = asset.split('.')
   return prefix
-}
-
-// Limit swaps (`LIM=`) share THORChain's regular-swap destination-chain
-// universe — `=` vs `=<` only selects execution behavior (price/queue/TTL),
-// not a different set of destination chains, per THORChain's memo docs
-// (dev.thorchain.org/concepts/memos.html). `lpChainMap` alone
-// under-resolves this: it's LP-position-display-scoped (keyed off pool
-// existence), so Solana/Noble - which have no THORChain LP pools but ARE
-// valid swap destinations (see `thorChainSwapEnabledChains`, the list
-// already used to gate regular market swaps to THORChain) - never got an
-// entry. We union the two rather than replacing `lpChainMap` outright:
-// `thorChainSwapEnabledChains` is itself missing chains (Dash/Kujira/
-// Arbitrum/Zcash) that `lpChainMap` already resolves correctly, so a
-// straight swap of authority would regress those. We deliberately do NOT
-// use the broader `nativeSwapChainIds`, which also carries MayaChain-only
-// entries (e.g. `Chain.MayaChain` itself) that aren't valid THORChain
-// limit-swap destinations.
-const thorchainAssetPrefixToChain: Partial<Record<string, Chain>> = {
-  ...lpChainMap,
-  ...thorChainSwapEnabledChains.reduce<Partial<Record<string, Chain>>>((acc, chain) => {
-    acc[nativeSwapChainIds[chain]] = chain
-    return acc
-  }, {}),
 }
 
 const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {

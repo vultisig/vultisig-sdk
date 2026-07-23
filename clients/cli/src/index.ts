@@ -57,7 +57,7 @@ import {
   executeVerify,
   resolveTxStatusParams,
 } from './commands'
-import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
 import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
@@ -149,6 +149,7 @@ program
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
       '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
+      '  VULTISIG_SSE_IDLE_TIMEOUT_MS  Agent SSE frame-idle timeout in ms (default 60000)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
@@ -592,12 +593,10 @@ program
     withExit(
       async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
         const context = await init(program.opts().vault)
-        const verified = await executeVerify(context, vaultId, options)
-        if (!verified) {
-          const err: any = new Error('Verification failed')
-          err.exitCode = 1
-          throw err
-        }
+        // executeVerify throws a typed error on failure; it no longer signals
+        // failure via a `false` return that this had to re-throw (which produced a
+        // second JSON document on stdout).
+        await executeVerify(context, vaultId, options)
       }
     )
   )
@@ -689,26 +688,21 @@ See also: balance, tx-status`
           throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
         }
         const context = await init(program.opts().vault)
-        try {
-          await executeSend(context, {
-            chain,
-            to,
-            amount: amount ?? 'max',
-            tokenId: options.token,
-            memo: options.memo,
-            destinationTag,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12), which withExit
+        // surfaces as a success:false envelope — the interactive twin of the
+        // non-interactive refusal. No local swallow (which used to force exit 0).
+        await executeSend(context, {
+          chain,
+          to,
+          amount: amount ?? 'max',
+          tokenId: options.token,
+          memo: options.memo,
+          destinationTag,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -738,24 +732,17 @@ Examples:
         options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault, options.password)
-        try {
-          await executeExecute(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
-            contract,
-            msg,
-            funds: options.funds,
-            memo: options.memo,
-            dryRun: options.dryRun,
-            yes: options.yes,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeExecute(context, {
+          chain: findChainByName(chainStr) || (chainStr as Chain),
+          contract,
+          msg,
+          funds: options.funds,
+          memo: options.memo,
+          dryRun: options.dryRun,
+          yes: options.yes,
+          password: options.password,
+        })
       }
     )
   )
@@ -1076,9 +1063,10 @@ Examples:
           decimals?: string
         }
       ) => {
+        const chain = resolveChainOrThrow(chainStr)
         const context = await init(program.opts().vault)
         await executeTokens(context, {
-          chain: findChainByName(chainStr) || (chainStr as Chain),
+          chain,
           add: options.add,
           remove: options.remove,
           discover: options.discover,
@@ -1129,10 +1117,12 @@ Examples:
       ) => {
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
+        const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+        const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
-          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          fromChain,
+          toChain,
           amount: options.max ? 'max' : parseFloat(amountStr!),
           fromToken: options.fromToken,
           toToken: options.toToken,
@@ -1185,26 +1175,19 @@ See also: swap-quote, swap-chains, balance`
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
-        try {
-          await executeSwap(context, {
-            fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-            toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: options.max ? 'max' : parseFloat(amountStr!),
-            fromToken: options.fromToken,
-            toToken: options.toToken,
-            slippage: options.slippage ? parseFloat(options.slippage) : undefined,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Swap cancelled by user') {
-            warn('\nx Swap cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeSwap(context, {
+          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
+          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          amount: options.max ? 'max' : parseFloat(amountStr!),
+          fromToken: options.fromToken,
+          toToken: options.toToken,
+          slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -1374,6 +1357,10 @@ const agentCmd = program
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Without this flag, the CLI signs when confirmed but strips submit authorization.'
+  )
   .action(
     async (options: {
       viaAgent?: boolean
@@ -1384,6 +1371,7 @@ const agentCmd = program
       sessionId?: string
       notificationUrl?: string
       profile?: string
+      allowAutoSubmit?: boolean
     }) => {
       // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
       // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
@@ -1409,6 +1397,7 @@ const agentCmd = program
         sessionId: options.sessionId,
         notificationUrl: options.notificationUrl,
         profile: options.profile,
+        allowAutoSubmit: options.allowAutoSubmit,
       })
     }
   )
@@ -1426,6 +1415,10 @@ agentCmd
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Requires --yes for unattended signing.'
+  )
   .option(
     '--yes',
     'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
@@ -1446,6 +1439,9 @@ Signing safety:
   Without --yes, ask mode never signs or broadcasts — it reports the proposed
   transaction so a read-only prompt can't move funds. Pass --yes to opt in to
   unattended signing.
+
+  Signed Polymarket orders are NOT submitted by the backend unless
+  --allow-auto-submit is also passed.
 
   A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
   identical transaction intent was broadcast in the last 10 min and hasn't
@@ -1482,6 +1478,7 @@ Exit codes:
         profile?: string
         yes?: boolean
         force?: boolean
+        allowAutoSubmit?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1494,6 +1491,7 @@ Exit codes:
         profile: options.profile ?? parentOpts.profile,
         autoApprove: options.yes,
         force: options.force,
+        allowAutoSubmit: options.allowAutoSubmit ?? parentOpts.allowAutoSubmit,
       })
     }
   )

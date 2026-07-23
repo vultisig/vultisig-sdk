@@ -1,22 +1,17 @@
+import { Chain } from '@vultisig/core-chain/Chain'
 import { CoinKey } from '@vultisig/core-chain/coin/Coin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { EntityWithTicker } from '@vultisig/lib-utils/entities/EntityWithTicker'
 
 import { isFeeCoin } from '../../../coin/utils/isFeeCoin'
-import type { NativeSwapChain, NativeSwapChainId } from '../NativeSwapChain'
-import { nativeSwapChainIds, nativeSwapChains, nativeSwapEnabledChains } from '../NativeSwapChain'
-
-type NativeSwapDenomChainKey = Lowercase<NativeSwapChainId>
-
-const nativeSwapChainIdValues = Object.values(nativeSwapChainIds) as NativeSwapChainId[]
-
-const securedAssetDenomChainKeyToSwapId = Object.fromEntries(
-  nativeSwapChainIdValues.map(swapId => [swapId.toLowerCase() as NativeSwapDenomChainKey, swapId])
-) as Partial<Record<NativeSwapDenomChainKey, NativeSwapChainId>>
-
-const getSecuredAssetSwapId = (chainKey: string): NativeSwapChainId | undefined =>
-  securedAssetDenomChainKeyToSwapId[chainKey.toLowerCase() as NativeSwapDenomChainKey]
+import type { NativeSwapChain } from '../NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+  nativeSwapChains,
+  nativeSwapEnabledChains,
+} from '../NativeSwapChain'
 
 const formatSecuredAssetRest = (rest: string): string => {
   const evmTail = rest.match(/^(.+)-(0x[0-9a-fA-F]+)$/i)
@@ -48,10 +43,17 @@ const normalizeNativeSwapChainDenom = ({
 
   const segments = denom.split('-')
   if (segments.length >= 2) {
-    const swapId = getSecuredAssetSwapId(segments[0])
+    const swapId = getNativeSwapChainIdFromDenomPrefix(segments[0])
     if (swapId) {
       const rest = segments.slice(1).join('-')
-      return `${swapId}.${formatSecuredAssetRest(rest)}`
+      // THORChain secured assets settle on THORChain (a thor1 destination), so
+      // they must use secured-asset notation `CHAIN-ASSET`, not L1 pool
+      // notation `CHAIN.ASSET`. With the dot form THORNode reads the target as
+      // the L1 asset and rejects the swap ("swap destination address is not the
+      // same chain as the target asset"). MayaChain has no secured assets, so
+      // keep its existing dot notation.
+      const separator = chain === Chain.THORChain ? '-' : '.'
+      return `${swapId}${separator}${formatSecuredAssetRest(rest)}`
     }
   }
 

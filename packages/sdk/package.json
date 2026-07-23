@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/sdk",
-  "version": "2.19.19",
+  "version": "2.21.0",
   "description": "The self-custody MPC wallet SDK for AI agents. Bitcoin, Ethereum, Solana & 36+ chains via DKLS23 threshold signatures. TypeScript, multi-platform (Node, browser, React Native).",
   "type": "module",
   "main": "dist/index.node.cjs",
@@ -72,6 +72,32 @@
       "import": "./dist/vite/index.js",
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
+    },
+    "./tools/parse": {
+      "types": "./dist/tools/parse/index.d.ts",
+      "browser": "./dist/tools/parse/index.js",
+      "worker": "./dist/tools/parse/index.js",
+      "react-native": "./dist/tools/parse/index.js",
+      "node": {
+        "import": "./dist/tools/parse/index.js",
+        "require": "./dist/tools/parse/index.cjs"
+      },
+      "import": "./dist/tools/parse/index.js",
+      "require": "./dist/tools/parse/index.cjs",
+      "default": "./dist/tools/parse/index.cjs"
+    },
+    "./tools/defi": {
+      "types": "./dist/tools/defi/index.d.ts",
+      "browser": "./dist/tools/defi/index.js",
+      "worker": "./dist/tools/defi/index.js",
+      "react-native": "./dist/tools/defi/index.js",
+      "node": {
+        "import": "./dist/tools/defi/index.js",
+        "require": "./dist/tools/defi/index.cjs"
+      },
+      "import": "./dist/tools/defi/index.js",
+      "require": "./dist/tools/defi/index.cjs",
+      "default": "./dist/tools/defi/index.cjs"
     }
   },
   "scripts": {
@@ -179,12 +205,12 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@formatjs/intl-getcanonicallocales": "^3.2.10",
-    "@formatjs/intl-locale": "^5.3.9",
+    "@formatjs/intl-getcanonicallocales": "^3.2.11",
+    "@formatjs/intl-locale": "^5.3.10",
     "@formatjs/intl-numberformat": "^9.3.11",
     "@formatjs/intl-pluralrules": "^6.3.10",
     "@lifi/sdk": "^4.1.0",
-    "@mysten/sui": "^2.20.1",
+    "@mysten/sui": "^2.20.3",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
     "@scure/base": "^1.2.5",
@@ -198,7 +224,7 @@
     "@vultisig/lib-mldsa": "workspace:*",
     "@vultisig/lib-schnorr": "workspace:*",
     "@vultisig/mpc-types": "workspace:*",
-    "axios": "^1.17.0",
+    "axios": "^1.18.1",
     "bech32": "^2.0.0",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
@@ -227,7 +253,7 @@
     "viem": "^2.53.1",
     "vite-plugin-node-polyfills": "^0.28.0",
     "vite-plugin-wasm": "^3.6.0",
-    "ws": "^8.21.0",
+    "ws": "^8.21.1",
     "xrpl": "^5.0.0",
     "zod": "^4.4.3"
   },
@@ -261,6 +287,7 @@
   "peerDependencies": {
     "@react-native-async-storage/async-storage": "^2.0.0",
     "@vultisig/mpc-native": "workspace:*",
+    "@vultisig/walletcore-native": "workspace:*",
     "expo-crypto": "^13.0.0 || ^14.0.0 || ^15.0.0 || ^55.0.0",
     "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
   },
@@ -269,6 +296,9 @@
       "optional": true
     },
     "@vultisig/mpc-native": {
+      "optional": true
+    },
+    "@vultisig/walletcore-native": {
       "optional": true
     },
     "expo-crypto": {

@@ -3,9 +3,9 @@
  *
  * Provides version display and update checking functionality
  */
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 import chalk from 'chalk'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
 import { join } from 'path'
 
 import { info } from './output'
@@ -49,7 +49,7 @@ type VersionCache = {
   latestVersion: string | null
 }
 
-const CACHE_DIR = join(homedir(), '.vultisig', 'cache')
+const CACHE_DIR = join(getVultisigConfigDir(), 'cache')
 const VERSION_CACHE_FILE = join(CACHE_DIR, 'version-check.json')
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24 hours
 
@@ -203,12 +203,13 @@ export function formatVersionShort(): string {
  */
 export function formatVersionDetailed(): string {
   const lines: string[] = []
+  const configDir = getVultisigConfigDir()
 
   lines.push(chalk.bold(`Vultisig CLI v${getVersion()}`))
   lines.push('')
   lines.push(`  Node.js:   ${process.version}`)
   lines.push(`  Platform:  ${process.platform}-${process.arch}`)
-  lines.push(`  Config:    ~/.vultisig/`)
+  lines.push(`  Config:    ${configDir}`)
 
   return lines.join('\n')
 }

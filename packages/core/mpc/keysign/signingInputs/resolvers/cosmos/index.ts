@@ -5,7 +5,10 @@ import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveC
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
-import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { THORChainSpecific, TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { fromBase64 } from '@cosmjs/encoding'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -62,6 +65,37 @@ const getThorchainDepositAsset = ({
     ticker: secured ? assetCoin.ticker.toUpperCase() : assetCoin.ticker,
     synth: false,
     secured,
+  })
+}
+
+// Mirrors iOS THORChainHelper.isSecuredAsset (thorchain.swift): a THORChain-held
+// token whose denom encodes an L1 chain prefix + '-' (e.g. `xrp-xrp`,
+// `eth-usdc-0x…`). RUNE and `x/…` THORChain-native tokens are not secured assets.
+const isSecuredAssetSwapCoin = (assetCoin: { chain: string; contractAddress?: string }): boolean =>
+  assetCoin.chain === Chain.THORChain &&
+  !!assetCoin.contractAddress &&
+  !assetCoin.contractAddress.startsWith('x/') &&
+  assetCoin.contractAddress.includes('-')
+
+// Builds the MsgDeposit asset for a THORChain secured asset spent in a swap.
+// Mirrors iOS THORChainHelper: the L1 chain and symbol are derived from the
+// secured denom (`eth-usdc-0x…` -> chain `ETH`, symbol `USDC-0X…`) with the
+// `secured` flag set, so THORNode matches the deposited coin against the same
+// secured asset referenced by the server-issued swap memo (`=:ETH-USDC:…`).
+const getSecuredAssetDepositAsset = (assetCoin: { contractAddress: string; ticker: string }) => {
+  const [chainPrefix, ...symbolParts] = assetCoin.contractAddress.split('-')
+  const chainId = getNativeSwapChainIdFromDenomPrefix(chainPrefix)
+  if (!chainId) {
+    throw new Error(`Unsupported secured asset chain prefix: "${chainPrefix}"`)
+  }
+  const symbol = symbolParts.join('-')
+
+  return TW.Cosmos.Proto.THORChainAsset.create({
+    chain: chainId,
+    symbol: (symbol || assetCoin.ticker).toUpperCase(),
+    ticker: assetCoin.ticker.toUpperCase().replace(/X\//g, ''),
+    synth: false,
+    secured: true,
   })
 }
 
@@ -374,9 +408,16 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
         const assetCoin = swapPayload?.fromCoin ?? coin
         const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
+        const securedSwapFromCoin =
+          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
 
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
+          asset: securedSwapFromCoin
+            ? getSecuredAssetDepositAsset({
+                contractAddress: securedSwapFromCoin.contractAddress,
+                ticker: securedSwapFromCoin.ticker,
+              })
+            : getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
           ...(isPositive
             ? {
                 amount: amountStr,
@@ -520,8 +561,8 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     publicKey,
     signingMode,
     chainId,
-    accountNumber: new Long(Number(accountNumber)),
-    sequence: new Long(Number(sequence)),
+    accountNumber: Long.fromString(accountNumber.toString(), true),
+    sequence: Long.fromString(sequence.toString(), true),
     mode: TW.Cosmos.Proto.BroadcastMode.SYNC,
     memo: txMemo,
     messages,

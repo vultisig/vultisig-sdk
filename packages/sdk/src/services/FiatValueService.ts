@@ -1,13 +1,34 @@
-import type { Chain } from '@vultisig/core-chain/Chain'
-import type { EvmChain } from '@vultisig/core-chain/Chain'
+import { type Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { getErc20Prices } from '@vultisig/core-chain/coin/price/evm/getErc20Prices'
 import { getCoinPrices } from '@vultisig/core-chain/coin/price/getCoinPrices'
+import { resolveTokenPriceId } from '@vultisig/core-chain/coin/price/resolveTokenPriceId'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 
 import type { Balance, Token } from '../types'
 import { CacheScope, type CacheService } from './CacheService'
+
+// Max chains fetched at once when totalling portfolio value — bounds the RPC fan-out on many-chain vaults.
+const TOTAL_VALUE_CONCURRENCY = 8
+
+/**
+ * Map over items with a bounded number of in-flight promises, preserving input order. A raw
+ * Promise.all over every chain fans out one price/balance round-trip per chain simultaneously; on a
+ * many-chain vault that's an unbounded RPC burst. This caps concurrency while keeping the results ordered.
+ */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await fn(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker))
+  return results
+}
 
 /**
  * Service for fetching cryptocurrency prices and calculating fiat values
@@ -295,27 +316,77 @@ export class FiatValueService {
   ): Promise<Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }>> {
     const values: Record<string, { amount: string; currency: FiatCurrency; lastUpdated: number }> = {}
 
-    try {
-      // Get native token value
-      values.native = await this.getValue(chain, undefined, fiatCurrency)
-    } catch (error) {
-      console.warn(`Failed to get native value for ${chain}:`, error)
-    }
-
     // Get all token values
     const allTokens = this.getTokens()
-    const tokens = allTokens[chain] || []
+    const tokens = (allTokens[chain] || []).filter((token): token is Token & { contractAddress: string } =>
+      Boolean(token.contractAddress)
+    )
 
-    for (const token of tokens) {
-      if (!token.contractAddress) continue
-      try {
-        values[token.contractAddress] = await this.getValue(chain, token.contractAddress, fiatCurrency)
-      } catch (error) {
-        console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
+    // Batch-fetch every token price for this chain in a single request (warms the
+    // price cache) instead of one getErc20Prices call per token via getValue().
+    const currency = (fiatCurrency ?? this.getCurrency()).toLowerCase() as FiatCurrency
+    await this.warmTokenPriceCache(
+      chain,
+      tokens.map(token => token.contractAddress),
+      currency
+    )
+
+    const [nativeValue, tokenValues] = await Promise.all([
+      this.getValue(chain, undefined, fiatCurrency).catch(error => {
+        console.warn(`Failed to get native value for ${chain}:`, error)
+        return undefined
+      }),
+      Promise.all(
+        tokens.map(token =>
+          this.getValue(chain, token.contractAddress, fiatCurrency)
+            .then(value => [token.contractAddress, value] as const)
+            .catch(error => {
+              console.warn(`Failed to get value for token ${token.contractAddress}:`, error)
+              return undefined
+            })
+        )
+      ),
+    ])
+
+    if (nativeValue) {
+      values.native = nativeValue
+    }
+    for (const entry of tokenValues) {
+      if (entry) {
+        values[entry[0]] = entry[1]
       }
     }
 
     return values
+  }
+
+  /**
+   * Fetch prices for many ERC-20 tokens on a chain in a single request and seed
+   * the price cache, so subsequent per-token getPrice() calls hit the cache
+   * instead of issuing one getErc20Prices call each.
+   * @private
+   */
+  private async warmTokenPriceCache(chain: Chain, tokenIds: string[], currency: FiatCurrency): Promise<void> {
+    if (tokenIds.length === 0 || !this.isEvmChain(chain)) {
+      return
+    }
+
+    let prices: Record<string, number>
+    try {
+      prices = await getErc20Prices({ ids: tokenIds, chain: chain as EvmChain, fiatCurrency: currency })
+    } catch (error) {
+      // Non-fatal: individual getValue() calls will fall back to per-token fetches.
+      console.warn(`Failed to batch-fetch token prices for ${chain}:`, error)
+      return
+    }
+
+    for (const tokenId of tokenIds) {
+      const price = prices[tokenId.toLowerCase()]
+      if (price !== undefined && price !== 0) {
+        const key = `${chain.toLowerCase()}:${tokenId}:${currency}`
+        await this.cacheService.setScoped(key, CacheScope.PRICE, price)
+      }
+    }
   }
 
   /**
@@ -339,20 +410,20 @@ export class FiatValueService {
 
     // Calculate total - no separate cache needed since getValues() uses cached prices/balances
     const chains = this.getChains()
-    let total = 0
 
-    // Sum values across all chains
-    for (const chain of chains) {
+    // Fetch chains' values concurrently but with a bounded number in flight, so a many-chain vault
+    // doesn't fire an unbounded simultaneous RPC burst.
+    const chainTotals = await mapWithConcurrency(chains, TOTAL_VALUE_CONCURRENCY, async chain => {
       try {
         const chainValues = await this.getValues(chain, currency)
-        for (const value of Object.values(chainValues)) {
-          total += parseFloat(value.amount)
-        }
+        return Object.values(chainValues).reduce((sum, value) => sum + parseFloat(value.amount), 0)
       } catch (error) {
         console.warn(`Failed to get values for ${chain}:`, error)
-        // Continue with other chains
+        return 0
       }
-    }
+    })
+
+    const total = chainTotals.reduce((sum, value) => sum + value, 0)
 
     return {
       amount: total.toFixed(2),
@@ -381,9 +452,10 @@ export class FiatValueService {
     await this.clearPrices()
 
     if (chain === 'all') {
-      // Fetch values for all chains (triggers fresh price fetch)
+      // Fetch values for all chains (triggers fresh price fetch), bounded like getTotalValue —
+      // a raw Promise.all here would re-introduce the unbounded per-chain RPC burst on a many-chain vault.
       const chains = this.getChains()
-      await Promise.all(chains.map(c => this.getValues(c)))
+      await mapWithConcurrency(chains, TOTAL_VALUE_CONCURRENCY, chain => this.getValues(chain))
     } else {
       // Fetch values for specific chain
       await this.getValues(chain)
@@ -460,22 +532,30 @@ export class FiatValueService {
   }
 
   /**
-   * Fetch token price by contract address
-   * Currently supports EVM chains (Ethereum, Polygon, BSC, etc.)
+   * Fetch a token price using the chain's canonical token identifier.
    * @private
    */
   private async fetchTokenPrice(chain: Chain, tokenAddress: string, currency: FiatCurrency): Promise<number> {
     if (!this.isEvmChain(chain)) {
-      return 0
+      const priceProviderId = resolveTokenPriceId(chain, tokenAddress)
+      if (!priceProviderId) return 0
+
+      const prices = await getCoinPrices({
+        ids: [priceProviderId],
+        fiatCurrency: currency,
+      })
+      const price = prices[priceProviderId.toLowerCase()]
+      if (price === undefined || price === 0) {
+        throw new Error(`Price not found for token ${tokenAddress} on ${chain}`)
+      }
+      return price
     }
 
-    // Fetch ERC-20 token price
     const prices = await getErc20Prices({
       ids: [tokenAddress],
       chain: chain as EvmChain,
       fiatCurrency: currency,
     })
-
     const price = prices[tokenAddress.toLowerCase()]
     if (price === undefined || price === 0) {
       throw new Error(`Price not found for token ${tokenAddress} on ${chain}`)
@@ -502,20 +582,6 @@ export class FiatValueService {
    * @private
    */
   private isEvmChain(chain: Chain): boolean {
-    const evmChains = [
-      'Ethereum',
-      'Polygon',
-      'BNBChain',
-      'Avalanche',
-      'Arbitrum',
-      'Optimism',
-      'Base',
-      'Blast',
-      'CronosChain',
-      'ZkSync',
-      'Mantle',
-      'Sei',
-    ]
-    return evmChains.includes(chain)
+    return Object.values(EvmChain).includes(chain as EvmChain)
   }
 }

@@ -40,7 +40,7 @@ describe('getCosmosSigningInputs gas limit', () => {
     publicKeyHex = Buffer.from(publicKey.data()).toString('hex')
   })
 
-  const buildPayload = ({ gasLimit }: { gasLimit?: bigint }) =>
+  const buildPayload = ({ gasLimit, sequence = 3n }: { gasLimit?: bigint; sequence?: bigint }) =>
     create(KeysignPayloadSchema, {
       coin: create(CoinSchema, {
         chain: Chain.Cosmos,
@@ -58,7 +58,7 @@ describe('getCosmosSigningInputs gas limit', () => {
         case: 'cosmosSpecific',
         value: create(CosmosSpecificSchema, {
           accountNumber: 7n,
-          sequence: 3n,
+          sequence,
           gas: 2500n,
           gasLimit,
           transactionType: TransactionType.UNSPECIFIED,
@@ -77,6 +77,16 @@ describe('getCosmosSigningInputs gas limit', () => {
       gas: input.fee?.gas.toString(),
     }
   }
+
+  it('preserves a uint64 sequence above the JavaScript safe-integer limit in WalletCore input', async () => {
+    const sequence = 9_007_199_254_740_993n
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: buildPayload({ sequence }),
+      walletCore,
+    })
+
+    expect(input.sequence.toString()).toBe(sequence.toString())
+  })
 
   it('honors a positive relayed CosmosSpecific gas limit', async () => {
     await expect(feeFor(345_678n)).resolves.toEqual({
@@ -227,4 +237,162 @@ describe('getCosmosSigningInputs gas limit', () => {
     })
     expect(depositCoin?.decimals.toString()).toBe('8')
   })
+
+  it('encodes a secured-asset swap deposit with the L1 secured asset (native)', async () => {
+    const memo = `=:ETH-USDC:${thorSender}`
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '200000000',
+        memo,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+        swapPayload: {
+          case: 'thorchainSwapPayload',
+          value: {
+            fromCoin: {
+              chain: Chain.THORChain,
+              ticker: 'XRP',
+              contractAddress: 'xrp-xrp',
+              decimals: 8,
+            },
+            fromAmount: '200000000',
+            vaultAddress: '',
+            routerAddress: '',
+            expirationTime: 0n,
+          },
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'XRP',
+      symbol: 'XRP',
+      ticker: 'XRP',
+      secured: true,
+    })
+    expect(depositCoin?.amount).toBe('200000000')
+    expect(depositCoin?.decimals.toString()).toBe('8')
+  })
+
+  it('encodes a secured-asset swap deposit with the contract symbol (token)', async () => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.THORChain,
+          ticker: 'RUNE',
+          address: thorSender,
+          decimals: 8,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: '',
+        toAmount: '41391997',
+        memo: `=:XRP-XRP:${thorSender}`,
+        blockchainSpecific: {
+          case: 'thorchainSpecific',
+          value: create(THORChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            fee: 2_000_000n,
+            isDeposit: true,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+        swapPayload: {
+          case: 'thorchainSwapPayload',
+          value: {
+            fromCoin: {
+              chain: Chain.THORChain,
+              ticker: 'USDC',
+              contractAddress: 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+              decimals: 8,
+            },
+            fromAmount: '41391997',
+            vaultAddress: '',
+            routerAddress: '',
+            expirationTime: 0n,
+          },
+        },
+      }),
+      walletCore,
+    })
+
+    const depositCoin = input.messages[0]?.thorchainDepositMessage?.coins?.[0]
+    expect(depositCoin?.asset).toMatchObject({
+      chain: 'ETH',
+      symbol: 'USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+      ticker: 'USDC',
+      secured: true,
+    })
+    expect(depositCoin?.decimals.toString()).toBe('8')
+  })
+
+  it.each(['bogus-usdc', '-usdc', '__proto__-usdc', 'constructor-usdc'])(
+    'rejects a secured-asset swap deposit with a non-canonical chain prefix (%s)',
+    contractAddress => {
+      const resolve = () =>
+        getCosmosSigningInputs({
+          keysignPayload: create(KeysignPayloadSchema, {
+            coin: create(CoinSchema, {
+              chain: Chain.THORChain,
+              ticker: 'RUNE',
+              address: thorSender,
+              decimals: 8,
+              isNativeToken: true,
+              hexPublicKey: publicKeyHex,
+            }),
+            toAddress: '',
+            toAmount: '41391997',
+            memo: `=:XRP-XRP:${thorSender}`,
+            blockchainSpecific: {
+              case: 'thorchainSpecific',
+              value: create(THORChainSpecificSchema, {
+                accountNumber: 7n,
+                sequence: 3n,
+                fee: 2_000_000n,
+                isDeposit: true,
+                transactionType: TransactionType.UNSPECIFIED,
+              }),
+            },
+            swapPayload: {
+              case: 'thorchainSwapPayload',
+              value: {
+                fromCoin: {
+                  chain: Chain.THORChain,
+                  ticker: 'USDC',
+                  contractAddress,
+                  decimals: 8,
+                },
+                fromAmount: '41391997',
+                vaultAddress: '',
+                routerAddress: '',
+                expirationTime: 0n,
+              },
+            },
+          }),
+          walletCore,
+        })
+
+      expect(resolve).toThrow('Unsupported secured asset chain prefix')
+    }
+  )
 })

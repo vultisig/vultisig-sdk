@@ -377,14 +377,11 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Check in-memory pending vaults first, then fall back to disk
     let pendingVault = this.pendingVaults.get(vaultId)
-    let fromDisk = false
-
     if (!pendingVault) {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
         pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
-        fromDisk = true
       }
     }
 
@@ -407,9 +404,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
 
     // Clean up pending state
     this.pendingVaults.delete(vaultId)
-    if (fromDisk) {
-      await this.context.storage.remove(`pending:${vaultId}`)
-    }
+    await this.context.storage.remove(`pending:${vaultId}`)
 
     this.emit('vaultChanged', { vaultId })
 
@@ -1015,13 +1010,14 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Clear all stored vaults
+   * Clear all SDK-owned vault data while preserving unrelated values in a
+   * shared custom storage adapter.
    */
   async clearVaults(): Promise<void> {
     await this.ensureInitialized()
     await this.vaultManager.clearVaults()
-    await this.storage.clear()
-    this.addressBookManager.clear()
+    this.pendingVaults.clear()
+    await this.addressBookManager.clear()
     this.emit('vaultChanged', { vaultId: '' })
   }
 
@@ -1225,19 +1221,20 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   /**
    * Get the canonical "view on explorer" URL for a swap-provider transaction.
    *
-   * Routes to the aggregator's scanner where one exists (LI.FI / Helius for
-   * Solana settlement, Runescan for THORChain, the MayaChain explorer for
-   * MayaChain) and falls back to the source-chain explorer for `1inch`,
-   * `kyber`, and `swapkit` — none of which expose a per-tx aggregator page.
+   * Routes to the aggregator's scanner where one exists (LI.FI / Helius,
+   * SwapKit, CoW Explorer, Runescan, or the MayaChain explorer) and falls back
+   * to the source-chain explorer for `1inch`, `kyber`, and `jupiter`.
    *
    * Mirrors iOS `ExplorerLinkBuilder.swift` and Android
    * `ExplorerLinkRepository.getSwapProgressLink` so every Vultisig client
    * routes tx-history links to the same scanner.
    *
    * @param provider - The swap provider that executed the trade
-   * @param txHash - The on-chain transaction hash (with or without 0x prefix)
-   * @param fromChain - The chain the tx was broadcast on
+   * @param txHash - The on-chain transaction hash, or the 56-byte order UID for
+   * a pending CowSwap order
+   * @param fromChain - The source chain; an unsupported CowSwap chain throws
    * @returns The provider-specific explorer URL
+   * @throws For an unsupported CowSwap chain
    */
   static getSwapExplorerUrl(provider: SwapExplorerProvider, txHash: string, fromChain: Chain): string {
     return getSwapExplorerUrl({ provider, txHash, fromChain })
