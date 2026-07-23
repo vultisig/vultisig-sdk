@@ -21,6 +21,7 @@ const {
   mockGetSolanaSignatureStatuses,
   mockGetCosmosClient,
   mockCosmosBroadcastTx,
+  mockCosmosGetTx,
   mockExecuteSuiTx,
   mockRippleRequest,
 } = vi.hoisted(() => ({
@@ -31,6 +32,7 @@ const {
   mockGetSolanaSignatureStatuses: vi.fn(),
   mockGetCosmosClient: vi.fn(),
   mockCosmosBroadcastTx: vi.fn(),
+  mockCosmosGetTx: vi.fn(),
   mockExecuteSuiTx: vi.fn(),
   mockRippleRequest: vi.fn(),
 }))
@@ -80,14 +82,20 @@ describe('RawBroadcastService', () => {
     mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
     mockGetCosmosClient.mockResolvedValue({
       broadcastTx: mockCosmosBroadcastTx,
+      getTx: mockCosmosGetTx,
     })
-    mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash' })
+    mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash', code: 0 })
+    mockCosmosGetTx.mockResolvedValue(null)
     mockExecuteSuiTx.mockResolvedValue({
       digest: 'sui-digest',
       effects: { status: { status: 'success' } },
     })
     mockRippleRequest.mockResolvedValue({
-      result: { tx_json: { hash: 'xrp-hash' } },
+      result: {
+        engine_result: 'tesSUCCESS',
+        engine_result_code: 0,
+        tx_json: { hash: 'xrp-hash' },
+      },
     })
   })
 
@@ -277,6 +285,10 @@ describe('RawBroadcastService', () => {
     const txBytes = Buffer.from([1, 2, 3])
     const rawTx = txBytes.toString('base64')
     mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue({
+      hash: bytesToHex(sha256(txBytes)).toUpperCase(),
+      code: 0,
+    })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Cosmos,
@@ -284,6 +296,40 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe(bytesToHex(sha256(txBytes)).toUpperCase())
+  })
+
+  it('fails closed when a duplicate Cosmos transaction already failed execution', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue({
+      hash: 'failed-hash',
+      code: 5,
+      rawLog: 'out of gas',
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('execution failed'),
+    })
+  })
+
+  it('fails closed when a duplicate Cosmos transaction cannot be verified on-chain', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue(null)
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
   })
 
   it('fails closed on an ambiguous Cosmos account sequence mismatch', async () => {
@@ -496,8 +542,8 @@ describe('RawBroadcastService', () => {
 
   it('maps Tron duplicate transaction to BroadcastFailed', async () => {
     mockQueryUrl.mockResolvedValue({
-      code: 'ERROR',
-      message: 'DUPLICATE_TRANSACTION',
+      code: 'DUP_TRANSACTION_ERROR',
+      message: Buffer.from('Transaction already exists').toString('hex'),
     })
 
     await expect(
@@ -527,8 +573,8 @@ describe('RawBroadcastService', () => {
 
   it('returns the derived Tron txID for duplicate transaction responses', async () => {
     mockQueryUrl.mockResolvedValue({
-      code: 'ERROR',
-      message: 'DUPLICATE_TRANSACTION',
+      code: 'DUP_TRANSACTION_ERROR',
+      message: Buffer.from('Transaction already exists').toString('hex'),
     })
 
     const rawDataHex = '010203'
@@ -547,8 +593,8 @@ describe('RawBroadcastService', () => {
 
   it('fails closed when a duplicate Tron response carries a mismatched txID', async () => {
     mockQueryUrl.mockResolvedValue({
-      code: 'ERROR',
-      message: 'DUPLICATE_TRANSACTION',
+      code: 'DUP_TRANSACTION_ERROR',
+      message: Buffer.from('Transaction already exists').toString('hex'),
     })
 
     await expect(
@@ -588,7 +634,13 @@ describe('RawBroadcastService', () => {
       SigningPubKey: '',
       TxnSignature: '',
     })
-    mockRippleRequest.mockRejectedValue(new Error('tefALREADY'))
+    mockRippleRequest.mockResolvedValue({
+      result: {
+        engine_result: 'tefALREADY',
+        engine_result_code: -198,
+        engine_result_message: 'The transaction was already applied.',
+      },
+    })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
@@ -599,7 +651,14 @@ describe('RawBroadcastService', () => {
   })
 
   it('fails closed on an ambiguous Ripple past-sequence response', async () => {
-    mockRippleRequest.mockRejectedValue(new Error('tefPAST_SEQ'))
+    mockRippleRequest.mockResolvedValue({
+      result: {
+        engine_result: 'tefPAST_SEQ',
+        engine_result_code: -190,
+        engine_result_message: 'This sequence number has already passed.',
+        tx_json: { hash: 'misleading-hash' },
+      },
+    })
 
     await expect(
       service.broadcastRawTx({
@@ -609,6 +668,24 @@ describe('RawBroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('tefPAST_SEQ'),
+    })
+  })
+
+  it('fails closed on an ambiguous Ripple response even when it includes a transaction hash', async () => {
+    mockRippleRequest.mockResolvedValue({
+      result: {
+        tx_json: { hash: 'misleading-hash' },
+      },
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx: '1200aa',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('engine result'),
     })
   })
 })
