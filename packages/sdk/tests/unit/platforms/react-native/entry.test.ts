@@ -135,6 +135,24 @@ describe('RN entry exposes fromChainAmountExact + getBlockExplorerUrl', () => {
     expect(rn.decodeCosmosTx).toBe(decode.decodeCosmosTx)
     expect(rn.decodeEvmTx).toBe(decode.decodeEvmTx)
   })
+
+  it('re-exports the canonical StakeKit yield helpers from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const stakekit = await import('../../../../src/tools/defi/stakekit')
+
+    expect(rn.buildYieldActionScanRequest).toBe(stakekit.buildYieldActionScanRequest)
+    expect(rn.buildYieldStepScanRequest).toBe(stakekit.buildYieldStepScanRequest)
+    expect(rn.parseActionDisplay).toBe(stakekit.parseActionDisplay)
+    expect(rn.stakekit).toBe(stakekit.stakekit)
+    expect(rn.stakekitSearch).toBe(stakekit.stakekitSearch)
+    expect(rn.stakekitDetails).toBe(stakekit.stakekitDetails)
+    expect(rn.stakekitBalances).toBe(stakekit.stakekitBalances)
+    expect(rn.stakekitBuildEnter).toBe(stakekit.stakekitBuildEnter)
+    expect(rn.stakekitBuildExit).toBe(stakekit.stakekitBuildExit)
+    expect(rn.stakekitBuildManage).toBe(stakekit.stakekitBuildManage)
+    expect(rn.validateStakekitActionAddress).toBe(stakekit.validateStakekitActionAddress)
+    expect(rn.validateStakekitActionInput).toBe(stakekit.validateStakekitActionInput)
+  })
 })
 
 // Same parity guard for the hardened human-amount -> base-units parser: the RN
