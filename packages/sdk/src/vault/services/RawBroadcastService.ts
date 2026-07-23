@@ -12,6 +12,7 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -320,7 +321,30 @@ export class RawBroadcastService {
 
     if (error) {
       if (isInError(error, 'tx already exists in cache')) {
-        return deriveCosmosRawTxHash(rawTx)
+        const hash = deriveCosmosRawTxHash(rawTx)
+        const { data: existingTx, error: lookupError } = await attempt(client.getTx(hash))
+
+        if (!existingTx) {
+          const lookupMessage = lookupError instanceof Error ? lookupError.message : String(lookupError ?? 'not found')
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction may already exist, but its execution result could not be verified: ${lookupMessage}`,
+            lookupError instanceof Error ? lookupError : new Error(lookupMessage)
+          )
+        }
+
+        try {
+          assertIsDeliverTxSuccess({ ...existingTx, transactionHash: existingTx.hash })
+        } catch (deliverTxError) {
+          const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction was included but execution failed: ${message}`,
+            deliverTxError instanceof Error ? deliverTxError : new Error(message)
+          )
+        }
+
+        return hash
       }
       throw error
     }
@@ -471,14 +495,33 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      if (isInError(error, 'tefALREADY')) {
-        return deriveRippleRawTxHash(rawTx)
-      }
       throw error
     }
 
-    if (!response?.result?.tx_json?.hash) throw new Error('No transaction hash returned')
-    return response.result.tx_json.hash
+    const result = response?.result
+    if (!result || typeof result.engine_result_code !== 'number') {
+      throw new Error('Ripple broadcast did not return an engine result')
+    }
+
+    const engineResultCode = result.engine_result_code
+    const engineResult = result.engine_result ?? 'unknown'
+    if (engineResultCode !== 0) {
+      if (engineResult === 'tefALREADY') {
+        return deriveRippleRawTxHash(rawTx)
+      }
+
+      if (isRippleInFlightEngineResult(engineResult)) {
+        return result.tx_json?.hash ?? deriveRippleRawTxHash(rawTx)
+      }
+
+      const engineResultMessage = result.engine_result_message ?? ''
+      throw new Error(
+        `Ripple broadcast rejected: ${engineResult}${engineResultMessage ? ` — ${engineResultMessage}` : ''}`
+      )
+    }
+
+    if (!result.tx_json?.hash) throw new Error('No transaction hash returned')
+    return result.tx_json.hash
   }
 
   /**
@@ -547,8 +590,9 @@ export class RawBroadcastService {
     // `result: false` without a `code` must not fall through to the txid check below and be
     // reported as a success.
     if (response.result === false || (response.code && response.code !== 'SUCCESS')) {
-      const errorMsg = response.message || response.code || 'Unknown error'
-      if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
+      const decodedMessage = response.message ? Buffer.from(response.message, 'hex').toString('utf8') : ''
+      const errorMsg = decodedMessage || response.code || 'Unknown error'
+      if (response.code && isInError(response.code, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
         const localHash = deriveTronRawTxHash(txJson)
         if (localHash) {
           return localHash
