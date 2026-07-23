@@ -338,8 +338,9 @@ export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/c
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
 // client↔server chainId bug class). Native tickers are already exported via
 // `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
-// resolves a hex chainId back to its EvmChain.
-export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+// resolves a hex chainId back to its EvmChain; `getEvmRpcUrl` returns the
+// canonical default/custom-RPC-resolved endpoint for that chain.
+export { getEvmChainByChainId, getEvmChainId, getEvmRpcUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
