@@ -52,15 +52,20 @@ try {
       "const require = createRequire(import.meta.url)",
       "const parsePath = require.resolve('@vultisig/sdk/tools/parse')",
       "const defiPath = require.resolve('@vultisig/sdk/tools/defi')",
+      "const prepPath = require.resolve('@vultisig/sdk/tools/prep')",
       "assert.match(parsePath, /dist\\/tools\\/parse\\/index\\.cjs$/)",
       "assert.match(defiPath, /dist\\/tools\\/defi\\/index\\.cjs$/)",
+      "assert.match(prepPath, /dist\\/tools\\/prep\\/index\\.cjs$/)",
       "const parse = await import('@vultisig/sdk/tools/parse')",
       "const defiModule = await import('@vultisig/sdk/tools/defi')",
+      "const prep = await import('@vultisig/sdk/tools/prep')",
       "assert.equal(parse.parseChain('Ethereum').success, true)",
       "assert.equal(typeof parse.parseTicker, 'function')",
       "assert.equal(typeof defiModule.defi, 'object')",
       "assert.equal(typeof defiModule.osmosis.buildSwapExactAmountIn, 'function')",
-      "console.log(JSON.stringify({ parsePath, defiPath, parseOk: true, defiOk: true }))",
+      "assert.equal(typeof prep.prepareSendTxFromKeys, 'function')",
+      "assert.equal(typeof prep.prepareIbcTransfer, 'function')",
+      "console.log(JSON.stringify({ parsePath, defiPath, prepPath, parseOk: true, defiOk: true, prepOk: true }))",
       '',
     ].join('\n')
   )
@@ -69,11 +74,16 @@ try {
     [
       "import { parseChain, type ParseChainResult } from '@vultisig/sdk/tools/parse'",
       "import { defi, type Defi } from '@vultisig/sdk/tools/defi'",
+      "import { prepareIbcTransfer, prepareSendTxFromKeys, type PrepareSendTxFromKeysParams } from '@vultisig/sdk/tools/prep'",
       '',
       "const chainResult: ParseChainResult = parseChain('Ethereum')",
       'void chainResult',
       'const tools: Defi = defi',
       'void tools',
+      'void prepareIbcTransfer',
+      'void prepareSendTxFromKeys',
+      'type _PrepParams = PrepareSendTxFromKeysParams',
+      'void (0 as unknown as _PrepParams)',
       '',
     ].join('\n')
   )
