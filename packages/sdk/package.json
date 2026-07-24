@@ -98,6 +98,19 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./tools/swap": {
+      "types": "./dist/tools/swap/index.d.ts",
+      "browser": "./dist/tools/swap/index.js",
+      "worker": "./dist/tools/swap/index.js",
+      "react-native": "./dist/tools/swap/index.js",
+      "node": {
+        "import": "./dist/tools/swap/index.js",
+        "require": "./dist/tools/swap/index.cjs"
+      },
+      "import": "./dist/tools/swap/index.js",
+      "require": "./dist/tools/swap/index.cjs",
+      "default": "./dist/tools/swap/index.cjs"
     }
   },
   "scripts": {
