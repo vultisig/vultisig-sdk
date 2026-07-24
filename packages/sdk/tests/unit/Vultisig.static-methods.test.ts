@@ -91,9 +91,9 @@ describe('Vultisig static methods', () => {
     })
 
     it('uses a non-address XRPL issued-currency token ID canonically', () => {
-      const [rlusd] = Vultisig.getKnownTokens(Chain.Ripple)
+      const rlusd = Vultisig.getKnownTokens(Chain.Ripple).find(token => token.ticker === 'RLUSD')
 
-      expect(rlusd?.ticker).toBe('RLUSD')
+      expect(rlusd).toBeDefined()
       expect(rlusd?.tokenId).toMatch(/^[A-F0-9]{40}\.r/u)
       expect(rlusd?.contractAddress).toBe(rlusd?.tokenId)
       expect(Vultisig.getKnownToken(Chain.Ripple, rlusd!.tokenId!)).toEqual(rlusd)
@@ -202,6 +202,7 @@ describe('Vultisig static methods', () => {
           ticker: 'USDC',
           decimals: 6,
           logo: 'usdc.png',
+          isHidden: true,
         },
         {
           chain: Chain.Ethereum,
@@ -228,6 +229,7 @@ describe('Vultisig static methods', () => {
           ticker: 'USDC',
           decimals: 6,
           logo: 'usdc.png',
+          isHidden: true,
         },
         {
           chain: Chain.Ethereum,
