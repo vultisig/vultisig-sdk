@@ -585,14 +585,12 @@ export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 // Pure helpers — no chain client deps
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
-//
 // Exact base-units -> human decimal-string conversion (pure bigint string
-// arithmetic, no float64 round-trip) and the chain-native block explorer URL
-// builder (a const chain->URL map + match). Both were added to the generic
-// entry (src/index.ts) but the RN allow-list omitted them — same
-// hand-curated-gap class as the rest of this section (sdk#1224) — so RN
-// consumers (Station) couldn't format high-decimal balances exactly or link
-// out to a block explorer without deep-importing core-chain.
+// arithmetic, no float64 round-trip), pairing-QR payload generation, and the
+// notification-vault-id helper are all deterministic utilities with no live
+// chain client dependency. Re-export them here so RN consumers do not have to
+// deep-import internal service/util paths.
+export { buildKeygenPairingQrPayload } from '../../services/buildKeygenPairingQrPayload'
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
 export type {
   AmountDirection,
