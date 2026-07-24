@@ -105,6 +105,38 @@ export const CLI_SIGNABLE_PREP_TOOLS: ReadonlySet<string> = new Set([
   'execute_contract_call',
 ])
 
+/**
+ * `yield_enter` / `yield_exit` (yield.xyz deposit/withdraw). Their output is a
+ * THIRD shape, distinct from both flat and prep tools: a top-level
+ * `transactions[]` array of already-built flat EVM legs
+ * (`{to, value, data, action, description}`) — the `splitMultiTx` Pattern 2 /
+ * `build_cctp_bridge_usdc` envelope (mcp-lunc-hop `yield-tools.ts:435-457`).
+ * A well-formed EVM deposit is a 2-step approve→deposit sequence; some actions
+ * (a pure withdraw, or a deposit whose allowance is already sufficient) are a
+ * single step.
+ *
+ * Neither existing derivation covers this: the FLAT path reads a single flat
+ * leg off the envelope root (`extractLeg(env)`) and never walks `transactions[]`;
+ * the PREP path requires `txArgs.tx_encoding`, which yield's EVM envelope
+ * deliberately omits (yield-tools.ts:205-210). So `yield_enter`/`yield_exit`
+ * fell through `deriveToolOutputCandidate` → no candidate → the CLI never
+ * synthesized a `sign_tx` → keysign never fired (bead vultisig-6rg2, found via
+ * live real-fund dogfood: the turn ended at the backend's "Transaction prepared"
+ * with no txHash).
+ *
+ * `deriveYieldCandidate` maps the `transactions[]` legs onto the executor's
+ * EXISTING two-leg (`{approvalTxArgs, txArgs}`) / single-leg (`{tx}`) machinery,
+ * reusing `extractLeg` (faithful to/value/data lift — never fabricates calldata)
+ * and `resolveStrictEvmChain` (fail-closed EVM chain guard). EVM-only, matching
+ * both the executor's `signMultiLeg` EVM-only constraint AND yield's EVM
+ * canonical-envelope path; non-EVM yields (Solana/Sui/Ton/Tron prebuilt) carry
+ * a per-step `tx_encoding` and are left for a follow-up.
+ */
+export const CLI_SIGNABLE_YIELD_TOOLS: ReadonlySet<string> = new Set([
+  'yield_enter',
+  'yield_exit',
+])
+
 // ============================================================================
 // Small structural helpers (carried from #922 polymarketTxOutput.ts)
 // ============================================================================
@@ -317,11 +349,96 @@ export function buildTxReadyFromToolOutput(toolName: string, output: unknown): T
   return { __buildTx: true, chain: chainStr, chain_id: chainIdStr, ...(action ? { action } : {}), tx: main }
 }
 
-/** Marker: the candidate came from a flat enrichment (`build*`/polymarket/…) vs
- *  an `execute_*` prep passthrough. Drives selection logging only. */
+/**
+ * Turn a `yield_enter`/`yield_exit` output into a signable candidate, or null
+ * when it carries no signable EVM transaction / fails a guard.
+ *
+ * The yield EVM envelope is `{ chain, provider:'yield_xyz', transactions:[…] }`
+ * where each `transactions[]` entry is a flat leg `{to, value, data, action,
+ * description}` (yield-tools.ts:435-457). We:
+ *   - require a known, self-consistent EVM chain via the same fail-closed guard
+ *     the flat path uses. yield emits a top-level `chain` (PascalCase) but no
+ *     `chain_id`, so we resolve `chain` alone (strict name→EVM) rather than
+ *     demanding the chain⇄chain_id pair `resolveStrictEvmChain` wants;
+ *   - lift EACH leg through `extractLeg` (the SAME faithful to/value/data reader
+ *     the flat/polymarket path uses — it copies the backend-built calldata
+ *     verbatim and NEVER fabricates or mutates it), rejecting any leg that isn't
+ *     a real tx (missing to/data);
+ *   - map a 2-leg approve→action sequence onto the executor's `{approvalTxArgs,
+ *     txArgs}` two-leg machinery (approve is signed + receipt-confirmed BEFORE
+ *     the action leg — same sequencing swap-with-approval uses), and a 1-leg
+ *     action onto the single-leg `{tx}` shape.
+ *
+ * Returns null (→ nothing signs) when: not a yield tool; error/no-op envelope;
+ * chain missing / non-EVM; `transactions[]` absent/empty; ANY leg fails
+ * `extractLeg`; more than 2 legs (yield.xyz EVM actions are approve+action; a
+ * >2-leg envelope is unexpected and we refuse rather than sign a shape the
+ * executor's 2-leg sequencer can't represent — fail closed, leave it beaded).
+ *
+ * The scan_request the yield tool emits (`env.scan_request`) is inert to signing
+ * and is NOT consumed here — L4/the backend runs the Blockaid scan before the
+ * tool output reaches the CLI; this path does not bypass it.
+ */
+export function buildTxReadyFromYieldOutput(toolName: string, output: unknown): TxReadyPayload | null {
+  if (!CLI_SIGNABLE_YIELD_TOOLS.has(toolName)) return null
+
+  const env = asRecord(output)
+  if (!env) return null
+  if (env.status === 'error' || 'error' in env) return null
+
+  // yield emits a top-level PascalCase `chain` (Ethereum, Polygon, …) and no
+  // `chain_id`. Resolve strictly by name and require EVM (the executor's
+  // multi-leg sequencer + yield's canonical multi-step envelope are EVM-only).
+  const chain = asChainString(env.chain)
+  if (!chain) return null
+  const resolved = resolveChain(chain)
+  if (!resolved || getChainKind(resolved) !== 'evm') return null
+  const chainStr = chain
+
+  const rawTxs = env.transactions
+  if (!Array.isArray(rawTxs) || rawTxs.length === 0) return null
+
+  // Lift every leg faithfully. A single un-liftable leg fails the whole action
+  // closed — never sign a partial sequence (mirrors yield-tools' all-or-nothing
+  // canonicalization: an approve that signs while its deposit is dropped would
+  // leave funds approved-but-not-deposited).
+  const legs: FlatLeg[] = []
+  for (const raw of rawTxs) {
+    const legObj = asRecord(raw)
+    if (!legObj) return null
+    if (legObj.status === 'error' || 'error' in legObj) return null
+    const leg = extractLeg(legObj)
+    if (!leg) return null
+    legs.push(leg)
+  }
+
+  // The executor's two-leg sequencer represents exactly approve→main. yield.xyz
+  // EVM actions are 1 leg (action only) or 2 legs (approve + action). Refuse a
+  // >2-leg envelope rather than silently drop legs.
+  if (legs.length > 2) return null
+
+  const action = typeof env.action === 'string' && env.action !== '' ? env.action : undefined
+
+  if (legs.length === 2) {
+    const [approveLeg, mainLeg] = legs
+    return {
+      __buildTx: true,
+      chain: chainStr,
+      ...(action ? { action } : {}),
+      approvalTxArgs: { chain: chainStr, tx: approveLeg },
+      txArgs: { chain: chainStr, tx: mainLeg },
+    }
+  }
+
+  return { __buildTx: true, chain: chainStr, ...(action ? { action } : {}), tx: legs[0] }
+}
+
+/** Marker: the candidate came from a flat enrichment (`build*`/polymarket/…), an
+ *  `execute_*` prep passthrough, or a `yield_*` multi-step envelope. Drives
+ *  selection logging only. */
 export type ToolOutputCandidate = {
   payload: TxReadyPayload
-  source: 'flat' | 'prep'
+  source: 'flat' | 'prep' | 'yield'
   toolName: string
 }
 
@@ -331,11 +448,18 @@ export type ToolOutputCandidate = {
  *  - FLAT tools → `buildTxReadyFromToolOutput` (the port).
  *  - `execute_*` PREP tools → passthrough of the already-signer-ready envelope
  *    (must carry `txArgs` with a `tx_encoding` discriminator).
+ *  - `yield_enter`/`yield_exit` → `buildTxReadyFromYieldOutput` maps the
+ *    top-level `transactions[]` (approve + action) EVM legs onto the executor's
+ *    two-leg / single-leg machinery (bead vultisig-6rg2).
  */
 export function deriveToolOutputCandidate(toolName: string, output: unknown): ToolOutputCandidate | null {
   if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName)) {
     const payload = buildTxReadyFromToolOutput(toolName, output)
     return payload ? { payload, source: 'flat', toolName } : null
+  }
+  if (CLI_SIGNABLE_YIELD_TOOLS.has(toolName)) {
+    const payload = buildTxReadyFromYieldOutput(toolName, output)
+    return payload ? { payload, source: 'yield', toolName } : null
   }
   if (CLI_SIGNABLE_PREP_TOOLS.has(toolName)) {
     const env = asRecord(output)
