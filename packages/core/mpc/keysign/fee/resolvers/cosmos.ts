@@ -1,5 +1,6 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+import { MAYA_SEND_FEE_BASE_UNITS } from '@vultisig/core-chain/chains/cosmos/gas'
 import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
 import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
@@ -8,8 +9,6 @@ import { getCosmosChainSpecific } from '../../signingInputs/resolvers/cosmos/cha
 import { getKeysignChain } from '../../utils/getKeysignChain'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { FeeAmountResolver } from '../resolver'
-
-const mayaGas = 2000000000n
 
 /**
  * Reads the cosmos fee from `blockchainSpecific`. Initiators are responsible
@@ -40,6 +39,6 @@ export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
       })
       return feeAmount
     },
-    vaultBased: value => ('fee' in value ? value.fee : mayaGas),
+    vaultBased: value => ('fee' in value ? value.fee : MAYA_SEND_FEE_BASE_UNITS),
   })
 }
