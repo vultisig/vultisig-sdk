@@ -150,6 +150,18 @@ describe('getCosmosBalance', () => {
     expect(call).toBeGreaterThanOrEqual(2)
   })
 
+  it('does not depend on AbortSignal.timeout at runtime', async () => {
+    mockBank([{ denom: 'uosmo', amount: '12500000' }])
+    const originalTimeout = AbortSignal.timeout
+    Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true })
+    try {
+      const res = await getCosmosBalance(Chain.Osmosis, 'osmo1abc')
+      expect(res.nativeFormatted).toBe('12.5')
+    } finally {
+      Object.defineProperty(AbortSignal, 'timeout', { value: originalTimeout, configurable: true })
+    }
+  })
+
   it('rejects a cross-chain mis-paired address (osmo1 → Cosmos) before any LCD read', async () => {
     const fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch)
