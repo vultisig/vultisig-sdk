@@ -23,6 +23,10 @@ function authHeaders(apiKey?: string, extra: Record<string, string> = {}): Recor
   return headers
 }
 
+function cacheScope(apiKey?: string): string {
+  return apiKey ? `apiKey:${apiKey}` : 'public'
+}
+
 // --- Simple TTL cache (same pattern as defi-llama.ts) ---
 
 const cache = new Map<string, { data: unknown; expires: number }>()
@@ -207,7 +211,7 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  const cacheKey = `yield:search:${cacheScope(params.apiKey)}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 

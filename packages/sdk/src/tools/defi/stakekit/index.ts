@@ -629,8 +629,11 @@ export async function stakekitBuildExit(params: {
       restAction: 'exit',
       restBody: {
         addresses: { address: params.address },
-        args: { amount: params.amount, ...resolved.extras },
-        ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        args: {
+          amount: params.amount,
+          ...resolved.extras,
+          ...(resolved.validatorAddressesForREST ? { validatorAddresses: resolved.validatorAddressesForREST } : {}),
+        },
       },
       apiKey: params.apiKey,
       preferRest: params.yieldId.startsWith('tron-'),
