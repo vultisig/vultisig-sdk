@@ -98,6 +98,32 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./chains/tron": {
+      "types": "./dist/chains/tron/index.d.ts",
+      "browser": "./dist/chains/tron/index.js",
+      "worker": "./dist/chains/tron/index.js",
+      "react-native": "./dist/chains/tron/index.js",
+      "node": {
+        "import": "./dist/chains/tron/index.js",
+        "require": "./dist/chains/tron/index.cjs"
+      },
+      "import": "./dist/chains/tron/index.js",
+      "require": "./dist/chains/tron/index.cjs",
+      "default": "./dist/chains/tron/index.cjs"
+    },
+    "./chains/utxo": {
+      "types": "./dist/chains/utxo/index.d.ts",
+      "browser": "./dist/chains/utxo/index.js",
+      "worker": "./dist/chains/utxo/index.js",
+      "react-native": "./dist/chains/utxo/index.js",
+      "node": {
+        "import": "./dist/chains/utxo/index.js",
+        "require": "./dist/chains/utxo/index.cjs"
+      },
+      "import": "./dist/chains/utxo/index.js",
+      "require": "./dist/chains/utxo/index.cjs",
+      "default": "./dist/chains/utxo/index.cjs"
     }
   },
   "scripts": {

@@ -97,9 +97,11 @@ export default defineConfig([
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
-  // Dedicated public tool subpath types — keep these as first-class bundles so
-  // package-name imports like `@vultisig/sdk/tools/parse` resolve to narrow
-  // declarations instead of the root index type graph.
+  // Dedicated public tool/chain subpath types — keep these as first-class
+  // bundles so package-name imports resolve to narrow declarations instead of
+  // the root index type graph.
   createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts'),
   createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts'),
+  createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts'),
+  createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts'),
 ])
