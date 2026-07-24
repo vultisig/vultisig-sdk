@@ -98,6 +98,19 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./chains/ton": {
+      "types": "./dist/chains/ton/index.d.ts",
+      "browser": "./dist/chains/ton/index.js",
+      "worker": "./dist/chains/ton/index.js",
+      "react-native": "./dist/chains/ton/index.js",
+      "node": {
+        "import": "./dist/chains/ton/index.js",
+        "require": "./dist/chains/ton/index.cjs"
+      },
+      "import": "./dist/chains/ton/index.js",
+      "require": "./dist/chains/ton/index.cjs",
+      "default": "./dist/chains/ton/index.cjs"
     }
   },
   "scripts": {
