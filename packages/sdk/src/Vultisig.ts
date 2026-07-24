@@ -1286,6 +1286,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       ticker: coin.ticker,
       decimals: coin.decimals,
       logo: coin.logo,
+      ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
     }))
   }
 

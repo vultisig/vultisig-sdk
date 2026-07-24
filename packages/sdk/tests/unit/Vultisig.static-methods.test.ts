@@ -226,6 +226,34 @@ describe('Vultisig static methods', () => {
       expect(result[0]?.contractAddress).toBe('')
     })
 
+    it('preserves isHidden when core discovery returns it', async () => {
+      vi.mocked(findCoins).mockResolvedValue([
+        {
+          chain: Chain.Ethereum,
+          id: '0xhidden',
+          ticker: 'HID',
+          decimals: 18,
+          isHidden: true,
+        },
+      ] as never)
+
+      const result = await Vultisig.discoverTokens({
+        chain: Chain.Ethereum,
+        address: '0xhidden-wallet',
+      })
+
+      expect(result).toEqual([
+        {
+          chain: Chain.Ethereum,
+          contractAddress: '0xhidden',
+          ticker: 'HID',
+          decimals: 18,
+          logo: undefined,
+          isHidden: true,
+        },
+      ])
+    })
+
     it('returns [] when the address holds nothing', async () => {
       vi.mocked(findCoins).mockResolvedValue([] as never)
       const result = await Vultisig.discoverTokens({
