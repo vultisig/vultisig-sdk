@@ -13,6 +13,18 @@ import { hashes as xrplHashes } from 'xrpl'
 import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
 import { VaultError, VaultErrorCode } from '@/vault/VaultError'
 
+const makeRippleRawTx = () =>
+  xrplEncode({
+    TransactionType: 'Payment',
+    Account: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+    Destination: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+    Amount: '1',
+    Fee: '10',
+    Sequence: 1,
+    SigningPubKey: '',
+    TxnSignature: '',
+  })
+
 const {
   mockQueryUrl,
   mockGetEvmClient,
@@ -209,6 +221,7 @@ describe('RawBroadcastService', () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
     mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [{ err: null }] })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Solana,
@@ -237,6 +250,32 @@ describe('RawBroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
+  it.each([
+    {
+      name: 'the status lookup finds no record',
+      arrange: () => mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] }),
+    },
+    {
+      name: 'the status lookup errors',
+      arrange: () => mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down')),
+    },
+  ])('fails closed on a duplicate-style Solana broadcast error when $name', async ({ arrange }) => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    arrange()
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Solana,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
     })
   })
 
@@ -572,13 +611,19 @@ describe('RawBroadcastService', () => {
   })
 
   it('returns the derived Tron txID for duplicate transaction responses', async () => {
-    mockQueryUrl.mockResolvedValue({
-      code: 'DUP_TRANSACTION_ERROR',
-      message: Buffer.from('Transaction already exists').toString('hex'),
-    })
-
-    const rawDataHex = '010203'
-    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    const rawDataHex =
+      '0a02f69b22087d4a3b02495f232040b888e6eaa5335a67080112630a2d747970652e676f6f676c65617069732e636f6d2f70726f746f636f6c2e5472616e73666572436f6e747261637412320a15411320a6fb4dcd4ff8e91392a8cb98378633cf7dd81215414c8967080d86f3d0e1352a42f9213c7b9dd03b0f18c0843d7080cae2eaa533'
+    const expectedHash = '6db783c4142b3749a4b598db4644155455c9206e2eca4b31efbd48e46773d9d5'
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({
+        id: expectedHash,
+        blockNumber: 12345,
+        receipt: { result: 'SUCCESS' },
+      })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Tron,
@@ -589,6 +634,7 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe(expectedHash)
+    expect(bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))).toBe(expectedHash)
   })
 
   it('fails closed when a duplicate Tron response carries a mismatched txID', async () => {
@@ -611,6 +657,58 @@ describe('RawBroadcastService', () => {
     })
   })
 
+  it('fails closed when a duplicate Tron response is only an unverified RPC cache hit', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({})
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: expectedHash,
+          raw_data_hex: rawDataHex,
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
+  })
+
+  it('fails closed when a duplicate Tron transaction already failed on-chain', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({
+        id: expectedHash,
+        blockNumber: 12345,
+        receipt: { result: 'REVERT' },
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: expectedHash,
+          raw_data_hex: rawDataHex,
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
   it('broadcasts Ripple tx blob', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
@@ -624,23 +722,21 @@ describe('RawBroadcastService', () => {
   })
 
   it('treats duplicate-style Ripple broadcast errors as idempotent success', async () => {
-    const rawTx = xrplEncode({
-      TransactionType: 'Payment',
-      Account: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
-      Destination: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
-      Amount: '1',
-      Fee: '10',
-      Sequence: 1,
-      SigningPubKey: '',
-      TxnSignature: '',
-    })
-    mockRippleRequest.mockResolvedValue({
-      result: {
-        engine_result: 'tefALREADY',
-        engine_result_code: -198,
-        engine_result_message: 'The transaction was already applied.',
-      },
-    })
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tesSUCCESS' },
+        },
+      })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
@@ -648,6 +744,57 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe(xrplHashes.hashSignedTx(rawTx))
+  })
+
+  it('fails closed when a duplicate Ripple transaction finalized with a tec failure', async () => {
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tecUNFUNDED_PAYMENT' },
+        },
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
+  it('fails closed when a duplicate Ripple transaction cannot be found by hash', async () => {
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockRejectedValueOnce(new Error('txnNotFound'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
   })
 
   it('fails closed on an ambiguous Ripple past-sequence response', async () => {

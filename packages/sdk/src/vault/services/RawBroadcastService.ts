@@ -14,6 +14,7 @@ import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
+import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
@@ -93,6 +94,26 @@ const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown })
   }
 
   return derivedHash
+}
+
+const verifyKnownRawTx = async (chain: Chain, hash: string, chainName: string): Promise<string> => {
+  const { data: status, error } = await attempt(getTxStatus({ chain, hash }))
+  const isKnownPending = status?.status === 'pending' && status.isKnown !== false
+
+  if (status?.status === 'success' || isKnownPending) {
+    return hash
+  }
+
+  if (status?.status === 'error') {
+    throw new VaultError(VaultErrorCode.BroadcastFailed, `${chainName} transaction already failed on-chain`)
+  }
+
+  const lookupMessage = error instanceof Error ? error.message : String(error ?? status?.status ?? 'not found')
+  throw new VaultError(
+    VaultErrorCode.BroadcastFailed,
+    `${chainName} transaction may already exist, but its status could not be verified: ${lookupMessage}`,
+    error instanceof Error ? error : new Error(lookupMessage)
+  )
 }
 
 /**
@@ -267,12 +288,14 @@ export class RawBroadcastService {
     )
 
     let signature = sentSignature
+    let isDuplicate = false
     if (error) {
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
         // "AlreadyProcessed" only proves the node has seen and executed this signature before -
         // not that the original execution succeeded. It must go through the same on-chain-failure
         // check below as a fresh send, not be handed back as a hash unconditionally.
         signature = deriveSolanaRawTxSignature(rawTx)
+        isDuplicate = true
       } else {
         throw error
       }
@@ -291,7 +314,7 @@ export class RawBroadcastService {
     // submission), only on an explicit on-chain error already attached to this signature.
     // This also covers the "already been processed" idempotent-retry path above: a duplicate
     // signature that already failed on-chain must still fail closed here, not report success.
-    const { data: statuses } = await attempt(
+    const { data: statuses, error: statusError } = await attempt(
       client.getSignatureStatuses([signature], { searchTransactionHistory: true })
     )
     const signatureStatus = statuses?.value?.[0]
@@ -299,6 +322,16 @@ export class RawBroadcastService {
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
         `Solana transaction was submitted but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
+      )
+    }
+
+    if (isDuplicate && !signatureStatus) {
+      const lookupMessage =
+        statusError instanceof Error ? statusError.message : String(statusError ?? 'transaction status not found')
+      throw new VaultError(
+        VaultErrorCode.BroadcastFailed,
+        `Solana transaction may already have been processed, but its execution result could not be verified: ${lookupMessage}`,
+        statusError instanceof Error ? statusError : new Error(lookupMessage)
       )
     }
 
@@ -507,7 +540,7 @@ export class RawBroadcastService {
     const engineResult = result.engine_result ?? 'unknown'
     if (engineResultCode !== 0) {
       if (engineResult === 'tefALREADY') {
-        return deriveRippleRawTxHash(rawTx)
+        return verifyKnownRawTx(OtherChain.Ripple, deriveRippleRawTxHash(rawTx), 'Ripple')
       }
 
       if (isRippleInFlightEngineResult(engineResult)) {
@@ -595,7 +628,7 @@ export class RawBroadcastService {
       if (response.code && isInError(response.code, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
         const localHash = deriveTronRawTxHash(txJson)
         if (localHash) {
-          return localHash
+          return verifyKnownRawTx(OtherChain.Tron, localHash, 'Tron')
         }
         throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
       }
