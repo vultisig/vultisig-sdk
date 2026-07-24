@@ -51,6 +51,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.evmCheckAllowance).toBe('function')
   })
 
+  it('exports native-swap minimum helpers promised by the public SDK surface', () => {
+    expect(typeof sdk.getNativeSwapMinAmountIn).toBe('function')
+    expect(sdk.NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER).toBe(2)
+  })
+
   it('exports encodeErc20Approve, encodeErc20Revoke, MAX_UINT256 (ERC-20 approve/revoke calldata)', () => {
     expect(typeof sdk.encodeErc20Approve).toBe('function')
     expect(typeof sdk.encodeErc20Revoke).toBe('function')
