@@ -92,6 +92,22 @@ export const assertNativeSwapReadyForBroadcast = async ({
     return
   }
 
+  // RUNE/CACAO-source swaps (source chain IS the native swap chain) execute as a
+  // native MsgDeposit — the funds are already on THOR/Maya, so there is no inbound
+  // vault to deposit into. THORNode's native-source quote returns no `inbound_address`
+  // (verified live: THOR.RUNE->ETH.ETH), so the payload's `vaultAddress` falls back to
+  // the vault's own THOR address rather than a vault to validate; and THORNode/mayanode
+  // `inbound_addresses` never lists the source chain's own entry (no `THOR`/`MAYA` entry),
+  // so the lookup below can never match and always threw at broadcast ("Cannot validate
+  // THORChain inbound vault for source chain THOR"). Dry-run skips broadcast, which is the
+  // exact preview/broadcast divergence that let RUNE-source swaps pass preview and then
+  // fail at broadcast (bead vultisig-6emp). The quote-expiry check above still applies to
+  // these MsgDeposit quotes and has already run. The inbound-vault + trading-halt checks
+  // below only guard L1->THOR/Maya deposits (source chain != native chain).
+  if (chain === native.chain) {
+    return
+  }
+
   const sourceChainId = getNativeSwapChainId(chain)
   if (!sourceChainId) {
     throw new NativeSwapBroadcastGuardError(

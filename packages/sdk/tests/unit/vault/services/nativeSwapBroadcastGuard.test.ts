@@ -175,11 +175,15 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
-  it('does not exempt a secure-memo payload that carries an inbound vault', async () => {
-    const getInboundAddresses = vi.fn(async nativeChain => {
-      expect(nativeChain).toBe(Chain.THORChain)
-      return [makeInbound('THOR', 'thor1active')]
-    })
+  // A non-expired secure-memo payload whose source chain IS THORChain is a native
+  // MsgDeposit. It fails the isSecuredAssetWithdrawal predicate (non-empty vaultAddress),
+  // but it is STILL a THOR-source native swap with no L1 inbound vault — THORNode's
+  // inbound_addresses never lists a THOR entry (bead vultisig-6emp). So no inbound fetch
+  // happens and the still-valid quote is allowed via the source-chain-is-native-chain
+  // branch, NOT via the secured-asset-withdrawal exemption. Pre-#6emp this fabricated a
+  // THOR inbound entry that production never returns and asserted a stale-vault throw.
+  it('allows a non-expired secure-memo THOR-source payload without fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
 
     await expect(
       assertNativeSwapReadyForBroadcast({
@@ -192,16 +196,16 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/inbound vault address changed/)
+    ).resolves.toBeUndefined()
 
-    expect(getInboundAddresses).toHaveBeenCalledOnce()
+    expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
-  it('does not treat a standard liquidity-withdraw memo as a secured-asset withdrawal', async () => {
-    const getInboundAddresses = vi.fn(async nativeChain => {
-      expect(nativeChain).toBe(Chain.THORChain)
-      return [makeInbound('THOR', 'thor1active')]
-    })
+  // A standard liquidity-withdraw memo is not a secured-asset withdrawal, but its source
+  // chain is still THORChain (native MsgDeposit) — same "no THOR inbound vault to validate"
+  // outcome via the native-source branch.
+  it('allows a non-expired liquidity-withdraw THOR-source payload without fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
 
     await expect(
       assertNativeSwapReadyForBroadcast({
@@ -214,9 +218,30 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/inbound vault address changed/)
+    ).resolves.toBeUndefined()
 
-    expect(getInboundAddresses).toHaveBeenCalledOnce()
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  // Expiry still gates a THOR-source secure-memo payload even though no inbound vault is
+  // validated — the expired-quote check runs before the native-source short-circuit.
+  it('still rejects an expired secure-memo THOR-source payload', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeSecuredAssetWithdrawalPayload({
+          vaultAddress: 'thor1stale',
+          memo: 'secure-:bc1qdestination',
+          expirationTime: 1_700_000_000n,
+        }),
+        getInboundAddresses,
+        now: () => 1_700_000_001_000,
+      })
+    ).rejects.toThrow(/expired/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
   it('rejects expired Maya native swap payloads before fetching inbound addresses', async () => {
@@ -412,5 +437,62 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         now: () => 1_700_000_000_000,
       })
     ).rejects.toThrow(/trading is halted/)
+  })
+
+  // bead vultisig-6emp: a RUNE-source swap (source chain IS THORChain) is a native
+  // MsgDeposit with no inbound vault. THORNode's native-source quote returns no
+  // inbound_address, so the payload's vaultAddress falls back to the vault's own THOR
+  // address (a NON-empty value — the real production shape). THORNode's inbound_addresses
+  // never lists a THOR entry, so the old code threw "Cannot validate THORChain inbound
+  // vault for source chain THOR" at broadcast while dry-run (which skips broadcast) passed.
+  // The guard must short-circuit before fetching inbound addresses.
+  it('passes a RUNE-source (THORChain) swap without fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: 'thor1vaultownaddress' }),
+        getInboundAddresses,
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  it('still rejects an expired RUNE-source (THORChain) swap', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({
+          vaultAddress: 'thor1vaultownaddress',
+          expirationTime: 1_700_000_000n,
+        }),
+        getInboundAddresses,
+        now: () => 1_700_000_001_000,
+      })
+    ).rejects.toThrow(/expired/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  // A CACAO-source swap (source chain IS MayaChain) is likewise a native MsgDeposit with
+  // no inbound vault.
+  it('passes a CACAO-source (MayaChain) swap without fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.MayaChain,
+        keysignPayload: makeMayachainSwapPayload({ vaultAddress: 'maya1vaultownaddress' }),
+        getInboundAddresses,
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 })
