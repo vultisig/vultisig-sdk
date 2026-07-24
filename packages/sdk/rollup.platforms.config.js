@@ -326,6 +326,18 @@ const configs = {
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
     }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/policy/index.ts',
+      distBase: 'tools/policy',
+    }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/bridge/index.ts',
+      distBase: 'tools/bridge',
+    }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/gas/index.ts',
+      distBase: 'tools/gas',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',

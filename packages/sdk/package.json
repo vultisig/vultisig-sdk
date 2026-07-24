@@ -98,6 +98,45 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./tools/policy": {
+      "types": "./dist/tools/policy/index.d.ts",
+      "browser": "./dist/tools/policy/index.js",
+      "worker": "./dist/tools/policy/index.js",
+      "react-native": "./dist/tools/policy/index.js",
+      "node": {
+        "import": "./dist/tools/policy/index.js",
+        "require": "./dist/tools/policy/index.cjs"
+      },
+      "import": "./dist/tools/policy/index.js",
+      "require": "./dist/tools/policy/index.cjs",
+      "default": "./dist/tools/policy/index.cjs"
+    },
+    "./tools/bridge": {
+      "types": "./dist/tools/bridge/index.d.ts",
+      "browser": "./dist/tools/bridge/index.js",
+      "worker": "./dist/tools/bridge/index.js",
+      "react-native": "./dist/tools/bridge/index.js",
+      "node": {
+        "import": "./dist/tools/bridge/index.js",
+        "require": "./dist/tools/bridge/index.cjs"
+      },
+      "import": "./dist/tools/bridge/index.js",
+      "require": "./dist/tools/bridge/index.cjs",
+      "default": "./dist/tools/bridge/index.cjs"
+    },
+    "./tools/gas": {
+      "types": "./dist/tools/gas/index.d.ts",
+      "browser": "./dist/tools/gas/index.js",
+      "worker": "./dist/tools/gas/index.js",
+      "react-native": "./dist/tools/gas/index.js",
+      "node": {
+        "import": "./dist/tools/gas/index.js",
+        "require": "./dist/tools/gas/index.cjs"
+      },
+      "import": "./dist/tools/gas/index.js",
+      "require": "./dist/tools/gas/index.cjs",
+      "default": "./dist/tools/gas/index.cjs"
     }
   },
   "scripts": {
