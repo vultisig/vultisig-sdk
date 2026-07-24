@@ -16,12 +16,14 @@ import {
   buildTrc20TransferTx,
   buildTronSendTx,
   buildTronTxFromRawData,
+  tronAddressToBytes,
 } from '../../../src/chains/tron/tx'
 
 // Valid Tron base58check addresses (0x41 || 20-byte payload, bs58check-encoded).
 const FROM = 'T9yED5xMV5ARV98BexN97aLZ1UUq7eKSxm'
 const TO = 'TQcYkNR861VZVLMDfr2RG8CG9bTyDF7jhN'
 const USDT = 'TMbLM7XNeQsr3gm8wVYPVcS98WgdYmaVEZ'
+const TO_EVM_HEX = '9d8a62f656a8d1615c1294fd71e9cfb3e4855a4f'
 
 const REF_BLOCK_BYTES = new Uint8Array([0x40, 0xdf])
 const REF_BLOCK_HASH = new Uint8Array([0xe4, 0xb1, 0x7a, 0x2d, 0x6f, 0x5a, 0x63, 0xbf])
@@ -81,6 +83,25 @@ describe('tron / encodeInt64Varint', () => {
     const enc = encodeInt64Varint(min)
     expect(enc.length).toBe(10)
     expect(enc[9]).toBe(0x01)
+  })
+})
+
+describe('tron / tronAddressToBytes', () => {
+  it('accepts a Nile testnet address through the shared core decoder', async () => {
+    const bs58check = await import('bs58check')
+    const mod = bs58check as unknown as {
+      encode?: (b: Uint8Array) => string
+      default?: { encode: (b: Uint8Array) => string }
+    }
+    const encode = mod.encode ?? mod.default?.encode
+    if (!encode) throw new Error('bs58check.encode unavailable in test')
+
+    const nileAddress = encode(Buffer.concat([Buffer.from([0xa0]), Buffer.from(TO_EVM_HEX, 'hex')]))
+    const bytes = tronAddressToBytes(nileAddress)
+
+    expect(bytes).toHaveLength(21)
+    expect(bytes[0]).toBe(0xa0)
+    expect(bytesToHex(bytes.subarray(1))).toBe(TO_EVM_HEX)
   })
 })
 
