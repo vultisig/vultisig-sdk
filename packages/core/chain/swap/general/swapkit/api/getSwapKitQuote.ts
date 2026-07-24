@@ -16,6 +16,7 @@ import {
   normalizeSwapKitProvider,
   swapKitExcludedProviders,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
@@ -135,6 +136,13 @@ type SwapKitQuoteResponse = {
   message?: string
 }
 
+type SwapKitFee = {
+  type?: string
+  amount?: string
+  asset?: string
+  chain?: string
+}
+
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
   tx?: unknown
@@ -155,7 +163,7 @@ type SwapKitSwapResponse = {
   swapId?: string
   providers?: string[]
   legs?: { provider?: string }[]
-  fees?: { type?: string; amount?: string }[]
+  fees?: SwapKitFee[]
   meta?: {
     txType?: string
   }
@@ -407,33 +415,92 @@ const buildEvmTx = (
 }
 
 const getSwapKitFeeAmount = (fees: SwapKitSwapResponse['fees'], type: string, decimals: number): bigint => {
-  const fee = fees?.find(fee => fee.type?.toLowerCase() === type)
-
-  if (!fee?.amount) {
-    return 0n
-  }
-
-  return toChainAmount(fee.amount, decimals)
+  return (fees ?? [])
+    .filter(fee => fee.type?.toLowerCase() === type && fee.amount)
+    .reduce((total, fee) => total + toChainAmount(fee.amount!, decimals), 0n)
 }
 
-const buildSolanaTx = (tx: unknown, fees: SwapKitSwapResponse['fees']): GeneralSwapTx => {
+const isZeroFeeAmount = (amount: string) => /^[+-]?(?:0+(?:\.0*)?|\.0+)$/.test(amount.trim())
+
+const sameSwapFeeCoin = (one: SwapFee, another: SwapFee) =>
+  one.chain === another.chain &&
+  one.decimals === another.decimals &&
+  (one.id ?? '').toLowerCase() === (another.id ?? '').toLowerCase()
+
+const getSwapKitSwapFee = (
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>
+): SwapFee => {
+  const candidates = [from, to].map(coin => ({
+    coin,
+    asset: toSwapKitAsset(coin).toLowerCase(),
+  }))
+  let result: SwapFee | undefined
+
+  for (const fee of fees ?? []) {
+    const type = fee.type?.toLowerCase()
+
+    if ((type !== 'affiliate' && type !== 'service') || !fee.amount || isZeroFeeAmount(fee.amount)) {
+      continue
+    }
+
+    if (!fee.asset) {
+      throw new Error(`SwapKit ${type} fee is missing its asset.`)
+    }
+
+    const candidate = candidates.find(({ asset }) => asset === fee.asset!.toLowerCase())
+
+    if (!candidate) {
+      throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
+    }
+
+    const current: SwapFee = {
+      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      chain: candidate.coin.chain,
+      id: candidate.coin.id,
+      decimals: candidate.coin.decimals,
+    }
+
+    if (current.amount < 0n) {
+      throw new Error(`SwapKit ${type} fee amount cannot be negative.`)
+    }
+
+    if (result && !sameSwapFeeCoin(result, current)) {
+      throw new Error('SwapKit affiliate and service fees use different assets.')
+    }
+
+    result = result ? { ...result, amount: result.amount + current.amount } : current
+  }
+
+  return (
+    result ?? {
+      amount: 0n,
+      chain: from.chain,
+      id: from.id,
+      decimals: from.decimals,
+    }
+  )
+}
+
+const buildSolanaTx = (
+  tx: unknown,
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>
+): GeneralSwapTx => {
   if (typeof tx !== 'string') {
     throw new Error('SwapKit Solana route did not return a serialized transaction string.')
   }
 
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
-  const swapFee = getSwapKitFeeAmount(fees, 'affiliate', decimals) + getSwapKitFeeAmount(fees, 'service', decimals)
 
   return {
     solana: {
       data: tx,
       networkFee,
-      swapFee: {
-        amount: swapFee,
-        decimals,
-        chain: Chain.Solana,
-      },
+      swapFee: getSwapKitSwapFee(fees, from, to),
     },
   }
 }
@@ -611,10 +678,11 @@ const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Se
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>,
   amount: bigint
 ): GeneralSwapTx => {
   if (from.chain === Chain.Solana) {
-    return buildSolanaTx(response.tx, response.fees)
+    return buildSolanaTx(response.tx, response.fees, from, to)
   }
 
   if (shouldUseTransferTx(from.chain)) {
@@ -811,6 +879,6 @@ export const getSwapKitQuote = async ({
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
     routeProvider: getRouteProviderName(swapResponse) ?? getRouteProviderName(route),
-    tx: buildSwapKitTx(swapResponse, from, amount),
+    tx: buildSwapKitTx(swapResponse, from, to, amount),
   }
 }
