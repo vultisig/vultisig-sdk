@@ -1,3 +1,4 @@
+import { encodeFunctionData, getAddress, parseAbi, serializeTransaction, type Address, type Hex } from 'viem'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -14,7 +15,9 @@ import {
   policy,
   ResultKind,
   scaleDecimalClaimToAtomic,
+  toPolicyEnvelope,
 } from '@/tools/policy'
+import { decodeFromToolResult } from '@/tools/decode'
 
 const usdc = (recipient: string, amount: bigint): Envelope => ({
   decoded: true,
@@ -23,6 +26,23 @@ const usdc = (recipient: string, amount: bigint): Envelope => ({
   asset: { symbol: 'USDC', decimals: 6 },
   amount,
 })
+
+const POLICY_USDC = getAddress('0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
+const POLICY_RECIPIENT = getAddress('0x70997970C51812dc3A010C7d01b50e0d17dc79C8')
+
+function buildEvmTx(to: Address, data: Hex, value = 0n, chainId = 1): Hex {
+  return serializeTransaction({
+    to,
+    value,
+    data,
+    chainId,
+    nonce: 0,
+    gas: 60_000n,
+    maxFeePerGas: 30_000_000_000n,
+    maxPriorityFeePerGas: 1_000_000_000n,
+    type: 'eip1559',
+  })
+}
 
 describe('evaluatePolicy', () => {
   it('BLOCKs on recipient mismatch (send 1 USDC to 0xAAA vs envelope 0xBBB)', () => {
@@ -223,6 +243,71 @@ describe('checkInvariants', () => {
       userMemo: '',
     })
     expect(violations).toHaveLength(0)
+  })
+})
+
+describe('toPolicyEnvelope', () => {
+  it('adapts the decoder envelope into the policy envelope shape', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'base',
+      family: 'evm',
+      kind: 'transfer',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: '1000000',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope).toEqual({
+      chainId: 'base',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: 1000000n,
+      decoded: true,
+      decodeError: '',
+    })
+  })
+
+  it('lets policy consume decodeFromToolResult output without a consumer-written shim', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [POLICY_RECIPIENT, 1_000_000n],
+    })
+    const decoded = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(POLICY_USDC, data),
+      args: { token: 'USDC' },
+    })
+
+    const verdict = policy.evaluate(
+      { chain: 'ethereum', recipient: POLICY_RECIPIENT, asset: 'USDC', amount: '1', amountUnits: 'human' },
+      policy.fromDecodedEnvelope(decoded),
+    )
+
+    expect(decoded.decoded).toBe(true)
+    expect(verdict.result).toBe(ResultKind.Pass)
+  })
+
+  it('fails closed when the decoded amount is not an integer atomic string', () => {
+    const envelope = toPolicyEnvelope({
+      chain: 'base',
+      family: 'evm',
+      kind: 'transfer',
+      recipient: '0xAAA',
+      asset: { symbol: 'USDC', contract: POLICY_USDC, decimals: 6 },
+      amount: '1e6',
+      spender: '',
+      decoded: true,
+      decodeError: '',
+    })
+
+    expect(envelope.amount).toBeNull()
+    expect(envelope.decoded).toBe(false)
+    expect(envelope.decodeError).toContain('invalid decoded atomic amount')
   })
 })
 
