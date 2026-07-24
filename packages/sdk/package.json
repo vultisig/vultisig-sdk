@@ -98,6 +98,19 @@
       "import": "./dist/tools/defi/index.js",
       "require": "./dist/tools/defi/index.cjs",
       "default": "./dist/tools/defi/index.cjs"
+    },
+    "./tools/token": {
+      "types": "./dist/tools/token/index.d.ts",
+      "browser": "./dist/tools/token/index.js",
+      "worker": "./dist/tools/token/index.js",
+      "react-native": "./dist/tools/token/index.js",
+      "node": {
+        "import": "./dist/tools/token/index.js",
+        "require": "./dist/tools/token/index.cjs"
+      },
+      "import": "./dist/tools/token/index.js",
+      "require": "./dist/tools/token/index.cjs",
+      "default": "./dist/tools/token/index.cjs"
     }
   },
   "scripts": {
