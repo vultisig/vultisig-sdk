@@ -161,3 +161,18 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
   })
 })
+
+describe('RN entry exposes the dangerous-address helpers', () => {
+  it('re-exports the canonical dangerous-address helpers and constants from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const dangerousAddresses = await import('../../../../src/utils/dangerousAddresses')
+
+    expect(rn.EVM_DANGEROUS_ADDRESSES).toBe(dangerousAddresses.EVM_DANGEROUS_ADDRESSES)
+    expect(rn.SOLANA_DANGEROUS_ADDRESSES).toBe(dangerousAddresses.SOLANA_DANGEROUS_ADDRESSES)
+    expect(rn.getEvmDangerousReason).toBe(dangerousAddresses.getEvmDangerousReason)
+    expect(rn.isEvmBurnAddress).toBe(dangerousAddresses.isEvmBurnAddress)
+    expect(rn.getChainDangerousReason).toBe(dangerousAddresses.getChainDangerousReason)
+    expect(rn.assertSafeEvmDestination).toBe(dangerousAddresses.assertSafeEvmDestination)
+    expect(rn.assertSafeDestination).toBe(dangerousAddresses.assertSafeDestination)
+  })
+})
