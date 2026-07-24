@@ -585,7 +585,13 @@ function yieldSingleStep() {
     chain: 'Polygon',
     provider: 'yield_xyz',
     transactions: [
-      { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA, action: 'withdraw', description: 'Withdraw from Aave v3' },
+      {
+        to: AAVE_POOL,
+        value: '0x0',
+        data: YIELD_DEPOSIT_DATA,
+        action: 'withdraw',
+        description: 'Withdraw from Aave v3',
+      },
     ],
   }
 }
@@ -640,9 +646,7 @@ describe('buildTxReadyFromYieldOutput — fail-closed guards (never sign a bad s
   })
 
   it('null when the envelope is an error', () => {
-    expect(
-      buildTxReadyFromYieldOutput('yield_enter', { ...yieldEnterApproveDeposit(), status: 'error' }),
-    ).toBeNull()
+    expect(buildTxReadyFromYieldOutput('yield_enter', { ...yieldEnterApproveDeposit(), status: 'error' })).toBeNull()
     expect(buildTxReadyFromYieldOutput('yield_enter', { error: 'yield.xyz rejected' })).toBeNull()
   })
 

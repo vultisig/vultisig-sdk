@@ -132,10 +132,7 @@ export const CLI_SIGNABLE_PREP_TOOLS: ReadonlySet<string> = new Set([
  * canonical-envelope path; non-EVM yields (Solana/Sui/Ton/Tron prebuilt) carry
  * a per-step `tx_encoding` and are left for a follow-up.
  */
-export const CLI_SIGNABLE_YIELD_TOOLS: ReadonlySet<string> = new Set([
-  'yield_enter',
-  'yield_exit',
-])
+export const CLI_SIGNABLE_YIELD_TOOLS: ReadonlySet<string> = new Set(['yield_enter', 'yield_exit'])
 
 // ============================================================================
 // Small structural helpers (carried from #922 polymarketTxOutput.ts)
