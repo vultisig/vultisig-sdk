@@ -1,5 +1,11 @@
 # @vultisig/sdk
 
+## 2.21.2
+
+### Patch Changes
+
+- [#1486](https://github.com/vultisig/vultisig-sdk/pull/1486) [`f99133d`](https://github.com/vultisig/vultisig-sdk/commit/f99133dc7a99f44bbe78ba43fa59e7ec761c73e1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use the noble Point API in React Native derivation and reject malformed Solana or EVM signature hex.
+
 ## 2.21.1
 
 ### Patch Changes
