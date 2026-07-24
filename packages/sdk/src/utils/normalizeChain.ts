@@ -56,6 +56,7 @@ Object.assign(aliasToChain, {
   thor: Chain.THORChain,
   maya: Chain.MayaChain,
   gaia: Chain.Cosmos,
+  robinhoodchain: Chain.Robinhood, // "Robinhood Chain" via the separator-stripped fallback
 })
 
 // Also accept each canonical Chain enum value (case-insensitive). Runs last to override.
