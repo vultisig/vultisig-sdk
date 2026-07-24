@@ -333,13 +333,15 @@ export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
 // that can drift from each other (the mcp-ts #384 bug class).
 export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
 
-// EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
-// chainId table so consumers (app, agent-backend-ts) import it instead of
+// EVM chainId ↔ chain mapping plus the canonical priority-fee sanity clamp.
+// Single source of truth for the per-chain EVM chainId table and fee-ceiling
+// policy so consumers (app, agent-backend-ts) import it instead of
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
-// client↔server chainId bug class). Native tickers are already exported via
-// `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
-// resolves a hex chainId back to its EvmChain.
+// chainId bug class and the client-side fee-policy fork class). Native tickers
+// are already exported via `chainFeeCoin`. `getEvmChainId` returns the hex
+// chainId; `getEvmChainByChainId` resolves a hex chainId back to its EvmChain.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+export { clampEvmPriorityFee } from '@vultisig/core-chain/tx/fee/evm/clampEvmPriorityFee'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.

@@ -153,11 +153,15 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
-  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+  it('exports canonical EVM chain-id helpers and the priority-fee sanity clamp from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(typeof sdk.clampEvmPriorityFee).toBe('function')
     expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+    expect(sdk.clampEvmPriorityFee(sdk.Chain.Base as Parameters<typeof sdk.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)).toBe(
+      50n * 1_000_000_000n,
+    )
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
