@@ -237,6 +237,11 @@ export {
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
+// Blockaid-supported EVM-chain canonicals — surfaced so first-party consumers
+// stop hand-copying the backend security map that the SDK already owns.
+export type { BlockaidSupportedEvmChain } from '@vultisig/core-chain/security/blockaid/evmChains'
+export { blockaidEvmChain, blockaidSupportedEvmChains } from '@vultisig/core-chain/security/blockaid/evmChains'
+
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {
