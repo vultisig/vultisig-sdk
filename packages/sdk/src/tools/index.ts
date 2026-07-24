@@ -303,6 +303,7 @@ export type {
   ThreeJaneTranche,
   ThreeJaneTxStep,
 } from './defi/threeJane'
+export { buildThreeJaneSupplyUsdc, parseUsdcAmount as parseThreeJaneUsdcAmount, THREE_JANE_ADDRESSES } from './defi/threeJane'
 export { VerifierClient } from './verifier'
 
 // Pure intent↔envelope policy diff (vault-free comparison, no signing/broadcast)
