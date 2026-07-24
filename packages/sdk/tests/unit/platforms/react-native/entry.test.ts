@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+process.env.VULTISIG_STRICT_SINGLETON = '0'
+
 vi.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   getRandomValues: <T extends ArrayBufferView | null>(a: T) => a,
@@ -40,12 +42,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof storage.get).toBe('function')
   })
 
-  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+  it('exports the canonical Cosmos fee-denom + memo-cap helpers from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
+    expect(rn.COSMOS_MEMO_DEFAULT_MAX_BYTES).toBe(256)
+    expect(rn.getCosmosMemoMaxBytes(rn.Chain.TerraClassic)).toBe(256)
+    expect(rn.getCosmosMemoMaxBytesByChainId('osmosis-1')).toBe(256)
+    expect(rn.isCosmosMemoWithinCap(rn.Chain.Cosmos, 'memo')).toBe(true)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 

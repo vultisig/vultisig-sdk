@@ -69,6 +69,12 @@ export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export {
+  COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  getCosmosMemoMaxBytes,
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosMemoWithinCap,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
