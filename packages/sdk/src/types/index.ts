@@ -24,7 +24,7 @@ export type { MpcLib }
 import type { CosmosChain, EvmChain, OtherChain, UtxoChain } from '@vultisig/core-chain/Chain'
 export type { CosmosChain, EvmChain, OtherChain, UtxoChain }
 export type { Chain as ChainType } from '@vultisig/core-chain/Chain'
-export { Chain } from '@vultisig/core-chain/Chain'
+export { Chain, IbcEnabledCosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 
 // VaultFolder and VaultSecurityType not available in copied core - using local types
 export type VaultFolder = 'fast' | 'secure'

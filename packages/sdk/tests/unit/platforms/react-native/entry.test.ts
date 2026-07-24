@@ -40,13 +40,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(typeof storage.get).toBe('function')
   })
 
-  it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
+  it('exports the canonical Cosmos fee-denom helpers and cosmos chain subsets from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
     expect(rn.getCosmosAllowedFeeDenoms(rn.Chain.Cosmos)).toContain('uatom')
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+    expect(rn.IbcEnabledCosmosChain.TerraClassic).toBe('TerraClassic')
+    expect(rn.VaultBasedCosmosChain.THORChain).toBe('THORChain')
+    expect(Object.values(rn.IbcEnabledCosmosChain)).not.toContain(rn.Chain.THORChain)
   })
 
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
