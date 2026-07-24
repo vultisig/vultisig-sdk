@@ -28,14 +28,33 @@ const FEATHER_FALLBACK = new Set([
 ])
 
 const stockLogoUrl = a =>
-  FEATHER_FALLBACK.has(a.tokenSymbol)
-    ? a.logoUrl
-    : `https://financialmodelingprep.com/image-stock/${a.tokenSymbol}.png`
+  FEATHER_FALLBACK.has(a.tokenSymbol) ? a.logoUrl : `https://financialmodelingprep.com/image-stock/${a.tokenSymbol}.png`
+
+// Registry fields land verbatim inside generated TS/Swift/Kotlin string
+// literals — reject anything that could break out of or corrupt them.
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+const TICKER_RE = /^[A-Za-z0-9.-]{1,12}$/
+const isSafeLogoUrl = url => {
+  if (!/^[A-Za-z0-9:/._%?=&-]+$/.test(url)) return false
+  try {
+    return new URL(url).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+const validateRow = a => {
+  if (!ADDRESS_RE.test(a.deployment.contractAddress))
+    throw new Error(`invalid contractAddress for ${a.tokenSymbol}: ${a.deployment.contractAddress}`)
+  if (!TICKER_RE.test(a.tokenSymbol)) throw new Error(`invalid tokenSymbol: ${JSON.stringify(a.tokenSymbol)}`)
+  const logo = stockLogoUrl(a)
+  if (!isSafeLogoUrl(logo)) throw new Error(`unsafe logoUrl for ${a.tokenSymbol}: ${JSON.stringify(logo)}`)
+}
 
 const fetchDecimals = async contractAddress => {
   const res = await fetch(RPC_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(15_000),
     body: JSON.stringify({
       jsonrpc: '2.0',
       method: 'eth_call',
@@ -43,21 +62,34 @@ const fetchDecimals = async contractAddress => {
       id: 1,
     }),
   })
-  const { result } = await res.json()
-  if (!result || result === '0x') throw new Error(`decimals() failed for ${contractAddress}`)
-  return parseInt(result, 16)
+  if (!res.ok) throw new Error(`decimals() RPC ${res.status} for ${contractAddress}`)
+  const { result, error } = await res.json()
+  if (error) throw new Error(`decimals() RPC error for ${contractAddress}: ${error.message ?? error.code}`)
+  if (typeof result !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(result))
+    throw new Error(`decimals() malformed result for ${contractAddress}: ${result}`)
+  const decimals = parseInt(result, 16)
+  if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 255)
+    throw new Error(`decimals() out of range for ${contractAddress}: ${decimals}`)
+  return decimals
 }
 
-const res = await fetch(REGISTRY_URL)
+const res = await fetch(REGISTRY_URL, { signal: AbortSignal.timeout(15_000) })
 if (!res.ok) throw new Error(`registry fetch failed: ${res.status}`)
 const body = await res.json()
-const assets = Array.isArray(body) ? body : Object.values(body).find(Array.isArray)
+const assets = Array.isArray(body) ? body : Object.values(Object(body)).find(Array.isArray)
+if (!Array.isArray(assets) || assets.length === 0)
+  throw new Error(`registry payload has no asset array — schema drift? keys: ${Object.keys(Object(body))}`)
 
 const rows = assets
-  .filter(a => a.status === 'ASSET_STATUS_ACTIVE')
-  .map(a => ({ ...a, deployment: (a.deployments ?? []).find(d => d.chainId === CHAIN_ID) }))
+  .filter(a => a?.status === 'ASSET_STATUS_ACTIVE')
+  .map(a => ({
+    ...a,
+    deployment: (Array.isArray(a.deployments) ? a.deployments : []).find(d => d?.chainId === CHAIN_ID),
+  }))
   .filter(a => a.deployment)
   .sort((a, b) => a.tokenSymbol.localeCompare(b.tokenSymbol))
+if (rows.length === 0) throw new Error(`no active assets with a chain-${CHAIN_ID} deployment — schema drift?`)
+rows.forEach(validateRow)
 
 for (let i = 0; i < rows.length; i += RPC_CONCURRENCY) {
   await Promise.all(
