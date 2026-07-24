@@ -1,4 +1,6 @@
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { sha256 } from '@noble/hashes/sha2'
+import { bytesToHex } from '@noble/hashes/utils'
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
@@ -10,6 +12,7 @@ import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
+import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -18,6 +21,8 @@ import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 import base58 from 'bs58'
+import { keccak256 } from 'viem'
+import { hashes as xrplHashes } from 'xrpl'
 
 import { VaultError, VaultErrorCode } from '../VaultError'
 
@@ -33,6 +38,62 @@ type BlockchairBroadcastResponse =
         error: string
       }
     }
+
+const deriveEvmRawTxHash = (rawTx: string): string => keccak256(ensureHexPrefix(rawTx) as `0x${string}`)
+
+const getCosmosRawTxBytes = (rawTx: string): Uint8Array => {
+  try {
+    const parsed = JSON.parse(rawTx)
+    return Buffer.from(parsed.tx_bytes, 'base64')
+  } catch {
+    return Buffer.from(rawTx, 'base64')
+  }
+}
+
+const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCosmosRawTxBytes(rawTx))).toUpperCase()
+
+const deriveSolanaRawTxSignature = (rawTx: string): string => {
+  const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
+  const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
+  let offset = 0
+  let signatureCount = 0
+  let shift = 0
+
+  while (offset < txBytes.length) {
+    const byte = txBytes[offset]
+    signatureCount |= (byte & 0x7f) << shift
+    offset += 1
+    if ((byte & 0x80) === 0) break
+    shift += 7
+  }
+
+  if (signatureCount < 1 || txBytes.length < offset + 64) {
+    throw new Error('Solana raw transaction does not contain a primary signature')
+  }
+
+  return base58.encode(txBytes.subarray(offset, offset + 64))
+}
+
+const deriveRippleRawTxHash = (rawTx: string): string =>
+  xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
+
+const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown }): string | null => {
+  if (
+    typeof txJson.raw_data_hex !== 'string' ||
+    txJson.raw_data_hex.length === 0 ||
+    txJson.raw_data_hex.length % 2 !== 0 ||
+    !/^[0-9a-fA-F]+$/.test(txJson.raw_data_hex)
+  ) {
+    return null
+  }
+
+  const derivedHash = bytesToHex(sha256(Buffer.from(txJson.raw_data_hex, 'hex')))
+  if (txJson.txID !== undefined && (typeof txJson.txID !== 'string' || txJson.txID.toLowerCase() !== derivedHash)) {
+    return null
+  }
+
+  return derivedHash
+}
 
 /**
  * RawBroadcastService
@@ -143,27 +204,9 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       // Ignore certain errors that indicate the tx was already submitted
-      if (
-        isInError(
-          error,
-          'already known',
-          'transaction is temporarily banned',
-          'nonce too low',
-          'transaction already exists',
-          'future transaction tries to replace pending',
-          'could not replace existing tx',
-          'tx already in mempool'
-        )
-      ) {
-        // For "already known" errors, we can't reliably get the tx hash
-        // The caller should compute it from the raw tx if needed
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+      if (isInError(error, 'already known', 'transaction already exists', 'tx already in mempool')) {
+        return deriveEvmRawTxHash(rawTx)
       }
       throw error
     }
@@ -215,7 +258,7 @@ export class RawBroadcastService {
     const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
     const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
 
-    const { data: signature, error } = await attempt(
+    const { data: sentSignature, error } = await attempt(
       client.sendRawTransaction(txBytes, {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
@@ -223,16 +266,16 @@ export class RawBroadcastService {
       })
     )
 
+    let signature = sentSignature
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+        // "AlreadyProcessed" only proves the node has seen and executed this signature before -
+        // not that the original execution succeeded. It must go through the same on-chain-failure
+        // check below as a fresh send, not be handed back as a hash unconditionally.
+        signature = deriveSolanaRawTxSignature(rawTx)
+      } else {
+        throw error
       }
-      throw error
     }
 
     if (!signature) throw new Error('No transaction signature returned')
@@ -246,6 +289,8 @@ export class RawBroadcastService {
     // this bounded, non-blocking status check catches that without adding real broadcast
     // latency: it never blocks/throws on "not yet confirmed" (the normal state right after
     // submission), only on an explicit on-chain error already attached to this signature.
+    // This also covers the "already been processed" idempotent-retry path above: a duplicate
+    // signature that already failed on-chain must still fail closed here, not report success.
     const { data: statuses } = await attempt(
       client.getSignatureStatuses([signature], { searchTransactionHistory: true })
     )
@@ -269,27 +314,37 @@ export class RawBroadcastService {
     // Support both formats:
     // 1. JSON: { "tx_bytes": "base64..." }
     // 2. Raw base64 protobuf bytes
-    let txBytes: Uint8Array
-
-    try {
-      const parsed = JSON.parse(rawTx)
-      txBytes = Buffer.from(parsed.tx_bytes, 'base64')
-    } catch {
-      // Assume raw base64
-      txBytes = Buffer.from(rawTx, 'base64')
-    }
+    const txBytes = getCosmosRawTxBytes(rawTx)
 
     const client = await getCosmosClient(chain)
     const { data: result, error } = await attempt(client.broadcastTx(txBytes))
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      if (isInError(error, 'tx already exists in cache', 'account sequence mismatch')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
+      if (isInError(error, 'tx already exists in cache')) {
+        const hash = deriveCosmosRawTxHash(rawTx)
+        const { data: existingTx, error: lookupError } = await attempt(client.getTx(hash))
+
+        if (!existingTx) {
+          const lookupMessage = lookupError instanceof Error ? lookupError.message : String(lookupError ?? 'not found')
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction may already exist, but its execution result could not be verified: ${lookupMessage}`,
+            lookupError instanceof Error ? lookupError : new Error(lookupMessage)
+          )
+        }
+
+        try {
+          assertIsDeliverTxSuccess({ ...existingTx, transactionHash: existingTx.hash })
+        } catch (deliverTxError) {
+          const message = deliverTxError instanceof Error ? deliverTxError.message : String(deliverTxError)
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Cosmos transaction was included but execution failed: ${message}`,
+            deliverTxError instanceof Error ? deliverTxError : new Error(message)
+          )
+        }
+
+        return hash
       }
       throw error
     }
@@ -440,19 +495,33 @@ export class RawBroadcastService {
     )
 
     if (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      if (isInError(error, 'tefPAST_SEQ', 'tefALREADY')) {
-        throw new VaultError(
-          VaultErrorCode.BroadcastFailed,
-          `Transaction may have already been submitted: ${errorMessage}`,
-          error instanceof Error ? error : new Error(errorMessage)
-        )
-      }
       throw error
     }
 
-    if (!response?.result?.tx_json?.hash) throw new Error('No transaction hash returned')
-    return response.result.tx_json.hash
+    const result = response?.result
+    if (!result || typeof result.engine_result_code !== 'number') {
+      throw new Error('Ripple broadcast did not return an engine result')
+    }
+
+    const engineResultCode = result.engine_result_code
+    const engineResult = result.engine_result ?? 'unknown'
+    if (engineResultCode !== 0) {
+      if (engineResult === 'tefALREADY') {
+        return deriveRippleRawTxHash(rawTx)
+      }
+
+      if (isRippleInFlightEngineResult(engineResult)) {
+        return result.tx_json?.hash ?? deriveRippleRawTxHash(rawTx)
+      }
+
+      const engineResultMessage = result.engine_result_message ?? ''
+      throw new Error(
+        `Ripple broadcast rejected: ${engineResult}${engineResultMessage ? ` — ${engineResultMessage}` : ''}`
+      )
+    }
+
+    if (!result.tx_json?.hash) throw new Error('No transaction hash returned')
+    return result.tx_json.hash
   }
 
   /**
@@ -521,8 +590,13 @@ export class RawBroadcastService {
     // `result: false` without a `code` must not fall through to the txid check below and be
     // reported as a success.
     if (response.result === false || (response.code && response.code !== 'SUCCESS')) {
-      const errorMsg = response.message || response.code || 'Unknown error'
-      if (isInError(errorMsg, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
+      const decodedMessage = response.message ? Buffer.from(response.message, 'hex').toString('utf8') : ''
+      const errorMsg = decodedMessage || response.code || 'Unknown error'
+      if (response.code && isInError(response.code, 'DUPLICATE_TRANSACTION', 'DUP_TRANSACTION_ERROR')) {
+        const localHash = deriveTronRawTxHash(txJson)
+        if (localHash) {
+          return localHash
+        }
         throw new VaultError(VaultErrorCode.BroadcastFailed, `Transaction may have already been submitted: ${errorMsg}`)
       }
       throw new Error(`Tron broadcast failed: ${errorMsg}`)
