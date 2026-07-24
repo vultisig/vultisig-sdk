@@ -353,6 +353,12 @@ export {
 // tables, no chain-client deps, so safe as a static re-export.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
+// Swap tracker URL routing (pure provider/chain -> URL mapping). The root SDK
+// entry already exports these canonicals, but the RN allow-list omitted them,
+// forcing RN consumers back into local provider-host routing tables.
+export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
+
 // Gas / fee primitives (read-only — uses global `fetch` + a type-only
 // `UtxoChain` import, no heavy chain client). The RN allow-list omitted
 // these so RN consumers (vultiagent-app) couldn't resolve a current
@@ -495,6 +501,48 @@ export {
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../tools/bridge'
+
+// Noon USDC vault helpers. The root SDK entry already exports these canonicals,
+// but the RN allow-list omitted them, pushing first-party mobile consumers back
+// toward local API/calldata wrappers for the same vault contract.
+export type {
+  NoonContractCall,
+  NoonDepositTxPlan,
+  NoonVaultMetrics,
+  NoonVaultPosition,
+  NoonVaultQueue,
+  NoonVaultState,
+} from '@vultisig/core-chain/chains/evm/noon'
+export {
+  encodeNoonDeposit,
+  encodeNoonRequestRedeem,
+  encodeNoonUsdcApprove,
+  encodeNoonWithdraw,
+  fetchNoonUsdcVaultApy,
+  fetchNoonUsdcVaultMetrics,
+  fetchNoonUsdcVaultTvl,
+  getNoonDepositContractCall,
+  getNoonDepositTxPlan,
+  getNoonRequestRedeemContractCall,
+  getNoonUsdcAllowance,
+  getNoonUsdcApproveContractCall,
+  getNoonWithdrawContractCall,
+  noonUsdcVaultConfig,
+  noonVaultAbi,
+  readNoonClaimableRedeemRequest,
+  readNoonPendingRedeemRequest,
+  readNoonVaultConvertToAssets,
+  readNoonVaultMinAmountWei,
+  readNoonVaultPosition,
+  readNoonVaultPreviewDeposit,
+  readNoonVaultPreviewRedeem,
+  readNoonVaultPreviewWithdraw,
+  readNoonVaultQueue,
+  readNoonVaultSharePrice,
+  readNoonVaultState,
+  readNoonWithdrawalRequestRaw,
+  readNoonWithdrawalRequestsRaw,
+} from '@vultisig/core-chain/chains/evm/noon'
 
 // Token USD pricing (CoinGecko via the Vultisig proxy) — RN-safe: pure fetch
 // over the same proxy `searchToken` already uses, no WASM/native deps.
