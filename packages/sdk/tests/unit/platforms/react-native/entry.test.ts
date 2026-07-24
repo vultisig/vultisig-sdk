@@ -93,6 +93,30 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.Dash,
     ])
   })
+
+  it('exports the newer pure validation / normalization / policy helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const validateNormalizers = await import('../../../../src/utils/validateNormalizers')
+    const addressFormat = await import('../../../../src/utils/addressFormat')
+    const tx = await import('../../../../src/tx')
+    const knownContracts = await import('../../../../src/utils/knownContracts')
+    const policy = await import('../../../../src/tools/policy')
+
+    expect(rn.amountMatches).toBe(validateNormalizers.amountMatches)
+    expect(rn.classifyAddress).toBe(addressFormat.classifyAddress)
+    expect(rn.normalizeTx).toBe(tx.normalizeTx)
+    expect(rn.isKnownContract).toBe(knownContracts.isKnownContract)
+    expect(rn.policy).toBe(policy.policy)
+
+    expect(rn.classifyAddress('0x1234567890123456789012345678901234567890')).toBe('evm')
+    expect(rn.scaleHumanToRaw('1.5', 6)).toBe(1500000n)
+    expect(rn.isKnownContract('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
+    expect(rn.checkChainPrefix('0x1234567890123456789012345678901234567890', 'Ethereum')).toMatchObject({
+      valid: true,
+      canonicalChain: 'ethereum',
+    })
+    expect(rn.policy.evaluate).toBe(policy.evaluatePolicy)
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
