@@ -30,6 +30,7 @@ describe('parseUsdcAmount', () => {
   it('rejects bad input', () => {
     expect(() => parseUsdcAmount('')).toThrow()
     expect(() => parseUsdcAmount('-5')).toThrow()
+    expect(() => parseUsdcAmount('+5')).toThrow(/invalid integer part/)
     expect(() => parseUsdcAmount('1.2.3')).toThrow()
     expect(() => parseUsdcAmount('1.1234567')).toThrow(/too many decimal places/)
     expect(() => parseUsdcAmount('abc')).toThrow()

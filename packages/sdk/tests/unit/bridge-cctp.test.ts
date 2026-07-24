@@ -64,8 +64,9 @@ describe('parseUsdcAmount', () => {
     expect(parseUsdcAmount('0.000001')).toBe(1n)
   })
 
-  it('rejects negative, empty, and over-precise amounts', () => {
+  it('rejects signed, empty, and over-precise amounts', () => {
     expect(() => parseUsdcAmount('-1')).toThrow(/negative/)
+    expect(() => parseUsdcAmount('+1')).toThrow(/invalid integer part/)
     expect(() => parseUsdcAmount('')).toThrow(/empty/)
     expect(() => parseUsdcAmount('1.1234567')).toThrow(/too many decimal/)
   })
