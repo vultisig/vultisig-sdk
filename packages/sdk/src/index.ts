@@ -107,6 +107,7 @@ export {
 export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addressValidation'
 export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
+export { isValidTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
