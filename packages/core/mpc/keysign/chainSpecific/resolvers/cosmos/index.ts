@@ -125,7 +125,38 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
   // amounts are acceptance floors — Osmosis's is fetched from its live txfees
   // module, Akash's is a fixed minimum — not per-gas rates that may be scaled
   // down. Shrinking them would risk "insufficient fee" for no benefit.
-  const staticFeeAmount = await getCosmosFeeAmount(coin)
+  // Terra Classic charges a proportional burn tax (`x/tax`, currently 0.5%) on
+  // a `MsgSend`. It is a REVERSE CHARGE: pre-pay it in the fee and the
+  // recipient receives the full stated amount; omit it and the chain deducts it
+  // from the transfer instead, so the recipient gets 0.5% less than the amount
+  // the user typed. Both are accepted on-chain — this is a "who bears the tax"
+  // choice, not a validity one. Pre-paying is what iOS and Android do, and it
+  // keeps "You're sending N LUNC" literally true.
+  //
+  // Scoped to plain native-LUNC sends, deliberately:
+  //   - IBC `MsgTransfer` is taxable too, but every observed columbus-5 IBC
+  //     transfer pays gas only and lets the chain deduct from the amount, as do
+  //     iOS and Android. Pre-paying here would diverge from both for no
+  //     validity gain.
+  //   - Relayed `signDirect` / `signAmino` never reach this value: the signing
+  //     resolver returns the dapp-supplied fee verbatim, so touching `gas`
+  //     would move only the DISPLAYED fee and reintroduce shown != signed.
+  //   - Non-fee coins pay the fee in `uluna` while the tax accrues in the send
+  //     denom; folding them into one amount would mix denoms.
+  //
+  // USTC (`uusd`) is untouched here — its tax rides in `ibcDenomTraces.baseDenom`
+  // as a separate fee coin (see `computeUstcBurnTaxAmount`).
+  const isTerraClassicLuncSend = coin.chain === Chain.TerraClassic && isNativeSend
+
+  // Independent lookups — run them concurrently rather than paying two
+  // sequential LCD round-trips while the user waits on the Verify screen.
+  // `getTerraClassicBurnTaxRate` fails closed rather than rejecting, so this
+  // cannot turn an LCD blip into a failed payload build.
+  const [staticFeeAmount, burnTaxRate] = await Promise.all([
+    getCosmosFeeAmount(coin),
+    isTerraClassicLuncSend ? getTerraClassicBurnTaxRate() : Promise.resolve(0n),
+  ])
+
   const gasFeeAmount =
     gasLimit && gasLimit > staticGasLimit
       ? scaleCosmosFeeAmount({
@@ -135,25 +166,9 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
         })
       : staticFeeAmount
 
-  // Terra Classic charges a proportional burn tax (`x/tax`, currently 0.5%) on
-  // a `MsgSend` in ADDITION to the gas fee. For native LUNC both are paid in
-  // `uluna`, so they fold into the single `gas` amount — iOS and Android do the
-  // same. Added AFTER the gas scaling above: the tax is proportional to the
-  // transfer amount, not to the gas limit, so scaling it would be wrong.
-  //
-  // Until now this was absorbed implicitly by an oversized 20 LUNC flat fee,
-  // which overcharged ordinary sends ~2× while still under-covering any send
-  // above ~2,300 LUNC, where 0.5% outgrows the slack. Computing it explicitly
-  // fixes both ends. Fails closed to the 0.5% governance rate on LCD error.
-  //
-  // USTC (`uusd`) is untouched here — its tax rides in `ibcDenomTraces.baseDenom`
-  // as a separate fee coin (see `computeUstcBurnTaxAmount`).
-  const isTerraClassicLuncSend = coin.chain === Chain.TerraClassic && isNativeSend
-  const burnTax = isTerraClassicLuncSend
-    ? applyTerraClassicBurnTax(BigInt(keysignPayload.toAmount), await getTerraClassicBurnTaxRate())
-    : 0n
-
-  const gas = gasFeeAmount + burnTax
+  // Added AFTER the gas scaling: the tax is proportional to the transfer
+  // amount, not to the gas limit, so scaling it would be wrong.
+  const gas = gasFeeAmount + applyTerraClassicBurnTax(BigInt(keysignPayload.toAmount), burnTaxRate)
 
   return create(CosmosSpecificSchema, {
     accountNumber: BigInt(accountNumber),
