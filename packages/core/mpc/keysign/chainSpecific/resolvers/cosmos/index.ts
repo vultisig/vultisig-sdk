@@ -1,7 +1,9 @@
 import { create } from '@bufbuild/protobuf'
 import { Chain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
+import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 import { getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'
+import { priceCosmosFeeForGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
 import {
   applyTerraClassicTax,
   getTerraClassicTaxCap,
@@ -100,11 +102,22 @@ export const getCosmosChainSpecific: GetChainSpecificResolver<'cosmosSpecific'> 
       })
     : undefined
 
+  // `CosmosSpecific.gas` is the FINAL fee amount every co-signer spends
+  // verbatim (see the cross-platform contract on `resolveCosmosGasFee`), so the
+  // initiator prices it here for the limit it relays. Pricing it downstream
+  // instead diverges from the Swift clients, which never re-scale `gas`.
+  const staticGasLimit = getCosmosGasLimit(coin)
+  const gas = priceCosmosFeeForGasLimit({
+    baseFee: await getCosmosFeeAmount(coin),
+    gasLimit: gasLimit ?? staticGasLimit,
+    staticGasLimit,
+  })
+
   return create(CosmosSpecificSchema, {
     accountNumber: BigInt(accountNumber),
     sequence: sequenceBigInt,
     transactionType,
-    gas: await getCosmosFeeAmount(coin),
+    gas,
     gasLimit,
     ibcDenomTraces: {
       latestBlock: timeoutTimestamp ? `${latestBlock.split('_')[0]}_${timeoutTimestamp}` : latestBlock,

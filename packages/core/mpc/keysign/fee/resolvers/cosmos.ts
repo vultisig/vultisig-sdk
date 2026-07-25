@@ -18,9 +18,10 @@ const mayaGas = 2000000000n
  * `CosmosSpecific.gas` at keysign-payload build time, so every consumer —
  * including this resolver — agrees on what the chain will charge.
  *
- * When a dynamic `CosmosSpecific.gas_limit` is relayed, the displayed fee is
- * scaled by the same rule the signing-inputs resolver applies, so the Network
- * Fee row matches what the chain actually charges.
+ * `gas` is the final fee amount — already priced for any relayed
+ * `CosmosSpecific.gas_limit` by the initiator — so this resolver reads it
+ * through the same helper the signing-inputs resolver uses and the Network Fee
+ * row always matches the signed fee, on every platform.
  */
 export const getCosmosFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)

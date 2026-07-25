@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveCosmosGasFee } from './resolveCosmosGasFee.js'
+import { IBC_GAS_MULTIPLIER, priceCosmosFeeForGasLimit, resolveCosmosGasFee } from './resolveCosmosGasFee.js'
 
 describe('resolveCosmosGasFee', () => {
   const staticGasLimit = 200_000n
@@ -34,19 +34,34 @@ describe('resolveCosmosGasFee', () => {
     })
   })
 
-  it('scales the fee proportionally (ceiling) when the relayed limit exceeds the static limit', () => {
-    // 7500 * 400000 / 200000 = 15000 exactly
+  it('spends `gas` verbatim when the relayed limit exceeds the static limit', () => {
+    // The initiator already priced `gas` for the relayed limit — re-scaling it
+    // here would diverge from the Swift co-signers and break the signature.
     expect(resolveCosmosGasFee({ gas, relayedGasLimit: 400_000n, staticGasLimit })).toEqual({
       resolvedGasLimit: 400_000n,
-      feeAmount: 15_000n,
+      feeAmount: gas,
     })
   })
 
-  it('rounds the scaled fee up', () => {
-    // 7500 * 300001 / 200000 = 11250.0375 -> ceil 11251
+  it('spends `gas` verbatim for a limit that is not a multiple of the static one', () => {
     expect(resolveCosmosGasFee({ gas, relayedGasLimit: 300_001n, staticGasLimit })).toEqual({
       resolvedGasLimit: 300_001n,
-      feeAmount: 11_251n,
+      feeAmount: gas,
+    })
+  })
+
+  it('matches the Swift reader on the Terra Classic send that broke co-signing', () => {
+    // columbus-5: static 300k, simulate ≈ 320,687 -> the old scaling branch turned
+    // a 20 LUNC fee into 21.379134 LUNC while iOS/macOS signed the 20 LUNC it was sent.
+    expect(
+      resolveCosmosGasFee({
+        gas: 20_000_000n,
+        relayedGasLimit: 320_687n,
+        staticGasLimit: 300_000n,
+      })
+    ).toEqual({
+      resolvedGasLimit: 320_687n,
+      feeAmount: 20_000_000n,
     })
   })
 
@@ -87,13 +102,45 @@ describe('resolveCosmosGasFee', () => {
       })
     })
 
-    it('scales further off the IBC-adjusted base when a relayed limit exceeds it', () => {
-      // effective static = 400_000, effective gas = 15_000
-      // 15_000 * 800_000 / 400_000 = 30_000
+    it('keeps the doubled fee when a relayed limit exceeds the IBC-adjusted static limit', () => {
+      // effective gas = 15_000; the relayed limit only moves the gas limit, never the fee
       expect(resolveCosmosGasFee({ gas, relayedGasLimit: 800_000n, staticGasLimit, isIbcTransfer: true })).toEqual({
         resolvedGasLimit: 800_000n,
-        feeAmount: 30_000n,
+        feeAmount: gas * IBC_GAS_MULTIPLIER,
       })
     })
+  })
+})
+
+describe('priceCosmosFeeForGasLimit', () => {
+  const staticGasLimit = 200_000n
+  const baseFee = 7500n
+
+  it('returns the base fee unchanged at the static limit', () => {
+    expect(priceCosmosFeeForGasLimit({ baseFee, gasLimit: staticGasLimit, staticGasLimit })).toBe(baseFee)
+  })
+
+  it('returns the base fee unchanged below the static limit', () => {
+    expect(priceCosmosFeeForGasLimit({ baseFee, gasLimit: 100_000n, staticGasLimit })).toBe(baseFee)
+  })
+
+  it('scales proportionally above the static limit', () => {
+    // 7500 * 400000 / 200000 = 15000 exactly
+    expect(priceCosmosFeeForGasLimit({ baseFee, gasLimit: 400_000n, staticGasLimit })).toBe(15_000n)
+  })
+
+  it('rounds up so the ante handler is always cleared', () => {
+    // 7500 * 300001 / 200000 = 11250.0375 -> ceil 11251
+    expect(priceCosmosFeeForGasLimit({ baseFee, gasLimit: 300_001n, staticGasLimit })).toBe(11_251n)
+  })
+
+  it('prices the Terra Classic send the initiator relays', () => {
+    expect(
+      priceCosmosFeeForGasLimit({
+        baseFee: 20_000_000n,
+        gasLimit: 320_687n,
+        staticGasLimit: 300_000n,
+      })
+    ).toBe(21_379_134n)
   })
 })

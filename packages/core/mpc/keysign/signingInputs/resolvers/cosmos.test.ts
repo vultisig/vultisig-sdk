@@ -88,9 +88,12 @@ describe('getCosmosSigningInputs gas limit', () => {
     expect(input.sequence.toString()).toBe(sequence.toString())
   })
 
-  it('honors a positive relayed CosmosSpecific gas limit', async () => {
+  it('honors a positive relayed CosmosSpecific gas limit and spends `gas` verbatim', async () => {
+    // The initiator prices `gas` for the limit it relays, so the reader must not
+    // re-scale it — a Swift co-signer signs `gas` unchanged and the pre-sign
+    // hashes have to match.
     await expect(feeFor(345_678n)).resolves.toEqual({
-      amount: '4321',
+      amount: '2500',
       gas: '345678',
     })
   })

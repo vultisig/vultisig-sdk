@@ -4,12 +4,22 @@
  *
  * Shared by the signing-inputs resolver (what gets signed) and the fee-display
  * resolver (what the user sees) so the shown and signed fee can never drift —
- * the gas limit is part of the SignDoc, so both sides MUST agree.
+ * both the gas limit and the fee amount are part of the SignDoc, so every
+ * co-signing device MUST resolve them identically.
  *
- * When the relayed limit exceeds the static per-chain limit, the fee amount is
- * scaled proportionally with a ceiling (exact integer math) so the tx pays for
- * the extra gas. Below or equal to the static limit, both values are left
- * untouched, keeping the non-dynamic path byte-identical.
+ * CROSS-PLATFORM CONTRACT — `CosmosSpecific.gas` IS THE FINAL FEE AMOUNT.
+ * The initiator prices the fee for the limit it relays (see
+ * `priceCosmosFeeForGasLimit`, applied at keysign-payload build time) and every
+ * reader spends `gas` verbatim. The Swift clients do exactly this
+ * (`TerraHelperStruct` / `CosmosHelperStruct`: `effectiveGasLimit =
+ * relayedGasLimit ?? staticGasLimit`, `feeAmount = String(gas)`), so a reader
+ * that re-scales `gas` by the limit ratio signs a different SignDoc than its
+ * peer, the pre-sign hashes diverge, and the joining device polls
+ * `GET /setup-message/{sessionId}` for a hash the initiator never uploaded —
+ * failing with "HTTP 404" / "fail to download setup message". That is exactly
+ * what a Terra Classic send did across a Swift initiator and a TypeScript
+ * co-signer (simulate returns ~320k against a 300k static limit, so the
+ * scaling branch was always taken on columbus-5).
  */
 
 /**
@@ -25,8 +35,37 @@
  */
 export const IBC_GAS_MULTIPLIER = 2n
 
+type PriceCosmosFeeForGasLimitInput = {
+  /** per-chain fee amount calibrated for `staticGasLimit` (`getCosmosFeeAmount`) */
+  baseFee: bigint
+  /** gas limit the tx will actually request (dynamic estimate, else the static limit) */
+  gasLimit: bigint
+  /** static per-chain gas limit (`getCosmosGasLimit`) the base fee is priced at */
+  staticGasLimit: bigint
+}
+
+/**
+ * Prices a per-chain base fee for the gas limit the tx actually requests.
+ *
+ * INITIATOR-ONLY. Called once at keysign-payload build time, before the fee is
+ * written into `CosmosSpecific.gas`; the result travels in the payload so no
+ * co-signer ever recomputes it (see the cross-platform contract above).
+ *
+ * Scales up with a ceiling in exact integer math when the requested limit
+ * exceeds the static one, so chains that price the fee as `gasLimit ×
+ * minGasPrice` still clear their ante handler at the bigger limit. At or below
+ * the static limit the base fee is returned untouched, keeping the
+ * non-dynamic path byte-identical to before dynamic gas existed.
+ */
+export const priceCosmosFeeForGasLimit = ({
+  baseFee,
+  gasLimit,
+  staticGasLimit,
+}: PriceCosmosFeeForGasLimitInput): bigint =>
+  gasLimit > staticGasLimit ? (baseFee * gasLimit + staticGasLimit - 1n) / staticGasLimit : baseFee
+
 type ResolveCosmosGasFeeInput = {
-  /** static per-chain fee amount already stored in `CosmosSpecific.gas` */
+  /** final fee amount carried in `CosmosSpecific.gas`, spent verbatim */
   gas: bigint
   /** relayed `CosmosSpecific.gas_limit` (undefined / 0 → use the static limit) */
   relayedGasLimit: bigint | undefined
@@ -35,10 +74,10 @@ type ResolveCosmosGasFeeInput = {
   /**
    * Whether this tx is an IBC transfer (`MsgTransfer`, optionally
    * PFM-forwarded). Applies `IBC_GAS_MULTIPLIER` to both the static gas
-   * limit and its matching fee before resolving against a relayed limit.
-   * Defaults to `false` so every other Cosmos message (plain sends, wasm
-   * executes, staking) keeps paying the calibrated flat fee — a blanket
-   * multiplier on all Cosmos messages would overpay non-IBC sends.
+   * limit and its matching fee. Defaults to `false` so every other Cosmos
+   * message (plain sends, wasm executes, staking) keeps paying the calibrated
+   * flat fee — a blanket multiplier on all Cosmos messages would overpay
+   * non-IBC sends.
    */
   isIbcTransfer?: boolean
 }
@@ -59,10 +98,7 @@ export const resolveCosmosGasFee = ({
 
   const resolvedGasLimit = relayedGasLimit && relayedGasLimit > 0n ? relayedGasLimit : effectiveStaticGasLimit
 
-  const feeAmount =
-    resolvedGasLimit > effectiveStaticGasLimit
-      ? (effectiveGas * resolvedGasLimit + effectiveStaticGasLimit - 1n) / effectiveStaticGasLimit
-      : effectiveGas
-
-  return { resolvedGasLimit, feeAmount }
+  // `gas` is already priced for `relayedGasLimit` by the initiator — re-scaling
+  // it here would diverge from every Swift co-signer and break the signature.
+  return { resolvedGasLimit, feeAmount: effectiveGas }
 }
