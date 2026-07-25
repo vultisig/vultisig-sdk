@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildTxReadyFromToolOutput,
+  buildTxReadyFromYieldOutput,
   CLI_SIGNABLE_FLAT_TOOLS,
   deriveToolOutputCandidate,
   POLYMARKET_DEPOSIT_TOOL,
@@ -541,5 +542,183 @@ describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard
     }
     const c = deriveToolOutputCandidate('execute_send', cosmos)
     expect(c?.source).toBe('prep')
+  })
+})
+
+// ============================================================================
+// yield_enter / yield_exit — the top-level transactions[] (Pattern 2) shape.
+// Bead vultisig-6rg2: these were in NEITHER allowlist, so deriveToolOutputCandidate
+// returned null → no synthetic sign_tx → keysign never fired on yield deposits.
+// ============================================================================
+
+const AAVE_POOL = '0x794a61358d6845594f94dc1db02a252b5b4814ad'
+const YIELD_DEPOSIT_DATA = '0x617ba037' + '0'.repeat(248)
+
+/** A realistic EVM yield_enter output: approve USDC → deposit into Aave Pool.
+ *  Mirrors mcp-lunc-hop yield-tools.ts parseActionDisplay EVM canonical steps. */
+function yieldEnterApproveDeposit() {
+  return {
+    scan_request: { kind: 'evm', chain: 'polygon' },
+    intent: 'enter',
+    type: 'lending',
+    yieldId: 'polygon-usdc-aave-v3-lending',
+    amount: '0.4',
+    amountUsd: '0.4',
+    chain: 'Polygon',
+    provider: 'yield_xyz',
+    transactions: [
+      { to: USDC_E, value: '0x0', data: APPROVE_DATA, action: 'approval', description: 'Approve USDC' },
+      { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA, action: 'deposit', description: 'Deposit into Aave v3' },
+    ],
+  }
+}
+
+/** A single-step EVM yield action (e.g. a withdraw, or a deposit whose allowance
+ *  is already sufficient). */
+function yieldSingleStep() {
+  return {
+    scan_request: { kind: 'evm', chain: 'polygon' },
+    intent: 'exit',
+    type: 'lending',
+    yieldId: 'polygon-usdc-aave-v3-lending',
+    amount: '0.4',
+    chain: 'Polygon',
+    provider: 'yield_xyz',
+    transactions: [
+      {
+        to: AAVE_POOL,
+        value: '0x0',
+        data: YIELD_DEPOSIT_DATA,
+        action: 'withdraw',
+        description: 'Withdraw from Aave v3',
+      },
+    ],
+  }
+}
+
+describe('buildTxReadyFromYieldOutput — allowlist gate', () => {
+  it('returns null for a non-yield tool (never enriches an unlisted tool)', () => {
+    expect(buildTxReadyFromYieldOutput('execute_send', yieldEnterApproveDeposit())).toBeNull()
+    expect(buildTxReadyFromYieldOutput(POLYMARKET_DEPOSIT_TOOL, yieldEnterApproveDeposit())).toBeNull()
+  })
+})
+
+describe('buildTxReadyFromYieldOutput — 2-step approve+deposit → multi-leg', () => {
+  it('maps transactions[approve,deposit] onto approvalTxArgs/txArgs with nested tx', () => {
+    const out = buildTxReadyFromYieldOutput('yield_enter', yieldEnterApproveDeposit())
+    expect(out).not.toBeNull()
+    expect(out).toMatchObject({
+      chain: 'Polygon',
+      approvalTxArgs: { chain: 'Polygon', tx: { to: USDC_E, value: '0x0', data: APPROVE_DATA } },
+      txArgs: { chain: 'Polygon', tx: { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA } },
+    })
+    // approve leg is FIRST (signed + receipt-confirmed before the deposit).
+    expect(out?.approvalTxArgs).toBeDefined()
+    // a multi-leg envelope must NOT also carry a single-leg `tx`.
+    expect(out?.tx).toBeUndefined()
+  })
+
+  it('faithfully copies the backend-built calldata verbatim (never fabricates)', () => {
+    const out = buildTxReadyFromYieldOutput('yield_enter', yieldEnterApproveDeposit())
+    // the deposit selector (0x617ba037 = Aave supply) survives untouched.
+    expect((out?.txArgs as { tx: { data: string } }).tx.data).toBe(YIELD_DEPOSIT_DATA)
+    expect((out?.approvalTxArgs as { tx: { data: string } }).tx.data).toBe(APPROVE_DATA)
+  })
+})
+
+describe('buildTxReadyFromYieldOutput — single-step → single-leg', () => {
+  it('maps a lone transactions[action] onto {chain,tx}', () => {
+    const out = buildTxReadyFromYieldOutput('yield_exit', yieldSingleStep())
+    expect(out).toMatchObject({ chain: 'Polygon', tx: { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA } })
+    expect(out?.approvalTxArgs).toBeUndefined()
+  })
+})
+
+describe('buildTxReadyFromYieldOutput — fail-closed guards (never sign a bad shape)', () => {
+  it('null when transactions[] is absent', () => {
+    const { transactions: _drop, ...noTxs } = yieldEnterApproveDeposit()
+    void _drop
+    expect(buildTxReadyFromYieldOutput('yield_enter', noTxs)).toBeNull()
+  })
+
+  it('null when transactions[] is empty', () => {
+    expect(buildTxReadyFromYieldOutput('yield_enter', { ...yieldEnterApproveDeposit(), transactions: [] })).toBeNull()
+  })
+
+  it('null when the envelope is an error', () => {
+    expect(buildTxReadyFromYieldOutput('yield_enter', { ...yieldEnterApproveDeposit(), status: 'error' })).toBeNull()
+    expect(buildTxReadyFromYieldOutput('yield_enter', { error: 'yield.xyz rejected' })).toBeNull()
+  })
+
+  it('null when chain is missing (would default to Ethereum at sign time)', () => {
+    const { chain: _drop, ...noChain } = yieldEnterApproveDeposit()
+    void _drop
+    expect(buildTxReadyFromYieldOutput('yield_enter', noChain)).toBeNull()
+  })
+
+  it('null for a non-EVM chain (yield multi-step signing is EVM-only here)', () => {
+    // A Solana yield envelope (its steps carry tx_encoding: solana-tx and a raw
+    // data string, not flat to/data) must NOT be forced through the EVM legs.
+    const solana = {
+      ...yieldEnterApproveDeposit(),
+      chain: 'Solana',
+      transactions: [{ tx_encoding: 'solana-tx', chain: 'Solana', data: 'base64blob', action: 'deposit' }],
+    }
+    expect(buildTxReadyFromYieldOutput('yield_enter', solana)).toBeNull()
+  })
+
+  it('null when ANY leg is un-liftable (all-or-nothing: never a partial sequence)', () => {
+    const badDeposit = {
+      ...yieldEnterApproveDeposit(),
+      transactions: [
+        { to: USDC_E, value: '0x0', data: APPROVE_DATA, action: 'approval' },
+        { to: AAVE_POOL, value: '0x0', action: 'deposit' }, // no calldata
+      ],
+    }
+    expect(buildTxReadyFromYieldOutput('yield_enter', badDeposit)).toBeNull()
+  })
+
+  it('null when a leg carries an error marker', () => {
+    const errLeg = {
+      ...yieldEnterApproveDeposit(),
+      transactions: [
+        { to: USDC_E, value: '0x0', data: APPROVE_DATA, action: 'approval' },
+        { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA, action: 'deposit', error: 'sim failed' },
+      ],
+    }
+    expect(buildTxReadyFromYieldOutput('yield_enter', errLeg)).toBeNull()
+  })
+
+  it('null for a >2-leg envelope (executor 2-leg sequencer cannot represent it — fail closed)', () => {
+    const threeLegs = {
+      ...yieldEnterApproveDeposit(),
+      transactions: [
+        { to: USDC_E, value: '0x0', data: APPROVE_DATA, action: 'approval' },
+        { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA, action: 'deposit' },
+        { to: AAVE_POOL, value: '0x0', data: YIELD_DEPOSIT_DATA, action: 'stake' },
+      ],
+    }
+    expect(buildTxReadyFromYieldOutput('yield_enter', threeLegs)).toBeNull()
+  })
+})
+
+describe('deriveToolOutputCandidate — yield tools (bead vultisig-6rg2, the regression)', () => {
+  it('yield_enter approve+deposit → candidate tagged source:yield (WAS null pre-fix)', () => {
+    const c = deriveToolOutputCandidate('yield_enter', yieldEnterApproveDeposit())
+    expect(c?.source).toBe('yield')
+    expect(c?.payload).toMatchObject({
+      approvalTxArgs: { tx: { to: USDC_E, data: APPROVE_DATA } },
+      txArgs: { tx: { to: AAVE_POOL, data: YIELD_DEPOSIT_DATA } },
+    })
+  })
+
+  it('yield_exit single-step → candidate tagged source:yield', () => {
+    const c = deriveToolOutputCandidate('yield_exit', yieldSingleStep())
+    expect(c?.source).toBe('yield')
+    expect(c?.payload).toMatchObject({ tx: { to: AAVE_POOL, data: YIELD_DEPOSIT_DATA } })
+  })
+
+  it('CONTROL: a yield tool with no signable tx → null (nothing signs)', () => {
+    expect(deriveToolOutputCandidate('yield_enter', { chain: 'Polygon', transactions: [] })).toBeNull()
   })
 })
