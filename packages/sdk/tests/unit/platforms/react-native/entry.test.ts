@@ -93,6 +93,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.Dash,
     ])
   })
+
+  it('exports the Jupiter swap helper family from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const jupiterConfig = await import('../../../../src/tools/swap/jupiterConfig')
+
+    expect(typeof rn.buildJupiterSwapTx).toBe('function')
+    await expect(rn.buildJupiterSwapTx({ userPublicKey: '11111111111111111111111111111111', amountBaseUnits: 1n })).rejects.toThrow(
+      /must differ/
+    )
+    expect(rn.resolveJupiterFeeAccount).toBe(jupiterConfig.resolveJupiterFeeAccount)
+    expect(rn.SOL_NATIVE_MINT).toBe(jupiterConfig.SOL_NATIVE_MINT)
+    expect(rn.JUPITER_AFFILIATE_FEE_OWNER).toBe(jupiterConfig.JUPITER_AFFILIATE_FEE_OWNER)
+    expect(rn.JUPITER_PLATFORM_FEE_BPS).toBe(jupiterConfig.JUPITER_PLATFORM_FEE_BPS)
+    expect(rn.JUPITER_DEFAULT_SLIPPAGE_BPS).toBe(jupiterConfig.JUPITER_DEFAULT_SLIPPAGE_BPS)
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
