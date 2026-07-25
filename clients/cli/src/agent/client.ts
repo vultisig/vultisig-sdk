@@ -9,7 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { IdempotencyKeyReusedError, IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
-import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
+import {
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  CLI_SIGNABLE_YIELD_TOOLS,
+  deriveToolOutputCandidate,
+  type ToolOutputCandidate,
+} from './toolOutputSigning'
 import type {
   AuthTokenRequest,
   AuthTokenResponse,
@@ -121,7 +127,7 @@ type StreamCallbacks = {
   // the CLI doesn't consume). `source` distinguishes a flat enrichment
   // (polymarket / build_custom_* / erc20_approve) from an `execute_*` prep
   // passthrough; both sign. The session buffers it into the executor.
-  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => void
+  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: ToolOutputCandidate['source']) => void
   // Fired for the `data-balance_summary` SSE part the backend emits when the
   // client advertised "balance_summary" in supported_surfaces. Carries the raw
   // card envelope; the consumer validates + renders it. Replaces the legacy
@@ -894,7 +900,12 @@ export class AgentClient {
     // resting on a null-check three calls away.
     if (v1Type === 'tool-output-error') return
     if (status !== 'done' || !toolName || !callbacks.onToolOutputTx) return
-    if (!CLI_SIGNABLE_FLAT_TOOLS.has(toolName) && !CLI_SIGNABLE_PREP_TOOLS.has(toolName)) return
+    if (
+      !CLI_SIGNABLE_FLAT_TOOLS.has(toolName) &&
+      !CLI_SIGNABLE_PREP_TOOLS.has(toolName) &&
+      !CLI_SIGNABLE_YIELD_TOOLS.has(toolName)
+    )
+      return
     const candidate = deriveToolOutputCandidate(toolName, output)
     if (!candidate) return
     if (this.verbose)
