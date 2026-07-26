@@ -221,22 +221,28 @@ describe('extractBalanceSummaryFromText (legacy verbatim-echo fallback)', () => 
 // yield_opportunities (rj3p)
 // ============================================================================
 
+// Field names (`token`/`network`, `apy` as an already-formatted percentage
+// number) match the live yield_search envelope observed against the
+// miniforum backend during rj3p live-verify — NOT a shape invented from
+// guesswork.
 const YIELD_ENVELOPE = {
   surface: 'yield_opportunities',
+  title: 'USDC Lending Opportunities',
   opportunities: [
-    { id: 'y1', name: 'USDC Lending', chain: 'Ethereum', symbol: 'USDC', apy: 0.042, provider: 'Aave' },
+    { id: 'linea-usdc-aave-v3-lending', token: 'USDC', network: 'linea', provider: 'Aave', type: 'lending', apy: 4.99 },
     { id: 'y2', symbol: 'DOT', chain: 'Polkadot', apy: '12.5%' },
   ],
 }
 
 describe('parseYieldOpportunitiesEnvelope', () => {
-  it('parses a valid envelope, converting fractional APY to a percentage', () => {
+  it('parses a valid envelope using the live token/network/apy field names', () => {
     const card = parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)
     expect(card).not.toBeNull()
+    expect(card!.title).toBe('USDC Lending Opportunities')
     expect(card!.opportunities).toHaveLength(2)
-    expect(card!.opportunities[0]).toMatchObject({ symbol: 'USDC', apy: '4.20%', provider: 'Aave' })
-    // A pre-formatted string APY passes through unchanged.
-    expect(card!.opportunities[1].apy).toBe('12.5%')
+    expect(card!.opportunities[0]).toMatchObject({ symbol: 'USDC', chain: 'linea', apy: '4.99%', provider: 'Aave' })
+    // The symbol/chain aliases (used by the legacy-echo fallback shape) also parse.
+    expect(card!.opportunities[1]).toMatchObject({ symbol: 'DOT', chain: 'Polkadot', apy: '12.5%' })
   })
 
   it('rejects a non-yield_opportunities surface', () => {
@@ -256,8 +262,8 @@ describe('parseYieldOpportunitiesEnvelope', () => {
 describe('renderYieldOpportunitiesCard', () => {
   it('renders human-readable prose, not raw JSON', () => {
     const out = renderYieldOpportunitiesCard(parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)!)
-    expect(out).toContain('USDC')
-    expect(out).toContain('4.20%')
+    expect(out).toContain('USDC Lending Opportunities')
+    expect(out).toContain('4.99%')
     expect(out).toContain('Aave')
     expect(out).toContain('DOT')
     expect(out).not.toContain('"surface"')

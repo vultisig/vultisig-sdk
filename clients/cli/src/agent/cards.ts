@@ -287,38 +287,42 @@ export function renderBalanceSummaryCard(card: BalanceSummaryCard): string {
 
 export type YieldOpportunity = {
   id: string
-  name: string
   chain: string
   symbol: string
   apy?: string
   provider?: string
+  type?: string
 }
 
 export type YieldOpportunitiesCard = {
   surface: 'yield_opportunities'
+  title?: string
   opportunities: YieldOpportunity[]
 }
 
+// Live backend envelope (yield_search tool, observed via miniforum dogfood,
+// rj3p): `token`/`network` are plain strings, not nested objects, and `apy` is
+// already a percentage number (4.99 = 4.99%), not a 0..1 fraction. Accept
+// `symbol`/`chain` as aliases too — the field names the backend uses for this
+// surface aren't contractually pinned from this repo, so parse defensively.
 function parseYieldOpportunity(v: unknown): YieldOpportunity | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
   const id = asString(o.id)
-  const name = asString(o.name) || asString((o.metadata as Record<string, unknown> | undefined)?.name)
-  const chain = asString(o.chain) || asString(o.network)
-  const symbol = asString(o.symbol) || asString((o.token as Record<string, unknown> | undefined)?.symbol)
-  if (!name && !symbol) return null
-  const opportunity: YieldOpportunity = { id, name, chain, symbol }
+  const symbol = asString(o.token) || asString(o.symbol)
+  const chain = asString(o.network) || asString(o.chain)
+  if (!symbol) return null
+  const opportunity: YieldOpportunity = { id, chain, symbol }
   const apy = o.apy
   if (typeof apy === 'number' && Number.isFinite(apy)) {
-    // Backend sends APY as a fraction (0.0421 = 4.21%); a string is assumed
-    // pre-formatted and passed through as-is.
-    opportunity.apy = `${(apy * 100).toFixed(2)}%`
+    opportunity.apy = `${apy.toFixed(2)}%`
   } else if (typeof apy === 'string' && apy) {
     opportunity.apy = stripControlChars(apy)
   }
-  const provider =
-    asString(o.provider) || asString((o.metadata as Record<string, unknown> | undefined)?.provider as any)
+  const provider = asString(o.provider)
   if (provider) opportunity.provider = provider
+  const type = asString(o.type)
+  if (type) opportunity.type = type
   return opportunity
 }
 
@@ -334,7 +338,10 @@ export function parseYieldOpportunitiesEnvelope(value: unknown): YieldOpportunit
   const raw = Array.isArray(o.opportunities) ? o.opportunities : Array.isArray(o.data) ? o.data : []
   const opportunities = raw.map(parseYieldOpportunity).filter((y): y is YieldOpportunity => y !== null)
   if (opportunities.length === 0) return null
-  return { surface: 'yield_opportunities', opportunities }
+  const card: YieldOpportunitiesCard = { surface: 'yield_opportunities', opportunities }
+  const title = asString(o.title)
+  if (title) card.title = title
+  return card
 }
 
 /**
@@ -342,9 +349,9 @@ export function parseYieldOpportunitiesEnvelope(value: unknown): YieldOpportunit
  * instead of the raw envelope JSON.
  */
 export function renderYieldOpportunitiesCard(card: YieldOpportunitiesCard): string {
-  const lines: string[] = [chalk.bold('  Yield opportunities')]
+  const lines: string[] = [chalk.bold(`  ${card.title || 'Yield opportunities'}`)]
   for (const opp of card.opportunities) {
-    const label = [opp.symbol, opp.name].filter(Boolean).join(' — ') || opp.id || 'opportunity'
+    const label = opp.symbol || opp.id || 'opportunity'
     const apyCol = opp.apy ? chalk.green(`  ${opp.apy} APY`) : ''
     const chainCol = opp.chain ? chalk.gray(`  (${opp.chain})`) : ''
     const providerCol = opp.provider ? chalk.gray(`  via ${opp.provider}`) : ''
