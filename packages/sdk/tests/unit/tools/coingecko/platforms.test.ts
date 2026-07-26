@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest'
+
+import { chainForCoinGeckoPlatform, coinGeckoPlatformForChain } from '@/tools/coingecko/platforms'
+
+describe('CoinGecko platform registry', () => {
+  it.each([
+    ['Ethereum', 'ethereum'],
+    ['Avalanche', 'avalanche-c-chain'],
+    ['Zksync', 'zksync-era'],
+    ['Sei', 'sei'],
+    ['Ton', 'the-open-network'],
+    ['Hyperliquid', 'hyperliquid'],
+  ])('round-trips %s <-> %s', (chain, platform) => {
+    expect(coinGeckoPlatformForChain(chain)).toBe(platform)
+    expect(chainForCoinGeckoPlatform(platform)).toBe(chain)
+  })
+
+  it('returns undefined for unsupported inputs', () => {
+    expect(coinGeckoPlatformForChain('NotAChain')).toBeUndefined()
+    expect(chainForCoinGeckoPlatform('not-a-platform')).toBeUndefined()
+  })
+})
