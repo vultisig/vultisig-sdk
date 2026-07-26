@@ -225,6 +225,20 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.VAULT_BACKUP_MAGIC_LEN).toBe(constants.VAULT_BACKUP_MAGIC_LEN)
     expect(rn.VAULT_BACKUP_PBKDF2_HEADER_LEN).toBe(constants.VAULT_BACKUP_PBKDF2_HEADER_LEN)
   })
+
+  it('re-exports the canonical IBC + Sui prep helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const ibc = await import('../../../../src/tools/prep/ibcTransfer')
+    const sui = await import('../../../../src/tools/prep/suiTokenTransfer')
+
+    expect(rn.prepareIbcTransfer).toBe(ibc.prepareIbcTransfer)
+    expect(rn.normaliseIbcChainId).toBe(ibc.normaliseIbcChainId)
+    expect(rn.supportedIbcDestinationsFrom).toBe(ibc.supportedIbcDestinationsFrom)
+    expect(rn.IBC_MSG_TRANSFER_TYPE_URL).toBe(ibc.IBC_MSG_TRANSFER_TYPE_URL)
+    expect(rn.IBC_CHANNEL_DEST).toBe(ibc.IBC_CHANNEL_DEST)
+    expect(rn.prepareSuiTokenTransferFromKeys).toBe(sui.prepareSuiTokenTransferFromKeys)
+    expect(rn.SUI_NATIVE_COIN_TYPE).toBe(sui.SUI_NATIVE_COIN_TYPE)
+  })
 })
 
 // RN-entry parity guard: the root barrel (packages/sdk/src/index.ts, resolved
