@@ -153,6 +153,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
+  it('exports the canonical Cosmos Tendermint RPC registry from the root sdk surface', () => {
+    expect(sdk.tendermintRpcUrl[sdk.Chain.Cosmos]).toBe('https://cosmos-rpc.publicnode.com:443')
+    expect(sdk.tendermintRpcUrl[sdk.Chain.THORChain]).toBe('https://gateway.liquify.com/chain/thorchain_rpc')
+  })
+
   it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
