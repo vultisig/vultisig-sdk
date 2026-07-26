@@ -82,6 +82,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
   it('exports the canonical prep constants from the RN entry', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
+    const tronAbi = await import('../../../../src/abi/tron')
 
     expect(rn.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
     expect(rn.SUI_NATIVE_COIN_TYPE).toBe('0x2::sui::SUI')
@@ -92,6 +93,10 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       rn.Chain.BitcoinCash,
       rn.Chain.Dash,
     ])
+    expect(rn.encodeTrc20TransferParam).toBe(tronAbi.encodeTrc20TransferParam)
+    expect(rn.tronBase58ToEvmHex).toBe(tronAbi.tronBase58ToEvmHex)
+    expect(rn.tronBase58ToHex).toBe(tronAbi.tronBase58ToHex)
+    expect(rn.tronHexToBase58).toBe(tronAbi.tronHexToBase58)
   })
 })
 
