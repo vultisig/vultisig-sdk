@@ -188,10 +188,15 @@ export type {
   ConsolidateChain,
   ConsolidateUtxo,
   GetMaxSendAmountFromKeysParams,
+  IbcCosmosTx,
+  IbcMsgTransfer,
+  PrepareIbcTransferParams,
+  PrepareIbcTransferResult,
   PrepareJettonTransferTxFromKeysParams,
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
   PrepareUtxoConsolidateResult,
@@ -231,8 +236,15 @@ export { buildCw20TransferMsg } from '../../tools/prep/cw20Transfer'
 // rather than a lazy `await import(...)` wrapper. `POLKADOT_ASSET_HUB_KNOWN_ASSETS`
 // is a plain const map. Omitting these broke RN/vultiagent-app consumption of the
 // Asset Hub send builder (same hand-curated-allow-list gap as prior prep builders).
+export {
+  IBC_CHANNEL_DEST,
+  IBC_MSG_TRANSFER_TYPE_URL,
+  normaliseIbcChainId,
+  prepareIbcTransfer,
+  supportedIbcDestinationsFrom,
+} from '../../tools/prep/ibcTransfer'
 export { POLKADOT_ASSET_HUB_KNOWN_ASSETS, preparePolkadotAssetSend } from '../../tools/prep/polkadotAssetSend'
-export { SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
+export { prepareSuiTokenTransferFromKeys, SUI_NATIVE_COIN_TYPE } from '../../tools/prep/suiTokenTransfer'
 export { TRC20_TRANSFER_SELECTOR } from '../../tools/prep/trc20'
 export { CONSOLIDATE_CHAINS } from '../../tools/prep/utxoConsolidate'
 
