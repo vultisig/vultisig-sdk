@@ -10,16 +10,15 @@
  * this suite also fixes: (1) the fee coin denom+amount comes from `gas`; (2) the gas limit now
  * honours field-7 `gasLimit` when set, falling back to the 300_000 default when unset.
  *
- * IMPORTANT for whoever populates field 7 next: QBTC's fee is DELIBERATELY FLAT. Unlike the shared
- * standard-cosmos helper `resolveCosmosGasFee` (which SCALES the fee amount proportionally when the
- * limit exceeds the static limit, so gas price is held constant and the tx "pays for the extra
- * gas"), QBTC writes `fee.amount = cosmosSpecific.gas` verbatim regardless of the limit. This is
- * intentional and consistent today: QBTC bypasses `resolveCosmosGasFee` entirely, and its fee
- * DISPLAY (`getQbtcFeeAmount`) also returns raw `gas`, so shown == signed with no drift. So field 7
- * is honoured as the LIMIT only; it does NOT (and must not silently) re-scale the fee. Making QBTC
- * scale its fee would be a coordinated change across the fee-display resolver, the signing encoder,
- * AND every co-signer (gasLimit is part of the SignDoc). QBTC is also a post-quantum TESTNET
- * (Chain.ts) - the fee posture here is low-stakes; do not re-run the P0 fire drill over it.
+ * IMPORTANT for whoever populates field 7 next: QBTC's fee is FLAT, and that is now the rule
+ * everywhere. `fee.amount = cosmosSpecific.gas` verbatim, regardless of the limit — the same
+ * contract the standard-cosmos signing path follows. (It briefly did NOT: it rescaled the amount by
+ * `relayedGasLimit / staticGasLimit` on the read side, which diverged the SignDoc from iOS and
+ * Android and broke cross-platform TerraClassic keysigns. Any fee headroom is applied by the
+ * INITIATOR before it writes field 3 — see resolveCosmosGasLimit.ts.) So field 7 is honoured as the
+ * LIMIT only; it does NOT (and must not silently) re-scale the fee on any read path. QBTC is also a
+ * post-quantum TESTNET (Chain.ts) - the fee posture here is low-stakes; do not re-run the P0 fire
+ * drill over it.
  */
 import { Buffer } from 'buffer'
 import { create } from '@bufbuild/protobuf'
@@ -144,9 +143,9 @@ describe('QBTCHelper — fee/gas split golden vectors (sdk#1366)', () => {
     })
 
     const fee = decodeFee(serialized)
-    // QBTC's fee is DELIBERATELY flat: it stays == cosmosSpecific.gas even as the limit grows. This
-    // is NOT the resolveCosmosGasFee rule (that scales the fee with the limit); see the file
-    // docstring. Field 7 is honoured as the LIMIT only - it must not silently re-scale the fee.
+    // The fee stays == cosmosSpecific.gas even as the limit grows, matching every other cosmos
+    // signing path; see the file docstring. Field 7 is honoured as the LIMIT only - no read path
+    // may silently re-scale the fee, or co-signers build different SignDocs.
     expect(fee.amount).toBe('2500')
     expect(fee.gasLimit).toBe('550000') // limit now tracks field-7 gasLimit
   })

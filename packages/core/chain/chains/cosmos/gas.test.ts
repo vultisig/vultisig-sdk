@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../../Chain'
-import { cosmosGasRecord, getCosmosFeeAmount, getFeeAmountFromGasPrice, getMinGasPriceForDenom } from './gas'
+import { getCosmosGasLimit } from './cosmosGasLimitRecord'
+import {
+  cosmosGasRecord,
+  getCosmosFeeAmount,
+  getFeeAmountFromGasPrice,
+  getMinGasPriceForDenom,
+  TERRA_CLASSIC_ULUNA_BASE_GAS,
+} from './gas'
 
 const jsonResponse = (body: unknown, status = 200) =>
   ({
@@ -241,5 +248,27 @@ describe('getCosmosFeeAmount', () => {
 
       expect(fee).toBe(30_000n) // dynamic floor discarded, generic path used
     })
+  })
+})
+
+describe('TERRA_CLASSIC_ULUNA_BASE_GAS', () => {
+  // The constant is `staticGasLimit × 28.325 uluna/gas`, but nothing in the type
+  // system ties it to cosmosGasLimitRecord. If that limit is ever retuned, the
+  // base gas would silently under- or over-price every LUNC send. Fail loudly
+  // here instead.
+  const ULUNA_GAS_PRICE_MILLI = 28_325n // 28.325, scaled by 1000 to stay integral
+
+  it('equals the TerraClassic static gas limit priced at 28.325 uluna/gas', () => {
+    const staticGasLimit = getCosmosGasLimit({ chain: Chain.TerraClassic, id: undefined })
+
+    expect(TERRA_CLASSIC_ULUNA_BASE_GAS).toBe((staticGasLimit * ULUNA_GAS_PRICE_MILLI) / 1000n)
+  })
+
+  it('is the value cosmosGasRecord serves for TerraClassic', () => {
+    expect(cosmosGasRecord[Chain.TerraClassic]).toBe(TERRA_CLASSIC_ULUNA_BASE_GAS)
+  })
+
+  it('matches iOS ulunaBaseGas / Android ULUNA_BASE_GAS', () => {
+    expect(TERRA_CLASSIC_ULUNA_BASE_GAS).toBe(8_497_500n)
   })
 })
