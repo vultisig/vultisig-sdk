@@ -375,10 +375,10 @@
       "import": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js",
       "default": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js"
     },
-    "./chains/cosmos/resolveCosmosGasFee": {
-      "types": "./dist/chains/cosmos/resolveCosmosGasFee.d.ts",
-      "import": "./dist/chains/cosmos/resolveCosmosGasFee.js",
-      "default": "./dist/chains/cosmos/resolveCosmosGasFee.js"
+    "./chains/cosmos/resolveCosmosGasLimit": {
+      "types": "./dist/chains/cosmos/resolveCosmosGasLimit.d.ts",
+      "import": "./dist/chains/cosmos/resolveCosmosGasLimit.js",
+      "default": "./dist/chains/cosmos/resolveCosmosGasLimit.js"
     },
     "./chains/cosmos/staking/lcdQueries": {
       "types": "./dist/chains/cosmos/staking/lcdQueries.d.ts",

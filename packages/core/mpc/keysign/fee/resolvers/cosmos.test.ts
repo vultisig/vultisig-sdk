@@ -15,7 +15,15 @@ import { getCosmosFeeAmount } from './cosmos'
 const SENDER = 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqjturm7'
 const RECEIVER = 'cosmos1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqp3z0y6'
 
-const buildInput = ({ transactionType, gas = 2500n }: { transactionType: TransactionType; gas?: bigint }) => ({
+const buildInput = ({
+  transactionType,
+  gas = 2500n,
+  gasLimit,
+}: {
+  transactionType: TransactionType
+  gas?: bigint
+  gasLimit?: bigint
+}) => ({
   keysignPayload: create(KeysignPayloadSchema, {
     coin: create(CoinSchema, {
       chain: Chain.Cosmos,
@@ -34,6 +42,7 @@ const buildInput = ({ transactionType, gas = 2500n }: { transactionType: Transac
         accountNumber: 7n,
         sequence: 3n,
         gas,
+        gasLimit,
         transactionType,
       }),
     },
@@ -42,13 +51,24 @@ const buildInput = ({ transactionType, gas = 2500n }: { transactionType: Transac
   publicKey: {} as never,
 })
 
-describe('getCosmosFeeAmount COSMOS-02: IBC gas multiplier', () => {
-  it('doubles the displayed fee for an IBC transfer', () => {
-    expect(getCosmosFeeAmount(buildInput({ transactionType: TransactionType.IBC_TRANSFER, gas: 2500n }))).toBe(5000n)
+describe('getCosmosFeeAmount', () => {
+  it('displays CosmosSpecific.gas verbatim — it is the fee AMOUNT (proto field 3)', () => {
+    expect(getCosmosFeeAmount(buildInput({ transactionType: TransactionType.UNSPECIFIED, gas: 2500n }))).toBe(2500n)
   })
 
-  it('leaves the displayed fee unchanged for a plain (non-IBC) send on the same ibc-enabled chain', () => {
-    expect(getCosmosFeeAmount(buildInput({ transactionType: TransactionType.UNSPECIFIED, gas: 2500n }))).toBe(2500n)
+  it('does not re-derive the amount from a relayed gas limit', () => {
+    // Field 7 moves the signed gas LIMIT only. The initiator already priced
+    // `gas` against it, so rescaling here would show a fee no other client signs.
+    expect(
+      getCosmosFeeAmount(buildInput({ transactionType: TransactionType.UNSPECIFIED, gas: 2500n, gasLimit: 345_678n }))
+    ).toBe(2500n)
+  })
+
+  it('does not double the displayed fee for an IBC transfer', () => {
+    // COSMOS-02 headroom is applied by the initiator (widened `gas_limit` plus a
+    // fee priced for it), never here — the read side has no proto field
+    // carrying a multiplier, so iOS / Android could not reproduce one.
+    expect(getCosmosFeeAmount(buildInput({ transactionType: TransactionType.IBC_TRANSFER, gas: 2500n }))).toBe(2500n)
   })
 
   it('matches the signing-inputs resolver so the displayed fee never drifts from the signed fee', async () => {
@@ -81,6 +101,9 @@ describe('getCosmosFeeAmount COSMOS-02: IBC gas multiplier', () => {
           accountNumber: 7n,
           sequence: 3n,
           gas: 2500n,
+          // An initiator-widened IBC limit (static 200_000 × IBC_GAS_MULTIPLIER)
+          // exercises the path where display and signing could drift apart.
+          gasLimit: 400_000n,
           transactionType: TransactionType.IBC_TRANSFER,
           ibcDenomTraces: create(CosmosIbcDenomTraceSchema, {
             path: 'transfer/channel-141',
@@ -95,7 +118,8 @@ describe('getCosmosFeeAmount COSMOS-02: IBC gas multiplier', () => {
 
     const [signingInput] = await getCosmosSigningInputs({ keysignPayload, walletCore })
 
-    expect(displayedFee).toBe(5000n)
-    expect(signingInput.fee?.amounts?.[0]?.amount).toBe('5000')
+    expect(signingInput.fee?.amounts?.[0]?.amount).toBe(displayedFee.toString())
+    expect(displayedFee).toBe(2500n)
+    expect(signingInput.fee?.gas.toString()).toBe('400000')
   })
 })
