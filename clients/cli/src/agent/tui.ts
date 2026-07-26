@@ -14,7 +14,14 @@ import * as readline from 'node:readline'
 import chalk from 'chalk'
 
 import type { AgentErrorCode } from './agentErrors'
-import { type BalanceSummaryCard, renderBalanceSummaryCard } from './cards'
+import {
+  type BalanceSummaryCard,
+  type PolymarketMarketsCard,
+  renderBalanceSummaryCard,
+  renderPolymarketMarketsCard,
+  renderYieldOpportunitiesCard,
+  type YieldOpportunitiesCard,
+} from './cards'
 import type { AgentSession } from './session'
 import type { ConversationMessage, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -210,6 +217,24 @@ export class ChatTUI {
         // `content !== this.currentStreamText` guard and be silently dropped.
         this.currentStreamText = ''
         console.log(renderBalanceSummaryCard(card))
+      },
+
+      onYieldOpportunities: (card: YieldOpportunitiesCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        this.currentStreamText = ''
+        console.log(renderYieldOpportunitiesCard(card))
+      },
+
+      onPolymarketMarkets: (card: PolymarketMarketsCard) => {
+        if (this.isStreaming) {
+          process.stdout.write('\n')
+          this.isStreaming = false
+        }
+        this.currentStreamText = ''
+        console.log(renderPolymarketMarketsCard(card))
       },
 
       onSuggestions: (suggestions: Suggestion[]) => {

@@ -10,18 +10,25 @@
  *
  * When the client does NOT advertise a surface, the backend falls back to the
  * legacy path where the model echoes the `card_payload` JSON verbatim into the
- * message content (the #341/#582 raw-JSON-in-the-terminal incidents). The CLI
- * historically advertised nothing, so a balance query dumped raw card JSON.
+ * message content (the #341/#582 raw-JSON-in-the-terminal incidents, and the
+ * rj3p class-bug: `yield_opportunities` / `polymarket_markets` weren't
+ * advertised, so `find me yield opportunities for USDC` dumped raw
+ * `{"surface":"yield_opportunities",...}` JSON into the terminal).
  *
- * This module owns the one surface the CLI renders today — `balance_summary` —
- * plus the defensive fallback that pretty-renders a card envelope if the legacy
- * verbatim-echo path ever fires (older backend, or a backend that ignores the
- * advertised surface).
+ * This module owns the surfaces the CLI renders today — `balance_summary`,
+ * `yield_opportunities`, `polymarket_markets` — plus the defensive fallback
+ * that pretty-renders a card envelope if the legacy verbatim-echo path ever
+ * fires (older backend, or a backend that ignores the advertised surface).
  */
 import chalk from 'chalk'
 
 /** Surface keys the CLI declares it can render. Sent as `supported_surfaces`. */
-export const CLI_SUPPORTED_SURFACES = ['balance_summary', 'turn_outcome'] as const
+export const CLI_SUPPORTED_SURFACES = [
+  'balance_summary',
+  'turn_outcome',
+  'yield_opportunities',
+  'polymarket_markets',
+] as const
 
 /**
  * Typed turn-outcome discriminator (agent-backend a2a-02). The backend emits a
@@ -272,4 +279,229 @@ export function renderBalanceSummaryCard(card: BalanceSummaryCard): string {
   }
 
   return lines.join('\n')
+}
+
+// ============================================================================
+// yield_opportunities (rj3p)
+// ============================================================================
+
+export type YieldOpportunity = {
+  id: string
+  name: string
+  chain: string
+  symbol: string
+  apy?: string
+  provider?: string
+}
+
+export type YieldOpportunitiesCard = {
+  surface: 'yield_opportunities'
+  opportunities: YieldOpportunity[]
+}
+
+function parseYieldOpportunity(v: unknown): YieldOpportunity | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  const id = asString(o.id)
+  const name = asString(o.name) || asString((o.metadata as Record<string, unknown> | undefined)?.name)
+  const chain = asString(o.chain) || asString(o.network)
+  const symbol = asString(o.symbol) || asString((o.token as Record<string, unknown> | undefined)?.symbol)
+  if (!name && !symbol) return null
+  const opportunity: YieldOpportunity = { id, name, chain, symbol }
+  const apy = o.apy
+  if (typeof apy === 'number' && Number.isFinite(apy)) {
+    // Backend sends APY as a fraction (0.0421 = 4.21%); a string is assumed
+    // pre-formatted and passed through as-is.
+    opportunity.apy = `${(apy * 100).toFixed(2)}%`
+  } else if (typeof apy === 'string' && apy) {
+    opportunity.apy = stripControlChars(apy)
+  }
+  const provider =
+    asString(o.provider) || asString((o.metadata as Record<string, unknown> | undefined)?.provider as any)
+  if (provider) opportunity.provider = provider
+  return opportunity
+}
+
+/**
+ * Validate + coerce an arbitrary value into a {@link YieldOpportunitiesCard}.
+ * Returns null when it isn't a yield_opportunities envelope with at least one
+ * renderable opportunity, mirroring {@link parseBalanceSummaryEnvelope}.
+ */
+export function parseYieldOpportunitiesEnvelope(value: unknown): YieldOpportunitiesCard | null {
+  if (!value || typeof value !== 'object') return null
+  const o = value as Record<string, unknown>
+  if (o.surface !== 'yield_opportunities') return null
+  const raw = Array.isArray(o.opportunities) ? o.opportunities : Array.isArray(o.data) ? o.data : []
+  const opportunities = raw.map(parseYieldOpportunity).filter((y): y is YieldOpportunity => y !== null)
+  if (opportunities.length === 0) return null
+  return { surface: 'yield_opportunities', opportunities }
+}
+
+/**
+ * Render a yield_opportunities card as prose — one line per opportunity —
+ * instead of the raw envelope JSON.
+ */
+export function renderYieldOpportunitiesCard(card: YieldOpportunitiesCard): string {
+  const lines: string[] = [chalk.bold('  Yield opportunities')]
+  for (const opp of card.opportunities) {
+    const label = [opp.symbol, opp.name].filter(Boolean).join(' — ') || opp.id || 'opportunity'
+    const apyCol = opp.apy ? chalk.green(`  ${opp.apy} APY`) : ''
+    const chainCol = opp.chain ? chalk.gray(`  (${opp.chain})`) : ''
+    const providerCol = opp.provider ? chalk.gray(`  via ${opp.provider}`) : ''
+    lines.push(`    ${chalk.bold(label)}${apyCol}${chainCol}${providerCol}`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Legacy-path fallback: detect a yield_opportunities envelope embedded in
+ * assistant message content and return both the parsed card and the message
+ * text with the JSON blob removed. Mirrors
+ * {@link extractBalanceSummaryFromText}.
+ */
+export function extractYieldOpportunitiesFromText(
+  content: string
+): { card: YieldOpportunitiesCard; remainingText: string } | null {
+  return extractSurfaceFromText(content, 'yield_opportunities', parseYieldOpportunitiesEnvelope)
+}
+
+// ============================================================================
+// polymarket_markets (rj3p)
+// ============================================================================
+
+export type PolymarketOutcome = {
+  name: string
+  price?: string
+}
+
+export type PolymarketMarket = {
+  id: string
+  question: string
+  volume?: string
+  endDate?: string
+  outcomes: PolymarketOutcome[]
+}
+
+export type PolymarketMarketsCard = {
+  surface: 'polymarket_markets'
+  markets: PolymarketMarket[]
+}
+
+function parsePolymarketOutcome(v: unknown): PolymarketOutcome | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  const name = asString(o.name) || asString(o.outcome)
+  if (!name) return null
+  const outcome: PolymarketOutcome = { name }
+  const price = o.price
+  if (typeof price === 'number' && Number.isFinite(price)) {
+    outcome.price = `${(price * 100).toFixed(1)}%`
+  } else if (typeof price === 'string' && price) {
+    outcome.price = stripControlChars(price)
+  }
+  return outcome
+}
+
+function parsePolymarketMarket(v: unknown): PolymarketMarket | null {
+  if (!v || typeof v !== 'object') return null
+  const o = v as Record<string, unknown>
+  const question = asString(o.question) || asString(o.title)
+  if (!question) return null
+  const id = asString(o.id) || asString(o.slug)
+  const outcomesRaw = Array.isArray(o.outcomes) ? o.outcomes : []
+  const outcomes = outcomesRaw.map(parsePolymarketOutcome).filter((x): x is PolymarketOutcome => x !== null)
+  const market: PolymarketMarket = { id, question, outcomes }
+  const volume = o.volume
+  if (typeof volume === 'number' && Number.isFinite(volume)) {
+    market.volume = formatUsd(volume)
+  } else if (typeof volume === 'string' && volume) {
+    market.volume = stripControlChars(volume)
+  }
+  const endDate = asString(o.endDate) || asString(o.end_date)
+  if (endDate) market.endDate = endDate
+  return market
+}
+
+/**
+ * Validate + coerce an arbitrary value into a {@link PolymarketMarketsCard}.
+ * Returns null when it isn't a polymarket_markets envelope with at least one
+ * renderable market, mirroring {@link parseBalanceSummaryEnvelope}.
+ */
+export function parsePolymarketMarketsEnvelope(value: unknown): PolymarketMarketsCard | null {
+  if (!value || typeof value !== 'object') return null
+  const o = value as Record<string, unknown>
+  if (o.surface !== 'polymarket_markets') return null
+  const raw = Array.isArray(o.markets) ? o.markets : Array.isArray(o.data) ? o.data : []
+  const markets = raw.map(parsePolymarketMarket).filter((m): m is PolymarketMarket => m !== null)
+  if (markets.length === 0) return null
+  return { surface: 'polymarket_markets', markets }
+}
+
+/**
+ * Render a polymarket_markets card as prose — one block per market — instead
+ * of the raw envelope JSON.
+ */
+export function renderPolymarketMarketsCard(card: PolymarketMarketsCard): string {
+  const lines: string[] = [chalk.bold('  Polymarket markets')]
+  for (const market of card.markets) {
+    const metaBits = [market.volume ? `${market.volume} vol` : '', market.endDate ? `ends ${market.endDate}` : '']
+      .filter(Boolean)
+      .join(', ')
+    lines.push(`    ${chalk.bold(market.question)}${metaBits ? chalk.gray(`  (${metaBits})`) : ''}`)
+    for (const outcome of market.outcomes) {
+      const priceCol = outcome.price ? chalk.gray(`  ${outcome.price}`) : ''
+      lines.push(`      ${outcome.name}${priceCol}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Legacy-path fallback: detect a polymarket_markets envelope embedded in
+ * assistant message content and return both the parsed card and the message
+ * text with the JSON blob removed. Mirrors
+ * {@link extractBalanceSummaryFromText}.
+ */
+export function extractPolymarketMarketsFromText(
+  content: string
+): { card: PolymarketMarketsCard; remainingText: string } | null {
+  return extractSurfaceFromText(content, 'polymarket_markets', parsePolymarketMarketsEnvelope)
+}
+
+/**
+ * Shared legacy-echo extractor: scan `content` for a `{`-delimited object that
+ * mentions `surfaceKey` and parses as a well-formed envelope via `parser`.
+ * Generalizes {@link extractBalanceSummaryFromText}'s brace-scan so each
+ * surface doesn't reimplement the same O(n) scan / size backstop / fence
+ * stripping.
+ */
+function extractSurfaceFromText<T>(
+  content: string,
+  surfaceKey: string,
+  parser: (value: unknown) => T | null
+): { card: T; remainingText: string } | null {
+  if (!content || !content.includes(surfaceKey)) return null
+
+  // Same pathological-input backstop as extractBalanceSummaryFromText.
+  if (content.length > 200_000) return null
+
+  for (let i = content.indexOf('{'); i !== -1; i = content.indexOf('{', i + 1)) {
+    const end = matchBrace(content, i)
+    if (end === -1) break
+    const blob = content.slice(i, end + 1)
+    if (!blob.includes(surfaceKey)) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(blob)
+    } catch {
+      continue
+    }
+    const card = parser(parsed)
+    if (!card) continue
+    const before = content.slice(0, i).replace(/```(?:json)?\s*$/i, '')
+    const after = content.slice(end + 1).replace(/^\s*```/, '')
+    const remainingText = (before + after).trim()
+    return { card, remainingText }
+  }
+  return null
 }

@@ -133,6 +133,13 @@ type StreamCallbacks = {
   // card envelope; the consumer validates + renders it. Replaces the legacy
   // verbatim-echo path where the card arrived as raw JSON in message content.
   onBalanceSummary?: (card: unknown) => void
+  // Fired for the `data-yield_opportunities` / `data-polymarket_markets` SSE
+  // parts the backend emits when the client advertised those surfaces (rj3p).
+  // Same contract as onBalanceSummary: carries the raw envelope, the consumer
+  // validates + renders it as prose instead of letting the legacy verbatim-echo
+  // path dump raw card JSON into message content.
+  onYieldOpportunities?: (card: unknown) => void
+  onPolymarketMarkets?: (card: unknown) => void
   // Fired for the `data-turn_outcome` SSE part the backend emits at turn end when
   // the client advertised "turn_outcome" in supported_surfaces (a2a-02). Carries
   // the typed { kind, code?, detail? } discriminator so a headless caller can tell
@@ -725,6 +732,16 @@ export class AgentClient {
           callbacks.onBalanceSummary?.(card)
           break
         }
+        case 'yield_opportunities': {
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onYieldOpportunities?.(card)
+          break
+        }
+        case 'polymarket_markets': {
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onPolymarketMarkets?.(card)
+          break
+        }
         case 'turn_outcome': {
           // a2a-02: typed turn-outcome discriminator (envelope under `.data`).
           // parseTurnOutcome drops a malformed payload so it can never flip an
@@ -989,6 +1006,10 @@ export class AgentClient {
         return 'suggestions'
       case 'data-balance_summary':
         return 'balance_summary'
+      case 'data-yield_opportunities':
+        return 'yield_opportunities'
+      case 'data-polymarket_markets':
+        return 'polymarket_markets'
       case 'data-turn_outcome':
         return 'turn_outcome'
       case 'data-message':

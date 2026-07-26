@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest'
 import {
   CLI_SUPPORTED_SURFACES,
   extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
   parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
   parseTurnOutcome,
+  parseYieldOpportunitiesEnvelope,
   renderBalanceSummaryCard,
+  renderPolymarketMarketsCard,
+  renderYieldOpportunitiesCard,
 } from '../cards'
 
 const VALID_ENVELOPE = {
@@ -33,6 +39,10 @@ describe('CLI_SUPPORTED_SURFACES', () => {
   })
   it('advertises turn_outcome (a2a-02)', () => {
     expect(CLI_SUPPORTED_SURFACES).toContain('turn_outcome')
+  })
+  it('advertises yield_opportunities and polymarket_markets (rj3p)', () => {
+    expect(CLI_SUPPORTED_SURFACES).toContain('yield_opportunities')
+    expect(CLI_SUPPORTED_SURFACES).toContain('polymarket_markets')
   })
 })
 
@@ -204,5 +214,140 @@ describe('extractBalanceSummaryFromText (legacy verbatim-echo fallback)', () => 
     // content past the backstop returns null (raw text prints) rather than hang.
     const huge = 'balance_summary ' + '{'.repeat(150_000) + '}'.repeat(150_000)
     expect(extractBalanceSummaryFromText(huge)).toBeNull()
+  })
+})
+
+// ============================================================================
+// yield_opportunities (rj3p)
+// ============================================================================
+
+const YIELD_ENVELOPE = {
+  surface: 'yield_opportunities',
+  opportunities: [
+    { id: 'y1', name: 'USDC Lending', chain: 'Ethereum', symbol: 'USDC', apy: 0.042, provider: 'Aave' },
+    { id: 'y2', symbol: 'DOT', chain: 'Polkadot', apy: '12.5%' },
+  ],
+}
+
+describe('parseYieldOpportunitiesEnvelope', () => {
+  it('parses a valid envelope, converting fractional APY to a percentage', () => {
+    const card = parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)
+    expect(card).not.toBeNull()
+    expect(card!.opportunities).toHaveLength(2)
+    expect(card!.opportunities[0]).toMatchObject({ symbol: 'USDC', apy: '4.20%', provider: 'Aave' })
+    // A pre-formatted string APY passes through unchanged.
+    expect(card!.opportunities[1].apy).toBe('12.5%')
+  })
+
+  it('rejects a non-yield_opportunities surface', () => {
+    expect(parseYieldOpportunitiesEnvelope({ surface: 'balance_summary', opportunities: [] })).toBeNull()
+  })
+
+  it('rejects an envelope with no renderable opportunities', () => {
+    expect(parseYieldOpportunitiesEnvelope({ surface: 'yield_opportunities', opportunities: [{}] })).toBeNull()
+  })
+
+  it('rejects junk', () => {
+    expect(parseYieldOpportunitiesEnvelope(null)).toBeNull()
+    expect(parseYieldOpportunitiesEnvelope('nope')).toBeNull()
+  })
+})
+
+describe('renderYieldOpportunitiesCard', () => {
+  it('renders human-readable prose, not raw JSON', () => {
+    const out = renderYieldOpportunitiesCard(parseYieldOpportunitiesEnvelope(YIELD_ENVELOPE)!)
+    expect(out).toContain('USDC')
+    expect(out).toContain('4.20%')
+    expect(out).toContain('Aave')
+    expect(out).toContain('DOT')
+    expect(out).not.toContain('"surface"')
+    expect(out).not.toContain('"opportunities"')
+  })
+})
+
+describe('extractYieldOpportunitiesFromText (legacy verbatim-echo fallback)', () => {
+  it('returns null for plain prose', () => {
+    expect(extractYieldOpportunitiesFromText('Here are some yield options.')).toBeNull()
+  })
+
+  it('extracts an envelope embedded in surrounding prose', () => {
+    const text = `Sure, here's what I found: ${JSON.stringify(YIELD_ENVELOPE)} Let me know if you want more.`
+    const res = extractYieldOpportunitiesFromText(text)
+    expect(res).not.toBeNull()
+    expect(res!.card.opportunities).toHaveLength(2)
+    expect(res!.remainingText).toContain("Sure, here's what I found")
+    expect(res!.remainingText).not.toContain('"surface"')
+  })
+})
+
+// ============================================================================
+// polymarket_markets (rj3p)
+// ============================================================================
+
+const POLYMARKET_ENVELOPE = {
+  surface: 'polymarket_markets',
+  markets: [
+    {
+      id: 'm1',
+      question: 'Will it rain tomorrow?',
+      volume: 12345.6,
+      endDate: '2026-08-01',
+      outcomes: [
+        { name: 'Yes', price: 0.6 },
+        { name: 'No', price: 0.4 },
+      ],
+    },
+  ],
+}
+
+describe('parsePolymarketMarketsEnvelope', () => {
+  it('parses a valid envelope, converting fractional prices to percentages', () => {
+    const card = parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)
+    expect(card).not.toBeNull()
+    expect(card!.markets).toHaveLength(1)
+    expect(card!.markets[0].outcomes).toEqual([
+      { name: 'Yes', price: '60.0%' },
+      { name: 'No', price: '40.0%' },
+    ])
+    expect(card!.markets[0].volume).toContain('12,345.60')
+  })
+
+  it('rejects a non-polymarket_markets surface', () => {
+    expect(parsePolymarketMarketsEnvelope({ surface: 'yield_opportunities', markets: [] })).toBeNull()
+  })
+
+  it('rejects an envelope with no renderable markets', () => {
+    expect(parsePolymarketMarketsEnvelope({ surface: 'polymarket_markets', markets: [{}] })).toBeNull()
+  })
+
+  it('rejects junk', () => {
+    expect(parsePolymarketMarketsEnvelope(null)).toBeNull()
+    expect(parsePolymarketMarketsEnvelope('nope')).toBeNull()
+  })
+})
+
+describe('renderPolymarketMarketsCard', () => {
+  it('renders human-readable prose, not raw JSON', () => {
+    const out = renderPolymarketMarketsCard(parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)!)
+    expect(out).toContain('Will it rain tomorrow?')
+    expect(out).toContain('Yes')
+    expect(out).toContain('60.0%')
+    expect(out).not.toContain('"surface"')
+    expect(out).not.toContain('"outcomes"')
+  })
+})
+
+describe('extractPolymarketMarketsFromText (legacy verbatim-echo fallback)', () => {
+  it('returns null for plain prose', () => {
+    expect(extractPolymarketMarketsFromText('Here are some markets.')).toBeNull()
+  })
+
+  it('extracts an envelope embedded in surrounding prose', () => {
+    const text = `Done. ${JSON.stringify(POLYMARKET_ENVELOPE)} Anything else?`
+    const res = extractPolymarketMarketsFromText(text)
+    expect(res).not.toBeNull()
+    expect(res!.card.markets).toHaveLength(1)
+    expect(res!.remainingText).toContain('Done.')
+    expect(res!.remainingText).not.toContain('"surface"')
   })
 })
