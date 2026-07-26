@@ -88,9 +88,12 @@ describe('getCosmosSigningInputs gas limit', () => {
     expect(input.sequence.toString()).toBe(sequence.toString())
   })
 
-  it('honors a positive relayed CosmosSpecific gas limit', async () => {
+  it('honors a positive relayed CosmosSpecific gas limit without touching the fee amount', async () => {
+    // `gas` (proto field 3) is the fee AMOUNT and is signed verbatim; field 7
+    // moves the gas LIMIT only. Re-deriving the amount here is what diverged
+    // the SignDoc from iOS / Android.
     await expect(feeFor(345_678n)).resolves.toEqual({
-      amount: '4321',
+      amount: '2500',
       gas: '345678',
     })
   })
@@ -104,6 +107,48 @@ describe('getCosmosSigningInputs gas limit', () => {
       amount: '2500',
       gas: '200000',
     })
+  })
+
+  // Regression: a TerraClassic LUNC send initiated by the extension with a
+  // simulated gas limit of 321_979 was signed by this resolver with a rescaled
+  // fee of 21_465_267 uluna, while the iOS co-signer signed the payload's
+  // 20_000_000 verbatim. Two SignDocs, two pre-sign hashes, keysign never
+  // completed. Pin the mobile-compatible bytes.
+  it('signs a TerraClassic fee amount verbatim alongside a widened relayed gas limit', async () => {
+    const terraClassicSender = walletCore.AnyAddress.createWithPublicKey(
+      walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1)).getPublicKeySecp256k1(true),
+      walletCore.CoinType.terra
+    ).description()
+
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.TerraClassic,
+          ticker: 'LUNC',
+          address: terraClassicSender,
+          contractAddress: '',
+          decimals: 6,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: terraClassicSender,
+        toAmount: '300000000',
+        blockchainSpecific: {
+          case: 'cosmosSpecific',
+          value: create(CosmosSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            gas: 20_000_000n,
+            gasLimit: 321_979n,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    expect(input.fee?.amounts?.[0]?.amount).toBe('20000000')
+    expect(input.fee?.gas.toString()).toBe('321979')
   })
 
   it('keeps vault-based Cosmos chains on their static gas limit', async () => {

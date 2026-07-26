@@ -26,6 +26,8 @@
  * does not change mid-tx.
  */
 
+import { attempt } from '@vultisig/lib-utils/attempt'
+
 import { Chain } from '../../Chain'
 import { cosmosRpcUrl } from './cosmosRpcUrl'
 
@@ -43,6 +45,25 @@ import { cosmosRpcUrl } from './cosmosRpcUrl'
  */
 export const getTerraClassicTaxRateUrl = (): string =>
   `${cosmosRpcUrl[Chain.TerraClassic]}/terra/treasury/v1beta1/tax_rate`
+
+/**
+ * The `x/tax` module params, which carry `burn_tax_rate` — a DIFFERENT tax
+ * from the `x/treasury` `tax_rate` above, and the one that is actually live.
+ *
+ * | module       | field           | live value | exempts uluna? |
+ * |--------------|-----------------|------------|----------------|
+ * | `x/treasury` | `tax_rate`      | 0          | yes            |
+ * | `x/tax`      | `burn_tax_rate` | 0.005      | NO             |
+ *
+ * The treasury stability tax has been paused by governance since the UST
+ * collapse; the burn tax replaced it and applies to `uluna` transfers too —
+ * burning LUNC is its entire purpose. Reading the treasury endpoint for a
+ * LUNC send therefore always yields 0 and undercharges the fee.
+ *
+ * Same endpoint iOS (`CosmosAPI.terraClassicTaxParams`) and Android read.
+ */
+export const getTerraClassicBurnTaxParamsUrl = (): string =>
+  `${cosmosRpcUrl[Chain.TerraClassic]}/terra/tax/v1beta1/params`
 
 export const getTerraClassicTaxCapsUrl = (denom: string): string =>
   // URL-encode the denom: `ibc/<HASH>` and `factory/<addr>/<subdenom>` carry
@@ -62,6 +83,26 @@ export const getTerraClassicTaxCapsUrl = (denom: string): string =>
  * tax in base units of the same denom.
  */
 export const TERRA_CLASSIC_TAX_DEC_SCALE = 10n ** 18n
+
+/**
+ * Conservative fallback burn-tax rate (0.5%) used when the live `x/tax`
+ * params can't be fetched or parsed. Failing CLOSED (taxing) rather than open
+ * (0%) avoids signing a tx the chain then rejects at broadcast — an overpaid
+ * fee is recoverable, a rejected transfer wastes the gas and moves nothing.
+ *
+ * Mirrors iOS / Android `TerraClassicTax.fallbackBurnTaxRate`.
+ */
+export const TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE = 5_000_000_000_000_000n // 0.005
+
+/**
+ * Sanity ceiling (10%) for a parsed burn-tax rate. The rate is
+ * governance-controlled and has historically been ≤ 1.2%, so anything above
+ * this is treated as garbage — a malformed `"5"` meaning 500% would otherwise
+ * be applied literally and drain the account into the fee. Keeps the fail-safe
+ * symmetric with the lower bound, so a bad endpoint can neither under- nor
+ * massively over-charge. Mirrors iOS / Android `maxBurnTaxRate`.
+ */
+export const TERRA_CLASSIC_MAX_BURN_TAX_RATE = 100_000_000_000_000_000n // 0.1
 
 // ---------------------------------------------------------------------------
 // Fetchers
@@ -131,6 +172,60 @@ export async function getTerraClassicTaxRate(opts: FetchOpts = {}): Promise<bigi
     throw new Error('tax_rate: missing field on 200 response')
   }
   return parseDecToFixed18(raw.tax_rate)
+}
+
+/**
+ * Parses an `x/tax` `burn_tax_rate` Dec string into an 18-decimal fixed-point
+ * bigint, falling back to {@link TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE} on a
+ * missing, malformed, negative, or implausibly large value.
+ *
+ * Never throws. Unlike the treasury `tax_rate` — where a missing field means
+ * "the LCD is broken, refuse to guess" — a missing burn rate has a known-safe
+ * answer (the current governance rate), and the initiator is the only device
+ * that computes this. Mirrors iOS / Android `TerraClassicTax.parseRate`.
+ */
+export const parseTerraClassicBurnTaxRate = (raw: string | null | undefined): bigint => {
+  if (raw === null || raw === undefined) return TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE
+
+  const parsed = attempt(() => parseDecToFixed18(raw))
+  if ('error' in parsed) return TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE
+
+  return parsed.data > TERRA_CLASSIC_MAX_BURN_TAX_RATE ? TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE : parsed.data
+}
+
+/**
+ * Fetches the live `x/tax` burn-tax rate as an 18-decimal fixed-point bigint
+ * (`5_000_000_000_000_000n` for the current 0.5%).
+ *
+ * Fails closed to {@link TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE} on any LCD
+ * error, so a network blip produces a slightly overpaid fee rather than a tx
+ * the ante handler rejects.
+ */
+export async function getTerraClassicBurnTaxRate(opts: FetchOpts = {}): Promise<bigint> {
+  type Raw = { params?: { burn_tax_rate?: string } }
+
+  const result = await attempt(() => lcdGetJson<Raw>(getTerraClassicBurnTaxParamsUrl(), opts))
+  if ('error' in result) return TERRA_CLASSIC_FALLBACK_BURN_TAX_RATE
+
+  return parseTerraClassicBurnTaxRate(result.data.params?.burn_tax_rate)
+}
+
+/**
+ * Burn tax on a `amount` of the send denom, at an 18-decimal fixed-point
+ * `rate`, rounded UP so the signed fee never lands a base unit below the
+ * chain's check.
+ *
+ * Deliberately NOT {@link applyTerraClassicTax}: that models the treasury
+ * stability tax, which exempts `uluna` and applies per-denom caps. The burn
+ * tax exempts nothing and is uncapped — feeding a LUNC send through the
+ * treasury helper silently returns `0n`.
+ *
+ * Mirrors iOS / Android `TerraClassicTax.burnTax` (both round up).
+ */
+export const applyTerraClassicBurnTax = (amount: bigint, rate: bigint): bigint => {
+  if (amount <= 0n || rate <= 0n) return 0n
+
+  return (amount * rate + TERRA_CLASSIC_TAX_DEC_SCALE - 1n) / TERRA_CLASSIC_TAX_DEC_SCALE
 }
 
 /**

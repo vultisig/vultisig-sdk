@@ -1,7 +1,7 @@
 import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
-import { resolveCosmosGasFee } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasFee'
+import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
@@ -528,23 +528,19 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
 
-    const staticGasLimit = getCosmosGasLimit(coin)
-    const relayedGasLimit = ibcSpecific?.gasLimit
-    // COSMOS-02: an IBC MsgTransfer needs more gas headroom than the flat
-    // per-chain limit (calibrated for MsgSend) — see resolveCosmosGasFee's
-    // IBC_GAS_MULTIPLIER. Scoped to IBC_TRANSFER only so plain sends and
-    // wasm executes on ibc-enabled chains keep the calibrated flat fee.
-    const isIbcTransfer = ibcSpecific?.transactionType === TransactionType.IBC_TRANSFER
-    const { resolvedGasLimit, feeAmount } = resolveCosmosGasFee({
-      gas: ibcSpecific?.gas ?? 0n,
-      relayedGasLimit,
-      staticGasLimit,
-      isIbcTransfer,
+    // `CosmosSpecific.gas` (proto field 3) IS the fee amount — signed verbatim,
+    // never re-derived here. The initiator prices it against the gas limit it
+    // relays in field 7 (`getCosmosChainSpecific`), so any headroom is already
+    // baked in. Doing arithmetic on it in this read path is what diverged the
+    // SignDoc from iOS / Android — see resolveCosmosGasLimit.ts.
+    const resolvedGasLimit = resolveCosmosGasLimit({
+      relayedGasLimit: ibcSpecific?.gasLimit,
+      staticGasLimit: getCosmosGasLimit(coin),
     })
 
     return TW.Cosmos.Proto.Fee.create({
       gas: Long.fromBigInt(resolvedGasLimit),
-      amounts: getFeeAmounts(feeAmount),
+      amounts: getFeeAmounts(ibcSpecific?.gas ?? 0n),
     })
   }
 
