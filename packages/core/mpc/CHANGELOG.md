@@ -1,5 +1,75 @@
 # @vultisig/core-mpc
 
+## 1.13.0
+
+### Minor Changes
+
+- [#1518](https://github.com/vultisig/vultisig-sdk/pull/1518) [`aa47b4a`](https://github.com/vultisig/vultisig-sdk/commit/aa47b4a03c7391d13c738cba68b13a1526d1c502) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Add `buildLimitSwapKeysignPayload`, the step that turns a THORChain `=<` limit-order memo into a signable transaction.
+
+  `buildLimitSwapMemo` produced the memo and `getThorchainMemoAsset` the asset notation, but nothing carried either into a `KeysignPayload` — limit orders could be composed and never placed. This builder branches on the source asset, mirroring iOS `LimitSwapPayloadAssembler`:
+
+  - **Native RUNE** — `MsgDeposit` on THORChain itself; no inbound vault, `toAddress` carries the signer's own address as the placeholder the Cosmos signer ignores.
+  - **Native gas asset** — transfer to the live Asgard inbound vault with the memo in tx `data` / `OP_RETURN`, no swap payload.
+  - **ERC20** — the router's `depositWithExpiry` call plus an `approve` when allowance is short, both in one ceremony. A token source signed without a swap payload would fall through to a plain ERC-20 transfer, dropping the memo and stranding the tokens on the router.
+
+  Every gate fails closed: the `EnableAdvSwapQueue` mimir is re-checked at sign time (it can flip while the user sits on Verify, and a `=<` order on a network with the queue off can execute as an unprotected market swap), the memo must actually be a limit memo, RUNE deposits are blocked on THORChain's global trading pause — including when the inbound list is unverifiable, since RUNE bypasses the per-chain halt filter entirely — and external sources must resolve a live, non-halted inbound whose address is then used as the destination.
+
+  Also exports `getAdvancedSwapQueueEnabled` (the mimir gate), `findLimitSwapInbound` / `shouldBlockRuneDeposit` (pure inbound selection), and `assertLimitSwapMemo`.
+
+  `assertValidThorchainDepositMemo` is deliberately unchanged: it guards the standalone `prepareThorchainMsgDepositTxFromKeys` tool and is not on the keysign-payload path, so excluding swap-shaped memos there stays correct.
+
+  No EVM gas-limit override is applied. iOS pins a native-EVM limit deposit to 120000 to match its own market path, but here both paths put the memo on `keysignPayload.memo` and neither sets a general swap payload, so both already floor at `deriveEvmGasLimit`'s 600000 data-tx limit. Forcing 120000 would make the limit path diverge from the market path and risk under-gassing.
+
+### Patch Changes
+
+- [#1419](https://github.com/vultisig/vultisig-sdk/pull/1419) [`1292e83`](https://github.com/vultisig/vultisig-sdk/commit/1292e83b1d370eff35ecd95b94e83689b724ca36) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject secured-asset signing payloads whose chain prefix is not in the canonical native-swap registry.
+
+- Updated dependencies [[`1292e83`](https://github.com/vultisig/vultisig-sdk/commit/1292e83b1d370eff35ecd95b94e83689b724ca36), [`aa47b4a`](https://github.com/vultisig/vultisig-sdk/commit/aa47b4a03c7391d13c738cba68b13a1526d1c502), [`b8d0639`](https://github.com/vultisig/vultisig-sdk/commit/b8d063904673890f0a956a56f6474d678ceaba3c), [`32e5d36`](https://github.com/vultisig/vultisig-sdk/commit/32e5d369ae4723299a6cb8f694da1782dbf207c2)]:
+  - @vultisig/core-chain@2.28.0
+
+## 1.12.1
+
+### Patch Changes
+
+- [#1474](https://github.com/vultisig/vultisig-sdk/pull/1474) [`c443b9c`](https://github.com/vultisig/vultisig-sdk/commit/c443b9ce699ef76f1407d0386ed20fbc7e3f253f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route SwapKit transaction links through its public tracker across the shared core and SDK APIs.
+
+- [#1423](https://github.com/vultisig/vultisig-sdk/pull/1423) [`6c64ce3`](https://github.com/vultisig/vultisig-sdk/commit/6c64ce39888097d02881427e3cc4c9a388714beb) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix Cardano send-max building an unbroadcastable zero-fee transaction. WalletCore's Cardano planner ignores `forceFee` whenever `useMaxAmount` is set (it returns the full input as the amount with fee=0), so a send-max is now built as an explicit `(totalInput - fee)` transfer with the converged fee forced and `useMaxAmount: false` - yielding a valid fee-bearing tx with the balance fully consumed (no change output).
+
+- [#1473](https://github.com/vultisig/vultisig-sdk/pull/1473) [`338ef32`](https://github.com/vultisig/vultisig-sdk/commit/338ef3229d778bb012d915977f512121d330ac1f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose the native-swap expiry and inbound-vault guard from core MPC so shipping
+  wallets and the SDK facade can share one pre-signing or pre-broadcast check.
+
+- [#1415](https://github.com/vultisig/vultisig-sdk/pull/1415) [`01a66cf`](https://github.com/vultisig/vultisig-sdk/commit/01a66cf5c0110ea1ea439ddbca8e6b75179fc0c5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve exact uint64 Cosmos account sequences through account lookup and signing payload construction.
+
+- [#1378](https://github.com/vultisig/vultisig-sdk/pull/1378) [`ba14218`](https://github.com/vultisig/vultisig-sdk/commit/ba1421829bd4d278b9e6524fa53cf0dd18e96943) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - fix(qbtc): thread proto field-7 `gasLimit` into the QBTC AuthInfo encoder so a QBTC tx that supplies a simulated gas limit is no longer capped at the flat `300000` default. This is a no-op while field 7 is unset, which is the case for every QBTC tx today (the QBTC chain-specific resolver never populates it). Adds golden vectors pinning the QBTC fee/gas split: fee amount from field-3 `gas`, gas limit from field-7-or-300000. QBTC's fee is deliberately flat and, unlike the shared `resolveCosmosGasFee` path, does not scale with the limit.
+
+- [#1414](https://github.com/vultisig/vultisig-sdk/pull/1414) [`300dabf`](https://github.com/vultisig/vultisig-sdk/commit/300dabf232bfe49d9628d4026c55bb72b6472b97) Thanks [@rcoderdev](https://github.com/rcoderdev)! - For EVM swap providers that legitimately distinguish the allowance executor
+  from the swap router, use the quote's approval address for SDK allowance checks
+  and approval payloads while retaining the router as the signed destination.
+
+- [#1377](https://github.com/vultisig/vultisig-sdk/pull/1377) [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-assert the aggregator router allow-list (1inch/kyber) and the Solana Jupiter
+  program + fund-movement guard on the MPC co-signer signing-input path, not only
+  at quote construction. Every co-signer independently rebuilds the signing input
+  from the shared KeysignPayload, so a compromised initiator could otherwise hand
+  a co-signer an unvalidated swap destination (EVM `quote.tx.to`) or a spliced
+  drain instruction (Solana `quote.tx.data`) and have it signed verbatim. Both
+  guards are pure gates: they fail closed for enforced providers or no-op, and
+  never mutate the signed bytes, so cross-device pre-signing hash agreement is
+  unchanged.
+
+- [#1215](https://github.com/vultisig/vultisig-sdk/pull/1215) [`77e2401`](https://github.com/vultisig/vultisig-sdk/commit/77e24018c906a8dcf1cb21d2c1fc8e337a4b2b8e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Sign dApp-supplied raw Solana transactions over their original message bytes instead of a WalletCore re-encode. The signSolana path previously routed raw transactions through TransactionDecoder + SigningInput.rawMessage, letting WalletCore re-encode the message to form the ed25519 pre-image - not guaranteed byte-identical for v0+ALT transactions across WalletCore versions, which breaks mixed-vault co-signing with iOS/Android (which already sign the original bytes, ios#4419 / android#5223). The signature is now spliced into the original transaction bytes at the fee-payer slot for assembly.
+
+- [#1275](https://github.com/vultisig/vultisig-sdk/pull/1275) [`83df849`](https://github.com/vultisig/vultisig-sdk/commit/83df8496aa01cfe7d59f48b32686ba863cf87a02) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Match iOS Sui send coin selection by bounding native inputs to the largest
+  objects covering amount plus gas, selecting token inputs by largest covering
+  objects, and choosing a native gas object that covers token-send gas.
+
+- [#1377](https://github.com/vultisig/vultisig-sdk/pull/1377) [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Bind the ERC-20 approval spender to the verified swap router on the co-signer signing-input path for enforced aggregator providers (1inch/kyber). Follow-up to the signing-path router guard: `quote.tx.to` was re-asserted, but `erc20ApprovePayload.spender` is a separate wire field the approve resolver reads verbatim, so a payload could pass the router check yet still carry an approve granting an attacker an allowance (approval-drain). The bind runs in the approve branch (where the field is still present) and requires `spender === quote.tx.to` for enforced providers; unenforced providers stay unbound (notably cowswap, whose spender is legitimately the GPv2VaultRelayer, not `tx.to`). Monotonic gate: throws or no-ops, never mutates signed bytes. Initiators set the two equal by construction, so only a hand-built/tampered payload trips it.
+
+- [#1274](https://github.com/vultisig/vultisig-sdk/pull/1274) [`ffc174c`](https://github.com/vultisig/vultisig-sdk/commit/ffc174c56d72990e6ee387ac389c96a2f4812cf5) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject negative TON signing amounts before byte encoding so native, dApp-supplied
+  TON messages, and Jetton helper amounts cannot silently truncate a `-`-prefixed
+  hex value.
+- Updated dependencies [[`5d46269`](https://github.com/vultisig/vultisig-sdk/commit/5d46269396fd0dbcf9d84f0201a494dffafc1a36), [`9d50ac5`](https://github.com/vultisig/vultisig-sdk/commit/9d50ac5c586d058aabdbfb413e7be163a222da89), [`c443b9c`](https://github.com/vultisig/vultisig-sdk/commit/c443b9ce699ef76f1407d0386ed20fbc7e3f253f), [`a4d8bbe`](https://github.com/vultisig/vultisig-sdk/commit/a4d8bbe81a94019aea5193a411a091ccb2e98682), [`69a3f75`](https://github.com/vultisig/vultisig-sdk/commit/69a3f75c265e19682e6dbdac0fdb640c53d73b33), [`e3d8568`](https://github.com/vultisig/vultisig-sdk/commit/e3d8568a04a6dcd977ccaeeeb5bcf5da080fd275), [`47a63df`](https://github.com/vultisig/vultisig-sdk/commit/47a63dfc8613405b7be1105233627e66a163d7c7), [`ceccf56`](https://github.com/vultisig/vultisig-sdk/commit/ceccf5633ebd7d838e26e2fcbac151c52d26af85), [`b5f880a`](https://github.com/vultisig/vultisig-sdk/commit/b5f880a2dea1e06239b6ccb1a35fbdb4994d5917), [`0c4a090`](https://github.com/vultisig/vultisig-sdk/commit/0c4a090bc4f3868e2a3a20c9f12742344cf8350e), [`8a0bca6`](https://github.com/vultisig/vultisig-sdk/commit/8a0bca688ec606292df587559115cafcc3287fcf), [`8c02c8c`](https://github.com/vultisig/vultisig-sdk/commit/8c02c8c7e8463b5d57fbd5c338a1f95c6129feb2), [`01a66cf`](https://github.com/vultisig/vultisig-sdk/commit/01a66cf5c0110ea1ea439ddbca8e6b75179fc0c5), [`7226d49`](https://github.com/vultisig/vultisig-sdk/commit/7226d49d42cec673465aac5b49b54d4e47628ab6), [`0de8684`](https://github.com/vultisig/vultisig-sdk/commit/0de8684706f1b538a459acca0e55bf15c95a91f3), [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235), [`d01ac2e`](https://github.com/vultisig/vultisig-sdk/commit/d01ac2ee87d080def76454adcf5313726a916ed8), [`358c27b`](https://github.com/vultisig/vultisig-sdk/commit/358c27ba3bdd94813d00ec966ba43c8cc46f49e0), [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235), [`3a40960`](https://github.com/vultisig/vultisig-sdk/commit/3a40960cc6391b69bbe6371874889b64399d64b9), [`3bc880a`](https://github.com/vultisig/vultisig-sdk/commit/3bc880a06b90fa64793983ba498f11fdc55e2115)]:
+  - @vultisig/core-chain@2.27.0
+
 ## 1.12.0
 
 ### Minor Changes

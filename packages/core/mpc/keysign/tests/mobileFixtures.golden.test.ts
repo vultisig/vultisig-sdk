@@ -71,34 +71,23 @@ const compareHashesAsSet = ({ chain, fixtureFile }: { chain: Chain; fixtureFile:
 // Root-cause notes (golden-vector hardening pass, sdk#1367):
 //
 // - cardano.json::Send ADA - max amount
-//   Root cause CONFIRMED: this repo's pinned wallet-core (4.7.0) has a real
-//   bug/regression for Cardano `Transfer.useMaxAmount: true` combined with a
-//   client-supplied `forceFee`. Verified via TWO independent WalletCore entry
-//   points — `TransactionCompiler.preImageHashes` (what this SDK calls) AND
-//   `AnySigner.plan` (the "official" planning API) — both return
-//   `TransactionPlan{ amount: <full input UTXO, unadjusted>, fee: 0 }` for
-//   this fixture's `useMaxAmount: true` input, ignoring `forceFee` entirely.
-//   A fee=0 Cardano tx is invalid on-chain (real nodes require
-//   fee >= minFeeA + minFeeB*txSize) — a "send max" Cardano transaction built
-//   by this SDK today would be rejected at broadcast, not silently mis-signed.
-//   Separately CONFIRMED via exhaustive brute force (fee in [150_000,
-//   200_000] lovelace) that fee=164_515 / amount=9_835_485 reproduces the
-//   recorded device hash byte-for-byte — proving the device's original
-//   signer DID compute a real minimum fee for this send, and that a correct
-//   fix is possible in principle. However, 164_515 does NOT factor as an
-//   integer solution of the standard Cardano linear-fee formula
-//   (minFeeA=155_381 + minFeeB=44 * txSizeBytes) against this transaction's
-//   actual encoded size (90-byte body + a single ed25519 witness) — so the
-//   exact algorithm the device used (a different WalletCore version? a
-//   different placeholder-size assumption for the fee-convergence loop?)
-//   was NOT recoverable from this fixture alone. Applying a fix without a
-//   verified-general formula risks silently mis-computing fees on other
-//   real max-amount Cardano sends — worse than the current (loudly broken,
-//   fee=0) behavior. Follow-up: implement client-side fee convergence for
-//   Cardano max-amount sends (mirroring how the UTXO/Bitcoin resolver already
-//   calls `AnySigner.plan` before hashing) using the CURRENT wallet-core's
-//   own Cardano linear-fee behavior, validated against multiple max-amount
-//   fixtures (not just this one) before removing this override.
+//   The fee=0 send-max bug is FIXED (sdk#1382): WalletCore's Cardano planner
+//   ignores `forceFee` whenever `useMaxAmount` is set (returns `amount: <full
+//   input>, fee: 0`, an unbroadcastable tx), so the resolver no longer takes
+//   that path — a send-max is built as an EXPLICIT (totalInput - fee) transfer
+//   with the converged fee forced. Proven end-to-end (real fee-convergence +
+//   `AnySigner.plan`: fee > 0, change = 0, amount + fee = totalInput) in
+//   chainSpecific/resolvers/cardano.test.ts.
+//   This OFFLINE golden replay still diverges from the recorded device hash and
+//   is pinned via the override below: the fixture's `byte_fee: 44` is iOS's
+//   per-byte-rate parameter, whereas the SDK's `byteFee` field carries the
+//   TOTAL forced fee (computed by getCardanoChainSpecific's `44*size + 155_381`
+//   convergence). Replaying the raw fixture value therefore forces fee=44 here,
+//   not the device's converged fee (~164_515, which additionally does not
+//   factor the standard linear-fee formula for this body — a different
+//   historical signer). The production path re-converges `byteFee` first (this
+//   replay intentionally skips getCardanoChainSpecific), so this pinned hash is
+//   an artifact of the raw offline replay, not the shipped behavior.
 //
 // - terra.json::Send USTC on terra classic
 //   Root cause LIKELY (not conclusively reproduced): `getCosmosSigningInputs`
@@ -136,7 +125,7 @@ const compareHashesAsSet = ({ chain, fixtureFile }: { chain: Chain; fixtureFile:
 //   `tax_rate`/`tax_cap` that was live on `columbus-5` at capture time from
 //   chain history and extend the brute-force window accordingly.
 const sdkExpectedHashOverrides: Record<string, string[]> = {
-  'cardano.json::Send ADA - max amount': ['d681b85a798708c5d0e3cfd491363527889c72c6812419c2de246773a31fc120'],
+  'cardano.json::Send ADA - max amount': ['36c543072b375c86720e358084fec7436eab4a5b08be4377c02fed5e086eac49'],
   'terra.json::Send USTC on terra classic': ['0122eb10508372f69c521d7206a8d06aa6c569b1d4a9e449d4de5f32853dc6f8'],
 }
 

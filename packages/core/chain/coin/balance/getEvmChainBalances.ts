@@ -14,6 +14,12 @@ export type GetEvmChainBalancesInput = {
   coins: AccountCoinKey<EvmChain>[]
 }
 
+/**
+ * Balances keyed by `accountCoinKeyToString`. A key is present ONLY when the balance was actually
+ * READ: a present `0n` is a genuine zero balance, an ABSENT key means "unknown, the call failed".
+ * Callers must not conflate the two — caching/emitting a fabricated zero for a coin the user owns
+ * shows a real 0 for an owned asset until the cache expires.
+ */
 export type EvmChainBalances = Record<string, bigint>
 
 const getFallbackBalances = async ({ chain, address, coins }: GetEvmChainBalancesInput): Promise<EvmChainBalances> => {
@@ -24,12 +30,13 @@ const getFallbackBalances = async ({ chain, address, coins }: GetEvmChainBalance
       try {
         return [accountCoinKeyToString(input), await getEvmCoinBalance(input)] as const
       } catch {
-        return [accountCoinKeyToString(input), 0n] as const
+        // OMIT the key rather than reporting 0n: the read failed, so the balance is unknown.
+        return undefined
       }
     })
   )
 
-  return Object.fromEntries(entries)
+  return Object.fromEntries(entries.filter(entry => entry !== undefined))
 }
 
 export const getEvmChainBalances = async (input: GetEvmChainBalancesInput): Promise<EvmChainBalances> => {
@@ -74,11 +81,17 @@ export const getEvmChainBalances = async (input: GetEvmChainBalancesInput): Prom
   }
 
   return Object.fromEntries(
-    coins.map((coin, index) => {
+    coins.flatMap((coin, index) => {
       const result = results[index]
-      const amount = result?.status === 'success' ? BigInt(result.result as bigint) : 0n
 
-      return [accountCoinKeyToString({ ...coin, chain, address }), amount] as const
+      // A reverted / failed sub-call (allowFailure keeps it in the array as status 'failure') carries
+      // NO balance. Omit it instead of decoding it as 0n, so the caller can tell an unread coin from a
+      // genuinely empty one and refetch it rather than caching a fabricated zero.
+      if (result?.status !== 'success') {
+        return []
+      }
+
+      return [[accountCoinKeyToString({ ...coin, chain, address }), BigInt(result.result as bigint)] as const]
     })
   )
 }

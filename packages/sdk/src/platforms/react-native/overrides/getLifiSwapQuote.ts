@@ -28,6 +28,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
+import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
 import {
   getLifiClient,
   LifiAffiliateConfig,
@@ -41,7 +42,7 @@ import { memoize } from '@vultisig/lib-utils/memoize'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
-type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
+type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
   amount: bigint
   affiliateBps?: number
   /** Consumer-supplied LI.FI integrator override — mirrors the core
@@ -49,18 +50,12 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain>> & {
    * arg on `getQuote` so RN consumers get the same affiliate-routing surface
    * as Node consumers. (Ehsan-saradar #618 review.) */
   lifiAffiliateConfig?: LifiAffiliateConfig
+  /** Slippage tolerance as a fraction (e.g. 0.01 = 1%). Mirrors the core
+   * `getLifiSwapQuote` Input — the shared caller (findSwapQuote) passes
+   * `lifiSlippageFraction` here. When omitted, falls back to the stable/
+   * non-stable pair tier (see resolveLifiSlippage). */
+  slippage?: number
 }
-
-// 1% slippage tolerance — same as core implementation (see getLifiSwapQuote.ts in core).
-// MPC keysign ceremony latency makes the default LiFi 0.5% too tight for Vultisig flows.
-const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
-
-// Mirror of core's MAX_COMBINED_COST_BPS guard. Defensive: logs when affiliate
-// + slippage combined cost crosses 3%. Today affiliateBps is typically 0 and
-// slippage is 1% (100bps total) — well under the ceiling — but a future bump to
-// affiliateBps shouldn't silently push users past 3% total cost without logging.
-// (#519 r-N NeO should-fix #3 - mirror core guard in RN override.)
-const MAX_COMBINED_COST_BPS = 300
 
 // Mirror of core's `resolveSwapFeeChain`. See the core version in
 // `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote.ts` for the
@@ -102,11 +97,18 @@ export const getLifiSwapQuote = async ({
   amount,
   affiliateBps,
   lifiAffiliateConfig,
+  slippage: slippageOverride,
   ...transfer
 }: Input): Promise<GeneralSwapQuote> => {
   ensureLifiConfiguredInRN()
 
-  const combinedCostBps = (affiliateBps ?? 0) + DEFAULT_LIFI_SLIPPAGE_TOLERANCE * 10000
+  // Mirror core's tiered slippage (see ./lifiSlippage, the shared source of truth): honor an
+  // explicit consumer override, else 0.3% for stable pairs / 1% otherwise. Previously this
+  // override hardcoded a flat 1% and dropped the caller's `slippage` — so RN (most users) got a
+  // wider floor than web on stable pairs and silently ignored an explicit tight-tolerance request.
+  const slippage = resolveLifiSlippage({ slippageOverride, from: transfer.from, to: transfer.to })
+
+  const combinedCostBps = (affiliateBps ?? 0) + slippage * 10000
   if (combinedCostBps > MAX_COMBINED_COST_BPS) {
     console.warn(
       `[getLifiSwapQuote] affiliate + slippage combined cost exceeds ${MAX_COMBINED_COST_BPS}bps: ${combinedCostBps}bps`
@@ -146,7 +148,7 @@ export const getLifiSwapQuote = async ({
     // silently fall back to `_config.routeOptions?.fee`. For a consumer that
     // explicitly set 0, that's a silent non-zero fee. Now: 0 stays 0.
     fee: affiliateBps !== undefined ? affiliateBps / 10000 : undefined,
-    slippage: DEFAULT_LIFI_SLIPPAGE_TOLERANCE,
+    slippage,
     integrator,
   })
 

@@ -298,7 +298,24 @@ export class TransactionBuilder {
         allMessageHashes.push(...hexHashes)
       }
 
-      return allMessageHashes
+      // Sort so the initiating device drives messages in the same order as the
+      // joining devices. The joiner in this repo already sorts — see
+      // `keysign/cosigner.ts` — as do the Android app
+      // (`SigningHelper.getKeysignMessages` -> `messages.sorted()`) and the
+      // extension (`useKeysignMutation` -> `.sort()`); all three sign a
+      // multi-message keysign in lexicographic hash order. Returning
+      // resolver order here meant that whenever the order differed — e.g. an
+      // ERC-20 approve + swap where approveHash > swapHash — the initiator and the
+      // joiner drove different messages at the same step, and the joiner polled
+      // `GET /setup-message/{sessionId}` for a hash the initiator never uploaded,
+      // failing with "HTTP 404: Not Found" after its retries. Single-message
+      // keysigns (plain transfers) were unaffected, which is why this only showed
+      // up on approve+swap flows.
+      //
+      // Safe to sort here: the signing loop, `messagesToSign` and the signature
+      // pairing all read this same array, and the resulting signature map is keyed
+      // by message hash rather than by index.
+      return allMessageHashes.sort()
     } catch (error) {
       throw new VaultError(
         VaultErrorCode.SigningFailed,
