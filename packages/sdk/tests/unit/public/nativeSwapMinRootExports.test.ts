@@ -75,13 +75,12 @@ describe('SDK root exports the prep companion types (sdk#1542, tsc-gated)', () =
       b = a
       a = b
     })
-    assertAssignable<
-      PrepareUtxoConsolidateTxFromKeysParamsFromRoot,
-      PrepareUtxoConsolidateTxFromKeysParamsFromPrep
-    >((a, b) => {
-      b = a
-      a = b
-    })
+    assertAssignable<PrepareUtxoConsolidateTxFromKeysParamsFromRoot, PrepareUtxoConsolidateTxFromKeysParamsFromPrep>(
+      (a, b) => {
+        b = a
+        a = b
+      }
+    )
     assertAssignable<NativeSwapMinAmountInFromRoot, NativeSwapMinAmountInFromTools>((a, b) => {
       b = a
       a = b
