@@ -1018,10 +1018,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@bufbuild/protobuf@npm:^2.12.0":
-  version: 2.12.0
-  resolution: "@bufbuild/protobuf@npm:2.12.0"
-  checksum: 10c0/28959e371fd2e7c8d67d52af9e3c8f8e6770e2e116dcc5508f469ca736afa6905e216bc76183835898a5f3deb8aa2e7db47d4a0e706fba76115e9a1996893191
+"@bufbuild/protobuf@npm:^2.13.0":
+  version: 2.13.0
+  resolution: "@bufbuild/protobuf@npm:2.13.0"
+  checksum: 10c0/bb4d39512302887399355ac2ba1228e562c1cae818ff88b4b85b3060758aba5fec94786fe80f69de8878f98e730911c0bd145741adb582d0abf6b42de921e50c
   languageName: node
   linkType: hard
 
@@ -7069,7 +7069,7 @@ __metadata:
   resolution: "@vultisig/core-chain@workspace:packages/core/chain"
   dependencies:
     7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.12.0"
+    "@bufbuild/protobuf": "npm:^2.13.0"
     "@cosmjs/amino": "npm:^0.39.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
@@ -7113,7 +7113,7 @@ __metadata:
   resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
   dependencies:
     7z-wasm: "npm:^1.2.0"
-    "@bufbuild/protobuf": "npm:^2.12.0"
+    "@bufbuild/protobuf": "npm:^2.13.0"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@mysten/sui": "npm:^2.20.3"
     "@noble/hashes": "npm:^1.8.0"
@@ -7290,7 +7290,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@vultisig/rujira@workspace:packages/rujira"
   dependencies:
-    "@bufbuild/protobuf": "npm:^2.12.0"
+    "@bufbuild/protobuf": "npm:^2.13.0"
     "@cosmjs/cosmwasm-stargate": "npm:^0.39.0"
     "@cosmjs/proto-signing": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
@@ -7313,7 +7313,7 @@ __metadata:
     7z-wasm: "npm:^1.2.0"
     "@balancer-labs/balancer-maths": "npm:^0.0.41"
     "@balancer/sdk": "npm:6.1.1"
-    "@bufbuild/protobuf": "npm:^2.12.0"
+    "@bufbuild/protobuf": "npm:^2.13.0"
     "@coral-xyz/anchor": "npm:^0.32.1"
     "@cosmjs/encoding": "npm:^0.39.0"
     "@cosmjs/stargate": "npm:^0.39.0"
