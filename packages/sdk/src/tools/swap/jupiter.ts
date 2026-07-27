@@ -250,7 +250,15 @@ export const buildJupiterSwapTx = async ({
   // Resolve the per-output-mint affiliate fee account. Production resolves the
   // ATA and prepends an idempotent create instruction below; test callers may
   // return a string to exercise quote/body symmetry without serializing a real tx.
-  const feeAccountResult = await resolveFeeAccount(outputMint)
+  let feeAccountResult: JupiterFeeAccountResult = null
+  try {
+    feeAccountResult = await resolveFeeAccount(outputMint)
+  } catch (error) {
+    console.warn(
+      'Failed to resolve Jupiter affiliate fee account; continuing without an affiliate fee:',
+      error instanceof Error ? error.message : error
+    )
+  }
   const feeAccount = typeof feeAccountResult === 'string' ? feeAccountResult : feeAccountResult?.feeAccount
 
   // Step 1: Get a quote. Pass platformFeeBps ONLY when we have a valid

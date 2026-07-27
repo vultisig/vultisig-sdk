@@ -488,4 +488,30 @@ describe('buildJupiterSwapTx — affiliate ON (injected treasury ATA)', () => {
     const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
     expect(swapBody).not.toHaveProperty('feeAccount')
   })
+
+  it('keeps the swap available without an affiliate fee when fee-account resolution fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+      resolveFeeAccount: () => Promise.reject(new Error('Solana RPC unavailable')),
+    })
+
+    expect(res.affiliateFeeApplied).toBe(false)
+    expect(res.swapTransaction).toBe(fakeSwap.swapTransaction)
+    expect(prependJupiterFeeAtaMock).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to resolve Jupiter affiliate fee account; continuing without an affiliate fee:',
+      'Solana RPC unavailable'
+    )
+
+    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
+    expect(quoteUrl).not.toContain('platformFeeBps')
+
+    const swapCall = fetchSpy.mock.calls.find(([u]) => String(u).includes('/swap/v1/swap'))
+    const swapBody = JSON.parse((swapCall?.[1] as RequestInit).body as string)
+    expect(swapBody).not.toHaveProperty('feeAccount')
+  })
 })
