@@ -25,11 +25,17 @@ and decommissions it entirely by mid-October 2026, so the previous
   paginated `balances` connection to completion, returning `tokens_unavailable`
   rather than a silently truncated portfolio.
 
-The CLI's permanent-vs-retryable broadcast classifier follows the transport:
-a Sui rejection now carries the grpc-status name (`INVALID_ARGUMENT`) instead
-of the numeric JSON-RPC `-32002`, and grpc-web percent-encodes the message
-trailer. Left unchanged, that gate would have gone dead and every permanent
-Sui rejection would have been re-broadcast as if transient.
+Broadcast-error classification follows the transport. A gRPC failure carries the
+grpc-status NAME in `code` (not a JSON-RPC number) and a percent-encoded message,
+so both classifiers were re-pointed:
+
+- `isTransientBroadcastError` retries `UNAVAILABLE` / `DEADLINE_EXCEEDED` /
+  `RESOURCE_EXHAUSTED` and decodes the message before pattern-matching. A
+  grpc-web response is HTTP 200 with the real status in the trailer, so the
+  existing 5xx branch never saw a busy or restarting node.
+- The CLI's permanent-vs-retryable gate matches `INVALID_ARGUMENT` instead of
+  the numeric `-32002`. Left unchanged, that gate would have gone dead and every
+  permanent Sui rejection would have been re-broadcast as if transient.
 
 Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
 client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
