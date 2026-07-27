@@ -239,9 +239,7 @@ describe('BalanceService', () => {
       const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
       const { service } = makeStatefulService(live, saveVault)
 
-      await expect(
-        service.addToken(Chain.Ripple, rippleToken(`USD.${issuer}`))
-      ).rejects.toThrow('disk full')
+      await expect(service.addToken(Chain.Ripple, rippleToken(`USD.${issuer}`))).rejects.toThrow('disk full')
 
       expect(live[Chain.Ripple]).toEqual([existing])
     })
