@@ -173,9 +173,33 @@ yarn test:all
 4. Ensure tests pass (`yarn test`)
 5. Ensure quality checks pass (`yarn check` covers typecheck, lint, knip, and Prettier; agents can use `yarn check:agent` for the same core static gates with setup guidance; run `yarn check:ci` before relying on full CI parity)
 6. **Add a changeset** if your changes affect the published packages (`yarn changeset`)
-7. Commit with a descriptive message
-8. Push to your fork
-9. Open a Pull Request
+7. **Fill in the Parity section** of the PR template if the change touches a shared behavioural surface (see [Parity](#parity))
+8. Commit with a descriptive message
+9. Push to your fork
+10. Open a Pull Request
+
+### Parity
+
+The SDK is consumed by iOS, Android, Windows and the browser extension. A behavioural change
+made here — or a bug fixed here — is only half done until the consuming platforms are accounted
+for. Historically the failure mode has not been a forgotten port; it has been a _superseded_ fix
+left uncited, so the next platform copies a shape that has already been corrected elsewhere.
+
+If your PR touches **send, swap, keysign, broadcast, or fee computation**, give one verdict per
+consuming surface in the PR body:
+
+| Verdict              | Meaning                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------- |
+| `linked: <repo>#<n>` | Sibling issue already exists — link it                                                                |
+| `filed: <repo>#<n>`  | You filed the sibling as part of this PR                                                              |
+| `n/a: <reason>`      | Genuinely platform-specific                                                                           |
+| `first: <surface>`   | First implementation anywhere. Name the surface so the other platforms' tickets can be raised from it |
+
+`first:` is the escape hatch for genuinely new work — you are not blocked on parity that cannot
+exist yet. It is not a blanket bypass: naming the surface is what lets the next platform find
+this work instead of reinventing it.
+
+This is currently a convention, not a CI gate.
 
 ### Commit Messages
 
