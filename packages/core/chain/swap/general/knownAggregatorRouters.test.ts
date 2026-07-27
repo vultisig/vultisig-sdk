@@ -11,6 +11,7 @@ import {
 const ONE_INCH_V6 = '0x111111125421ca6dc452d289314280a0f8842a65'
 const ONE_INCH_V5 = '0x1111111254eeb25477b68fb85ed929f73a960582'
 const ONE_INCH_V6_ZKSYNC = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
+const ONE_INCH_V6_ROBINHOOD = '0x5a705de8982235a7fa45bb83dcacf03a211389c7'
 const KYBER_V2 = '0x6131b5fae19ea4f9d964eac0408e4408b66337b5'
 const ATTACKER_ADDRESS = '0x000000000000000000000000000000deadbeef'
 
@@ -51,6 +52,27 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
 
     it('REJECTS the zkSync-specific router on a DIFFERENT chain (Ethereum) — scoping is not accidentally global', () => {
       expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V6_ZKSYNC, Chain.Ethereum)).toThrow(
+        /unrecognized router address/
+      )
+    })
+  })
+
+  // Robinhood (4663) is the second chain-specific 1inch deployment after zkSync —
+  // live-confirmed 2026-07-27 via /approve/spender + a real v6.0 /swap both returning
+  // this address, with 24,542 bytes of code at it on-chain.
+  describe('1inch Robinhood — a genuinely different router (chain-scoping)', () => {
+    it('accepts the Robinhood-specific router ONLY on Robinhood', () => {
+      expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V6_ROBINHOOD, Chain.Robinhood)).not.toThrow()
+    })
+
+    it('REJECTS the standard V6 router on Robinhood', () => {
+      expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V6, Chain.Robinhood)).toThrow(
+        /unrecognized router address/
+      )
+    })
+
+    it('REJECTS the Robinhood-specific router on a DIFFERENT chain (Ethereum) — scoping is not accidentally global', () => {
+      expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V6_ROBINHOOD, Chain.Ethereum)).toThrow(
         /unrecognized router address/
       )
     })
