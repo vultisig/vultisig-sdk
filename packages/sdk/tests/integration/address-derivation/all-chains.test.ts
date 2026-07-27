@@ -545,10 +545,7 @@ describe('Integration: Multi-Chain Address Derivation', () => {
     const toChecksumEthAddress = (addressHex: string): string => {
       const lower = addressHex.toLowerCase()
       const hashHex = Buffer.from(keccak_256(new TextEncoder().encode(lower))).toString('hex')
-      return (
-        '0x' +
-        [...lower].map((char, i) => (parseInt(hashHex[i], 16) >= 8 ? char.toUpperCase() : char)).join('')
-      )
+      return '0x' + [...lower].map((char, i) => (parseInt(hashHex[i], 16) >= 8 ? char.toUpperCase() : char)).join('')
     }
 
     it('derives the canonical Ethereum address (BIP32 m/44/60/0/0/0 + Keccak-256 + EIP-55)', async () => {
