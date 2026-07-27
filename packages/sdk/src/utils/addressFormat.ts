@@ -25,6 +25,7 @@
 import bs58 from 'bs58'
 
 import { isValidCashAddr } from './cashaddr'
+import { normalizeChain } from './normalizeChain'
 
 /**
  * Coarse chain-family tag. Mirrors the backend `address.Family` enum.
@@ -351,10 +352,36 @@ const chainAlias: Record<string, string> = {
   stars: 'stargaze',
 }
 
+/**
+ * Map a canonical SDK Chain value to the address-format rule key used in
+ * chainFormatRules.
+ */
+function canonicalRuleTagForNormalizedChain(chain: string): string {
+  const lowered = chain.toLowerCase()
+  if (chainFormatRules[lowered]) return lowered
+
+  const stripped = lowered.replace(/[\s_-]+/g, '')
+  if (chainFormatRules[stripped]) return stripped
+
+  if (lowered.endsWith('chain')) {
+    const withoutChainSuffix = lowered.slice(0, -'chain'.length)
+    if (chainFormatRules[withoutChainSuffix]) return withoutChainSuffix
+  }
+
+  return lowered
+}
+
 /** Resolve an arbitrary chain string to a canonical tag in chainFormatRules. */
 export function canonicalChainTag(chain: string): string {
   const key = chain.trim().toLowerCase()
-  return chainAlias[key] ?? key
+  const direct = chainAlias[key] ?? key
+  if (chainFormatRules[direct]) return direct
+
+  try {
+    return canonicalRuleTagForNormalizedChain(normalizeChain(chain))
+  } catch {
+    return direct
+  }
 }
 
 /**
