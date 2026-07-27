@@ -37,12 +37,14 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   // a single page silently under-funds a send) and is bounded so a stuck cursor
   // fails closed instead of spinning.
   const isNativeToken = !coin.id
-  const sendsNonNativeToken = !!coin.id && !isSameSuiCoinType(coin.id, suiNativeCoinType)
+  // A payload can name SUI as its "token" id; listing it twice would duplicate every
+  // native object in the selection pool, so only a genuinely distinct type is fetched.
+  const tokenCoinType = coin.id && !isSameSuiCoinType(coin.id, suiNativeCoinType) ? coin.id : undefined
 
-  const nativeCoins = await listAllSuiCoins({ client, owner: address, coinType: suiNativeCoinType })
-  const tokenCoins = sendsNonNativeToken
-    ? await listAllSuiCoins({ client, owner: address, coinType: coin.id as string })
-    : []
+  const [nativeCoins, tokenCoins] = await Promise.all([
+    listAllSuiCoins({ client, owner: address, coinType: suiNativeCoinType }),
+    tokenCoinType ? listAllSuiCoins({ client, owner: address, coinType: tokenCoinType }) : Promise.resolve([]),
+  ])
 
   const coins = [...nativeCoins, ...tokenCoins].map(rawCoin => create(SuiCoinSchema, rawCoin))
 
