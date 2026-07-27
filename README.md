@@ -144,6 +144,7 @@ await vault.sign(payload, {
 
 - [SDK API Reference & Examples](packages/sdk/README.md) — Full API docs with code examples
 - [SDK Users Guide](docs/SDK-USERS-GUIDE.md) — Detailed usage guide with advanced topics
+- [CowSwap client support](docs/cowswap-client-support.md) — First-party support matrix and caller capability contract
 - [CLI Documentation](clients/cli/README.md) — Command-line interface
 - [docs.vultisig.com](https://docs.vultisig.com/developer-docs/vultisig-sdk/) — Online documentation
 
