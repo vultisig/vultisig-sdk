@@ -31,7 +31,7 @@ if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).B
 // full cascade in dependency order: getCanonicalLocales → Locale →
 // NumberFormat → PluralRules.
 //
-// Without these, even lazy `import('@mysten/sui/jsonRpc')` /
+// Without these, even lazy `import('@mysten/sui/graphql')` /
 // `import('@lifi/sdk')` crashes the first time the module is evaluated.
 import '@formatjs/intl-getcanonicallocales/polyfill.js'
 import '@formatjs/intl-locale/polyfill.js'
@@ -173,7 +173,7 @@ export type {
 //
 // These helpers work on RN because heavy chain clients (viem, xrpl,
 // @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
-// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
+// @mysten/sui/graphql, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
 // are externalized in rollup.platforms.config.js. Consumers must install
 // those they actually reach (or metro-stub the rest). `bip32` is inlined
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined

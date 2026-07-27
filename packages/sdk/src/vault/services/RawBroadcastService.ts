@@ -1,4 +1,5 @@
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { fromBase64 } from '@mysten/sui/utils'
 import { sha256 } from '@noble/hashes/sha2'
 import { bytesToHex } from '@noble/hashes/utils'
 import { Chain, CosmosChain, EvmChain, OtherChain, UtxoBasedChain } from '@vultisig/core-chain/Chain'
@@ -10,6 +11,7 @@ import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 import { getSolanaClient } from '@vultisig/core-chain/chains/solana/client'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
+import { getSuiResultTransaction } from '@vultisig/core-chain/chains/sui/transactionResult'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
 import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
@@ -573,10 +575,10 @@ export class RawBroadcastService {
 
     const client = getSuiClient()
     const { data: result, error } = await attempt(
-      client.executeTransactionBlock({
-        transactionBlock: unsignedTx,
-        signature: [signature],
-        options: { showEffects: true },
+      client.executeTransaction({
+        transaction: fromBase64(unsignedTx),
+        signatures: [signature],
+        include: { effects: true },
       })
     )
 
@@ -593,8 +595,15 @@ export class RawBroadcastService {
     }
 
     if (!result) throw new Error('No broadcast result returned')
-    assertSuiTxSucceeded(result.effects)
-    return result.digest
+    assertSuiTxSucceeded(result)
+
+    // Prefer the top-level digest; fall back to the effects' copy so a
+    // response that carries only effects still yields a usable hash.
+    const transaction = getSuiResultTransaction(result)
+    const digest = transaction?.digest ?? transaction?.effects?.transactionDigest
+    if (!digest) throw new Error('No transaction digest returned')
+
+    return digest
   }
 
   /**
