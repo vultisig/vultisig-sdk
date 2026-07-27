@@ -16,5 +16,10 @@ on XRPL.
 
 `isValidTokenId` now also accepts a human ticker (`SOLO`, `RLUSD`) wherever an
 on-ledger currency code is accepted — the form shown on explorers like xrpscan — and
-a new `normalizeTokenId` canonicalises a pasted id to the on-ledger form so a
-manually added token dedupes against the same id ledger auto-discovery produces.
+a new `normalizeTokenId` canonicalises a pasted id to the on-ledger form.
+
+`BalanceService.addToken`/`removeToken` normalise the token id (and its matching
+`contractAddress`) before it enters persisted state, so a manually added
+`RLUSD.<issuer>` collapses onto the canonical `524C…<issuer>` that ledger discovery
+stores instead of being kept as a second, distinct token. A no-op for chains whose
+ids are already canonical.

@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
@@ -152,5 +153,70 @@ describe('BalanceService', () => {
     expect(getEvmChainBalances).toHaveBeenCalledTimes(1)
     expect(cached[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(cached[`${Chain.Ethereum}:${token.id}`]?.formattedAmount).toBe('5')
+  })
+
+  describe('addToken / removeToken - Ripple issued-currency id normalization', () => {
+    const issuer = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+    // The on-ledger id ledger discovery stores (RLUSD encoded as its 40-hex code).
+    const canonicalId = rippleTokenId({ currency: 'RLUSD', issuer })
+    // The same token entered by its human ticker, as shown on explorers.
+    const humanTickerId = `RLUSD.${issuer}`
+
+    const rippleToken = (id: string): Token => ({
+      id,
+      symbol: 'RLUSD',
+      name: 'Ripple USD',
+      decimals: 15,
+      contractAddress: id,
+      chainId: Chain.Ripple,
+    })
+
+    const makeStatefulService = (initial: Record<string, Token[]> = {}) => {
+      let store: Record<string, Token[]> = initial
+      const service = new BalanceService(
+        cacheService,
+        vi.fn(),
+        vi.fn(),
+        async chain => `${chain}-address`,
+        chain => store[chain] ?? [],
+        () => store,
+        tokens => {
+          store = tokens
+        },
+        vi.fn(),
+        vi.fn(),
+        vi.fn()
+      )
+      return { service, ripple: () => store[Chain.Ripple] ?? [] }
+    }
+
+    it('collapses a manual human-ticker add and an auto-discovered canonical id into one token', async () => {
+      // Discovery already stored the on-ledger canonical id.
+      const { service, ripple } = makeStatefulService({ [Chain.Ripple]: [rippleToken(canonicalId)] })
+
+      // User manually adds the same token by its human ticker.
+      await service.addToken(Chain.Ripple, rippleToken(humanTickerId))
+
+      expect(ripple()).toHaveLength(1)
+      expect(ripple()[0].id).toBe(canonicalId)
+    })
+
+    it('persists a manually added human-ticker token under its canonical id', async () => {
+      const { service, ripple } = makeStatefulService()
+
+      await service.addToken(Chain.Ripple, rippleToken(humanTickerId))
+
+      expect(ripple()).toHaveLength(1)
+      expect(ripple()[0].id).toBe(canonicalId)
+      expect(ripple()[0].contractAddress).toBe(canonicalId)
+    })
+
+    it('removes a canonical-stored token when asked by its human-ticker id', async () => {
+      const { service, ripple } = makeStatefulService({ [Chain.Ripple]: [rippleToken(canonicalId)] })
+
+      await service.removeToken(Chain.Ripple, humanTickerId)
+
+      expect(ripple()).toHaveLength(0)
+    })
   })
 })

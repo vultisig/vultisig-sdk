@@ -3,6 +3,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
@@ -288,15 +289,26 @@ export class BalanceService {
       allTokens[chain] = []
     }
 
+    // Canonicalise the id (and matching contractAddress) before the token enters
+    // persisted state, so a manually added token — e.g. a Ripple issued currency
+    // entered by its human ticker `RLUSD.<issuer>` — dedupes against the on-ledger
+    // id discovery stores (`524C…<issuer>`) instead of being kept as a second,
+    // distinct token. A no-op for chains whose ids are already canonical.
+    const id = normalizeTokenId({ chain, id: token.id })
+    const normalizedToken: Token =
+      token.contractAddress === undefined
+        ? { ...token, id }
+        : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
+
     // Check if token already exists
-    if (!allTokens[chain].find(t => t.id === token.id)) {
+    if (!allTokens[chain].find(t => t.id === normalizedToken.id)) {
       // State mutation - SAFE only because no async validation follows
-      allTokens[chain].push(token)
+      allTokens[chain].push(normalizedToken)
       this.setAllTokens(allTokens)
       await this.saveVault()
 
       // Emit token added event
-      this.emitTokenAdded({ chain, token })
+      this.emitTokenAdded({ chain, token: normalizedToken })
     }
   }
 
@@ -310,15 +322,19 @@ export class BalanceService {
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
     const allTokens = this.getAllTokens()
 
+    // Match the canonical id addToken persisted, so a raw id — e.g. a Ripple
+    // human-ticker `RLUSD.<issuer>` — still removes the stored token.
+    const id = normalizeTokenId({ chain, id: tokenId })
+
     if (allTokens[chain]) {
-      const tokenExists = allTokens[chain].some(t => t.id === tokenId)
+      const tokenExists = allTokens[chain].some(t => t.id === id)
 
       if (tokenExists) {
         // Store original state for rollback
         const originalTokens = { ...allTokens }
 
         // Optimistically remove token
-        allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
+        allTokens[chain] = allTokens[chain].filter(t => t.id !== id)
         this.setAllTokens(allTokens)
 
         try {
@@ -326,7 +342,7 @@ export class BalanceService {
           await this.saveVault()
 
           // Emit token removed event only after successful save
-          this.emitTokenRemoved({ chain, tokenId })
+          this.emitTokenRemoved({ chain, tokenId: id })
         } catch (error) {
           // Rollback on failure to maintain consistency
           this.setAllTokens(originalTokens)
