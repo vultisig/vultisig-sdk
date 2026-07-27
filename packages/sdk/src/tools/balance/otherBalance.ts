@@ -348,6 +348,93 @@ export async function getTonJettonBalance(address: string, jettonMaster: string)
 
 // ── Sui ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Sui GraphQL RPC endpoint.
+ *
+ * Sui retired JSON-RPC: it was disabled on Sui Foundation mainnet full nodes
+ * the week of 2026-07-27 and is decommissioned entirely by mid-October 2026,
+ * so `suix_getBalance` / `suix_getAllBalances` against
+ * `sui-rpc.publicnode.com` no longer have a future. gRPC and GraphQL RPC are
+ * the supported replacements; GraphQL is a plain JSON POST, which keeps this
+ * folder's dependency-free `fetchJson` design (the SDK's Sui *client* rail in
+ * `core-chain` uses gRPC instead — these tools deliberately import nothing).
+ */
+const SUI_GRAPHQL_URL = 'https://graphql.mainnet.sui.io/graphql'
+
+type SuiGraphQLResponse<T> = {
+  data?: T | null
+  errors?: Array<{ message?: string }>
+}
+
+/** Throwing GraphQL POST — mirrors what the JSON-RPC calls used to do on failure. */
+async function suiGraphQL<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+  const response = await fetchJson<SuiGraphQLResponse<T>>(SUI_GRAPHQL_URL, { query, variables })
+
+  // GraphQL answers HTTP 200 even for a bad address, carrying `errors` and a
+  // null `data` — treat that as a failure, never as "you hold nothing".
+  if (response.errors?.length) {
+    throw new Error(response.errors.map(e => e.message ?? 'unknown error').join('; '))
+  }
+  if (response.data == null) {
+    throw new Error('Sui GraphQL returned neither data nor errors — malformed upstream response.')
+  }
+
+  return response.data
+}
+
+const SUI_BALANCE_QUERY = `query getBalance($owner: SuiAddress!, $coinType: String = "0x2::sui::SUI") {
+  address(address: $owner) {
+    balance(coinType: $coinType) {
+      totalBalance
+    }
+  }
+}`
+
+const SUI_BALANCES_QUERY = `query listBalances($owner: SuiAddress!, $limit: Int, $cursor: String) {
+  address(address: $owner) {
+    balances(first: $limit, after: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        coinType {
+          repr
+        }
+        totalBalance
+      }
+    }
+  }
+}`
+
+type SuiBalanceQueryData = {
+  address?: { balance?: { totalBalance?: string | null } | null } | null
+}
+
+type SuiBalancesQueryData = {
+  address?: {
+    balances?: {
+      pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
+      nodes?: Array<{ coinType?: { repr?: string | null } | null; totalBalance?: string | null }>
+    } | null
+  } | null
+}
+
+/**
+ * Total balance of one coin type, in base units.
+ *
+ * An address that has never held the coin type resolves to `null` rather than
+ * an error, which is a genuine zero — not an upstream fault.
+ */
+async function fetchSuiTotalBalance(address: string, coinType?: string): Promise<string> {
+  const data = await suiGraphQL<SuiBalanceQueryData>(SUI_BALANCE_QUERY, {
+    owner: address,
+    ...(coinType ? { coinType } : {}),
+  })
+
+  return data.address?.balance?.totalBalance ?? '0'
+}
+
 export type SuiBalance = {
   address: string
   chain: 'Sui'
@@ -359,13 +446,7 @@ export type SuiBalance = {
 
 /** Get the native SUI balance (1 SUI = 1e9 MIST). */
 export async function getSuiBalance(address: string): Promise<SuiBalance> {
-  const response = await fetchJson<{ result: { totalBalance: string } }>('https://sui-rpc.publicnode.com', {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'suix_getBalance',
-    params: [address],
-  })
-  const mist = response.result.totalBalance
+  const mist = await fetchSuiTotalBalance(address)
   return {
     address,
     chain: 'Sui',
@@ -385,16 +466,10 @@ export type SuiTokenBalance = {
 
 /** Get balance of a specific fungible token on Sui (base units). */
 export async function getSuiTokenBalance(address: string, coinType: string): Promise<SuiTokenBalance> {
-  const response = await fetchJson<{ result: { totalBalance: string } }>('https://sui-rpc.publicnode.com', {
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'suix_getBalance',
-    params: [address, coinType],
-  })
   return {
     address,
     coinType,
-    balance: response.result.totalBalance,
+    balance: await fetchSuiTotalBalance(address, coinType),
     asOf: new Date().toISOString(),
   }
 }
@@ -416,86 +491,93 @@ const SUI_NATIVE_TYPES = new Set([
   '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI',
 ])
 
+/** Page size and cap for the paginated balances connection. */
+const SUI_BALANCES_PAGE_SIZE = 50
+const SUI_BALANCES_MAX_PAGES = 40
+
 /**
- * Get ALL coin balances for a Sui address in ONE call (native SUI + every
- * fungible token held) via suix_getAllBalances.
+ * Get ALL coin balances for a Sui address (native SUI + every fungible token
+ * held) through the GraphQL `balances` connection.
  *
- * A typo'd address, an upstream fault, or a non-integer balance returns a
- * deterministic `tokens_unavailable` signal rather than masking it as an empty
- * wallet — under-reporting a portfolio as if complete is a fund-visibility bug.
+ * Unlike the retired `suix_getAllBalances`, the connection is PAGINATED, so
+ * this follows the cursor to completion — reading only the first page would
+ * silently under-report a wallet holding more than one page of coin types.
+ * A typo'd address, an upstream fault, a stuck cursor, more pages than the cap,
+ * or a non-integer balance all return a deterministic `tokens_unavailable`
+ * signal rather than masking it as an empty (or partial) wallet — reporting an
+ * incomplete portfolio as if complete is a fund-visibility bug.
  */
 export async function getSuiAllBalances(address: string): Promise<SuiAllBalancesResult> {
-  let response: {
-    result?: Array<{ coinType: string; totalBalance: string; coinObjectCount: number }>
-    error?: { code?: number; message?: string }
-  }
-  try {
-    response = await fetchJson('https://sui-rpc.publicnode.com', {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'suix_getAllBalances',
-      params: [address],
-    })
-  } catch (e) {
-    return {
-      ok: false,
-      error: 'tokens_unavailable',
-      chain: 'Sui',
-      address,
-      detail: e instanceof Error ? e.message : String(e),
-    }
-  }
-
-  // Sui answers HTTP 200 even for a bad address, carrying { error } instead of
-  // result — surface it as tokens_unavailable, not "you hold nothing".
-  if (response.error) {
-    return {
-      ok: false,
-      error: 'tokens_unavailable',
-      chain: 'Sui',
-      address,
-      detail: response.error.message ?? `Sui RPC error${response.error.code != null ? ` ${response.error.code}` : ''}`,
-    }
-  }
-  if (!Array.isArray(response.result)) {
-    return {
-      ok: false,
-      error: 'tokens_unavailable',
-      chain: 'Sui',
-      address,
-      detail: 'Sui RPC returned neither a result array nor an error — malformed upstream response.',
-    }
-  }
+  const unavailable = (detail: string): SuiAllBalancesResult => ({
+    ok: false,
+    error: 'tokens_unavailable',
+    chain: 'Sui',
+    address,
+    detail,
+  })
 
   const balances: SuiCoinBalance[] = []
-  for (const b of response.result) {
-    let amount: bigint
-    try {
-      amount = BigInt(b.totalBalance)
-    } catch {
-      return {
-        ok: false,
-        error: 'tokens_unavailable',
-        chain: 'Sui',
-        address,
-        detail: `Sui RPC returned a non-integer balance for ${b.coinType} — refusing to report a partial portfolio.`,
-      }
-    }
-    if (amount <= 0n) continue
+  let cursor: string | null | undefined = undefined
+  let pages = 0
 
-    const native = SUI_NATIVE_TYPES.has(b.coinType)
-    // Ticker = outer struct name; strip any generic type-arg suffix first
-    // (…::lp::LP<0x2::sui::SUI,…> → …::lp::LP) so it doesn't read "SUI>".
-    const bareType = b.coinType.split('<')[0]
-    const ticker = native ? 'SUI' : bareType.split('::').pop() || b.coinType
-    balances.push({
-      coinType: b.coinType,
-      ticker,
-      isNative: native,
-      balance: native ? formatBalance(amount, 9) : b.totalBalance,
-      balanceBaseUnits: b.totalBalance,
-    })
-  }
+  do {
+    let data: SuiBalancesQueryData
+    try {
+      data = await suiGraphQL<SuiBalancesQueryData>(SUI_BALANCES_QUERY, {
+        owner: address,
+        limit: SUI_BALANCES_PAGE_SIZE,
+        cursor: cursor ?? null,
+      })
+    } catch (e) {
+      return unavailable(e instanceof Error ? e.message : String(e))
+    }
+
+    const connection = data.address?.balances
+    if (!connection || !Array.isArray(connection.nodes)) {
+      // A resolvable address with no holdings still returns an empty `nodes`
+      // array; a missing connection is a malformed response, not a zero wallet.
+      return unavailable('Sui GraphQL returned no balances connection — malformed upstream response.')
+    }
+
+    for (const node of connection.nodes) {
+      const coinType = node.coinType?.repr
+      const totalBalance = node.totalBalance
+      if (!coinType || totalBalance == null) {
+        return unavailable('Sui GraphQL returned a balance entry without a coin type or amount.')
+      }
+
+      let amount: bigint
+      try {
+        amount = BigInt(totalBalance)
+      } catch {
+        return unavailable(
+          `Sui GraphQL returned a non-integer balance for ${coinType} — refusing to report a partial portfolio.`
+        )
+      }
+      if (amount <= 0n) continue
+
+      const native = SUI_NATIVE_TYPES.has(coinType)
+      // Ticker = outer struct name; strip any generic type-arg suffix first
+      // (…::lp::LP<0x2::sui::SUI,…> → …::lp::LP) so it doesn't read "SUI>".
+      const bareType = coinType.split('<')[0]
+      const ticker = native ? 'SUI' : bareType.split('::').pop() || coinType
+      balances.push({
+        coinType,
+        ticker,
+        isNative: native,
+        balance: native ? formatBalance(amount, 9) : totalBalance,
+        balanceBaseUnits: totalBalance,
+      })
+    }
+
+    cursor = connection.pageInfo?.hasNextPage ? connection.pageInfo.endCursor : null
+
+    if (++pages >= SUI_BALANCES_MAX_PAGES && cursor) {
+      return unavailable(
+        `Sui GraphQL exceeded ${SUI_BALANCES_MAX_PAGES} balance pages — refusing to report a truncated portfolio.`
+      )
+    }
+  } while (cursor)
 
   return { ok: true, address, chain: 'Sui', balances, asOf: new Date().toISOString() }
 }
