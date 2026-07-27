@@ -237,11 +237,15 @@ describe('BalanceService', () => {
       // getAllTokens() hands back live state; a failed add must leave it untouched.
       const live: Record<string, Token[]> = { [Chain.Ripple]: [existing] }
       const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
-      const { service } = makeStatefulService(live, saveVault)
+      const { service, ripple } = makeStatefulService(live, saveVault)
 
       await expect(service.addToken(Chain.Ripple, rippleToken(`USD.${issuer}`))).rejects.toThrow('disk full')
 
+      // The caller's original record is never mutated in place...
       expect(live[Chain.Ripple]).toEqual([existing])
+      // ...and the store the service actually reads from is rolled back to it,
+      // so no stale optimistic token survives the failed save.
+      expect(ripple()).toEqual([existing])
     })
   })
 })
