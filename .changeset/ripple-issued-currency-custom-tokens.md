@@ -8,8 +8,10 @@ feat(ripple): add XRPL issued-currency (custom token) support
 XRPL issued currencies (trust-line tokens / IOUs) had no token metadata resolver,
 so custom tokens could not be added on Ripple. Adds `getRippleTokenMetadata` and
 registers Ripple in `chainsWithTokenMetadataDiscovery`. Unlike EVM/Tron there is no
-on-ledger metadata call: issued amounts carry no fixed decimal count and the ticker
-is derived from the currency code, so the resolver fetches nothing. Curated tokens
+on-ledger metadata call: XRPL exposes no per-token decimal metadata — so the SDK
+applies its fixed issued-currency decimal policy (`rippleIssuedCurrencyDecimals`) —
+and the ticker is derived from the currency code, so the resolver fetches nothing.
+Curated tokens
 (RLUSD) get their logo and price provider merged in; an arbitrary token gets neither
 rather than borrowing a known token's identity, since two issuers can share a ticker
 on XRPL.

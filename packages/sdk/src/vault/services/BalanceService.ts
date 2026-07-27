@@ -275,19 +275,16 @@ export class BalanceService {
    * @param chain Chain to add token to
    * @param token Token to add
    *
-   * @important ATOMICITY WARNING: This method currently mutates state before
-   * calling saveVault(). It is SAFE because there is no async validation
-   * between mutation and save. However, if you add ANY async validation
-   * (e.g., checking token contract existence on-chain), you MUST move that
-   * validation BEFORE the state mutation to prevent partial state corruption.
-   * See addChain() in PreferencesService for the correct pattern.
+   * @important ATOMICITY: `getAllTokens()` hands back live vault state, so the
+   * new token is applied as a fresh record/array rather than pushed in place —
+   * that keeps the pre-add state intact as a rollback target. If saveVault()
+   * fails the previous state is restored and the error rethrown, matching
+   * removeToken(). Any async validation you add must still run BEFORE the state
+   * is applied; see addChain() in PreferencesService for the same pattern.
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     const allTokens = this.getAllTokens()
-
-    if (!allTokens[chain]) {
-      allTokens[chain] = []
-    }
+    const chainTokens = allTokens[chain] ?? []
 
     // Canonicalise the id (and matching contractAddress) before the token enters
     // persisted state, so a manually added token — e.g. a Ripple issued currency
@@ -301,11 +298,17 @@ export class BalanceService {
         : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
 
     // Check if token already exists
-    if (!allTokens[chain].find(t => t.id === normalizedToken.id)) {
-      // State mutation - SAFE only because no async validation follows
-      allTokens[chain].push(normalizedToken)
-      this.setAllTokens(allTokens)
-      await this.saveVault()
+    if (!chainTokens.find(t => t.id === normalizedToken.id)) {
+      this.setAllTokens({ ...allTokens, [chain]: [...chainTokens, normalizedToken] })
+
+      try {
+        await this.saveVault()
+      } catch (error) {
+        // Persistence failed — drop the optimistic add so a later successful
+        // save can't quietly persist a token the caller was told failed.
+        this.setAllTokens(allTokens)
+        throw error
+      }
 
       // Emit token added event
       this.emitTokenAdded({ chain, token: normalizedToken })

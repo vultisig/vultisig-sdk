@@ -171,8 +171,9 @@ describe('BalanceService', () => {
       chainId: Chain.Ripple,
     })
 
-    const makeStatefulService = (initial: Record<string, Token[]> = {}) => {
+    const makeStatefulService = (initial: Record<string, Token[]> = {}, saveVault = vi.fn()) => {
       let store: Record<string, Token[]> = initial
+      const emitTokenAdded = vi.fn()
       const service = new BalanceService(
         cacheService,
         vi.fn(),
@@ -183,11 +184,11 @@ describe('BalanceService', () => {
         tokens => {
           store = tokens
         },
-        vi.fn(),
-        vi.fn(),
+        saveVault,
+        emitTokenAdded,
         vi.fn()
       )
-      return { service, ripple: () => store[Chain.Ripple] ?? [] }
+      return { service, emitTokenAdded, ripple: () => store[Chain.Ripple] ?? [] }
     }
 
     it('collapses a manual human-ticker add and an auto-discovered canonical id into one token', async () => {
@@ -217,6 +218,32 @@ describe('BalanceService', () => {
       await service.removeToken(Chain.Ripple, humanTickerId)
 
       expect(ripple()).toHaveLength(0)
+    })
+
+    it('rolls the add back when persistence fails, leaving no phantom token', async () => {
+      const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
+      const { service, emitTokenAdded, ripple } = makeStatefulService({ [Chain.Ripple]: [] }, saveVault)
+
+      await expect(service.addToken(Chain.Ripple, rippleToken(humanTickerId))).rejects.toThrow('disk full')
+
+      // The caller was told the add failed, so it must not linger in memory and
+      // get persisted by some later successful save.
+      expect(ripple()).toHaveLength(0)
+      expect(emitTokenAdded).not.toHaveBeenCalled()
+    })
+
+    it('does not corrupt live vault state when persistence fails', async () => {
+      const existing = rippleToken(canonicalId)
+      // getAllTokens() hands back live state; a failed add must leave it untouched.
+      const live: Record<string, Token[]> = { [Chain.Ripple]: [existing] }
+      const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
+      const { service } = makeStatefulService(live, saveVault)
+
+      await expect(
+        service.addToken(Chain.Ripple, rippleToken(`USD.${issuer}`))
+      ).rejects.toThrow('disk full')
+
+      expect(live[Chain.Ripple]).toEqual([existing])
     })
   })
 })
