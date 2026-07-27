@@ -17,11 +17,19 @@
  */
 
 import { create, toBinary } from '@bufbuild/protobuf'
+import { ripemd160 } from '@noble/hashes/legacy.js'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { keccak_256 } from '@noble/hashes/sha3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { LibType } from '@vultisig/core-mpc/types/vultisig/keygen/v1/lib_type_message_pb'
 import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
 import { Vault_KeyShareSchema, VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
+import { bech32 } from 'bech32'
+import BIP32Factory from 'bip32'
+import * as bitcoin from 'bitcoinjs-lib'
+import bs58 from 'bs58'
+import * as ecc from 'tiny-secp256k1'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { createSdkContext, type SdkContext } from '../../../src/context/SdkContextBuilder'
@@ -92,6 +100,16 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
 
 /** Deterministic hex pubkey for QBTC (ML-DSA); deriveQbtcAddress only hashes bytes — no chain signing. */
 const MOCK_MLDSA_PUBLIC_KEY_HEX = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+
+/**
+ * Fixed test-vault root keys shared by the mock vault below AND the golden-vector
+ * describe block further down. A valid (on-curve) compressed secp256k1 pubkey +
+ * 32-byte chain code, so `derivePublicKey`'s BIP32 CKD math and the golden
+ * reference derivation below operate on the exact same root.
+ */
+const MOCK_ECDSA_PUBLIC_KEY_HEX = '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc'
+const MOCK_EDDSA_PUBLIC_KEY_HEX = 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e'
+const MOCK_HEX_CHAIN_CODE = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
 
 /** Base64 VaultContainer (unencrypted) wrapping a Vault protobuf that includes ML-DSA fields. */
 function buildUnencryptedVultBase64(params: {
@@ -180,10 +198,10 @@ describe('Integration: Multi-Chain Address Derivation', () => {
       name: 'Integration Test Vault',
       publicKeys: {
         // Real-ish looking public keys (proper format for address derivation)
-        ecdsa: '02a1633cafcc01ebfb6d78e39f687a1f0995c62fc95f51ead10a02ee0be551b5dc',
-        eddsa: 'b5d7a8e02f3c9d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e',
+        ecdsa: MOCK_ECDSA_PUBLIC_KEY_HEX,
+        eddsa: MOCK_EDDSA_PUBLIC_KEY_HEX,
       },
-      hexChainCode: '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+      hexChainCode: MOCK_HEX_CHAIN_CODE,
       localPartyId: 'test-device',
       signers: ['test-device', 'Server-1'],
       keyShares: {
@@ -473,6 +491,105 @@ describe('Integration: Multi-Chain Address Derivation', () => {
 
         expect(address.startsWith(expectedPrefix), `${chain} address should start with "${expectedPrefix}"`).toBe(true)
       })
+    })
+  })
+
+  /**
+   * sdk#1539 - every assertion above this point is a format REGEX (or, for the
+   * Cosmos block, a bech32 PREFIX). A derivation bug that produces a
+   * well-formed-but-WRONG address - swapped coin type, wrong derivation path,
+   * wrong hash function - passes every one of them, because a regex only knows
+   * the SHAPE of an address, not its VALUE.
+   *
+   * This block pins the exact VALUE for one chain per family (UTXO / EVM /
+   * Cosmos / EdDSA) against an INDEPENDENT reference re-derivation, not
+   * against a value captured by running `vault.address()` once and pasting
+   * the result (that would just fossilize whatever the SDK currently does,
+   * bug included).
+   *
+   * The independent reference re-implements, using different libraries than
+   * `packages/core/chain/publicKey/{getPublicKey,ecdsa/derivePublicKey,address/deriveAddress}.ts`:
+   *  - the BIP32 public-key-only child derivation `derivePublicKey.ts` does via
+   *    the `bip32` + `tiny-secp256k1` packages (same libraries, since they ARE
+   *    the audited reference secp256k1/BIP32 implementation most JS wallets
+   *    build on - not something the SDK authored), applied to the coin-specific
+   *    path segments as WalletCore's own `CoinTypeExt.derivationPath` documents
+   *    them (`getPublicKey.ts` strips the `'` hardened markers and derives
+   *    every segment as a plain non-hardened index, since a public-only root
+   *    key cannot do hardened CKD - verified directly against a running
+   *    `CoinTypeExt.derivationPath()` call: bitcoin m/84'/0'/0'/0/0, ethereum
+   *    m/44'/60'/0'/0/0, cosmos m/44'/118'/0'/0/0);
+   *  - the per-chain address ENCODING via dedicated libraries instead of
+   *    WalletCore's `AnyAddress`/`CoinTypeExt`: `bitcoinjs-lib`'s P2WPKH payment
+   *    for Bitcoin, hand-rolled Keccak-256 + EIP-55 checksum for Ethereum,
+   *    `@noble/hashes`' sha256/ripemd160 + `bech32` for the Cosmos-SDK
+   *    `RIPEMD160(SHA256(pubkey))` address scheme, and `bs58` for Solana (an
+   *    EdDSA chain - `getPublicKey.ts`'s eddsa branch returns the root eddsa
+   *    pubkey unchanged with no HD derivation, so a Solana address is simply
+   *    the base58 encoding of that raw pubkey).
+   *
+   * Mutation-verify (sdk#1539): temporarily swapping the Ethereum coin type for
+   * Cosmos's in `getCoinType.ts` still produces a well-formed 0x-address that
+   * passes the `Ethereum` regex above, but fails `toBe(expectedEthereumAddress)`
+   * here - proving this block catches what the regex cannot.
+   */
+  describe('Golden address vectors (independent reference derivation, sdk#1539)', () => {
+    const bip32 = BIP32Factory(ecc)
+    const rootNode = bip32.fromPublicKey(
+      Buffer.from(MOCK_ECDSA_PUBLIC_KEY_HEX, 'hex'),
+      Buffer.from(MOCK_HEX_CHAIN_CODE, 'hex')
+    )
+
+    const deriveNonHardened = (path: number[]) => path.reduce((node, index) => node.derive(index), rootNode)
+
+    const toChecksumEthAddress = (addressHex: string): string => {
+      const lower = addressHex.toLowerCase()
+      const hashHex = Buffer.from(keccak_256(new TextEncoder().encode(lower))).toString('hex')
+      return (
+        '0x' +
+        [...lower].map((char, i) => (parseInt(hashHex[i], 16) >= 8 ? char.toUpperCase() : char)).join('')
+      )
+    }
+
+    it('derives the canonical Ethereum address (BIP32 m/44/60/0/0/0 + Keccak-256 + EIP-55)', async () => {
+      const child = deriveNonHardened([44, 60, 0, 0, 0])
+      const uncompressed = ecc.pointCompress(child.publicKey, false)
+      const addressBytes = keccak_256(uncompressed.slice(1)).slice(-20)
+      const expectedAddress = toChecksumEthAddress(Buffer.from(addressBytes).toString('hex'))
+
+      const address = await vault.address(Chain.Ethereum)
+
+      expect(address).toBe(expectedAddress)
+    })
+
+    it('derives the canonical Bitcoin native-segwit address (BIP32 m/84/0/0/0/0 + P2WPKH)', async () => {
+      const child = deriveNonHardened([84, 0, 0, 0, 0])
+      const expectedAddress = bitcoin.payments.p2wpkh({
+        pubkey: Buffer.from(child.publicKey),
+        network: bitcoin.networks.bitcoin,
+      }).address
+
+      const address = await vault.address(Chain.Bitcoin)
+
+      expect(address).toBe(expectedAddress)
+    })
+
+    it('derives the canonical Cosmos address (BIP32 m/44/118/0/0/0 + RIPEMD160(SHA256) + bech32)', async () => {
+      const child = deriveNonHardened([44, 118, 0, 0, 0])
+      const hash160 = ripemd160(sha256(Buffer.from(child.publicKey)))
+      const expectedAddress = bech32.encode('cosmos', bech32.toWords(hash160))
+
+      const address = await vault.address(Chain.Cosmos)
+
+      expect(address).toBe(expectedAddress)
+    })
+
+    it('derives the canonical Solana address (raw EdDSA pubkey, base58, no HD derivation)', async () => {
+      const expectedAddress = bs58.encode(Buffer.from(MOCK_EDDSA_PUBLIC_KEY_HEX, 'hex'))
+
+      const address = await vault.address(Chain.Solana)
+
+      expect(address).toBe(expectedAddress)
     })
   })
 
