@@ -2,13 +2,15 @@ import { create } from '@bufbuild/protobuf'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 import { suiGasBudget } from '@vultisig/core-chain/chains/sui/config'
 import { SuiCoinSchema, SuiSpecificSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
-import { attempt, withFallback } from '@vultisig/lib-utils/attempt'
+import { attempt } from '@vultisig/lib-utils/attempt'
 import type { CoinStruct } from '@mysten/sui/jsonRpc'
 
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { selectSuiPayloadCoins } from '../../../suiCoinSelection'
 import { GetChainSpecificResolver } from '../../resolver'
 import { refineSuiChainSpecific } from './refine'
+
+class SuiGasBudgetConvergenceError extends Error {}
 
 export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = async ({
   keysignPayload,
@@ -81,50 +83,58 @@ export const getSuiChainSpecific: GetChainSpecificResolver<'suicheSpecific'> = a
   // Re-price that grown selection, bounded so a pathological RPC response
   // cannot make transaction construction loop indefinitely.
   const maxGasBudgetConvergeIterations = 2
-  const refined = await withFallback(
-    attempt(async () => {
-      let priced = await refineSuiChainSpecific({
-        keysignPayload,
-        chainSpecific,
-        walletCore,
-      })
+  const initialRefinement = await attempt(() =>
+    refineSuiChainSpecific({
+      keysignPayload,
+      chainSpecific,
+      walletCore,
+    })
+  )
 
-      let gasBudget = priced.gasBudget ? BigInt(priced.gasBudget) : suiGasBudget
-      let selectedCoins = selectCoins(gasBudget)
-      let pricedCoinCount = chainSpecific.coins.length
+  // Preserve the historical fallback only when the first dry run cannot
+  // refine the static baseline. Once refinement has learned a higher gas
+  // requirement, returning that baseline on a later re-price or re-selection
+  // failure would knowingly construct an under-budget transaction.
+  if ('error' in initialRefinement) return chainSpecific
 
-      for (
-        let iteration = 0;
-        iteration < maxGasBudgetConvergeIterations && selectedCoins.length > pricedCoinCount;
-        iteration++
-      ) {
-        const repriced = await refineSuiChainSpecific({
-          keysignPayload,
-          chainSpecific: create(SuiSpecificSchema, {
-            ...priced,
-            coins: selectedCoins,
-            gasBudget: gasBudget.toString(),
-          }),
-          walletCore,
-        })
-        const repricedGasBudget = repriced.gasBudget ? BigInt(repriced.gasBudget) : gasBudget
-        const nextGasBudget = repricedGasBudget > gasBudget ? repricedGasBudget : gasBudget
-        if (nextGasBudget === gasBudget) break
+  let priced = initialRefinement.data
+  let gasBudget = priced.gasBudget ? BigInt(priced.gasBudget) : suiGasBudget
+  let selectedCoins = selectCoins(gasBudget)
+  let pricedCoinCount = chainSpecific.coins.length
 
-        pricedCoinCount = selectedCoins.length
-        gasBudget = nextGasBudget
-        priced = repriced
-        selectedCoins = selectCoins(gasBudget)
-      }
-
-      return create(SuiSpecificSchema, {
+  for (
+    let iteration = 0;
+    iteration < maxGasBudgetConvergeIterations && selectedCoins.length > pricedCoinCount;
+    iteration++
+  ) {
+    const repriced = await refineSuiChainSpecific({
+      keysignPayload,
+      chainSpecific: create(SuiSpecificSchema, {
         ...priced,
         coins: selectedCoins,
         gasBudget: gasBudget.toString(),
-      })
-    }),
-    chainSpecific
-  )
+      }),
+      walletCore,
+    })
+    const repricedGasBudget = repriced.gasBudget ? BigInt(repriced.gasBudget) : gasBudget
+    const nextGasBudget = repricedGasBudget > gasBudget ? repricedGasBudget : gasBudget
+    pricedCoinCount = selectedCoins.length
+    if (nextGasBudget === gasBudget) break
 
-  return refined
+    gasBudget = nextGasBudget
+    priced = repriced
+    selectedCoins = selectCoins(gasBudget)
+  }
+
+  if (selectedCoins.length > pricedCoinCount) {
+    throw new SuiGasBudgetConvergenceError(
+      `Sui gas budget did not converge after ${maxGasBudgetConvergeIterations} re-price rounds`
+    )
+  }
+
+  return create(SuiSpecificSchema, {
+    ...priced,
+    coins: selectedCoins,
+    gasBudget: gasBudget.toString(),
+  })
 }

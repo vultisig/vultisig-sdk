@@ -65,12 +65,22 @@ const wallet = Array.from({ length: 300 }, (_, i) => makeRpcCoin(i, '50000'))
 // 3_450_000, above the 3_000_000 static baseline used to size the initial
 // (dry-run) payload selection.
 const dryRunResponse = {
-  effects: { gasUsed: { computationCost: '2000000', storageCost: '1000000', storageRebate: '0' } },
+  effects: {
+    gasUsed: {
+      computationCost: '2000000',
+      storageCost: '1000000',
+      storageRebate: '0',
+    },
+  },
 }
 
 describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, refine NOT stubbed)', () => {
   it('re-selects payload coins against the REFINED budget so the final signing input covers the budget it declares', async () => {
-    mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({
+      data: wallet,
+      hasNextPage: false,
+      nextCursor: null,
+    })
     // Selection grows 140 -> 149 (see below), so refine's converge loop fires
     // ONE re-price round. The re-price reports the SAME cost as the first dry
     // run, so it converges immediately without growing further — the "typical
@@ -80,7 +90,10 @@ describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, r
     const amount = 4_000_000n
     const keysignPayload = buildPayload(amount)
 
-    const chainSpecific = await getSuiChainSpecific({ keysignPayload, walletCore })
+    const chainSpecific = await getSuiChainSpecific({
+      keysignPayload,
+      walletCore,
+    })
 
     // Refine actually landed (not the attempt/withFallback error path).
     expect(chainSpecific.gasBudget).toBe('3450000')
@@ -115,51 +128,119 @@ describe('getSuiChainSpecific -> refine -> getSuiSigningInputs (full pipeline, r
 
     // Deterministic: an identical wallet + dry-run responses select the
     // identical object set on a second run.
-    mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({
+      data: wallet,
+      hasNextPage: false,
+      nextCursor: null,
+    })
     mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce(dryRunResponse).mockResolvedValueOnce(dryRunResponse)
-    const again = await getSuiChainSpecific({ keysignPayload: buildPayload(amount), walletCore })
+    const again = await getSuiChainSpecific({
+      keysignPayload: buildPayload(amount),
+      walletCore,
+    })
     expect(again.coins.map(c => c.coinObjectId)).toEqual(chainSpecific.coins.map(c => c.coinObjectId))
   })
 
-  it('bounds the converge loop at 2 re-price rounds even when the dry-run cost keeps climbing', async () => {
+  it('fails closed after 2 re-price rounds when the dry-run cost keeps climbing', async () => {
     // Each round's re-price reports a HIGHER cost than the last, so the
     // selection keeps growing (140 -> 149 -> 154 -> 159) and would keep
     // triggering further rounds forever if unbounded. The loop must stop
-    // after exactly 2 extra rounds (3 dry runs total) and accept the last
-    // computed budget/selection rather than looping indefinitely.
-    mockGetAllCoins.mockReset().mockResolvedValueOnce({ data: wallet, hasNextPage: false, nextCursor: null })
+    // after exactly 2 extra rounds (3 dry runs total) and reject the unpriced
+    // final selection rather than returning it.
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({
+      data: wallet,
+      hasNextPage: false,
+      nextCursor: null,
+    })
     mockDryRunTransactionBlock
       .mockReset()
       // Round 0 (baseline, 140 objects): 3_000_000 -> budget 3_450_000, grows to 149.
       .mockResolvedValueOnce({
-        effects: { gasUsed: { computationCost: '2000000', storageCost: '1000000', storageRebate: '0' } },
+        effects: {
+          gasUsed: {
+            computationCost: '2000000',
+            storageCost: '1000000',
+            storageRebate: '0',
+          },
+        },
       })
       // Round 1 (re-price on 149 objects): 3_200_000 -> budget 3_680_000, grows to 154.
       .mockResolvedValueOnce({
-        effects: { gasUsed: { computationCost: '2100000', storageCost: '1100000', storageRebate: '0' } },
+        effects: {
+          gasUsed: {
+            computationCost: '2100000',
+            storageCost: '1100000',
+            storageRebate: '0',
+          },
+        },
       })
       // Round 2 (re-price on 154 objects): 3_400_000 -> budget 3_910_000, grows to 159.
       .mockResolvedValueOnce({
-        effects: { gasUsed: { computationCost: '2200000', storageCost: '1200000', storageRebate: '0' } },
+        effects: {
+          gasUsed: {
+            computationCost: '2200000',
+            storageCost: '1200000',
+            storageRebate: '0',
+          },
+        },
       })
 
     const amount = 4_000_000n
     const keysignPayload = buildPayload(amount)
 
-    const chainSpecific = await getSuiChainSpecific({ keysignPayload, walletCore })
+    await expect(getSuiChainSpecific({ keysignPayload, walletCore })).rejects.toThrow(
+      'Sui gas budget did not converge after 2 re-price rounds'
+    )
 
     // Exactly 1 (baseline) + 2 (the bound) dry runs — never a 4th, even though
     // the round-2 selection (159 objects) still grew past round-1's (154).
     expect(mockDryRunTransactionBlock).toHaveBeenCalledTimes(3)
-    expect(chainSpecific.gasBudget).toBe('3910000')
-    expect(chainSpecific.coins).toHaveLength(159)
+  })
 
-    // The selection accepted at the bound still covers the budget it itself
-    // declares, even though a hypothetical round 3 might have priced higher
-    // still — the documented fail-safe tradeoff of the bound.
-    const target = amount + BigInt(chainSpecific.gasBudget)
-    const payloadTotal = chainSpecific.coins.reduce((sum, c) => sum + BigInt(c.balance), 0n)
-    expect(payloadTotal).toBeGreaterThanOrEqual(target)
-    expect(chainSpecific.coins.length).toBeLessThanOrEqual(maxSuiInputCoinObjects)
+  it('fails closed when re-pricing errors after the initial selection grows', async () => {
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({
+      data: wallet,
+      hasNextPage: false,
+      nextCursor: null,
+    })
+    mockDryRunTransactionBlock
+      .mockReset()
+      .mockResolvedValueOnce(dryRunResponse)
+      .mockRejectedValueOnce(new Error('Sui re-price RPC unavailable'))
+
+    await expect(
+      getSuiChainSpecific({
+        keysignPayload: buildPayload(4_000_000n),
+        walletCore,
+      })
+    ).rejects.toThrow('Sui re-price RPC unavailable')
+
+    expect(mockDryRunTransactionBlock).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a refined budget exceeds the available wallet balance', async () => {
+    mockGetAllCoins.mockReset().mockResolvedValueOnce({
+      data: wallet,
+      hasNextPage: false,
+      nextCursor: null,
+    })
+    mockDryRunTransactionBlock.mockReset().mockResolvedValueOnce({
+      effects: {
+        gasUsed: {
+          computationCost: '10000000',
+          storageCost: '4000000',
+          storageRebate: '0',
+        },
+      },
+    })
+
+    await expect(
+      getSuiChainSpecific({
+        keysignPayload: buildPayload(4_000_000n),
+        walletCore,
+      })
+    ).rejects.toThrow('Insufficient Sui coin balance to cover 20100000')
+
+    expect(mockDryRunTransactionBlock).toHaveBeenCalledTimes(1)
   })
 })
