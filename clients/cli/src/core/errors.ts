@@ -393,16 +393,48 @@ const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
   /failed to deserialize(?: transaction)?|failed to sanitize|(?:transaction )?signature verification (?:failed|failure)|non-base58 character|invalid base58/i
 
 // The local required-fields guard (RawBroadcastService) is always permanent —
-// it never carries an RPC code, so it's checked independently of the -32002 gate below.
+// it never carries an RPC status, so it's checked independently of the status gate below.
 const SUI_REQUIRED_FIELDS_GUARD_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
 
-// -32002 ("TransactionExecutionClientError") is a broad Sui JSON-RPC bucket covering
-// many distinct client-caused execution failures, not signature verification alone —
-// pairing the code with a message match keeps a generic/unrecognized -32002 (e.g. an
-// object-version or gas condition we can't positively identify as permanent) retryable
-// instead of a blanket match on the code.
+// Sui retired JSON-RPC, so broadcasts now go over gRPC and the rejection signal changed
+// shape twice over:
+//
+//  - `err.code` is the grpc-status NAME (a string) — `@protobuf-ts` surfaces the
+//    grpc-status/grpc-message trailer pair as an `RpcError`. The old numeric -32002
+//    ("TransactionExecutionClientError") gate can never match again, and a dead gate here
+//    is not fail-safe: it silently reclassifies every permanent rejection as retryable, so
+//    the CLI would re-broadcast bytes that can never land.
+//  - the message arrives PERCENT-ENCODED. grpc-web escapes the trailer, so the wire text
+//    reads `invalid%20signature:%20...` and a regex with literal spaces never matches.
+//
+// INVALID_ARGUMENT is Sui's status for a request the node rejected at (or before)
+// conversion. It is still a bucket, so keep the original discipline: pair the status with
+// a recognized message, leaving anything unidentified retryable. Ambiguity staying
+// retryable is the safe side — a false permanent verdict strands a user.
+const SUI_PERMANENT_GRPC_STATUS = 'INVALID_ARGUMENT'
+
+// Every alternative below is a message this repo has actually captured from mainnet
+// (`fullnode.mainnet.sui.io`), not a guess at the node's wording:
+//   executeTransaction, malformed signature  -> "invalid signature: error converting from
+//                                               protobuf: field: bcs reason: FIELD_INVALID
+//                                               description: missing signature scheme flag"
+//   executeTransaction, no signatures        -> "Invalid user signature: Expect 1 signer
+//                                               signatures but got 0"
+//   executeTransaction, malformed tx bytes   -> "invalid transaction: error converting from
+//                                               protobuf: field: bcs reason: FIELD_INVALID ..."
+// All three are intrinsic to the bytes being sent — no retry or wait makes them valid.
 const SUI_PERMANENT_EXECUTION_MESSAGE_RE =
-  /invalid (?:user )?signature|signature verification (?:failed|failure)|malformed transaction|invalid transaction (?:data|bytes)/i
+  /invalid (?:user )?signature|signature verification (?:failed|failure)|malformed transaction|invalid transaction(?: (?:data|bytes))?\b/i
+
+// grpc-web percent-encodes the grpc-message trailer. Match against BOTH forms so a
+// decodable message is understood and a plain (or malformed-escape) one still works.
+const decodeRpcDetails = (details: string): string => {
+  try {
+    return decodeURIComponent(details)
+  } catch {
+    return details
+  }
+}
 
 // Cosmos SDK RootCodespace error codes (codespace "sdk") whose rejection is intrinsic
 // to THIS signed tx — the fault is in the bytes themselves, so no amount of retrying or
@@ -454,7 +486,11 @@ const permanentBroadcastInputClassifiers: Partial<Record<ChainKind, PermanentBro
   sui: (err, details) => {
     if (SUI_REQUIRED_FIELDS_GUARD_RE.test(details)) return true
     const rpcCode = (err.originalError as (Error & { code?: unknown }) | undefined)?.code
-    return rpcCode === -32002 && SUI_PERMANENT_EXECUTION_MESSAGE_RE.test(details)
+    if (rpcCode !== SUI_PERMANENT_GRPC_STATUS) return false
+    return (
+      SUI_PERMANENT_EXECUTION_MESSAGE_RE.test(details) ||
+      SUI_PERMANENT_EXECUTION_MESSAGE_RE.test(decodeRpcDetails(details))
+    )
   },
   cosmos: (_err, details) => isCosmosPermanentBroadcastInput(details),
 }

@@ -2,6 +2,7 @@
 '@vultisig/core-chain': minor
 '@vultisig/core-mpc': minor
 '@vultisig/sdk': minor
+'@vultisig/cli': patch
 ---
 
 Move every Sui read, simulation and broadcast off JSON-RPC.
@@ -23,6 +24,12 @@ and decommissions it entirely by mid-October 2026, so the previous
   `getSuiTokenBalance`, `getSuiAllBalances`) now POST Sui GraphQL and follow the
   paginated `balances` connection to completion, returning `tokens_unavailable`
   rather than a silently truncated portfolio.
+
+The CLI's permanent-vs-retryable broadcast classifier follows the transport:
+a Sui rejection now carries the grpc-status name (`INVALID_ARGUMENT`) instead
+of the numeric JSON-RPC `-32002`, and grpc-web percent-encodes the message
+trailer. Left unchanged, that gate would have gone dead and every permanent
+Sui rejection would have been re-broadcast as if transient.
 
 Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
 client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
