@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { DeliverTxFailedError, isTransientBroadcastError } from './transientRetry'
 
-// Sui retired JSON-RPC, so its broadcasts now fail through gRPC. `@protobuf-ts`
+// Sui is retiring JSON-RPC, so its broadcasts now go over gRPC. `@protobuf-ts`
 // surfaces the grpc-status/grpc-message trailer pair as an `RpcError` whose `code`
 // is the status NAME and whose `message` is still PERCENT-ENCODED (grpc-web escapes
 // the trailer). Both fixtures here are verbatim mainnet captures from

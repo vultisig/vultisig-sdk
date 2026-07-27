@@ -396,7 +396,7 @@ const SOLANA_PERMANENT_BROADCAST_INPUT_RE =
 // it never carries an RPC status, so it's checked independently of the status gate below.
 const SUI_REQUIRED_FIELDS_GUARD_RE = /Sui broadcast requires JSON with "unsignedTx" and "signature" fields/i
 
-// Sui retired JSON-RPC, so broadcasts now go over gRPC and the rejection signal changed
+// Sui is retiring JSON-RPC, so broadcasts now go over gRPC and the rejection signal changed
 // shape twice over:
 //
 //  - `err.code` is the grpc-status NAME (a string) — `@protobuf-ts` surfaces the

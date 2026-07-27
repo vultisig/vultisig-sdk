@@ -7,9 +7,11 @@
 
 Move every Sui read, simulation and broadcast off JSON-RPC.
 
-Sui disabled JSON-RPC on Foundation mainnet full nodes the week of 2026-07-27
-and decommissions it entirely by mid-October 2026, so the previous
-`SuiJsonRpcClient` against `sui-rpc.publicnode.com` was on a dead rail.
+Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+week of 2026-07-27 and full decommission (code removal) lands mid-October 2026,
+after which no provider can serve it. This is a scheduled migration ahead of
+that date, NOT a fix for a live outage — as of 2026-07-27 both
+`sui-rpc.publicnode.com` and `fullnode.mainnet.sui.io` still answer JSON-RPC.
 
 - `getSuiClient()` now returns a `SuiGrpcClient` pointed at
   `https://fullnode.mainnet.sui.io:443` (gRPC-web over HTTPS).

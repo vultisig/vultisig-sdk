@@ -7,7 +7,7 @@
 //    `Intl.PluralRules`, so importing eagerly crashes `sdk.initialize()`.
 //    The Proxy below lazy-imports the client only when a method is invoked.
 //
-// 2. Core now talks gRPC (Sui retired JSON-RPC), but `SuiGrpcClient` speaks
+// 2. Core now talks gRPC (Sui is retiring JSON-RPC), but `SuiGrpcClient` speaks
 //    grpc-web through `GrpcWebFetchTransport`, which reads `Response.body` as
 //    a `ReadableStream`. Hermes' XHR-backed `fetch` exposes no `Response.body`,
 //    so every grpc-web call would throw "missing response body". Sui's other

@@ -8,10 +8,12 @@ export const suiNetwork: SuiClientTypes.Network = 'mainnet'
 /**
  * Sui full node gRPC endpoint (grpc-web over HTTPS).
  *
- * Sui is retiring JSON-RPC: it was disabled on Sui Foundation mainnet full
- * nodes the week of 2026-07-27 and is fully decommissioned (code removed)
- * mid-October 2026. gRPC and GraphQL RPC are the supported replacements, so
- * every Sui read/simulate/execute in this repo goes through one of them.
+ * Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+ * week of 2026-07-27 and full decommission (code removal) lands mid-October
+ * 2026, after which no provider can serve it. gRPC and GraphQL RPC are the
+ * supported replacements, so every Sui read/simulate/execute in this repo goes
+ * through one of them. (JSON-RPC still answered on 2026-07-27 — this is a
+ * migration ahead of the deadline, not a response to a live outage.)
  *
  * The previously-used `sui-rpc.publicnode.com` is JSON-RPC only — it answers
  * nothing over gRPC — so the endpoint moves to the Foundation full node.

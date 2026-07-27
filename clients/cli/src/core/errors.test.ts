@@ -636,7 +636,7 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    // Sui retired JSON-RPC: broadcasts go over gRPC, so the rejection carries a
+    // Sui is retiring JSON-RPC: broadcasts go over gRPC, so the rejection carries a
     // grpc-status NAME (string) instead of the old numeric -32002, and grpc-web
     // percent-encodes the message trailer. Both fixtures below are verbatim mainnet
     // captures from `fullnode.mainnet.sui.io`.

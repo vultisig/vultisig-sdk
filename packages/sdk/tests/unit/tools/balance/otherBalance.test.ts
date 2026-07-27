@@ -179,7 +179,7 @@ describe('getTonBalance', () => {
   })
 })
 
-// Sui retired JSON-RPC (disabled on Foundation mainnet full nodes the week of
+// Sui is retiring JSON-RPC (Foundation mainnet shutdown began the week of
 // 2026-07-27), so these tools now POST GraphQL. Fixtures mirror the GraphQL
 // envelope: `{ data: { address: { ... } } }` / `{ data: null, errors: [...] }`.
 describe('getSuiBalance / getSuiTokenBalance / getSuiAllBalances (GraphQL RPC)', () => {

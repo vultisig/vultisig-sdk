@@ -351,10 +351,10 @@ export async function getTonJettonBalance(address: string, jettonMaster: string)
 /**
  * Sui GraphQL RPC endpoint.
  *
- * Sui retired JSON-RPC: it was disabled on Sui Foundation mainnet full nodes
- * the week of 2026-07-27 and is decommissioned entirely by mid-October 2026,
- * so `suix_getBalance` / `suix_getAllBalances` against
- * `sui-rpc.publicnode.com` no longer have a future. gRPC and GraphQL RPC are
+ * Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+ * week of 2026-07-27 and it is decommissioned entirely by mid-October 2026, so
+ * `suix_getBalance` / `suix_getAllBalances` against `sui-rpc.publicnode.com`
+ * have no future even though they still answer today. gRPC and GraphQL RPC are
  * the supported replacements; GraphQL is a plain JSON POST, which keeps this
  * folder's dependency-free `fetchJson` design (the SDK's Sui *client* rail in
  * `core-chain` uses gRPC instead — these tools deliberately import nothing).
