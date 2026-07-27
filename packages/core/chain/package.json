@@ -820,10 +820,20 @@
       "import": "./dist/chains/sui/config.js",
       "default": "./dist/chains/sui/config.js"
     },
+    "./chains/sui/listAllCoins": {
+      "types": "./dist/chains/sui/listAllCoins.d.ts",
+      "import": "./dist/chains/sui/listAllCoins.js",
+      "default": "./dist/chains/sui/listAllCoins.js"
+    },
     "./chains/sui/sign": {
       "types": "./dist/chains/sui/sign.d.ts",
       "import": "./dist/chains/sui/sign.js",
       "default": "./dist/chains/sui/sign.js"
+    },
+    "./chains/sui/transactionResult": {
+      "types": "./dist/chains/sui/transactionResult.d.ts",
+      "import": "./dist/chains/sui/transactionResult.js",
+      "default": "./dist/chains/sui/transactionResult.js"
     },
     "./chains/thorchain/ruji/services/fetchMergeableTokenBalances": {
       "types": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.d.ts",
