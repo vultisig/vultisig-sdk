@@ -54,8 +54,21 @@ const getThorchainDepositAsset = ({
     (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
     nativeSwapChainIds[chain as VaultBasedCosmosChain]
   const { contractAddress } = assetCoin
+  // The `TICKER-CONTRACT` symbol form belongs to secured-asset withdrawals only,
+  // where `assetCoin` is the L1 coin being pulled off THORChain and
+  // `contractAddress` is its L1 token contract (`USDC` + `0xa0b8…` ->
+  // `USDC-0XA0B8…`, matching THORNode's `ETH.USDC-0XA0B8…`).
+  //
+  // For a plain swap the contract address is the THORChain bank denom
+  // (`tcy`, `x/ruji`), and appending it produced `TCY-tcy` — an asset THORNode
+  // has no pool for, and a pre-image hash that no longer matched the one iOS
+  // (`thorchain.swift` getSwapPreSignedInputData) and Android
+  // (`ThorchainSwapHelper.getSwapPreSignedInputData`) derive from the same
+  // payload. A co-signing joiner then polled a `message_id` the initiator never
+  // uploaded and died on `404 Timed out while waiting for setup message`.
+  // See vultisig/vultisig-windows#4464.
   const rawSymbol =
-    typeof contractAddress === 'string' && contractAddress.trim()
+    secured && typeof contractAddress === 'string' && contractAddress.trim()
       ? `${assetCoin.ticker}-${contractAddress}`
       : assetCoin.ticker
 
