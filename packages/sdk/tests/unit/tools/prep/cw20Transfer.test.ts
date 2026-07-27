@@ -101,6 +101,18 @@ describe('buildCw20TransferMsg', () => {
     ).toThrow(/positive integer/)
   })
 
+  it('rejects an amount above the CW20 Uint128 maximum', () => {
+    expect(() =>
+      buildCw20TransferMsg({
+        bech32Prefix: 'osmo',
+        contract: OSMO_CONTRACT,
+        recipient: OSMO_RECIPIENT,
+        amount: ((1n << 128n) + 1n).toString(),
+        sender: OSMO_SENDER,
+      })
+    ).toThrow(/Uint128 maximum/)
+  })
+
   it('rejects a prefix mismatch (recipient on wrong chain)', () => {
     expect(() =>
       buildCw20TransferMsg({
