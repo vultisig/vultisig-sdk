@@ -757,6 +757,33 @@ export class AgentSession {
       if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
       }
+      // Ask mode: a declined signing ENDS the turn. Without --yes the gate is a
+      // fixed policy, not a decision the model can influence, so recursing the
+      // refusal back into the loop can only produce a retry that fails again —
+      // which is exactly what happened: execute_send(ok) -> sign_tx(declined) ->
+      // execute_send(error), and the turn ended reporting a build failure, a
+      // missing send tool, or an unconfirmable broadcast about a transaction that
+      // built fine and was never authorized to broadcast. Stopping here keeps the
+      // built transaction as the turn's result (see onProposedTransaction) instead
+      // of burning it in a retry, which is what `agent ask --help` promises:
+      // "it reports the proposed transaction so a read-only prompt can't move funds".
+      //
+      // Scoped to ask mode deliberately. In the TUI a decline is a live user
+      // choice mid-conversation and the model SHOULD get to acknowledge it; in
+      // pipe mode the host can approve on a later turn. Both keep the existing
+      // report-and-continue behavior.
+      if (this.config.askMode && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+        // Drop the queued refusal: it is the turn's result now, not input for a
+        // next request. Leaving it queued would leak into the following turn.
+        this.pendingToolResults = []
+        if (this.config.verbose) {
+          process.stderr.write(
+            '[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction\n'
+          )
+        }
+        ui.onDone()
+        return
+      }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
       // learns confirmed/failed/timeout instead of treating broadcast as success.
@@ -1149,6 +1176,11 @@ export class AgentSession {
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
+        // Capture the proposed transaction BEFORE dropping the envelope below —
+        // a declined signing is the one case where the built-but-unsigned tx IS
+        // the turn's result, and clearPendingTransaction() would otherwise take
+        // the only record of it with it.
+        const proposedChain = toolName === 'sign_tx' ? this.executor.getPendingChain() : null
         // Drop the rejected envelope so it can't linger into later turns
         // (stale legs/summary). sign_typed_data has no buffered tx to drop.
         if (toolName === 'sign_tx') {
@@ -1161,8 +1193,10 @@ export class AgentSession {
             error: 'Transaction not confirmed',
             code: AgentErrorCode.CONFIRMATION_REQUIRED,
             proposed: summary,
+            ...(proposedChain ? { proposed_chain: proposedChain } : {}),
           },
         }
+        ui.onProposedTransaction?.({ tool: toolName, summary, ...(proposedChain ? { chain: proposedChain } : {}) })
         ui.onToolCall(toolCallId, toolName, input)
         ui.onToolResult(
           toolCallId,

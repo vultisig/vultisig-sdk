@@ -14,6 +14,7 @@ function makeUi(approve: boolean) {
     onToolResult: vi.fn(),
     requestConfirmation: vi.fn(async (_msg: string) => approve),
     requestPassword: vi.fn(async () => 'pw'),
+    onProposedTransaction: vi.fn(),
   }
 }
 
@@ -23,10 +24,15 @@ function callGate(opts: {
   body: () => Promise<RecentAction>
   input?: Record<string, unknown>
   pendingSummary?: string | null
+  pendingChain?: string | null
 }): { result: Promise<RecentAction>; clearPendingTransaction: ReturnType<typeof vi.fn> } {
   const clearPendingTransaction = vi.fn()
   const fakeThis = {
-    executor: { getPendingSummary: () => opts.pendingSummary ?? null, clearPendingTransaction },
+    executor: {
+      getPendingSummary: () => opts.pendingSummary ?? null,
+      getPendingChain: () => opts.pendingChain ?? null,
+      clearPendingTransaction,
+    },
     config: { password: 'pw' },
   }
   const result = (AgentSession.prototype as any).runPasswordGatedTool.call(
@@ -49,6 +55,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
       ui,
       body,
       pendingSummary: 'send 0.001 ETH on Base to 0xabc',
+      pendingChain: 'Base',
     })
     const res = await result
     expect(ui.requestConfirmation).toHaveBeenCalledWith('send 0.001 ETH on Base to 0xabc')
@@ -56,6 +63,14 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(res.success).toBe(false)
     expect(res.data?.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
     expect(res.data?.proposed).toBe('send 0.001 ETH on Base to 0xabc')
+    expect(res.data?.proposed_chain).toBe('Base')
+    // The built transaction is captured BEFORE the buffer is dropped — a declined
+    // signing is the one case where the unsigned tx IS the turn's result.
+    expect(ui.onProposedTransaction).toHaveBeenCalledExactlyOnceWith({
+      tool: 'sign_tx',
+      summary: 'send 0.001 ETH on Base to 0xabc',
+      chain: 'Base',
+    })
     // The rejected envelope must not linger into later turns.
     expect(clearPendingTransaction).toHaveBeenCalledOnce()
   })
@@ -125,7 +140,7 @@ describe('runPasswordGatedTool — confirmation gate', () => {
 // a refactor ever routes the tool-output candidate straight to
 // executor.signTxFromBuffer — the unit tests above can't catch that un-wiring.
 describe('processMessageLoop — tool-output signing wiring through the gate', () => {
-  function makeLoopHarness(opts: { approve: boolean }) {
+  function makeLoopHarness(opts: { approve: boolean; askMode?: boolean }) {
     const signTxFromBuffer = vi.fn(
       async () => ({ tool: 'sign_tx', success: true, data: { tx_hash: '0xfeed', chain: 'Base' } }) as RecentAction
     )
@@ -149,6 +164,7 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       storeServerTransaction: vi.fn(() => true),
       setPassword: vi.fn(),
       getPendingSummary: () => 'send 1 ETH on Base to 0xR',
+      getPendingChain: () => 'Base',
       signTxFromBuffer,
       clearPendingTransaction,
     }
@@ -161,6 +177,7 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       onTxStatus: vi.fn(),
       onError: vi.fn(),
       onDone: vi.fn(),
+      onProposedTransaction: vi.fn(),
       requestPassword: vi.fn(async () => 'pw'),
       requestConfirmation: vi.fn(async () => opts.approve),
     }
@@ -168,7 +185,7 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       conversationId: 'conv-1',
       publicKey: 'pk-test',
       cachedContext: { addresses: {} },
-      config: { password: 'pw', askMode: true, verbose: false },
+      config: { password: 'pw', askMode: opts.askMode ?? true, verbose: false },
       pendingToolResults: [],
       abortController: null,
       client,
@@ -189,18 +206,43 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
     return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction }
   }
 
-  it('denied: the tool-output candidate never reaches signTxFromBuffer; CONFIRMATION_REQUIRED reported to backend', async () => {
+  it('denied in ask mode: nothing signs, the turn ENDS, and the proposed transaction is the result', async () => {
+    // Ask mode's gate is a fixed policy (no --yes), not a decision the model can
+    // influence — so recursing the refusal could only buy a retry that fails again.
+    // That retry is what produced the reported defect: execute_send(ok) ->
+    // sign_tx(declined) -> execute_send(error), ending in a turn that claimed the
+    // build failed / the send tool was missing / a broadcast could not be confirmed,
+    // about a transaction that built fine and was never authorized to broadcast.
     const h = makeLoopHarness({ approve: false })
     await h.run()
     expect(h.ui.requestConfirmation).toHaveBeenCalledExactlyOnceWith('send 1 ETH on Base to 0xR')
     expect(h.signTxFromBuffer).not.toHaveBeenCalled()
     expect(h.clearPendingTransaction).toHaveBeenCalledOnce()
     expect(h.ui.onTxStatus).not.toHaveBeenCalled()
-    // The decline is recursed back to the backend as a recent_action.
+    // NO second request: the turn ends on the decline instead of retrying into failure.
+    expect(h.streamRequests).toHaveLength(1)
+    // The built-but-unsigned transaction is surfaced as the turn's result.
+    expect(h.ui.onProposedTransaction).toHaveBeenCalledExactlyOnceWith({
+      tool: 'sign_tx',
+      summary: 'send 1 ETH on Base to 0xR',
+      chain: 'Base',
+    })
+    expect(h.ui.onDone).toHaveBeenCalledOnce()
+  })
+
+  it('denied OUTSIDE ask mode: the decline is still reported back so the model can acknowledge it', async () => {
+    // In the TUI a decline is a live user choice mid-conversation, and in pipe mode
+    // the host can approve on a later turn — both keep the report-and-continue
+    // behavior. The short-circuit is scoped to the non-interactive ask path only.
+    const h = makeLoopHarness({ approve: false, askMode: false })
+    await h.run()
+    expect(h.signTxFromBuffer).not.toHaveBeenCalled()
     expect(h.streamRequests).toHaveLength(2)
     const reported = h.streamRequests[1].context.recent_actions
     expect(reported).toHaveLength(1)
     expect(reported[0].data.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
+    // The proposed transaction is surfaced on every client, not just ask mode.
+    expect(h.ui.onProposedTransaction).toHaveBeenCalledOnce()
     expect(h.ui.onDone).toHaveBeenCalledOnce()
   })
 

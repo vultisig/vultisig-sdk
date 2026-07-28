@@ -15,7 +15,7 @@ import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
 import type { BalanceSummaryCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
-import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type { ProposedTransaction, ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -57,6 +57,15 @@ export type AskResult = {
    * or an infra error without parsing prose.
    */
   outcome?: TurnOutcome
+  /**
+   * The transaction the agent BUILT but was never authorized to sign, set when the
+   * confirm gate declined a signing request (no `--yes`). Nothing was signed and
+   * nothing was broadcast. This is the read-safe path's actual result: `agent ask`
+   * without `--yes` is documented to report the proposed transaction, and before
+   * this existed the built tx was discarded and the turn reported a failure whose
+   * stated cause (missing tool / failed build / unconfirmable broadcast) was wrong.
+   */
+  proposedTransaction?: ProposedTransaction
 }
 
 export class AskInterface {
@@ -69,6 +78,7 @@ export class AskInterface {
   private cards: BalanceSummaryCard[] = []
   private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
+  private proposedTransaction: ProposedTransaction | undefined
   private error: AskResult['error']
   // Tracks whether the currently-latched `error` is a terminal one (e.g. the
   // depth cap). A terminal error may overwrite a prior non-terminal one; once a
@@ -141,6 +151,12 @@ export class AskInterface {
         // recent_actions turn) can produce more than one across requests — the last
         // reflects the turn's true ending.
         this.outcome = outcome
+      },
+
+      onProposedTransaction: (proposed: ProposedTransaction) => {
+        // Last one wins: a turn gates at most one signable payload, but a
+        // multi-step flow could gate again — the latest is the one still pending.
+        this.proposedTransaction = proposed
       },
 
       onSuggestions: (_suggestions: Suggestion[]) => {
@@ -217,6 +233,7 @@ export class AskInterface {
     this.cards = []
     this.warnings = []
     this.outcome = undefined
+    this.proposedTransaction = undefined
     // Each turn's error (and its terminal flag) is turn-local — reset every turn.
     this.error = undefined
     this.errorIsTerminal = false
@@ -245,6 +262,7 @@ export class AskInterface {
       warnings: this.warnings,
       error: this.error,
       ...(this.outcome ? { outcome: this.outcome } : {}),
+      ...(this.proposedTransaction ? { proposedTransaction: this.proposedTransaction } : {}),
     }
   }
 }

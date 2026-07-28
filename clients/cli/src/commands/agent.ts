@@ -162,6 +162,13 @@ function outputAskError(
     // `data` so a caller reads `data.outcome` on BOTH the success and error
     // envelopes (the success envelope wraps its fields under `data` via outputJson).
     if (result?.outcome) data.outcome = result.outcome
+    // The built-but-unauthorized transaction IS this turn's result. Without it the
+    // read-safe path returns an error envelope with nothing to read.
+    if (result?.proposedTransaction) {
+      data.confirmation_required = true
+      data.proposed_transaction = result.proposedTransaction
+      data.proposed = result.proposedTransaction.summary
+    }
     outputErrorJson({
       success: false,
       v: 1,
@@ -176,6 +183,10 @@ function outputAskError(
         process.stderr.write(`outcome:${kind}${outcomeCode ? `:${outcomeCode}` : ''}\n`)
       }
       if (result.response) process.stderr.write(`${result.response}\n`)
+      if (result.proposedTransaction) {
+        process.stderr.write('confirmation-required:pass --yes to authorize signing\n')
+        process.stderr.write(`proposed:${result.proposedTransaction.summary}\n`)
+      }
     }
     process.stderr.write(`Error: ${message} [${code}]\n`)
   }
@@ -193,6 +204,13 @@ function hasCommittedBroadcast(result: AskResult | undefined): boolean {
 }
 
 const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data'])
+
+// The confirm gate's own verdict, stated in the caller's terms. The raw executor
+// string ("Transaction not confirmed") reads like the transaction was attempted and
+// came back unconfirmed; what actually happened is that it was built and deliberately
+// never authorized. Nothing was signed and nothing was broadcast.
+const CONFIRMATION_REQUIRED_MESSAGE =
+  'The transaction was built but signing was not authorized, so nothing was signed or broadcast. Re-run with --yes to authorize signing.'
 
 /**
  * The turn's signing verdict, or undefined if it signed cleanly (or never tried).
@@ -215,6 +233,9 @@ function failedSigningError(result: AskResult): { message: string; code: AgentEr
     failed.code ??
     (typeof dataCode === 'string' && isAgentErrorCode(dataCode) ? dataCode : inferAgentErrorCodeFromMessage(message))
 
+  if (code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+    return { message: CONFIRMATION_REQUIRED_MESSAGE, code }
+  }
   return { message, code }
 }
 
@@ -349,6 +370,14 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
 
 /** Convert a typed non-success turn ending into its stable envelope code. */
 function outcomeError(outcome: AskResult['outcome']): { message: string; code: AgentErrorCode } | undefined {
+  // Keyed on the CODE, not the kind: a backend that classifies a built-but-unauthorized
+  // transaction reports it under an existing kind (so no consumer switching on `kind`
+  // meets a value it doesn't handle) with this code. It maps onto the CLI's existing
+  // CONFIRMATION_REQUIRED / exit 12 slot — the same code `send` and `swap` already use
+  // for "needs --yes" — rather than a generic safety block.
+  if (outcome?.code === 'confirmation_required') {
+    return { message: CONFIRMATION_REQUIRED_MESSAGE, code: AgentErrorCode.CONFIRMATION_REQUIRED }
+  }
   switch (outcome?.kind) {
     case 'blocked':
       return {

@@ -130,6 +130,106 @@ describe('agent ask --json output contract', () => {
     expect(stderr.join('')).not.toContain('"success"')
   })
 
+  // The read-safe path: `agent ask` WITHOUT --yes is documented to "report the
+  // proposed transaction so a read-only prompt can't move funds". What it returned
+  // instead was an error envelope with transactions:[], cards:[], no proposed tx,
+  // and a message that named the wrong cause. These pin the honest result.
+  describe('declined signing (no --yes) — the proposed transaction is the result', () => {
+    // The exact shape the session produces on a declined sign_tx.
+    const driveDecline = (cb: UICallbacks) => {
+      cb.onToolResult('tc-send', 'execute_send', true, { chain: 'Ethereum' })
+      cb.onProposedTransaction?.({
+        tool: 'sign_tx',
+        summary: 'send 0.0001 ETH on Ethereum to 0xd8dA',
+        chain: 'Ethereum',
+      })
+      cb.onToolResult(
+        'tc-sign',
+        'sign_tx',
+        false,
+        {
+          error: 'Transaction not confirmed',
+          code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          proposed: 'send 0.0001 ETH on Ethereum to 0xd8dA',
+        },
+        'Transaction not confirmed',
+        AgentErrorCode.CONFIRMATION_REQUIRED
+      )
+      cb.onAssistantMessage('I built the transaction.')
+    }
+
+    it('exits 12 (CONFIRMATION_REQUIRED) and carries the proposed transaction in the envelope', async () => {
+      driver.run = driveDecline
+      const { exitCode } = await runAsk()
+      expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+      const envelope = JSON.parse(stdout.join(''))
+      expect(envelope.success).toBe(false)
+      expect(envelope.error.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
+      // The built transaction is present and machine-readable — the read-safe
+      // affordance the help text promises.
+      expect(envelope.data.confirmation_required).toBe(true)
+      expect(envelope.data.proposed_transaction).toEqual({
+        tool: 'sign_tx',
+        summary: 'send 0.0001 ETH on Ethereum to 0xd8dA',
+        chain: 'Ethereum',
+      })
+      expect(envelope.data.proposed).toBe('send 0.0001 ETH on Ethereum to 0xd8dA')
+    })
+
+    it('states the real cause: built but not authorized — never a failed build or an unconfirmable broadcast', async () => {
+      driver.run = driveDecline
+      await runAsk()
+      const envelope = JSON.parse(stdout.join(''))
+      const msg: string = envelope.error.message
+      expect(msg).toMatch(/built/i)
+      expect(msg).toMatch(/not authorized|--yes/i)
+      expect(msg).toMatch(/nothing was signed|not.*broadcast/i)
+      // The messages the defect actually produced must not come back.
+      expect(msg).not.toMatch(/couldn't set up|step errored/i)
+      expect(msg).not.toMatch(/don't have access to a send tool/i)
+      expect(msg).not.toMatch(/cannot confirm that transaction was actually broadcast/i)
+      expect(msg).not.toBe('Transaction not confirmed')
+    })
+
+    it('human (non-JSON) output surfaces the proposed transaction too', async () => {
+      driver.run = driveDecline
+      const { exitCode } = await runAsk(false)
+      expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+      const err = stderr.join('')
+      expect(err).toContain('confirmation-required:pass --yes to authorize signing')
+      expect(err).toContain('proposed:send 0.0001 ETH on Ethereum to 0xd8dA')
+    })
+
+    it('a backend turn_outcome of confirmation_required maps to exit 12, not a generic safety block', async () => {
+      // A turn with no client-side signing leg at all (the backend classified it).
+      // The code, not the kind, decides — so an existing kind can carry it without
+      // any consumer meeting an outcome kind it does not already handle.
+      driver.run = cb => {
+        cb.onAssistantMessage('I built the transaction but it was not authorized.')
+        cb.onTurnOutcome?.({ kind: 'blocked', code: 'confirmation_required', detail: 'signing was not authorized' })
+      }
+      const { exitCode } = await runAsk()
+      expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+      expect(exitCode).not.toBe(ExitCode.AGENT_TURN_BLOCKED)
+      const envelope = JSON.parse(stdout.join(''))
+      expect(envelope.error.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
+      expect(envelope.data.outcome).toEqual({
+        kind: 'blocked',
+        code: 'confirmation_required',
+        detail: 'signing was not authorized',
+      })
+    })
+
+    it('an ordinary safety block still exits 10 (the confirmation code does not swallow it)', async () => {
+      driver.run = cb => {
+        cb.onAssistantMessage("I can't complete that safely.")
+        cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim' })
+      }
+      const { exitCode } = await runAsk()
+      expect(exitCode).toBe(ExitCode.AGENT_TURN_BLOCKED)
+    })
+  })
+
   it('surfaces protocol-drift warnings in the success envelope', async () => {
     driver.run = cb => {
       cb.onProtocolWarning?.({
