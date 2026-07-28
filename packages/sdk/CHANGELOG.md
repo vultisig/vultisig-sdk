@@ -1,5 +1,157 @@
 # @vultisig/sdk
 
+## 2.22.0
+
+### Minor Changes
+
+- [#1475](https://github.com/vultisig/vultisig-sdk/pull/1475) [`4b14790`](https://github.com/vultisig/vultisig-sdk/commit/4b14790fb5f0fa5b9a58f6fe5575ad4c2bab3867) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose canonical Cosmos native-send fee metadata so first-party consumers can stop maintaining local tables: IBC chains use their shared/default floors, MayaChain exposes its fixed fee, and THORChain remains explicitly unresolved because its fee comes from live network data.
+
+- [#1614](https://github.com/vultisig/vultisig-sdk/pull/1614) [`bb5b62c`](https://github.com/vultisig/vultisig-sdk/commit/bb5b62c60ca298d0aa98614e8c2b01eeef0d8bdb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Let joining devices review a THORChain limit order instead of approving it as a generic send.
+
+  The limit-order builder attaches a swap payload only for ERC20 sources, so RUNE and native-gas-asset orders reached a co-signer as a transfer to an opaque address with an opaque memo — no buy asset, payout destination, or minimum received.
+
+  `getKeysignLimitSwapOrder` decodes those terms from `keysignPayload.memo`, which is present on every source branch. Reading the memo also makes the review trustworthy rather than merely present: the memo is the exact string THORChain executes, so terms derived from it cannot disagree with what gets signed, whereas a display field supplied by the initiating device can.
+
+  `parseLimitSwapMemo` is the underlying decoder, and `assertLimitSwapMemo` now delegates to it so the grammar has one implementation.
+
+  `buildLimitSwapKeysignPayload` now derives the ERC20 branch's `toAmountDecimal` from the memo's LIM rather than from the caller's `expectedToAmount`. That argument is now an optional cross-check: supplying a value that disagrees with the memo throws, which catches a caller that rescaled the LIM into the target coin's own decimals — a mistake that signs a correct order while showing a co-signer a wrong figure.
+
+- [#1583](https://github.com/vultisig/vultisig-sdk/pull/1583) [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27) Thanks [@Toby1009](https://github.com/Toby1009)! - Move every Sui read, simulation and broadcast off JSON-RPC.
+
+  Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+  week of 2026-07-27 and full decommission (code removal) lands mid-October 2026,
+  after which no provider can serve it. This is a scheduled migration ahead of
+  that date, NOT a fix for a live outage — as of 2026-07-27 both
+  `sui-rpc.publicnode.com` and `fullnode.mainnet.sui.io` still answer JSON-RPC.
+
+  - `getSuiClient()` now returns a `SuiGrpcClient` pointed at
+    `https://fullnode.mainnet.sui.io:443` (gRPC-web over HTTPS).
+  - React Native uses `SuiGraphQLClient` against
+    `https://graphql.mainnet.sui.io/graphql` instead: grpc-web needs
+    `Response.body` streaming, which Hermes' fetch does not provide. Both clients
+    implement the same unified transport interface, so callsites are identical.
+  - Balance, coin metadata, coin listing, tx hash, tx status, broadcast and
+    keysign gas refinement moved to `getBalance` / `getCoinMetadata` / `listCoins`
+    / `simulateTransaction` / `getTransaction` / `executeTransaction`.
+  - The dependency-free `@vultisig/sdk` balance tools (`getSuiBalance`,
+    `getSuiTokenBalance`, `getSuiAllBalances`) now POST Sui GraphQL and follow the
+    paginated `balances` connection to completion, returning `tokens_unavailable`
+    rather than a silently truncated portfolio.
+
+  Broadcast-error classification follows the transport. A gRPC failure carries the
+  grpc-status NAME in `code` (not a JSON-RPC number) and a percent-encoded message,
+  so both classifiers were re-pointed:
+
+  - `isTransientBroadcastError` retries `UNAVAILABLE` / `DEADLINE_EXCEEDED` /
+    `RESOURCE_EXHAUSTED` and decodes the message before pattern-matching. A
+    grpc-web response is HTTP 200 with the real status in the trailer, so the
+    existing 5xx branch never saw a busy or restarting node.
+  - The CLI's permanent-vs-retryable gate matches `INVALID_ARGUMENT` instead of
+    the numeric `-32002`. Left unchanged, that gate would have gone dead and every
+    permanent Sui rejection would have been re-broadcast as if transient.
+
+  Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
+  client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
+  instead of a JSON-RPC effects object.
+
+### Patch Changes
+
+- [#1555](https://github.com/vultisig/vultisig-sdk/pull/1555) [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(cosmos): sign `CosmosSpecific.gas` verbatim so co-signing matches iOS/Android
+
+  `CosmosSpecific.gas` (proto field 3) is the fee AMOUNT — commondata#93 documents
+  it as such and every other client signs it verbatim. The signing-inputs and
+  fee-display resolvers were instead re-deriving it as
+  `ceil(gas × relayedGasLimit / staticGasLimit)`, and doubling it for IBC
+  transfers. That silently redefined a shared wire field in one client: on a
+  TerraClassic LUNC send with a simulated gas limit of 321,979 the extension
+  signed a 21.465267 LUNC fee while the iOS co-signer signed the payload's
+  20 LUNC, the SignDocs diverged, and the MPC keysign never completed.
+
+  Both read paths now use `gas` as-is and only resolve the gas LIMIT from field 7.
+  Fee headroom moved to the initiator, which prices `gas` against the limit it
+  relays — matching iOS `CosmosGasPricedFee.scaled` and Android
+  `TerraClassicTax.baseGas`. The COSMOS-02 IBC source-leg headroom is preserved by
+  relaying the widened limit in `gas_limit` instead of applying a multiplier that
+  no other client can reproduce.
+
+  `resolveCosmosGasFee` is replaced by `resolveCosmosGasLimit` (limit resolution)
+  and `scaleCosmosFeeAmount` (initiator-only pricing).
+
+- [#1489](https://github.com/vultisig/vultisig-sdk/pull/1489) [`98ec3bf`](https://github.com/vultisig/vultisig-sdk/commit/98ec3bfdcf0831df00ceec6618c796dbfa2c4d13) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Decode canonical direct CW20 transfer execute messages into transfer envelopes and reject builder amounts above Uint128.
+
+- [#1582](https://github.com/vultisig/vultisig-sdk/pull/1582) [`d7fd8fd`](https://github.com/vultisig/vultisig-sdk/commit/d7fd8fd891d2bb9f007b3feff5b31cc961bae497) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply the Jupiter affiliate fee by deriving and prepending its ATA, while
+  normalizing zero-fee quotes before unsigned transaction construction.
+
+- [#1599](https://github.com/vultisig/vultisig-sdk/pull/1599) [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the canonical Cosmos memo-cap helper family (`COSMOS_MEMO_DEFAULT_MAX_BYTES`, `getCosmosMemoMaxBytes`, `getCosmosMemoMaxBytesByChainId`, `isCosmosMemoWithinCap`) from `@vultisig/sdk/react-native`. The root SDK entry already exported this family; the RN entry is a hand-curated allow-list and had omitted it, pushing mobile consumers toward local memo-cap tables.
+
+- [#1486](https://github.com/vultisig/vultisig-sdk/pull/1486) [`f99133d`](https://github.com/vultisig/vultisig-sdk/commit/f99133dc7a99f44bbe78ba43fa59e7ec761c73e1) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Use the noble Point API in React Native derivation and reject malformed Solana or EVM signature hex.
+
+- [#1599](https://github.com/vultisig/vultisig-sdk/pull/1599) [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the canonical native-swap minimum helper family (`getNativeSwapMinAmountIn`, `NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER`, `NativeSwapMinAmountIn`) and the Sui/UTXO-consolidate prep companion types (`PrepareSuiTokenTransferFromKeysParams`, `ConsolidateChain`, `ConsolidateUtxo`, `PrepareUtxoConsolidateResult`, `PrepareUtxoConsolidateTxFromKeysParams`) from the root `@vultisig/sdk` entry. These already existed in the tools barrel; root-package consumers previously had no way to import them without reaching into an internal path.
+
+- [#1467](https://github.com/vultisig/vultisig-sdk/pull/1467) [`6142529`](https://github.com/vultisig/vultisig-sdk/commit/6142529abc39bb548be8b1f32453f0207584c4e2) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Fail Sui transaction construction when gas-budget re-pricing cannot cover the
+  final selected coin set instead of returning a known under-priced baseline.
+
+- [#1555](https://github.com/vultisig/vultisig-sdk/pull/1555) [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(terraclassic): price the LUNC fee from the chain's gas price and add the burn tax explicitly
+
+  `cosmosGasRecord[TerraClassic]` was a hand-tuned flat 20 LUNC (itself already
+  lowered from 100 LUNC). Terra Classic's actual `uluna` gas price is 28.325
+  uluna/gas, so a send at the static 300k limit costs 8,497,500 uluna — the flat
+  constant overcharged every send by ~2.35× before any gas-limit scaling.
+
+  It was also implicitly absorbing the `x/tax` burn tax (0.5% of the transfer),
+  which scales with the amount while a flat constant does not. So it overcharged
+  small sends and under-covered anything above ~2,300 LUNC, where 0.5% outgrows
+  the slack.
+
+  Both halves are now explicit:
+
+  - `cosmosGasRecord[TerraClassic]` = `8_497_500n` (`300_000 × 28.325`), matching
+    iOS `TerraClassicTax.ulunaBaseGas` and Android `ULUNA_BASE_GAS`. It still
+    scales with a relayed `gas_limit`.
+  - The initiator adds `applyTerraClassicBurnTax(amount, rate)` to `gas` for
+    native LUNC sends, after the gas scaling — the tax tracks the transfer
+    amount, not the gas limit.
+
+  Adds `getTerraClassicBurnTaxRate`, which reads `x/tax` `burn_tax_rate` (live
+  0.5%) and fails closed to 0.5% on any LCD error. This is a different tax from
+  the existing `x/treasury` `tax_rate`, which governance has held at 0 since the
+  UST collapse and which exempts `uluna` — reading it for a LUNC send always
+  returned 0. `applyTerraClassicBurnTax` is separate from `applyTerraClassicTax`
+  for the same reason: the burn tax exempts nothing and is uncapped.
+
+  A 300 LUNC send at a simulated 321,979 gas limit now costs 10.620056 LUNC
+  (9.120056 gas + 1.5 tax) instead of 21.465267.
+
+- [#1591](https://github.com/vultisig/vultisig-sdk/pull/1591) [`e76ba9b`](https://github.com/vultisig/vultisig-sdk/commit/e76ba9ba78ec52f30f3678ef4acc933ef5712cdc) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(thorchain): don't append the bank denom to a native-token swap deposit symbol
+
+  A swap sourced from a THORChain-native token (TCY, RUJI) encoded its
+  `MsgDeposit` asset as `` `${ticker}-${contractAddress}` `` — and for these coins
+  `contractAddress` IS the bank denom, so the deposit went out as `TCY-tcy`
+  instead of `TCY`. iOS (`thorchain.swift` `getSwapPreSignedInputData`) and
+  Android (`ThorchainSwapHelper`) both encode the bare ticker.
+
+  Because the symbol is part of the signed pre-image, this moved the hash: a
+  co-signing joiner rebuilds the payload locally and polls the relay with
+  `messageId = getMessageHash(message)`, so it asked for a `message_id` the
+  initiator never uploaded and failed with
+  `404 Timed out while waiting for setup message`. Reported in
+  vultisig/vultisig-windows#4464 as a TCY -> RUNE swap that fails whenever the
+  extension co-signs and succeeds against an Apple co-signer.
+
+  The `TICKER-CONTRACT` form is now gated on `secured`, which is the case it was
+  written for (vultisig-sdk `5a8aacdeb`): a secured-asset withdrawal, where the
+  auxiliary coin is the L1 token being pulled off THORChain and the contract
+  address genuinely belongs in the symbol (`USDC` + `0xa0b8…` ->
+  `USDC-0XA0B8…`, matching THORNode's `ETH.USDC-0XA0B8…`). Both sides of that
+  gate are now covered by tests; RUNE, secured assets, and non-swap deposits
+  (bond/merge/stake) were never affected.
+
+- [#1490](https://github.com/vultisig/vultisig-sdk/pull/1490) [`4777264`](https://github.com/vultisig/vultisig-sdk/commit/47772647b90336ae3297d208777523592f69dde4) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Ship dedicated declaration bundles for the browser and Chrome extension entrypoints.
+
+- [#1471](https://github.com/vultisig/vultisig-sdk/pull/1471) [`89410fb`](https://github.com/vultisig/vultisig-sdk/commit/89410fbb0abf3ad05919fb38d1abc74a5acf9a6b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix Tron TRC-20 transfers going OUT_OF_ENERGY. `getTrc20TransferFee` trusted `energy_used`/`energy_penalty` defaulting to 0 on unsuccessful `triggerconstantcontract` response shapes (empty body, indexing lag, or reverts, including live responses with `result.result === true` plus a revert message), silently producing a `feeLimit` of 0 downstream. It now rejects unsuccessful and non-positive estimates. The serialized `feeLimit` ceiling is based on the full simulated energy before staked-energy subtraction, padded by `+50%`, and capped at 100 TRX so concurrent staked-energy use during the 10-60s MPC ceremony cannot reduce the ceiling to zero. The user-displayed/max-send fee remains the unpadded expected burn after current staked energy is applied. The 280 sun/energy fallback (stale 2023 governance default) is also corrected to the live TronGrid value of 100 sun/energy and documented for unreachable, missing, or invalid chain-parameter responses.
+
+- [#1511](https://github.com/vultisig/vultisig-sdk/pull/1511) [`787e755`](https://github.com/vultisig/vultisig-sdk/commit/787e755d230d1e0fa012583d6edd8b7fa5aad88d) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Return locally derived transaction hashes for deterministic raw broadcast duplicate responses.
+
 ## 2.21.1
 
 ### Patch Changes
