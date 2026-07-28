@@ -287,6 +287,21 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([discovered])
   })
 
+  it('removes the symbol-matched record even when another record uses the ticker as its id', async () => {
+    // A ticker-keyed id ('usdc') on one record and the symbol 'USDC' on another
+    // make the reference 'USDC' match different records depending on which
+    // question you ask. The resolver answers symbol-first, so removal must too:
+    // otherwise `--remove USDC` reports success while USDC stays tracked and
+    // the differently-named sibling silently disappears.
+    const bySymbol: Token = { ...addedToken, id: USDC, contractAddress: USDC, symbol: 'USDC' }
+    const byTickerId: Token = { ...addedToken, id: 'usdc', contractAddress: USDC, symbol: 'USDCoin' }
+    const { service, getTokens } = makeMutableService([bySymbol, byTickerId])
+
+    await expect(service.removeToken(Chain.Ethereum, 'USDC')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([byTickerId])
+  })
+
   it('removes only the referenced token when a chain tracks several', async () => {
     const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
     const daiToken: Token = {
