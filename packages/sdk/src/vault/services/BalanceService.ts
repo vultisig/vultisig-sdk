@@ -341,30 +341,51 @@ export class BalanceService {
 
     if (!tokens) return false
 
-    // An exact stored-id match wins. A vault can legitimately hold two records
-    // for one asset — a discovered token (`id: <address>`) and a CLI-added copy
-    // (`id: <Chain>-<address>`), because addToken dedupes on exact id only — and
-    // a caller naming one of them exactly must not have the other removed
-    // underneath it. This also preserves the pre-resolver removal semantics.
-    let tokenIndex = tokens.findIndex(token => token.id?.toLowerCase() === id.toLowerCase())
+    // Resolve first. The resolver is the single definition of what a token
+    // reference means, and removal must not disagree with the asset that
+    // `send`/`swap` would pick for the same reference.
+    let resolved
+    try {
+      resolved = resolveTokenRef(chain, id, tokens)
+    } catch {
+      return false
+    }
 
-    if (tokenIndex === -1) {
-      let resolved
-      try {
-        resolved = resolveTokenRef(chain, id, tokens)
-      } catch {
-        return false
-      }
+    if (!resolved.contractAddress) return false
 
-      if (!resolved.contractAddress) return false
+    const resolvedAssetId = resolved.contractAddress.toLowerCase()
+    // Use the same `||` fallback the resolver applies (tokenRef.ts): a token
+    // stored with an empty `contractAddress` is identified by its `id`, and
+    // matching on `??` would compare it against `''` and leave it permanently
+    // unremovable. The address is the identity; `symbol` is unvalidated
+    // metadata and may be absent.
+    const assetIdOf = (token: Token) => (token.contractAddress || token.id)?.toLowerCase()
 
-      const resolvedAssetId = resolved.contractAddress.toLowerCase()
-      // Match on the asset id, using the same `||` fallback the resolver itself
-      // applies (tokenRef.ts) — a token stored with an empty `contractAddress`
-      // resolves via its `id`, and matching on `??` here would compare it
-      // against `''` and leave it permanently unremovable. The address is the
-       // identity; `symbol` is unvalidated metadata and may be absent.
-       tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+    // An exact stored-id match wins, but only when it names the same asset the
+    // resolver picked. A vault can legitimately hold two records for one asset —
+    // a discovered token (`id: <address>`) and a CLI-added copy
+    // (`id: <Chain>-<address>`), since addToken dedupes on exact id only — and a
+    // caller naming one exactly must not have its sibling removed underneath it.
+    // But when the exact id names a *different* asset than the resolver's
+    // symbol-first match (a vault holding a ticker-keyed `id: 'usdt'` as the
+    // users guide documents, alongside a bridged USDT), the resolver wins:
+    // removing "USDT" must mean the same token `send({ symbol: 'USDT' })` means.
+    const exactIndex = tokens.findIndex(token => token.id?.toLowerCase() === id.toLowerCase())
+
+    let tokenIndex: number
+    if (exactIndex !== -1 && assetIdOf(tokens[exactIndex]) === resolvedAssetId) {
+      tokenIndex = exactIndex
+    } else {
+      // Among the records for the resolved asset, prefer the one carrying the
+      // symbol the resolver actually matched: one asset can be tracked twice
+      // under different symbols (discovery writes `USDC`, `tokens --add
+      // --symbol USDCoin` writes another record for the same contract), and
+      // removing by one symbol must not delete the record holding the other.
+      const resolvedTicker = resolved.ticker.toLowerCase()
+      tokenIndex = tokens.findIndex(
+        token => assetIdOf(token) === resolvedAssetId && token.symbol?.toLowerCase() === resolvedTicker
+      )
+      if (tokenIndex === -1) tokenIndex = tokens.findIndex(token => assetIdOf(token) === resolvedAssetId)
     }
 
     if (tokenIndex === -1) return false

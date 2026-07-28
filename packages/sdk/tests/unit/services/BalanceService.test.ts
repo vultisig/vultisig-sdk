@@ -239,6 +239,54 @@ describe('BalanceService', () => {
     expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: addedToken.id })
   })
 
+  it('removes the asset the resolver picks when a stored id collides with another token symbol', async () => {
+    // A vault following the users guide stores USDT with `id: 'usdt'`. If it
+    // also tracks a bridged USDT, the ref 'USDT' is both an exact id of one
+    // record and the symbol of another. Removal must agree with the resolver —
+    // otherwise `--remove USDT` deletes a different asset than the one
+    // `send({ symbol: 'USDT' })` would spend.
+    const bridged: Token = {
+      id: '0x00000000000000000000000000000000000br1dge',
+      contractAddress: '0x00000000000000000000000000000000000br1dge',
+      symbol: 'USDT',
+      name: 'Bridged Tether',
+      decimals: 6,
+      chainId: Chain.Ethereum,
+      isNative: false,
+    }
+    const canonical: Token = {
+      id: 'usdt',
+      contractAddress: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+      symbol: 'USDT',
+      name: 'Tether USD',
+      decimals: 6,
+      chainId: Chain.Ethereum,
+      isNative: false,
+    }
+    const { service, getTokens } = makeMutableService([bridged, canonical])
+
+    await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(true)
+
+    // resolveTokenRef matches by symbol first and returns the FIRST symbol
+    // match, so 'USDT' means the bridged token on every surface — including here.
+    expect(getTokens(Chain.Ethereum)).toEqual([canonical])
+  })
+
+  it('removes the record carrying the named symbol when one asset is tracked twice', async () => {
+    // Discovery stores the contract under its on-chain symbol; `tokens --add
+    // --symbol USDCoin` can store a second record for the SAME contract under a
+    // different symbol. Removing by one symbol must delete that record, not its
+    // sibling — otherwise the CLI reports removing USDCoin while USDCoin stays
+    // listed and USDC silently disappears.
+    const discovered: Token = { ...addedToken, id: USDC, contractAddress: USDC, symbol: 'USDC' }
+    const renamed: Token = { ...addedToken, symbol: 'USDCoin' }
+    const { service, getTokens } = makeMutableService([discovered, renamed])
+
+    await expect(service.removeToken(Chain.Ethereum, 'USDCoin')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([discovered])
+  })
+
   it('removes only the referenced token when a chain tracks several', async () => {
     const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
     const daiToken: Token = {
