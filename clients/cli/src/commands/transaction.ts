@@ -84,6 +84,14 @@ export async function sendTransaction(
   if (params.dryRun) {
     const balance = await vault.balance(params.chain, params.tokenId)
     const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+    // A token send pays its fee out of the NATIVE balance, which `total` no
+    // longer covers — so check it separately. Holding the token but no gas is
+    // the ordinary way an ERC-20 send fails, and it would otherwise preview
+    // clean and only fail at broadcast.
+    const feeBalance =
+      dryResult.feeSymbol === balance.symbol ? balance : await vault.balance(params.chain).catch(() => undefined)
+    const hasInsufficientFee =
+      feeBalance !== undefined && parseFloat(dryResult.fee) > parseFloat(feeBalance.formattedAmount)
     // fee/total come straight from the build the SDK just did. They were previously
     // dropped from the JSON result even though the human preview below prints the fee
     // and `total` is what the insufficient-balance check compares against — so
@@ -100,8 +108,17 @@ export async function sendTransaction(
       balance: balance.formattedAmount,
       destinationTag,
     }
+    const warnings: string[] = []
     if (hasInsufficientBalance) {
-      result.warning = `Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`
+      warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
+    }
+    if (hasInsufficientFee && feeBalance) {
+      warnings.push(
+        `Insufficient ${dryResult.feeSymbol} for the network fee: you have ${feeBalance.formattedAmount} ${dryResult.feeSymbol}, the fee is ${dryResult.fee}`
+      )
+    }
+    if (warnings.length > 0) {
+      result.warning = warnings.join(' ')
     }
     if (isJsonOutput()) {
       outputJson(result)

@@ -11,6 +11,7 @@
  * expectation here fails.
  */
 import { Chain } from '@vultisig/core-chain/Chain'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Token } from '../../../src/types'
@@ -210,5 +211,42 @@ describe('send and balance resolve a token ref identically', () => {
     expect(coin).toMatchObject({ ticker: 'ETH', decimals: 18 })
     expect(coin?.id).toBeUndefined()
     expect(await balanceIdFor('ETH', [storedUsdc])).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Non-EVM chains. Their registry ids are denoms and mint addresses, not
+// 0x-addresses, so the id-matching branch has to work on strings that look
+// nothing like an EVM contract address.
+// ---------------------------------------------------------------------------
+
+describe('non-EVM token refs resolve on both paths', () => {
+  it('resolves a Cosmos denom by id and by ticker to the same asset', () => {
+    // MayaChain's registry keys `maya` (the denom) with ticker `MAYA`.
+    const byTicker = resolveTokenRef(Chain.MayaChain, 'MAYA', [])
+    const byDenom = resolveTokenRef(Chain.MayaChain, 'maya', [])
+    expect(byTicker).toEqual(byDenom)
+    expect(byTicker.contractAddress).toBe('maya')
+  })
+
+  it('resolves a Solana mint address by id', () => {
+    const known = knownTokens[Chain.Solana] ?? []
+    const mint = known[0]
+    expect(mint).toBeDefined()
+    expect(resolveTokenRef(Chain.Solana, mint.id, [])).toMatchObject({
+      ticker: mint.ticker,
+      decimals: mint.decimals,
+      contractAddress: mint.id,
+    })
+  })
+
+  it('keeps send and balance in agreement for a non-EVM ref', async () => {
+    const known = knownTokens[Chain.Solana] ?? []
+    const mint = known[0]
+    const info = resolveTokenRef(Chain.Solana, mint.ticker, [])
+    // Same assertion as the EVM matrix: whatever the send path signs for is
+    // exactly what the balance path queries.
+    expect(resolveTokenRefId(Chain.Solana, mint.ticker, [])).toBe(info.contractAddress)
+    expect(resolveTokenRefId(Chain.Solana, mint.id, [])).toBe(info.contractAddress)
   })
 })

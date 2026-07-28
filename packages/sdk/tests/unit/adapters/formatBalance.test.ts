@@ -221,29 +221,49 @@ describe('formatBalance', () => {
       })
     })
 
-    it('should handle token without token registry', () => {
+    // These two cases used to assert the 18-decimal / address-as-symbol fallback
+    // for USDC's real contract address — 1 USDC rendered as
+    // "0.000000000001 0xa0b86991…". That is the wrong answer, and it was reachable
+    // from the send preview: `vault.balance()` resolves a token ref to its contract
+    // address, and a well-known token need not be in the vault's own list.
+    // A well-known token now formats correctly with no vault registry at all.
+    it('formats a well-known token from the registry when the vault tracks no tokens', () => {
       const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 
       expect(result).toEqual({
         amount: '1000000',
-        formattedAmount: '0.000000000001',
-        symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        decimals: 18,
+        formattedAmount: '1',
+        symbol: 'USDC',
+        decimals: 6,
         chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       })
     })
 
-    it('should handle empty token registry', () => {
+    it('formats a well-known token from the registry when the token registry is empty', () => {
       const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', {})
 
       expect(result).toEqual({
         amount: '1000000',
-        formattedAmount: '0.000000000001',
-        symbol: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-        decimals: 18,
+        formattedAmount: '1',
+        symbol: 'USDC',
+        decimals: 6,
         chainId: Chain.Ethereum,
         tokenId: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      })
+    })
+
+    it('still falls back to 18 decimals and the raw id for a token in no registry', () => {
+      const unknown = '0x00000000000000000000000000000000000000ff'
+      const result = formatBalance(1000000n, Chain.Ethereum, unknown, {})
+
+      expect(result).toEqual({
+        amount: '1000000',
+        formattedAmount: '0.000000000001',
+        symbol: unknown,
+        decimals: 18,
+        chainId: Chain.Ethereum,
+        tokenId: unknown,
       })
     })
 

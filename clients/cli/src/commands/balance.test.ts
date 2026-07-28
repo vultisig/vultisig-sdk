@@ -341,6 +341,32 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(portfolio.totalValue.amount).toBe('6.62')
   })
 
+  it('renders one table row per priced asset, tokens included (human output)', async () => {
+    // The table is what a human actually reconciles against the printed total.
+    // Capturing console.table's ARGUMENT (rather than stubbing it away) is what
+    // makes this catch a regression to a native-only breakdown.
+    configureOutput({ format: 'table', silent: false })
+    let rows: Array<Record<string, string>> = []
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'table').mockImplementation((data: unknown) => {
+      rows = data as Array<Record<string, string>>
+    })
+
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      balance: async (_chain, tokenId) => makeBalance(tokenId ? 'USDC' : 'ETH'),
+      getValue: async () => makeValue('1.06'),
+      getValues: async () => ({ native: makeValue('1.06'), [USDC]: makeValue('6.62') }),
+    })
+
+    await executePortfolio(ctx, { currency: 'usd' })
+
+    expect(rows.map(r => r.Symbol)).toEqual(['ETH', 'USDC'])
+    expect(rows.map(r => r.Value)).toEqual(['1.06 USD', '6.62 USD'])
+    // Every row carries its chain, so a multi-chain table stays readable.
+    expect(rows.every(r => r.Chain === Chain.Ethereum)).toBe(true)
+  })
+
   it('prints per-chain warnings on the human-readable (table) output', async () => {
     configureOutput({ format: 'table', silent: false })
     const logs: string[] = []
