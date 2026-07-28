@@ -113,6 +113,27 @@ describe('runPasswordGatedTool — confirmation gate', () => {
     expect(clearPendingTransaction).not.toHaveBeenCalled()
   })
 
+  it('caps an oversized typed-data summary ONCE — data.proposed and the callback agree', async () => {
+    // The sign_typed_data fallback summary is JSON.stringify(input), an arbitrarily large blob that
+    // reaches stdout and the JSON envelope. Capping only one of the two representations would ship
+    // two conflicting descriptions of the same proposal.
+    const ui = makeUi(false)
+    const big = 'x'.repeat(2000)
+    const { result } = callGate({
+      toolName: 'sign_typed_data',
+      ui,
+      body: vi.fn(async () => ({ tool: 'sign_typed_data', success: true, data: {} }) as RecentAction),
+      input: { typed_data: big },
+      pendingSummary: null,
+    })
+    const res = await result
+    const proposed = res.data?.proposed as string
+    const emitted = ui.onProposedTransaction.mock.calls[0][0].summary
+    expect(proposed.length).toBeLessThan(600)
+    expect(proposed.endsWith('…')).toBe(true)
+    expect(emitted).toBe(proposed)
+  })
+
   it('sign_typed_data with no buffer falls back to tool name + input', async () => {
     const ui = makeUi(false)
     await callGate({
@@ -144,6 +165,7 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
     approve: boolean
     askMode?: boolean
     dispatchDuringTurn?: RecentAction
+    extraDispatch?: RecentAction
     noSignable?: boolean
   }) {
     const signTxFromBuffer = vi.fn(
@@ -210,6 +232,7 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       dispatchClientSideTool: opts.dispatchDuringTurn
         ? async function (this: any) {
             this.pendingToolResults.push(opts.dispatchDuringTurn)
+            if (opts.extraDispatch) this.pendingToolResults.push(opts.extraDispatch)
           }
         : (AgentSession.prototype as any).dispatchClientSideTool,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
@@ -291,6 +314,41 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
     const h = makeLoopHarness({ approve: false, askMode: false, dispatchDuringTurn: declined, noSignable: true })
     await h.run()
     expect(h.streamRequests).toHaveLength(2)
+  })
+
+  it('EVERY queued decline is dropped — two typed-data declines in one turn leak none', async () => {
+    // Client-side dispatches are serialized and all awaited before the turn ends, so one response
+    // can queue several declined sign_typed_data calls. Removing only the first would leave the rest
+    // queued, and the NEXT request would flush a stale refusal into an unrelated turn.
+    const decline = (id: string): RecentAction => ({
+      tool: 'sign_typed_data',
+      success: false,
+      data: { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED, proposed: id },
+    })
+    const h = makeLoopHarness({
+      approve: false,
+      dispatchDuringTurn: decline('first'),
+      extraDispatch: decline('second'),
+      noSignable: true,
+    })
+    await h.run()
+    expect(h.streamRequests).toHaveLength(1)
+    expect(h.pendingAfter()).toEqual([])
+  })
+
+  it('a typed-data decline queued alongside a declined sign_tx does not leak either', async () => {
+    // The signable branch returns WITHOUT reaching the tail check, so it must purge the queue too.
+    const typedDecline: RecentAction = {
+      tool: 'sign_typed_data',
+      success: false,
+      data: { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED },
+    }
+    const mutation: RecentAction = { tool: 'vault_coin', success: true, data: { added: 'USDC' } }
+    const h = makeLoopHarness({ approve: false, dispatchDuringTurn: typedDecline, extraDispatch: mutation })
+    await h.run()
+    expect(h.streamRequests).toHaveLength(1)
+    // Both refusals gone; the executed mutation survives.
+    expect(h.pendingAfter()).toEqual([mutation])
   })
 
   it('denied OUTSIDE ask mode: the decline is still reported back so the model can acknowledge it', async () => {

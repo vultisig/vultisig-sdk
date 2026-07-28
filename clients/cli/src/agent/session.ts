@@ -171,23 +171,29 @@ function reportDeclinedSigning(
   const proposedChain = toolName === 'sign_tx' ? executor.getPendingChain() : null
   // Drop the rejected envelope so it can't linger into later turns (stale legs/summary).
   if (toolName === 'sign_tx') executor.clearPendingTransaction()
+  // `summary` is a one-line human string for sign_tx, but the sign_typed_data fallback is
+  // `JSON.stringify(input)` — an arbitrarily large typed-data blob that reaches stdout/stderr and
+  // the JSON envelope from here. Cap it rather than dumping the whole payload into a field
+  // documented as one line. Capped ONCE, before both consumers: `data.proposed` and
+  // `proposedTransaction.summary` describe the SAME proposal, so capping only one would ship two
+  // conflicting representations of it. Nothing is lost — this is a display summary of a
+  // transaction that was NOT authorized; the authoritative payload is the request the caller
+  // re-issues with `--yes`.
+  const proposed =
+    summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
   const declined: RecentAction = {
     tool: toolName,
     success: false,
     data: {
       error: 'Transaction not confirmed',
       code: AgentErrorCode.CONFIRMATION_REQUIRED,
-      proposed: summary,
+      proposed,
       ...(proposedChain ? { proposed_chain: proposedChain } : {}),
     },
   }
-  // `summary` is a one-line human string for sign_tx, but the sign_typed_data fallback is
-  // `JSON.stringify(input)` — an arbitrarily large typed-data blob that reaches stdout/stderr and
-  // the JSON envelope from here. Cap it rather than dumping the whole payload into a field
-  // documented as one line.
   ui.onProposedTransaction?.({
     tool: toolName,
-    summary: summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary,
+    summary: proposed,
     ...(proposedChain ? { chain: proposedChain } : {}),
   })
   ui.onToolCall(toolCallId, toolName, input)
@@ -224,19 +230,25 @@ function isAskModeDecline(askMode: boolean | undefined, recent: RecentAction | u
 }
 
 /**
- * Remove a queued ask-mode signing decline, returning whether one was found.
+ * Remove EVERY queued ask-mode signing decline, returning whether any was found.
  *
- * Only the refusal is dropped — it is the turn's result, not input for a next request. Every OTHER
- * queued entry is a client-side tool the model dispatched that already RAN this turn (vault_chain /
- * vault_coin / address_book, see dispatchClientSideTool); those mutations are committed locally, so
- * they stay queued and the next request still reports them as recent_actions. Clearing the whole
- * queue would silently lose the record of work that happened.
+ * All of them, not just the first: client-side dispatches are serialized and all awaited before the
+ * turn ends, so one response can queue several declined sign_typed_data calls, and a response that
+ * mixes a declined sign_typed_data with a buffered sign_tx returns from the signable branch — which
+ * also calls this. Removing one would leave the rest queued, and the NEXT request would flush a
+ * stale refusal into an unrelated turn's recent_actions.
+ *
+ * Only refusals are dropped — they are this turn's result, not input for a next request. Every
+ * OTHER queued entry is a client-side tool the model dispatched that already RAN this turn
+ * (vault_chain / vault_coin / address_book, see dispatchClientSideTool); those mutations are
+ * committed locally, so they stay queued and the next request still reports them as recent_actions.
+ * Clearing the whole queue would silently lose the record of work that happened.
  */
-function takeQueuedAskModeDecline(askMode: boolean | undefined, pending: RecentAction[]): boolean {
+function takeQueuedAskModeDeclines(askMode: boolean | undefined, pending: RecentAction[]): boolean {
   if (!askMode) return false
-  const idx = pending.findIndex(r => isAskModeDecline(askMode, r))
-  if (idx === -1) return false
-  pending.splice(idx, 1)
+  const kept = pending.filter(r => !isAskModeDecline(askMode, r))
+  if (kept.length === pending.length) return false
+  pending.splice(0, pending.length, ...kept)
   return true
 }
 
@@ -871,6 +883,9 @@ export class AgentSession {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
       }
       if (declinedInAskMode) {
+        // Also purge any decline already queued THIS turn (a sign_typed_data the model dispatched
+        // before the signable candidate) — this branch returns without reaching the tail check.
+        takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)
         finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
         return
       }
@@ -893,7 +908,7 @@ export class AgentSession {
     // dispatchClientSideTool rather than the signable branch above, so without this it kept the
     // original retry-into-failure behavior — `agent ask "bet 5 USDC on X"` without --yes would
     // still report a wrong cause.
-    if (takeQueuedAskModeDecline(this.config.askMode, this.pendingToolResults)) {
+    if (takeQueuedAskModeDeclines(this.config.askMode, this.pendingToolResults)) {
       finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
       return
     }
