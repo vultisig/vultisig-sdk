@@ -38,7 +38,6 @@ export class BalanceService {
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
     const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
-    const assetId = resolveTokenRefId(chain, tokenId, this.getTokens(chain))
 
     // Check scoped cache (uses configured TTL)
     const cached = this.cacheService.getScoped<Balance>(key, CacheScope.BALANCE)
@@ -46,6 +45,11 @@ export class BalanceService {
 
     let address: string | undefined
     try {
+      // Resolved inside the try, after the cache check: `getTokens` is injected,
+      // so a throw from it stays wrapped as a VaultError instead of escaping raw
+      // on a path that used to be served from cache.
+      const assetId = resolveTokenRefId(chain, tokenId, this.getTokens(chain))
+
       address = await this.getAddress(chain)
 
       // Core handles balance fetching for ALL chains
@@ -337,21 +341,32 @@ export class BalanceService {
 
     if (!tokens) return false
 
-    let resolved
-    try {
-      resolved = resolveTokenRef(chain, id, tokens)
-    } catch {
-      return false
+    // An exact stored-id match wins. A vault can legitimately hold two records
+    // for one asset — a discovered token (`id: <address>`) and a CLI-added copy
+    // (`id: <Chain>-<address>`), because addToken dedupes on exact id only — and
+    // a caller naming one of them exactly must not have the other removed
+    // underneath it. This also preserves the pre-resolver removal semantics.
+    let tokenIndex = tokens.findIndex(token => token.id?.toLowerCase() === id.toLowerCase())
+
+    if (tokenIndex === -1) {
+      let resolved
+      try {
+        resolved = resolveTokenRef(chain, id, tokens)
+      } catch {
+        return false
+      }
+
+      if (!resolved.contractAddress) return false
+
+      const resolvedAssetId = resolved.contractAddress.toLowerCase()
+      // Match on the asset id, using the same `||` fallback the resolver itself
+      // applies (tokenRef.ts) — a token stored with an empty `contractAddress`
+      // resolves via its `id`, and matching on `??` here would compare it
+      // against `''` and leave it permanently unremovable. The address is the
+       // identity; `symbol` is unvalidated metadata and may be absent.
+       tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
     }
 
-    if (!resolved.contractAddress) return false
-
-    const resolvedAssetId = resolved.contractAddress.toLowerCase()
-    const tokenIndex = tokens.findIndex(
-      token =>
-        token.symbol.toLowerCase() === resolved.ticker.toLowerCase() &&
-        (token.contractAddress ?? token.id).toLowerCase() === resolvedAssetId
-    )
     if (tokenIndex === -1) return false
 
     // Store original state for rollback

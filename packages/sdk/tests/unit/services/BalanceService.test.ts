@@ -191,6 +191,119 @@ describe('BalanceService', () => {
     expect(emitTokenRemoved).not.toHaveBeenCalled()
   })
 
+  it('rolls the token back and does not emit removal when persisting fails', async () => {
+    const { service, getTokens, saveVault, emitTokenRemoved } = makeMutableService([addedToken])
+    saveVault.mockRejectedValueOnce(new Error('disk full'))
+
+    // The removal is optimistic: state is mutated before saveVault(). A failed
+    // save must restore the pre-removal token list rather than leave the vault
+    // in memory disagreeing with the vault on disk.
+    await expect(service.removeToken(Chain.Ethereum, 'USDC')).rejects.toThrow('disk full')
+
+    expect(getTokens(Chain.Ethereum)).toEqual([addedToken])
+    expect(emitTokenRemoved).not.toHaveBeenCalled()
+  })
+
+  it('removes a token stored with an empty contractAddress', async () => {
+    // Token discovery writes `contractAddress: coin.id ?? ''`, so a stored token
+    // can carry an empty contractAddress and be identified by its id alone. The
+    // resolver falls back to `id` here, and the removal match must use the same
+    // `||` fallback — matching on `??` would compare against '' and leave the
+    // token permanently unremovable.
+    const emptyContractToken: Token = { ...addedToken, id: USDC, contractAddress: '' }
+    const { service, getTokens } = makeMutableService([emptyContractToken])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([])
+  })
+
+  it('refuses to remove the chain native asset and leaves tracked tokens alone', async () => {
+    const { service, getTokens, saveVault } = makeMutableService([addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, 'ETH')).resolves.toBe(false)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([addedToken])
+    expect(saveVault).not.toHaveBeenCalled()
+  })
+
+  it('removes the exact stored id when a discovered and a CLI-added copy coexist', async () => {
+    // addToken dedupes on exact id, so a vault can hold both shapes for one
+    // asset. Naming one exactly must remove that record, not its sibling.
+    const discoveredCopy: Token = { ...addedToken, id: USDC, contractAddress: USDC }
+    const { service, getTokens, emitTokenRemoved } = makeMutableService([discoveredCopy, addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, addedToken.id)).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([discoveredCopy])
+    expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: addedToken.id })
+  })
+
+  it('removes only the referenced token when a chain tracks several', async () => {
+    const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
+    const daiToken: Token = {
+      id: `${Chain.Ethereum}-${DAI}`,
+      contractAddress: DAI,
+      symbol: 'DAI',
+      name: 'Dai Stablecoin',
+      decimals: 18,
+      chainId: Chain.Ethereum,
+      isNative: false,
+    }
+    const { service, getTokens } = makeMutableService([addedToken, daiToken])
+
+    await expect(service.removeToken(Chain.Ethereum, 'USDC')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([daiToken])
+  })
+
+  it('resolves each token independently when a chain tracks several', async () => {
+    const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
+    const daiToken: Token = {
+      id: `${Chain.Ethereum}-${DAI}`,
+      contractAddress: DAI,
+      symbol: 'DAI',
+      name: 'Dai Stablecoin',
+      decimals: 18,
+      chainId: Chain.Ethereum,
+      isNative: false,
+    }
+    let allTokens: Record<string, Token[]> = { [Chain.Ethereum]: [addedToken, daiToken] }
+    const service = new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => allTokens[chain] ?? [],
+      () => allTokens,
+      tokens => {
+        allTokens = tokens
+      },
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+
+    vi.mocked(getEvmChainBalances).mockImplementation(async ({ chain, address, coins }) => {
+      const ids = coins.map(coin => coin.id).filter((id): id is string => id !== undefined)
+      // Every tracked token must reach the RPC as its own contract address —
+      // one token resolving to the wrong id would silently mislabel the other.
+      if (ids.some(id => id !== USDC && id !== DAI)) throw new Error(`invalid address: ${ids.join(',')}`)
+
+      return {
+        [accountCoinKeyToString({ chain, address })]: 1_000_000_000_000_000_000n,
+        [accountCoinKeyToString({ chain, id: USDC, address })]: 5_000_000n,
+        [accountCoinKeyToString({ chain, id: DAI, address })]: 7_000_000_000_000_000_000n,
+      }
+    })
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
+    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${daiToken.id}`]?.formattedAmount).toBe('7')
+  })
+
   it('batches native + token balances for an EVM chain into a single multicall', async () => {
     const ethAddress = `${Chain.Ethereum}-address`
     vi.mocked(getEvmChainBalances).mockResolvedValue({
