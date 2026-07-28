@@ -23,11 +23,19 @@ Make token references resolve consistently across the vault and CLI surfaces.
   the token's decimals and `total` was amount + fee — both meaningless when the
   fee is paid in a different asset. `total` is now denominated in the asset
   being sent. Native sends are unaffected.
+- A `Balance` for a token is labelled by the same resolution. Previously the
+  token was found by an exact match against the vault's stored token id, so a
+  well-known token the vault does not track — or one added with an id that is
+  not its bare contract address — fell through to a default of 18 decimals with
+  the raw id as `symbol`. `formatBalance` now resolves the same way everything
+  else does; a token in no registry still falls back as before.
 
 **`@vultisig/cli`:**
 
 - `send --token` works with either a contract address or a symbol, and its
-  dry-run preview quotes the fee in the native asset.
+  dry-run preview quotes the fee in the native asset. The preview also warns
+  separately when the native balance cannot cover the fee — a token send draws
+  its fee from a different balance than the one `total` is checked against.
 - `portfolio`'s total now equals the sum of the breakdown printed under it, with
   each held token itemized as its own row (`chainBalances[].tokens`).
 - `balance <chain> --tokens` returns token balances instead of silently

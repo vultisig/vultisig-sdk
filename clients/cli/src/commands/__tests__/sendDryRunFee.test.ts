@@ -55,7 +55,14 @@ function makeVault(opts: { fee: string; total: string; balance: string }) {
  * balance than the asset being sent. `balance(chain, tokenId)` returns the
  * token; `balance(chain)` returns the native asset.
  */
-function makeTokenVault(opts: { fee: string; total: string; tokenBalance: string; nativeBalance: string }) {
+function makeTokenVault(opts: {
+  fee: string
+  total: string
+  tokenBalance: string
+  nativeBalance: string
+  /** Ticker the token reports. Defaults to USDC; set to 'ETH' to collide with the native ticker. */
+  tokenSymbol?: string
+}) {
   return {
     send: vi.fn(async () => ({
       dryRun: true,
@@ -66,7 +73,14 @@ function makeTokenVault(opts: { fee: string; total: string; tokenBalance: string
     })),
     balance: vi.fn(async (_chain: unknown, tokenId?: string) =>
       tokenId
-        ? { formattedAmount: opts.tokenBalance, symbol: 'USDC', amount: '0', decimals: 6, chainId: 'ethereum', tokenId }
+        ? {
+            formattedAmount: opts.tokenBalance,
+            symbol: opts.tokenSymbol ?? 'USDC',
+            amount: '0',
+            decimals: 6,
+            chainId: 'ethereum',
+            tokenId,
+          }
         : { formattedAmount: opts.nativeBalance, symbol: 'ETH', amount: '0', decimals: 18, chainId: 'ethereum' }
     ),
     gas: vi.fn(async () => ({})),
@@ -205,5 +219,61 @@ describe('send --dry-run preview — token sends', () => {
     const warning = JSON.parse(stdout.join('')).data.warning
     expect(warning).toMatch(/Insufficient balance: you have 5\.0 USDC/)
     expect(warning).toMatch(/Insufficient ETH for the network fee/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Which balance pays the fee is decided by asset IDENTITY, not by ticker.
+// ---------------------------------------------------------------------------
+
+describe('send --dry-run preview — fee asset identity', () => {
+  it('checks the native balance for gas even when the token shares the native ticker', async () => {
+    configureOutput({ format: 'json' })
+
+    // An ERC-20 whose symbol is literally "ETH" (they exist, and scam tokens
+    // mimic deliberately) selected by contract address. Deciding the fee asset
+    // by comparing tickers would compare the fee against this token's own
+    // balance and report no shortfall for gas it cannot pay.
+    await sendTransaction(
+      makeTokenVault({
+        fee: '0.001',
+        total: '1.0',
+        tokenBalance: '50.0',
+        nativeBalance: '0.0',
+        tokenSymbol: 'ETH',
+      }),
+      { ...(tokenParams as object), tokenId: '0xdeadbeef' } as never
+    )
+
+    expect(JSON.parse(stdout.join('')).data.warning).toMatch(/Insufficient ETH for the network fee/)
+  })
+
+  it('does not double-report a native send whose balance is below the fee alone', async () => {
+    configureOutput({ format: 'json' })
+
+    // A native send already carries the fee inside `total`, so the separate gas
+    // check must not run — otherwise one shortfall is reported twice.
+    await sendTransaction(makeVault({ fee: '5.0', total: '6.0', balance: '1.0' }), params)
+
+    const warning = JSON.parse(stdout.join('')).data.warning
+    expect(warning).toMatch(/Insufficient balance/)
+    expect(warning).not.toMatch(/network fee/)
+  })
+
+  it('says so when the gas balance cannot be read, instead of previewing clean', async () => {
+    configureOutput({ format: 'json' })
+
+    const vault = makeTokenVault({ fee: '0.0001', total: '1.0', tokenBalance: '50.0', nativeBalance: '0.5' })
+    // Token balance resolves; the native read for the gas check fails.
+    ;(vault as unknown as { balance: ReturnType<typeof vi.fn> }).balance = vi.fn(
+      async (_chain: unknown, tokenId?: string) => {
+        if (!tokenId) throw new Error('rpc down')
+        return { formattedAmount: '50.0', symbol: 'USDC', amount: '0', decimals: 6, chainId: 'ethereum', tokenId }
+      }
+    )
+
+    await sendTransaction(vault, tokenParams)
+
+    expect(JSON.parse(stdout.join('')).data.warning).toMatch(/Could not check your ETH balance/)
   })
 })

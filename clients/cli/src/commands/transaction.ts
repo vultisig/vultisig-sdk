@@ -88,8 +88,15 @@ export async function sendTransaction(
     // longer covers — so check it separately. Holding the token but no gas is
     // the ordinary way an ERC-20 send fails, and it would otherwise preview
     // clean and only fail at broadcast.
+    //
+    // Whether this IS a token send is decided by asset identity (`tokenId` is
+    // absent on a native balance), never by comparing tickers: an ERC-20 whose
+    // symbol happens to be the native ticker would otherwise have its own
+    // balance checked for gas it cannot pay. A native send needs no separate
+    // check at all — `total` already includes the fee, and running one would
+    // just report the same shortfall twice.
     const feeBalance =
-      dryResult.feeSymbol === balance.symbol ? balance : await vault.balance(params.chain).catch(() => undefined)
+      balance.tokenId === undefined ? undefined : await vault.balance(params.chain).catch(() => undefined)
     const hasInsufficientFee =
       feeBalance !== undefined && parseFloat(dryResult.fee) > parseFloat(feeBalance.formattedAmount)
     // fee/total come straight from the build the SDK just did. They were previously
@@ -116,9 +123,13 @@ export async function sendTransaction(
       warnings.push(
         `Insufficient ${dryResult.feeSymbol} for the network fee: you have ${feeBalance.formattedAmount} ${dryResult.feeSymbol}, the fee is ${dryResult.fee}`
       )
+    } else if (balance.tokenId !== undefined && feeBalance === undefined) {
+      // The gas check needs a second balance read, and it failed. Say so rather
+      // than letting its absence read as "gas is fine".
+      warnings.push(`Could not check your ${dryResult.feeSymbol} balance for the network fee`)
     }
     if (warnings.length > 0) {
-      result.warning = warnings.join(' ')
+      result.warning = warnings.join('. ')
     }
     if (isJsonOutput()) {
       outputJson(result)
