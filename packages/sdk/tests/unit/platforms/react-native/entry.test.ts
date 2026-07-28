@@ -30,7 +30,7 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
-    await import('../../../../src/platforms/react-native/index')
+    const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
     const { getDefaultStorage } = await import('../../../../src/context/defaultStorage')
 
@@ -38,6 +38,21 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const storage = getDefaultStorage()
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
+    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('exports default chain canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(rn.defaultChains)).toBe(true)
+    expect(rn.DEFAULT_CHAINS).toEqual([
+      'Bitcoin',
+      'Ethereum',
+      'THORChain',
+      'Solana',
+      'BSC',
+    ])
   })
 
   it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {

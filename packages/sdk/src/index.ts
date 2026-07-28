@@ -166,12 +166,14 @@ export {
 // Supported chains constants
 export {
   assertSeedphraseImportSupportsChains,
+  DEFAULT_CHAINS,
   getUnsupportedSeedphraseImportChains,
   isSeedphraseImportSupportedChain,
   SEEDPHRASE_IMPORT_SUPPORTED_CHAINS,
   SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS,
   SUPPORTED_CHAINS,
 } from './Vultisig'
+export { defaultChains } from '@vultisig/core-chain/Chain'
 
 // ============================================================================
 // PUBLIC API - Storage
