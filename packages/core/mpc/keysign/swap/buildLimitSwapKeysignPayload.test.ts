@@ -233,4 +233,42 @@ describe('buildLimitSwapKeysignPayload', () => {
 
     expect(mocks.refineKeysignUtxo).toHaveBeenCalled()
   })
+
+  // sdk#1611: the co-signer's "you receive" row comes from the memo's LIM, not
+  // from a figure the initiating device supplies alongside it. A display value
+  // that can disagree with the signed order is one a co-signer cannot verify.
+  describe('minimum-received display', () => {
+    const erc20Input = { ...baseInput, fromCoin: usdcCoin, toCoin: ethCoin }
+
+    it('derives toAmountDecimal from the memo LIM', async () => {
+      const payload = await buildLimitSwapKeysignPayload(erc20Input)
+
+      // The memo encodes a LIM of 1600000000 in THORChain's 1e8 fixed point.
+      expect(payload.swapPayload.value?.toAmountDecimal).toBe('16.00000000')
+    })
+
+    it('ignores the caller when it agrees with the memo', async () => {
+      const payload = await buildLimitSwapKeysignPayload({ ...erc20Input, expectedToAmount: 1_600_000_000n })
+
+      expect(payload.swapPayload.value?.toAmountDecimal).toBe('16.00000000')
+    })
+
+    it('rejects an expectedToAmount that disagrees with the memo LIM', async () => {
+      await expect(
+        buildLimitSwapKeysignPayload({ ...erc20Input, expectedToAmount: 1n })
+      ).rejects.toThrow(/disagrees with the memo's LIM/)
+    })
+
+    // The exact mistake this guard exists for: rescaling the 1e8 LIM into the
+    // target coin's own decimals. The memo still signs correctly, so nothing
+    // else catches it.
+    it('rejects a LIM rescaled to the target coin decimals', async () => {
+      const rescaledToEthDecimals = (1_600_000_000n * 10n ** 18n) / 10n ** 8n
+
+      await expect(
+        buildLimitSwapKeysignPayload({ ...erc20Input, expectedToAmount: rescaledToEthDecimals })
+      ).rejects.toThrow(/1e8 fixed point/)
+    })
+  })
 })
+
