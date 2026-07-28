@@ -1,5 +1,16 @@
 # @vultisig/cli
 
+## 2.23.0
+
+### Patch Changes
+
+- [#1262](https://github.com/vultisig/vultisig-sdk/pull/1262) [`10164ae`](https://github.com/vultisig/vultisig-sdk/commit/10164ae94af2183a63e908318ed4e675d2fe1e6e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve exact decimal swap amounts from CLI input through preview and execution.
+
+- Updated dependencies [[`23563f4`](https://github.com/vultisig/vultisig-sdk/commit/23563f41da7b142e5ae9d34d4287eaaaa3fef701), [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198)]:
+  - @vultisig/sdk@2.23.0
+  - @vultisig/core-chain@2.29.1
+  - @vultisig/rujira@56.0.0
+
 ## 2.22.0
 
 ### Patch Changes
