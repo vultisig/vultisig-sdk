@@ -147,6 +147,109 @@ export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boole
   })
 }
 
+/**
+ * Build + report the result of a signing request the confirm gate DECLINED.
+ *
+ * Nothing was signed and nothing was broadcast. The built transaction is captured BEFORE the
+ * rejected envelope is dropped — a declined signing is the one case where the unsigned transaction
+ * IS the turn's result — and surfaced via `onProposedTransaction` on every client, so a read-safe
+ * `agent ask` can report the proposed transaction rather than a bare failure.
+ *
+ * A module-level function, not a method: the session's private methods are exercised through the
+ * prototype with a minimal `this` in tests, and every new method would have to be wired into each
+ * of those harnesses.
+ */
+function reportDeclinedSigning(
+  executor: Pick<AgentExecutor, 'getPendingChain' | 'clearPendingTransaction'>,
+  toolName: string,
+  toolCallId: string,
+  summary: string,
+  input: Record<string, unknown> | undefined,
+  ui: UICallbacks
+): RecentAction {
+  // Only sign_tx has a buffered tx envelope; sign_typed_data legitimately has no chain.
+  const proposedChain = toolName === 'sign_tx' ? executor.getPendingChain() : null
+  // Drop the rejected envelope so it can't linger into later turns (stale legs/summary).
+  if (toolName === 'sign_tx') executor.clearPendingTransaction()
+  const declined: RecentAction = {
+    tool: toolName,
+    success: false,
+    data: {
+      error: 'Transaction not confirmed',
+      code: AgentErrorCode.CONFIRMATION_REQUIRED,
+      proposed: summary,
+      ...(proposedChain ? { proposed_chain: proposedChain } : {}),
+    },
+  }
+  // `summary` is a one-line human string for sign_tx, but the sign_typed_data fallback is
+  // `JSON.stringify(input)` — an arbitrarily large typed-data blob that reaches stdout/stderr and
+  // the JSON envelope from here. Cap it rather than dumping the whole payload into a field
+  // documented as one line.
+  ui.onProposedTransaction?.({
+    tool: toolName,
+    summary: summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary,
+    ...(proposedChain ? { chain: proposedChain } : {}),
+  })
+  ui.onToolCall(toolCallId, toolName, input)
+  ui.onToolResult(
+    toolCallId,
+    toolName,
+    false,
+    declined.data,
+    'Transaction not confirmed',
+    AgentErrorCode.CONFIRMATION_REQUIRED
+  )
+  return declined
+}
+
+/**
+ * Whether a signing result is a DECLINE that should end an ask-mode turn.
+ *
+ * Ask mode's confirm gate is a fixed POLICY (no `--yes`; its `requestConfirmation` returns a
+ * constant), so recursing the refusal back into the model loop can only buy a retry that fails
+ * again — which is exactly the reported defect: `execute_send(ok)` -> `sign_tx(declined)` ->
+ * `execute_send(error)`, ending in a turn that claimed the build failed, that there was no send
+ * tool, or that a broadcast could not be confirmed, about a transaction that built fine and was
+ * never authorized to broadcast. Ending the turn instead keeps the built transaction as the
+ * result (see `onProposedTransaction`), which is what `agent ask --help` promises: "it reports the
+ * proposed transaction so a read-only prompt can't move funds".
+ *
+ * The discriminator is POLICY-VS-DECISION, not headless-vs-interactive. The TUI prompts a live
+ * user and pipe mode blocks on a live host answer over stdin (pipe.ts resolves a pending promise)
+ * — in both, a decline is a real decision the model should get to acknowledge, so both keep
+ * report-and-continue.
+ */
+function isAskModeDecline(askMode: boolean | undefined, recent: RecentAction | undefined): boolean {
+  return !!askMode && !!recent && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
+}
+
+/**
+ * Remove a queued ask-mode signing decline, returning whether one was found.
+ *
+ * Only the refusal is dropped — it is the turn's result, not input for a next request. Every OTHER
+ * queued entry is a client-side tool the model dispatched that already RAN this turn (vault_chain /
+ * vault_coin / address_book, see dispatchClientSideTool); those mutations are committed locally, so
+ * they stay queued and the next request still reports them as recent_actions. Clearing the whole
+ * queue would silently lose the record of work that happened.
+ */
+function takeQueuedAskModeDecline(askMode: boolean | undefined, pending: RecentAction[]): boolean {
+  if (!askMode) return false
+  const idx = pending.findIndex(r => isAskModeDecline(askMode, r))
+  if (idx === -1) return false
+  pending.splice(idx, 1)
+  return true
+}
+
+/** End a turn that stopped on a declined signing, leaving already-executed results queued. */
+function finishDeclinedTurn(verbose: boolean | undefined, pendingCount: number, ui: UICallbacks): void {
+  if (verbose) {
+    process.stderr.write(
+      `[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction (${pendingCount} already-executed result(s) stay queued)\n`
+    )
+  }
+  ui.onDone()
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -754,33 +857,10 @@ export class AgentSession {
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
-      // Ask mode: a declined signing ENDS the turn. Without --yes the gate is a
-      // fixed policy, not a decision the model can influence, so recursing the
-      // refusal back into the loop can only produce a retry that fails again —
-      // which is exactly what happened: execute_send(ok) -> sign_tx(declined) ->
-      // execute_send(error), and the turn ended reporting a build failure, a
-      // missing send tool, or an unconfirmable broadcast about a transaction that
-      // built fine and was never authorized to broadcast. Ending here keeps the
-      // built transaction as the turn's result (see onProposedTransaction) instead
-      // of burning it in a retry, which is what `agent ask --help` promises:
-      // "it reports the proposed transaction so a read-only prompt can't move funds".
-      //
-      // Scoped to ask mode deliberately, because the DISCRIMINATOR IS POLICY-VS-
-      // DECISION, not headless-vs-interactive. Ask mode's gate is a fixed policy
-      // (no --yes; `requestConfirmation` returns a constant), so a retry can never
-      // satisfy it. The TUI prompts a live user and pipe mode blocks on a live host
-      // answer over stdin (pipe.ts requestConfirmation resolves a pending promise) —
-      // in both, a decline is a real decision the model should get to acknowledge,
-      // and a later turn can legitimately be approved. Both keep report-and-continue.
-      const declinedInAskMode =
-        !!this.config.askMode && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
-      // The declined refusal is this turn's RESULT, not input for a next request, so
-      // in ask mode it is never queued. Anything ALREADY queued is a different thing
-      // entirely — a client-side tool the model dispatched and that already RAN this
-      // turn (vault_chain / vault_coin / address_book, see dispatchClientSideTool).
-      // Those mutations are committed locally, so their acknowledgement must survive:
-      // they stay queued and the next request flushes them as recent_actions. Clearing
-      // the whole queue here would silently lose the record of work that happened.
+      // Ask mode: a declined signing ENDS the turn — see isAskModeDecline / finishDeclinedTurn.
+      // The refusal is this turn's RESULT, not input for a next request, so it is never queued;
+      // anything ALREADY queued is a client-side tool that already RAN this turn and must survive.
+      const declinedInAskMode = isAskModeDecline(this.config.askMode, recent)
       if (!declinedInAskMode) this.pendingToolResults.push(recent)
       // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
       // broadcast anything — surface it as a hard error so a headless caller
@@ -791,12 +871,7 @@ export class AgentSession {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
       }
       if (declinedInAskMode) {
-        if (this.config.verbose) {
-          process.stderr.write(
-            `[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction (${this.pendingToolResults.length} already-executed result(s) stay queued)\n`
-          )
-        }
-        ui.onDone()
+        finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
         return
       }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
@@ -814,27 +889,13 @@ export class AgentSession {
       return
     }
 
-    // Ask mode: a declined signing ENDS the turn here too. sign_typed_data is gated by the same
-    // confirm gate but reaches the queue via dispatchClientSideTool rather than the signable branch
-    // above, so without this it kept the original retry-into-failure behavior — `agent ask "bet 5
-    // USDC on X"` without --yes would still report a wrong cause. Same policy-vs-decision
-    // discriminator as the signable branch. Already-executed results stay queued for the next
-    // request; only the refusal is dropped, and its ui.onToolResult already fired, so the caller
-    // still classifies the turn CONFIRMATION_REQUIRED.
-    if (this.config.askMode) {
-      const declinedIdx = this.pendingToolResults.findIndex(
-        r => !r.success && r.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
-      )
-      if (declinedIdx !== -1) {
-        this.pendingToolResults.splice(declinedIdx, 1)
-        if (this.config.verbose) {
-          process.stderr.write(
-            `[session] signing declined and ask mode is non-interactive; ending turn (${this.pendingToolResults.length} already-executed result(s) stay queued)\n`
-          )
-        }
-        ui.onDone()
-        return
-      }
+    // sign_typed_data is gated by the SAME confirm gate but reaches the queue via
+    // dispatchClientSideTool rather than the signable branch above, so without this it kept the
+    // original retry-into-failure behavior — `agent ask "bet 5 USDC on X"` without --yes would
+    // still report a wrong cause.
+    if (takeQueuedAskModeDecline(this.config.askMode, this.pendingToolResults)) {
+      finishDeclinedTurn(this.config.verbose, this.pendingToolResults.length, ui)
+      return
     }
 
     // Client-side tool results accumulated — recurse to deliver them.
@@ -1214,46 +1275,7 @@ export class AgentSession {
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
       if (!approved) {
-        // Capture the proposed transaction BEFORE dropping the envelope below —
-        // a declined signing is the one case where the built-but-unsigned tx IS
-        // the turn's result, and clearPendingTransaction() would otherwise take
-        // the only record of it with it.
-        const proposedChain = toolName === 'sign_tx' ? this.executor.getPendingChain() : null
-        // Drop the rejected envelope so it can't linger into later turns
-        // (stale legs/summary). sign_typed_data has no buffered tx to drop.
-        if (toolName === 'sign_tx') {
-          this.executor.clearPendingTransaction()
-        }
-        const declined: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Transaction not confirmed',
-            code: AgentErrorCode.CONFIRMATION_REQUIRED,
-            proposed: summary,
-            ...(proposedChain ? { proposed_chain: proposedChain } : {}),
-          },
-        }
-        // `summary` is a one-line human string for sign_tx, but the sign_typed_data
-        // fallback above is `JSON.stringify(input)` — an arbitrarily large typed-data
-        // blob. It reaches stdout/stderr and the JSON envelope from here, so cap it
-        // rather than dumping the whole payload into a field documented as one line.
-        ui.onProposedTransaction?.({
-          tool: toolName,
-          summary:
-            summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary,
-          ...(proposedChain ? { chain: proposedChain } : {}),
-        })
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          declined.data,
-          'Transaction not confirmed',
-          AgentErrorCode.CONFIRMATION_REQUIRED
-        )
-        return declined
+        return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
     }
 
