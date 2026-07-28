@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandContext, PortfolioSummary } from '../core'
 import { ExitCode, NetworkError } from '../core/errors'
 import { configureOutput, resetOutput } from '../lib/output'
-import { executePortfolio } from './balance'
+import { executeBalance, executePortfolio } from './balance'
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -367,5 +367,61 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(joined).toContain('failed to load fully')
     expect(joined).toContain('Bitcoin')
     expect(joined).toContain('btc unreachable')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// `balance <chain> --tokens`
+// ---------------------------------------------------------------------------
+
+describe('executeBalance honours --tokens on a single chain', () => {
+  const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+
+  beforeEach(() => {
+    configureOutput({ format: 'json' })
+  })
+
+  afterEach(() => {
+    resetOutput()
+    vi.restoreAllMocks()
+  })
+
+  function makeBalanceCtx() {
+    const balances = vi.fn(async () => ({
+      [Chain.Ethereum]: makeBalance('ETH'),
+      [`${Chain.Ethereum}:${USDC}`]: makeBalance('USDC'),
+    }))
+    const balance = vi.fn(async () => makeBalance('ETH'))
+    const vault = { balances, balance } as unknown as VaultBase
+    return { ctx: { ensureActiveVault: async () => vault } as unknown as CommandContext, balances, balance }
+  }
+
+  it('returns token entries for one chain instead of dropping the flag', async () => {
+    // Pre-fix this branch called vault.balance(chain) with no token argument, so
+    // --tokens was accepted and then ignored — the native balance came back and
+    // the user had no way to tell the flag had done nothing.
+    const { ctx, balances, balance } = makeBalanceCtx()
+
+    const out = captureStdout()
+    await executeBalance(ctx, { chain: Chain.Ethereum, includeTokens: true })
+    out.restore()
+
+    expect(balances).toHaveBeenCalledWith([Chain.Ethereum], true)
+    expect(balance).not.toHaveBeenCalled()
+
+    const { balances: emitted } = JSON.parse(out.calls.join('')).data
+    expect(Object.keys(emitted)).toContain(`${Chain.Ethereum}:${USDC}`)
+  })
+
+  it('leaves the native-only path untouched when --tokens is absent', async () => {
+    const { ctx, balances, balance } = makeBalanceCtx()
+
+    const out = captureStdout()
+    await executeBalance(ctx, { chain: Chain.Ethereum })
+    out.restore()
+
+    expect(balance).toHaveBeenCalledWith(Chain.Ethereum)
+    expect(balances).not.toHaveBeenCalled()
+    expect(JSON.parse(out.calls.join('')).data).toMatchObject({ chain: Chain.Ethereum, balance: { symbol: 'ETH' } })
   })
 })

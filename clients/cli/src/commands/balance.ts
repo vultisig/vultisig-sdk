@@ -34,6 +34,23 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
   const raw = options.raw ?? false
 
   if (options.chain) {
+    // `--tokens` used to be accepted and then dropped on this branch: the flag
+    // is documented for `balance <chain>`, but only the all-chains branch below
+    // ever passed it on, so `balance Ethereum --tokens` silently returned the
+    // native balance alone. Same call, same result shape as all-chains, scoped
+    // to one chain.
+    if (options.includeTokens) {
+      const balances = await vault.balances([options.chain], true)
+      spinner.succeed('Balances loaded')
+
+      if (isJsonOutput()) {
+        outputJson({ chain: options.chain, balances })
+        return
+      }
+      displayBalancesTable(balances, raw)
+      return
+    }
+
     const balance = await vault.balance(options.chain)
     spinner.succeed('Balance loaded')
 
