@@ -9,6 +9,7 @@ import type { Address } from 'viem'
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
+import { resolveTokenRef, resolveTokenRefId } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -37,6 +38,7 @@ export class BalanceService {
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
     const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
+    const assetId = resolveTokenRefId(chain, tokenId, this.getTokens(chain))
 
     // Check scoped cache (uses configured TTL)
     const cached = this.cacheService.getScoped<Balance>(key, CacheScope.BALANCE)
@@ -51,7 +53,7 @@ export class BalanceService {
       const rawBalance = await getCoinBalance({
         chain,
         address,
-        id: tokenId, // Token ID (contract address for ERC-20, etc.)
+        id: assetId, // Contract address / chain-level asset id, never the vault's storage key
       })
 
       // Format using adapter
@@ -157,12 +159,15 @@ export class BalanceService {
 
     const requests: CoinRequest[] = [
       { coinKey: { chain, address }, resultKey: chain, cacheKey: `${chain.toLowerCase()}:native` },
-      ...tokens.map(token => ({
-        coinKey: { chain, id: token.id, address } as AccountCoinKey<EvmChain>,
-        resultKey: `${chain}:${token.id}`,
-        cacheKey: `${chain.toLowerCase()}:${token.id}`,
-        tokenId: token.id,
-      })),
+      ...tokens.map(token => {
+        const assetId = resolveTokenRefId(chain, token.id, tokens) ?? token.id
+        return {
+          coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
+          resultKey: `${chain}:${token.id}`,
+          cacheKey: `${chain.toLowerCase()}:${token.id}`,
+          tokenId: token.id,
+        }
+      }),
     ]
 
     const entries: Array<readonly [string, Balance]> = []
@@ -322,36 +327,52 @@ export class BalanceService {
    * @param chain Chain to remove token from
    * @param tokenId Token ID (contract address) to remove
    */
-  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+  async removeToken(chain: Chain, tokenId: string): Promise<boolean> {
     const allTokens = this.getAllTokens()
+    const tokens = allTokens[chain]
 
     // Match the canonical id addToken persisted, so a raw id — e.g. a Ripple
     // human-ticker `RLUSD.<issuer>` — still removes the stored token.
     const id = normalizeTokenId({ chain, id: tokenId })
 
-    if (allTokens[chain]) {
-      const tokenExists = allTokens[chain].some(t => t.id === id)
+    if (!tokens) return false
 
-      if (tokenExists) {
-        // Store original state for rollback
-        const originalTokens = { ...allTokens }
+    let resolved
+    try {
+      resolved = resolveTokenRef(chain, id, tokens)
+    } catch {
+      return false
+    }
 
-        // Optimistically remove token
-        allTokens[chain] = allTokens[chain].filter(t => t.id !== id)
-        this.setAllTokens(allTokens)
+    if (!resolved.contractAddress) return false
 
-        try {
-          // Attempt to persist changes
-          await this.saveVault()
+    const resolvedAssetId = resolved.contractAddress.toLowerCase()
+    const tokenIndex = tokens.findIndex(
+      token =>
+        token.symbol.toLowerCase() === resolved.ticker.toLowerCase() &&
+        (token.contractAddress ?? token.id).toLowerCase() === resolvedAssetId
+    )
+    if (tokenIndex === -1) return false
 
-          // Emit token removed event only after successful save
-          this.emitTokenRemoved({ chain, tokenId: id })
-        } catch (error) {
-          // Rollback on failure to maintain consistency
-          this.setAllTokens(originalTokens)
-          throw error
-        }
-      }
+    // Store original state for rollback
+    const originalTokens = { ...allTokens }
+    const removedToken = tokens[tokenIndex]
+
+    // Optimistically remove the resolved token
+    allTokens[chain] = tokens.filter((_, index) => index !== tokenIndex)
+    this.setAllTokens(allTokens)
+
+    try {
+      // Attempt to persist changes
+      await this.saveVault()
+
+      // Emit token removed event only after successful save
+      this.emitTokenRemoved({ chain, tokenId: removedToken.id })
+      return true
+    } catch (error) {
+      // Rollback on failure to maintain consistency
+      this.setAllTokens(originalTokens)
+      throw error
     }
   }
 }

@@ -26,6 +26,17 @@ const token: Token = {
   chainId: Chain.Ethereum,
 }
 
+const USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+const addedToken: Token = {
+  id: `${Chain.Ethereum}-${USDC}`,
+  contractAddress: USDC,
+  symbol: 'USDC',
+  name: 'USD Coin',
+  decimals: 6,
+  chainId: Chain.Ethereum,
+  isNative: false,
+}
+
 const flushMicrotasks = async () => {
   await Promise.resolve()
   await Promise.resolve()
@@ -52,6 +63,133 @@ describe('BalanceService', () => {
       vi.fn(),
       vi.fn()
     )
+
+  const makeMutableService = (initialTokens: Token[] = []) => {
+    let allTokens: Record<string, Token[]> = { [Chain.Ethereum]: [...initialTokens] }
+    const saveVault = vi.fn(async () => {})
+    const emitTokenRemoved = vi.fn()
+    const service = new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => allTokens[chain] ?? [],
+      () => allTokens,
+      tokens => {
+        allTokens = tokens
+      },
+      saveVault,
+      vi.fn(),
+      emitTokenRemoved
+    )
+
+    return {
+      service,
+      saveVault,
+      emitTokenRemoved,
+      getTokens: (chain: Chain) => allTokens[chain] ?? [],
+    }
+  }
+
+  it('keeps an EVM chain in --tokens results after adding a token with a prefixed vault id', async () => {
+    const { service, getTokens } = makeMutableService()
+
+    // This is the exact token shape written by the CLI's `tokens --add` path.
+    await service.addToken(Chain.Ethereum, addedToken)
+    expect(getTokens(Chain.Ethereum)[0]).toMatchObject({
+      id: `${Chain.Ethereum}-${USDC}`,
+      contractAddress: USDC,
+    })
+
+    vi.mocked(getEvmChainBalances).mockImplementation(async ({ chain, address, coins }) => {
+      const requestedToken = coins.find(coin => coin.id !== undefined)
+      // Mirror viem's rejection of the old `Ethereum-0x...` RPC id. If the
+      // service regresses, getBalances() catches this chain-level failure and
+      // silently returns no Ethereum entries.
+      if (requestedToken?.id !== USDC) throw new Error(`invalid address: ${requestedToken?.id}`)
+
+      return {
+        [accountCoinKeyToString({ chain, address })]: 1_000_000_000_000_000_000n,
+        [accountCoinKeyToString({ chain, id: USDC, address })]: 5_000_000n,
+      }
+    })
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
+    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(getEvmChainBalances).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]),
+      })
+    )
+  })
+
+  it('uses the token asset id for the non-EVM per-coin balance path', async () => {
+    const mint = 'So11111111111111111111111111111111111111112'
+    const solanaToken: Token = {
+      id: `${Chain.Solana}-${mint}`,
+      contractAddress: mint,
+      symbol: 'WSOL',
+      name: 'Wrapped SOL',
+      decimals: 9,
+      chainId: Chain.Solana,
+      isNative: false,
+    }
+    let allTokens: Record<string, Token[]> = { [Chain.Solana]: [solanaToken] }
+    const service = new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => allTokens[chain] ?? [],
+      () => allTokens,
+      tokens => {
+        allTokens = tokens
+      },
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+    vi.mocked(getCoinBalance).mockImplementation(async ({ id }) => {
+      if (id === solanaToken.id) throw new Error(`invalid asset id: ${id}`)
+      return id ? 5_000_000_000n : 1_000_000_000n
+    })
+
+    const result = await service.getBalances({ chains: Chain.Solana, includeTokens: true })
+
+    expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint])
+    expect(result[Chain.Solana]).toBeDefined()
+    expect(result[`${Chain.Solana}:${solanaToken.id}`]?.formattedAmount).toBe('5')
+  })
+
+  it('removes an added token by symbol through the shared token resolver', async () => {
+    const { service, getTokens, saveVault, emitTokenRemoved } = makeMutableService([addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, 'USDC')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([])
+    expect(saveVault).toHaveBeenCalledTimes(1)
+    expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: addedToken.id })
+  })
+
+  it('removes an added token by contract address through the shared token resolver', async () => {
+    const { service, getTokens } = makeMutableService([addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, USDC.toUpperCase())).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([])
+  })
+
+  it('reports that no token was removed when the reference does not exist', async () => {
+    const { service, getTokens, saveVault, emitTokenRemoved } = makeMutableService([addedToken])
+
+    await expect(service.removeToken(Chain.Ethereum, 'NOT-TRACKED')).resolves.toBe(false)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([addedToken])
+    expect(saveVault).not.toHaveBeenCalled()
+    expect(emitTokenRemoved).not.toHaveBeenCalled()
+  })
 
   it('batches native + token balances for an EVM chain into a single multicall', async () => {
     const ethAddress = `${Chain.Ethereum}-address`
