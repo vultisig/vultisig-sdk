@@ -57,11 +57,20 @@ export type TransactionResult = {
  * Portfolio summary with breakdown by chain
  */
 export type PortfolioSummary = {
+  /** Sum of every row in `chainBalances`, native and token alike. */
   totalValue: Value
   chainBalances: Array<{
     chain: Chain
+    /** Native balance for the chain. */
     balance: Balance
+    /** Fiat value of the native balance. Absent when the price lookup failed. */
     value?: Value
+    /**
+     * Tracked tokens on this chain that carry a fiat value. Itemized so the
+     * breakdown accounts for the whole total instead of leaving token value as
+     * an unexplained gap between the total and the sum of the native rows.
+     */
+    tokens?: Array<{ tokenId: string; balance?: Balance; value: Value }>
   }>
 }
 
