@@ -14,13 +14,31 @@ export const COSMOS_SEND_FEE_DEFAULT = 7500n
 /** Canonical fixed MayaChain native-send fee in CACAO base units. */
 export const MAYA_SEND_FEE_BASE_UNITS = 2000000000n
 
+/**
+ * Terra Classic's `uluna` fee at the static 300k gas limit:
+ * `300_000 × 28.325 uluna/gas`. 28.325 is the chain's own minimum gas price,
+ * live-verifiable at `/terra/tax/v1beta1/params` (`gas_prices[uluna]`), and
+ * real columbus-5 sends pay exactly `gas_wanted × 28.325`.
+ *
+ * This is a derived price, NOT a hand-tuned floor. It previously sat at
+ * 20_000_000 (20 LUNC) — 2.35× the chain's requirement — which overcharged
+ * every send while ALSO under-covering large ones, because the burn tax it
+ * was implicitly absorbing scales with the transfer amount and this constant
+ * does not. The burn tax is now added explicitly by the initiator (see
+ * `applyTerraClassicBurnTax`), so this is purely the gas component.
+ *
+ * Matches iOS `TerraClassicTax.ulunaBaseGas` and Android
+ * `TerraClassicTax.ULUNA_BASE_GAS`.
+ */
+export const TERRA_CLASSIC_ULUNA_BASE_GAS = 8_497_500n
+
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,
   [Chain.Kujira]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Terra]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Dydx]: 2500000000000000n,
-  [Chain.TerraClassic]: 20000000n,
+  [Chain.TerraClassic]: TERRA_CLASSIC_ULUNA_BASE_GAS,
   [Chain.Noble]: 30000n,
   [Chain.Akash]: 200000n,
 }
