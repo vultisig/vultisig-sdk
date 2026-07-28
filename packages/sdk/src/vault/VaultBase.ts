@@ -1027,7 +1027,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Force refresh balance (clear cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.updateBalance(chain, tokenId)
+    return this.balanceService.updateBalance(chain, resolveTokenRefId(chain, tokenId, this.getTokens(chain)))
   }
 
   /**

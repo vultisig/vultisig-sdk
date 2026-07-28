@@ -1,5 +1,5 @@
 ---
-'@vultisig/sdk': minor
+'@vultisig/sdk': major
 '@vultisig/cli': minor
 ---
 

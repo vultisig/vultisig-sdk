@@ -181,6 +181,21 @@ async function balanceIdFor(ref: string, tokens: Token[]) {
   return getBalance.mock.calls[0][1] as string | undefined
 }
 
+async function updateBalanceIdFor(ref: string, tokens: Token[]) {
+  const updateBalance = vi.fn().mockResolvedValue({})
+  const vault = {
+    _tokens: { [Chain.Ethereum]: tokens },
+    getTokens: proto.getTokens,
+    balanceService: { updateBalance },
+  }
+  await (proto.updateBalance as unknown as (this: unknown, c: Chain, t?: string) => Promise<unknown>).call(
+    vault,
+    Chain.Ethereum,
+    ref
+  )
+  return updateBalance.mock.calls[0][1] as string | undefined
+}
+
 describe('send and balance resolve a token ref identically', () => {
   const cases: Array<[string, string, Token[]]> = [
     ['symbol, token in the vault store', 'USDC', [storedUsdc]],
@@ -204,6 +219,11 @@ describe('send and balance resolve a token ref identically', () => {
     expect(coin).toMatchObject({ ticker: 'ETH', decimals: 18 })
     expect(coin?.id).toBeUndefined()
     expect(await balanceIdFor('ETH', [storedUsdc])).toBeUndefined()
+  })
+
+  it('updateBalance refreshes the same resolved token id as balance', async () => {
+    expect(await balanceIdFor('USDC', [storedUsdc])).toBe(USDC_LOWER)
+    expect(await updateBalanceIdFor('USDC', [storedUsdc])).toBe(USDC_LOWER)
   })
 })
 
