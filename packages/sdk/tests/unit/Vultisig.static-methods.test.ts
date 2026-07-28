@@ -94,7 +94,7 @@ describe('Vultisig static methods', () => {
       const rlusd = Vultisig.getKnownTokens(Chain.Ripple).find(token => token.ticker === 'RLUSD')
 
       expect(rlusd).toBeDefined()
-      expect(rlusd?.tokenId).toMatch(/^[A-F0-9]{40}\.r/u)
+      expect(rlusd?.tokenId).toMatch(/^[A-F0-9]{40}\.r.+$/u)
       expect(rlusd?.contractAddress).toBe(rlusd?.tokenId)
       expect(Vultisig.getKnownToken(Chain.Ripple, rlusd!.tokenId!)).toEqual(rlusd)
     })
