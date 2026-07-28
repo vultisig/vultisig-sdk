@@ -160,7 +160,12 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
   })
 
-  it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
+  it('exports canonical Cosmos fee metadata and send-fee floors for first-party consumers', () => {
+    expect(sdk.cosmosFeeCoinDenom[sdk.Chain.Cosmos]).toBe('uatom')
+    expect(sdk.getCosmosGasLimit({ chain: sdk.Chain.Cosmos })).toBe(200000n)
+    expect(sdk.getCosmosGasLimit({ chain: sdk.Chain.MayaChain })).toBe(2_000_000_000n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
     expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
