@@ -110,6 +110,12 @@ export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<stri
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
+// ProposedTransaction.summary is documented as a ONE-LINE human summary, and it reaches
+// stdout/stderr and the JSON envelope. For sign_tx it is exactly that; for sign_typed_data the
+// gate falls back to JSON.stringify(input), which is an arbitrarily large typed-data blob. Cap it
+// so a declined typed-data signature can't dump its whole payload into a one-line field.
+const PROPOSED_SUMMARY_MAX_CHARS = 500
+
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
 // this far apart, for the assistant message the detached backend persisted.
@@ -748,7 +754,34 @@ export class AgentSession {
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
-      this.pendingToolResults.push(recent)
+      // Ask mode: a declined signing ENDS the turn. Without --yes the gate is a
+      // fixed policy, not a decision the model can influence, so recursing the
+      // refusal back into the loop can only produce a retry that fails again —
+      // which is exactly what happened: execute_send(ok) -> sign_tx(declined) ->
+      // execute_send(error), and the turn ended reporting a build failure, a
+      // missing send tool, or an unconfirmable broadcast about a transaction that
+      // built fine and was never authorized to broadcast. Ending here keeps the
+      // built transaction as the turn's result (see onProposedTransaction) instead
+      // of burning it in a retry, which is what `agent ask --help` promises:
+      // "it reports the proposed transaction so a read-only prompt can't move funds".
+      //
+      // Scoped to ask mode deliberately, because the DISCRIMINATOR IS POLICY-VS-
+      // DECISION, not headless-vs-interactive. Ask mode's gate is a fixed policy
+      // (no --yes; `requestConfirmation` returns a constant), so a retry can never
+      // satisfy it. The TUI prompts a live user and pipe mode blocks on a live host
+      // answer over stdin (pipe.ts requestConfirmation resolves a pending promise) —
+      // in both, a decline is a real decision the model should get to acknowledge,
+      // and a later turn can legitimately be approved. Both keep report-and-continue.
+      const declinedInAskMode =
+        !!this.config.askMode && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
+      // The declined refusal is this turn's RESULT, not input for a next request, so
+      // in ask mode it is never queued. Anything ALREADY queued is a different thing
+      // entirely — a client-side tool the model dispatched and that already RAN this
+      // turn (vault_chain / vault_coin / address_book, see dispatchClientSideTool).
+      // Those mutations are committed locally, so their acknowledgement must survive:
+      // they stay queued and the next request flushes them as recent_actions. Clearing
+      // the whole queue here would silently lose the record of work that happened.
+      if (!declinedInAskMode) this.pendingToolResults.push(recent)
       // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
       // broadcast anything — surface it as a hard error so a headless caller
       // exits non-zero with a clear, actionable signal instead of reading a
@@ -757,28 +790,10 @@ export class AgentSession {
       if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
         ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
       }
-      // Ask mode: a declined signing ENDS the turn. Without --yes the gate is a
-      // fixed policy, not a decision the model can influence, so recursing the
-      // refusal back into the loop can only produce a retry that fails again —
-      // which is exactly what happened: execute_send(ok) -> sign_tx(declined) ->
-      // execute_send(error), and the turn ended reporting a build failure, a
-      // missing send tool, or an unconfirmable broadcast about a transaction that
-      // built fine and was never authorized to broadcast. Stopping here keeps the
-      // built transaction as the turn's result (see onProposedTransaction) instead
-      // of burning it in a retry, which is what `agent ask --help` promises:
-      // "it reports the proposed transaction so a read-only prompt can't move funds".
-      //
-      // Scoped to ask mode deliberately. In the TUI a decline is a live user
-      // choice mid-conversation and the model SHOULD get to acknowledge it; in
-      // pipe mode the host can approve on a later turn. Both keep the existing
-      // report-and-continue behavior.
-      if (this.config.askMode && !recent.success && recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
-        // Drop the queued refusal: it is the turn's result now, not input for a
-        // next request. Leaving it queued would leak into the following turn.
-        this.pendingToolResults = []
+      if (declinedInAskMode) {
         if (this.config.verbose) {
           process.stderr.write(
-            '[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction\n'
+            `[session] signing declined and ask mode is non-interactive; ending turn with the proposed transaction (${this.pendingToolResults.length} already-executed result(s) stay queued)\n`
           )
         }
         ui.onDone()
@@ -797,6 +812,29 @@ export class AgentSession {
       }
       await this.processMessageLoop(null, ui, depth + 1)
       return
+    }
+
+    // Ask mode: a declined signing ENDS the turn here too. sign_typed_data is gated by the same
+    // confirm gate but reaches the queue via dispatchClientSideTool rather than the signable branch
+    // above, so without this it kept the original retry-into-failure behavior — `agent ask "bet 5
+    // USDC on X"` without --yes would still report a wrong cause. Same policy-vs-decision
+    // discriminator as the signable branch. Already-executed results stay queued for the next
+    // request; only the refusal is dropped, and its ui.onToolResult already fired, so the caller
+    // still classifies the turn CONFIRMATION_REQUIRED.
+    if (this.config.askMode) {
+      const declinedIdx = this.pendingToolResults.findIndex(
+        r => !r.success && r.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED
+      )
+      if (declinedIdx !== -1) {
+        this.pendingToolResults.splice(declinedIdx, 1)
+        if (this.config.verbose) {
+          process.stderr.write(
+            `[session] signing declined and ask mode is non-interactive; ending turn (${this.pendingToolResults.length} already-executed result(s) stay queued)\n`
+          )
+        }
+        ui.onDone()
+        return
+      }
     }
 
     // Client-side tool results accumulated — recurse to deliver them.
@@ -1196,7 +1234,16 @@ export class AgentSession {
             ...(proposedChain ? { proposed_chain: proposedChain } : {}),
           },
         }
-        ui.onProposedTransaction?.({ tool: toolName, summary, ...(proposedChain ? { chain: proposedChain } : {}) })
+        // `summary` is a one-line human string for sign_tx, but the sign_typed_data
+        // fallback above is `JSON.stringify(input)` — an arbitrarily large typed-data
+        // blob. It reaches stdout/stderr and the JSON envelope from here, so cap it
+        // rather than dumping the whole payload into a field documented as one line.
+        ui.onProposedTransaction?.({
+          tool: toolName,
+          summary:
+            summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary,
+          ...(proposedChain ? { chain: proposedChain } : {}),
+        })
         ui.onToolCall(toolCallId, toolName, input)
         ui.onToolResult(
           toolCallId,

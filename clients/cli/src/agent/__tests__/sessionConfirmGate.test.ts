@@ -140,7 +140,12 @@ describe('runPasswordGatedTool — confirmation gate', () => {
 // a refactor ever routes the tool-output candidate straight to
 // executor.signTxFromBuffer — the unit tests above can't catch that un-wiring.
 describe('processMessageLoop — tool-output signing wiring through the gate', () => {
-  function makeLoopHarness(opts: { approve: boolean; askMode?: boolean }) {
+  function makeLoopHarness(opts: {
+    approve: boolean
+    askMode?: boolean
+    dispatchDuringTurn?: RecentAction
+    noSignable?: boolean
+  }) {
     const signTxFromBuffer = vi.fn(
       async () => ({ tool: 'sign_tx', success: true, data: { tx_hash: '0xfeed', chain: 'Base' } }) as RecentAction
     )
@@ -151,11 +156,16 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
         streamRequests.push(request)
         // First turn: backend proposes a server-built tx. Later turns: plain text.
         if (streamRequests.length === 1) {
-          callbacks.onToolOutputTx(
-            { chain: 'Base', txArgs: { tx: { to: '0x1111111111111111111111111111111111111111', value: '1' } } },
-            'execute_send',
-            'prep'
-          )
+          // A client-side tool the model dispatched in the SAME response, executed (and queued)
+          // before the signable candidate is handled — see processMessageLoop's await of
+          // pendingDispatches ahead of the sign gate.
+          if (opts.dispatchDuringTurn) callbacks.onClientSideToolCall('tc-dispatch', 'vault_coin', { ticker: 'USDC' })
+          if (!opts.noSignable)
+            callbacks.onToolOutputTx(
+              { chain: 'Base', txArgs: { tx: { to: '0x1111111111111111111111111111111111111111', value: '1' } } },
+              'execute_send',
+              'prep'
+            )
         }
         return { message: { content: 'ok' }, fullText: '', transactions: [] }
       }),
@@ -195,7 +205,13 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       reportDeferredSignable: (AgentSession.prototype as any).reportDeferredSignable,
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
-      dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
+      // Stubbed: the real dispatcher needs full executor plumbing. What matters here is only that
+      // it EXECUTED and queued a result before the sign gate ran, which is the real ordering.
+      dispatchClientSideTool: opts.dispatchDuringTurn
+        ? async function (this: any) {
+            this.pendingToolResults.push(opts.dispatchDuringTurn)
+          }
+        : (AgentSession.prototype as any).dispatchClientSideTool,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
       // No `vault` here, so confirmBroadcastedTx early-returns — the broadcast
       // block still only emits the `pending` status this harness asserts.
@@ -203,7 +219,8 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'hello', ui, 0)
-    return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction }
+    const pendingAfter = () => fakeThis.pendingToolResults
+    return { run, ui, client, streamRequests, signTxFromBuffer, clearPendingTransaction, pendingAfter }
   }
 
   it('denied in ask mode: nothing signs, the turn ENDS, and the proposed transaction is the result', async () => {
@@ -230,13 +247,63 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
     expect(h.ui.onDone).toHaveBeenCalledOnce()
   })
 
+  it('denied in ask mode: an already-executed client-side mutation stays queued (not discarded)', async () => {
+    // Client-side dispatches are awaited BEFORE the signable candidate is handled, so a turn can
+    // both run a local mutation (vault_chain / vault_coin / address_book) and propose a transaction.
+    // Those mutations are committed locally — clearing the whole queue on the decline would silently
+    // lose the record of work that actually happened, and the backend would never learn of it.
+    const mutation: RecentAction = { tool: 'vault_coin', success: true, data: { added: 'USDC' } }
+    const h = makeLoopHarness({ approve: false, dispatchDuringTurn: mutation })
+    await h.run()
+    expect(h.streamRequests).toHaveLength(1)
+    // The declined refusal is dropped (it IS the turn's result); the executed mutation is NOT —
+    // it stays queued so the next request still reports it as a recent_action.
+    expect(h.pendingAfter()).toEqual([mutation])
+  })
+
+  it('denied sign_typed_data in ask mode also ENDS the turn (it reaches the queue by another route)', async () => {
+    // sign_typed_data is gated by the SAME confirm gate but is dispatched as a client-side tool, so
+    // its refusal lands on the generic pendingToolResults recursion rather than the signable branch.
+    // Without the second terminal check, `agent ask "bet 5 USDC on X"` without --yes kept the exact
+    // retry-into-failure behavior this change exists to remove.
+    const declined: RecentAction = {
+      tool: 'sign_typed_data',
+      success: false,
+      data: {
+        error: 'Transaction not confirmed',
+        code: AgentErrorCode.CONFIRMATION_REQUIRED,
+        proposed: 'sign_typed_data {"primaryType":"Order"}',
+      },
+    }
+    const h = makeLoopHarness({ approve: false, dispatchDuringTurn: declined, noSignable: true })
+    await h.run()
+    expect(h.streamRequests).toHaveLength(1)
+    expect(h.pendingAfter()).toEqual([])
+    expect(h.ui.onDone).toHaveBeenCalledOnce()
+  })
+
+  it('denied sign_typed_data OUTSIDE ask mode still recurses', async () => {
+    const declined: RecentAction = {
+      tool: 'sign_typed_data',
+      success: false,
+      data: { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED },
+    }
+    const h = makeLoopHarness({ approve: false, askMode: false, dispatchDuringTurn: declined, noSignable: true })
+    await h.run()
+    expect(h.streamRequests).toHaveLength(2)
+  })
+
   it('denied OUTSIDE ask mode: the decline is still reported back so the model can acknowledge it', async () => {
     // In the TUI a decline is a live user choice mid-conversation, and in pipe mode
     // the host can approve on a later turn — both keep the report-and-continue
     // behavior. The short-circuit is scoped to the non-interactive ask path only.
     const h = makeLoopHarness({ approve: false, askMode: false })
     await h.run()
+    expect(h.ui.requestConfirmation).toHaveBeenCalledExactlyOnceWith('send 1 ETH on Base to 0xR')
     expect(h.signTxFromBuffer).not.toHaveBeenCalled()
+    // The rejected envelope must not linger into later turns (the original hazard).
+    expect(h.clearPendingTransaction).toHaveBeenCalledOnce()
+    expect(h.ui.onTxStatus).not.toHaveBeenCalled()
     expect(h.streamRequests).toHaveLength(2)
     const reported = h.streamRequests[1].context.recent_actions
     expect(reported).toHaveLength(1)

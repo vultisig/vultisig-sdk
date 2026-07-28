@@ -200,6 +200,30 @@ describe('agent ask --json output contract', () => {
       expect(err).toContain('proposed:send 0.0001 ETH on Ethereum to 0xd8dA')
     })
 
+    it('a declined sign_typed_data reports a chain-less proposed transaction (no fabricated chain)', async () => {
+      // getPendingChain() only describes the sign_tx buffer, so a typed-data decline legitimately has
+      // no chain. The envelope must simply omit it rather than invent one.
+      driver.run = cb => {
+        cb.onProposedTransaction?.({ tool: 'sign_typed_data', summary: 'sign_typed_data {"primaryType":"Order"}' })
+        cb.onToolResult(
+          'tc-typed',
+          'sign_typed_data',
+          false,
+          { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED },
+          'Transaction not confirmed',
+          AgentErrorCode.CONFIRMATION_REQUIRED
+        )
+      }
+      const { exitCode } = await runAsk()
+      expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+      const envelope = JSON.parse(stdout.join(''))
+      expect(envelope.data.proposed_transaction).toEqual({
+        tool: 'sign_typed_data',
+        summary: 'sign_typed_data {"primaryType":"Order"}',
+      })
+      expect(envelope.data.proposed_transaction.chain).toBeUndefined()
+    })
+
     it('a backend turn_outcome of confirmation_required maps to exit 12, not a generic safety block', async () => {
       // A turn with no client-side signing leg at all (the backend classified it).
       // The code, not the kind, decides — so an existing kind can carry it without
