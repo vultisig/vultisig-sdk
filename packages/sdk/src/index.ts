@@ -223,6 +223,11 @@ export {
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -550,6 +555,8 @@ export type {
   CompareCostsParams,
   CompareCostsResult,
   CompareCostsSkipped,
+  ConsolidateChain,
+  ConsolidateUtxo,
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
@@ -578,6 +585,7 @@ export type {
   JupiterSwapResult,
   KnownCoin,
   KnownCoinMetadata,
+  NativeSwapMinAmountIn,
   PendleActiveMarket,
   PendleChain,
   PendleMarketParams,
@@ -595,9 +603,12 @@ export type {
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
   PrepareThorchainMsgDepositTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
   PriceBatchResult,
   PriceQuery,
   PriceQuote,
@@ -740,6 +751,7 @@ export {
   getEvmBalances,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getNativeSwapMinAmountIn,
   getPolkadotAssetBalance,
   getPolkadotNativeBalance,
   getPrice,
@@ -787,6 +799,7 @@ export {
   MAX_UINT256,
   MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
+  NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
   parseActionDisplay,
