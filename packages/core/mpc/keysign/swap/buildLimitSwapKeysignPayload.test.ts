@@ -254,9 +254,9 @@ describe('buildLimitSwapKeysignPayload', () => {
     })
 
     it('rejects an expectedToAmount that disagrees with the memo LIM', async () => {
-      await expect(
-        buildLimitSwapKeysignPayload({ ...erc20Input, expectedToAmount: 1n })
-      ).rejects.toThrow(/disagrees with the memo's LIM/)
+      await expect(buildLimitSwapKeysignPayload({ ...erc20Input, expectedToAmount: 1n })).rejects.toThrow(
+        /disagrees with the memo's LIM/
+      )
     })
 
     // The exact mistake this guard exists for: rescaling the 1e8 LIM into the
@@ -271,4 +271,3 @@ describe('buildLimitSwapKeysignPayload', () => {
     })
   })
 })
-

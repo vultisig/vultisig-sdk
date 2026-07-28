@@ -86,4 +86,3 @@ describe('parseLimitSwapMemo', () => {
     expect(`=<:${targetAsset}:${destinationAddress}:${limit}/${intervalBlocks}/${quantity}`).toBe(validMemo)
   })
 })
-
