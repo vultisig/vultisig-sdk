@@ -5,7 +5,7 @@
  * Includes vault addresses, balances, coins, and address book entries.
  */
 import type { VaultBase } from '@vultisig/sdk'
-import { Chain } from '@vultisig/sdk'
+import { chainFeeCoin } from '@vultisig/sdk'
 
 import type { BalanceInfo, CoinInfo, MessageContext } from './types'
 
@@ -100,12 +100,14 @@ export async function buildMessageContext(vault: VaultBase): Promise<MessageCont
     const chains = vault.chains
 
     for (const chain of chains) {
+      const nativeCoin = chainFeeCoin[chain]
+
       // Add native coin
       coins.push({
         chain: chain.toString(),
-        ticker: getNativeTokenTicker(chain),
+        ticker: nativeCoin?.ticker ?? chain.toString(),
         is_native_token: true,
-        decimals: getNativeTokenDecimals(chain),
+        decimals: nativeCoin?.decimals ?? 18,
       })
 
       // Add custom tokens for this chain
@@ -165,60 +167,3 @@ export async function buildMinimalContext(vault: VaultBase): Promise<MessageCont
   return context
 }
 
-function getNativeTokenTicker(chain: Chain): string {
-  const tickers: Partial<Record<Chain, string>> = {
-    [Chain.Ethereum]: 'ETH',
-    [Chain.Bitcoin]: 'BTC',
-    [Chain.Solana]: 'SOL',
-    [Chain.THORChain]: 'RUNE',
-    [Chain.Cosmos]: 'ATOM',
-    [Chain.Avalanche]: 'AVAX',
-    [Chain.BSC]: 'BNB',
-    [Chain.Polygon]: 'MATIC',
-    [Chain.Arbitrum]: 'ETH',
-    [Chain.Optimism]: 'ETH',
-    [Chain.Base]: 'ETH',
-    [Chain.Blast]: 'ETH',
-    [Chain.Litecoin]: 'LTC',
-    [Chain.Dogecoin]: 'DOGE',
-    [Chain.Dash]: 'DASH',
-    [Chain.MayaChain]: 'CACAO',
-    [Chain.Polkadot]: 'DOT',
-    [Chain.Sui]: 'SUI',
-    [Chain.Ton]: 'TON',
-    [Chain.Tron]: 'TRX',
-    [Chain.Ripple]: 'XRP',
-    [Chain.Dydx]: 'DYDX',
-    [Chain.Osmosis]: 'OSMO',
-    [Chain.Terra]: 'LUNA',
-    [Chain.Noble]: 'USDC',
-    [Chain.Kujira]: 'KUJI',
-    [Chain.Zksync]: 'ETH',
-    [Chain.CronosChain]: 'CRO',
-  }
-  return tickers[chain] || chain.toString()
-}
-
-function getNativeTokenDecimals(chain: Chain): number {
-  const decimals: Partial<Record<Chain, number>> = {
-    [Chain.Bitcoin]: 8,
-    [Chain.Litecoin]: 8,
-    [Chain.Dogecoin]: 8,
-    [Chain.Dash]: 8,
-    [Chain.Solana]: 9,
-    [Chain.Sui]: 9,
-    [Chain.Ton]: 9,
-    [Chain.Polkadot]: 10,
-    [Chain.Cosmos]: 6,
-    [Chain.THORChain]: 8,
-    [Chain.MayaChain]: 10,
-    [Chain.Osmosis]: 6,
-    [Chain.Dydx]: 18,
-    [Chain.Tron]: 6,
-    [Chain.Ripple]: 6,
-    [Chain.Noble]: 6,
-    [Chain.Kujira]: 6,
-    [Chain.Terra]: 6,
-  }
-  return decimals[chain] || 18
-}
