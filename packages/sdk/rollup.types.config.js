@@ -61,6 +61,27 @@ export default defineConfig([
     },
     plugins: [dts(dtsPluginOptions)],
   },
+  // Browser platform types. Keep this bundle aligned with the browser runtime
+  // entry so platform-only storage, crypto, and polyfill exports are visible
+  // through both the root browser condition and the explicit subpath.
+  {
+    input: 'src/platforms/browser/index.ts',
+    output: {
+      file: 'dist/index.browser.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
+  // Chrome Extension platform types. This entry exposes the extension storage,
+  // crypto, and polyfill implementations shipped by the matching runtime bundle.
+  {
+    input: 'src/platforms/chrome-extension/index.ts',
+    output: {
+      file: 'dist/index.chrome-extension.d.ts',
+      format: 'es',
+    },
+    plugins: [dts(dtsPluginOptions)],
+  },
   // React Native platform types — RN-specific exports (e.g. keysign) that
   // aren't reachable from src/index.ts because that entry stays platform
   // agnostic. Consumers resolving under the "react-native" export condition

@@ -27,7 +27,12 @@ import {
   loadCachedToken,
   saveCachedToken,
 } from './tokenCache'
-import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, payloadLooksSignable } from './toolOutputSigning'
+import {
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  payloadLooksSignable,
+  type ToolOutputCandidate,
+} from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -578,7 +583,7 @@ export class AgentSession {
     let toolOutputCandidate: {
       payload: TxReadyPayload
       toolName: string
-      source: 'flat' | 'prep'
+      source: ToolOutputCandidate['source']
     } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
@@ -624,7 +629,7 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => {
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: ToolOutputCandidate['source']) => {
         // Client-enriched candidate from a `tool-output-available` frame — the sole
         // sign source (buffered after the stream by `selectAndBufferSignable`).
         // First-wins per turn: a SECOND signable frame is deferred (the executor
@@ -814,7 +819,7 @@ export class AgentSession {
     toolOutputCandidate: {
       payload: TxReadyPayload
       toolName: string
-      source: 'flat' | 'prep'
+      source: ToolOutputCandidate['source']
     } | null
   ): boolean {
     if (!toolOutputCandidate) return false

@@ -54,6 +54,7 @@ import { buildCosmosWasmExecuteMsg } from './cosmosWasmExecute'
  */
 
 const VALIDATOR_HRP_SUFFIXES = ['valoper', 'valcons'] as const
+const CW20_UINT128_MAX = (1n << 128n) - 1n
 
 const isValidatorHrp = (prefix: string): boolean => VALIDATOR_HRP_SUFFIXES.some(suffix => prefix.endsWith(suffix))
 
@@ -141,8 +142,12 @@ const validateBaseUnitAmount = (value: string): string => {
   if (!/^\d+$/.test(trimmed)) {
     throw new Error(`invalid amount: expected a positive integer base-unit string, got "${value}"`)
   }
-  if (BigInt(trimmed) <= 0n) {
+  const amount = BigInt(trimmed)
+  if (amount <= 0n) {
     throw new Error('invalid amount: must be greater than zero')
+  }
+  if (amount > CW20_UINT128_MAX) {
+    throw new Error('invalid amount: exceeds CW20 Uint128 maximum')
   }
   // Return the trimmed string UNCHANGED for byte-parity with mcp-ts's shared
   // `validateBaseUnitAmount` (src/lib/validateBaseUnitAmount.ts). The amount is

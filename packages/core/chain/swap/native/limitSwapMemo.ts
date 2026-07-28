@@ -3,11 +3,10 @@ import { PublicKey } from '@solana/web3.js'
 
 import { Chain } from '../../Chain'
 import { getChainKind } from '../../ChainKind'
-import { lpChainMap } from '../../chains/cosmos/thor/lp/lpChainMap'
 import { assertValidPoolId } from '../../chains/cosmos/thor/lp/pools'
 import { baseAffiliateBps } from '../affiliate/config'
 import { nativeSwapAffiliateConfig } from './nativeSwapAffiliateConfig'
-import { nativeSwapChainIds, thorChainSwapEnabledChains } from './NativeSwapChain'
+import { thorchainAssetPrefixToChain } from './thorchainMemoAsset'
 
 export const limitSwapExpiryHours = [12, 24, 72] as const
 export type LimitSwapExpiryHours = (typeof limitSwapExpiryHours)[number]
@@ -56,29 +55,6 @@ const assertMemoSegmentSafe = (value: string, fieldName: string): void => {
 const getAssetChainPrefix = (asset: string): string => {
   const [prefix] = asset.split('.')
   return prefix
-}
-
-// Limit swaps (`LIM=`) share THORChain's regular-swap destination-chain
-// universe — `=` vs `=<` only selects execution behavior (price/queue/TTL),
-// not a different set of destination chains, per THORChain's memo docs
-// (dev.thorchain.org/concepts/memos.html). `lpChainMap` alone
-// under-resolves this: it's LP-position-display-scoped (keyed off pool
-// existence), so Solana/Noble - which have no THORChain LP pools but ARE
-// valid swap destinations (see `thorChainSwapEnabledChains`, the list
-// already used to gate regular market swaps to THORChain) - never got an
-// entry. We union the two rather than replacing `lpChainMap` outright:
-// `thorChainSwapEnabledChains` is itself missing chains (Dash/Kujira/
-// Arbitrum/Zcash) that `lpChainMap` already resolves correctly, so a
-// straight swap of authority would regress those. We deliberately do NOT
-// use the broader `nativeSwapChainIds`, which also carries MayaChain-only
-// entries (e.g. `Chain.MayaChain` itself) that aren't valid THORChain
-// limit-swap destinations.
-const thorchainAssetPrefixToChain: Partial<Record<string, Chain>> = {
-  ...lpChainMap,
-  ...thorChainSwapEnabledChains.reduce<Partial<Record<string, Chain>>>((acc, chain) => {
-    acc[nativeSwapChainIds[chain]] = chain
-    return acc
-  }, {}),
 }
 
 const getSupportedThorchainAssetChain = (asset: string, fieldName: string): Chain => {
@@ -268,10 +244,82 @@ export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
   getLimitSwapIntervalBlocks(inputs.expiry_hours)
 }
 
+/**
+ * THORChain memo prefix selecting the advanced swap queue — what makes a deposit
+ * a resting limit order rather than a market swap (`=>`).
+ */
+export const limitSwapMemoPrefix = '=<:'
+
+/** `<LIM>/<interval>/<quantity>`, the segment that makes the order a limit order. */
+const limitSwapMemoTradeTargetPattern = /^\d+\/\d+\/\d+$/
+
+/** Basis points are a bare integer; the affiliate name is a printable, separator-free token. */
+const limitSwapMemoAffiliateBpsPattern = /^\d+$/
+
+/**
+ * Fail closed on anything that is not a well-formed THORChain limit-swap memo.
+ *
+ * Guards the signing path. The limit deposit builder accepts a pre-built memo
+ * string, so a market (`=>`) memo, an unrelated action, or a truncated/corrupted
+ * limit memo would otherwise sign a value-bearing deposit that executes with
+ * completely different semantics — or with no price protection at all.
+ *
+ * Validates the shape `=<:TARGET:DEST:LIM/INTERVAL/QUANTITY[:AFFILIATE:BPS]`
+ * rather than only the prefix, because it is the trade-target segment that
+ * carries the order's price floor: a memo whose LIM is missing or non-numeric is
+ * exactly the case that must never reach a signer.
+ */
+export const assertLimitSwapMemo = (memo: string): void => {
+  if (!memo.startsWith(limitSwapMemoPrefix)) {
+    throw new Error(
+      `memo is not a THORChain limit-swap memo (expected a "${limitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
+    )
+  }
+
+  const segments = memo.slice(limitSwapMemoPrefix.length).split(':')
+  if (segments.length !== 3 && segments.length !== 5) {
+    throw new Error(
+      `limit-swap memo must have 3 segments (or 5 with an affiliate) after the prefix, got ${segments.length}: ${JSON.stringify(memo)}`
+    )
+  }
+
+  const [targetAsset, destAddress, tradeTarget, affiliate, affiliateBps] = segments
+
+  if (!targetAsset) {
+    throw new Error(`limit-swap memo is missing its target asset: ${JSON.stringify(memo)}`)
+  }
+
+  if (!destAddress) {
+    throw new Error(`limit-swap memo is missing its destination address: ${JSON.stringify(memo)}`)
+  }
+
+  if (!limitSwapMemoTradeTargetPattern.test(tradeTarget)) {
+    throw new Error(
+      `limit-swap memo trade target must be "<limit>/<interval>/<quantity>", got ${JSON.stringify(tradeTarget)}`
+    )
+  }
+
+  const [limit] = tradeTarget.split('/')
+  if (BigInt(limit) === 0n) {
+    // THORChain reads a zero trade target as an unprotected market order.
+    throw new Error(`limit-swap memo has a zero minimum-received (LIM), which THORChain treats as a market order`)
+  }
+
+  if (segments.length === 5) {
+    if (!affiliate) {
+      throw new Error(`limit-swap memo has an empty affiliate segment: ${JSON.stringify(memo)}`)
+    }
+
+    if (!limitSwapMemoAffiliateBpsPattern.test(affiliateBps)) {
+      throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
+    }
+  }
+}
+
 const buildMemo = (inputs: LimitSwapMemoInput, includeAffiliate: boolean): string => {
   const limit = getLimitSwapLimitAmount(inputs)
   const interval = getLimitSwapIntervalBlocks(inputs.expiry_hours)
-  const memo = `=<:${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
+  const memo = `${limitSwapMemoPrefix}${inputs.target_asset}:${inputs.dest_addr}:${limit}/${interval}/0`
 
   return includeAffiliate ? `${memo}:${nativeSwapAffiliateConfig.affiliateFeeAddress}:${baseAffiliateBps}` : memo
 }

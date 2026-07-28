@@ -92,6 +92,10 @@ export class SwapService {
         amount: chainAmount,
         referral: params.referral,
         vultDiscountTier,
+        // Per-provider affiliate overrides (sdk#1150): forward the consumer's
+        // config so tenants (e.g. Station) can supply their own fee owners.
+        // Omitted -> core falls back to the vultisig-0 defaults, unchanged.
+        affiliateConfig: params.affiliateConfig,
         recipient: params.recipient,
         slippageTolerance: params.slippageTolerance,
         excludeProviders: params.excludeProviders,

@@ -1,5 +1,9 @@
-import { Chain } from '@vultisig/core-chain/Chain'
+import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
+import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
+import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
@@ -94,20 +98,13 @@ export class BalanceService {
     await Promise.all(
       chainsList.map(async chain => {
         try {
-          const balanceRequests: Array<Promise<readonly [string, Balance]>> = [
-            this.getBalance(chain).then(balance => [chain, balance] as const),
-          ]
+          // EVM chains fetch native + all tokens in a single Multicall3 round-trip
+          // instead of one RPC per token (N+1). Non-EVM chains keep the per-coin path.
+          const entries =
+            includeTokens && getChainKind(chain) === 'evm'
+              ? await this.getEvmBalancesBatched(chain as EvmChain)
+              : await this.getBalancesPerCoin(chain, includeTokens)
 
-          if (includeTokens) {
-            const tokens = this.getTokens(chain)
-            for (const token of tokens) {
-              balanceRequests.push(
-                this.getBalance(chain, token.id).then(balance => [`${chain}:${token.id}`, balance] as const)
-              )
-            }
-          }
-
-          const entries = await Promise.all(balanceRequests)
           for (const [key, balance] of entries) {
             result[key] = balance
           }
@@ -118,6 +115,97 @@ export class BalanceService {
     )
 
     return result
+  }
+
+  /**
+   * Fetch native + token balances for a single chain, one coin per request.
+   * Used for non-EVM chains and native-only lookups.
+   */
+  private async getBalancesPerCoin(chain: Chain, includeTokens: boolean): Promise<Array<readonly [string, Balance]>> {
+    const balanceRequests: Array<Promise<readonly [string, Balance]>> = [
+      this.getBalance(chain).then(balance => [chain as string, balance] as const),
+    ]
+
+    if (includeTokens) {
+      const tokens = this.getTokens(chain)
+      for (const token of tokens) {
+        balanceRequests.push(
+          this.getBalance(chain, token.id).then(balance => [`${chain}:${token.id}`, balance] as const)
+        )
+      }
+    }
+
+    return Promise.all(balanceRequests)
+  }
+
+  /**
+   * Fetch native + token balances for a single EVM chain in one Multicall3 call.
+   * Respects the per-coin BALANCE cache, only multicalling the uncached coins,
+   * and caches/emits each fetched balance exactly like getBalance() does.
+   */
+  private async getEvmBalancesBatched(chain: EvmChain): Promise<Array<readonly [string, Balance]>> {
+    const address = await this.getAddress(chain)
+    const tokens = this.getTokens(chain)
+
+    type CoinRequest = {
+      coinKey: AccountCoinKey<EvmChain>
+      resultKey: string
+      cacheKey: string
+      tokenId?: string
+    }
+
+    const requests: CoinRequest[] = [
+      { coinKey: { chain, address }, resultKey: chain, cacheKey: `${chain.toLowerCase()}:native` },
+      ...tokens.map(token => ({
+        coinKey: { chain, id: token.id, address } as AccountCoinKey<EvmChain>,
+        resultKey: `${chain}:${token.id}`,
+        cacheKey: `${chain.toLowerCase()}:${token.id}`,
+        tokenId: token.id,
+      })),
+    ]
+
+    const entries: Array<readonly [string, Balance]> = []
+    const uncached: CoinRequest[] = []
+    for (const request of requests) {
+      const cached = this.cacheService.getScoped<Balance>(request.cacheKey, CacheScope.BALANCE)
+      if (cached) {
+        entries.push([request.resultKey, cached] as const)
+      } else {
+        uncached.push(request)
+      }
+    }
+
+    if (uncached.length === 0) {
+      return entries
+    }
+
+    const rawBalances = await getEvmChainBalances({
+      chain,
+      address: address as Address,
+      coins: uncached.map(request => request.coinKey),
+    })
+
+    const tokensRecord = this.getTokensRecord()
+    for (const request of uncached) {
+      const rawBalance = rawBalances[accountCoinKeyToString(request.coinKey)]
+      // A key MISSING from the multicall result means that coin was omitted/failed (a transient RPC
+      // hiccup, a partial Multicall3 aggregate). The old per-coin path cached NOTHING on failure; caching
+      // a fabricated 0n here (5min TTL) would show a real 0 for a coin the user owns AND emit it as a real
+      // balanceUpdated. Only cache + emit keys the multicall actually RETURNED (a genuine 0n from the
+      // aggregate IS a real balance and is kept); a missing key falls through uncached + unemitted so the
+      // next call refetches. It's still returned for this call so the shape is complete.
+      const present = rawBalance !== undefined
+      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, tokensRecord)
+
+      if (present) {
+        await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
+        this.emitBalanceUpdated({ chain, balance, tokenId: request.tokenId })
+      }
+
+      entries.push([request.resultKey, balance] as const)
+    }
+
+    return entries
   }
 
   /**
