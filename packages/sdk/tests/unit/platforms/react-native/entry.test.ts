@@ -186,4 +186,14 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
   })
+
+  it('exports canonical chain-kind helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const chainKind = await import('@vultisig/core-chain/ChainKind')
+
+    expect(rn.getChainKind).toBe(chainKind.getChainKind)
+    expect(rn.isChainOfKind).toBe(chainKind.isChainOfKind)
+    expect(rn.getChainKind(rn.Chain.Ethereum)).toBe('evm')
+    expect(rn.isChainOfKind(rn.Chain.Solana, 'solana')).toBe(true)
+  })
 })
