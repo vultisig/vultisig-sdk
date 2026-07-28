@@ -58,18 +58,21 @@ const formatBaseUnits = (baseUnits: bigint, decimals: number): string => {
 
 /**
  * Source-chain tx-fee estimate for a cosmos swap, formatted `"~<amount> <TICKER>"`,
- * e.g. `"~100 LUNC"`. Lets a swap card's Est. fee row show something instead of an
+ * e.g. `"~8.4975 LUNC"`. Lets a swap card's Est. fee row show something instead of an
  * em-dash for cosmos / Skip routes, which carry no fee in Skip's /route response
  * (the chain gas is otherwise only known at sign time). Returns '' for non-cosmos
  * / flat-fee chains (THORChain / MayaChain have no gas market) so callers leave the
  * label empty (no regression). The consumer appends the fiat value off its own
  * price-cache.
  *
- * The amount is the SAME canonical per-chain fee the SDK signer actually charges
- * (`cosmosGasRecord`), so the displayed estimate cannot drift below the real
- * sign-time fee — a 10x under-display on e.g. TerraClassic's 100 LUNC would badly
- * mislead the user. It is explicitly an ESTIMATE (tilde-prefixed). PURE: no
- * network, no signing, no broadcast.
+ * The amount is the SAME canonical per-chain gas fee the SDK signer actually
+ * charges (`cosmosGasRecord`), so the displayed estimate tracks the real
+ * sign-time fee by construction rather than re-deriving it from a heuristic.
+ *
+ * It does NOT include Terra Classic's `x/tax` burn tax, which is 0.5% OF THE
+ * TRANSFER: this helper is amount-independent and has nothing to apply it to.
+ * The signer adds it at payload-build time. Hence ESTIMATE (tilde-prefixed).
+ * PURE: no network, no signing, no broadcast.
  *
  * @param chain - chain name (any string; non-cosmos / flat-fee → '').
  */
