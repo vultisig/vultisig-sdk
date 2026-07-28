@@ -438,6 +438,28 @@ export type {
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
 
+// THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
+// `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
+// initiator or a co-signer reviewing a payload it did not build — reads an
+// order's true terms. Terms decoded from the memo cannot disagree with what
+// gets signed; a display field carried alongside it can.
+export type {
+  LimitSwapExpiryHours,
+  LimitSwapMemoInput,
+  ParsedLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export {
+  assertLimitSwapMemo,
+  buildLimitSwapMemo,
+  getLimitSwapIntervalBlocks,
+  getLimitSwapLimitAmount,
+  limitSwapExpiryHours,
+  limitSwapMemoPrefix,
+  parseLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
+export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
+
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 export * from '@vultisig/core-chain/chains/cosmos/thor/lp'

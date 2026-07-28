@@ -601,6 +601,11 @@
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",
       "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js"
     },
+    "./keysign/swap/getKeysignLimitSwapOrder": {
+      "types": "./dist/keysign/swap/getKeysignLimitSwapOrder.d.ts",
+      "import": "./dist/keysign/swap/getKeysignLimitSwapOrder.js",
+      "default": "./dist/keysign/swap/getKeysignLimitSwapOrder.js"
+    },
     "./keysign/swap/getKeysignSwapPayload": {
       "types": "./dist/keysign/swap/getKeysignSwapPayload.d.ts",
       "import": "./dist/keysign/swap/getKeysignSwapPayload.js",
