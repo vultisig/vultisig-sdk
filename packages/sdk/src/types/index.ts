@@ -615,7 +615,20 @@ export type Portfolio = {
 
 export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
-  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+  | {
+      dryRun: true
+      /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
+      fee: string
+      /** Ticker of the asset the fee is paid in — always the chain's native asset. */
+      feeSymbol: string
+      /**
+       * What the send costs in the asset being sent, comparable against that
+       * asset's balance: `amount` for a token send (the fee is paid separately
+       * in the native asset), `amount + fee` for a native send.
+       */
+      total: string
+      keysignPayload: KeysignPayload
+    }
 
 export type CompoundSwapResult =
   | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }

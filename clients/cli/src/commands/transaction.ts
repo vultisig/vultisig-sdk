@@ -95,6 +95,7 @@ export async function sendTransaction(
       amount: params.amount,
       symbol: balance.symbol,
       fee: dryResult.fee,
+      feeSymbol: dryResult.feeSymbol,
       total: dryResult.total,
       balance: balance.formattedAmount,
       destinationTag,
@@ -110,7 +111,7 @@ export async function sendTransaction(
       info(`  To:      ${result.to}`)
       info(`  Amount:  ${result.amount} ${result.symbol}`)
       if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
-      info(`  Fee:     ${result.fee} ${result.symbol}`)
+      info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
       info(`  Total:   ${result.total} ${result.symbol}`)
       info(`  Balance: ${result.balance} ${result.symbol}`)
       if (result.warning) warn(`  Warning: ${result.warning}`)

@@ -1766,10 +1766,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         memo,
         destinationTag,
       })
+      // The network fee is always paid in the chain's native asset, never in the
+      // token being sent. Formatting it with the token's decimals (and adding it
+      // to the token amount) produced a nonsense quote for every token send —
+      // USDC's 6 decimals applied to a wei-denominated gas fee reads as hundreds
+      // of millions of USDC, and `total` then failed any balance comparison.
+      const native = chainFeeCoin[chain]
+      const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
-        fee: this.formatUnits(fee, tokenInfo.decimals),
-        total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals),
+        fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
+        feeSymbol: native.ticker,
+        // Denominated in the asset being sent, so it is directly comparable to
+        // that asset's balance. Only a native send debits the fee from it.
+        total: this.formatUnits(isTokenSend ? amountBigInt : amountBigInt + fee, tokenInfo.decimals),
         keysignPayload,
       }
     }

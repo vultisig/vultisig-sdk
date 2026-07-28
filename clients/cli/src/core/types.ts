@@ -29,9 +29,15 @@ export type SendDryRunResult = {
   to: string
   amount: string
   symbol: string
-  /** Network fee the build estimated for this transaction. */
+  /** Network fee the build estimated for this transaction, in `feeSymbol`. */
   fee: string
-  /** amount + fee — what the send actually costs, and what `balance` is checked against. */
+  /** Asset the fee is paid in — the chain's native asset, which is not `symbol` for a token send. */
+  feeSymbol: string
+  /**
+   * What the send costs in `symbol`, and what `balance` is checked against:
+   * amount + fee for a native send, amount alone for a token send (whose fee is
+   * paid in `feeSymbol`, out of a different balance).
+   */
   total: string
   balance: string
   destinationTag?: number
