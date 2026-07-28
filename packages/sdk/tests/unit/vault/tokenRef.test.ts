@@ -140,16 +140,28 @@ describe('resolveTokenRefId', () => {
 
 const proto = VaultBase.prototype as unknown as Record<string, (...args: never[]) => unknown>
 
-async function sendCoinFor(ref: string, tokens: Token[]) {
+/**
+ * Sender / recipient fixtures. Token resolution never inspects either address —
+ * they are carried onto the coin and handed to the (stubbed) tx builder — but
+ * using the right shape per chain keeps the fixture honest about what it models.
+ */
+const addressFor: Partial<Record<Chain, string>> = {
+  [Chain.Ethereum]: '0x58C4a1F319297EC9c398A0F3a3b64AF5a18b5C35',
+  [Chain.THORChain]: 'thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm',
+  [Chain.Solana]: '5QXePTiaWgmqSCHh9YDWAiVvEeKWaM5cUN62K4SXwUSB',
+}
+
+async function sendCoinFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
   let coin: { ticker: string; decimals: number; id?: string } | undefined
+  const address = addressFor[chain]
   const vault = {
-    _tokens: { [Chain.Ethereum]: tokens },
+    _tokens: { [chain]: tokens },
     getTokens: proto.getTokens,
     resolveTokenInfo: proto.resolveTokenInfo,
     buildAccountCoin: proto.buildAccountCoin,
     parseAmount: proto.parseAmount,
     formatUnits: proto.formatUnits,
-    address: async () => '0x58C4a1F319297EC9c398A0F3a3b64AF5a18b5C35',
+    address: async () => address,
     prepareSendTx: async (params: { coin: typeof coin }) => {
       coin = params.coin
       return {}
@@ -157,8 +169,8 @@ async function sendCoinFor(ref: string, tokens: Token[]) {
     transactionBuilder: { estimateSendFee: async () => 21000n },
   }
   await (proto.send as unknown as (this: unknown, p: unknown) => Promise<unknown>).call(vault, {
-    chain: Chain.Ethereum,
-    to: '0x1111111111111111111111111111111111111111',
+    chain,
+    to: address,
     amount: '0.01',
     symbol: ref,
     dryRun: true,
@@ -166,18 +178,14 @@ async function sendCoinFor(ref: string, tokens: Token[]) {
   return coin
 }
 
-async function balanceIdFor(ref: string, tokens: Token[]) {
+async function balanceIdFor(ref: string, tokens: Token[], chain: Chain = Chain.Ethereum) {
   const getBalance = vi.fn().mockResolvedValue({})
   const vault = {
-    _tokens: { [Chain.Ethereum]: tokens },
+    _tokens: { [chain]: tokens },
     getTokens: proto.getTokens,
     balanceService: { getBalance },
   }
-  await (proto.balance as unknown as (this: unknown, c: Chain, t?: string) => Promise<unknown>).call(
-    vault,
-    Chain.Ethereum,
-    ref
-  )
+  await (proto.balance as unknown as (this: unknown, c: Chain, t?: string) => Promise<unknown>).call(vault, chain, ref)
   return getBalance.mock.calls[0][1] as string | undefined
 }
 
@@ -227,30 +235,58 @@ describe('send and balance resolve a token ref identically', () => {
   })
 })
 
+/**
+ * Pick a registry token whose id is genuinely distinct from its ticker.
+ *
+ * `resolveTokenRef` upper-cases the ref and matches tickers *before* ids, so a
+ * token whose id is only its ticker in another case — MayaChain's `maya` /
+ * `MAYA`, THORChain's `tcy` / `TCY` — resolves on the ticker branch no matter
+ * which of the two you pass. Such a token cannot exercise id matching at all:
+ * a test built on one passes just as happily with the id lookup deleted.
+ *
+ * The ticker must also be unique on the chain, or the ticker branch could land
+ * on a different token than the id branch and the agreement assertions would be
+ * comparing two unrelated assets.
+ */
+function tokenWithDistinctId(chain: Chain) {
+  const known = knownTokens[chain] ?? []
+  const token = known.find(
+    (t): t is typeof t & { id: string } =>
+      t.id !== undefined &&
+      t.id.toLowerCase() !== t.ticker.toLowerCase() &&
+      known.filter(other => other.ticker.toUpperCase() === t.ticker.toUpperCase()).length === 1
+  )
+  if (!token) throw new Error(`no known token on ${chain} whose id differs from its ticker`)
+  return token
+}
+
 describe('non-EVM token refs resolve on both paths', () => {
-  it('resolves a Cosmos denom by id and by ticker to the same asset', () => {
-    const byTicker = resolveTokenRef(Chain.MayaChain, 'MAYA', [])
-    const byDenom = resolveTokenRef(Chain.MayaChain, 'maya', [])
-    expect(byTicker).toEqual(byDenom)
-    expect(byTicker.contractAddress).toBe('maya')
+  it('resolves a Cosmos denom by ticker', () => {
+    // `maya` and `MAYA` both land on the ticker branch — this covers ticker
+    // input for a Cosmos denom, and nothing more. See tokenWithDistinctId.
+    expect(resolveTokenRef(Chain.MayaChain, 'MAYA', [])).toMatchObject({ ticker: 'MAYA', contractAddress: 'maya' })
   })
 
-  it('resolves a Solana mint address by id', () => {
-    const known = knownTokens[Chain.Solana] ?? []
-    const mint = known[0]
-    expect(mint).toBeDefined()
-    expect(resolveTokenRef(Chain.Solana, mint.id, [])).toMatchObject({
-      ticker: mint.ticker,
-      decimals: mint.decimals,
-      contractAddress: mint.id,
-    })
+  it.each([Chain.THORChain, Chain.Solana])('resolves a %s token by id and by ticker to the same asset', chain => {
+    const token = tokenWithDistinctId(chain)
+    const expected = { ticker: token.ticker, decimals: token.decimals, contractAddress: token.id }
+
+    expect(resolveTokenRef(chain, token.id, [])).toEqual(expected)
+    expect(resolveTokenRef(chain, token.ticker, [])).toEqual(expected)
   })
 
-  it('keeps send and balance in agreement for a non-EVM ref', async () => {
-    const known = knownTokens[Chain.Solana] ?? []
-    const mint = known[0]
-    const info = resolveTokenRef(Chain.Solana, mint.ticker, [])
-    expect(resolveTokenRefId(Chain.Solana, mint.ticker, [])).toBe(info.contractAddress)
-    expect(resolveTokenRefId(Chain.Solana, mint.id, [])).toBe(info.contractAddress)
-  })
+  it.each([Chain.THORChain, Chain.Solana])(
+    'keeps send() and balance() in agreement for a %s ref, by id and by ticker',
+    async chain => {
+      const token = tokenWithDistinctId(chain)
+
+      for (const ref of [token.id, token.ticker]) {
+        const coin = await sendCoinFor(ref, [], chain)
+        const balanceId = await balanceIdFor(ref, [], chain)
+
+        expect(coin).toMatchObject({ ticker: token.ticker, decimals: token.decimals, id: token.id })
+        expect(balanceId).toBe(coin?.id)
+      }
+    }
+  )
 })
