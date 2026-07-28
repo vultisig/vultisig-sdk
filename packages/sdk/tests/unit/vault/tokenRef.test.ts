@@ -45,6 +45,32 @@ describe('resolveTokenRef', () => {
     expect(resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [storedUsdc])).toMatchObject({ ticker: 'USDC' })
   })
 
+  it('resolves a user token with no symbol by contract address and returns a defined ticker', () => {
+    const malformed = { ...storedUsdc, symbol: undefined } as unknown as Token
+
+    expect(() => resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [malformed])).not.toThrow()
+    expect(resolveTokenRef(Chain.Ethereum, USDC_CHECKSUM, [malformed])).toEqual({
+      ticker: USDC_LOWER,
+      decimals: 6,
+      contractAddress: USDC_LOWER,
+    })
+  })
+
+  it('resolves a well-formed token by symbol when a malformed sibling is present', () => {
+    const malformed = {
+      ...storedUsdc,
+      id: '0x00000000000000000000000000000000000000aa',
+      symbol: undefined,
+      contractAddress: '0x00000000000000000000000000000000000000aa',
+    } as unknown as Token
+
+    expect(resolveTokenRef(Chain.Ethereum, 'USDC', [malformed, storedUsdc])).toEqual({
+      ticker: 'USDC',
+      decimals: 6,
+      contractAddress: USDC_LOWER,
+    })
+  })
+
   it('resolves a user token by its stored id when that differs from contractAddress', () => {
     const added: Token = { ...storedUsdc, id: `${Chain.Ethereum}-${USDC_LOWER}` }
     expect(resolveTokenRef(Chain.Ethereum, `${Chain.Ethereum}-${USDC_LOWER}`, [added])).toMatchObject({

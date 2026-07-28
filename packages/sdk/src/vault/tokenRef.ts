@@ -50,10 +50,14 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
   //    or stored id (the CLI's `--add` writes id as `<Chain>-<address>`, token
   //    discovery writes the bare address, so both are checked).
   const token =
-    userTokens.find(t => t.symbol.toUpperCase() === upper) ??
+    userTokens.find(t => t.symbol?.toUpperCase() === upper) ??
     userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower)
   if (token) {
-    return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
+    return {
+      ticker: token.symbol ?? token.contractAddress ?? token.id,
+      decimals: token.decimals,
+      contractAddress: token.contractAddress || token.id,
+    }
   }
 
   // 2. Well-known token registry (no network call) — ticker first, then id.
