@@ -44,12 +44,7 @@ function formatUnits(value: bigint, decimals: number): string {
   return `${whole}.${trimmed}`
 }
 
-/**
- * Thin adapter over the REAL resolver so these cases exercise shipped code.
- * (This helper used to be a hand-copied re-implementation of VaultBase's private
- * resolveTokenInfo — it had already drifted from it, and would have stayed green
- * with the real resolver deleted. Broader coverage lives in tokenRef.test.ts.)
- */
+// Keep these legacy cases on the shipped resolver, not a copied implementation.
 function resolveTokenInfo(
   chain: Chain,
   symbol: string | undefined,

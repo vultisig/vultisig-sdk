@@ -221,12 +221,7 @@ describe('formatBalance', () => {
       })
     })
 
-    // These two cases used to assert the 18-decimal / address-as-symbol fallback
-    // for USDC's real contract address — 1 USDC rendered as
-    // "0.000000000001 0xa0b86991…". That is the wrong answer, and it was reachable
-    // from the send preview: `vault.balance()` resolves a token ref to its contract
-    // address, and a well-known token need not be in the vault's own list.
-    // A well-known token now formats correctly with no vault registry at all.
+    // A known token must not fall back to 18 decimals when absent from the vault.
     it('formats a well-known token from the registry when the vault tracks no tokens', () => {
       const result = formatBalance(1000000n, Chain.Ethereum, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
 

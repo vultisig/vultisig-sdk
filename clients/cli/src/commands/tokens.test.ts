@@ -68,10 +68,6 @@ describe('tokens --discover', () => {
 
   describe('disclosure', () => {
     it('tells the user the discovered tokens were saved and what that affects', async () => {
-      // The command has always written to the vault; the help and the output
-      // described it as a lookup. A user who ran it expecting a query had no
-      // way to know their vault file — and every later portfolio total — had
-      // changed. Silence here is the defect, not the write itself.
       configureOutput({ format: 'table', silent: false })
       const logs: string[] = []
       vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -90,8 +86,6 @@ describe('tokens --discover', () => {
     it('says it is now tracking the tokens rather than merely reporting them', async () => {
       configureOutput({ format: 'table', silent: false })
       const succeed = vi.fn()
-      // The spinner's success line is the one-line summary a scripted user sees;
-      // "Discovered N token(s)" read as a pure lookup.
       vi.spyOn(await import('../lib/output'), 'createSpinner').mockReturnValue({
         succeed,
         fail: vi.fn(),

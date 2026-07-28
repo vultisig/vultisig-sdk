@@ -1,11 +1,3 @@
-/**
- * `send({ dryRun: true })` fee denomination.
- *
- * Drives the REAL `VaultBase.prototype.send` (the `.call`-with-minimal-`this`
- * pattern from VaultBase.balancesWithPrices.test.ts). Only the two network
- * boundaries — `prepareSendTx` and `estimateSendFee` — are stubbed; the
- * resolution, unit maths and result assembly under test are the shipped ones.
- */
 import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +18,6 @@ const storedUsdc: Token = {
 
 const proto = VaultBase.prototype as unknown as Record<string, (...args: never[]) => unknown>
 
-/** 0.00013667 ETH of gas, in wei — a realistic ERC-20 transfer fee. */
 const FEE_WEI = 136670384400000n
 
 async function dryRun(symbol: string | undefined, amount = '0.01'): Promise<Extract<SendResult, { dryRun: true }>> {
@@ -55,17 +46,12 @@ async function dryRun(symbol: string | undefined, amount = '0.01'): Promise<Extr
 describe('send dry-run quotes the network fee in the native asset', () => {
   it('formats a token send fee with the NATIVE decimals and names the native asset', async () => {
     const result = await dryRun('USDC')
-    // Pre-fix this formatted a wei-denominated gas fee with USDC's 6 decimals
-    // and reported 136670384.4 "USDC" of fee.
     expect(result.fee).toBe('0.0001366703844')
     expect(result.feeSymbol).toBe('ETH')
   })
 
   it('leaves a token send total equal to the amount, so it compares against the token balance', async () => {
     const result = await dryRun('USDC')
-    // The fee is paid out of the ETH balance, not the USDC balance, so adding it
-    // to the USDC amount made `total` fail every balance check (the CLI warned
-    // "Insufficient balance" on a send the vault could afford).
     expect(result.total).toBe('0.01')
   })
 
