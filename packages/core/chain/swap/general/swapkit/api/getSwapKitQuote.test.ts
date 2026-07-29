@@ -525,6 +525,64 @@ describe('getSwapKitQuote', () => {
     })
   })
 
+  it('maps independent Chainflip stable USDC fees for a SOL to native ETH route', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [
+              {
+                routeId: 'chainflip-stable-fee-route',
+                providers: ['CHAINFLIP_STREAMING'],
+                expectedBuyAmount: '24.5',
+              },
+            ],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP_STREAMING'],
+            expectedBuyAmount: '24.5',
+            tx: 'serialized-solana-transaction',
+            fees: [
+              { type: 'affiliate', amount: '1.25', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+              { type: 'service', amount: '0.5', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' },
+            ],
+          })
+        )
+    )
+
+    const quote = await getSwapKitQuote({
+      from: {
+        chain: Chain.Solana,
+        address: 'sol-source',
+        ticker: 'SOL',
+        decimals: 9,
+      },
+      to: {
+        chain: Chain.Ethereum,
+        address: '0xdestination',
+        ticker: 'ETH',
+        decimals: 18,
+      },
+      amount: 1_000_000_000_000n,
+    })
+
+    expect(quote.tx).toMatchObject({
+      solana: {
+        swapFee: {
+          amount: 1_750_000n,
+          decimals: 6,
+          chain: Chain.Ethereum,
+          id: usdcId.toLowerCase(),
+        },
+      },
+    })
+  })
+
   it('sums repeated SwapKit fee entries of the same type and asset', async () => {
     vi.stubGlobal(
       'fetch',
@@ -624,6 +682,66 @@ describe('getSwapKitQuote', () => {
         amount: 1_000_000n,
       })
     ).rejects.toThrow('SwapKit affiliate and service fees use different assets.')
+  })
+
+  it('rejects an independent stable fee outside a Chainflip route', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'jupiter-stable-fee', providers: ['JUPITER'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['JUPITER'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1', asset: `ETH.USDC-${usdcId}`, chain: 'Ethereum' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(`SwapKit service fee uses unsupported asset ETH.USDC-${usdcId}.`)
+  })
+
+  it('rejects a fee whose chain metadata contradicts its asset', async () => {
+    const usdcId = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({
+            routes: [{ routeId: 'chainflip-wrong-fee-chain', providers: ['CHAINFLIP'], expectedBuyAmount: '1' }],
+          })
+        )
+        .mockResolvedValueOnce(
+          response({
+            providers: ['CHAINFLIP'],
+            expectedBuyAmount: '1',
+            tx: 'serialized-solana-transaction',
+            fees: [{ type: 'service', amount: '0.1', asset: `ETH.USDC-${usdcId}`, chain: 'Solana' }],
+          })
+        )
+    )
+
+    await expect(
+      getSwapKitQuote({
+        from: { chain: Chain.Solana, address: 'sol-source', ticker: 'SOL', decimals: 9 },
+        to: { chain: Chain.Ethereum, address: '0xdestination', ticker: 'ETH', decimals: 18 },
+        amount: 1_000_000n,
+      })
+    ).rejects.toThrow(`SwapKit service fee uses unsupported asset ETH.USDC-${usdcId}.`)
   })
 
   it('uses the Vultisig proxy without an API key by default', async () => {

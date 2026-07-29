@@ -3,6 +3,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
@@ -325,7 +326,9 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
   return data as T
 }
 
-const toSwapKitAsset = ({ chain, id, ticker }: AccountCoin<SwapKitEnabledChain>) => {
+type SwapKitAssetCoin = Pick<AccountCoin<SwapKitEnabledChain>, 'chain' | 'decimals' | 'id' | 'ticker'>
+
+const toSwapKitAsset = ({ chain, id, ticker }: Pick<SwapKitAssetCoin, 'chain' | 'id' | 'ticker'>) => {
   const chainId = swapKitChainId[chain]
   const symbol = id ? ticker : chainFeeCoin[chain].ticker
 
@@ -427,12 +430,38 @@ const sameSwapFeeCoin = (one: SwapFee, another: SwapFee) =>
   one.decimals === another.decimals &&
   (one.id ?? '').toLowerCase() === (another.id ?? '').toLowerCase()
 
+const chainflipStableFeeCoin = {
+  chain: Chain.Ethereum,
+  decimals: usdc.decimals,
+  id: usdc.id.toLowerCase(),
+  ticker: usdc.ticker,
+} satisfies SwapKitAssetCoin
+
+const isChainflipProvider = (provider: string | undefined) =>
+  provider === 'CHAINFLIP' || provider === 'CHAINFLIP_STREAMING'
+
+const matchesSwapKitFeeChain = (feeChain: string | undefined, coinChain: SwapKitEnabledChain) => {
+  if (!feeChain) {
+    return true
+  }
+
+  const normalized = feeChain.toLowerCase()
+
+  return normalized === coinChain.toLowerCase() || normalized === swapKitChainId[coinChain].toLowerCase()
+}
+
 const getSwapKitSwapFee = (
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
-  to: AccountCoin<SwapKitEnabledChain>
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
 ): SwapFee => {
-  const candidates = [from, to].map(coin => ({
+  const feeCoins: SwapKitAssetCoin[] = [
+    from,
+    to,
+    ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
+  ]
+  const candidates = feeCoins.map(coin => ({
     coin,
     asset: toSwapKitAsset(coin).toLowerCase(),
   }))
@@ -449,7 +478,9 @@ const getSwapKitSwapFee = (
       throw new Error(`SwapKit ${type} fee is missing its asset.`)
     }
 
-    const candidate = candidates.find(({ asset }) => asset === fee.asset!.toLowerCase())
+    const candidate = candidates.find(
+      ({ asset, coin }) => asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain)
+    )
 
     if (!candidate) {
       throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
@@ -487,7 +518,8 @@ const buildSolanaTx = (
   tx: unknown,
   fees: SwapKitSwapResponse['fees'],
   from: AccountCoin<SwapKitSourceChain>,
-  to: AccountCoin<SwapKitEnabledChain>
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
 ): GeneralSwapTx => {
   if (typeof tx !== 'string') {
     throw new Error('SwapKit Solana route did not return a serialized transaction string.')
@@ -500,7 +532,7 @@ const buildSolanaTx = (
     solana: {
       data: tx,
       networkFee,
-      swapFee: getSwapKitSwapFee(fees, from, to),
+      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider),
     },
   }
 }
@@ -679,10 +711,11 @@ const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
   to: AccountCoin<SwapKitEnabledChain>,
-  amount: bigint
+  amount: bigint,
+  routeProvider: string | undefined
 ): GeneralSwapTx => {
   if (from.chain === Chain.Solana) {
-    return buildSolanaTx(response.tx, response.fees, from, to)
+    return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
   }
 
   if (shouldUseTransferTx(from.chain)) {
@@ -874,11 +907,12 @@ export const getSwapKitQuote = async ({
       disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
     })
   )
+  const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
 
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
-    routeProvider: getRouteProviderName(swapResponse) ?? getRouteProviderName(route),
-    tx: buildSwapKitTx(swapResponse, from, to, amount),
+    routeProvider,
+    tx: buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }
