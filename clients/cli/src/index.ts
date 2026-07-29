@@ -1038,10 +1038,14 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
-  .option('--discover', 'Auto-discover tokens with balances on the chain')
+  .option('--discover', 'Find tokens with balances on the chain and save them to this vault')
   .addHelpText(
     'after',
     `
+--discover writes to the vault: every token it finds is saved to the tracked
+list, so it also changes what portfolio and balance --tokens report. Use
+--remove <tokenId> to stop tracking one.
+
 Examples:
   vultisig tokens Ethereum
   vultisig tokens Ethereum --discover --output json
