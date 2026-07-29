@@ -20,11 +20,20 @@ export type LimitSwapOutcome = (typeof limitSwapOutcomes)[number]
  * stem because detail is appended behind a separator
  * (`"limit swap cancelled; fail to refund …"`).
  *
- * The completion stem is the surprising one, verified live on mainnet
- * (tx 5CB3698C…40F9C3): a FILLED limit order indexes as a `refund` action whose
- * reason is `"swap has been completed."` — there is no `swap`-type action at
- * all. A classifier without this stem reports every filled limit order as
- * refunded.
+ * The completion stem is the surprising one: THORNode's advanced-swap-queue
+ * manager (`manager_adv_swap_queue_current.go`) writes
+ * `"swap has been completed."` via `settleSwap` whenever `IsDone(...)` is
+ * true — which fires on TTL elapse as well as full execution (the source
+ * comment directly above the call reads "Check if our swap is already
+ * completed, ie a limit swap has expired"). `settleSwap` only emits a refund
+ * action when `state.deposit > state.in`, i.e. an unfilled remainder is being
+ * returned; a fully-filled order has `deposit == in` and emits no refund
+ * action at all. So a `refund` action carrying this stem is TTL-expiry closing
+ * out the unfilled remainder, never a fill confirmation — verified live on
+ * mainnet (tx 5CB3698C…40F9C3): placed at height 27179916, refunded at height
+ * 27194316 (exactly +14400 blocks, matching the memo's own TTL), with the
+ * refund returning the full RUNE deposit to the sender and zero of the
+ * destination asset ever paid out.
  */
 const completedReasonStem = 'swap has been completed'
 const cancelledReasonStem = 'limit swap cancelled'
@@ -59,7 +68,7 @@ export const getLimitSwapCloseOutcome = (refundReason: string | undefined | null
     return 'refunded'
   }
   if (hasStem(normalized, completedReasonStem)) {
-    return 'filled'
+    return 'expired'
   }
   if (hasStem(normalized, cancelledReasonStem)) {
     return 'cancelled'

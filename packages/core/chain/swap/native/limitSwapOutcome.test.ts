@@ -42,17 +42,20 @@ describe('classifyLimitSwapActions', () => {
     expect(classifyLimitSwapActions([fill()])).toBe('filled')
   })
 
-  // Verified live on mainnet (tx 5CB3698C…40F9C3): a FILLED limit order indexes
-  // as a refund action reading "swap has been completed." with the placement's
-  // limit_swap action beside it — and no swap-type action at all. Without the
-  // completion stem every filled limit order classifies as refunded.
-  it('classifies the live filled-order shape as filled', () => {
+  // Verified live on mainnet (tx 5CB3698C…40F9C3): this shape is a TTL-expired
+  // limit order, NOT a fill. THORNode's settleSwap writes "swap has been
+  // completed." on TTL elapse (IsDone(...) is true on expiry as well as full
+  // execution) and only emits a refund action when an unfilled remainder is
+  // being returned — a fully-filled order has deposit == in and emits no
+  // refund action at all. On-chain the refund returned the full deposit to
+  // the sender and zero of the destination asset was ever paid out.
+  it('classifies the live TTL-expiry refund shape as expired, not filled', () => {
     expect(
       classifyLimitSwapActions([
         refund('swap has been completed.', 'success'),
         { type: 'limit_swap', status: 'success' },
       ])
-    ).toBe('filled')
+    ).toBe('expired')
   })
 
   // The refund's reason is authoritative regardless of its status: the refund
