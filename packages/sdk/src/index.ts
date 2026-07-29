@@ -223,6 +223,11 @@ export {
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -350,6 +355,14 @@ export {
   XRP_DANGEROUS_ADDRESSES,
 } from './utils/dangerousAddresses'
 
+// EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
+// chainId table so consumers (app, agent-backend-ts) import it instead of
+// hand-maintaining their own copies that can drift (the Hyperliquid 998/999
+// client↔server chainId bug class). Native tickers are already exported via
+// `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
+// resolves a hex chainId back to its EvmChain.
+export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
+
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
 export type {
@@ -441,6 +454,28 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+
+// THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
+// `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
+// initiator or a co-signer reviewing a payload it did not build — reads an
+// order's true terms. Terms decoded from the memo cannot disagree with what
+// gets signed; a display field carried alongside it can.
+export type {
+  LimitSwapExpiryHours,
+  LimitSwapMemoInput,
+  ParsedLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export {
+  assertLimitSwapMemo,
+  buildLimitSwapMemo,
+  getLimitSwapIntervalBlocks,
+  getLimitSwapLimitAmount,
+  limitSwapExpiryHours,
+  limitSwapMemoPrefix,
+  parseLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
+export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
@@ -559,6 +594,8 @@ export type {
   CompareCostsParams,
   CompareCostsResult,
   CompareCostsSkipped,
+  ConsolidateChain,
+  ConsolidateUtxo,
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
@@ -587,6 +624,7 @@ export type {
   JupiterSwapResult,
   KnownCoin,
   KnownCoinMetadata,
+  NativeSwapMinAmountIn,
   PendleActiveMarket,
   PendleChain,
   PendleMarketParams,
@@ -604,8 +642,12 @@ export type {
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareThorchainMsgDepositTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
   PriceBatchResult,
   PriceQuery,
   PriceQuote,
@@ -748,6 +790,7 @@ export {
   getEvmBalances,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getNativeSwapMinAmountIn,
   getPolkadotAssetBalance,
   getPolkadotNativeBalance,
   getPrice,
@@ -795,6 +838,7 @@ export {
   MAX_UINT256,
   MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
+  NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
   parseActionDisplay,
@@ -818,6 +862,7 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
+  prepareThorchainMsgDepositTxFromKeys,
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,

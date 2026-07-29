@@ -31,7 +31,7 @@ if (typeof globalThis !== 'undefined' && !(globalThis as { Buffer?: unknown }).B
 // full cascade in dependency order: getCanonicalLocales → Locale →
 // NumberFormat → PluralRules.
 //
-// Without these, even lazy `import('@mysten/sui/jsonRpc')` /
+// Without these, even lazy `import('@mysten/sui/graphql')` /
 // `import('@lifi/sdk')` crashes the first time the module is evaluated.
 import '@formatjs/intl-getcanonicallocales/polyfill.js'
 import '@formatjs/intl-locale/polyfill.js'
@@ -69,6 +69,22 @@ export {
   getCosmosAllowedFeeDenoms,
   isCosmosFeeDenomAllowed,
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
+
+// Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
+// "will this memo fit before broadcast rejects it with sdk code 12 (memo too
+// long) after the user has already signed?" Kept in parity with the root SDK
+// entrypoint (sdk#1538) so RN consumers don't hand-roll their own memo-cap table.
+export {
+  COSMOS_MEMO_DEFAULT_MAX_BYTES,
+  getCosmosMemoMaxBytes,
+  getCosmosMemoMaxBytesByChainId,
+  isCosmosMemoWithinCap,
+} from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
@@ -173,7 +189,7 @@ export type {
 //
 // These helpers work on RN because heavy chain clients (viem, xrpl,
 // @solana/web3.js, @ton/*, @polkadot/util-crypto, bitcoinjs-lib, @cosmjs/*,
-// @mysten/sui/jsonRpc, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
+// @mysten/sui/graphql, @lifi/sdk, @bufbuild/protobuf, cbor-x, i18next)
 // are externalized in rollup.platforms.config.js. Consumers must install
 // those they actually reach (or metro-stub the rest). `bip32` is inlined
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
@@ -345,6 +361,13 @@ export {
   resolve4ByteSelector,
   resolveEns,
 } from '../../tools/evm'
+
+// EVM chainId ↔ chain mapping. Same single source of truth exported from the
+// generic entry (src/index.ts) — the RN allow-list omitted these so RN
+// consumers (Station) had to hand-maintain their own chainId table, risking
+// the Hyperliquid 998/999 client↔server chainId drift class. Pure lookup
+// tables, no chain-client deps, so safe as a static re-export.
+export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
 // Gas / fee primitives (read-only — uses global `fetch` + a type-only
 // `UtxoChain` import, no heavy chain client). The RN allow-list omitted

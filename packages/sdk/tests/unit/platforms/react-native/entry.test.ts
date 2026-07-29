@@ -49,6 +49,32 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
+  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+  })
+
+  // sdk#1538 - the memo-cap family was already exported from the root SDK
+  // entrypoint but omitted from the RN allow-list, pushing mobile consumers
+  // toward local memo-cap tables. An over-long memo signs fine but gets
+  // rejected (or silently truncated by an intermediary) at broadcast, so
+  // drift here is a money/UX bug, not just a lint nit.
+  it('exports the canonical Cosmos memo-cap helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_MEMO_DEFAULT_MAX_BYTES).toBe(256)
+    expect(rn.getCosmosMemoMaxBytes(rn.Chain.Cosmos)).toBe(512)
+    expect(rn.getCosmosMemoMaxBytes(rn.Chain.Osmosis)).toBe(256)
+    expect(rn.getCosmosMemoMaxBytesByChainId('phoenix-1')).toBe(512)
+    expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(256))).toBe(true)
+    expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 
@@ -150,5 +176,14 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
 
     expect(typeof rn.ChainAmountParseError).toBe('function')
     expect(() => rn.toChainAmount('   ', 8)).toThrow(rn.ChainAmountParseError)
+  })
+
+  it('exports the EVM chainId helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getEvmChainId).toBe('function')
+    expect(typeof rn.getEvmChainByChainId).toBe('function')
+    expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
+    expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
   })
 })

@@ -153,6 +153,21 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
+  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+    expect(typeof sdk.getEvmChainId).toBe('function')
+    expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
+    expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+  })
+
+  it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
+    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)

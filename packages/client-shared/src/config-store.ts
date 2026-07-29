@@ -11,6 +11,12 @@ function getConfigDir(): string {
   return process.env.VULTISIG_CONFIG_DIR || path.join(os.homedir(), '.vultisig')
 }
 
+// Public form of the resolver above, for CLI state that must stay co-located
+// with the config store (version cache, vault state). Same call-time contract.
+export function getVultisigConfigDir(): string {
+  return getConfigDir()
+}
+
 function getConfigFilePath(): string {
   return path.join(getConfigDir(), 'config.json')
 }
