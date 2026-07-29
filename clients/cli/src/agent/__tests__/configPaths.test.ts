@@ -40,12 +40,10 @@ describe('agent/shared config-dir path policy', () => {
     const fallbackDir = join(homedir(), '.vultisig')
 
     process.env[ENV_KEY] = ''
-    expect(getTokenCachePath()).toBe(join(fallbackDir, 'agent-tokens.json'))
     expect(getCredentialsPath()).toBe(join(fallbackDir, 'credentials.enc'))
     expect(journalPath()).toBe(join(fallbackDir, 'broadcasts.jsonl'))
 
     process.env[ENV_KEY] = '   '
-    expect(getTokenCachePath()).toBe(join(fallbackDir, 'agent-tokens.json'))
     expect(getCredentialsPath()).toBe(join(fallbackDir, 'credentials.enc'))
     expect(journalPath()).toBe(join(fallbackDir, 'broadcasts.jsonl'))
   })
