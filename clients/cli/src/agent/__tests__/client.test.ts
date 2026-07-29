@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AgentErrorCode } from '../agentErrors'
-import { AgentClient, resolveHttpTimeoutMs } from '../client'
+import { ExitCode } from '../../core/errors'
+import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agentErrors'
+import { AgentClient, AgentStreamIdleTimeoutError, resolveHttpTimeoutMs, resolveSseIdleTimeoutMs } from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -250,6 +251,256 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onTextDelta).toHaveBeenNthCalledWith(2, 'world')
     expect(onTitle).toHaveBeenCalledWith('Greeting')
     expect(onMessage).toHaveBeenCalledTimes(1)
+  })
+
+  // H2 (review of #1305): unknown `data-*` kinds are FORWARD-COMPATIBLE by the
+  // backend's own V1 contract (`v1_wire_schema_test.go`) and some are emitted
+  // from a dynamic site — `V1Data(streamSurface, …)` over the mutable
+  // `genericCardSurfaces` map — that no static client list can track. Three
+  // enumeration passes each found types the last had missed. So a `data-*` card
+  // this CLI has no surface for is not drift: it is tolerated, quietly.
+  //
+  // The frames below are every UI-only card the two backends emit today (Go
+  // agent.go quick_actions/vault_required/diagnostics + the streamSurface cards;
+  // Go api/message.go checkout-wall; Mastra uiStream.ts agentStep) PLUS an
+  // invented surface no CLI list has ever heard of. The invented one is the
+  // point: under the old enumerate-everything design it stamped PROTOCOL_DRIFT
+  // on a successful turn, and no test could have caught it, because the whole
+  // failure mode is a surface that does not exist yet.
+  it('tolerates unknown data-* cards quietly, including surfaces no list knows about', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"data-usage","data":{"total_tokens":10}}\n\n',
+      'data: {"type":"data-quick_actions","data":{"quick_actions":[]}}\n\n',
+      'data: {"type":"data-vault_required","data":{"required":true}}\n\n',
+      'data: {"type":"data-diagnostics","data":{"trace":"x"}}\n\n',
+      'data: {"type":"data-checkout-wall","data":{"catalog":[]}}\n\n',
+      'data: {"type":"data-agentStep","id":"c1-0","data":{"status":"running"}}\n\n',
+      'data: {"type":"data-polymarket_markets","data":{"surface":"polymarket_markets"}}\n\n',
+      'data: {"type":"data-yield_opportunities","data":{"surface":"yield_opportunities"}}\n\n',
+      'data: {"type":"data-yield_position","data":{"surface":"yield_position"}}\n\n',
+      'data: {"type":"data-confirmation","data":{"required":true}}\n\n',
+      // A surface invented for this test — stands in for whatever the backend
+      // registers next. The CLI must not editorialise about it to machines.
+      'data: {"type":"data-surface_from_the_future","data":{"value":1}}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.finished).toBe(true)
+    expect(result.protocolWarnings).toEqual([])
+    // Tolerated ≠ hidden: a developer running --verbose still sees them.
+    expect(stderr).toHaveBeenCalledWith(
+      expect.stringContaining('[SSE] tolerated unknown data frame: data-surface_from_the_future')
+    )
+    // ...but a frame we route (data-usage → 'ignore') is not even that.
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('tolerated unknown data frame: data-usage'))
+  })
+
+  // A genuinely unexpected PROTOCOL-level frame (not a `data-*` card, so not
+  // covered by the forward-compat contract) is still recorded — but only under
+  // --verbose. PROTOCOL_DRIFT is a debug aid, not a machine contract: warning by
+  // default fires on healthy turns against a newer backend, and a detector that
+  // fires on ~every healthy turn is one automation learns to filter out.
+  it('records unknown non-data frames as drift only under verbose', async () => {
+    const frames = [
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"reasoning-delta","delta":"hmm"}\n\n',
+      'data: {"type":"reasoning-delta","delta":"hmm2"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ]
+
+    globalThis.fetch = mockFetchSSE([...frames])
+    const quiet = new AgentClient('http://example.com')
+    const quietResult = await quiet.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    expect(quietResult.protocolWarnings).toEqual([])
+
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    globalThis.fetch = mockFetchSSE([...frames])
+    const loud = new AgentClient('http://example.com')
+    loud.verbose = true
+    const loudResult = await loud.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    expect(loudResult.protocolWarnings).toEqual([
+      {
+        code: 'PROTOCOL_DRIFT',
+        message: 'Ignored 2 unknown SSE frames: reasoning-delta',
+        count: 2,
+        eventTypes: ['reasoning-delta'],
+      },
+    ])
+  })
+
+  // Frame `type` is backend-controlled and lands in the ask JSON envelope, so
+  // both the number of distinct types and each type's length stay bounded.
+  it('caps the distinct frame types recorded in a drift warning while keeping the count exact', async () => {
+    const frames = Array.from({ length: 25 }, (_, i) => `data: {"type":"junk-${i}"}\n\n`)
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      ...frames,
+      'data: {"type":"finish"}\n\n',
+    ])
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    const [warning] = result.protocolWarnings
+    expect(warning?.count).toBe(25)
+    expect(warning?.eventTypes).toHaveLength(10)
+  })
+
+  it('truncates an oversized frame type instead of echoing it whole', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      `data: {"type":"${'x'.repeat(500)}"}\n\n`,
+      'data: {"type":"finish"}\n\n',
+    ])
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    const [warning] = result.protocolWarnings
+    expect(warning?.eventTypes).toHaveLength(1)
+    expect(warning?.eventTypes[0]).toHaveLength(65)
+    expect(warning?.eventTypes[0]).toMatch(/…$/)
+  })
+
+  // H2, the dangerous half. `tool-output-error` is the backend's explicit tool
+  // FAILURE terminal (`V1ToolOutputError`, protocol_v1.go). Ignoring it is not a
+  // display gap: the call gets no terminal frame at all, so the tool never
+  // reports done, the turn records no failure, and — in the backend's own words
+  // — that "lets the LLM's same-turn prose claim success even though no action
+  // ever ran". It must land as a done/ok:false tool result, the same typed
+  // failure shape `tool-output-available` with an error payload produces.
+  it('surfaces tool-output-error as a failed tool result, not silence', async () => {
+    const onToolProgress = vi.fn()
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-available","toolCallId":"call-1","toolName":"execute_swap","input":{}}\n\n',
+      'data: {"type":"tool-output-error","toolCallId":"call-1","errorText":"swap builder timed out"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolProgress })
+
+    // toolName is resolved from the toolCallId cache — the frame carries only
+    // toolCallId + errorText, never a name.
+    expect(onToolProgress).toHaveBeenCalledWith('execute_swap', 'done', undefined, false)
+    // Not drift — it is a frame we now handle.
+    expect(result.protocolWarnings).toEqual([])
+  })
+
+  // Fund-safety: the error terminal reports status 'done', which is the same
+  // status that gates the tool-output→sign bridge. A FAILED tool must never
+  // produce a signable candidate.
+  it('never derives a signable candidate from a tool-output-error', async () => {
+    const onToolOutputTx = vi.fn()
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-available","toolCallId":"call-1","toolName":"execute_swap","input":{}}\n\n',
+      'data: {"type":"tool-output-error","toolCallId":"call-1","errorText":"boom"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, { onToolOutputTx })
+
+    expect(onToolOutputTx).not.toHaveBeenCalled()
+  })
+
+  // H2, the other dangerous half — and the sharpest one. The backend emits
+  // `text-replace` precisely when it has decided the prose it already streamed
+  // is WRONG and must be discarded (protocol_v1.go: a client "MUST locate the
+  // existing part with id==replaces and overwrite its text"). Ignoring it means
+  // `fullText` — which session.ts turns into `responseText`, the `response`
+  // field of `agent ask --output json` — keeps the RETRACTED claim. On current
+  // main this test's stream answers "I sent your 5 ETH." after the backend
+  // retracted exactly that sentence.
+  it('applies text-replace so the turn answers with the corrected text, not the retracted one', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"text-start","id":"t1"}\n\n',
+      'data: {"type":"text-delta","id":"t1","delta":"I sent your 5 ETH."}\n\n',
+      'data: {"type":"text-end","id":"t1"}\n\n',
+      'data: {"type":"text-replace","replaces":"t1","text":"I could not send your ETH."}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('I could not send your ETH.')
+    expect(result.protocolWarnings).toEqual([])
+  })
+
+  it('replaces only the retracted part, preserving surrounding parts and their order', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"text-delta","id":"t1","delta":"First. "}\n\n',
+      'data: {"type":"text-delta","id":"t2","delta":"WRONG."}\n\n',
+      'data: {"type":"text-delta","id":"t3","delta":" Last."}\n\n',
+      'data: {"type":"text-replace","replaces":"t2","text":"Right."}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('First. Right. Last.')
+  })
+
+  // Degrade safely, never half-apply. A stream whose deltas carried no `id`
+  // cannot be recomposed from parts without DROPPING that prose, so the
+  // replacement is declined and the text stands as streamed — something the
+  // backend actually said — rather than being partially rebuilt.
+  it('declines a text-replace it cannot apply rather than corrupting the text', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    globalThis.fetch = mockFetchSSE([
+      // Legacy/id-less delta: not attributable to a part.
+      'data: {"type":"text-delta","delta":"streamed prose"}\n\n',
+      'data: {"type":"text-replace","replaces":"t1","text":"correction"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    client.verbose = true
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('streamed prose')
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('[SSE] text-replace not applied'))
+  })
+
+  it('declines a text-replace targeting a part it never saw', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"text-delta","id":"t1","delta":"hello"}\n\n',
+      'data: {"type":"text-replace","replaces":"nonexistent","text":"correction"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.fullText).toBe('hello')
+  })
+
+  it('keeps start-step quiet instead of reporting it as drift', async () => {
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"start","messageId":"m-1"}\n\n',
+      'data: {"type":"start-step"}\n\n',
+      'data: {"type":"text-delta","id":"t1","delta":"hi"}\n\n',
+      'data: {"type":"finish-step"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    const client = new AgentClient('http://example.com')
+    const result = await client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    expect(result.protocolWarnings).toEqual([])
+    expect(result.fullText).toBe('hi')
   })
 
   it('derives tool_progress status from v1 frame type and resolves toolName via toolCallId cache', async () => {
@@ -832,6 +1083,151 @@ describe('AgentClient — request timeouts (headless-hang guard)', () => {
     expect(result.disconnected).toBe(false)
     expect(result.fullText).toBe('slow')
   })
+
+  it('rejects with a typed TIMEOUT when an established SSE stream stops producing frames', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(': keep-alive\n\n'))
+        // Deliberately never enqueue another frame or close.
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    await vi.advanceTimersByTimeAsync(49)
+
+    let settled = false
+    void pending.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    const error = await pending.catch((caught: unknown) => caught)
+    expect(error).toMatchObject({
+      name: 'AgentStreamIdleTimeoutError',
+      code: AgentErrorCode.TIMEOUT,
+    })
+    expect(error).toBeInstanceOf(AgentStreamIdleTimeoutError)
+    expect(normalizeAgentError(error)).toEqual({
+      code: AgentErrorCode.TIMEOUT,
+      message: 'SSE stream idle timeout after 50ms without progress',
+    })
+    expect(agentErrorCodeToExitCode(AgentErrorCode.TIMEOUT)).toBe(ExitCode.NETWORK)
+    vi.useRealTimers()
+  })
+
+  it('does not reset the SSE idle deadline on bare blank lines', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    const caught = pending.catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(40)
+    controller.enqueue(encoder.encode('\n'))
+    await Promise.resolve()
+    await vi.advanceTimersByTimeAsync(10)
+
+    await expect(caught).resolves.toBeInstanceOf(AgentStreamIdleTimeoutError)
+    vi.useRealTimers()
+  })
+
+  // H1 (review of #1305): the deadline exists to bound a HUNG BACKEND. Both
+  // backends heartbeat from a ticker that runs independently of turn progress
+  // (Go `internal/api/message.go` writes `": ping"` every 15s from a safego
+  // goroutine; Mastra `withSseHeartbeat(resp, 15_000)`), so a clock that
+  // keep-alives reset bounds only a dead transport — the wedged backend pings
+  // forever and `agent ask` hangs exactly as it did pre-#1305. This test
+  // replaces one that asserted the opposite (keep-alives DO reset), which
+  // encoded the defect as the contract.
+  it('bounds a heartbeating-but-wedged backend: keep-alives do not defer the deadline', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+        // The turn starts and produces real output, then the agent loop wedges
+        // and only the heartbeat goroutine keeps writing.
+        c.enqueue(encoder.encode('data: {"type":"text-delta","id":"t1","delta":"thinking"}\n\n'))
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+    const caught = pending.catch((error: unknown) => error)
+
+    // Pings at 40ms against a 50ms deadline — the real 15s/180s ratio is far
+    // wider, so this is a conservative stand-in for "heartbeating forever".
+    for (let i = 0; i < 3; i++) {
+      await vi.advanceTimersByTimeAsync(40)
+      // Once the deadline fires the reader is cancelled and the stream closes;
+      // stop pinging then, exactly as the real backend's heartbeat exits on a
+      // write error to a dead socket.
+      try {
+        controller.enqueue(encoder.encode(': ping\n\n'))
+      } catch {
+        break
+      }
+      await Promise.resolve()
+    }
+
+    await expect(caught).resolves.toBeInstanceOf(AgentStreamIdleTimeoutError)
+    vi.useRealTimers()
+  })
+
+  // The no-false-positive property the review verified must survive the change:
+  // a turn that is SLOW but genuinely progressing still resets the clock, since
+  // real data frames — unlike comments — prove the agent loop advanced.
+  it('does not time out a slow-but-progressing turn', async () => {
+    vi.useFakeTimers()
+    const encoder = new TextEncoder()
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        controller = c
+      },
+    })
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as typeof fetch
+
+    const client = new AgentClient('http://example.com', 60_000, 50)
+    const pending = client.sendMessageStream('c1', { public_key: 'pk', content: 'hi' }, {})
+
+    // 4 × 40ms = 160ms of wall clock, 3× the 50ms deadline — survived only
+    // because each frame is real progress.
+    for (let i = 0; i < 4; i++) {
+      await vi.advanceTimersByTimeAsync(40)
+      controller.enqueue(encoder.encode(`data: {"type":"text-delta","id":"t1","delta":"tick"}\n\n`))
+      await Promise.resolve()
+    }
+    controller.enqueue(encoder.encode('data: {"type":"finish"}\n\n'))
+    controller.close()
+
+    await expect(pending).resolves.toMatchObject({
+      finished: true,
+      disconnected: false,
+      fullText: 'ticktickticktick',
+    })
+    vi.useRealTimers()
+  })
 })
 
 describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
@@ -856,5 +1252,29 @@ describe('resolveHttpTimeoutMs (VULTISIG_HTTP_TIMEOUT_MS parsing)', () => {
   it.each(['', '   ', 'abc', '0', '-5', 'NaN', 'Infinity'])('falls back to the default for invalid value %j', val => {
     process.env.VULTISIG_HTTP_TIMEOUT_MS = val
     expect(resolveHttpTimeoutMs()).toBe(30_000)
+  })
+})
+
+describe('resolveSseIdleTimeoutMs (VULTISIG_SSE_IDLE_TIMEOUT_MS parsing)', () => {
+  const original = process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+  afterEach(() => {
+    if (original === undefined) delete process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+    else process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = original
+  })
+
+  // 180s, not the previous 60s: now that keep-alives no longer defer the
+  // deadline it measures real backend SILENCE, and a healthy turn is documented
+  // to be silent for up to ~150s (claudeRequestTimeout 90s + 60s MCP). It stays
+  // below the backend's own 5min agentTurnMaxDuration so a wedge is still bounded.
+  it('defaults to 180000ms, above the backend worst-case silent stretch', () => {
+    delete process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS
+    expect(resolveSseIdleTimeoutMs()).toBe(180_000)
+  })
+
+  it('honors a valid positive override and rejects disabling typos', () => {
+    process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = '90000'
+    expect(resolveSseIdleTimeoutMs()).toBe(90_000)
+    process.env.VULTISIG_SSE_IDLE_TIMEOUT_MS = '0'
+    expect(resolveSseIdleTimeoutMs()).toBe(180_000)
   })
 })

@@ -7,7 +7,7 @@ import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { getThorchainInboundAddress } from '../../../chains/cosmos/thor/getThorchainInboundAddress'
 import { getThorchainPools, ThorchainPoolSummary } from '../../../chains/cosmos/thor/lp/pools'
 import { toNativeSwapAsset } from '../asset/toNativeSwapAsset'
-import { NativeSwapChain, nativeSwapChainIds, nativeSwapEnabledChains } from '../NativeSwapChain'
+import { getNativeSwapChainId, NativeSwapChain, nativeSwapEnabledChains } from '../NativeSwapChain'
 
 /**
  * Multiplier applied to the destination chain's `outbound_fee` to derive the
@@ -130,7 +130,10 @@ export const getNativeSwapMinAmountIn = async (
       ;[inbound, pools] = await Promise.all([inboundCache.value, poolsCache.value])
     }
 
-    const destChainId = nativeSwapChainIds[to.chain]
+    const destChainId = getNativeSwapChainId(to.chain)
+    if (!destChainId) {
+      return null
+    }
     const destInfo = inbound.find(info => info.chain === destChainId)
     if (!destInfo) {
       return null
@@ -179,7 +182,10 @@ export const getNativeSwapMinAmountIn = async (
     // gas asset (1e8 thor units); convert into the `from` asset — identity when
     // `from` IS the gas asset, otherwise via the source gas-asset pool. Absent
     // source-chain inbound info or a zero threshold contributes nothing.
-    const fromChainId = nativeSwapChainIds[from.chain]
+    const fromChainId = getNativeSwapChainId(from.chain)
+    if (!fromChainId) {
+      return null
+    }
     const fromInfo = inbound.find(info => info.chain === fromChainId)
     const fromGasAssetId = `${fromChainId}.${chainFeeCoin[from.chain].ticker}`
     const dustThreshold = fromInfo ? Number(fromInfo.dust_threshold) : 0

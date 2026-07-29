@@ -1,4 +1,5 @@
 import { descriptions } from '@vultisig/client-shared'
+import { resolveChainReference } from '@vultisig/sdk'
 import * as z from 'zod/v4'
 
 import type { Vault } from './types.js'
@@ -30,8 +31,9 @@ async function wrapHandler<T>(fn: () => Promise<T>): Promise<ToolResult> {
   }
 }
 
+/** Resolve a chain reference within the vault's currently known chain set. */
 export function resolveChain(name: string, knownChains: readonly string[]): string {
-  const match = knownChains.find(c => c.toLowerCase() === name.toLowerCase())
+  const match = resolveChainReference(name, knownChains)
   if (!match) throw new Error(`Unknown chain "${name}". Use supported_chains or vault_info to see available chains.`)
   return match
 }

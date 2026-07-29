@@ -46,6 +46,7 @@ export const mapBlockchainSpecific = (bsRaw: any) => {
         sequence: numberOrUndefined(r.sequence),
         gas: numberOrUndefined(r.gas),
         lastLedgerSequence: numberOrUndefined(r.last_ledger_sequence ?? r.lastLedgerSequence),
+        destinationTag: numberOrUndefined(r.destination_tag ?? r.destinationTag),
       },
     }
   }

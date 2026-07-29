@@ -16,6 +16,8 @@ export type PrepareSendTxFromKeysParams = {
   receiver: string
   amount: bigint
   memo?: string
+  /** XRPL DestinationTag, independent from the transaction memo. */
+  destinationTag?: number
   feeSettings?: FeeSettings
 }
 
@@ -82,6 +84,7 @@ export const prepareSendTxFromKeys = async (
     receiver: params.receiver,
     amount: params.amount,
     memo: params.memo,
+    destinationTag: params.destinationTag,
     vaultId: identity.ecdsaPublicKey,
     localPartyId: identity.localPartyId,
     publicKey,

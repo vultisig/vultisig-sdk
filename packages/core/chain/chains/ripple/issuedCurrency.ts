@@ -113,9 +113,41 @@ export const formatIssuedCurrencyValue = (amount: bigint, decimals: number): str
 export const rippleIssuedCurrencyDecimals = 15
 
 /**
- * Curated XRPL issued tokens surfaced in the "open trust line" flow. Not wired
- * into `knownTokens` — issued-currency balances / asset-list display are handled
- * separately (vultisig-windows#4307 / vultisig-sdk#997).
+ * Parses an XRPL issued-currency value string (as returned by `account_lines`)
+ * into a base-unit bigint at {@link rippleIssuedCurrencyDecimals}. The inverse of
+ * {@link formatIssuedCurrencyValue}.
+ *
+ * The ledger may return scientific notation (e.g. `1e-8`) as well as plain
+ * decimals, and values are signed — a negative balance means the account is the
+ * issuer of the line rather than a holder of it.
+ *
+ * Fractional digits beyond our modelled precision are truncated, never rounded
+ * up, so a dust balance can never be inflated into a larger holding.
+ */
+export const parseIssuedCurrencyValue = (value: string): bigint => {
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(value.trim())
+  if (!match) {
+    throw new Error(`Invalid XRPL issued-currency value: "${value}"`)
+  }
+
+  const [, sign, intPart, fracPart = '', exponent = '0'] = match
+
+  // The literal is `digits * 10^(exponent - fracPart.length)`, so scaling it to
+  // base units shifts by that plus our modelled decimals. Shifting the digit
+  // string rather than round-tripping through a float keeps full precision.
+  const shift = Number(exponent) - fracPart.length + rippleIssuedCurrencyDecimals
+  const digits = BigInt(`${intPart}${fracPart}`)
+
+  const magnitude = shift >= 0 ? digits * 10n ** BigInt(shift) : digits / 10n ** BigInt(-shift)
+
+  return sign === '-' ? -magnitude : magnitude
+}
+
+/**
+ * Curated XRPL issued tokens, surfaced both in the "open trust line" flow and —
+ * via `knownTokens` — in the asset list. Trust lines the account already holds are
+ * discovered from the ledger by the Ripple coin finder; this list is what a user
+ * can pick before any trust line exists.
  */
 export const rippleKnownIssuedTokens: KnownCoin[] = [
   {

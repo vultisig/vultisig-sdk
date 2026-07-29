@@ -19,6 +19,7 @@ import { AccountCoinKey } from '../../../../coin/AccountCoin'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
 import { logUnenforcedAggregatorDestination } from '../../knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from './injectSolanaAtaIfMissing'
+import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from './lifiSlippage'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
   amount: bigint
@@ -31,31 +32,8 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { 
   slippage?: number
 }
 
-// Stable-pair detection: tickers that commonly trade within a tight peg.
-// DAI is included because on most DEXs DAI/USDC depth is comparable to
-// USDC/USDT and the 0.3% ceiling is still safe headroom for MPC latency.
-/** @internal exported for unit tests only */
-export const STABLE_TICKERS: ReadonlySet<string> = new Set([
-  'USDC',
-  'USDT',
-  'DAI',
-  'BUSD',
-  'TUSD',
-  'FRAX',
-  'USDP',
-  'GUSD',
-  'LUSD',
-  'USDD',
-  'FDUSD',
-  'PYUSD',
-])
-
-const isStableTicker = (ticker: string | undefined): boolean =>
-  ticker !== undefined && STABLE_TICKERS.has(ticker.toUpperCase())
-
-/** @internal exported for unit tests only */
-export const isStablePair = (from: { ticker?: string }, to: { ticker?: string }): boolean =>
-  isStableTicker(from.ticker) && isStableTicker(to.ticker)
+/** @internal re-exported for unit tests only — source of truth is ./lifiSlippage. */
+export { isStablePair, STABLE_TICKERS } from './lifiSlippage'
 
 /** Lazy bootstrap for callers that never invoked the public `setupLifi`
  * — uses whatever defaults sit on `lifiConfig` (vultisig-0 + no apiUrl
@@ -66,65 +44,10 @@ const ensureLifiConfigured = memoize(() => {
   setupLifi()
 })
 
-// Slippage tolerance baked into the LiFi-prebuilt swap tx. The
-// returned `transactionRequest.data` is a fully-formed Solana / EVM
-// transaction that encodes a minAmountOut floor at quote time —
-// the underlying AMM (Raydium / Orca / Meteora on Solana; Uniswap /
-// 1inch on EVM) reverts if simulation-time output drops below the
-// floor. Default LiFi slippage is 0.005 (0.5%), which is far too
-// tight for MPC-signed flows where the keysign ceremony adds
-// 30-90s of clock drift between quote and broadcast and the price
-// routinely moves more than 0.5% on volatile pairs (SOL/USDC,
-// SOL/anything memecoin). Production repro (2026-05-22):
-// SOL→USDC simulation failed with `-32002: custom program error:
-// 0x32` (Raydium AMM error 50 = AmountExceedsMaximum / slippage
-// exceeded). Bump to 1% — covers the typical ceremony drift while
-// staying well inside the user's pre-sign card's risk surface
-// (typical realised slippage on these aggregators is <0.1%, so
-// the 1% is a ceiling, not the expected price hit).
-//
-// EVM is less time-sensitive — the model dispatches and the user
-// signs in seconds, but the same 1% bump still helps cover block
-// time variance during mempool pending (~12s on ETH, ~2s on L2s).
-// On WalletConnect / injected signers the dapp typically re-fetches
-// the quote at MetaMask/Rainbow signing time, so quote staleness from
-// user pause on the pre-sign card is NOT the failure mode — block-
-// time variance during pending is. (NeOMakinG #513 round 1 CR
-// `should-fix` 1 — comment was misleading pre-fix.)
-//
-// **Cross-chain bridge+swap caveat (NeOMakinG #513 round 1
-// `preferably-blocking`).** This 1% slippage applies to the FINAL
-// destination amount only. LiFi cross-chain routes (Stargate, Across,
-// Hop + destination AMM swap) have TWO slippage points: (1) bridge
-// liquidity pool exit on the source chain, (2) destination AMM swap.
-// Intermediate bridge slippage is managed by bridge protocols' own
-// limits and is NOT covered by this 1% floor — so total realised
-// slippage on a SOL→ETH→USDC route could be 2-3% even when this
-// constant says "1%". Document the bridge cost explicitly to users
-// when surfacing cross-chain quote previews; don't rely on this
-// constant as the single source of truth for cross-chain slippage.
-//
-// Hoisted to module scope so the planned per-pair / per-call
-// override (forwarding `execute_swap.slippage_tolerance_percent`
-// through the resolver, tracked at vultisig/vultisig-sdk#NEW — TODO
-// open) lands as a clean diff rather than reshaping the function
-// body. Codex Round 1b review feedback (vultisig-sdk#513 r1).
-//
-// Two tiers (vultisig-sdk#524):
-// - stable pairs (USDC/USDT/DAI/...): 0.3% — well above typical
-//   concentrated-liquidity spread (0.02-0.05%) but avoids the 1%
-//   MEV surface on tight-peg operations.
-// - volatile pairs: 1% — covers MPC ceremony latency (30-90s) where
-//   price can move >0.5% on thin pairs. See full rationale above.
-const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
-const STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE = 0.003
-
-// Combined affiliate + slippage ceiling. Defensive guard so a high
-// affiliateBps + the 1% slippage don't silently combine into a >3%
-// effective cost on the user without anyone noticing. Logged-only,
-// not a hard reject — getQuote will still dispatch. NeOMakinG #513
-// round 1 `suggestion` 1.
-const MAX_COMBINED_COST_BPS = 300
+// Slippage tolerance (baked into the LiFi-prebuilt tx's minAmountOut floor) is resolved by
+// ./lifiSlippage — the shared source of truth for the two tiers + combined-cost ceiling, so the RN
+// override resolves it identically. See that module for the full rationale (MPC ceremony drift, the
+// stable/volatile split, and the cross-chain bridge-slippage caveat).
 
 // Resolve a LiFi fee-token `chainId` back to a Vultisig `LifiSwapEnabledChain`.
 //
@@ -167,9 +90,7 @@ export const getLifiSwapQuote = async ({
   const [fromToken, toToken] = [transfer.from, transfer.to].map(({ id, chain }) => id ?? chainFeeCoin[chain].ticker)
   const [fromAddress, toAddress] = [transfer.from, transfer.to].map(({ address }) => address)
 
-  const slippage =
-    slippageOverride ??
-    (isStablePair(transfer.from, transfer.to) ? STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE : DEFAULT_LIFI_SLIPPAGE_TOLERANCE)
+  const slippage = resolveLifiSlippage({ slippageOverride, from: transfer.from, to: transfer.to })
 
   // Defensive: log when affiliate + slippage combined cost crosses the
   // 3% ceiling. Today affiliateBps is typically 0 and slippage is 1%,
@@ -314,6 +235,21 @@ export const getLifiSwapQuote = async ({
           swapFee &&
           ([fromToken, toToken].find(token => token.toLowerCase() === swapFeeAddress) ||
             chainFeeCoin[transfer.from.chain].id)
+        // LI.FI `estimate.approvalAddress` is the address that will call
+        // `transferFrom` on the input ERC-20. It can differ from `to` (the
+        // Diamond / router) when an inner executor (e.g. 1inch
+        // AggregationExecutor) pulls the token directly. The field is always
+        // present in the LiFi API response (`Estimate.approvalAddress: string`)
+        // but may be the zero address or equal to `to` for native-token routes.
+        // Pass it through so mcp-ts (and other consumers) can approve the
+        // correct spender instead of the Diamond.
+        //
+        // On-chain proof: tx 0xa3aadf17 (Ethereum, block 25415989) reverted
+        // with "ERC20: transfer amount exceeds allowance". Vault had 9.41 USDC
+        // approved to Diamond (0x9025B8ff…, = `to`) — sufficient. Inner 1inch
+        // executor (0x7f51c134…, = `approvalAddress`) had zero allowance — the
+        // actual transferFrom caller → revert.
+        const approvalAddr = estimate.approvalAddress
         const evmTo = shouldBePresent(to)
         // AGG-02: LiFi routes through many different bridge/DEX contracts by design
         // (diamond routing, multi-hop, chain-specific deployments) — a hard allowlist
@@ -327,6 +263,12 @@ export const getLifiSwapQuote = async ({
             data: shouldBePresent(data),
             value: BigInt(shouldBePresent(value)).toString(),
             gasLimit: gasLimit ? BigInt(gasLimit) : undefined,
+            // Include approvalAddress when it is present and non-zero so the
+            // consumer can approve the right spender. Omit for the zero address
+            // (native-only routes) to avoid a spurious zero-address approval.
+            ...(approvalAddr && approvalAddr !== '0x0000000000000000000000000000000000000000'
+              ? { approvalAddress: approvalAddr }
+              : {}),
             ...(swapFee
               ? {
                   affiliateFee: {
