@@ -169,17 +169,62 @@ export const parseLimitSwapQueue = (body: unknown): LimitSwapQueueEntry[] | null
   return limitSwaps.map(parseEntry)
 }
 
+const PAGE_LIMIT = 100
+// Safety valve against a queue that never reports `has_next: false` — mirrors
+// getAllCosmosBalances's pattern. 100 orders/page * 50 pages = 5k orders, far
+// past any real sender's resting-order count.
+const MAX_PAGES = 50
+
+/** Whether the envelope says there is a further page beyond the one just read. */
+const hasNextPage = (body: unknown): boolean =>
+  isRecord(body) && isRecord(body.pagination) && body.pagination.has_next === true
+
 /**
  * Fetch the advanced-swap-queue's resting limit orders for a sender.
  *
  * Always scope to a sender: unfiltered, the endpoint returns every resting
- * order on the network. One call covers all of an address's orders, so a vault
- * polls once per source address in play, not once per order.
+ * order on the network.
+ *
+ * The endpoint is paginated (`pagination: { limit, has_next }`) and a sender
+ * with more than one page of resting orders would otherwise only ever see
+ * page 1 — an order resting on page 2 would read as "absent from the queue",
+ * which callers treat as the order having left and closed. This walks pages
+ * while `has_next` is true, deduped by `txId` (the identity orders are
+ * matched on) as a defensive no-op if a retried page repeats entries.
  *
  * Failures propagate — a fetch or parse error is "no information", and the
- * caller keeps its orders resting rather than concluding anything from it.
+ * caller keeps its orders resting rather than concluding anything from it. An
+ * unrecognised envelope on the FIRST page is the same "no information" `null`
+ * as a single-page fetch; on a later page it only means we can't confirm
+ * anything past what we already collected, so those entries are kept rather
+ * than discarded.
  */
 export const getLimitSwapQueue = async (sender: string): Promise<LimitSwapQueueEntry[] | null> => {
-  const body = await queryUrl<unknown>(`${limitSwapQueueApi}?sender=${encodeURIComponent(sender)}`)
-  return parseLimitSwapQueue(body)
+  const entries: LimitSwapQueueEntry[] = []
+  const seenTxIds = new Set<string>()
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      sender,
+      'pagination.limit': String(PAGE_LIMIT),
+      'pagination.offset': String(page * PAGE_LIMIT),
+    })
+    const body = await queryUrl<unknown>(`${limitSwapQueueApi}?${params.toString()}`)
+    const parsed = parseLimitSwapQueue(body)
+
+    if (parsed === null) {
+      if (page === 0) return null
+      break
+    }
+
+    for (const entry of parsed) {
+      if (seenTxIds.has(entry.txId)) continue
+      seenTxIds.add(entry.txId)
+      entries.push(entry)
+    }
+
+    if (!hasNextPage(body)) break
+  }
+
+  return entries
 }

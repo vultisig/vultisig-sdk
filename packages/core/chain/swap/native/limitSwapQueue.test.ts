@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { parseLimitSwapQueue } from './limitSwapQueue'
+vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({ queryUrl: vi.fn() }))
+
+import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+
+import { getLimitSwapQueue, parseLimitSwapQueue } from './limitSwapQueue'
 
 /** The populated shape as observed live on mainnet: object envelope, string numerics. */
 const liveEntry = {
@@ -104,5 +108,78 @@ describe('parseLimitSwapQueue', () => {
     expect(entry.deposit).toBeUndefined()
     expect(entry.tradeTarget).toBeUndefined()
     expect(entry.timeToExpiryBlocks).toBeUndefined()
+  })
+})
+
+describe('getLimitSwapQueue', () => {
+  beforeEach(() => vi.mocked(queryUrl).mockReset())
+
+  // A sender with more than one page of resting orders must not have page 2's
+  // orders silently dropped — an order resting on page 2 would otherwise read
+  // as "absent from the queue", which callers treat as the order having
+  // closed.
+  it('walks pages while pagination.has_next is true and concatenates results', async () => {
+    vi.mocked(queryUrl)
+      .mockResolvedValueOnce({
+        limit_swaps: [{ swap: { tx: { id: 'A' } } }],
+        pagination: { limit: '100', has_next: true },
+      } as never)
+      .mockResolvedValueOnce({
+        limit_swaps: [{ swap: { tx: { id: 'B' } } }],
+        pagination: { limit: '100', has_next: false },
+      } as never)
+
+    const res = await getLimitSwapQueue('thor1abc')
+
+    expect(res?.map(entry => entry.txId)).toEqual(['A', 'B'])
+    expect(vi.mocked(queryUrl)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(queryUrl).mock.calls[0]?.[0]).toContain('pagination.offset=0')
+    expect(vi.mocked(queryUrl).mock.calls[1]?.[0]).toContain('pagination.offset=100')
+  })
+
+  it('stops after one page when has_next is false', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({
+      limit_swaps: [{ swap: { tx: { id: 'A' } } }],
+      pagination: { limit: '100', has_next: false },
+    } as never)
+
+    const res = await getLimitSwapQueue('thor1abc')
+
+    expect(res).toHaveLength(1)
+    expect(vi.mocked(queryUrl)).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats an absent limit_swaps key on the first page as no information, not an empty queue', async () => {
+    vi.mocked(queryUrl).mockResolvedValueOnce({} as never)
+
+    const res = await getLimitSwapQueue('thor1abc')
+
+    expect(res).toBeNull()
+  })
+
+  it('keeps already-collected entries when a later page is unrecognised, rather than discarding them', async () => {
+    vi.mocked(queryUrl)
+      .mockResolvedValueOnce({
+        limit_swaps: [{ swap: { tx: { id: 'A' } } }],
+        pagination: { limit: '100', has_next: true },
+      } as never)
+      .mockResolvedValueOnce({} as never)
+
+    const res = await getLimitSwapQueue('thor1abc')
+
+    expect(res?.map(entry => entry.txId)).toEqual(['A'])
+  })
+
+  it('caps the page walk so a never-false has_next cannot loop forever', async () => {
+    vi.mocked(queryUrl).mockResolvedValue({
+      limit_swaps: [{ swap: { tx: { id: 'X' } } }],
+      pagination: { limit: '100', has_next: true },
+    } as never)
+
+    const res = await getLimitSwapQueue('thor1abc')
+
+    // MAX_PAGES = 50, deduped down to the one repeated txId.
+    expect(vi.mocked(queryUrl)).toHaveBeenCalledTimes(50)
+    expect(res).toHaveLength(1)
   })
 })
