@@ -11,6 +11,32 @@ export type ThorchainTxResult = {
   rawLog: string
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * Parse a `/cosmos/tx/v1beta1/txs/{hash}` body into a result, or `null` for
+ * anything that isn't one.
+ *
+ * The code must be a non-negative safe integer — cosmos ABCI codes are uint32.
+ * `typeof === 'number'` alone would let a malformed body's `-1`, `0.5` or `NaN`
+ * through, and since callers read any nonzero code as a rejection, garbage
+ * would surface as a verdict instead of as "no information".
+ */
+export const parseThorchainTxResult = (body: unknown): ThorchainTxResult | null => {
+  if (!isRecord(body) || !isRecord(body.tx_response)) {
+    return null
+  }
+  const { code, raw_log } = body.tx_response
+  if (typeof code !== 'number' || !Number.isSafeInteger(code) || code < 0) {
+    return null
+  }
+  return {
+    code,
+    rawLog: typeof raw_log === 'string' ? raw_log : '',
+  }
+}
+
 /**
  * A broadcast transaction's RESULT — its `code` and `raw_log` — from
  * `/cosmos/tx/v1beta1/txs/{hash}`.
@@ -27,18 +53,10 @@ export type ThorchainTxResult = {
  */
 export const getThorchainTxResult = (txHash: string): Promise<ThorchainTxResult | null> =>
   withFallback(
-    attempt(async (): Promise<ThorchainTxResult | null> => {
-      const body = await queryUrl<{ tx_response?: { code?: unknown; raw_log?: unknown } }>(
-        `${cosmosRpcUrl[Chain.THORChain]}/cosmos/tx/v1beta1/txs/${encodeURIComponent(txHash)}`
+    attempt(async () =>
+      parseThorchainTxResult(
+        await queryUrl<unknown>(`${cosmosRpcUrl[Chain.THORChain]}/cosmos/tx/v1beta1/txs/${encodeURIComponent(txHash)}`)
       )
-      const response = body.tx_response
-      if (!response || typeof response.code !== 'number') {
-        return null
-      }
-      return {
-        code: response.code,
-        rawLog: typeof response.raw_log === 'string' ? response.raw_log : '',
-      }
-    }),
+    ),
     null
   )

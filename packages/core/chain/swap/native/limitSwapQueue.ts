@@ -118,9 +118,14 @@ const parseEntry = (value: unknown): LimitSwapQueueEntry => {
   const coins = Array.isArray(tx.coins) ? tx.coins : []
   const sourceCoin = isRecord(coins[0]) ? coins[0] : undefined
 
-  const failedSwapReasons = Array.isArray(state?.failed_swap_reasons)
-    ? state.failed_swap_reasons.filter((reason): reason is string => typeof reason === 'string')
-    : []
+  // Absent is an empty list; present-but-malformed throws like every other
+  // field. Silently dropping entries would report "no missed attempts" on the
+  // strength of data we didn't understand.
+  const rawReasons = state?.failed_swap_reasons ?? []
+  if (!Array.isArray(rawReasons) || !rawReasons.every((reason): reason is string => typeof reason === 'string')) {
+    throw new Error('limit swap queue: state.failed_swap_reasons is not a string array')
+  }
+  const failedSwapReasons = rawReasons
 
   return {
     txId: tx.id,

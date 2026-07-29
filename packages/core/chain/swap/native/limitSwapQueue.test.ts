@@ -77,6 +77,14 @@ describe('parseLimitSwapQueue', () => {
     ['an entry with no tx id', { limit_swaps: [{ swap: { tx: {} } }] }],
     ['a non-integer amount', { limit_swaps: [{ swap: { tx: { id: 'AB' }, trade_target: '1.5' } }] }],
     ['an undecodable asset', { limit_swaps: [{ swap: { tx: { id: 'AB' }, target_asset: 42 } }] }],
+    [
+      'non-array failed_swap_reasons',
+      { limit_swaps: [{ swap: { tx: { id: 'AB' }, state: { failed_swap_reasons: 'oops' } } }] },
+    ],
+    [
+      'non-string entries in failed_swap_reasons',
+      { limit_swaps: [{ swap: { tx: { id: 'AB' }, state: { failed_swap_reasons: [42] } } }] },
+    ],
   ])('throws on %s rather than guessing', (_label, body) => {
     expect(() => parseLimitSwapQueue(body)).toThrow()
   })
