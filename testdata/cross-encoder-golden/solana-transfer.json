@@ -1,0 +1,10 @@
+{
+  "_description": "Shared Layer-1 (WalletCore/WASM, packages/core) / Layer-2 (RN-JS, packages/sdk) golden vector for a Solana SystemProgram transfer. Read via a plain readFileSync (not an import) by packages/core/mpc/tx/compile/compileTx.golden.test.ts AND packages/sdk/tests/unit/platforms/react-native/tx-builder-golden-vectors.test.ts, since packages/sdk does not depend on packages/core and a file read sidesteps the workspace dependency graph entirely. This is the SINGLE source of truth for this fixture - do not duplicate these values as literals in either test file.",
+  "senderPrivateKeyHex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "_derivedNote": "senderAddress below is deterministically derived from senderPrivateKeyHex via WalletCore.AnyAddress.createWithPublicKey (ed25519). packages/core's suite re-derives it fresh via its own already-loaded WalletCore/WASM instance (proving live agreement every run); packages/sdk's unit suite reads it directly here instead, to avoid adding a WASM wallet-core dependency to an otherwise pure-JS/fast unit test file. Anyone can independently re-verify this field from the private key above.",
+  "senderAddress": "AKnL4NNf3DGWZJS6cPknBuEGnVsV4A4m5tgebLHaRSZ9",
+  "recipientAddress": "GogodXVKU6KfeZiSR9oybanGGZXRuQ34ogb2i3f3WvYi",
+  "recentBlockhash": "44jzmJEahEFTHexSNLkLfXXXyKggtpT2jJuJ3hdCBbsB",
+  "lamports": "123456789",
+  "expectedMessageHex": "010001038a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cead507107acfc90d38c835bfbbfa61879ff12ea1b1640abb08b90dcb2eb4320b00000000000000000000000000000000000000000000000000000000000000002d886b3a1d282bef2fd4ac76de74b2c9a4cf7b07c02121f68e2689698bf555e601020200010c0200000015cd5b0700000000"
+}

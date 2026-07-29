@@ -140,6 +140,9 @@ function hexToBytes(hex: string): Uint8Array {
   if (clean.length % 2 !== 0) {
     throw new Error(`invalid hex length: ${clean.length}`)
   }
+  if (!/^[0-9a-fA-F]+$/.test(clean)) {
+    throw new Error('invalid hex: non-hex characters in input')
+  }
   const out = new Uint8Array(clean.length / 2)
   for (let i = 0; i < out.length; i++) {
     out[i] = parseInt(clean.substring(i * 2, i * 2 + 2), 16)

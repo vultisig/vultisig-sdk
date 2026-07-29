@@ -8,6 +8,9 @@ const EVM_TX_HASH = '0x9f8c2b1a4d3e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7081
 const THOR_TX_HASH_NO_PREFIX = 'F1E2D3C4B5A6978869DECABFE1F2A3B4C5D6E7F8091A2B3C4D5E6F708192A3B4'
 const MAYA_TX_HASH_NO_PREFIX = '0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF'
 const SOL_TX_HASH = '5sN4Gd1cYpkqXf9PJ2vk3aHe8mLZbT9rsQwYjVtNcXkA6zBeLgFmHqWdYbCnRsVtUxKpJ8MzTwQhPgRfNlEd'
+// 56-byte CoW order UID: 32-byte digest + 20-byte owner + 4-byte validTo.
+const COW_ORDER_UID =
+  '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
 
 describe('getSwapExplorerUrl', () => {
   describe('li.fi', () => {
@@ -94,7 +97,7 @@ describe('getSwapExplorerUrl', () => {
     })
   })
 
-  describe('aggregators without a per-tx scanner', () => {
+  describe('provider scanners and fallbacks', () => {
     it('1inch falls back to the source-chain block explorer', () => {
       expect(
         getSwapExplorerUrl({
@@ -123,14 +126,54 @@ describe('getSwapExplorerUrl', () => {
       ).toBe(`https://basescan.org/tx/${EVM_TX_HASH}`)
     })
 
-    it('swapkit falls back to the source-chain block explorer', () => {
+    it('swapkit routes to the public tracker and preserves the raw hash', () => {
       expect(
         getSwapExplorerUrl({
           provider: 'swapkit',
           txHash: SOL_TX_HASH,
           fromChain: Chain.Solana,
         })
-      ).toBe(`https://solscan.io/tx/${SOL_TX_HASH}`)
+      ).toBe(`https://track.swapkit.dev/?hash=${SOL_TX_HASH}&chainId=solana`)
+    })
+
+    it('swapkit falls back to the source-chain block explorer when unmapped', () => {
+      expect(
+        getSwapExplorerUrl({
+          provider: 'swapkit',
+          txHash: EVM_TX_HASH,
+          fromChain: Chain.Polkadot,
+        })
+      ).toContain(EVM_TX_HASH)
+    })
+
+    it('cowswap routes order UIDs to CoW Explorer', () => {
+      expect(
+        getSwapExplorerUrl({
+          provider: 'cowswap',
+          txHash: COW_ORDER_UID,
+          fromChain: Chain.Ethereum,
+        })
+      ).toBe(`https://explorer.cow.fi/orders/${COW_ORDER_UID}`)
+    })
+
+    it('uses the CoW network segment for a supported non-mainnet chain', () => {
+      expect(
+        getSwapExplorerUrl({
+          provider: 'cowswap',
+          txHash: COW_ORDER_UID,
+          fromChain: Chain.Base,
+        })
+      ).toBe(`https://explorer.cow.fi/base/orders/${COW_ORDER_UID}`)
+    })
+
+    it('rejects an unsupported CoW chain for untyped JavaScript callers', () => {
+      expect(() =>
+        getSwapExplorerUrl({
+          provider: 'cowswap',
+          txHash: COW_ORDER_UID,
+          fromChain: Chain.Polygon,
+        })
+      ).toThrow('CowSwap explorer URL is not supported for chain: Polygon')
     })
 
     it('jupiter falls back to the Solana block explorer', () => {
@@ -146,7 +189,7 @@ describe('getSwapExplorerUrl', () => {
 
   it('exposes every provider via swapExplorerProviders', () => {
     expect([...swapExplorerProviders].sort()).toEqual(
-      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'jupiter', 'thorchain'].sort()
+      ['1inch', 'kyber', 'li.fi', 'mayachain', 'swapkit', 'cowswap', 'jupiter', 'thorchain'].sort()
     )
   })
 })

@@ -110,4 +110,12 @@ describe('authenticateVault — MPC signing retry classification', () => {
     expect(signBytes).toHaveBeenCalledTimes(1)
     expect(client.authenticate).not.toHaveBeenCalled()
   })
+
+  it('fails closed when MPC signing omits the recovery id', async () => {
+    const signBytes = vi.fn().mockResolvedValue({ signature: rawSig.signature })
+    const client = { authenticate: vi.fn() } as any
+
+    await expect(authenticateVault(client, makeVault(signBytes), undefined, 1)).rejects.toThrow(/recovery id/)
+    expect(client.authenticate).not.toHaveBeenCalled()
+  })
 })

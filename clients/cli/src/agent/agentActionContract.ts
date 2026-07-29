@@ -16,7 +16,6 @@ export const DOCUMENTED_AGENT_ACTION_TYPES = [
   'get_address_book',
   'get_balances',
   'get_market_price',
-  'get_portfolio',
   'list_vaults',
   'read_evm_contract',
   'scan_tx',

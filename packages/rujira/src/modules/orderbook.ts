@@ -12,6 +12,7 @@ import { RujiraError, RujiraErrorCode } from '../errors.js'
 import type {
   ContractSide,
   FinExecuteMsg,
+  FinOrderExecuteMsg,
   FinQueryMsg,
   LimitOrderParams,
   Order,
@@ -176,7 +177,11 @@ export class RujiraOrderbook {
 
     // Convert SDK side to contract's Side enum format
     const contractSide = toContractSide(params.side)
-    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
+    // OrderTarget[2] is the target OFFER amount and must equal the attached
+    // funds — see calculateOfferAmount() for why that is not params.amount
+    // on a buy.
+    const offerAmount = this.calculateOfferAmount(params)
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, offerAmount]
 
     const msg: FinExecuteMsg = {
       order: [[orderTarget], null],
@@ -185,7 +190,7 @@ export class RujiraOrderbook {
     const funds: Coin[] = [
       {
         denom: assetInfo.denom,
-        amount: this.calculateOfferAmount(params),
+        amount: offerAmount,
       },
     ]
 
@@ -237,7 +242,7 @@ export class RujiraOrderbook {
    */
   async buildPlaceOrder(params: LimitOrderParams): Promise<{
     contractAddress: string
-    msg: FinExecuteMsg
+    msg: FinOrderExecuteMsg
     funds: Coin[]
   }> {
     this.validateOrderParams(params)
@@ -252,13 +257,17 @@ export class RujiraOrderbook {
     }
 
     const contractSide = toContractSide(params.side)
-    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, params.amount]
+    // OrderTarget[2] is the target OFFER amount and must equal the attached
+    // funds — see calculateOfferAmount() for why that is not params.amount
+    // on a buy.
+    const offerAmount = this.calculateOfferAmount(params)
+    const orderTarget: OrderTarget = [contractSide, { fixed: params.price }, offerAmount]
 
-    const msg: FinExecuteMsg = {
+    const msg: FinOrderExecuteMsg = {
       order: [[orderTarget], null],
     }
 
-    const funds: Coin[] = [{ denom: assetInfo.denom, amount: this.calculateOfferAmount(params) }]
+    const funds: Coin[] = [{ denom: assetInfo.denom, amount: offerAmount }]
 
     return { contractAddress, msg, funds }
   }
@@ -477,6 +486,15 @@ export class RujiraOrderbook {
     return config.base ? getAssetInfo(config.base) : undefined
   }
 
+  /**
+   * The amount of the OFFERED asset an order escrows.
+   *
+   * `params.amount` is the BASE quantity for both sides, so a sell offers it
+   * directly while a buy offers `amount x price` of the quote asset. FIN's
+   * `OrderTarget` is documented as "target offer amounts", and the contract
+   * requires "funds sent must be equal to the net change of balances" — so
+   * this single value belongs in BOTH the order msg and the attached funds.
+   */
   private calculateOfferAmount(params: LimitOrderParams): string {
     if (params.side === 'buy') {
       const amount = Big(params.amount)
