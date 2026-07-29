@@ -8,7 +8,6 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { getCoinValue } from '@vultisig/core-chain/coin/utils/getCoinValue'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { getTxStatus as coreTxStatus } from '@vultisig/core-chain/tx/status'
@@ -78,6 +77,7 @@ import { TokenDiscoveryService } from './services/TokenDiscoveryService'
 import { TransactionBuilder } from './services/TransactionBuilder'
 // Swap types
 import type { SwapPrepareResult, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
+import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
 import { VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -956,10 +956,15 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
   // ===== BALANCE METHODS =====
 
   /**
-   * Get balance for chain (with optional token)
+   * Get balance for chain (with optional token).
+   *
+   * `tokenId` is a token ref: a symbol (`USDC`), a contract address, or a vault
+   * token id — the same values `send()`/`swap()` accept. It is resolved through
+   * `resolveTokenRefId` before it reaches the RPC layer, which needs the
+   * contract address; an unrecognised ref is passed through untouched.
    */
   async balance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.getBalance(chain, tokenId)
+    return this.balanceService.getBalance(chain, resolveTokenRefId(chain, tokenId, this.getTokens(chain)))
   }
 
   /**
@@ -1022,7 +1027,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * Force refresh balance (clear cache)
    */
   async updateBalance(chain: Chain, tokenId?: string): Promise<Balance> {
-    return this.balanceService.updateBalance(chain, tokenId)
+    return this.balanceService.updateBalance(chain, resolveTokenRefId(chain, tokenId, this.getTokens(chain)))
   }
 
   /**
@@ -1761,10 +1766,20 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         memo,
         destinationTag,
       })
+      // The network fee is always paid in the chain's native asset, never in the
+      // token being sent. Formatting it with the token's decimals (and adding it
+      // to the token amount) produced a nonsense quote for every token send —
+      // USDC's 6 decimals applied to a wei-denominated gas fee reads as hundreds
+      // of millions of USDC, and `total` then failed any balance comparison.
+      const native = chainFeeCoin[chain]
+      const isTokenSend = Boolean(tokenInfo.contractAddress)
       return {
         dryRun: true,
-        fee: this.formatUnits(fee, tokenInfo.decimals),
-        total: this.formatUnits(amountBigInt + fee, tokenInfo.decimals),
+        fee: this.formatUnits(fee, isTokenSend ? native.decimals : tokenInfo.decimals),
+        feeSymbol: native.ticker,
+        // Denominated in the asset being sent, so it is directly comparable to
+        // that asset's balance. Only a native send debits the fee from it.
+        total: this.formatUnits(isTokenSend ? amountBigInt : amountBigInt + fee, tokenInfo.decimals),
         keysignPayload,
       }
     }
@@ -1972,27 +1987,13 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     }
   }
 
-  private resolveTokenInfo(
-    chain: Chain,
-    symbol?: string
-  ): { ticker: string; decimals: number; contractAddress?: string } {
-    const native = chainFeeCoin[chain]
-    if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase())
-      return { ticker: native.ticker, decimals: native.decimals }
-
-    // 1. User's configured tokens
-    const token = this.getTokens(chain).find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
-    if (token)
-      return { ticker: token.symbol, decimals: token.decimals, contractAddress: token.contractAddress || token.id }
-
-    // 2. Well-known token registry (no network call)
-    const known = (knownTokens[chain] ?? []).find(t => t.ticker.toUpperCase() === symbol.toUpperCase())
-    if (known) return { ticker: known.ticker, decimals: known.decimals, contractAddress: known.id }
-
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() or use a well-known token symbol.`
-    )
+  /**
+   * Resolve a token ref (symbol, well-known ticker, contract address or vault
+   * token id) for the transaction paths. See `tokenRef.ts` — `balance()` uses
+   * the same resolution so the two cannot disagree about what a ref means.
+   */
+  private resolveTokenInfo(chain: Chain, symbol?: string): ResolvedTokenInfo {
+    return resolveTokenRef(chain, symbol, this.getTokens(chain))
   }
 
   private parseAmount(amount: string, decimals: number): bigint {
