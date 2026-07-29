@@ -223,6 +223,11 @@ export {
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -432,6 +437,28 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+
+// THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
+// `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
+// initiator or a co-signer reviewing a payload it did not build — reads an
+// order's true terms. Terms decoded from the memo cannot disagree with what
+// gets signed; a display field carried alongside it can.
+export type {
+  LimitSwapExpiryHours,
+  LimitSwapMemoInput,
+  ParsedLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export {
+  assertLimitSwapMemo,
+  buildLimitSwapMemo,
+  getLimitSwapIntervalBlocks,
+  getLimitSwapLimitAmount,
+  limitSwapExpiryHours,
+  limitSwapMemoPrefix,
+  parseLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
+export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'

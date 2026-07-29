@@ -3,6 +3,7 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
@@ -274,29 +275,43 @@ export class BalanceService {
    * @param chain Chain to add token to
    * @param token Token to add
    *
-   * @important ATOMICITY WARNING: This method currently mutates state before
-   * calling saveVault(). It is SAFE because there is no async validation
-   * between mutation and save. However, if you add ANY async validation
-   * (e.g., checking token contract existence on-chain), you MUST move that
-   * validation BEFORE the state mutation to prevent partial state corruption.
-   * See addChain() in PreferencesService for the correct pattern.
+   * @important ATOMICITY: `getAllTokens()` hands back live vault state, so the
+   * new token is applied as a fresh record/array rather than pushed in place —
+   * that keeps the pre-add state intact as a rollback target. If saveVault()
+   * fails the previous state is restored and the error rethrown, matching
+   * removeToken(). Any async validation you add must still run BEFORE the state
+   * is applied; see addChain() in PreferencesService for the same pattern.
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     const allTokens = this.getAllTokens()
+    const chainTokens = allTokens[chain] ?? []
 
-    if (!allTokens[chain]) {
-      allTokens[chain] = []
-    }
+    // Canonicalise the id (and matching contractAddress) before the token enters
+    // persisted state, so a manually added token — e.g. a Ripple issued currency
+    // entered by its human ticker `RLUSD.<issuer>` — dedupes against the on-ledger
+    // id discovery stores (`524C…<issuer>`) instead of being kept as a second,
+    // distinct token. A no-op for chains whose ids are already canonical.
+    const id = normalizeTokenId({ chain, id: token.id })
+    const normalizedToken: Token =
+      token.contractAddress === undefined
+        ? { ...token, id }
+        : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
 
     // Check if token already exists
-    if (!allTokens[chain].find(t => t.id === token.id)) {
-      // State mutation - SAFE only because no async validation follows
-      allTokens[chain].push(token)
-      this.setAllTokens(allTokens)
-      await this.saveVault()
+    if (!chainTokens.find(t => t.id === normalizedToken.id)) {
+      this.setAllTokens({ ...allTokens, [chain]: [...chainTokens, normalizedToken] })
+
+      try {
+        await this.saveVault()
+      } catch (error) {
+        // Persistence failed — drop the optimistic add so a later successful
+        // save can't quietly persist a token the caller was told failed.
+        this.setAllTokens(allTokens)
+        throw error
+      }
 
       // Emit token added event
-      this.emitTokenAdded({ chain, token })
+      this.emitTokenAdded({ chain, token: normalizedToken })
     }
   }
 
@@ -310,15 +325,19 @@ export class BalanceService {
   async removeToken(chain: Chain, tokenId: string): Promise<void> {
     const allTokens = this.getAllTokens()
 
+    // Match the canonical id addToken persisted, so a raw id — e.g. a Ripple
+    // human-ticker `RLUSD.<issuer>` — still removes the stored token.
+    const id = normalizeTokenId({ chain, id: tokenId })
+
     if (allTokens[chain]) {
-      const tokenExists = allTokens[chain].some(t => t.id === tokenId)
+      const tokenExists = allTokens[chain].some(t => t.id === id)
 
       if (tokenExists) {
         // Store original state for rollback
         const originalTokens = { ...allTokens }
 
         // Optimistically remove token
-        allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
+        allTokens[chain] = allTokens[chain].filter(t => t.id !== id)
         this.setAllTokens(allTokens)
 
         try {
@@ -326,7 +345,7 @@ export class BalanceService {
           await this.saveVault()
 
           // Emit token removed event only after successful save
-          this.emitTokenRemoved({ chain, tokenId })
+          this.emitTokenRemoved({ chain, tokenId: id })
         } catch (error) {
           // Rollback on failure to maintain consistency
           this.setAllTokens(originalTokens)

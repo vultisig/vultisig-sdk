@@ -49,6 +49,16 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
   })
 
+  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+  })
+
   // sdk#1538 - the memo-cap family was already exported from the root SDK
   // entrypoint but omitted from the RN allow-list, pushing mobile consumers
   // toward local memo-cap tables. An over-long memo signs fine but gets
