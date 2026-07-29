@@ -13,6 +13,7 @@ const fileStorageBlocks = typescriptBlocks.filter(block => /new FileStorage\(/.t
 
 describe('SDK users guide storage contract', () => {
   it('uses platform defaults unless custom storage is required', () => {
+    expect(guide).toContain('Storage is optional; omit it to use the persistent platform default.')
     expect(guide).not.toContain('storage: new FileStorage()')
   })
 
@@ -37,7 +38,9 @@ describe('SDK users guide storage contract', () => {
   })
 
   it('constructs the documented Node storage configuration', () => {
-    const storage = new FileStorage({ basePath: '/tmp/vultisig-sdk-users-guide-contract' })
+    const storage = new FileStorage({
+      basePath: '/tmp/vultisig-sdk-users-guide-contract',
+    })
     const sdk = new Vultisig({ storage })
 
     expect(storage.basePath).toBe('/tmp/vultisig-sdk-users-guide-contract')
