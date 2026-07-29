@@ -51,9 +51,9 @@ const EVM_CHAINS = new Set<string>([
 // Public RPC endpoints for refreshing gas estimates before signing.
 // Used as fallback to ensure maxFeePerGas covers current base fee.
 const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://eth.llamarpc.com',
+  Ethereum: 'https://ethereum-rpc.publicnode.com',
   BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-rpc.com',
+  Polygon: 'https://polygon-bor-rpc.publicnode.com',
   Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
   Arbitrum: 'https://arb1.arbitrum.io/rpc',
   Optimism: 'https://mainnet.optimism.io',
@@ -1540,6 +1540,9 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
+      if (!res.ok || data.error || !data.result?.baseFeePerGas) {
+        throw new Error(`Failed to fetch current base fee for ${chain}`)
+      }
       const baseFee = BigInt(data.result?.baseFeePerGas || '0')
       if (baseFee === 0n) return
 
@@ -1560,7 +1563,9 @@ export class AgentExecutor {
       }
     } catch {
       // Non-fatal — keep the original gas estimate
-      if (this.verbose) process.stderr.write(`[gas] Failed to refresh base fee for ${chain}, keeping original\n`)
+      process.stderr.write(
+        `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
+      )
     }
   }
 
