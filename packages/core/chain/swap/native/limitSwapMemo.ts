@@ -256,20 +256,43 @@ const limitSwapMemoTradeTargetPattern = /^\d+\/\d+\/\d+$/
 /** Basis points are a bare integer; the affiliate name is a printable, separator-free token. */
 const limitSwapMemoAffiliateBpsPattern = /^\d+$/
 
+/** The order terms a `=<` memo encodes, as decoded from the memo itself. */
+export type ParsedLimitSwapMemo = {
+  /** THORChain asset notation for the buy side, e.g. `ETH.USDC-06EB48`. */
+  targetAsset: string
+  /** Where a filled order pays out. */
+  destinationAddress: string
+  /** Guaranteed-minimum received (LIM), in THORChain's 1e8 fixed point. */
+  limit: bigint
+  /** How long the order rests, in THORChain blocks. */
+  intervalBlocks: number
+  /** Streaming quantity; `0` for the orders this SDK builds. */
+  quantity: number
+  affiliate?: string
+  affiliateBps?: number
+}
+
 /**
- * Fail closed on anything that is not a well-formed THORChain limit-swap memo.
+ * Decode a THORChain limit-swap memo into the order terms it encodes.
  *
- * Guards the signing path. The limit deposit builder accepts a pre-built memo
- * string, so a market (`=>`) memo, an unrelated action, or a truncated/corrupted
- * limit memo would otherwise sign a value-bearing deposit that executes with
- * completely different semantics — or with no price protection at all.
+ * Fail closed on anything that is not a well-formed limit memo. This guards the
+ * signing path: the limit deposit builder accepts a pre-built memo string, so a
+ * market (`=>`) memo, an unrelated action, or a truncated/corrupted limit memo
+ * would otherwise sign a value-bearing deposit that executes with completely
+ * different semantics — or with no price protection at all.
  *
  * Validates the shape `=<:TARGET:DEST:LIM/INTERVAL/QUANTITY[:AFFILIATE:BPS]`
  * rather than only the prefix, because it is the trade-target segment that
  * carries the order's price floor: a memo whose LIM is missing or non-numeric is
  * exactly the case that must never reach a signer.
+ *
+ * Returning the terms rather than only validating them is what lets a *joining*
+ * device review a limit order. The memo is the order — it rides on the keysign
+ * payload for every source branch, and it is the exact string THORChain
+ * executes — so terms derived from it cannot disagree with what gets signed, the
+ * way a separately-supplied display field can.
  */
-export const assertLimitSwapMemo = (memo: string): void => {
+export const parseLimitSwapMemo = (memo: string): ParsedLimitSwapMemo => {
   if (!memo.startsWith(limitSwapMemoPrefix)) {
     throw new Error(
       `memo is not a THORChain limit-swap memo (expected a "${limitSwapMemoPrefix}" prefix): ${JSON.stringify(memo)}`
@@ -299,7 +322,7 @@ export const assertLimitSwapMemo = (memo: string): void => {
     )
   }
 
-  const [limit] = tradeTarget.split('/')
+  const [limit, interval, quantity] = tradeTarget.split('/')
   if (BigInt(limit) === 0n) {
     // THORChain reads a zero trade target as an unprotected market order.
     throw new Error(`limit-swap memo has a zero minimum-received (LIM), which THORChain treats as a market order`)
@@ -314,6 +337,26 @@ export const assertLimitSwapMemo = (memo: string): void => {
       throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
     }
   }
+
+  return {
+    targetAsset,
+    destinationAddress: destAddress,
+    limit: BigInt(limit),
+    intervalBlocks: Number(interval),
+    quantity: Number(quantity),
+    ...(segments.length === 5 ? { affiliate, affiliateBps: Number(affiliateBps) } : {}),
+  }
+}
+
+/**
+ * Fail closed on anything that is not a well-formed THORChain limit-swap memo.
+ *
+ * Thin wrapper over {@link parseLimitSwapMemo} so the grammar has exactly one
+ * implementation — a validator that could drift from the parser is how a memo
+ * ends up reviewed as one order and executed as another.
+ */
+export const assertLimitSwapMemo = (memo: string): void => {
+  parseLimitSwapMemo(memo)
 }
 
 const buildMemo = (inputs: LimitSwapMemoInput, includeAffiliate: boolean): string => {

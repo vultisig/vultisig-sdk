@@ -1,5 +1,143 @@
 # @vultisig/core-chain
 
+## 2.29.1
+
+### Patch Changes
+
+- [#1568](https://github.com/vultisig/vultisig-sdk/pull/1568) [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): add XRPL issued-currency (custom token) support
+
+  XRPL issued currencies (trust-line tokens / IOUs) had no token metadata resolver,
+  so custom tokens could not be added on Ripple. Adds `getRippleTokenMetadata` and
+  registers Ripple in `chainsWithTokenMetadataDiscovery`. Unlike EVM/Tron there is no
+  on-ledger metadata call: XRPL exposes no per-token decimal metadata — so the SDK
+  applies its fixed issued-currency decimal policy (`rippleIssuedCurrencyDecimals`) —
+  and the ticker is derived from the currency code, so the resolver fetches nothing.
+  Curated tokens
+  (RLUSD) get their logo and price provider merged in; an arbitrary token gets neither
+  rather than borrowing a known token's identity, since two issuers can share a ticker
+  on XRPL.
+
+  `isValidTokenId` now also accepts a human ticker (`SOLO`, `RLUSD`) wherever an
+  on-ledger currency code is accepted — the form shown on explorers like xrpscan — and
+  a new `normalizeTokenId` canonicalises a pasted id to the on-ledger form.
+
+  `BalanceService.addToken`/`removeToken` normalise the token id (and its matching
+  `contractAddress`) before it enters persisted state, so a manually added
+  `RLUSD.<issuer>` collapses onto the canonical `524C…<issuer>` that ledger discovery
+  stores instead of being kept as a second, distinct token. A no-op for chains whose
+  ids are already canonical.
+
+## 2.29.0
+
+### Minor Changes
+
+- [#1475](https://github.com/vultisig/vultisig-sdk/pull/1475) [`4b14790`](https://github.com/vultisig/vultisig-sdk/commit/4b14790fb5f0fa5b9a58f6fe5575ad4c2bab3867) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose canonical Cosmos native-send fee metadata so first-party consumers can stop maintaining local tables: IBC chains use their shared/default floors, MayaChain exposes its fixed fee, and THORChain remains explicitly unresolved because its fee comes from live network data.
+
+- [#1614](https://github.com/vultisig/vultisig-sdk/pull/1614) [`bb5b62c`](https://github.com/vultisig/vultisig-sdk/commit/bb5b62c60ca298d0aa98614e8c2b01eeef0d8bdb) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Let joining devices review a THORChain limit order instead of approving it as a generic send.
+
+  The limit-order builder attaches a swap payload only for ERC20 sources, so RUNE and native-gas-asset orders reached a co-signer as a transfer to an opaque address with an opaque memo — no buy asset, payout destination, or minimum received.
+
+  `getKeysignLimitSwapOrder` decodes those terms from `keysignPayload.memo`, which is present on every source branch. Reading the memo also makes the review trustworthy rather than merely present: the memo is the exact string THORChain executes, so terms derived from it cannot disagree with what gets signed, whereas a display field supplied by the initiating device can.
+
+  `parseLimitSwapMemo` is the underlying decoder, and `assertLimitSwapMemo` now delegates to it so the grammar has one implementation.
+
+  `buildLimitSwapKeysignPayload` now derives the ERC20 branch's `toAmountDecimal` from the memo's LIM rather than from the caller's `expectedToAmount`. That argument is now an optional cross-check: supplying a value that disagrees with the memo throws, which catches a caller that rescaled the LIM into the target coin's own decimals — a mistake that signs a correct order while showing a co-signer a wrong figure.
+
+- [#1583](https://github.com/vultisig/vultisig-sdk/pull/1583) [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27) Thanks [@Toby1009](https://github.com/Toby1009)! - Move every Sui read, simulation and broadcast off JSON-RPC.
+
+  Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+  week of 2026-07-27 and full decommission (code removal) lands mid-October 2026,
+  after which no provider can serve it. This is a scheduled migration ahead of
+  that date, NOT a fix for a live outage — as of 2026-07-27 both
+  `sui-rpc.publicnode.com` and `fullnode.mainnet.sui.io` still answer JSON-RPC.
+
+  - `getSuiClient()` now returns a `SuiGrpcClient` pointed at
+    `https://fullnode.mainnet.sui.io:443` (gRPC-web over HTTPS).
+  - React Native uses `SuiGraphQLClient` against
+    `https://graphql.mainnet.sui.io/graphql` instead: grpc-web needs
+    `Response.body` streaming, which Hermes' fetch does not provide. Both clients
+    implement the same unified transport interface, so callsites are identical.
+  - Balance, coin metadata, coin listing, tx hash, tx status, broadcast and
+    keysign gas refinement moved to `getBalance` / `getCoinMetadata` / `listCoins`
+    / `simulateTransaction` / `getTransaction` / `executeTransaction`.
+  - The dependency-free `@vultisig/sdk` balance tools (`getSuiBalance`,
+    `getSuiTokenBalance`, `getSuiAllBalances`) now POST Sui GraphQL and follow the
+    paginated `balances` connection to completion, returning `tokens_unavailable`
+    rather than a silently truncated portfolio.
+
+  Broadcast-error classification follows the transport. A gRPC failure carries the
+  grpc-status NAME in `code` (not a JSON-RPC number) and a percent-encoded message,
+  so both classifiers were re-pointed:
+
+  - `isTransientBroadcastError` retries `UNAVAILABLE` / `DEADLINE_EXCEEDED` /
+    `RESOURCE_EXHAUSTED` and decodes the message before pattern-matching. A
+    grpc-web response is HTTP 200 with the real status in the trailer, so the
+    existing 5xx branch never saw a busy or restarting node.
+  - The CLI's permanent-vs-retryable gate matches `INVALID_ARGUMENT` instead of
+    the numeric `-32002`. Left unchanged, that gate would have gone dead and every
+    permanent Sui rejection would have been re-broadcast as if transient.
+
+  Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
+  client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
+  instead of a JSON-RPC effects object.
+
+### Patch Changes
+
+- [#1555](https://github.com/vultisig/vultisig-sdk/pull/1555) [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(cosmos): sign `CosmosSpecific.gas` verbatim so co-signing matches iOS/Android
+
+  `CosmosSpecific.gas` (proto field 3) is the fee AMOUNT — commondata#93 documents
+  it as such and every other client signs it verbatim. The signing-inputs and
+  fee-display resolvers were instead re-deriving it as
+  `ceil(gas × relayedGasLimit / staticGasLimit)`, and doubling it for IBC
+  transfers. That silently redefined a shared wire field in one client: on a
+  TerraClassic LUNC send with a simulated gas limit of 321,979 the extension
+  signed a 21.465267 LUNC fee while the iOS co-signer signed the payload's
+  20 LUNC, the SignDocs diverged, and the MPC keysign never completed.
+
+  Both read paths now use `gas` as-is and only resolve the gas LIMIT from field 7.
+  Fee headroom moved to the initiator, which prices `gas` against the limit it
+  relays — matching iOS `CosmosGasPricedFee.scaled` and Android
+  `TerraClassicTax.baseGas`. The COSMOS-02 IBC source-leg headroom is preserved by
+  relaying the widened limit in `gas_limit` instead of applying a multiplier that
+  no other client can reproduce.
+
+  `resolveCosmosGasFee` is replaced by `resolveCosmosGasLimit` (limit resolution)
+  and `scaleCosmosFeeAmount` (initiator-only pricing).
+
+- [#1582](https://github.com/vultisig/vultisig-sdk/pull/1582) [`d7fd8fd`](https://github.com/vultisig/vultisig-sdk/commit/d7fd8fd891d2bb9f007b3feff5b31cc961bae497) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Apply the Jupiter affiliate fee by deriving and prepending its ATA, while
+  normalizing zero-fee quotes before unsigned transaction construction.
+
+- [#1555](https://github.com/vultisig/vultisig-sdk/pull/1555) [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - fix(terraclassic): price the LUNC fee from the chain's gas price and add the burn tax explicitly
+
+  `cosmosGasRecord[TerraClassic]` was a hand-tuned flat 20 LUNC (itself already
+  lowered from 100 LUNC). Terra Classic's actual `uluna` gas price is 28.325
+  uluna/gas, so a send at the static 300k limit costs 8,497,500 uluna — the flat
+  constant overcharged every send by ~2.35× before any gas-limit scaling.
+
+  It was also implicitly absorbing the `x/tax` burn tax (0.5% of the transfer),
+  which scales with the amount while a flat constant does not. So it overcharged
+  small sends and under-covered anything above ~2,300 LUNC, where 0.5% outgrows
+  the slack.
+
+  Both halves are now explicit:
+
+  - `cosmosGasRecord[TerraClassic]` = `8_497_500n` (`300_000 × 28.325`), matching
+    iOS `TerraClassicTax.ulunaBaseGas` and Android `ULUNA_BASE_GAS`. It still
+    scales with a relayed `gas_limit`.
+  - The initiator adds `applyTerraClassicBurnTax(amount, rate)` to `gas` for
+    native LUNC sends, after the gas scaling — the tax tracks the transfer
+    amount, not the gas limit.
+
+  Adds `getTerraClassicBurnTaxRate`, which reads `x/tax` `burn_tax_rate` (live
+  0.5%) and fails closed to 0.5% on any LCD error. This is a different tax from
+  the existing `x/treasury` `tax_rate`, which governance has held at 0 since the
+  UST collapse and which exempts `uluna` — reading it for a LUNC send always
+  returned 0. `applyTerraClassicBurnTax` is separate from `applyTerraClassicTax`
+  for the same reason: the burn tax exempts nothing and is uncapped.
+
+  A 300 LUNC send at a simulated 321,979 gas limit now costs 10.620056 LUNC
+  (9.120056 gas + 1.5 tax) instead of 21.465267.
+
 ## 2.28.0
 
 ### Minor Changes

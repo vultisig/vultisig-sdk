@@ -1,5 +1,21 @@
 # @vultisig/example-electron
 
+## 0.1.145
+
+### Patch Changes
+
+- Updated dependencies [[`23563f4`](https://github.com/vultisig/vultisig-sdk/commit/23563f41da7b142e5ae9d34d4287eaaaa3fef701), [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198)]:
+  - @vultisig/sdk@2.23.0
+  - @vultisig/examples-shared@0.1.130
+
+## 0.1.144
+
+### Patch Changes
+
+- Updated dependencies [[`4b14790`](https://github.com/vultisig/vultisig-sdk/commit/4b14790fb5f0fa5b9a58f6fe5575ad4c2bab3867), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`98ec3bf`](https://github.com/vultisig/vultisig-sdk/commit/98ec3bfdcf0831df00ceec6618c796dbfa2c4d13), [`bb5b62c`](https://github.com/vultisig/vultisig-sdk/commit/bb5b62c60ca298d0aa98614e8c2b01eeef0d8bdb), [`d7fd8fd`](https://github.com/vultisig/vultisig-sdk/commit/d7fd8fd891d2bb9f007b3feff5b31cc961bae497), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`f99133d`](https://github.com/vultisig/vultisig-sdk/commit/f99133dc7a99f44bbe78ba43fa59e7ec761c73e1), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`6142529`](https://github.com/vultisig/vultisig-sdk/commit/6142529abc39bb548be8b1f32453f0207584c4e2), [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`e76ba9b`](https://github.com/vultisig/vultisig-sdk/commit/e76ba9ba78ec52f30f3678ef4acc933ef5712cdc), [`4777264`](https://github.com/vultisig/vultisig-sdk/commit/47772647b90336ae3297d208777523592f69dde4), [`89410fb`](https://github.com/vultisig/vultisig-sdk/commit/89410fbb0abf3ad05919fb38d1abc74a5acf9a6b), [`787e755`](https://github.com/vultisig/vultisig-sdk/commit/787e755d230d1e0fa012583d6edd8b7fa5aad88d)]:
+  - @vultisig/sdk@2.22.0
+  - @vultisig/examples-shared@0.1.129
+
 ## 0.1.143
 
 ### Patch Changes
