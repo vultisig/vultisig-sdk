@@ -53,9 +53,18 @@ export {
   toBaseUnits,
   toHumanUnits,
 } from './utils/convertAmount'
+export { computePersonalSignHash, formatEcdsaSignature65 } from './utils/eip191'
 export type { FiatToAmountParams } from './utils/fiatToAmount'
 export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
+export { resolveChainReference } from './utils/resolveChainReference'
+export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+
+// Pure-bigint exact base-units -> human decimal-string conversion (no float64
+// round-trip, so it's safe for high-decimal assets). Exported at the root so
+// downstream consumers (CLI, app) can share this instead of hand-rolling
+// their own `BigInt(10 ** decimals)` divisor, which drifts past decimals=22.
+export { fromChainAmountExact } from '@vultisig/core-chain/amount/fromChainAmountExact'
 
 // Public-boundary argument validation (AUDIT-R3 TASK-020).
 // Zod schemas + safe-parse helpers for chain and ticker strings.
@@ -193,6 +202,20 @@ export { Chain } from './types'
 export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 
+// XRP Ledger issued-currency canonicals — surfaced so consumers stop re-creating
+// `<currency>.<issuer>` ids / 160-bit currency-code normalization outside the SDK.
+export {
+  formatIssuedCurrencyValue,
+  isValidXrplCurrencyCode,
+  parseIssuedCurrencyValue,
+  parseRippleTokenId,
+  rippleIssuedCurrencyDecimals,
+  rippleKnownIssuedTokens,
+  rippleOwnerReserveDrops,
+  rippleTokenId,
+  toXrplCurrencyCode,
+} from '@vultisig/core-chain/chains/ripple/issuedCurrency'
+
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
@@ -202,6 +225,11 @@ export {
 } from '@vultisig/core-chain/chains/cosmos/cosmosFeeDenomAllowlist'
 export { getCosmosGasLimit, getCosmosStakingGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
 export { cosmosRpcUrl } from '@vultisig/core-chain/chains/cosmos/cosmosRpcUrl'
+export {
+  COSMOS_SEND_FEE_DEFAULT,
+  getCosmosSendFeeBaseUnits,
+  MAYA_SEND_FEE_BASE_UNITS,
+} from '@vultisig/core-chain/chains/cosmos/gas'
 
 // Cosmos x/auth.MaxMemoCharacters cap, per chain — single source of truth for
 // "will this memo fit before broadcast rejects it with sdk code 12 (memo too
@@ -302,12 +330,23 @@ export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 export type { GetSwapExplorerUrlInput, SwapExplorerProvider } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 export { getSwapExplorerUrl, swapExplorerProviders } from '@vultisig/core-chain/swap/utils/getSwapExplorerUrl'
 
+// Chain-native block explorer URL builder (address/tx) for the non-swap case.
+export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorerUrl'
+
 // Skip Go routing-eligibility predicates. Single source of truth for "does this
 // from/to chain pair route through Skip Go?" — consolidated here so consumers
 // (execute/build tools, route discovery/listing, destination-format validation)
 // share one tested implementation instead of independently-maintained copies
 // that can drift from each other (the mcp-ts #384 bug class).
 export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
+
+// EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
+// chainId table so consumers (app, agent-backend-ts) import it instead of
+// hand-maintaining their own copies that can drift (the Hyperliquid 998/999
+// client↔server chainId bug class). Native tickers are already exported via
+// `chainFeeCoin`. `getEvmChainId` returns the hex chainId; `getEvmChainByChainId`
+// resolves a hex chainId back to its EvmChain.
+export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
 // Noon USDC yield vault SDK boundary. Consumers should use these helpers
 // instead of calling Noon/Accountable APIs or hand-encoding ERC-7540 calldata.
@@ -400,6 +439,28 @@ export type {
   SwapQuoteProviderExcludeName,
   SwapQuoteProviderName,
 } from '@vultisig/core-chain/swap/quote/findSwapQuote'
+
+// THORChain limit orders (`=<` advanced swap queue). The memo IS the order, so
+// `parseLimitSwapMemo` / `getKeysignLimitSwapOrder` are how any device — the
+// initiator or a co-signer reviewing a payload it did not build — reads an
+// order's true terms. Terms decoded from the memo cannot disagree with what
+// gets signed; a display field carried alongside it can.
+export type {
+  LimitSwapExpiryHours,
+  LimitSwapMemoInput,
+  ParsedLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export {
+  assertLimitSwapMemo,
+  buildLimitSwapMemo,
+  getLimitSwapIntervalBlocks,
+  getLimitSwapLimitAmount,
+  limitSwapExpiryHours,
+  limitSwapMemoPrefix,
+  parseLimitSwapMemo,
+} from '@vultisig/core-chain/swap/native/limitSwapMemo'
+export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
+export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 
 // THORChain LP primitives (v2: auto-pair, lockup, halts, mimir pause gate)
 export { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
@@ -518,6 +579,8 @@ export type {
   CompareCostsParams,
   CompareCostsResult,
   CompareCostsSkipped,
+  ConsolidateChain,
+  ConsolidateUtxo,
   CosmosBalanceChain,
   CosmosBalanceEntry,
   CosmosBalanceResult,
@@ -546,6 +609,7 @@ export type {
   JupiterSwapResult,
   KnownCoin,
   KnownCoinMetadata,
+  NativeSwapMinAmountIn,
   PendleActiveMarket,
   PendleChain,
   PendleMarketParams,
@@ -563,8 +627,12 @@ export type {
   PreparePolkadotAssetSendParams,
   PreparePolkadotAssetSendResult,
   PrepareSendTxFromKeysParams,
+  PrepareSuiTokenTransferFromKeysParams,
   PrepareSwapTxFromKeysParams,
+  PrepareThorchainMsgDepositTxFromKeysParams,
   PrepareTrc20TransferFromKeysParams,
+  PrepareUtxoConsolidateResult,
+  PrepareUtxoConsolidateTxFromKeysParams,
   PriceBatchResult,
   PriceQuery,
   PriceQuote,
@@ -625,6 +693,7 @@ export type {
   UndelegateParams,
   WithdrawRewardsParams,
 } from './tools'
+export type { BuildCosmosWasmExecuteMsgParams, CosmWasmExecuteFund } from './tools'
 export {
   abiDecode,
   abiEncode,
@@ -641,6 +710,7 @@ export {
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
+  buildCosmosWasmExecuteMsg,
   buildCw20TransferMsg,
   buildDelegateMsg,
   buildGlifRedeemSticnt,
@@ -667,6 +737,7 @@ export {
   coinGeckoIdToSymbol,
   compareCosts,
   computeAstroportMinReceive,
+  CONSOLIDATE_CHAINS,
   COSMOS_SWAP_FEE_LABEL_CHAINS,
   COSMOS_SWAP_GAS_LIMIT,
   cosmosBalanceChains,
@@ -704,6 +775,7 @@ export {
   getEvmBalances,
   getMaxSendAmountFromKeys,
   getNativeSwapDecimals,
+  getNativeSwapMinAmountIn,
   getPolkadotAssetBalance,
   getPolkadotNativeBalance,
   getPrice,
@@ -751,6 +823,7 @@ export {
   MAX_UINT256,
   MAYACHAIN_NODE_URL,
   NATIVE_COINGECKO_IDS,
+  NATIVE_SWAP_MIN_OUTBOUND_FEE_MULTIPLIER,
   normaliseIbcChainId,
   normalizeHexBytes,
   parseActionDisplay,
@@ -774,6 +847,7 @@ export {
   prepareSignDirectTxFromKeys,
   prepareSuiTokenTransferFromKeys,
   prepareSwapTxFromKeys,
+  prepareThorchainMsgDepositTxFromKeys,
   prepareTrc20TransferFromKeys,
   prepareUtxoConsolidateTxFromKeys,
   quoteSkipRoute,
@@ -800,15 +874,22 @@ export {
   stakekitDetails,
   stakekitSearch,
   stripChainPrefix,
+  SUI_NATIVE_COIN_TYPE,
   supportedIbcDestinationsFrom,
   supportedUtxoBalanceChains,
   symbolFromCoinGeckoId,
   TERRA_CHAIN_ID,
   TERRA_LCD,
   THORCHAIN_NODE_URL,
+  TRC20_TRANSFER_SELECTOR,
   utxoFeeRate,
   VerifierClient,
 } from './tools'
+
+// The protobuf builder is environment-neutral despite its historical RN path.
+// Export it from the root so Node/CLI consumers share the same wire builder.
+export type { BuildCosmosWasmExecuteOptions, CosmosTxBuilderResult } from './platforms/react-native/chains/cosmos/tx'
+export { buildCosmosWasmExecuteTx } from './platforms/react-native/chains/cosmos/tx'
 
 // Vault-bound gas/fee estimation (chain-specific fee floor for a loaded vault).
 // The pure read-only per-chain gas price lives in `evmGasPrice` above; this

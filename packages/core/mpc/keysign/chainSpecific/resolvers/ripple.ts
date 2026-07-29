@@ -15,6 +15,15 @@ import { GetChainSpecificResolver } from '../resolver'
 const minProtocolFee = 15n
 const baseFeeMultiplier = 2n
 const rippleRequireDestinationTagFlag = 0x00020000
+const lastLedgerSequenceOffset = 60
+
+export const getRippleLastLedgerSequence = (ledgerCurrentIndex: number | undefined): bigint => {
+  if (ledgerCurrentIndex === undefined || !Number.isSafeInteger(ledgerCurrentIndex) || ledgerCurrentIndex <= 0) {
+    throw new Error('Ripple account_info response is missing a valid ledger_current_index.')
+  }
+
+  return BigInt(ledgerCurrentIndex + lastLedgerSequenceOffset)
+}
 
 export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> = async ({
   keysignPayload,
@@ -89,11 +98,11 @@ export const getRippleChainSpecific: GetChainSpecificResolver<'rippleSpecific'> 
     }
   }
 
-  const { account_data, ledger_current_index } = senderAccount
+  const { account_data, ledger_current_index: ledgerCurrentIndex } = senderAccount
 
   return create(RippleSpecificSchema, {
     sequence: BigInt(account_data.Sequence),
-    lastLedgerSequence: BigInt((ledger_current_index ?? 0) + 60),
+    lastLedgerSequence: getRippleLastLedgerSequence(ledgerCurrentIndex),
     // Fee is the network fee only — the reserve rides on the Payment amount.
     gas: networkFee,
     ...(effectiveDestinationTag !== undefined ? { destinationTag: effectiveDestinationTag } : {}),

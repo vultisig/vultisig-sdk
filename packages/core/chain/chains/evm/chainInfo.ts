@@ -22,7 +22,9 @@ import {
 } from 'viem/chains'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
-export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io'
+// HyperEVM transactions and addresses live under hypurrscan's `/evm/` section.
+// The bare `https://hypurrscan.io/tx/<hash>` path returns a server error.
+export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io/evm'
 const hyperliquidNativeCoin = chainFeeCoin[EvmChain.Hyperliquid]
 
 export const hyperliquid = defineChain({

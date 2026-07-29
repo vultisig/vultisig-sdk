@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getCosmosChainByChainId } from '@vultisig/core-chain/chains/cosmos/chainInfo'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 
 /**
@@ -54,6 +55,7 @@ Object.assign(aliasToChain, {
   cronos: Chain.CronosChain,
   thor: Chain.THORChain,
   maya: Chain.MayaChain,
+  gaia: Chain.Cosmos,
 })
 
 // Also accept each canonical Chain enum value (case-insensitive). Runs last to override.
@@ -137,6 +139,12 @@ export const normalizeChain = (input: string | null | undefined): Chain => {
   const key = input?.trim().toLowerCase() ?? ''
   const resolved = aliasToChain[key]
   if (resolved) return resolved
+
+  // Cosmos uses network chain IDs on the wire (for example `cosmoshub-4`).
+  // Resolve them from the core-chain registry rather than duplicating the
+  // supported set at each caller.
+  const cosmosChain = getCosmosChainByChainId(key)
+  if (cosmosChain) return cosmosChain
 
   const stripped = stripSeparators(key)
   const strippedResolved = strippedAliasToChain[stripped]

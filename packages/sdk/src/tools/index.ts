@@ -330,6 +330,8 @@ export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } fro
 
 // Vault-free prep helpers (KeysignPayload construction without a full vault)
 export {
+  buildCosmosWasmExecuteMsg,
+  type BuildCosmosWasmExecuteMsgParams,
   buildCw20TransferMsg,
   type BuildCw20TransferMsgParams,
   type BuildCw20TransferMsgResult,
@@ -344,6 +346,7 @@ export {
   type ConsolidateUtxo,
   cosmosStaking,
   type CosmosStakingMsgEnvelope,
+  type CosmWasmExecuteFund,
   type DelegateParams,
   getMaxSendAmountFromKeys,
   type GetMaxSendAmountFromKeysParams,
@@ -372,6 +375,8 @@ export {
   type PrepareSuiTokenTransferFromKeysParams,
   prepareSwapTxFromKeys,
   type PrepareSwapTxFromKeysParams,
+  prepareThorchainMsgDepositTxFromKeys,
+  type PrepareThorchainMsgDepositTxFromKeysParams,
   prepareTrc20TransferFromKeys,
   type PrepareTrc20TransferFromKeysParams,
   type PrepareUtxoConsolidateResult,

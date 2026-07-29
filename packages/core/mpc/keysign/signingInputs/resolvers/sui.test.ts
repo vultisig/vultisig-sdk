@@ -9,6 +9,7 @@ import type { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import { beforeAll, describe, expect, it } from 'vitest'
 
 import { getSuiChainSpecific } from '../../chainSpecific/resolvers/sui'
+import { SuiCoinSchema, SuiSpecificSchema } from '../../../types/vultisig/keysign/v1/blockchain_specific_pb'
 import { CoinSchema } from '../../../types/vultisig/keysign/v1/coin_pb'
 import { KeysignPayloadSchema } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
 import { SignSuiSchema } from '../../../types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
@@ -28,6 +29,8 @@ const UNSIGNED_TX_MSG =
   'AAACAAhkAAAAAAAAAAAgW4yMD3sdSyqcPk9QYXKDlKW2x9jp8KGyw9Tl9gcYKTACAgABAQAAAQEDAAAAAAEBAFuMjA97HUsqnD5PUGFyg5SltsfY6fChssPU5fYHGCkwARERERERERERERERERERERERERERERERERERERERERERAQAAAAAAAAAgBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwdbjIwPex1LKpw+T1BhcoOUpbbH2OnwobLD1OX2BxgpMOgDAAAAAAAAwMYtAAAAAAAA'
 
 const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString('hex')
+const SUI_TYPE = '0x2::sui::SUI'
+const TOKEN_TYPE = '0xabc::coin::USDC'
 
 let walletCore: WalletCore
 let publicKey: PublicKey
@@ -47,6 +50,15 @@ const buildSignSuiPayload = () =>
       case: 'signSui',
       value: create(SignSuiSchema, { unsignedTxMsg: UNSIGNED_TX_MSG }),
     },
+  })
+
+const suiCoin = (id: string, balance: string, coinType = SUI_TYPE) =>
+  create(SuiCoinSchema, {
+    coinType,
+    coinObjectId: id,
+    version: '1',
+    digest: `digest-${id}`,
+    balance,
   })
 
 beforeAll(async () => {
@@ -151,6 +163,70 @@ describe('getSuiSigningInputs — native send', () => {
     })
 
     expect(() => getSuiSigningInputs({ keysignPayload, walletCore })).toThrow('do not support a memo')
+  })
+
+  it('selects only the largest native objects needed to cover amount plus gas', async () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'SUI',
+        address: signer,
+        decimals: 9,
+        isNativeToken: true,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      toAddress: signer,
+      toAmount: '12',
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          gasBudget: '3',
+          coins: [suiCoin('dust', '1'), suiCoin('covering', '20'), suiCoin('medium', '5')],
+        }),
+      },
+    })
+
+    const [input] = await getSuiSigningInputs({ keysignPayload, walletCore })
+
+    expect(input.paySui).toBeDefined()
+    expect(input.paySui?.inputCoins?.map(c => c.objectId)).toEqual(['covering'])
+  })
+
+  it('selects token inputs and a smallest-covering native gas object for token sends', async () => {
+    const keysignPayload = create(KeysignPayloadSchema, {
+      coin: create(CoinSchema, {
+        chain: Chain.Sui,
+        ticker: 'USDC',
+        address: signer,
+        decimals: 6,
+        isNativeToken: false,
+        contractAddress: TOKEN_TYPE,
+        hexPublicKey: hex(publicKey.data()),
+      }),
+      toAddress: signer,
+      toAmount: '10',
+      blockchainSpecific: {
+        case: 'suicheSpecific',
+        value: create(SuiSpecificSchema, {
+          referenceGasPrice: '1000',
+          gasBudget: '20',
+          coins: [
+            suiCoin('gas-too-small', '10'),
+            suiCoin('gas-large', '100'),
+            suiCoin('gas-small-cover', '30'),
+            suiCoin('token-small', '1', TOKEN_TYPE),
+            suiCoin('token-cover', '10', TOKEN_TYPE),
+          ],
+        }),
+      },
+    })
+
+    const [input] = await getSuiSigningInputs({ keysignPayload, walletCore })
+
+    expect(input.pay).toBeDefined()
+    expect(input.pay?.inputCoins?.map(c => c.objectId)).toEqual(['token-cover'])
+    expect(input.pay?.gas?.objectId).toBe('gas-small-cover')
   })
 })
 

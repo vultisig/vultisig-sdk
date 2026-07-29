@@ -5,6 +5,7 @@ import { TokenMetadataResolver } from './resolver'
 import { getCardanoTokenMetadata } from './resolvers/cardano'
 import { getCosmosTokenMetadata } from './resolvers/cosmos'
 import { getEvmTokenMetadata } from './resolvers/evm'
+import { getRippleTokenMetadata } from './resolvers/ripple'
 import { getSolanaTokenMetadata } from './resolvers/solana'
 import { getSuiTokenMetadata } from './resolvers/sui'
 import { getTonTokenMetadata } from './resolvers/ton'
@@ -18,6 +19,7 @@ const resolvers: Record<ChainKindWithTokenMetadataDiscovery, TokenMetadataResolv
   tron: getTronTokenMetadata,
   cardano: getCardanoTokenMetadata,
   sui: getSuiTokenMetadata,
+  ripple: getRippleTokenMetadata,
 }
 
 export const getTokenMetadata: TokenMetadataResolver = async input => {

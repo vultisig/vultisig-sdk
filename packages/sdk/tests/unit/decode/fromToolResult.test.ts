@@ -144,6 +144,43 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.amount).toBe('7')
   })
 
+  it('resolves typed tx chain ids through the canonical SDK registry for newer EVM chains', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 9n],
+    })
+
+    const hyperliquid = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 999),
+    })
+    expect(hyperliquid.decoded).toBe(true)
+    expect(hyperliquid.chain).toBe('hyperliquid')
+    expect(hyperliquid.recipient).toBe(RECIPIENT)
+    expect(hyperliquid.amount).toBe('9')
+
+    const sei = decodeFromToolResult({
+      family: 'evm',
+      chain: 'ethereum',
+      payload: buildEvmTx(USDC, data, 0n, 1329),
+    })
+    expect(sei.decoded).toBe(true)
+    expect(sei.chain).toBe('sei')
+    expect(sei.recipient).toBe(RECIPIENT)
+    expect(sei.amount).toBe('9')
+  })
+
+  it('falls back to the raw numeric chain id for unknown typed EVM chains', () => {
+    const payload = buildEvmTx(RECIPIENT, '0x', 1n, 31337)
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+    expect(env.decoded).toBe(true)
+    expect(env.chain).toBe('31337')
+    expect(env.recipient).toBe(RECIPIENT)
+    expect(env.amount).toBe('1')
+  })
+
   it('fails closed (decoded=false) on malformed EVM bytes — never throws', () => {
     const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload: '0xabcd' })
     expect(env.decoded).toBe(false)
@@ -383,6 +420,36 @@ describe('decodeFromToolResult — dispatch / guards', () => {
     expect(env.family).toBe('evm')
     expect(env.recipient).toBe(RECIPIENT)
   })
+
+  it('infers EVM family from canonical aliases omitted by the local subset', () => {
+    const data = encodeFunctionData({
+      abi: parseAbi(['function transfer(address to, uint256 value)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 1n],
+    })
+    const env = decodeFromToolResult({ chain: 'mantle', payload: buildEvmTx(USDC, data) })
+
+    expect(env.family).toBe('evm')
+    expect(env.recipient).toBe(RECIPIENT)
+  })
+
+  it.each(['thorchain', 'cosmoshub-4', 'gaia', 'osmosis-1', 'noble-1', 'dydx-mainnet-1', 'akashnet-2'])(
+    'infers Cosmos family from supported chain hint %s',
+    chain => {
+      const from = 'cosmos1pkptre7fdkl6gfrzlesjjvhxhlc3r4gmmk8rs6'
+      const to = 'cosmos1qypqxpq9qcrsszg2pvxq6rs0zqg3yyc5lzv7xu'
+      const any = Any.fromPartial({
+        typeUrl: '/cosmos.bank.v1beta1.MsgSend',
+        value: MsgSend.encode(
+          MsgSend.fromPartial({ fromAddress: from, toAddress: to, amount: [{ denom: 'rune', amount: '1' }] })
+        ).finish(),
+      })
+      const env = decodeFromToolResult({ chain, payload: buildCosmosTx([any]) })
+
+      expect(env.family).toBe('cosmos')
+      expect(env.recipient).toBe(to)
+    }
+  )
 
   it('fails closed when neither family nor a known chain is given', () => {
     const env = decodeFromToolResult({ payload: '0x1234' })
