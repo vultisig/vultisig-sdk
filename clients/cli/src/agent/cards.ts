@@ -391,38 +391,65 @@ export type PolymarketMarket = {
 
 export type PolymarketMarketsCard = {
   surface: 'polymarket_markets'
+  title?: string
+  subtitle?: string
   markets: PolymarketMarket[]
 }
 
-function parsePolymarketOutcome(v: unknown): PolymarketOutcome | null {
-  if (!v || typeof v !== 'object') return null
-  const o = v as Record<string, unknown>
-  const name = asString(o.name) || asString(o.outcome)
-  if (!name) return null
-  const outcome: PolymarketOutcome = { name }
-  const price = o.price
-  if (typeof price === 'number' && Number.isFinite(price)) {
-    outcome.price = `${(price * 100).toFixed(1)}%`
-  } else if (typeof price === 'string' && price) {
-    outcome.price = stripControlChars(price)
-  }
-  return outcome
+/** Format a 0.0–1.0 implied-probability fraction as a whole-percent string.
+ *  Returns undefined for non-finite / out-of-range values (e.g. Polymarket's
+ *  collapsed "extreme outcome" markets at 0 or 1) so the caller can elide the
+ *  price rather than render nonsense. Mirrors the app's PolymarketMarketsCardRenderer
+ *  formatPrice. */
+function formatProbability(v: unknown): string | undefined {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return undefined
+  if (v <= 0 || v >= 1) return undefined
+  return `${Math.round(v * 100)}%`
 }
 
+/**
+ * Synthesize the outcome rows this file's renderer expects (`{ name, price }[]`)
+ * from the real envelope fields `yesPrice`/`noPrice`/`topOutcome`. Binary
+ * YES/NO markets render a YES row (and a NO row when noPrice is present);
+ * multi-outcome markets (numOutcomes > 2) instead carry `topOutcome` — the
+ * leading outcome NAME — so we render one row labeled with that name and
+ * priced from `yesPrice`, mirroring the app's PolymarketMarketsCardRenderer
+ * (topOutcome replaces the YES/NO label, yesPrice stays the displayed price).
+ */
+function buildPolymarketOutcomes(o: Record<string, unknown>): PolymarketOutcome[] {
+  const yesPrice = formatProbability(o.yesPrice)
+  const noPrice = formatProbability(o.noPrice)
+  const topOutcome = asString(o.topOutcome)
+  if (topOutcome) {
+    const outcome: PolymarketOutcome = { name: topOutcome }
+    if (yesPrice) outcome.price = yesPrice
+    return [outcome]
+  }
+  const outcomes: PolymarketOutcome[] = []
+  if (yesPrice) outcomes.push({ name: 'YES', price: yesPrice })
+  if (noPrice) outcomes.push({ name: 'NO', price: noPrice })
+  return outcomes
+}
+
+// Live backend envelope (polymarket_search tool; cross-checked against the
+// app's PolymarketMarketsCardSchema signingCards.ts and agent-backend-ts's
+// PolymarketMarketRow / cardContracts.ts, surface_json_leak spike): rows carry
+// `yesPrice`/`noPrice` — 0..1 implied-probability fractions — and `topOutcome`
+// for multi-outcome markets, NOT a nested `outcomes[]` array. Volume is
+// `volume24h`, not `volume`.
 function parsePolymarketMarket(v: unknown): PolymarketMarket | null {
   if (!v || typeof v !== 'object') return null
   const o = v as Record<string, unknown>
   const question = asString(o.question) || asString(o.title)
   if (!question) return null
   const id = asString(o.id) || asString(o.slug)
-  const outcomesRaw = Array.isArray(o.outcomes) ? o.outcomes : []
-  const outcomes = outcomesRaw.map(parsePolymarketOutcome).filter((x): x is PolymarketOutcome => x !== null)
+  const outcomes = buildPolymarketOutcomes(o)
   const market: PolymarketMarket = { id, question, outcomes }
-  const volume = o.volume
-  if (typeof volume === 'number' && Number.isFinite(volume)) {
-    market.volume = formatUsd(volume)
-  } else if (typeof volume === 'string' && volume) {
-    market.volume = stripControlChars(volume)
+  const volume24h = o.volume24h
+  if (typeof volume24h === 'number' && Number.isFinite(volume24h)) {
+    market.volume = formatUsd(volume24h)
+  } else if (typeof volume24h === 'string' && volume24h) {
+    market.volume = stripControlChars(volume24h)
   }
   const endDate = asString(o.endDate) || asString(o.end_date)
   if (endDate) market.endDate = endDate
@@ -441,7 +468,12 @@ export function parsePolymarketMarketsEnvelope(value: unknown): PolymarketMarket
   const raw = Array.isArray(o.markets) ? o.markets : Array.isArray(o.data) ? o.data : []
   const markets = raw.map(parsePolymarketMarket).filter((m): m is PolymarketMarket => m !== null)
   if (markets.length === 0) return null
-  return { surface: 'polymarket_markets', markets }
+  const card: PolymarketMarketsCard = { surface: 'polymarket_markets', markets }
+  const title = asString(o.title)
+  if (title) card.title = title
+  const subtitle = asString(o.subtitle)
+  if (subtitle) card.subtitle = subtitle
+  return card
 }
 
 /**
@@ -449,7 +481,10 @@ export function parsePolymarketMarketsEnvelope(value: unknown): PolymarketMarket
  * of the raw envelope JSON.
  */
 export function renderPolymarketMarketsCard(card: PolymarketMarketsCard): string {
-  const lines: string[] = [chalk.bold('  Polymarket markets')]
+  const lines: string[] = [chalk.bold(`  ${card.title || 'Polymarket markets'}`)]
+  // subtitle carries backend-generated count-honesty text (e.g. "Showing 8 of
+  // 10 markets…") — must not be dropped, mirrors how title falls through.
+  if (card.subtitle) lines.push(chalk.gray(`  ${card.subtitle}`))
   for (const market of card.markets) {
     const metaBits = [market.volume ? `${market.volume} vol` : '', market.endDate ? `ends ${market.endDate}` : '']
       .filter(Boolean)

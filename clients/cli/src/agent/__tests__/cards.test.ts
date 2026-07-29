@@ -290,32 +290,75 @@ describe('extractYieldOpportunitiesFromText (legacy verbatim-echo fallback)', ()
 // polymarket_markets (rj3p)
 // ============================================================================
 
+// Real envelope shape (polymarket_search tool / app PolymarketMarketsCardSchema
+// / agent-backend-ts PolymarketMarketRow, surface_json_leak spike): rows carry
+// `yesPrice`/`noPrice` (0..1 fractions) and `topOutcome` for multi-outcome
+// markets, NOT a nested `outcomes[]` array; volume is `volume24h`, not
+// `volume`. This fixture pins the parser against that live shape rather than
+// an invented one.
 const POLYMARKET_ENVELOPE = {
   surface: 'polymarket_markets',
+  title: 'Trending Polymarket markets',
+  subtitle: 'Showing 2 of 8 markets · 24h volume',
   markets: [
     {
       id: 'm1',
+      slug: 'will-it-rain-tomorrow',
       question: 'Will it rain tomorrow?',
-      volume: 12345.6,
+      yesPrice: 0.6,
+      noPrice: 0.4,
+      volume24h: 12345.6,
       endDate: '2026-08-01',
-      outcomes: [
-        { name: 'Yes', price: 0.6 },
-        { name: 'No', price: 0.4 },
-      ],
+    },
+    {
+      id: 'm2',
+      slug: 'who-will-win-the-election',
+      question: 'Who will win the election?',
+      topOutcome: 'Candidate A',
+      yesPrice: 0.42,
+      volume24h: 5000,
     },
   ],
 }
 
 describe('parsePolymarketMarketsEnvelope', () => {
-  it('parses a valid envelope, converting fractional prices to percentages', () => {
+  it('parses a valid envelope off the real yesPrice/noPrice/volume24h shape', () => {
     const card = parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)
     expect(card).not.toBeNull()
-    expect(card!.markets).toHaveLength(1)
+    expect(card!.title).toBe('Trending Polymarket markets')
+    expect(card!.subtitle).toBe('Showing 2 of 8 markets · 24h volume')
+    expect(card!.markets).toHaveLength(2)
+    // Binary YES/NO market: outcomes synthesized from yesPrice/noPrice.
     expect(card!.markets[0].outcomes).toEqual([
-      { name: 'Yes', price: '60.0%' },
-      { name: 'No', price: '40.0%' },
+      { name: 'YES', price: '60%' },
+      { name: 'NO', price: '40%' },
     ])
     expect(card!.markets[0].volume).toContain('12,345.60')
+    // Multi-outcome market: topOutcome replaces the YES/NO label, priced off yesPrice.
+    expect(card!.markets[1].outcomes).toEqual([{ name: 'Candidate A', price: '42%' }])
+    expect(card!.markets[1].volume).toContain('5,000.00')
+  })
+
+  it('drops price/volume for a market carrying the OLD invented outcomes[]/volume shape', () => {
+    // Nothing in production ever emits this shape — pins that the parser reads
+    // yesPrice/noPrice/volume24h and does NOT fall back to outcomes[]/volume.
+    const card = parsePolymarketMarketsEnvelope({
+      surface: 'polymarket_markets',
+      markets: [
+        {
+          id: 'm1',
+          question: 'Will it rain tomorrow?',
+          volume: 12345.6,
+          outcomes: [
+            { name: 'Yes', price: 0.6 },
+            { name: 'No', price: 0.4 },
+          ],
+        },
+      ],
+    })
+    expect(card).not.toBeNull()
+    expect(card!.markets[0].outcomes).toEqual([])
+    expect(card!.markets[0].volume).toBeUndefined()
   })
 
   it('rejects a non-polymarket_markets surface', () => {
@@ -335,11 +378,24 @@ describe('parsePolymarketMarketsEnvelope', () => {
 describe('renderPolymarketMarketsCard', () => {
   it('renders human-readable prose, not raw JSON', () => {
     const out = renderPolymarketMarketsCard(parsePolymarketMarketsEnvelope(POLYMARKET_ENVELOPE)!)
+    expect(out).toContain('Trending Polymarket markets')
+    expect(out).toContain('Showing 2 of 8 markets')
     expect(out).toContain('Will it rain tomorrow?')
-    expect(out).toContain('Yes')
-    expect(out).toContain('60.0%')
+    expect(out).toContain('YES')
+    expect(out).toContain('60%')
+    expect(out).toContain('Candidate A')
+    expect(out).toContain('42%')
     expect(out).not.toContain('"surface"')
     expect(out).not.toContain('"outcomes"')
+  })
+
+  it('falls back to the default title when the envelope omits one', () => {
+    const card = parsePolymarketMarketsEnvelope({
+      surface: 'polymarket_markets',
+      markets: [{ id: 'm1', question: 'Will it rain tomorrow?', yesPrice: 0.6 }],
+    })
+    const out = renderPolymarketMarketsCard(card!)
+    expect(out).toContain('Polymarket markets')
   })
 })
 
@@ -352,7 +408,7 @@ describe('extractPolymarketMarketsFromText (legacy verbatim-echo fallback)', () 
     const text = `Done. ${JSON.stringify(POLYMARKET_ENVELOPE)} Anything else?`
     const res = extractPolymarketMarketsFromText(text)
     expect(res).not.toBeNull()
-    expect(res!.card.markets).toHaveLength(1)
+    expect(res!.card.markets).toHaveLength(2)
     expect(res!.remainingText).toContain('Done.')
     expect(res!.remainingText).not.toContain('"surface"')
   })

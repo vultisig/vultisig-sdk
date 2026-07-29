@@ -133,11 +133,16 @@ type StreamCallbacks = {
   // card envelope; the consumer validates + renders it. Replaces the legacy
   // verbatim-echo path where the card arrived as raw JSON in message content.
   onBalanceSummary?: (card: unknown) => void
-  // Fired for the `data-yield_opportunities` / `data-polymarket_markets` SSE
-  // parts the backend emits when the client advertised those surfaces (rj3p).
-  // Same contract as onBalanceSummary: carries the raw envelope, the consumer
-  // validates + renders it as prose instead of letting the legacy verbatim-echo
-  // path dump raw card JSON into message content.
+  // Forward-compat wiring for a `data-yield_opportunities` / `data-polymarket_markets`
+  // typed SSE part (rj3p) — NOT live today: agent-backend-ts gates these two
+  // envelopes on catalog/intent presence (keywords/catalog), not on
+  // `supported_surfaces`, and emits no such typed writer (verified against
+  // agent-backend-ts src/mastra/agent.ts + uiStream.ts). The envelope actually
+  // arrives via the legacy verbatim-echo path today, which is why
+  // extractYieldOpportunitiesFromText / extractPolymarketMarketsFromText exist
+  // as the real fallback. Same contract as onBalanceSummary once/if the backend
+  // adds the typed writer: carries the raw envelope, the consumer validates +
+  // renders it as prose instead of letting the raw card JSON reach message content.
   onYieldOpportunities?: (card: unknown) => void
   onPolymarketMarkets?: (card: unknown) => void
   // Fired for the `data-turn_outcome` SSE part the backend emits at turn end when
