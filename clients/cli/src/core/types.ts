@@ -41,6 +41,8 @@ export type SendDryRunResult = {
   total: string
   balance: string
   destinationTag?: number
+  /** Memo included in the signable transaction payload, when present. */
+  memo?: string
   warning?: string
 }
 

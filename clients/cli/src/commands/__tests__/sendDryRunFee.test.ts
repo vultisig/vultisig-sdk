@@ -22,14 +22,14 @@ afterEach(() => {
   resetOutput()
 })
 
-function makeVault(opts: { fee: string; total: string; balance: string }) {
+function makeVault(opts: { fee: string; total: string; balance: string; payloadMemo?: string }) {
   return {
     send: vi.fn(async () => ({
       dryRun: true,
       fee: opts.fee,
       feeSymbol: 'ETH',
       total: opts.total,
-      keysignPayload: { some: 'payload' },
+      keysignPayload: { memo: opts.payloadMemo },
     })),
     balance: vi.fn(async () => ({
       formattedAmount: opts.balance,
@@ -83,6 +83,7 @@ const params = {
 } as never
 
 const tokenParams = { ...(params as object), tokenId: 'USDC' } as never
+const memoParams = { ...(params as object), chain: Chain.THORChain, memo: 'memo-from-input' } as never
 
 async function sendJson(vault: never, options: never = params) {
   configureOutput({ format: 'json' })
@@ -110,6 +111,49 @@ describe('send --dry-run preview', () => {
       total: '1.0021',
       balance: '5.0',
     })
+  })
+
+  it('surfaces the signable payload memo in JSON instead of echoing the input', async () => {
+    const data = await sendJson(
+      makeVault({
+        fee: '0.0021',
+        total: '1.0021',
+        balance: '5.0',
+        payloadMemo: 'memo-from-signable-payload',
+      }),
+      memoParams
+    )
+
+    expect(data.memo).toBe('memo-from-signable-payload')
+    expect(data.memo).not.toBe('memo-from-input')
+  })
+
+  it('prints the signable payload memo and omits memo output for a memo-less payload', async () => {
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    await sendTransaction(
+      makeVault({
+        fee: '0.0021',
+        total: '1.0021',
+        balance: '5.0',
+        payloadMemo: 'memo-from-signable-payload',
+      }),
+      memoParams
+    )
+
+    const joined = logs.join('\n')
+    expect(joined).toMatch(/Memo:\s+memo-from-signable-payload/)
+    expect(joined).not.toContain('memo-from-input')
+
+    logs.length = 0
+    const memoLessResult = await sendTransaction(makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0' }), params)
+
+    expect(memoLessResult).not.toHaveProperty('memo')
+    expect(logs.join('\n')).not.toMatch(/\bMemo:/)
   })
 
   it('still warns when the total exceeds the balance, and reports the numbers behind it', async () => {

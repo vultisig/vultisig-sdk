@@ -2,7 +2,7 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
-import type { VaultBase } from '@vultisig/sdk'
+import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
@@ -42,7 +42,7 @@ export async function executeSend(
 async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
-  dryResult: { fee: string; feeSymbol: string; total: string },
+  dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
   to: string,
   destinationTag: number | undefined
 ): Promise<SendDryRunResult> {
@@ -92,6 +92,7 @@ async function previewDryRun(
     total: dryResult.total,
     balance: balance.formattedAmount,
     destinationTag,
+    ...(dryResult.keysignPayload.memo ? { memo: dryResult.keysignPayload.memo } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
   }
 
@@ -105,6 +106,7 @@ async function previewDryRun(
   info(`  To:      ${result.to}`)
   info(`  Amount:  ${result.amount} ${result.symbol}`)
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
+  if (result.memo) info(`  Memo:    ${result.memo}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
   info(`  Total:   ${result.total} ${result.symbol}`)
   info(`  Balance: ${result.balance} ${result.symbol}`)
