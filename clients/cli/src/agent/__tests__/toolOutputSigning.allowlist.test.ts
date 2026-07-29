@@ -21,6 +21,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CLI_SIGNABLE_FLAT_TOOLS,
   CLI_SIGNABLE_PREP_TOOLS,
+  CLI_SIGNABLE_YIELD_TOOLS,
   DIVERGENT_FIELD_TOOLS,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
@@ -85,6 +86,19 @@ describe('CLI_SIGNABLE_FLAT_TOOLS — independent anchor vs the mcp-ts source of
 describe('CLI_SIGNABLE_PREP_TOOLS', () => {
   it('contains exactly the execute_* signer-ready prep tools', () => {
     expect([...CLI_SIGNABLE_PREP_TOOLS].sort()).toEqual(['execute_contract_call', 'execute_send', 'execute_swap'])
+  })
+})
+
+describe('CLI_SIGNABLE_YIELD_TOOLS (bead vultisig-6rg2 — yield deposit/withdraw signing gap)', () => {
+  it('contains exactly yield_enter + yield_exit', () => {
+    expect([...CLI_SIGNABLE_YIELD_TOOLS].sort()).toEqual(['yield_enter', 'yield_exit'])
+  })
+
+  it('is disjoint from the flat and prep allowlists (a tool lives in ONE bucket)', () => {
+    for (const t of CLI_SIGNABLE_YIELD_TOOLS) {
+      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(false)
+      expect(CLI_SIGNABLE_PREP_TOOLS.has(t)).toBe(false)
+    }
   })
 })
 

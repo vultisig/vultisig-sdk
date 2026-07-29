@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
@@ -152,5 +153,99 @@ describe('BalanceService', () => {
     expect(getEvmChainBalances).toHaveBeenCalledTimes(1)
     expect(cached[Chain.Ethereum]?.formattedAmount).toBe('1')
     expect(cached[`${Chain.Ethereum}:${token.id}`]?.formattedAmount).toBe('5')
+  })
+
+  describe('addToken / removeToken - Ripple issued-currency id normalization', () => {
+    const issuer = 'rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De'
+    // The on-ledger id ledger discovery stores (RLUSD encoded as its 40-hex code).
+    const canonicalId = rippleTokenId({ currency: 'RLUSD', issuer })
+    // The same token entered by its human ticker, as shown on explorers.
+    const humanTickerId = `RLUSD.${issuer}`
+
+    const rippleToken = (id: string): Token => ({
+      id,
+      symbol: 'RLUSD',
+      name: 'Ripple USD',
+      decimals: 15,
+      contractAddress: id,
+      chainId: Chain.Ripple,
+    })
+
+    const makeStatefulService = (initial: Record<string, Token[]> = {}, saveVault = vi.fn()) => {
+      let store: Record<string, Token[]> = initial
+      const emitTokenAdded = vi.fn()
+      const service = new BalanceService(
+        cacheService,
+        vi.fn(),
+        vi.fn(),
+        async chain => `${chain}-address`,
+        chain => store[chain] ?? [],
+        () => store,
+        tokens => {
+          store = tokens
+        },
+        saveVault,
+        emitTokenAdded,
+        vi.fn()
+      )
+      return { service, emitTokenAdded, ripple: () => store[Chain.Ripple] ?? [] }
+    }
+
+    it('collapses a manual human-ticker add and an auto-discovered canonical id into one token', async () => {
+      // Discovery already stored the on-ledger canonical id.
+      const { service, ripple } = makeStatefulService({ [Chain.Ripple]: [rippleToken(canonicalId)] })
+
+      // User manually adds the same token by its human ticker.
+      await service.addToken(Chain.Ripple, rippleToken(humanTickerId))
+
+      expect(ripple()).toHaveLength(1)
+      expect(ripple()[0].id).toBe(canonicalId)
+    })
+
+    it('persists a manually added human-ticker token under its canonical id', async () => {
+      const { service, ripple } = makeStatefulService()
+
+      await service.addToken(Chain.Ripple, rippleToken(humanTickerId))
+
+      expect(ripple()).toHaveLength(1)
+      expect(ripple()[0].id).toBe(canonicalId)
+      expect(ripple()[0].contractAddress).toBe(canonicalId)
+    })
+
+    it('removes a canonical-stored token when asked by its human-ticker id', async () => {
+      const { service, ripple } = makeStatefulService({ [Chain.Ripple]: [rippleToken(canonicalId)] })
+
+      await service.removeToken(Chain.Ripple, humanTickerId)
+
+      expect(ripple()).toHaveLength(0)
+    })
+
+    it('rolls the add back when persistence fails, leaving no phantom token', async () => {
+      const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
+      const { service, emitTokenAdded, ripple } = makeStatefulService({ [Chain.Ripple]: [] }, saveVault)
+
+      await expect(service.addToken(Chain.Ripple, rippleToken(humanTickerId))).rejects.toThrow('disk full')
+
+      // The caller was told the add failed, so it must not linger in memory and
+      // get persisted by some later successful save.
+      expect(ripple()).toHaveLength(0)
+      expect(emitTokenAdded).not.toHaveBeenCalled()
+    })
+
+    it('does not corrupt live vault state when persistence fails', async () => {
+      const existing = rippleToken(canonicalId)
+      // getAllTokens() hands back live state; a failed add must leave it untouched.
+      const live: Record<string, Token[]> = { [Chain.Ripple]: [existing] }
+      const saveVault = vi.fn().mockRejectedValue(new Error('disk full'))
+      const { service, ripple } = makeStatefulService(live, saveVault)
+
+      await expect(service.addToken(Chain.Ripple, rippleToken(`USD.${issuer}`))).rejects.toThrow('disk full')
+
+      // The caller's original record is never mutated in place...
+      expect(live[Chain.Ripple]).toEqual([existing])
+      // ...and the store the service actually reads from is rolled back to it,
+      // so no stale optimistic token survives the failed save.
+      expect(ripple()).toEqual([existing])
+    })
   })
 })

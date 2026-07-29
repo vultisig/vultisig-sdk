@@ -1123,7 +1123,7 @@ Examples:
         await executeSwapQuote(context, {
           fromChain,
           toChain,
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -1179,7 +1179,7 @@ See also: swap-quote, swap-chains, balance`
         await executeSwap(context, {
           fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
           toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
           slippage: options.slippage ? parseFloat(options.slippage) : undefined,
