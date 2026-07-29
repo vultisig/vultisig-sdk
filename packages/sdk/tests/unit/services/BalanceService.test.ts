@@ -127,6 +127,7 @@ describe('BalanceService', () => {
 
   it('uses the token asset id for the non-EVM per-coin balance path', async () => {
     const mint = 'So11111111111111111111111111111111111111112'
+    const secondMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
     const solanaToken: Token = {
       id: `${Chain.Solana}-${mint}`,
       contractAddress: mint,
@@ -136,7 +137,16 @@ describe('BalanceService', () => {
       chainId: Chain.Solana,
       isNative: false,
     }
-    let allTokens: Record<string, Token[]> = { [Chain.Solana]: [solanaToken] }
+    const collidingToken: Token = {
+      id: 'wsol',
+      contractAddress: secondMint,
+      symbol: 'USDC',
+      name: 'USD Coin',
+      decimals: 6,
+      chainId: Chain.Solana,
+      isNative: false,
+    }
+    let allTokens: Record<string, Token[]> = { [Chain.Solana]: [solanaToken, collidingToken] }
     const service = new BalanceService(
       cacheService,
       vi.fn(),
@@ -152,15 +162,19 @@ describe('BalanceService', () => {
       vi.fn()
     )
     vi.mocked(getCoinBalance).mockImplementation(async ({ id }) => {
-      if (id === solanaToken.id) throw new Error(`invalid asset id: ${id}`)
-      return id ? 5_000_000_000n : 1_000_000_000n
+      if (id === solanaToken.id || id === collidingToken.id) throw new Error(`invalid asset id: ${id}`)
+      if (id === secondMint) return 7_000_000n
+      return id === mint ? 5_000_000_000n : 1_000_000_000n
     })
 
     const result = await service.getBalances({ chains: Chain.Solana, includeTokens: true })
 
-    expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint])
+    // `collidingToken.id` equals the first token's symbol. Resolving that id
+    // against the whole list would fetch WSOL twice and label one as USDC.
+    expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint, secondMint])
     expect(result[Chain.Solana]).toBeDefined()
     expect(result[`${Chain.Solana}:${solanaToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Solana}:${collidingToken.id}`]?.formattedAmount).toBe('7')
   })
 
   it('removes an added token by symbol through the shared token resolver', async () => {
@@ -320,10 +334,12 @@ describe('BalanceService', () => {
     expect(getTokens(Chain.Ethereum)).toEqual([daiToken])
   })
 
-  it('resolves each token independently when a chain tracks several', async () => {
+  it("uses each selected record's asset id when a stored id collides with a sibling symbol", async () => {
     const DAI = '0x6b175474e89094c44da98b954eedeac495271d0f'
     const daiToken: Token = {
-      id: `${Chain.Ethereum}-${DAI}`,
+      // This storage id collides case-insensitively with addedToken.symbol.
+      // Re-resolving it against both records would select USDC first.
+      id: 'usdc',
       contractAddress: DAI,
       symbol: 'DAI',
       name: 'Dai Stablecoin',

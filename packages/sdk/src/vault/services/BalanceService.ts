@@ -37,6 +37,15 @@ export class BalanceService {
    * Uses CacheService with automatic TTL-based caching
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
+    return this.getBalanceForAsset(chain, tokenId)
+  }
+
+  private async getBalanceForAsset(
+    chain: Chain,
+    tokenId?: string,
+    knownAssetId?: string,
+    knownToken?: Token
+  ): Promise<Balance> {
     const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
 
     // Check scoped cache (uses configured TTL)
@@ -48,7 +57,7 @@ export class BalanceService {
       // Resolved inside the try, after the cache check: `getTokens` is injected,
       // so a throw from it stays wrapped as a VaultError instead of escaping raw
       // on a path that used to be served from cache.
-      const assetId = resolveTokenRefId(chain, tokenId, this.getTokens(chain))
+      const assetId = knownAssetId ?? resolveTokenRefId(chain, tokenId, this.getTokens(chain))
 
       address = await this.getAddress(chain)
 
@@ -61,7 +70,7 @@ export class BalanceService {
       })
 
       // Format using adapter
-      const tokens = this.getTokensRecord()
+      const tokens = knownToken ? { [chain]: [knownToken] } : this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, tokenId, tokens)
 
       // Cache with configured TTL
@@ -136,8 +145,11 @@ export class BalanceService {
     if (includeTokens) {
       const tokens = this.getTokens(chain)
       for (const token of tokens) {
+        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
         balanceRequests.push(
-          this.getBalance(chain, token.id).then(balance => [`${chain}:${token.id}`, balance] as const)
+          this.getBalanceForAsset(chain, token.id, assetId, token).then(
+            balance => [`${chain}:${token.id}`, balance] as const
+          )
         )
       }
     }
@@ -159,17 +171,21 @@ export class BalanceService {
       resultKey: string
       cacheKey: string
       tokenId?: string
+      token?: Token
     }
 
     const requests: CoinRequest[] = [
       { coinKey: { chain, address }, resultKey: chain, cacheKey: `${chain.toLowerCase()}:native` },
       ...tokens.map(token => {
-        const assetId = resolveTokenRefId(chain, token.id, tokens) ?? token.id
+        // This record is already selected. Use its own chain-level asset id
+        // instead of resolving its storage key against sibling symbols.
+        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
         return {
           coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
           resultKey: `${chain}:${token.id}`,
           cacheKey: `${chain.toLowerCase()}:${token.id}`,
           tokenId: token.id,
+          token,
         }
       }),
     ]
@@ -205,7 +221,8 @@ export class BalanceService {
       // aggregate IS a real balance and is kept); a missing key falls through uncached + unemitted so the
       // next call refetches. It's still returned for this call so the shape is complete.
       const present = rawBalance !== undefined
-      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, tokensRecord)
+      const formatTokens = request.token ? { [chain]: [request.token] } : tokensRecord
+      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, formatTokens)
 
       if (present) {
         await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
