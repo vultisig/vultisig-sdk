@@ -235,4 +235,53 @@ describe('RujiraOrderbook', () => {
       expect(book.timestamp).toBeLessThanOrEqual(after)
     })
   })
+  // FUND SAFETY (vultisig-ops-p8bch): FIN's OrderTarget is documented as a
+  // "target offer amount", and the contract requires "funds sent must be equal
+  // to the net change of balances". buildPlaceOrder used to put the BASE
+  // quantity in the msg while attaching amount x price as funds, so on a buy
+  // the two disagreed by a factor of `price`. On-chain reality (every one of
+  // ~600 order txs scanned on thor1y8g3yhz...ts7ud7): msg amount == funds.
+  describe('buildPlaceOrder() offer-amount encoding', () => {
+    const pair = {
+      base: 'THOR.RUNE',
+      quote: 'ETH.USDC-0XA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48',
+      contractAddress: 'thor1paircontract',
+      tick: '0',
+      takerFee: '0',
+      makerFee: '0',
+    }
+
+    const build = async (side: 'buy' | 'sell', price: string, amount: string) => {
+      const orderbook = new RujiraOrderbook(createMockClient() as any)
+      return orderbook.buildPlaceOrder({ pair, side, price, amount } as any)
+    }
+
+    it('buy: msg amount equals the attached quote funds, not the base quantity', async () => {
+      // buy 2 RUNE at 4 USDC -> escrow 8 USDC. price > 1: the old encoding
+      // silently created an order 4x too small and refunded the excess.
+      const { msg, funds } = await build('buy', '4', '200000000')
+
+      expect(funds[0].amount).toBe('800000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+      expect(msg.order[0][0][0]).toBe('quote')
+    })
+
+    it('buy below parity: msg amount equals funds (old encoding under-funded and reverted)', async () => {
+      // buy 0.5 RUNE at 0.44 USDC -> escrow 0.22 USDC. price < 1: the old
+      // encoding asked the contract for 0.5 USDC of order while sending 0.22,
+      // tripping ContractError::InsufficientFunds.
+      const { msg, funds } = await build('buy', '0.44', '50000000')
+
+      expect(funds[0].amount).toBe('22000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+    })
+
+    it('sell: unchanged — base quantity is already the offer amount', async () => {
+      const { msg, funds } = await build('sell', '2', '300000000')
+
+      expect(funds[0].amount).toBe('300000000')
+      expect(msg.order[0][0][2]).toBe(funds[0].amount)
+      expect(msg.order[0][0][0]).toBe('base')
+    })
+  })
 })

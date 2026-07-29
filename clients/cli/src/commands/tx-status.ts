@@ -6,15 +6,16 @@
  * spent. Use --no-wait to return the current status immediately.
  *
  * The `--tx-hash` value is validated for its chain-kind BEFORE any RPC call, so a
- * malformed hash fails fast with INVALID_INPUT (exit 4) instead of being polled.
+ * malformed hash fails fast with INVALID_HASH (exit 4) instead of being polled.
  * A well-formed hash the node has never seen resolves to `not_found` rather than
  * an indefinite `pending`, so a typo'd or dropped hash can never poll forever.
  */
 import type { TxStatusResult } from '@vultisig/sdk'
 import { Chain, isValidTxHash, Vultisig } from '@vultisig/sdk'
 
+import { recordResolution } from '../agent/broadcastJournal'
 import type { CommandContext } from '../core'
-import { InvalidInputError, TxNotFoundError, TxStatusTimeoutError } from '../core'
+import { InvalidInputError, InvalidTxHashError, TxNotFoundError, TxStatusTimeoutError } from '../core'
 import { createSpinner, isJsonOutput, outputJson, printResult } from '../lib/output'
 
 export type TxStatusParams = {
@@ -23,6 +24,25 @@ export type TxStatusParams = {
   noWait?: boolean
   /** Total wait budget in seconds for polling mode. Ignored when `noWait`. */
   timeoutSec?: number
+}
+
+export function resolveTxStatusParams(params: TxStatusParams): TxStatusParams {
+  if (!Object.values(Chain).includes(params.chain)) {
+    throw new InvalidInputError(`Invalid chain: ${params.chain}`)
+  }
+
+  // Validate before vault lookup as well as before RPC. Invalid input must be
+  // reported truthfully even when no active vault is configured.
+  if (!isValidTxHash(params.chain, params.txHash)) {
+    throw new InvalidTxHashError(
+      `Invalid transaction hash for ${params.chain}: "${params.txHash}"`,
+      'Check the hash — it must match the expected format for the chain.',
+      undefined,
+      { chain: params.chain, txHash: params.txHash, status: 'invalid_hash' }
+    )
+  }
+
+  return params
 }
 
 const POLL_INTERVAL_MS = 5_000
@@ -41,11 +61,16 @@ const isTerminal = (status: TxStatusResult['status']): boolean => status === 'su
 // against reintroducing the infinite poll — `deadline = Date.now() + NaN` would
 // make `Date.now() >= deadline` forever false. The CLI validates `--timeout`
 // too, but this keeps `executeTxStatus` self-safe for every caller.
-function resolveTimeoutMs(timeoutSec: number | undefined): number {
+export function resolveTimeoutMs(timeoutSec: number | undefined): number {
   if (typeof timeoutSec !== 'number' || !Number.isFinite(timeoutSec)) {
     return DEFAULT_TIMEOUT_SEC * 1_000
   }
-  return Math.max(0, timeoutSec) * 1_000
+  const ms = Math.max(0, timeoutSec) * 1_000
+  // A *finite* `timeoutSec` can still overflow to Infinity once scaled to ms
+  // (e.g. `1e308 * 1000`). An Infinite deadline makes `remainingMs <= 0`
+  // unreachable — reintroducing the exact infinite poll this guard exists to
+  // prevent — so clamp an overflowed value back to a finite ceiling.
+  return Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER
 }
 
 export async function executeTxStatus(
@@ -53,23 +78,9 @@ export async function executeTxStatus(
   params: TxStatusParams,
   opts: { pollIntervalMs?: number } = {}
 ): Promise<TxStatusResult> {
+  resolveTxStatusParams(params)
+
   const vault = await ctx.ensureActiveVault()
-
-  if (!Object.values(Chain).includes(params.chain)) {
-    throw new InvalidInputError(`Invalid chain: ${params.chain}`)
-  }
-
-  // Validate the hash shape BEFORE touching the network — a malformed hash is a
-  // user error, not something to poll. (exit 4 / INVALID_INPUT, no RPC.)
-  if (!isValidTxHash(params.chain, params.txHash)) {
-    throw new InvalidInputError(
-      `Invalid transaction hash for ${params.chain}: "${params.txHash}"`,
-      'Check the hash — it must match the expected format for the chain.',
-      undefined,
-      { chain: params.chain, txHash: params.txHash }
-    )
-  }
-
   const pollIntervalMs = opts.pollIntervalMs ?? POLL_INTERVAL_MS
   const spinner = createSpinner('Checking transaction status...')
 
@@ -96,7 +107,13 @@ export async function executeTxStatus(
       }
     }
 
-    spinner.succeed(`Transaction status: ${result.status}`)
+    if (result.status === 'success') {
+      recordResolution(params.txHash, 'confirmed')
+    } else if (result.status === 'error') {
+      recordResolution(params.txHash, 'failed')
+    }
+
+    spinner.succeed(`Transaction status: ${toCliStatus(result.status)}`)
     displayResult(params.chain, params.txHash, result)
     return result
   } catch (error) {
@@ -135,11 +152,12 @@ function giveUpError(
 }
 
 function displayResult(chain: Chain, txHash: string, result: TxStatusResult): void {
+  const status = toCliStatus(result.status)
   if (isJsonOutput()) {
     outputJson({
       chain,
       txHash,
-      status: result.status,
+      status,
       receipt: result.receipt
         ? {
             feeAmount: result.receipt.feeAmount.toString(),
@@ -150,13 +168,21 @@ function displayResult(chain: Chain, txHash: string, result: TxStatusResult): vo
       explorerUrl: Vultisig.getTxExplorerUrl(chain, txHash),
     })
   } else {
-    printResult(`Status: ${result.status}`)
+    printResult(`Status: ${status}`)
     if (result.receipt) {
       const fee = formatFee(result.receipt.feeAmount, result.receipt.feeDecimals)
       printResult(`Fee: ${fee} ${result.receipt.feeTicker}`)
     }
     printResult(`Explorer: ${Vultisig.getTxExplorerUrl(chain, txHash)}`)
   }
+}
+
+type CliTxStatus = 'pending' | 'not_found' | 'confirmed' | 'failed'
+
+function toCliStatus(status: TxStatusResult['status']): CliTxStatus {
+  if (status === 'success') return 'confirmed'
+  if (status === 'error') return 'failed'
+  return status
 }
 
 function formatFee(amount: bigint, decimals: number): string {

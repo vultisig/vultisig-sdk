@@ -14,3 +14,5 @@ export const Chain = {
 export class Vultisig {}
 export class MemoryStorage {}
 export type VaultBase = any
+
+export { resolveChainReference } from '../../../../packages/sdk/src/utils/resolveChainReference'

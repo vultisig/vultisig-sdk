@@ -4,7 +4,7 @@ import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutDuplicates } from '@vultisig/lib-utils/array/withoutDuplicates'
 
-import { NativeSwapChain, nativeSwapChainIds, nativeSwapEnabledChains } from '../NativeSwapChain'
+import { getNativeSwapChainId, NativeSwapChain, nativeSwapEnabledChains } from '../NativeSwapChain'
 
 export type NativeSwapTradingHalt = {
   swapChain: NativeSwapChain
@@ -31,7 +31,7 @@ const cached = <T>(entry: CacheEntry<T> | undefined, load: () => Promise<T>): Ca
 }
 
 const chainIdFor = (coin: AccountCoin): string | null =>
-  isOneOf(coin.chain, nativeSwapEnabledChains) ? nativeSwapChainIds[coin.chain] : null
+  isOneOf(coin.chain, nativeSwapEnabledChains) ? getNativeSwapChainId(coin.chain) : null
 
 const getInboundAddresses = async (deps: NativeSwapTradingHaltDeps): Promise<InboundAddresses> => {
   if (deps.fetchInboundAddresses) {

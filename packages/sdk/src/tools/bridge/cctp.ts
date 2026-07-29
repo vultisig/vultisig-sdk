@@ -91,7 +91,11 @@ export const cctpChains: Record<string, CctpChainConfig> = {
     evmChainId: 8453,
     domain: 6,
     tokenMessenger: '0x1682Ae6375C4E4A97e4B583BC394c861A46D8962',
-    messageTransmitter: '0xAD09780d193884d503182aD4F75D113B9B9a86E7',
+    // Circle's published Base MessageTransmitter. The previous value
+    // (0xAD09780d193884d503182aD4F75D113B9B9a86E7, same prefix, different
+    // tail) is a CODELESS EOA on Base — receiveMessage against it
+    // "succeeds" without minting, i.e. burn-without-mint fund loss.
+    messageTransmitter: '0xAD09780d193884d503182aD4588450C416D6F9D4',
     usdc: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   },
   Polygon: {

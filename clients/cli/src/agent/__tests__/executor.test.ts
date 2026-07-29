@@ -5,7 +5,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
-import { AgentExecutor } from '../executor'
+import { AgentExecutor, resolveChainId } from '../executor'
 
 function createMockVault(): VaultBase {
   const ethereum = Chain.Ethereum
@@ -200,6 +200,16 @@ describe('AgentExecutor — per-tool handlers (new tool-path API)', () => {
     })
     expect(ok).toBe(true)
     expect(executor.hasPendingTransaction()).toBe(true)
+  })
+})
+
+describe('resolveChainId', () => {
+  it.each([
+    ['5000', Chain.Mantle],
+    ['999', Chain.Hyperliquid],
+    ['1329', Chain.Sei],
+  ])('resolves numeric chain_id %s via the canonical SDK EVM map', (chainId, expected) => {
+    expect(resolveChainId(chainId)).toBe(expected)
   })
 })
 

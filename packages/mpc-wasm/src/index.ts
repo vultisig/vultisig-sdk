@@ -212,6 +212,11 @@ class WasmSchnorrEngine implements SchnorrEngine {
     return wrapSession(session, s => wrapKeyshare(s.finish()))
   }
 
+  createMigrateSession(setup: Uint8Array, localPartyId: string, localUI: Uint8Array, publicKey: Uint8Array, rootChainCode: Uint8Array): MpcSession<MpcKeyshare> {
+    const session = SchnorrKeygenSession.migrate(setup, localPartyId, localUI, publicKey, rootChainCode)
+    return wrapSession(session, s => wrapKeyshare(s.finish()))
+  }
+
   signSetup(keyId: Uint8Array, chainPath: string, messageHash: Uint8Array | null | undefined, partyIds: string[]): Uint8Array {
     if (!messageHash) {
       throw new Error('Schnorr (EdDSA) signing requires a message hash')

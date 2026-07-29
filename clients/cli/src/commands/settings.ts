@@ -47,6 +47,11 @@ export async function executeCurrency(ctx: CommandContext, newCurrency?: string)
   spinner.succeed('Currency updated')
 
   const currencyName = fiatCurrencyNameRecord[currency]
+  if (isJsonOutput()) {
+    outputJson({ currency, name: currencyName, updated: true })
+    return currency
+  }
+
   success(`\n+ Currency preference set to ${currency.toUpperCase()} (${currencyName})`)
 
   return currency
@@ -154,16 +159,20 @@ export async function executeAddressBook(
     }
 
     const spinner = createSpinner('Adding address to address book...')
-    await ctx.sdk.addAddressBookEntry([
-      {
-        chain: chain!,
-        address: address!,
-        name: name!,
-        source: 'saved' as const,
-        dateAdded: Date.now(),
-      },
-    ])
+    const entry = {
+      chain: chain!,
+      address: address!,
+      name: name!,
+      source: 'saved' as const,
+      dateAdded: Date.now(),
+    }
+    await ctx.sdk.addAddressBookEntry([entry])
     spinner.succeed('Address added')
+
+    if (isJsonOutput()) {
+      outputJson({ added: entry })
+      return []
+    }
 
     success(`\n+ Added ${name} (${chain}: ${address})`)
     return []
@@ -173,6 +182,11 @@ export async function executeAddressBook(
     const spinner = createSpinner('Removing address from address book...')
     await ctx.sdk.removeAddressBookEntry([{ address: options.remove, chain: options.chain }])
     spinner.succeed('Address removed')
+
+    if (isJsonOutput()) {
+      outputJson({ removed: { address: options.remove, chain: options.chain } })
+      return []
+    }
 
     success(`\n+ Removed ${options.remove}`)
     return []
