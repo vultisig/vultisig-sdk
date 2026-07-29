@@ -9,10 +9,11 @@
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { signatureAlgorithms } from '@vultisig/core-chain/signing/SignatureAlgorithm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { Token } from '../../../src/types'
+import { resolveTokenRef } from '../../../src/vault/tokenRef'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
 // ---------------------------------------------------------------------------
@@ -43,31 +44,13 @@ function formatUnits(value: bigint, decimals: number): string {
   return `${whole}.${trimmed}`
 }
 
+// Keep these legacy cases on the shipped resolver, not a copied implementation.
 function resolveTokenInfo(
   chain: Chain,
   symbol: string | undefined,
   userTokens: Record<string, Array<{ symbol: string; decimals: number; contractAddress?: string; id?: string }>>
 ): { ticker: string; decimals: number; contractAddress?: string } {
-  const native = chainFeeCoin[chain]
-
-  if (!symbol || symbol.toUpperCase() === native.ticker.toUpperCase()) {
-    return { ticker: native.ticker, decimals: native.decimals }
-  }
-
-  const tokens = userTokens[chain] ?? []
-  const token = tokens.find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
-  if (!token) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `Token "${symbol}" not found on ${chain}. Add it with vault.addToken() first.`
-    )
-  }
-
-  return {
-    ticker: token.symbol,
-    decimals: token.decimals,
-    contractAddress: token.contractAddress || token.id,
-  }
+  return resolveTokenRef(chain, symbol, (userTokens[chain] ?? []) as Token[])
 }
 
 // ---------------------------------------------------------------------------
