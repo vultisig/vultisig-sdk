@@ -41,6 +41,7 @@ describe('VaultBase balancesWithPrices', () => {
     const vault = {
       _currency: 'usd',
       balances: vi.fn().mockResolvedValue(balances),
+      getTokens: vi.fn().mockReturnValue([]),
       fiatValueService: {
         getPrices,
         getPrice,
@@ -73,5 +74,40 @@ describe('VaultBase balancesWithPrices', () => {
       fiatValue: 50000,
       fiatCurrency: 'usd',
     })
+  })
+
+  it('resolves a tracked token storage id before requesting its price', async () => {
+    const contractAddress = '0x00000000000000000000000000000000000000aa'
+    const storedTokenId = `${Chain.Ethereum}-${contractAddress}`
+    const getPrice = vi.fn().mockResolvedValue(1)
+    const vault = {
+      _currency: 'usd',
+      balances: vi.fn().mockResolvedValue({
+        [`${Chain.Ethereum}:${storedTokenId}`]: {
+          amount: '5000000',
+          formattedAmount: '5',
+          decimals: 6,
+          symbol: 'USDC',
+          chainId: Chain.Ethereum,
+          tokenId: storedTokenId,
+        },
+      }),
+      getTokens: vi.fn().mockReturnValue([
+        {
+          id: storedTokenId,
+          contractAddress,
+          symbol: 'USDC',
+          decimals: 6,
+        },
+      ]),
+      fiatValueService: {
+        getPrices: vi.fn(),
+        getPrice,
+      },
+    }
+
+    await VaultBase.prototype.balancesWithPrices.call(vault as never, [Chain.Ethereum], true, 'usd')
+
+    expect(getPrice).toHaveBeenCalledWith(Chain.Ethereum, contractAddress, 'usd')
   })
 })

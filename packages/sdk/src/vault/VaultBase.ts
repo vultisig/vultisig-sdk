@@ -1001,8 +1001,9 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     await Promise.all(
       Object.entries(balances).map(async ([key, balance]) => {
         const chain = balance.chainId as Chain
+        const tokenId = balance.tokenId ? resolveTokenRefId(chain, balance.tokenId, this.getTokens(chain)) : undefined
         const price = balance.tokenId
-          ? await this.fiatValueService.getPrice(chain, balance.tokenId, currency)
+          ? await this.fiatValueService.getPrice(chain, tokenId, currency)
           : (nativePrices[chain] ?? (await this.fiatValueService.getPrice(chain, undefined, currency)))
 
         const fiatValue = getCoinValue({
