@@ -62,7 +62,16 @@ export const mapSwapPayload = (spRaw: any): KeysignPayload['swapPayload'] | unde
                 : undefined,
             }
           : undefined,
-        provider: '1inch',
+        // Carry the fixture's ACTUAL provider. Production always sets this to the real
+        // quote.provider (see mpc/keysign/swap/build.ts), so a li.fi/swapkit general swap is
+        // never labelled '1inch'. This mapper previously HARDCODED '1inch' for every general
+        // (OneinchSwapPayload) fixture, which mislabelled the lifiswap.json fixture (LiFi Diamond
+        // router 0x1231DEB6...) as a 1inch swap - and the signing-path router guard
+        // (sdk#1358, assertKnownAggregatorRouterOnSigningPath) then correctly rejected that LiFi
+        // router as a non-1inch router. When the source fixture omits provider (older captures),
+        // fall back to '' - an unattributed provider must NOT be enforced as 1inch. The guard is a
+        // pure gate, so this never changes any pinned pre-signing hash; it only stops the mislabel.
+        provider: o.provider ?? o.Provider ?? '',
       },
     }
 

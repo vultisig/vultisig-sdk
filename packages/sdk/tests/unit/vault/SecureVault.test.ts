@@ -307,7 +307,7 @@ describe('SecureVault signing', () => {
         wasmProvider: {
           getWalletCore: vi.fn().mockResolvedValue({}),
         },
-        pushNotificationService: {} as any,
+        pushNotificationService: undefined,
       },
       {
         name: 'Secure Vault',
@@ -322,6 +322,160 @@ describe('SecureVault signing', () => {
         keyShares: { ecdsa: 'ecdsa-key-share', eddsa: 'eddsa-key-share' },
       }
     ) as SecureVault
+
+  describe('session-correlated lifecycle events', () => {
+    it('keeps concurrent secure-signing events correlated to distinct sessions', async () => {
+      const vault = makeSecureVault()
+      const events: Array<{
+        type: string
+        sessionId: string
+        marker?: string
+      }> = []
+      const unsubscribers = [
+        vault.on('signingProgress', event =>
+          events.push({
+            type: 'progress',
+            sessionId: event.sessionId!,
+            marker: event.step.message,
+          })
+        ),
+        vault.on('qrCodeReady', event =>
+          events.push({
+            type: 'qr',
+            sessionId: event.sessionId,
+            marker: event.qrPayload,
+          })
+        ),
+        vault.on('deviceJoined', event =>
+          events.push({
+            type: 'joined',
+            sessionId: event.sessionId,
+            marker: event.deviceId,
+          })
+        ),
+        vault.on('transactionSigned', event =>
+          events.push({
+            type: 'signed',
+            sessionId: event.sessionId!,
+            marker: event.payload.messageHashes?.[0],
+          })
+        ),
+      ]
+
+      const installRelay = (marker: string) => {
+        vi.mocked(RelaySigningService).mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signWithRelay: vi.fn(async (_vault, payload, _walletCore, options) => {
+              const sessionId = options.sessionId as string
+              options.onProgress?.({
+                step: 'coordinating',
+                progress: 40,
+                message: marker,
+                mode: 'relay',
+              })
+              await Promise.resolve()
+              options.onQRCodeReady?.(`qr-${marker}`)
+              options.onDeviceJoined?.(`device-${marker}`, 2, 2)
+              return {
+                signature: `signature-${payload.messageHashes[0]}`,
+                recovery: 0,
+                format: 'ECDSA',
+                sessionId,
+              }
+            }),
+          })
+        } as any)
+      }
+
+      installRelay('first')
+      installRelay('second')
+
+      try {
+        await Promise.all([
+          vault.sign({
+            chain: 'Ethereum',
+            transaction: {},
+            messageHashes: ['hash-first'],
+          }),
+          vault.sign({
+            chain: 'Ethereum',
+            transaction: {},
+            messageHashes: ['hash-second'],
+          }),
+        ])
+      } finally {
+        unsubscribers.forEach(unsubscribe => unsubscribe())
+      }
+
+      const sessionIds = [...new Set(events.map(event => event.sessionId))]
+      expect(sessionIds).toHaveLength(2)
+      expect(sessionIds.every(Boolean)).toBe(true)
+
+      for (const sessionId of sessionIds) {
+        expect(events.filter(event => event.sessionId === sessionId).map(event => event.type)).toEqual([
+          'progress',
+          'qr',
+          'joined',
+          'signed',
+        ])
+      }
+
+      const signedEvents = events.filter(event => event.type === 'signed')
+      expect(signedEvents.map(event => event.marker).sort()).toEqual(['hash-first', 'hash-second'])
+    })
+
+    it('emits correlated terminal events for failures and cancellations', async () => {
+      const vault = makeSecureVault()
+      const failed: Array<{ sessionId: string; error: Error }> = []
+      const cancelled: Array<{ sessionId: string; error: Error }> = []
+      const unsubscribeFailed = vault.on('signingFailed', event => failed.push(event))
+      const unsubscribeCancelled = vault.on('signingCancelled', event => cancelled.push(event))
+      const lateAbortController = new AbortController()
+      const abortError = new Error('Operation aborted')
+      abortError.name = 'AbortError'
+
+      vi.mocked(RelaySigningService)
+        .mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signWithRelay: vi.fn(async () => {
+              lateAbortController.abort()
+              throw new Error('relay failure after an unrelated abort')
+            }),
+          })
+        } as any)
+        .mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signBytesWithRelay: vi.fn().mockRejectedValue(abortError),
+          })
+        } as any)
+
+      try {
+        const results = await Promise.allSettled([
+          vault.sign(
+            {
+              chain: 'Ethereum',
+              transaction: {},
+              messageHashes: ['hash-failure'],
+            },
+            { signal: lateAbortController.signal }
+          ),
+          vault.signBytes({ chain: 'Ethereum', data: '0x1234' }),
+        ])
+        expect(results.map(result => result.status)).toEqual(['rejected', 'rejected'])
+      } finally {
+        unsubscribeFailed()
+        unsubscribeCancelled()
+      }
+
+      expect(failed).toHaveLength(1)
+      expect(cancelled).toHaveLength(1)
+      expect(failed[0].sessionId).toBeTruthy()
+      expect(cancelled[0].sessionId).toBeTruthy()
+      expect(failed[0].sessionId).not.toBe(cancelled[0].sessionId)
+      expect(failed[0].error.message).toBe('relay failure after an unrelated abort')
+      expect(cancelled[0].error.message).toBe('Operation aborted')
+    })
+  })
 
   describe('sign() method interface', () => {
     it('should accept SigningPayload with messageHashes', () => {

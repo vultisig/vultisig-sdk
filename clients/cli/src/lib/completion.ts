@@ -3,7 +3,8 @@
  *
  * Provides tab completion for bash, zsh, and fish shells using tabtab
  */
-import type { Command } from 'commander'
+import { SUPPORTED_CHAINS } from '@vultisig/sdk'
+import { type Command, program } from 'commander'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
@@ -30,60 +31,25 @@ async function getTabtab() {
 }
 
 /**
- * All available commands for completion
+ * Command names for completion, read from Commander itself.
+ *
+ * These lists used to be hand-maintained and had drifted badly: the command array
+ * was missing sign/broadcast/tx-status/execute/discount/agent/auth/delete/join/
+ * rujira/add-mldsa, and the chain list was a hand-picked subset. Reading the real
+ * registries means completion cannot go stale again when a command or chain is added.
+ *
+ * Resolved lazily rather than at module load: `program` is Commander's singleton and
+ * the CLI registers its commands as its module body runs, so the list is only complete
+ * once that has happened — every caller here runs after it.
  */
-const COMMANDS = [
-  'create',
-  'import',
-  'verify',
-  'balance',
-  'send',
-  'portfolio',
-  'currency',
-  'server',
-  'export',
-  'addresses',
-  'address-book',
-  'chains',
-  'vaults',
-  'switch',
-  'rename',
-  'info',
-  'tokens',
-  'swap-chains',
-  'swap-quote',
-  'swap',
-  'completion',
-  'version',
-  'update',
-]
+function getCommands(): string[] {
+  return program.commands.map(cmd => cmd.name()).sort()
+}
 
-/**
- * Common chains for completion
- */
-const CHAINS = [
-  'Ethereum',
-  'Bitcoin',
-  'Solana',
-  'Polygon',
-  'Arbitrum',
-  'Optimism',
-  'Avalanche',
-  'BSC',
-  'Base',
-  'Cosmos',
-  'THORChain',
-  'Maya',
-  'Dydx',
-  'Kujira',
-  'Sui',
-  'Polkadot',
-  'Ripple',
-  'Dogecoin',
-  'Litecoin',
-  'Dash',
-  'Zcash',
-]
+/** Chain names for completion, from the SDK's chain registry. */
+function getChains(): string[] {
+  return [...SUPPORTED_CHAINS]
+}
 
 /**
  * Get stored vault names for completion
@@ -136,7 +102,7 @@ export async function handleCompletion(): Promise<boolean> {
 
   if (!cmd || parts.length === 1 || (parts.length === 2 && lastPartial)) {
     // Complete command names
-    completions = COMMANDS.filter(c => c.startsWith(lastPartial || ''))
+    completions = getCommands().filter(c => c.startsWith(lastPartial || ''))
   } else {
     // Command-specific completions
     switch (cmd) {
@@ -145,7 +111,7 @@ export async function handleCompletion(): Promise<boolean> {
       case 'send':
         // Complete chain names
         if (parts.length === 2 || (parts.length === 3 && lastPartial)) {
-          completions = CHAINS.filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
+          completions = getChains().filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
         }
         break
 
@@ -167,7 +133,7 @@ export async function handleCompletion(): Promise<boolean> {
         if (lastPartial?.startsWith('-')) {
           completions = ['--add', '--remove'].filter(o => o.startsWith(lastPartial))
         } else if (parts.includes('--add') || parts.includes('--remove')) {
-          completions = CHAINS.filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
+          completions = getChains().filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
         }
         break
 
@@ -175,7 +141,7 @@ export async function handleCompletion(): Promise<boolean> {
       case 'swap-quote':
         // Complete chain names for from/to
         if (parts.length <= 3 || (parts.length === 4 && lastPartial)) {
-          completions = CHAINS.filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
+          completions = getChains().filter(c => c.toLowerCase().startsWith((lastPartial || '').toLowerCase()))
         }
         break
 
@@ -318,19 +284,19 @@ _vultisig_completions() {
   local cmd="\${COMP_WORDS[1]}"
 
   if [ "\${COMP_CWORD}" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "${COMMANDS.join(' ')}" -- "\${cur}"))
+    COMPREPLY=($(compgen -W "${getCommands().join(' ')}" -- "\${cur}"))
     return
   fi
 
   case "\${cmd}" in
     balance|tokens|send)
-      COMPREPLY=($(compgen -W "${CHAINS.join(' ')}" -- "\${cur}"))
+      COMPREPLY=($(compgen -W "${getChains().join(' ')}" -- "\${cur}"))
       ;;
     chains)
-      COMPREPLY=($(compgen -W "--add --remove ${CHAINS.join(' ')}" -- "\${cur}"))
+      COMPREPLY=($(compgen -W "--add --remove ${getChains().join(' ')}" -- "\${cur}"))
       ;;
     swap|swap-quote)
-      COMPREPLY=($(compgen -W "${CHAINS.join(' ')}" -- "\${cur}"))
+      COMPREPLY=($(compgen -W "${getChains().join(' ')}" -- "\${cur}"))
       ;;
     completion)
       COMPREPLY=($(compgen -W "install uninstall bash zsh fish" -- "\${cur}"))
@@ -358,8 +324,10 @@ function getZshCompletionScript(): string {
 
 _vultisig() {
   local -a commands chains
-  commands=(${COMMANDS.map(c => `'${c}:${c} command'`).join(' ')})
-  chains=(${CHAINS.join(' ')})
+  commands=(${getCommands()
+    .map(c => `'${c}:${c} command'`)
+    .join(' ')})
+  chains=(${getChains().join(' ')})
 
   _arguments -C \\
     '1: :->command' \\
@@ -396,11 +364,11 @@ function getFishCompletionScript(): string {
   // Generate completions for both vultisig and vsig
   const commands = ['vultisig', 'vsig']
   const commandCompletions = commands
-    .flatMap(cmd => COMMANDS.map(c => `complete -c ${cmd} -n "__fish_use_subcommand" -a "${c}"`))
+    .flatMap(cmd => getCommands().map(c => `complete -c ${cmd} -n "__fish_use_subcommand" -a "${c}"`))
     .join('\n')
   const chainCompletions = commands
     .flatMap(cmd =>
-      CHAINS.map(
+      getChains().map(
         c => `complete -c ${cmd} -n "__fish_seen_subcommand_from balance tokens send swap swap-quote" -a "${c}"`
       )
     )

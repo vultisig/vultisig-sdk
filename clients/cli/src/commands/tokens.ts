@@ -135,7 +135,16 @@ export async function removeToken(ctx: CommandContext, chain: Chain, tokenId: st
 }
 
 /**
- * Discover tokens with balances on a chain and add them to the vault
+ * Discover tokens with balances on a chain and add them to the vault.
+ *
+ * The persistence is deliberate, not a side effect: `vault.discoverTokens()` is
+ * the read-only half (it just returns what the address holds), and this command
+ * is the "find what I hold and start tracking it" action, as distinct from
+ * `--add <address>` for a token you can already name. That is why it reports
+ * only tokens that are NEW relative to the stored list. What was wrong is that
+ * nothing said so — the help called it "auto-discover", and a user who ran it
+ * expecting a query found their vault file and later `portfolio` totals
+ * changed. Both now state it.
  */
 export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise<void> {
   const vault = await ctx.ensureActiveVault()
@@ -177,7 +186,7 @@ export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise
 
   const allTokens = vault.getTokens(chain)
 
-  spinner.succeed(`Discovered ${newTokens.length} new token(s) on ${chain}`)
+  spinner.succeed(`Now tracking ${newTokens.length} new token(s) on ${chain}`)
 
   if (isJsonOutput()) {
     outputJson({
@@ -195,6 +204,8 @@ export async function discoverTokens(ctx: CommandContext, chain: Chain): Promise
   for (const d of newTokens) {
     printResult(`  ${d.ticker} (${d.contractAddress})`)
   }
+  info(chalk.gray(`\nSaved to this vault — tracked tokens count toward portfolio and balance --tokens.`))
+  info(chalk.gray(`Use --remove <tokenId> to stop tracking one.`))
   info(chalk.gray(`\n${allTokens.length} total token(s) tracked on ${chain}`))
 }
 
