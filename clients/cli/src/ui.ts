@@ -59,12 +59,22 @@ export function displayPortfolio(portfolio: PortfolioSummary, currency: FiatCurr
   // Display breakdown by chain
   printResult(chalk.bold('Chain Breakdown:\n'))
 
-  const table = portfolio.chainBalances.map(({ chain, balance, value }) => ({
-    Chain: chain,
-    Amount: balance.formattedAmount,
-    Symbol: balance.symbol,
-    Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
-  }))
+  // One row per priced asset — native first, then the chain's tracked tokens —
+  // so the rows add up to the total printed above.
+  const table = portfolio.chainBalances.flatMap(({ chain, balance, value, tokens }) => [
+    {
+      Chain: chain,
+      Amount: balance.formattedAmount,
+      Symbol: balance.symbol,
+      Value: value ? `${value.amount} ${value.currency.toUpperCase()}` : 'N/A',
+    },
+    ...(tokens ?? []).map(token => ({
+      Chain: chain,
+      Amount: token.balance?.formattedAmount ?? '-',
+      Symbol: token.balance?.symbol ?? token.tokenId,
+      Value: `${token.value.amount} ${token.value.currency.toUpperCase()}`,
+    })),
+  ])
 
   printTable(table)
 }
