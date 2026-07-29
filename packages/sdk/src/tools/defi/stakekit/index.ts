@@ -409,6 +409,20 @@ async function resolveActionArgs(
 
 // --- Builder functions ---
 
+const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
+  bsc: 'binance',
+  'bnb chain': 'binance',
+  'bnb-chain': 'binance',
+  bnbchain: 'binance',
+  avalanche: 'avalanche-c',
+  avax: 'avalanche-c',
+}
+
+const normalizeStakekitNetwork = (network: string): string => {
+  const normalized = network.toLowerCase()
+  return STAKEKIT_NETWORK_ALIASES[normalized] ?? normalized
+}
+
 /**
  * Search yield opportunities. Wraps searchYields with client-side token/provider filtering.
  * apiKey is injectable; omit for unauthenticated read-only access.
@@ -423,17 +437,7 @@ export async function stakekitSearch(params: {
 }): Promise<YieldProduct[]> {
   const limit = Math.min(Math.max(params.limit ?? 10, 1), 50)
 
-  const NETWORK_ALIASES: Record<string, string> = {
-    bsc: 'binance',
-    'bnb chain': 'binance',
-    'bnb-chain': 'binance',
-    bnbchain: 'binance',
-    avalanche: 'avalanche-c',
-    avax: 'avalanche-c',
-  }
-  const aliasedNetwork = params.network
-    ? (NETWORK_ALIASES[params.network.toLowerCase()] ?? params.network.toLowerCase())
-    : undefined
+  const aliasedNetwork = params.network ? normalizeStakekitNetwork(params.network) : undefined
 
   const wantsClientFilter = !!params.token || !!params.provider
   const apiLimit = wantsClientFilter ? 100 : limit
@@ -497,7 +501,7 @@ export async function stakekitBalances(params: {
   address: string
   network: string
 }): Promise<YieldBalance[] | null> {
-  return getBalances(params.address, params.network?.toLowerCase(), params.apiKey)
+  return getBalances(params.address, normalizeStakekitNetwork(params.network), params.apiKey)
 }
 
 // Action-input validation — ported verbatim from mcp-ts yield-tools.ts
