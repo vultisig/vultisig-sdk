@@ -216,6 +216,25 @@ export {
   toXrplCurrencyCode,
 } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 
+// Custom-RPC canonicals — surfaced so consumers can use the SDK-owned per-chain
+// override registry + health probe instead of deep-importing core internals or
+// rebuilding the same feature in app/backend code.
+export {
+  clearCustomRpcOverride,
+  getCustomRpcOverride,
+  getCustomRpcOverrides,
+  setCustomRpcOverride,
+  setCustomRpcOverrides,
+} from '@vultisig/core-chain/chains/customRpc/customRpcOverrides'
+export {
+  customRpcSupportedChains,
+  customRpcSupportedCosmosChains,
+  customRpcSupportedEvmChains,
+  isCustomRpcSupported,
+} from '@vultisig/core-chain/chains/customRpc/customRpcSupportedChains'
+export type { RpcHealthResult } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+export { probeRpcHealth } from '@vultisig/core-chain/chains/customRpc/rpcHealthProbe'
+
 // Cosmos chain metadata — surfaced so consumers stop re-declaring LCD urls /
 // fee denoms / gas limits (e.g. mcp-ts lib/cosmos-chains.ts).
 export { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
