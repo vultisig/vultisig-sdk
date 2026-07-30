@@ -153,6 +153,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
+  it('exports the THOR/Maya swap-memo parser for downstream consumers', () => {
+    expect(typeof sdk.parseThorSwapMemo).toBe('function')
+  })
+
   it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
