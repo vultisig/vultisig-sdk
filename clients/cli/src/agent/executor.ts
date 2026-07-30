@@ -1543,7 +1543,7 @@ export class AgentExecutor {
       if (!res.ok || data.error || !data.result?.baseFeePerGas) {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
-      const baseFee = BigInt(data.result?.baseFeePerGas || '0')
+      const baseFee = BigInt(data.result.baseFeePerGas)
       if (baseFee === 0n) return
 
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')

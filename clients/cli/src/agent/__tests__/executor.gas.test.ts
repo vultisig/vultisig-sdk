@@ -63,31 +63,120 @@ afterEach(() => {
 })
 
 describe('AgentExecutor EVM gas refresh', () => {
-  it('warns without verbose and signs with the original estimate when the refresh fails', async () => {
+  it('warns without verbose and signs with the original estimate after an HTTP failure', async () => {
+    const payload = createEvmPayload()
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    // Keep a valid-looking result so the HTTP status remains the only failure signal.
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        jsonrpc: '2.0',
+        result: { baseFeePerGas: '0x3b9aca00' },
+      }),
+      ok: false,
+      status: 521,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await signEvm(executor, Chain.Ethereum)
+
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
+    expect(vault.sign).toHaveBeenCalledOnce()
+    expect(vault.broadcastTx).toHaveBeenCalledOnce()
+    expect(result.tx_hash).toBe('0xtxhash')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ethereum-rpc.publicnode.com',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('warns without verbose and signs with the original estimate after an HTTP-200 JSON-RPC error', async () => {
+    const payload = createEvmPayload()
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    // Keep a valid-looking result so the JSON-RPC error remains the only failure signal.
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        error: { code: -32051, message: 'tenant disabled' },
+        jsonrpc: '2.0',
+        result: { baseFeePerGas: '0x3b9aca00' },
+      }),
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await signEvm(executor, Chain.Ethereum)
+
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
+    expect(vault.sign).toHaveBeenCalledOnce()
+    expect(vault.broadcastTx).toHaveBeenCalledOnce()
+    expect(result.tx_hash).toBe('0xtxhash')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ethereum-rpc.publicnode.com',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('warns without verbose and signs with the original estimate after a malformed base fee', async () => {
     const payload = createEvmPayload()
     const vault = createSigningVault(payload)
     const executor = new AgentExecutor(vault)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const fetchMock = vi.fn().mockResolvedValue({
       json: vi.fn().mockResolvedValue({
-        error: { code: -32051, message: 'tenant disabled' },
+        jsonrpc: '2.0',
+        result: { baseFeePerGas: '' },
       }),
-      ok: false,
-      status: 401,
+      ok: true,
+      status: 200,
     })
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await signEvm(executor, Chain.Ethereum)
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://ethereum-rpc.publicnode.com',
-      expect.objectContaining({ method: 'POST' })
-    )
     expect(stderr).toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed for Ethereum'))
     expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('2000000000')
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(result.tx_hash).toBe('0xtxhash')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ethereum-rpc.publicnode.com',
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('silently keeps the original estimate when BSC reports a legitimate zero base fee', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.maxFeePerGasWei = '500000000'
+    const vault = createSigningVault(payload)
+    const executor = new AgentExecutor(vault)
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        jsonrpc: '2.0',
+        result: { baseFeePerGas: '0x0' },
+      }),
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await signEvm(executor, Chain.BSC)
+
+    expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed'))
+    expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('500000000')
+    expect(vault.sign).toHaveBeenCalledOnce()
+    expect(vault.broadcastTx).toHaveBeenCalledOnce()
+    expect(result.tx_hash).toBe('0xtxhash')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bsc-dataseed.binance.org',
+      expect.objectContaining({ method: 'POST' })
+    )
   })
 
   it.each([
@@ -110,10 +199,10 @@ describe('AgentExecutor EVM gas refresh', () => {
 
     await signEvm(executor, chain)
 
-    expect(fetchMock).toHaveBeenCalledWith(rpcUrl, expect.objectContaining({ method: 'POST' }))
     expect(stderr).not.toHaveBeenCalledWith(expect.stringContaining('gas estimate was not refreshed'))
     expect(payload.blockchainSpecific.value.maxFeePerGasWei).toBe('3500000000')
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledWith(rpcUrl, expect.objectContaining({ method: 'POST' }))
   })
 })
