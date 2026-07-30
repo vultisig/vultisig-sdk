@@ -1591,7 +1591,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      return BigInt(data.result || '0')
+      if (!res.ok || data?.error || data?.result === undefined || data?.result === null) {
+        return null
+      }
+      return BigInt(data.result)
     } catch {
       return null
     }

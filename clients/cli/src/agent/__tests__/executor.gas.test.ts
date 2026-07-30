@@ -12,6 +12,15 @@ type EvmSigner = {
   ): Promise<Record<string, unknown>>
 }
 
+type EvmNonceAccess = {
+  fetchEvmPendingNonce(chain: Chain): Promise<bigint | null>
+  patchEvmNonce(chain: Chain, payload: ReturnType<typeof createEvmPayload>): Promise<void>
+  stateStore: {
+    clearEvmState: ReturnType<typeof vi.fn>
+    getNextEvmNonce: ReturnType<typeof vi.fn>
+  }
+}
+
 function createEvmPayload() {
   return {
     blockchainSpecific: {
@@ -55,6 +64,15 @@ function serverTransaction(chain: Chain) {
 
 async function signEvm(executor: AgentExecutor, chain: Chain) {
   return (executor as unknown as EvmSigner).signEvmServerTx(serverTransaction(chain), chain, {})
+}
+
+function withNonceState(executor: AgentExecutor, nextNonce: bigint) {
+  const access = executor as unknown as EvmNonceAccess
+  access.stateStore = {
+    clearEvmState: vi.fn(),
+    getNextEvmNonce: vi.fn().mockReturnValue(nextNonce),
+  }
+  return access
 }
 
 afterEach(() => {
@@ -204,5 +222,120 @@ describe('AgentExecutor EVM gas refresh', () => {
     expect(vault.sign).toHaveBeenCalledOnce()
     expect(vault.broadcastTx).toHaveBeenCalledOnce()
     expect(fetchMock).toHaveBeenCalledWith(rpcUrl, expect.objectContaining({ method: 'POST' }))
+  })
+})
+
+describe('AgentExecutor EVM pending nonce', () => {
+  it('treats an HTTP error with a JSON body as unverifiable and does not assign a large-gap nonce', async () => {
+    const payload = createEvmPayload()
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const nonceAccess = withNonceState(executor, 10n)
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        jsonrpc: '2.0',
+        result: '0xa',
+      }),
+      ok: false,
+      status: 401,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await nonceAccess.patchEvmNonce(Chain.Polygon, payload)
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(1n)
+    expect(nonceAccess.stateStore.clearEvmState).toHaveBeenCalledWith(Chain.Polygon)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('returns null for a JSON-RPC error delivered over HTTP 200', async () => {
+    const executor = new AgentExecutor(createSigningVault(createEvmPayload()))
+    const nonceAccess = executor as unknown as EvmNonceAccess
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: vi.fn().mockResolvedValue({
+        error: { code: -32051, message: 'tenant disabled' },
+        jsonrpc: '2.0',
+        result: '0xa',
+      }),
+      ok: true,
+      status: 200,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a genuine zero nonce and still rejects a response with no result', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 0n
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const nonceAccess = withNonceState(executor, 5n)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: vi.fn().mockResolvedValue({
+          jsonrpc: '2.0',
+          result: '0x0',
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: vi.fn().mockResolvedValue({
+          jsonrpc: '2.0',
+          result: 0,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: vi.fn().mockResolvedValue({
+          jsonrpc: '2.0',
+        }),
+        ok: true,
+        status: 200,
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await nonceAccess.patchEvmNonce(Chain.Ethereum, payload)
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(0n)
+    expect(nonceAccess.stateStore.clearEvmState).toHaveBeenCalledWith(Chain.Ethereum)
+    await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBe(0n)
+    await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps normal non-zero nonce handling while treating a null result as a failure', async () => {
+    const payload = createEvmPayload()
+    payload.blockchainSpecific.value.nonce = 4n
+    const executor = new AgentExecutor(createSigningVault(payload))
+    const nonceAccess = withNonceState(executor, 5n)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: vi.fn().mockResolvedValue({
+          jsonrpc: '2.0',
+          result: '0x5',
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: vi.fn().mockResolvedValue({
+          jsonrpc: '2.0',
+          result: null,
+        }),
+        ok: true,
+        status: 200,
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await nonceAccess.patchEvmNonce(Chain.Ethereum, payload)
+
+    expect(payload.blockchainSpecific.value.nonce).toBe(5n)
+    expect(nonceAccess.stateStore.clearEvmState).not.toHaveBeenCalled()
+    await expect(nonceAccess.fetchEvmPendingNonce(Chain.Ethereum)).resolves.toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
