@@ -18,8 +18,11 @@ export { Vultisig } from './Vultisig'
 
 // Vault management
 export type { VaultConfig } from './vault'
+export type { ResolvedTokenInfo } from './vault'
 export {
   FastVault,
+  resolveTokenRef,
+  resolveTokenRefId,
   SecureVault,
   VaultBase,
   VaultError,

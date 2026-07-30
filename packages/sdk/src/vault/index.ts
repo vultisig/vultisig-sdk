@@ -11,6 +11,8 @@ import { VaultBase } from './VaultBase'
 export { FastVault, SecureVault, VaultBase }
 
 // Export errors
+export type { ResolvedTokenInfo } from './tokenRef'
+export { resolveTokenRef, resolveTokenRefId } from './tokenRef'
 export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 
 // Export vault configuration
