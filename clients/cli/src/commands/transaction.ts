@@ -10,17 +10,7 @@ import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } 
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
-
-const escapeTerminalControls = (value: string): string =>
-  Array.from(value, character => {
-    if (character === '\\') return '\\\\'
-
-    const codePoint = character.codePointAt(0) ?? 0
-    const isTerminalControl = codePoint <= 0x1f || codePoint === 0x7f || (codePoint >= 0x80 && codePoint <= 0x9f)
-
-    return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
-  }).join('')
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult, escapeTerminalControls } from '../ui'
 
 const getSendPreviewDetails = (
   chain: Chain,
