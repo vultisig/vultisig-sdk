@@ -9,10 +9,12 @@ const sdkPackageJson = JSON.parse(readFileSync(path.join(sdkRoot, 'package.json'
 const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.config.js'), 'utf8')
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
-describe('public API tools subpath exports', () => {
-  it('publishes dedicated export-map entries for parse and defi', () => {
+describe('public API subpath exports', () => {
+  it('publishes dedicated export-map entries for tool and chain subpaths', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
+    const tronExport = sdkPackageJson.exports['./chains/tron']
+    const utxoExport = sdkPackageJson.exports['./chains/utxo']
 
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
@@ -26,22 +28,46 @@ describe('public API tools subpath exports', () => {
       require: './dist/tools/defi/index.cjs',
       default: './dist/tools/defi/index.cjs',
     })
+    expect(tronExport).toMatchObject({
+      types: './dist/chains/tron/index.d.ts',
+      import: './dist/chains/tron/index.js',
+      require: './dist/chains/tron/index.cjs',
+      default: './dist/chains/tron/index.cjs',
+    })
+    expect(utxoExport).toMatchObject({
+      types: './dist/chains/utxo/index.d.ts',
+      import: './dist/chains/utxo/index.js',
+      require: './dist/chains/utxo/index.cjs',
+      default: './dist/chains/utxo/index.cjs',
+    })
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(tronExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(utxoExport)).not.toContain('dist/index.node')
   })
 
-  it('keeps dedicated JS and d.ts bundle generation wired for both subpaths', () => {
+  it('keeps dedicated JS and d.ts bundle generation wired for tool and chain subpaths', () => {
     expect(platformRollupConfig).toContain("input: './src/tools/parse/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/parse'")
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
+    expect(platformRollupConfig).toContain("input: './src/chains/tron/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'chains/tron'")
+    expect(platformRollupConfig).toContain("input: './src/chains/utxo/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'chains/utxo'")
 
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/chains/utxo/index.ts', 'dist/chains/utxo/index.d.ts')"
     )
   })
 })
