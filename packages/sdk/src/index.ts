@@ -338,6 +338,23 @@ export { getBlockExplorerUrl } from '@vultisig/core-chain/utils/getBlockExplorer
 // that can drift from each other (the mcp-ts #384 bug class).
 export { isSkipRoutableChain, isTerraChain, willRouteViaSkip } from '@vultisig/core-chain/swap/skip/skipRouting'
 
+// Dangerous/burn-address guard. Single source of truth for "is this destination
+// a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
+// XRP. Exported so the app + agent-backend-ts consume it instead of maintaining
+// their own copies that drift (the CCTP mintRecipient burn-drift incident this
+// list's header documents). Reconciled to the union of all three prior copies.
+export {
+  assertSafeDestination,
+  assertSafeEvmDestination,
+  EVM_DANGEROUS_ADDRESSES,
+  getChainDangerousReason,
+  getEvmDangerousReason,
+  isEvmBurnAddress,
+  SOLANA_DANGEROUS_ADDRESSES,
+  UTXO_DANGEROUS_ADDRESSES,
+  XRP_DANGEROUS_ADDRESSES,
+} from './utils/dangerousAddresses'
+
 // EVM chainId ↔ chain mapping. Single source of truth for the per-chain EVM
 // chainId table so consumers (app, agent-backend-ts) import it instead of
 // hand-maintaining their own copies that can drift (the Hyperliquid 998/999
