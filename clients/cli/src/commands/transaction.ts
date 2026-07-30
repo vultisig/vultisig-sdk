@@ -2,6 +2,7 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
+import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
@@ -10,6 +11,16 @@ import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from 
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
 import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
+
+const escapeTerminalControls = (value: string): string =>
+  Array.from(value, character => {
+    if (character === '\\') return '\\\\'
+
+    const codePoint = character.codePointAt(0) ?? 0
+    const isTerminalControl = codePoint <= 0x1f || codePoint === 0x7f || (codePoint >= 0x80 && codePoint <= 0x9f)
+
+    return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
+  }).join('')
 
 /**
  * Execute send command - send tokens to an address
@@ -43,11 +54,28 @@ async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
   dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
-  to: string,
-  destinationTag: number | undefined
+  to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  let previewMemo = dryResult.keysignPayload.memo || undefined
+  let payloadDestinationTag: number | undefined
+
+  if (params.chain === Chain.Ripple) {
+    const rippleSpecific = dryResult.keysignPayload.blockchainSpecific
+    if (rippleSpecific.case !== 'rippleSpecific') {
+      throw new Error('Ripple dry-run payload is missing Ripple-specific data')
+    }
+
+    payloadDestinationTag = resolveDestinationTag({
+      destinationTag: rippleSpecific.value.destinationTag,
+      memo: previewMemo,
+    })
+    const legacyMemoDestinationTag = getLegacyDestinationTag(previewMemo)
+    if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === payloadDestinationTag) {
+      previewMemo = undefined
+    }
+  }
 
   // A token send pays its fee out of the NATIVE balance, which `total` no
   // longer covers — so check it separately. Holding the token but no gas is
@@ -91,8 +119,8 @@ async function previewDryRun(
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
     balance: balance.formattedAmount,
-    destinationTag,
-    ...(dryResult.keysignPayload.memo ? { memo: dryResult.keysignPayload.memo } : {}),
+    destinationTag: payloadDestinationTag,
+    ...(previewMemo ? { memo: previewMemo } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
   }
 
@@ -106,7 +134,7 @@ async function previewDryRun(
   info(`  To:      ${result.to}`)
   info(`  Amount:  ${result.amount} ${result.symbol}`)
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
-  if (result.memo) info(`  Memo:    ${result.memo}`)
+  if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
   info(`  Total:   ${result.total} ${result.symbol}`)
   info(`  Balance: ${result.balance} ${result.symbol}`)
@@ -164,7 +192,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    return previewDryRun(vault, params, dryResult, to, destinationTag)
+    return previewDryRun(vault, params, dryResult, to)
   }
 
   // 2. Show preview and get gas estimate

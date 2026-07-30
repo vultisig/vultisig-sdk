@@ -22,14 +22,29 @@ afterEach(() => {
   resetOutput()
 })
 
-function makeVault(opts: { fee: string; total: string; balance: string; payloadMemo?: string }) {
+function makeVault(opts: {
+  fee: string
+  total: string
+  balance: string
+  payloadMemo?: string
+  payloadDestinationTag?: number
+}) {
   return {
     send: vi.fn(async () => ({
       dryRun: true,
       fee: opts.fee,
       feeSymbol: 'ETH',
       total: opts.total,
-      keysignPayload: { memo: opts.payloadMemo },
+      keysignPayload: {
+        memo: opts.payloadMemo,
+        blockchainSpecific:
+          opts.payloadDestinationTag === undefined
+            ? { case: undefined, value: undefined }
+            : {
+                case: 'rippleSpecific',
+                value: { destinationTag: opts.payloadDestinationTag },
+              },
+      },
     })),
     balance: vi.fn(async () => ({
       formattedAmount: opts.balance,
@@ -83,9 +98,10 @@ const params = {
 } as never
 
 const tokenParams = { ...(params as object), tokenId: 'USDC' } as never
-const memoParams = { ...(params as object), chain: Chain.THORChain, memo: 'memo-from-input' } as never
+const memoParams = { ...(params as object), memo: 'memo-from-input' } as never
 
 async function sendJson(vault: never, options: never = params) {
+  stdout.length = 0
   configureOutput({ format: 'json' })
   await sendTransaction(vault, options)
   return JSON.parse(stdout.join('')).data
@@ -114,18 +130,19 @@ describe('send --dry-run preview', () => {
   })
 
   it('surfaces the signable payload memo in JSON instead of echoing the input', async () => {
-    const data = await sendJson(
-      makeVault({
-        fee: '0.0021',
-        total: '1.0021',
-        balance: '5.0',
-        payloadMemo: 'memo-from-signable-payload',
-      }),
-      memoParams
-    )
+    const vault = makeVault({
+      fee: '0.0021',
+      total: '1.0021',
+      balance: '5.0',
+      payloadMemo: 'memo-from-signable-payload',
+    })
+    const data = await sendJson(vault, memoParams)
 
     expect(data.memo).toBe('memo-from-signable-payload')
     expect(data.memo).not.toBe('memo-from-input')
+    expect((vault as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
+      expect.objectContaining({ memo: 'memo-from-input' })
+    )
   })
 
   it('prints the signable payload memo and omits memo output for a memo-less payload', async () => {
@@ -154,6 +171,123 @@ describe('send --dry-run preview', () => {
 
     expect(memoLessResult).not.toHaveProperty('memo')
     expect(logs.join('\n')).not.toMatch(/\bMemo:/)
+
+    logs.length = 0
+    const emptyMemoResult = await sendTransaction(
+      makeVault({ fee: '0.0021', total: '1.0021', balance: '5.0', payloadMemo: '' }),
+      params
+    )
+
+    expect(emptyMemoResult).not.toHaveProperty('memo')
+    expect(logs.join('\n')).not.toMatch(/\bMemo:/)
+  })
+
+  it('reports XRP memo and destination-tag semantics from the signable payload', async () => {
+    const classicAddress = 'rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY'
+    const xAddress = 'XV5sbjUmgPpvXv4ixFWZ5ptAYZ6PD2q1qM6owqNbug8W6KV'
+    const cases = [
+      {
+        name: 'numeric legacy memo',
+        options: { chain: Chain.Ripple, to: classicAddress, amount: '1.0', memo: '12345', dryRun: true },
+        payloadMemo: '12345',
+        payloadDestinationTag: 12345,
+        expectedMemo: undefined,
+        expectedInputMemo: '12345',
+        expectedInputTag: undefined,
+        expectedTo: classicAddress,
+      },
+      {
+        name: 'explicit destination tag only',
+        options: { chain: Chain.Ripple, to: classicAddress, amount: '1.0', destinationTag: 12345, dryRun: true },
+        payloadMemo: '12345',
+        payloadDestinationTag: 12345,
+        expectedMemo: undefined,
+        expectedInputMemo: undefined,
+        expectedInputTag: 12345,
+        expectedTo: classicAddress,
+      },
+      {
+        name: 'X-address embedded tag',
+        options: { chain: Chain.Ripple, to: xAddress, amount: '1.0', dryRun: true },
+        payloadMemo: '495',
+        payloadDestinationTag: 495,
+        expectedMemo: undefined,
+        expectedInputMemo: undefined,
+        expectedInputTag: 495,
+        expectedTo: classicAddress,
+      },
+      {
+        name: 'distinct numeric memo and destination tag',
+        options: {
+          chain: Chain.Ripple,
+          to: classicAddress,
+          amount: '1.0',
+          memo: '67890',
+          destinationTag: 12345,
+          dryRun: true,
+        },
+        payloadMemo: '67890',
+        payloadDestinationTag: 12345,
+        expectedMemo: '67890',
+        expectedInputMemo: '67890',
+        expectedInputTag: 12345,
+        expectedTo: classicAddress,
+      },
+    ] as const
+
+    for (const testCase of cases) {
+      const vault = makeVault({
+        fee: '0.000015',
+        total: '1.000015',
+        balance: '5.0',
+        payloadMemo: testCase.payloadMemo,
+        payloadDestinationTag: testCase.payloadDestinationTag,
+      })
+      const data = await sendJson(vault, testCase.options as never)
+      const payload = (vault as unknown as { send: ReturnType<typeof vi.fn> }).send.mock.results[0].value
+
+      await expect(payload).resolves.toMatchObject({
+        keysignPayload: {
+          memo: testCase.payloadMemo,
+          blockchainSpecific: {
+            case: 'rippleSpecific',
+            value: { destinationTag: testCase.payloadDestinationTag },
+          },
+        },
+      })
+      expect.soft(data.destinationTag, `${testCase.name}: destination tag`).toBe(testCase.payloadDestinationTag)
+      expect.soft(data.memo, `${testCase.name}: memo`).toBe(testCase.expectedMemo)
+      expect.soft(data.to, `${testCase.name}: destination address`).toBe(testCase.expectedTo)
+      expect((vault as unknown as { send: ReturnType<typeof vi.fn> }).send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          memo: testCase.expectedInputMemo,
+          destinationTag: testCase.expectedInputTag,
+        })
+      )
+    }
+  })
+
+  it('escapes terminal control bytes in the human memo while preserving JSON bytes', async () => {
+    const payloadMemo = `literal\\x0A${String.fromCharCode(0, 10, 13, 27, 127, 155)}tail`
+    const vault = makeVault({
+      fee: '0.0021',
+      total: '1.0021',
+      balance: '5.0',
+      payloadMemo,
+    })
+
+    expect((await sendJson(vault, memoParams)).memo).toBe(payloadMemo)
+
+    configureOutput({ format: 'table', silent: false })
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+    await sendTransaction(vault, memoParams)
+
+    const memoLine = logs.find(line => line.includes('Memo:'))
+    expect(memoLine).toContain('literal\\\\x0A\\x00\\x0A\\x0D\\x1B\\x7F\\x9Btail')
+    expect(memoLine).not.toContain(payloadMemo)
   })
 
   it('still warns when the total exceeds the balance, and reports the numbers behind it', async () => {
