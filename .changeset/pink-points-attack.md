@@ -1,5 +1,5 @@
 ---
-'@vultisig/sdk': minor
+'@vultisig/sdk': major
 '@vultisig/cli': minor
 ---
 
@@ -11,4 +11,4 @@ A token added with `tokens --add` is stored under an id of the form `<Chain>-<ad
 
 **Behavior change — the agent `vault_coin remove` tool reports per-coin outcomes.** It previously returned `removed: true` unconditionally; it now returns the SDK's actual result, so the model is told when a coin was not tracked. Batch removals return `{ chain, tokenId, removed }` per coin rather than `{ chain, tokenId }`.
 
-`VaultBase.removeToken` widens from `Promise<void>` to `Promise<boolean>` — `true` when a tracked token was removed and persisted, `false` when the reference matched nothing. Existing callers that ignore the return value are unaffected.
+**Breaking SDK API change — `VaultBase.removeToken` now returns `Promise<boolean>` instead of `Promise<void>`.** It resolves to `true` when a tracked token was removed and persisted, and `false` when the reference matched nothing. Consumers with callbacks, interfaces, or overrides typed to the previous `Promise<void>` signature must update those types.

@@ -9,6 +9,7 @@ import { CacheService } from '../../../src/services/CacheService'
 import { MemoryStorage } from '../../../src/storage/MemoryStorage'
 import type { Token } from '../../../src/types'
 import { BalanceService } from '../../../src/vault/services/BalanceService'
+import { VaultBase } from '../../../src/vault/VaultBase'
 
 vi.mock('@vultisig/core-chain/coin/balance', () => ({
   getCoinBalance: vi.fn(),
@@ -32,6 +33,27 @@ const addedToken: Token = {
   contractAddress: USDC,
   symbol: 'USDC',
   name: 'USD Coin',
+  decimals: 6,
+  chainId: Chain.Ethereum,
+  isNative: false,
+}
+
+const COLLISION_ASSET_A = '0x00000000000000000000000000000000000000aa'
+const COLLISION_ASSET_B = '0x00000000000000000000000000000000000000bb'
+const collisionTokenA: Token = {
+  id: COLLISION_ASSET_A,
+  contractAddress: COLLISION_ASSET_A,
+  symbol: 'ALPHA',
+  name: 'Alpha',
+  decimals: 6,
+  chainId: Chain.Ethereum,
+  isNative: false,
+}
+const collisionTokenB: Token = {
+  id: COLLISION_ASSET_B,
+  contractAddress: COLLISION_ASSET_B,
+  symbol: COLLISION_ASSET_A,
+  name: 'Address-shaped symbol',
   decimals: 6,
   chainId: Chain.Ethereum,
   isNative: false,
@@ -90,6 +112,77 @@ describe('BalanceService', () => {
       getTokens: (chain: Chain) => allTokens[chain] ?? [],
     }
   }
+
+  const makeReadService = (tokens: Token[]) =>
+    new BalanceService(
+      cacheService,
+      vi.fn(),
+      vi.fn(),
+      async chain => `${chain}-address`,
+      chain => (chain === Chain.Ethereum ? tokens : []),
+      () => ({ [Chain.Ethereum]: tokens }),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn()
+    )
+
+  it("does not reinterpret a canonical asset id as another token's symbol", async () => {
+    vi.mocked(getCoinBalance).mockImplementation(async ({ id }) => {
+      if (id === COLLISION_ASSET_A) return 5_000_000n
+      if (id === COLLISION_ASSET_B) return 1_000_000n
+      return 0n
+    })
+    const service = makeReadService([collisionTokenA, collisionTokenB])
+
+    const balance = await service.getBalance(Chain.Ethereum, COLLISION_ASSET_A)
+
+    expect(getCoinBalance).toHaveBeenCalledWith({
+      chain: Chain.Ethereum,
+      address: `${Chain.Ethereum}-address`,
+      id: COLLISION_ASSET_A,
+    })
+    expect(balance.amount).toBe('5000000')
+  })
+
+  it("derives a max swap amount from the selected asset when a sibling's symbol matches its id", async () => {
+    vi.mocked(getCoinBalance).mockImplementation(async ({ id }) => {
+      if (id === COLLISION_ASSET_A) return 5_000_000n
+      if (id === COLLISION_ASSET_B) return 1_000_000n
+      return 0n
+    })
+    const service = makeReadService([collisionTokenA, collisionTokenB])
+    const proto = VaultBase.prototype as unknown as Record<string, (...args: never[]) => unknown>
+    const getSwapQuote = vi.fn().mockResolvedValue({ provider: 'test' })
+    const vault = {
+      _tokens: { [Chain.Ethereum]: [collisionTokenA, collisionTokenB] },
+      getTokens: proto.getTokens,
+      resolveTokenInfo: proto.resolveTokenInfo,
+      buildAccountCoin: proto.buildAccountCoin,
+      formatUnits: proto.formatUnits,
+      validateHumanSwapAmount: proto.validateHumanSwapAmount,
+      address: async (chain: Chain) => `${chain}-address`,
+      balanceService: service,
+      getSwapQuote,
+    }
+
+    await (proto.swap as unknown as (this: unknown, params: unknown) => Promise<unknown>).call(vault, {
+      fromChain: Chain.Ethereum,
+      fromSymbol: collisionTokenA.symbol,
+      toChain: Chain.Bitcoin,
+      toSymbol: 'BTC',
+      amount: 'max',
+      dryRun: true,
+    })
+
+    expect(getCoinBalance).toHaveBeenCalledWith(expect.objectContaining({ id: COLLISION_ASSET_A }))
+    expect(getSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromCoin: expect.objectContaining({ id: COLLISION_ASSET_A }),
+        amount: '5.0',
+      })
+    )
+  })
 
   it('keeps an EVM chain in --tokens results after adding a token with a prefixed vault id', async () => {
     const { service, getTokens } = makeMutableService()
@@ -230,6 +323,22 @@ describe('BalanceService', () => {
     await expect(service.removeToken(Chain.Ethereum, USDC)).resolves.toBe(true)
 
     expect(getTokens(Chain.Ethereum)).toEqual([])
+  })
+
+  it('removes a malformed token whose stored id is empty', async () => {
+    const emptyIdToken: Token = {
+      ...addedToken,
+      id: '',
+      contractAddress: undefined,
+      symbol: 'GHOST',
+    }
+    const { service, getTokens, saveVault, emitTokenRemoved } = makeMutableService([emptyIdToken])
+
+    await expect(service.removeToken(Chain.Ethereum, '')).resolves.toBe(true)
+
+    expect(getTokens(Chain.Ethereum)).toEqual([])
+    expect(saveVault).toHaveBeenCalledTimes(1)
+    expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: '' })
   })
 
   it('refuses to remove the chain native asset and leaves tracked tokens alone', async () => {

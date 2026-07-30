@@ -2801,7 +2801,7 @@ class VaultBase {
   getTokens(chain: Chain): Token[]
   setTokens(chain: Chain, tokens: Token[]): Promise<void>
   addToken(chain: Chain, token: Token): Promise<void>
-  removeToken(chain: Chain, tokenId: string): Promise<void>
+  removeToken(chain: Chain, tokenId: string): Promise<boolean>
 
   // Portfolio
   getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value>

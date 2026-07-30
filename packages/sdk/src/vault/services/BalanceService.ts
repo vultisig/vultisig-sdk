@@ -9,7 +9,7 @@ import type { Address } from 'viem'
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
-import { resolveTokenRef, resolveTokenRefId } from '../tokenRef'
+import { resolveTokenRef } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -54,10 +54,10 @@ export class BalanceService {
 
     let address: string | undefined
     try {
-      // Resolved inside the try, after the cache check: `getTokens` is injected,
-      // so a throw from it stays wrapped as a VaultError instead of escaping raw
-      // on a path that used to be served from cache.
-      const assetId = knownAssetId ?? resolveTokenRefId(chain, tokenId, this.getTokens(chain))
+      // User-facing refs are resolved at the VaultBase boundary. This service
+      // receives an already-canonical asset id; resolving it again could treat
+      // a contract address as an untrusted sibling token's symbol.
+      const assetId = knownAssetId ?? tokenId
 
       address = await this.getAddress(chain)
 
@@ -358,42 +358,50 @@ export class BalanceService {
 
     if (!tokens) return false
 
-    // Resolve first. The resolver is the single definition of what a token
-    // reference means, and removal must not disagree with the asset that
-    // `send`/`swap` would pick for the same reference.
-    let resolved
-    try {
-      resolved = resolveTokenRef(chain, id, tokens)
-    } catch {
-      return false
-    }
+    // Preserve the pre-existing escape hatch for malformed tracked records
+    // whose stored id is empty. The shared resolver interprets an empty ref as
+    // native, but the exact empty storage id was removable before this method
+    // adopted resolver-based matching.
+    let tokenIndex = id === '' ? tokens.findIndex(token => token.id === '') : -1
 
-    if (!resolved.contractAddress) return false
+    if (id !== '') {
+      // Resolve first. The resolver is the single definition of what a token
+      // reference means, and removal must not disagree with the asset that
+      // `send`/`swap` would pick for the same reference.
+      let resolved
+      try {
+        resolved = resolveTokenRef(chain, id, tokens)
+      } catch {
+        return false
+      }
 
-    // Select the record the RESOLVER selected, by mirroring its own user-token
-    // lookup order (tokenRef.ts): symbol first, then contract address or stored
-    // id. Reconstructing the choice from the resolved asset id instead is not
-    // equivalent — a vault can hold two records for one contract under
-    // different symbols, or a ticker-keyed id (`id: 'usdc'`) alongside the
-    // address-keyed record, and then "which record" and "which asset" are
-    // different questions. Removal must mean the same record every other
-    // surface means for that reference.
-    const upper = id.toUpperCase()
-    const lower = id.toLowerCase()
-    let tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
-    if (tokenIndex === -1) {
-      tokenIndex = tokens.findIndex(
-        token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
-      )
-    }
-    if (tokenIndex === -1) {
-      // The ref resolved through the well-known registry rather than a stored
-      // record. Fall back to the asset id, using the same `||` fallback the
-      // resolver applies — a token stored with an empty `contractAddress` is
-      // identified by its `id`, and `??` would compare it against `''` and
-      // leave it permanently unremovable.
-      const resolvedAssetId = resolved.contractAddress.toLowerCase()
-      tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+      if (!resolved.contractAddress) return false
+
+      // Select the record the RESOLVER selected, by mirroring its own user-token
+      // lookup order (tokenRef.ts): symbol first, then contract address or stored
+      // id. Reconstructing the choice from the resolved asset id instead is not
+      // equivalent — a vault can hold two records for one contract under
+      // different symbols, or a ticker-keyed id (`id: 'usdc'`) alongside the
+      // address-keyed record, and then "which record" and "which asset" are
+      // different questions. Removal must mean the same record every other
+      // surface means for that reference.
+      const upper = id.toUpperCase()
+      const lower = id.toLowerCase()
+      tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
+      if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(
+          token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
+        )
+      }
+      if (tokenIndex === -1) {
+        // The ref resolved through the well-known registry rather than a stored
+        // record. Fall back to the asset id, using the same `||` fallback the
+        // resolver applies — a token stored with an empty `contractAddress` is
+        // identified by its `id`, and `??` would compare it against `''` and
+        // leave it permanently unremovable.
+        const resolvedAssetId = resolved.contractAddress.toLowerCase()
+        tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+      }
     }
 
     if (tokenIndex === -1) return false
