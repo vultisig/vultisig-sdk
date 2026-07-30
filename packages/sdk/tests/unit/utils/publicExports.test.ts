@@ -139,6 +139,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports Balancer V3 calldata builder on the root sdk surface alongside other DeFi builders', () => {
+    expect(typeof sdk.buildBalancerV3SwapCalldata).toBe('function')
+    expect(typeof sdk.buildBuyPt).toBe('function')
+    expect(typeof sdk.defi.balancer.buildBalancerV3SwapCalldata).toBe('function')
+    expect(sdk.buildBalancerV3SwapCalldata).toBe(sdk.defi.balancer.buildBalancerV3SwapCalldata)
+  })
+
   it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.getChainKind).toBe('function')

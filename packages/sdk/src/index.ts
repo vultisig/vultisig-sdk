@@ -724,6 +724,7 @@ export {
   ASTROPORT_ROUTER,
   balancePolkadot,
   buildAstroportSwap,
+  buildBalancerV3SwapCalldata,
   buildBuyPt,
   buildCctpBridge,
   buildCctpClaim,
