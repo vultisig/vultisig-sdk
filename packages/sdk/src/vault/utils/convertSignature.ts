@@ -86,7 +86,7 @@ export function convertToKeysignSignatures(
         r: sig.r,
         s: sig.s,
         der_signature: sig.der,
-        recovery_id: signature.recovery?.toString(),
+        recovery_id: (sig.recovery ?? signature.recovery)?.toString(),
       }
     })
   } else {
