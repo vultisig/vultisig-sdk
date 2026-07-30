@@ -22,6 +22,33 @@ const escapeTerminalControls = (value: string): string =>
     return isTerminalControl ? `\\x${codePoint.toString(16).padStart(2, '0').toUpperCase()}` : character
   }).join('')
 
+const getSendPreviewDetails = (
+  chain: Chain,
+  keysignPayload: KeysignPayload
+): { memo: string | undefined; destinationTag: number | undefined } => {
+  let memo = keysignPayload.memo || undefined
+
+  if (chain !== Chain.Ripple) {
+    return { memo, destinationTag: undefined }
+  }
+
+  const rippleSpecific = keysignPayload.blockchainSpecific
+  if (rippleSpecific.case !== 'rippleSpecific') {
+    throw new Error('Ripple send payload is missing Ripple-specific data')
+  }
+
+  const destinationTag = resolveDestinationTag({
+    destinationTag: rippleSpecific.value.destinationTag,
+    memo,
+  })
+  const legacyMemoDestinationTag = getLegacyDestinationTag(memo)
+  if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === destinationTag) {
+    memo = undefined
+  }
+
+  return { memo, destinationTag }
+}
+
 /**
  * Execute send command - send tokens to an address
  */
@@ -58,24 +85,10 @@ async function previewDryRun(
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
-  let previewMemo = dryResult.keysignPayload.memo || undefined
-  let payloadDestinationTag: number | undefined
-
-  if (params.chain === Chain.Ripple) {
-    const rippleSpecific = dryResult.keysignPayload.blockchainSpecific
-    if (rippleSpecific.case !== 'rippleSpecific') {
-      throw new Error('Ripple dry-run payload is missing Ripple-specific data')
-    }
-
-    payloadDestinationTag = resolveDestinationTag({
-      destinationTag: rippleSpecific.value.destinationTag,
-      memo: previewMemo,
-    })
-    const legacyMemoDestinationTag = getLegacyDestinationTag(previewMemo)
-    if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === payloadDestinationTag) {
-      previewMemo = undefined
-    }
-  }
+  const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
+    params.chain,
+    dryResult.keysignPayload
+  )
 
   // A token send pays its fee out of the NATIVE balance, which `total` no
   // longer covers — so check it separately. Holding the token but no gas is
@@ -206,14 +219,15 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
+    const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
     displayTransactionPreview(
       address,
       to,
       dryResult.total,
       balance.symbol,
       params.chain,
-      params.memo,
-      destinationTag,
+      preview.memo,
+      preview.destinationTag,
       gas
     )
   }
