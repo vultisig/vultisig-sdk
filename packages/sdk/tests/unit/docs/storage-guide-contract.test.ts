@@ -10,6 +10,7 @@ const guidePath = fileURLToPath(new URL('../../../../../docs/SDK-USERS-GUIDE.md'
 const guide = readFileSync(guidePath, 'utf8')
 const typescriptBlocks = [...guide.matchAll(/```typescript\n([\s\S]*?)```/g)].map(match => match[1])
 const fileStorageBlocks = typescriptBlocks.filter(block => /new FileStorage\(/.test(block))
+const nodeFileStorageBlock = fileStorageBlocks.find(block => /from\s*['"]@vultisig\/sdk\/node['"]/.test(block))
 
 describe('SDK users guide storage contract', () => {
   it('uses platform defaults unless custom storage is required', () => {
@@ -38,12 +39,22 @@ describe('SDK users guide storage contract', () => {
   })
 
   it('constructs the documented Node storage configuration', () => {
+    const documentedBasePath = nodeFileStorageBlock?.match(
+      /new FileStorage\(\s*{\s*basePath:\s*(['"])(.*?)\1\s*}\s*\)/
+    )?.[2]
+
+    expect(documentedBasePath).toBeDefined()
+    if (!documentedBasePath) {
+      throw new Error('Expected the Node storage example to document a FileStorage basePath')
+    }
+
     const storage = new FileStorage({
-      basePath: '/tmp/vultisig-sdk-users-guide-contract',
+      basePath: documentedBasePath,
     })
     const sdk = new Vultisig({ storage })
 
-    expect(storage.basePath).toBe('/tmp/vultisig-sdk-users-guide-contract')
+    expect(storage.basePath).toBe(documentedBasePath)
+    expect(sdk.storage).toBe(storage)
     sdk.dispose()
   })
 })
