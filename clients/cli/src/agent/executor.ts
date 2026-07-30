@@ -1500,15 +1500,19 @@ export class AgentExecutor {
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
       if (pendingNonce === null && nonceGap > 3n) {
-        if (this.verbose)
-          process.stderr.write(
-            `[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`
-          )
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
+        )
         this.stateStore.clearEvmState(chain)
         return
       }
 
       bs.value.nonce = nextNonce
+      if (pendingNonce === null) {
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
+        )
+      }
       if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
     }
   }
@@ -1540,7 +1544,7 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      if (!res.ok || data.error || !data.result?.baseFeePerGas) {
+      if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
         throw new Error(`Failed to fetch current base fee for ${chain}`)
       }
       const baseFee = BigInt(data.result.baseFeePerGas)
