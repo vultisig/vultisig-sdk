@@ -78,6 +78,7 @@ describe('VaultBase balancesWithPrices', () => {
 
   it('resolves a tracked token storage id before requesting its price', async () => {
     const contractAddress = '0x00000000000000000000000000000000000000aa'
+    const otherContractAddress = '0x00000000000000000000000000000000000000bb'
     const storedTokenId = `${Chain.Ethereum}-${contractAddress}`
     const getPrice = vi.fn().mockResolvedValue(1)
     const vault = {
@@ -97,6 +98,12 @@ describe('VaultBase balancesWithPrices', () => {
           id: storedTokenId,
           contractAddress,
           symbol: 'USDC',
+          decimals: 6,
+        },
+        {
+          id: `${Chain.Ethereum}-${otherContractAddress}`,
+          contractAddress: otherContractAddress,
+          symbol: storedTokenId,
           decimals: 6,
         },
       ]),
