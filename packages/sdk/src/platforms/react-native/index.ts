@@ -638,6 +638,8 @@ export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export { normalizeChain, UnknownChainError } from '../../utils/normalizeChain'
 export { resolveChainReference } from '../../utils/resolveChainReference'
+export type { ParsedThorSwapMemo } from '../../utils/thorSwapMemo'
+export { parseThorSwapMemo } from '../../utils/thorSwapMemo'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 export async function parseKeygenQR(...args: unknown[]) {
   const mod = await import('../../utils/parseKeygenQR')
