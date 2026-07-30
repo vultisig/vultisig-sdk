@@ -1,12 +1,6 @@
 export { executeAuthLogout, executeAuthSetup, executeAuthStatus } from './auth-setup.js'
-export {
-  getConfigPath,
-  getVultisigConfigDir,
-  loadConfig,
-  saveConfig,
-  type VaultEntry,
-  type VsigConfig,
-} from './config-store.js'
+export { getVultisigConfigDir } from './config-dir.js'
+export { getConfigPath, loadConfig, saveConfig, type VaultEntry, type VsigConfig } from './config-store.js'
 export {
   _resetAll,
   clearCredentials,
