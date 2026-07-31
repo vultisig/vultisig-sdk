@@ -11,8 +11,11 @@
  *  - EdDSA: `r (32B) || s (32B)` (no recovery id)
  */
 
+import { Chain } from '@vultisig/core-chain/Chain'
 import { keysign } from '@vultisig/core-mpc/keysign'
+import { getPreSigningHashes } from '@vultisig/core-mpc/tx/preSigningHashes'
 
+import { getWalletCore } from '../../../context/wasmRuntime'
 import {
   DEFAULT_RN_FETCH_TIMEOUT_MS,
   delayWithSignal,
@@ -24,13 +27,20 @@ import { joinRelaySession, startRelaySession, waitForParties } from './relay'
 
 export type FastVaultSignOptions = {
   keyshareBase64: string
+  /** Hash that will be dispatched to VultiServer and the local MPC engine. */
   messageHashHex: string
+  /**
+   * Encoded WalletCore SigningInput for parity-sensitive RN-JS builders.
+   * TON requires this value so the SDK itself can invoke WalletCore and
+   * compare the independently derived pre-signing hash before dispatch.
+   */
+  walletCoreTxInputData?: Uint8Array
   serverDerivePath: string
   localDerivePath: string
   localPartyId: string
   vaultPassword: string
   publicKeyEcdsa: string
-  chain?: string
+  chain: string
   isEcdsa?: boolean
   maxAttempts?: number
   /** Cancels VultiServer, relay coordination, retry delays, and pre-keysign work. */
@@ -45,6 +55,56 @@ export type FastVaultSignOptions = {
 
 const DEFAULT_VULTI_SERVER_URL = 'https://api.vultisig.com/vault'
 const DEFAULT_RELAY_URL = 'https://api.vultisig.com/router'
+
+const normalizeSigningHash = (field: 'messageHashHex' | 'WalletCore pre-signing hash', value: string): string => {
+  const normalized = value.startsWith('0x') || value.startsWith('0X') ? value.slice(2) : value
+  if (!/^[0-9a-fA-F]{64}$/.test(normalized)) {
+    throw new Error(`fastVaultSign: ${field} must be a 32-byte hex string`)
+  }
+  return normalized.toLowerCase()
+}
+
+const hexFromBytes = (value: Uint8Array): string =>
+  Array.from(value, byte => byte.toString(16).padStart(2, '0')).join('')
+
+const verifyTonSigningHashParity = async (messageHash: string, txInputData: Uint8Array): Promise<void> => {
+  const walletCore = await getWalletCore()
+  const walletCoreHashes = getPreSigningHashes({
+    walletCore,
+    chain: Chain.Ton,
+    txInputData,
+  })
+  if (walletCoreHashes.length !== 1 || !walletCoreHashes[0]) {
+    throw new Error(
+      `fastVaultSign: WalletCore returned ${walletCoreHashes.length} pre-signing hashes for TON; expected exactly one`
+    )
+  }
+
+  if (messageHash !== normalizeSigningHash('WalletCore pre-signing hash', hexFromBytes(walletCoreHashes[0]))) {
+    throw new Error(
+      'fastVaultSign: encoder parity check failed; refusing to dispatch a hash that differs from WalletCore'
+    )
+  }
+}
+
+const assertPreDispatchSigningHashParity = (opts: FastVaultSignOptions): Promise<void> | undefined => {
+  const messageHash = normalizeSigningHash('messageHashHex', opts.messageHashHex)
+
+  if (!opts.chain) {
+    throw new Error('fastVaultSign: chain is required; refusing to dispatch without chain-bound parity policy')
+  }
+
+  if (opts.chain.toLowerCase() !== 'ton') return undefined
+
+  const txInputData = opts.walletCoreTxInputData
+  if (!(txInputData instanceof Uint8Array) || txInputData.length === 0) {
+    throw new Error(
+      'fastVaultSign: walletCoreTxInputData is required for TON; refusing to dispatch without WalletCore encoder parity proof'
+    )
+  }
+
+  return verifyTonSigningHashParity(messageHash, txInputData)
+}
 
 // Exported for unit tests so the missing-crypto fallback (CR item #9) can be
 // exercised directly. Not part of the public SDK surface — the
@@ -113,6 +173,12 @@ function assertHttpUrl(field: 'vultiServerUrl' | 'relayUrl', value: string): voi
 }
 
 export async function fastVaultSign(opts: FastVaultSignOptions): Promise<string> {
+  // This must run before retries, HTTP, relay session creation, or local MPC.
+  // A mismatch is deterministic and retrying it could only create duplicate
+  // signing sessions for a transaction the co-signers do not agree on.
+  const parityCheck = assertPreDispatchSigningHashParity(opts)
+  if (parityCheck) await parityCheck
+
   const maxAttempts = opts.maxAttempts ?? 2
   let lastErr: Error | undefined
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
