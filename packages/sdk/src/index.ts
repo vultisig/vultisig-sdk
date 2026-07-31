@@ -245,6 +245,12 @@ export {
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
+// Canonical Cosmos custom-message signing payload builders. Export these from
+// the SDK boundary so consumers do not have to assemble KeysignPayload values
+// themselves or import from internal vault-service paths.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from './vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from './vault/services/cosmos'
+
 // Fiat currency types
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export {

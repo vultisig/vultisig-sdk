@@ -75,6 +75,14 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
+  it('exports the canonical Cosmos custom-signing payload builders from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const canonical = await import('../../../../src/vault/services/cosmos')
+
+    expect(rn.buildSignAminoKeysignPayload).toBe(canonical.buildSignAminoKeysignPayload)
+    expect(rn.buildSignDirectKeysignPayload).toBe(canonical.buildSignDirectKeysignPayload)
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 

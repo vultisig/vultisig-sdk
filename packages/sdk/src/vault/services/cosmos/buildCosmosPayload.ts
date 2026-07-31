@@ -6,7 +6,7 @@
  */
 
 import { create } from '@bufbuild/protobuf'
-import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import type { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 import { CosmosChain, IbcEnabledCosmosChain } from '@vultisig/core-chain/Chain'
 import { getCosmosAccountInfo } from '@vultisig/core-chain/chains/cosmos/account/getCosmosAccountInfo'
 import { cosmosGasRecord, getCosmosFeeAmount } from '@vultisig/core-chain/chains/cosmos/gas'

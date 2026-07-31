@@ -86,6 +86,11 @@ export {
   isCosmosMemoWithinCap,
 } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
 
+// Canonical Cosmos custom-message signing payload builders. Keep this
+// hand-curated RN surface aligned with the root SDK entrypoint.
+export type { BuildSignAminoPayloadInput, BuildSignDirectPayloadInput } from '../../vault/services/cosmos'
+export { buildSignAminoKeysignPayload, buildSignDirectKeysignPayload } from '../../vault/services/cosmos'
+
 // XRP Ledger issued-currency canonicals — pure helpers/tables that are safe on
 // the RN graph and should stay in parity with the root SDK entrypoint.
 export {

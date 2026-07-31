@@ -292,6 +292,16 @@ assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
 assert.ok(root.Chain !== undefined, 'root exports Chain')
 assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
 assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
+assert.equal(
+  typeof root.buildSignAminoKeysignPayload,
+  'function',
+  'root exports buildSignAminoKeysignPayload'
+)
+assert.equal(
+  typeof root.buildSignDirectKeysignPayload,
+  'function',
+  'root exports buildSignDirectKeysignPayload'
+)
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
 
@@ -337,6 +347,18 @@ assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
     writeFileSync(
       path.join(consumer, 'types-smoke.ts'),
       `import type { Chain } from '@vultisig/sdk'
+import {
+  buildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload,
+  type BuildSignAminoPayloadInput,
+  type BuildSignDirectPayloadInput,
+} from '@vultisig/sdk'
+import {
+  buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
+  buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
+  type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
+  type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
+} from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
 import '@vultisig/sdk/browser'
@@ -345,6 +367,14 @@ export type X = Chain
 export type Y = Vultisig
 export type Z = ElectronMainVultisig
 export type ElectronCrypto = ElectronMainCrypto
+export type CosmosAminoInput = BuildSignAminoPayloadInput
+export type CosmosDirectInput = BuildSignDirectPayloadInput
+export type CosmosAminoInputReactNative = BuildSignAminoPayloadInputReactNative
+export type CosmosDirectInputReactNative = BuildSignDirectPayloadInputReactNative
+export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
+export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
+export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
+export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {

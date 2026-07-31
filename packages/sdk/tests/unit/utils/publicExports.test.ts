@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import * as sdk from '../../../src/index'
+import {
+  buildSignAminoKeysignPayload as canonicalBuildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload as canonicalBuildSignDirectKeysignPayload,
+} from '../../../src/vault/services/cosmos'
 
 describe('@vultisig/sdk public exports', () => {
   it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
@@ -171,6 +175,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
+  })
+
+  it('exports the canonical Cosmos custom-signing payload builders', () => {
+    expect(sdk.buildSignAminoKeysignPayload).toBe(canonicalBuildSignAminoKeysignPayload)
+    expect(sdk.buildSignDirectKeysignPayload).toBe(canonicalBuildSignDirectKeysignPayload)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
