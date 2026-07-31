@@ -464,7 +464,12 @@ export class FastVault extends VaultBase {
    * @param fastSigningService - Fast signing service instance
    * @param context - Vault context with dependencies
    */
-  static fromStorage(vaultData: VaultData, fastSigningService: FastSigningService, context: VaultContext): FastVault {
+  static fromStorage(
+    vaultData: VaultData,
+    fastSigningService: FastSigningService,
+    context: VaultContext,
+    persisted = true
+  ): FastVault {
     // Validate vault type
     if (vaultData.type !== 'fast') {
       throw new VaultError(VaultErrorCode.InvalidVault, `Cannot create FastVault from ${vaultData.type} vault data`)
@@ -490,8 +495,8 @@ export class FastVault extends VaultBase {
       ;(vault as any)._tokens = vaultData.tokens
     }
 
-    // Override vaultData to ensure all stored fields are preserved
-    ;(vault as any).vaultData = vaultData
+    // Override constructor defaults and retain the persisted revision baseline.
+    vault.restorePersistedVaultData(vaultData, persisted)
 
     // CRITICAL: Update coreVault with stored identity fields
     vault.coreVault.publicKeys = vaultData.publicKeys
