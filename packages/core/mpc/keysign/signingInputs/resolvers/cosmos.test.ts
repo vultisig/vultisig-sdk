@@ -5,6 +5,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import {
   CosmosSpecificSchema,
+  MAYAChainSpecificSchema,
   THORChainSpecificSchema,
   TransactionType,
 } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -20,6 +21,8 @@ describe('getCosmosSigningInputs gas limit', () => {
   let recipient: string
   let thorSender: string
   let thorRecipient: string
+  let mayaSender: string
+  let mayaRecipient: string
   let publicKeyHex: string
 
   beforeAll(async () => {
@@ -37,6 +40,8 @@ describe('getCosmosSigningInputs gas limit', () => {
       recipientPublicKey,
       walletCore.CoinType.thorchain
     ).description()
+    mayaSender = 'maya18altpx2gwt4c4ejr5uzda4kyzsudyn9q5dhl9c'
+    mayaRecipient = 'maya1tgxm5jw6hrlvslrd6lqpk4jwuu4g29dxyua4tr'
     publicKeyHex = Buffer.from(publicKey.data()).toString('hex')
   })
 
@@ -151,7 +156,7 @@ describe('getCosmosSigningInputs gas limit', () => {
     expect(input.fee?.gas.toString()).toBe('321979')
   })
 
-  it('keeps vault-based Cosmos chains on their static gas limit', async () => {
+  it('keeps THORChain on its static gas limit without inserting its message-processing fee into authInfo', async () => {
     const [input] = await getCosmosSigningInputs({
       keysignPayload: create(KeysignPayloadSchema, {
         coin: create(CoinSchema, {
@@ -181,6 +186,38 @@ describe('getCosmosSigningInputs gas limit', () => {
     })
 
     expect(input.fee?.gas.toString()).toBe('20000000')
+    expect(input.fee?.amounts).toEqual([])
+  })
+
+  it('keeps MayaChain on its static gas limit without inserting its message-processing fee into authInfo', async () => {
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.MayaChain,
+          ticker: 'CACAO',
+          address: mayaSender,
+          contractAddress: '',
+          decimals: 10,
+          isNativeToken: true,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: mayaRecipient,
+        toAmount: '12345',
+        memo: 'vault based fee boundary',
+        blockchainSpecific: {
+          case: 'mayaSpecific',
+          value: create(MAYAChainSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            isDeposit: false,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    expect(input.fee?.gas.toString()).toBe('2000000000')
+    expect(input.fee?.amounts).toEqual([])
   })
 
   it('encodes secured withdrawals with the L1 asset from the auxiliary payload', async () => {
