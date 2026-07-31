@@ -30,7 +30,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
 
   for (const { label, message } of cases) {
     it(`should match ethers.hashMessage for ${label}: "${message}"`, async () => {
-      const { keccak_256 } = await import('@noble/hashes/sha3')
+      const { keccak_256 } = await import('@noble/hashes/sha3.js')
       const { hashMessage } = await import('ethers')
 
       // Reproduce VaultBase signMessage hashing logic (EIP-191 with byte length)
@@ -47,7 +47,7 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
   }
 
   it('should differ from naive string.length for multi-byte messages', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
 
     const message = '\u{1F600}hello\u{1F30D}' // emoji: 4+5+4 = 13 bytes, but 7 JS chars
     const msgBytes = new TextEncoder().encode(message)
@@ -64,8 +64,8 @@ describe('signMessage EIP-191 multi-byte correctness', () => {
   })
 
   it('should produce SHA-256 (not keccak) for non-EVM chain messages', async () => {
-    const { keccak_256 } = await import('@noble/hashes/sha3')
-    const { sha256 } = await import('@noble/hashes/sha2')
+    const { keccak_256 } = await import('@noble/hashes/sha3.js')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
 
     const message = 'test message'
     const msgBytes = new TextEncoder().encode(message)
