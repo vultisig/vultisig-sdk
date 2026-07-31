@@ -1,5 +1,6 @@
 import { EvmChain } from '@vultisig/core-chain/Chain'
-import { getEvmClient } from '@vultisig/core-chain/chains/evm/client'
+
+import { evmGasPrice } from '../evm/gasPrice'
 
 /**
  * Gas units consumed by the supported tx archetypes. A plain native/ERC-20
@@ -66,10 +67,14 @@ export type CompareCostsResult = {
   skipped: CompareCostsSkipped[]
 }
 
-/** Fetch the current gas price (gwei, 4 dp) for a single EVM chain. */
+/**
+ * Fetch the current gas price (gwei, 4 dp) for a single EVM chain.
+ * Reuses `evmGasPrice` so sub-display non-zero wei values do not round down to
+ * a misleading `0 gwei` / zero-native-cost result here.
+ */
 export const getChainGasPriceGwei = async (chain: EvmChain): Promise<number> => {
-  const wei = await getEvmClient(chain).getGasPrice()
-  return parseFloat((Number(wei) / 1e9).toFixed(4))
+  const { gasPriceGwei } = await evmGasPrice(chain)
+  return gasPriceGwei
 }
 
 /**

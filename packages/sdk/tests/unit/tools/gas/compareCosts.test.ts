@@ -108,6 +108,22 @@ describe('compareCosts', () => {
     expect(res.cheapest?.estTxCostUsd).toBeCloseTo(0.000315, 6)
   })
 
+  it('clamps a non-zero sub-display gas price instead of reporting free gas', async () => {
+    const byChain: Record<string, bigint> = {
+      Base: 49_999n,
+    }
+    let call = 0
+    const order = ['Base']
+    mockGetGasPrice.mockImplementation(() => Promise.resolve(byChain[order[call++]]))
+
+    const res = await compareCosts({ chains: ['Base'] })
+
+    expect(res.results).toHaveLength(1)
+    expect(res.results[0].gasPriceGwei).toBe(0.0001)
+    expect(res.results[0].estTxCostNative).toBeCloseTo(0.0001 * 1e-9 * 21_000, 18)
+    expect(res.cheapest?.chain).toBe('Base')
+  })
+
   it('is fail-soft: a failing RPC lands in skipped, not a rejection', async () => {
     const byChain: Record<string, bigint | Error> = {
       Ethereum: 25_000_000_000n,
