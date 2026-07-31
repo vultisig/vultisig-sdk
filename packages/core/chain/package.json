@@ -1958,6 +1958,11 @@
       "import": "./dist/tx/broadcast/index.js",
       "default": "./dist/tx/broadcast/index.js"
     },
+    "./tx/broadcast/cosmosSequenceMismatch": {
+      "types": "./dist/tx/broadcast/cosmosSequenceMismatch.d.ts",
+      "import": "./dist/tx/broadcast/cosmosSequenceMismatch.js",
+      "default": "./dist/tx/broadcast/cosmosSequenceMismatch.js"
+    },
     "./tx/broadcast/resolver": {
       "types": "./dist/tx/broadcast/resolver.d.ts",
       "import": "./dist/tx/broadcast/resolver.js",
