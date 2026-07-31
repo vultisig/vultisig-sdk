@@ -34,6 +34,7 @@ import { getZcashConventionalFee } from '@vultisig/core-chain/chains/utxo/fee/zi
 import bs58check from 'bs58check'
 
 import { CASHADDR_CHARSET, verifyCashAddrChecksum } from '../../utils/cashaddr'
+import { assertUtxoAddressBrand, type UtxoChainName } from './addressBrand'
 
 // ---------------------------------------------------------------------------
 // Chain identifiers — string-typed to keep the module free of @vultisig/core-chain.
@@ -41,7 +42,7 @@ import { CASHADDR_CHARSET, verifyCashAddrChecksum } from '../../utils/cashaddr'
 // typed overload.
 // ---------------------------------------------------------------------------
 
-export type UtxoChainName = 'Bitcoin' | 'Litecoin' | 'Dogecoin' | 'Dash' | 'Bitcoin-Cash' | 'Zcash'
+export type { UtxoChainName } from './addressBrand'
 
 type UtxoScriptKind = 'p2pkh' | 'p2wpkh' | 'p2sh'
 
@@ -324,6 +325,8 @@ function decodeBase58Address(address: string, chain: UtxoChainName): DecodedAddr
  * (DOGE/DASH/Zcash/legacy BTC).
  */
 export function decodeAddressToPubKeyHash(address: string, chain: UtxoChainName): DecodedAddress {
+  assertUtxoAddressBrand(address, chain)
+
   // bech32 (BTC bc1q..., LTC ltc1q...)
   // We deliberately try bech32 first; non-bech32 addresses fall through to
   // CashAddr / base58 below. We DO NOT swallow the 32-byte (P2WSH) error
