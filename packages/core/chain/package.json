@@ -1673,6 +1673,11 @@
       "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
       "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
     },
+    "./swap/general/lifi/api/lifiSwapFeeChain": {
+      "types": "./dist/swap/general/lifi/api/lifiSwapFeeChain.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js",
+      "default": "./dist/swap/general/lifi/api/lifiSwapFeeChain.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",

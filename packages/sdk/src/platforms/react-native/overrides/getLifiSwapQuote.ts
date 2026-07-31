@@ -20,7 +20,6 @@
 //
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
-import type { ChainId } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
@@ -29,6 +28,7 @@ import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQ
 import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { injectSolanaAtaIfMissing } from '@vultisig/core-chain/swap/general/lifi/api/injectSolanaAtaIfMissing'
 import { MAX_COMBINED_COST_BPS, resolveLifiSlippage } from '@vultisig/core-chain/swap/general/lifi/api/lifiSlippage'
+import { resolveSwapFeeChain } from '@vultisig/core-chain/swap/general/lifi/api/lifiSwapFeeChain'
 import {
   getLifiClient,
   LifiAffiliateConfig,
@@ -39,7 +39,6 @@ import { lifiSwapChainId, LifiSwapEnabledChain } from '@vultisig/core-chain/swap
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { match } from '@vultisig/lib-utils/match'
 import { memoize } from '@vultisig/lib-utils/memoize'
-import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
 
 type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { ticker?: string }> & {
@@ -55,23 +54,6 @@ type Input = Record<TransferDirection, AccountCoinKey<LifiSwapEnabledChain> & { 
    * `lifiSlippageFraction` here. When omitted, falls back to the stable/
    * non-stable pair tier (see resolveLifiSlippage). */
   slippage?: number
-}
-
-// Mirror of core's `resolveSwapFeeChain`. See the core version in
-// `@vultisig/core-chain/swap/general/lifi/api/getLifiSwapQuote.ts` for the
-// full rationale: `mirrorRecord(lifiSwapChainId)[unknownChainId]` silently
-// returns `undefined` for cross-chain routes whose fee token lives on an
-// intermediate chain that is not a `LifiSwapEnabledChain`, producing an
-// ambiguous `swap_fee` non-empty + `swap_fee_chain` absent state on the
-// cosigner. Fall back to the source chain and warn so the drift is visible.
-// (NeOMakinG #540 review blocking #1.)
-const resolveSwapFeeChain = (chainId: ChainId, fallback: LifiSwapEnabledChain): LifiSwapEnabledChain => {
-  const resolved = mirrorRecord(lifiSwapChainId)[chainId]
-  if (resolved === undefined) {
-    console.warn(`[getLifiSwapQuote] fee token chainId ${chainId} not in lifiSwapChainId; falling back to ${fallback}`)
-    return fallback
-  }
-  return resolved
 }
 
 // RN-specific bootstrap. Mirrors the `ensureLifiConfigured` pattern from
