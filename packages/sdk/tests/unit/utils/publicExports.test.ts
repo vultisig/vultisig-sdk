@@ -293,9 +293,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.MAYA_SEND_FEE_BASE_UNITS).toBe(2_000_000_000n)
   })
 
-  it('exports the Cosmos staking gas limit helper, which the send-fee parity matrix does not cover', () => {
+  it('exports the Cosmos staking gas limit helper, including TerraClassic redelegation headroom', () => {
+    expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos })).toBe(350_000n)
     expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.Cosmos, msgCount: 2 })).toBe(437_500n)
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })).toBe(4_000_000n)
   })
 
   it('exports seedphrase import chain support policy for consumers', () => {
