@@ -80,16 +80,21 @@ const assets = Array.isArray(body) ? body : Object.values(Object(body)).find(Arr
 if (!Array.isArray(assets) || assets.length === 0)
   throw new Error(`registry payload has no asset array — schema drift? keys: ${Object.keys(Object(body))}`)
 
-const rows = assets
-  .filter(a => a?.status === 'ASSET_STATUS_ACTIVE')
+const activeAssets = assets.filter(a => a?.status === 'ASSET_STATUS_ACTIVE')
+activeAssets.forEach(a => {
+  if (!Array.isArray(a.deployments))
+    throw new Error(`invalid deployments for ${JSON.stringify(a?.tokenSymbol)} — schema drift?`)
+})
+
+const rows = activeAssets
   .map(a => ({
     ...a,
-    deployment: (Array.isArray(a.deployments) ? a.deployments : []).find(d => d?.chainId === CHAIN_ID),
+    deployment: a.deployments.find(d => d?.chainId === CHAIN_ID),
   }))
   .filter(a => a.deployment)
-  .sort((a, b) => a.tokenSymbol.localeCompare(b.tokenSymbol))
 if (rows.length === 0) throw new Error(`no active assets with a chain-${CHAIN_ID} deployment — schema drift?`)
 rows.forEach(validateRow)
+rows.sort((a, b) => a.tokenSymbol.localeCompare(b.tokenSymbol))
 
 for (let i = 0; i < rows.length; i += RPC_CONCURRENCY) {
   await Promise.all(
