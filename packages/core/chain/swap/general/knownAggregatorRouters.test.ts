@@ -71,6 +71,12 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
       )
     })
 
+    it('REJECTS the standard V5 router on Robinhood', () => {
+      expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V5, Chain.Robinhood)).toThrow(
+        /unrecognized router address/
+      )
+    })
+
     it('REJECTS the Robinhood-specific router on a DIFFERENT chain (Ethereum) — scoping is not accidentally global', () => {
       expect(() => assertKnownAggregatorRouter('1inch', ONE_INCH_V6_ROBINHOOD, Chain.Ethereum)).toThrow(
         /unrecognized router address/

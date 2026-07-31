@@ -192,16 +192,24 @@ describe('findEvmCoins', () => {
   })
 
   it('unions 1inch discoveries with curated catalog holdings on Robinhood (hybrid)', async () => {
-    // AAPL is curated but 1inch /token has no metadata for it (404s live) and the
-    // on-chain fallback is down; a 1inch-only extra (PEPE) has metadata. Pure 1inch
-    // would drop AAPL, pure curated would drop PEPE — the union must surface both,
-    // with the curated entry's hand-verified metadata winning.
+    // AAPL appears in both sources with conflicting metadata; a 1inch-only extra
+    // (PEPE) is also present. The union must surface both while deduplicating AAPL
+    // and retaining the curated entry's hand-verified metadata.
     const address = '0x1111111111111111111111111111111111111111'
     const aaplCatalog = knownTokens[EvmChain.Robinhood].find(c => c.ticker === 'AAPL')!
     const aaplId = aaplCatalog.id!
     const pepeAddress = '0x2222222222222222222222222222222222222222'
 
     queryOneInchMock.mockResolvedValueOnce({ [aaplId.toLowerCase()]: '3', [pepeAddress]: '5' }).mockResolvedValueOnce({
+      [aaplId.toLowerCase()]: {
+        address: aaplId,
+        symbol: 'AAPL',
+        decimals: 6,
+        name: 'Conflicting 1inch Apple',
+        eip2612: false,
+        tags: [],
+        providers: ['1inch'],
+      },
       [pepeAddress]: {
         address: pepeAddress,
         symbol: 'PEPE',
@@ -221,6 +229,7 @@ describe('findEvmCoins', () => {
 
     const tickers = coins.map(c => c.ticker).sort()
     expect(tickers).toEqual(['AAPL', 'PEPE'])
+    expect(coins.filter(c => c.ticker === 'AAPL')).toHaveLength(1)
     const aapl = coins.find(c => c.ticker === 'AAPL')!
     expect(aapl).toEqual({ ...aaplCatalog, address })
   })
