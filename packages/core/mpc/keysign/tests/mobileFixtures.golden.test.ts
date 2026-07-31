@@ -2,7 +2,7 @@ import { Buffer } from 'buffer'
 import { readdirSync, readFileSync } from 'fs'
 import { basename, join } from 'path'
 
-import { blake2b } from '@noble/hashes/blake2b'
+import { blake2b } from '@noble/hashes/blake2.js'
 import { Chain, UtxoChain } from '@vultisig/core-chain/Chain'
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
 import { beforeAll, describe, expect, it } from 'vitest'

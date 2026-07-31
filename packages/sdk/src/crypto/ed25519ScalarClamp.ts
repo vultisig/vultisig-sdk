@@ -7,7 +7,7 @@
  *
  * Shared Ed25519 / Schnorr TSS import clamping used across Vultisig clients.
  */
-import { sha512 } from '@noble/hashes/sha2'
+import { sha512 } from '@noble/hashes/sha2.js'
 
 /**
  * Ed25519 group order (L)

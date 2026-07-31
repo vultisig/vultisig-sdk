@@ -1,6 +1,6 @@
 // Core functions (functional dispatch) - Direct imports from core
 import { fromBinary } from '@bufbuild/protobuf'
-import { sha256 } from '@noble/hashes/sha2'
+import { sha256 } from '@noble/hashes/sha2.js'
 import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
