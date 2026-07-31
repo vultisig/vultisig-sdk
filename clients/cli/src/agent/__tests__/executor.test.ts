@@ -223,15 +223,15 @@ describe('resolveChainId', () => {
 // `add_chain` / `remove_chain` / etc.).
 
 describe('AgentExecutor — discriminator wrappers', () => {
-  it('vaultChain dispatches action=add to addChainImpl', async () => {
+  it('vaultChain resolves SDK-only aliases before dispatching action=add', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
-    const recent = await executor.vaultChain('call-vc-1', { action: 'add', chain: 'Ethereum' })
+    const recent = await executor.vaultChain('call-vc-1', { action: 'add', chain: 'gaia' })
 
     expect(recent.success).toBe(true)
     expect(recent.tool).toBe('vault_chain')
-    expect(vault.addChain).toHaveBeenCalledWith(Chain.Ethereum)
+    expect(vault.addChain).toHaveBeenCalledWith(Chain.Cosmos)
     expect(recent.data?.added).toBe(true)
   })
 
@@ -257,13 +257,13 @@ describe('AgentExecutor — discriminator wrappers', () => {
     expect((recent.data as Record<string, unknown>).error).toMatch(/unknown action/i)
   })
 
-  it('vaultCoin dispatches action=add to addCoinImpl', async () => {
+  it('vaultCoin resolves separator-tolerant SDK aliases before dispatching action=add', async () => {
     const vault = createMockVault()
     const executor = new AgentExecutor(vault)
 
     const recent = await executor.vaultCoin('call-vk-1', {
       action: 'add',
-      chain: 'Ethereum',
+      chain: 'Terra Classic',
       ticker: 'USDC',
       contract_address: '0xabc',
       decimals: 6,
@@ -271,7 +271,7 @@ describe('AgentExecutor — discriminator wrappers', () => {
 
     expect(recent.success).toBe(true)
     expect(recent.tool).toBe('vault_coin')
-    expect(vault.addToken).toHaveBeenCalled()
+    expect(vault.addToken).toHaveBeenCalledWith(Chain.TerraClassic, expect.objectContaining({ symbol: 'USDC' }))
     expect(recent.data?.added).toBe(true)
   })
 
@@ -299,21 +299,27 @@ describe('AgentExecutor — discriminator wrappers', () => {
     expect((recent.data as Record<string, unknown>).error).toMatch(/unknown action/i)
   })
 
-  it('addressBook dispatches action=add to addAddressBookImpl', async () => {
+  it('addressBook resolves canonical Cosmos chain IDs before dispatching action=add', async () => {
     const vault = createMockVault()
     const vultisig = createMockVultisig()
     const executor = new AgentExecutor(vault, false, '0xpub', vultisig)
 
     const recent = await executor.addressBook('call-ab-1', {
       action: 'add',
-      entry: { name: 'satoshi', chain: 'Ethereum', address: '0xdef' },
+      entry: { name: 'satoshi', chain: 'cosmoshub-4', address: 'cosmos1recipient' },
     })
 
     expect(recent.success).toBe(true)
     expect(recent.tool).toBe('address_book')
     expect(
       (vultisig as unknown as { addAddressBookEntry: ReturnType<typeof vi.fn> }).addAddressBookEntry
-    ).toHaveBeenCalled()
+    ).toHaveBeenCalledWith([
+      expect.objectContaining({
+        chain: Chain.Cosmos,
+        address: 'cosmos1recipient',
+        name: 'satoshi',
+      }),
+    ])
   })
 
   it('addressBook dispatches action=remove to removeAddressBookImpl with explicit address', async () => {
