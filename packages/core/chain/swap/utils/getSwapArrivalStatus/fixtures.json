@@ -1,0 +1,87 @@
+{
+  "thorchainNodePending": {
+    "tx": { "id": "THOR-SOURCE" },
+    "stages": {
+      "inbound_observed": { "started": true, "completed": true },
+      "inbound_confirmation_counted": { "completed": true },
+      "inbound_finalised": { "completed": true },
+      "swap_status": { "pending": true }
+    }
+  },
+  "thorchainMidgardPending": {
+    "count": "1",
+    "actions": [
+      {
+        "status": "pending",
+        "type": "swap",
+        "in": [{ "txID": "THOR-SOURCE" }],
+        "out": [],
+        "metadata": { "swap": { "memo": "=:BTC.BTC:bc1destination" } }
+      }
+    ]
+  },
+  "thorchainMidgardRefunded": {
+    "count": "1",
+    "actions": [
+      {
+        "status": "success",
+        "type": "refund",
+        "in": [{ "txID": "THOR-REFUND-SOURCE" }],
+        "out": [{ "txID": "THOR-REFUND-OUT" }],
+        "metadata": { "refund": { "reason": "emit asset less than price limit" } }
+      }
+    ]
+  },
+  "mayachainMidgardSuccess": {
+    "count": "1",
+    "actions": [
+      {
+        "status": "success",
+        "type": "swap",
+        "in": [{ "txID": "MAYA-SOURCE" }],
+        "out": [{ "txID": "MAYA-DESTINATION" }],
+        "metadata": { "swap": { "memo": "=:BTC.BTC:bc1destination" } }
+      }
+    ]
+  },
+  "skipCompleted": {
+    "state": "STATE_COMPLETED_SUCCESS",
+    "transfers": [
+      {
+        "transfer_sequence": [
+          {
+            "ibc_transfer": {
+              "packet_txs": {
+                "send_tx": { "tx_hash": "SKIP-SOURCE" },
+                "receive_tx": { "tx_hash": "SKIP-DESTINATION" }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "transfer_asset_release": { "chain_id": "osmosis-1", "released": true },
+    "error": null
+  },
+  "skipRefunded": {
+    "state": "STATE_COMPLETED_ERROR",
+    "transfers": [],
+    "transfer_asset_release": { "chain_id": "cosmoshub-4", "released": true },
+    "error": { "message": "route failed and assets returned" }
+  },
+  "lifiPending": {
+    "transactionId": "lifi-pending",
+    "status": "PENDING",
+    "substatus": "WAIT_DESTINATION_TRANSACTION",
+    "substatusMessage": "Waiting for the destination transaction.",
+    "sending": { "txHash": "0xsource" }
+  },
+  "lifiRefunded": {
+    "transactionId": "lifi-refunded",
+    "status": "DONE",
+    "substatus": "REFUNDED",
+    "substatusMessage": "Tokens were refunded.",
+    "sending": { "txHash": "0xsource" },
+    "receiving": { "txHash": "0xrefund" }
+  }
+}
