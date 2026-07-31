@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { CosmosSequenceMismatchError } from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -193,6 +194,20 @@ describe('BroadcastService', () => {
     await expect(service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Ethereum'),
+    })
+  })
+
+  it('preserves typed Cosmos stale-sequence recovery through the public broadcast error', async () => {
+    const mismatch = new CosmosSequenceMismatchError({
+      expectedSequence: 255n,
+      signedSequence: 254n,
+    })
+    mockCoreBroadcastTx.mockRejectedValue(mismatch)
+
+    await expect(service.broadcastTx({ chain: Chain.Cosmos, keysignPayload, signature })).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('start a new signing ceremony'),
+      originalError: mismatch,
     })
   })
 })

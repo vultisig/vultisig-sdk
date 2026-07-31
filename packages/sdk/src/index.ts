@@ -60,6 +60,10 @@ export { fiatToAmount, FiatToAmountError } from './utils/fiatToAmount'
 export { normalizeChain, UnknownChainError } from './utils/normalizeChain'
 export { resolveChainReference } from './utils/resolveChainReference'
 export { ChainAmountParseError, toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
+export {
+  CosmosSequenceMismatchError,
+  toCosmosSequenceMismatchError,
+} from '@vultisig/core-chain/tx/broadcast/cosmosSequenceMismatch'
 
 // Pure-bigint exact base-units -> human decimal-string conversion (no float64
 // round-trip, so it's safe for high-decimal assets). Exported at the root so
