@@ -283,6 +283,16 @@ assert.equal(typeof root?.fiatToAmount, 'function', 'root import exports fiatToA
 assert.equal(typeof root?.normalizeChain, 'function', 'root import exports normalizeChain')
 assert.equal(typeof root?.fromChainAmountExact, 'function', 'root import exports fromChainAmountExact')
 assert.equal(typeof root?.getBlockExplorerUrl, 'function', 'root import exports getBlockExplorerUrl')
+assert.equal(
+  typeof root?.buildSignAminoKeysignPayload,
+  'function',
+  'root import exports buildSignAminoKeysignPayload'
+)
+assert.equal(
+  typeof root?.buildSignDirectKeysignPayload,
+  'function',
+  'root import exports buildSignDirectKeysignPayload'
+)
 assert.ok(root?.chainRegistry !== undefined, 'root import exports chainRegistry')
 assert.equal(typeof root?.deriveFromChainRegistry, 'function', 'root import exports deriveFromChainRegistry')
 assert.equal(typeof root?.extendChainRegistry, 'function', 'root import exports extendChainRegistry')
@@ -348,8 +358,17 @@ void ${alias}Keys`
     path.join(consumerRoot, 'verify-types.ts'),
     `${typeImports}
 ${declarationAssertions}
-import { Chain, chainRegistry, deriveFromChainRegistry, extendChainRegistry } from '@vultisig/sdk'
+import {
+  Chain,
+  buildSignAminoKeysignPayload,
+  buildSignDirectKeysignPayload,
+  chainRegistry,
+  deriveFromChainRegistry,
+  extendChainRegistry,
+} from '@vultisig/sdk'
 import type {
+  BuildSignAminoPayloadInput,
+  BuildSignDirectPayloadInput,
   ChainDescriptor,
   ChainDescriptorRegistry,
   ChainExplorerDescriptor,
@@ -360,6 +379,12 @@ import type {
 import type {
   ChainDescriptor as ReactNativeChainDescriptor,
   ExtendedChainRegistry as ReactNativeExtendedChainRegistry,
+} from '@vultisig/sdk/react-native'
+import {
+  buildSignAminoKeysignPayload as buildSignAminoKeysignPayloadReactNative,
+  buildSignDirectKeysignPayload as buildSignDirectKeysignPayloadReactNative,
+  type BuildSignAminoPayloadInput as BuildSignAminoPayloadInputReactNative,
+  type BuildSignDirectPayloadInput as BuildSignDirectPayloadInputReactNative,
 } from '@vultisig/sdk/react-native'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
@@ -381,6 +406,14 @@ export type ExplorerShape = typeof explorer
 export type ExtendedShape = typeof extended
 export type ReactNativeDescriptor = ReactNativeChainDescriptor
 export type ReactNativeExtended = ReactNativeExtendedChainRegistry<typeof extension>
+export type CosmosAminoInput = BuildSignAminoPayloadInput
+export type CosmosDirectInput = BuildSignDirectPayloadInput
+export type CosmosAminoInputReactNative = BuildSignAminoPayloadInputReactNative
+export type CosmosDirectInputReactNative = BuildSignDirectPayloadInputReactNative
+export type CosmosAminoBuilder = typeof buildSignAminoKeysignPayload
+export type CosmosDirectBuilder = typeof buildSignDirectKeysignPayload
+export type CosmosAminoBuilderReactNative = typeof buildSignAminoKeysignPayloadReactNative
+export type CosmosDirectBuilderReactNative = typeof buildSignDirectKeysignPayloadReactNative
 `
   )
 
