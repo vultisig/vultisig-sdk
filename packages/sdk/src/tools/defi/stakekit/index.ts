@@ -414,6 +414,8 @@ const STAKEKIT_NETWORK_ALIASES: Readonly<Record<string, string>> = {
   'bnb chain': 'binance',
   'bnb-chain': 'binance',
   bnbchain: 'binance',
+  'cronos chain': 'cronos',
+  cronoschain: 'cronos',
   avalanche: 'avalanche-c',
   avax: 'avalanche-c',
 }

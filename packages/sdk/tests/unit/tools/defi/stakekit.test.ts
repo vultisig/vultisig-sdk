@@ -124,7 +124,10 @@ describe('sdk.defi.stakekit', () => {
   })
 
   describe('stakekitSearch', () => {
-    it('normalizes public network aliases at the StakeKit request boundary', async () => {
+    it.each([
+      ['BSC', 'binance'],
+      ['cronos chain', 'cronos'],
+    ])('normalizes public network alias %s to %s at the StakeKit request boundary', async (network, expected) => {
       const fetchMock = vi.fn().mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -133,10 +136,10 @@ describe('sdk.defi.stakekit', () => {
       } as Response)
       globalThis.fetch = fetchMock
 
-      await stakekitSearch({ network: 'BSC' })
+      await stakekitSearch({ network })
 
       const requestUrl = String(fetchMock.mock.calls[0]?.[0])
-      expect(new URL(requestUrl).searchParams.get('network')).toBe('binance')
+      expect(new URL(requestUrl).searchParams.get('network')).toBe(expected)
     })
 
     it('returns rows with YieldDiscoverOpportunity-compatible shape: apy is fraction, provider nested in metadata, id present', async () => {
@@ -537,12 +540,12 @@ describe('sdk.defi.stakekit', () => {
 
       const result = await stakekitBalances({
         address: '0x1234567890123456789012345678901234567890',
-        network: 'AVAX',
+        network: 'CronosChain',
       })
 
       expect(result).toEqual([])
       const requestUrl = String(fetchMock.mock.calls[0]?.[0])
-      expect(new URL(requestUrl).searchParams.get('network')).toBe('avalanche-c')
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('cronos')
     })
 
     it('returns null on 403 (restricted endpoint)', async () => {
