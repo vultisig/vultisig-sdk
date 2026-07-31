@@ -40,6 +40,25 @@ describe('ChromeExtensionStorage', () => {
   let storage: ChromeExtensionStorage
 
   beforeEach(() => {
+    let mutationTail = Promise.resolve()
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: async <T>(_name: string, operation: () => Promise<T>): Promise<T> => {
+          const previous = mutationTail
+          let release!: () => void
+          const current = new Promise<void>(resolve => {
+            release = resolve
+          })
+          mutationTail = previous.then(() => current)
+          await previous
+          try {
+            return await operation()
+          } finally {
+            release()
+          }
+        },
+      },
+    })
     mockStorage.clear()
     vi.clearAllMocks()
     storage = new ChromeExtensionStorage()
@@ -98,6 +117,36 @@ describe('ChromeExtensionStorage', () => {
         expect(error).toBeInstanceOf(StorageError)
         expect((error as StorageError).code).toBe(StorageErrorCode.QuotaExceeded)
       }
+    })
+
+    it('serializes ordinary writes with conditional writes', async () => {
+      let releaseRead!: () => void
+      const readGate = new Promise<void>(resolve => {
+        releaseRead = resolve
+      })
+      let signalRead!: () => void
+      const readStarted = new Promise<void>(resolve => {
+        signalRead = resolve
+      })
+      mockChromeStorageLocal.get.mockImplementationOnce(async () => {
+        signalRead()
+        await readGate
+        return {}
+      })
+
+      const replacing = storage.compareAndSet('vault:shared', null, { version: 'conditional' })
+      await readStarted
+      let ordinaryFinished = false
+      const saving = storage.set('vault:shared', { version: 'ordinary' }).then(() => {
+        ordinaryFinished = true
+      })
+      await Promise.resolve()
+      expect(ordinaryFinished).toBe(false)
+
+      releaseRead()
+      await expect(replacing).resolves.toBe(true)
+      await saving
+      await expect(storage.get('vault:shared')).resolves.toEqual({ version: 'ordinary' })
     })
   })
 

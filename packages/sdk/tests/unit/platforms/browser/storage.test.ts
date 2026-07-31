@@ -54,6 +54,26 @@ describe('BrowserStorage backend selection', () => {
   let local: LocalStorageDouble
 
   beforeEach(() => {
+    const lockTails = new Map<string, Promise<void>>()
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: async <T>(name: string, operation: () => Promise<T> | T): Promise<T> => {
+          const previous = lockTails.get(name) ?? Promise.resolve()
+          let release!: () => void
+          const current = new Promise<void>(resolve => {
+            release = resolve
+          })
+          lockTails.set(name, current)
+          await previous
+          try {
+            return await operation()
+          } finally {
+            release()
+            if (lockTails.get(name) === current) lockTails.delete(name)
+          }
+        },
+      },
+    })
     local = new LocalStorageDouble()
     vi.stubGlobal('localStorage', local)
     vi.stubGlobal('indexedDB', new IDBFactory())
@@ -72,6 +92,19 @@ describe('BrowserStorage backend selection', () => {
 
     expect(open).toHaveBeenCalledTimes(1)
     expect(local.getItem('__vultisig_storage_backend__')).toBe('indexeddb')
+  })
+
+  it('conditionally writes one shared IndexedDB value atomically across adapter instances', async () => {
+    const first = new BrowserStorage()
+    const second = new BrowserStorage()
+
+    const results = await Promise.all([
+      first.compareAndSet('vault:shared', null, { owner: 'first' }),
+      second.compareAndSet('vault:shared', null, { owner: 'second' }),
+    ])
+
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect(await first.get('vault:shared')).toEqual(results[0] ? { owner: 'first' } : { owner: 'second' })
   })
 
   it('surfaces IndexedDB quota without switching to localStorage or hiding existing keys', async () => {

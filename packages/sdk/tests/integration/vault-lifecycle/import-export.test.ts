@@ -455,7 +455,7 @@ describe('Integration: Vault Export', () => {
       expect(exportedData.length).toBeGreaterThan(0)
 
       // Re-import the exported vault
-      const reimportedVault = await sdk.importVault(exportedData, password)
+      const reimportedVault = await sdk.importVault(exportedData, password, { conflictResolution: 'replace' })
       expect(reimportedVault).toBeDefined()
 
       // Verify the re-imported vault can derive the same address
@@ -482,7 +482,7 @@ describe('Integration: Vault Export', () => {
       const { data: exportedData } = await vault.export()
 
       // Re-import
-      const reimportedVault = await sdk.importVault(exportedData)
+      const reimportedVault = await sdk.importVault(exportedData, undefined, { conflictResolution: 'replace' })
 
       // Verify addresses match
       const reimportedBtcAddress = await reimportedVault.address(Chain.Bitcoin)

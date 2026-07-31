@@ -5,9 +5,19 @@
 import * as fs from 'fs/promises'
 import * as os from 'os'
 import * as path from 'path'
+import { performance } from 'perf_hooks'
 
 import type { Storage, StorageMetadata, StoredValue } from '../../storage/types'
 import { STORAGE_VERSION, StorageError, StorageErrorCode } from '../../storage/types'
+
+type FileLockOwner = {
+  id: string
+  pid: number
+  hostname: string
+  processStartedAt: number
+}
+
+const PROCESS_STARTED_AT = performance.timeOrigin
 
 function getDefaultBasePath(): string {
   const override = process.env.VULTISIG_CONFIG_DIR?.trim()
@@ -54,20 +64,136 @@ export class FileStorage implements Storage {
     return path.join(this.basePath, `${sanitized}.json`)
   }
 
+  private async readValue<T>(key: string): Promise<T | null> {
+    const filePath = this.getFilePath(key)
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      const stored = JSON.parse(content) as StoredValue<T>
+      return stored.value
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  }
+
+  private async writeValue<T>(key: string, value: T): Promise<void> {
+    const filePath = this.getFilePath(key)
+    const metadata: StorageMetadata = {
+      version: STORAGE_VERSION,
+      createdAt: Date.now(),
+      lastModified: Date.now(),
+    }
+    const stored: StoredValue<T> = { value, metadata }
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
+      encoding: 'utf-8',
+      mode: 0o600,
+      flag: 'wx',
+    })
+    await fs.rename(tempPath, filePath)
+  }
+
+  private async removeValue(key: string): Promise<void> {
+    await fs.unlink(this.getFilePath(key)).catch(error => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })
+  }
+
+  private async readLockOwner(lockPath: string): Promise<FileLockOwner | undefined> {
+    try {
+      const owner = JSON.parse(await fs.readFile(lockPath, 'utf-8')) as Partial<FileLockOwner>
+      return typeof owner.id === 'string' &&
+        typeof owner.pid === 'number' &&
+        typeof owner.hostname === 'string' &&
+        typeof owner.processStartedAt === 'number'
+        ? (owner as FileLockOwner)
+        : undefined
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+      return undefined
+    }
+  }
+
+  private isOwnerProcessDead(owner: FileLockOwner): boolean {
+    if (owner.hostname !== os.hostname()) return false
+    if (owner.pid === process.pid) return owner.processStartedAt !== PROCESS_STARTED_AT
+    try {
+      process.kill(owner.pid, 0)
+      return false
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ESRCH'
+    }
+  }
+
+  private async withKeyLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+    await this.ensureDirectory()
+    const lockPath = `${this.getFilePath(key)}.lock`
+    const startedAt = Date.now()
+    const owner: FileLockOwner = {
+      id: `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      pid: process.pid,
+      hostname: os.hostname(),
+      processStartedAt: PROCESS_STARTED_AT,
+    }
+    const ownerPath = `${lockPath}.${owner.id}.owner`
+    await fs.writeFile(ownerPath, JSON.stringify(owner), { encoding: 'utf-8', mode: 0o600, flag: 'wx' })
+    let acquired = false
+
+    try {
+      while (!acquired) {
+        try {
+          await fs.link(ownerPath, lockPath)
+          acquired = true
+          continue
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+            throw new StorageError(StorageErrorCode.Unknown, `Failed to lock value for key "${key}"`, error as Error)
+          }
+        }
+
+        const currentOwner = await this.readLockOwner(lockPath)
+        if (currentOwner && this.isOwnerProcessDead(currentOwner)) {
+          const confirmedOwner = await this.readLockOwner(lockPath)
+          if (confirmedOwner?.id === currentOwner.id) {
+            await fs.unlink(lockPath).catch(error => {
+              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+            })
+            await fs.unlink(`${lockPath}.${currentOwner.id}.owner`).catch(error => {
+              if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+            })
+          }
+          continue
+        }
+
+        if (Date.now() - startedAt > 5_000) {
+          throw new StorageError(StorageErrorCode.StorageUnavailable, `Timed out locking value for key "${key}"`)
+        }
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+
+      return await operation()
+    } finally {
+      try {
+        if (acquired && (await this.readLockOwner(lockPath))?.id === owner.id) {
+          await fs.unlink(lockPath).catch(error => {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          })
+        }
+      } finally {
+        await fs.unlink(ownerPath).catch(error => {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        })
+      }
+    }
+  }
+
   async get<T>(key: string): Promise<T | null> {
     await this.ensureDirectory()
 
     try {
-      const filePath = this.getFilePath(key)
-      try {
-        await fs.access(filePath)
-      } catch {
-        return null
-      }
-
-      const content = await fs.readFile(filePath, 'utf-8')
-      const stored = JSON.parse(content) as StoredValue<T>
-      return stored.value
+      return await this.readValue<T>(key)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null
@@ -77,32 +203,10 @@ export class FileStorage implements Storage {
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    await this.ensureDirectory()
-
-    const metadata: StorageMetadata = {
-      version: STORAGE_VERSION,
-      createdAt: Date.now(),
-      lastModified: Date.now(),
-    }
-
-    const stored: StoredValue<T> = { value, metadata }
-
     try {
-      const filePath = this.getFilePath(key)
-      // Use unique temp file to avoid race conditions with concurrent writes
-      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`
-
-      // Ensure parent directory exists right before writing
-      await fs.mkdir(path.dirname(filePath), { recursive: true })
-
-      await fs.writeFile(tempPath, JSON.stringify(stored, null, 2), {
-        encoding: 'utf-8',
-        mode: 0o600,
-        flag: 'wx',
-      })
-
-      await fs.rename(tempPath, filePath)
+      await this.withKeyLock(key, () => this.writeValue(key, value))
     } catch (error) {
+      if (error instanceof StorageError) throw error
       if ((error as NodeJS.ErrnoException).code === 'ENOSPC') {
         throw new StorageError(StorageErrorCode.QuotaExceeded, 'Disk space quota exceeded', error as Error)
       }
@@ -110,20 +214,27 @@ export class FileStorage implements Storage {
     }
   }
 
-  async remove(key: string): Promise<void> {
-    await this.ensureDirectory()
-
-    try {
-      const filePath = this.getFilePath(key)
-      try {
-        await fs.access(filePath)
-        await fs.unlink(filePath)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
-        }
+  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+    return this.withKeyLock(key, async () => {
+      const currentValue = await this.readValue<T>(key)
+      if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+        return false
       }
+
+      if (value === null) {
+        await this.removeValue(key)
+      } else {
+        await this.writeValue(key, value)
+      }
+      return true
+    })
+  }
+
+  async remove(key: string): Promise<void> {
+    try {
+      await this.withKeyLock(key, () => this.removeValue(key))
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, `Failed to remove key "${key}"`, error as Error)
     }
   }
@@ -162,26 +273,10 @@ export class FileStorage implements Storage {
   }
 
   async clear(): Promise<void> {
-    await this.ensureDirectory()
-
     try {
-      const files = await fs.readdir(this.basePath)
-      await Promise.all(
-        files.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(this.basePath, file)))
-      )
-
-      try {
-        const cacheDir = path.join(this.basePath, 'cache')
-        const cacheFiles = await fs.readdir(cacheDir)
-        await Promise.all(
-          cacheFiles.filter(file => file.endsWith('.json')).map(file => fs.unlink(path.join(cacheDir, file)))
-        )
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error
-        }
-      }
+      await Promise.all((await this.list()).map(key => this.remove(key)))
     } catch (error) {
+      if (error instanceof StorageError) throw error
       throw new StorageError(StorageErrorCode.Unknown, 'Failed to clear storage', error as Error)
     }
   }

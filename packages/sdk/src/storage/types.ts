@@ -45,6 +45,13 @@ export type Storage = {
   set<T>(key: string, value: T): Promise<void>
 
   /**
+   * Atomically replace `key` only when its current value matches `expectedValue`.
+   * A null `value` removes the key. Vault import requires this capability so
+   * concurrent SDK instances cannot overwrite local key material.
+   */
+  compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean>
+
+  /**
    * Remove a value by key.
    */
   remove(key: string): Promise<void>
