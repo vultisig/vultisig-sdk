@@ -95,7 +95,8 @@ describe('getEvmFeeQuote gas limit buffering', () => {
 
     expect(quote.gasLimit).toBe(900_000n)
     expect(quote.baseFeePerGas).toBe(150n)
-    expect(quote.maxPriorityFeePerGas).toBe(2n)
+    // 2 wei RPC tip is floored to 1 gwei on Ethereum
+    expect(quote.maxPriorityFeePerGas).toBe(1n * 1_000_000_000n)
   })
 
   it('ceil-rounds buffered successful estimates for general swaps', async () => {
