@@ -16,15 +16,15 @@
  *   - intent-match (does the address match what the user asked for)
  *   - grounding (is the address present in tool output)
  *   - prompt-injection / fabrication detection
- *   - checksum verification (shape-valid is the contract here, same as the
- *     backend extractors which validate shape, not cryptographic checksum)
+ *   - checksum verification for non-UTXO families (shape-valid is their
+ *     contract here, same as the backend extractors)
  * Those stay in the agent backend's judgement layer. This is pure crypto
  * format-validation, RN-safe (bs58 is pure JS), no network, no signing.
  */
 
 import bs58 from 'bs58'
 
-import { isValidCashAddr } from './cashaddr'
+import { isUtxoAddressBrandValid } from '../chains/utxo/addressBrand'
 
 /**
  * Coarse chain-family tag. Mirrors the backend `address.Family` enum.
@@ -289,16 +289,17 @@ const chainFormatRules: Record<string, Matcher[]> = {
   // EVM family — all share 0x + 40 hex.
   ...Object.fromEntries(evmChains.map(chain => [chain, [evmRule]])),
   solana: [isSolanaAddress],
-  bitcoin: [re(reBTCNativeSegWit), re(reBTCLegacy)],
-  // Authoritative fund-safety gate: full CashAddr polymod checksum, not just
-  // the shape regex — rejects a mistyped BCH address the regex would pass.
-  bitcoincash: [isValidCashAddr],
-  litecoin: [re(reLTCBech32), re(reLTCLegacy)],
-  dogecoin: [re(reDOGE)],
-  dash: [re(reDASH)],
+  // UTXO chains use the canonical SDK brand validator so this generic gate,
+  // the tx decoder, and downstream consumers share one HRP / version-byte /
+  // CashAddr policy.
+  bitcoin: [addr => isUtxoAddressBrandValid(addr, 'Bitcoin')],
+  bitcoincash: [addr => isUtxoAddressBrandValid(addr, 'Bitcoin-Cash')],
+  litecoin: [addr => isUtxoAddressBrandValid(addr, 'Litecoin')],
+  dogecoin: [addr => isUtxoAddressBrandValid(addr, 'Dogecoin')],
+  dash: [addr => isUtxoAddressBrandValid(addr, 'Dash')],
   ripple: [re(reXRP)],
   ton: [re(reTON)],
-  zcash: [re(reZcashT), re(reZcashZ)],
+  zcash: [addr => isUtxoAddressBrandValid(addr, 'Zcash')],
   sui: [re(reSui)],
   tron: [re(reTron)],
   polkadot: [re(rePolkadot)],

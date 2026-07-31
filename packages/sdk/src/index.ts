@@ -108,6 +108,11 @@ export type { AddressFamily, AddressRole, ChainPrefixResult } from './utils/addr
 export { address, validate } from './utils/addressValidation'
 export { checkChainPrefix } from './utils/chainPrefix'
 
+// Canonical UTXO wrong-chain guard. Consumers should import this instead of
+// maintaining local bech32 HRP / Base58Check version / CashAddr matrices.
+export type { UtxoChainName } from './chains/utxo/addressBrand'
+export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/addressBrand'
+
 // ============================================================================
 // PUBLIC API - Tx Shape Normalization (pure, vault-free)
 // ============================================================================
