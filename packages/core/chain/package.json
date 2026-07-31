@@ -870,16 +870,6 @@
       "import": "./dist/chains/sui/transactionResult.js",
       "default": "./dist/chains/sui/transactionResult.js"
     },
-    "./chains/thorchain/ruji/services/fetchMergeableTokenBalances": {
-      "types": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.d.ts",
-      "import": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.js",
-      "default": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.js"
-    },
-    "./chains/thorchain/ruji/services/fetchStakeView": {
-      "types": "./dist/chains/thorchain/ruji/services/fetchStakeView.d.ts",
-      "import": "./dist/chains/thorchain/ruji/services/fetchStakeView.js",
-      "default": "./dist/chains/thorchain/ruji/services/fetchStakeView.js"
-    },
     "./chains/ton/account/getTonAccountInfo": {
       "types": "./dist/chains/ton/account/getTonAccountInfo.d.ts",
       "import": "./dist/chains/ton/account/getTonAccountInfo.js",
