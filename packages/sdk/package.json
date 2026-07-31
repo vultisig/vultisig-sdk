@@ -72,6 +72,16 @@
       "import": "./dist/vite/index.js",
       "require": "./dist/vite/index.cjs",
       "default": "./dist/vite/index.js"
+    },
+    "./seedphrase": {
+      "types": "./dist/seedphrase/index.d.ts",
+      "node": {
+        "import": "./dist/seedphrase/index.js",
+        "require": "./dist/seedphrase/index.cjs"
+      },
+      "import": "./dist/seedphrase/index.js",
+      "require": "./dist/seedphrase/index.cjs",
+      "default": "./dist/seedphrase/index.cjs"
     }
   },
   "scripts": {

@@ -22,6 +22,15 @@ const dtsPluginOptions = {
   },
 }
 
+const createSubpathTypesConfig = (input, file) => ({
+  input,
+  output: {
+    file,
+    format: 'es',
+  },
+  plugins: [dts(dtsPluginOptions)],
+})
+
 export default defineConfig([
   // Main types (platform-agnostic)
   {
@@ -88,4 +97,7 @@ export default defineConfig([
     external: ['vite'],
     plugins: [dts(dtsPluginOptions)],
   },
+  // Canonical seedphrase helpers and import/discovery services are published
+  // as a narrow declaration surface alongside their dedicated runtime bundle.
+  createSubpathTypesConfig('src/seedphrase/index.ts', 'dist/seedphrase/index.d.ts'),
 ])

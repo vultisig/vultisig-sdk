@@ -142,7 +142,10 @@ const rnOverridePlugin = () => ({
   name: 'vultisig-rn-path-override',
   async resolveId(source, importer, options) {
     if (options?.isEntry) return null
-    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    const resolved = await this.resolve(source, importer, {
+      ...options,
+      skipSelf: true,
+    })
     if (!resolved || resolved.external) return null
     const id = resolved.id.replace(/\\/g, '/')
     for (const [suffix, override] of Object.entries(rnOverrideMap)) {
@@ -236,6 +239,46 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
+const createSubpathConfigs = ({ input, distBase }) => [
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.js`,
+      format: 'es',
+      sourcemap: true,
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+    onwarn,
+  },
+  {
+    input,
+    output: {
+      file: `./dist/${distBase}/index.cjs`,
+      format: 'cjs',
+      sourcemap: true,
+      exports: 'named',
+      interop: 'auto',
+      inlineDynamicImports: true,
+      paths: wasmPathsResolver,
+    },
+    external,
+    plugins: createPlugins({
+      preferBuiltins: true,
+      replaceOptions: {
+        'process.env.VULTISIG_PLATFORM': JSON.stringify('node'),
+      },
+    }),
+  },
+]
+
 // Get target from environment variable
 const target = process.env.BUILD_TARGET || 'all'
 
@@ -278,6 +321,10 @@ const configs = {
         },
       }),
     },
+    ...createSubpathConfigs({
+      input: './src/seedphrase/index.ts',
+      distBase: 'seedphrase',
+    }),
   ],
   browser: {
     input: './src/platforms/browser/index.ts',
