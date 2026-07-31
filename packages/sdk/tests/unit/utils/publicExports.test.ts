@@ -173,6 +173,11 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
   })
 
+  it('exports the TerraClassic staking gas limit with redelegation headroom', () => {
+    expect(typeof sdk.getCosmosStakingGasLimit).toBe('function')
+    expect(sdk.getCosmosStakingGasLimit({ chain: sdk.Chain.TerraClassic })).toBe(4_000_000n)
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
