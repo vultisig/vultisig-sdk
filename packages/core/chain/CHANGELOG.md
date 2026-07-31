@@ -1,5 +1,89 @@
 # @vultisig/core-chain
 
+## 2.29.2
+
+### Patch Changes
+
+- [#1650](https://github.com/vultisig/vultisig-sdk/pull/1650) [`8061f30`](https://github.com/vultisig/vultisig-sdk/commit/8061f3072cc299196894b3c118bf7046eff8a004) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Validate Bittensor SS58 prefix and checksum before reading TAO balances.
+
+- [#1661](https://github.com/vultisig/vultisig-sdk/pull/1661) [`ec4aac7`](https://github.com/vultisig/vultisig-sdk/commit/ec4aac78e96db00cae283fe8a506983a30c42412) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Floor the signed EVM `maxPriorityFeePerGas` on tip-auction chains: 1 gwei on
+  Ethereum (parity with iOS `FeeService.calculateMaxPriorityFeePerGas` and
+  Android `EthereumFeeService`, which both floor at 1 gwei) and 30 gwei on
+  Polygon (validators enforce a ~25 gwei minimum tip). In quiet fee markets the
+  raw `eth_maxPriorityFeePerGas` suggestion collapses to near zero (~0.0004 gwei
+  observed live), and a tx signed with that tip is never picked up by block
+  builders — it sat in the public mempool until evicted, so Ethereum mainnet
+  sends from extension/desktop broadcast fine but vanished unmined. Rollup L2s
+  and the zkSync `estimateFee` path keep their current no-floor behavior, and
+  explicit user fee settings still bypass the clamp (vultisig-sdk#1659).
+
+- [#1193](https://github.com/vultisig/vultisig-sdk/pull/1193) [`d1ed4bb`](https://github.com/vultisig/vultisig-sdk/commit/d1ed4bbd459bfed006cf9f319d9e39356ffe25b9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reconcile and publicly export the dangerous/burn-address guard.
+
+  The SDK's `dangerousAddresses.ts` list had drifted from its own authoritative
+  parity source (mcp-ts `src/lib/dangerous-addresses.ts`) and from
+  agent-backend-ts's copy — the exact drift class the file's own header documents
+  via the CCTP `mintRecipient` burn incident. Reconciled to the **union** of all
+  three copies (additive/tightening only, never weakening an existing entry):
+
+  - Solana: added the SPL Token Program and Wrapped SOL mint (from mcp-ts), kept
+    the Solana Incinerator (which only this SDK copy carried).
+  - UTXO (Bitcoin/Litecoin/Dogecoin/Bitcoin-Cash/Dash/Zcash): added the Bitcoin
+    null-script and eater burn addresses.
+  - XRP (Ripple): added the ACCOUNT_ZERO black-hole and ACCOUNT_ONE reserved
+    system account.
+
+  The guard (`assertSafeDestination`, `assertSafeEvmDestination`,
+  `isEvmBurnAddress`, `getEvmDangerousReason`, `getChainDangerousReason`, and the
+  per-family tables) is now exported from the SDK's public API so the app and
+  agent-backend-ts can consume the single source of truth instead of maintaining
+  divergent copies. Non-EVM lists stay chain-family-scoped, so a burn address for
+  one family never blocks an unrelated chain.
+
+  The canonical table now lives in `@vultisig/core-chain`
+  (`security/dangerousAddresses`) — re-exported unchanged from the SDK — so the
+  lower-level core-chain swap guard can share it too (core-chain cannot depend on
+  the SDK). Two in-repo siblings that still held private, incomplete copies now
+  route through it:
+
+  - `recipientSanity.isNullAddress` (SDK) previously missed the SPL Token
+    Program + Wrapped SOL mint, the Bitcoin/XRP burns, and the third EVM variant;
+    it now flags all of them.
+  - `findSwapQuote`'s custom-recipient guard (core-chain) previously vetted only
+    the EVM zero + `…dEaD` addresses; it now rejects the `0xdead…42069` variant
+    and the base58 (Solana / UTXO / XRP) family burns on the destination chain.
+
+  The shared EVM shape check is now case-insensitive on the `0x` prefix, so a
+  `0X…`-prefixed burn can't slip past (parity with the Go guard).
+
+- [#1655](https://github.com/vultisig/vultisig-sdk/pull/1655) [`648d932`](https://github.com/vultisig/vultisig-sdk/commit/648d932b7e3c6f3c30ff7007f3c4e4387879ba38) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): resolve logos for XRPL issued currencies
+
+  Only curated issued currencies (RLUSD) carried a logo, so every other trust-line
+  token — SOLO, an issuer's USD, anything added by id or surfaced by ledger
+  discovery — resolved with no logo and rendered as a broken-image placeholder in
+  clients.
+
+  `getRippleTokenMetadata` now reads an uncurated token's official icon from the
+  XRPL token registry (xrplmeta), keyed by the `<currency>:<issuer>` pair. This is
+  the same shape as the EVM resolver reading `logoURI` from 1inch and the Solana
+  resolver returning `icon`; XRPL was the outlier because it has no on-ledger token
+  metadata registry of its own.
+
+  A curated token is unchanged: it keeps its bundled logo and price provider and
+  performs no lookup. An uncurated token may borrow an icon but never a curated
+  token's `priceProviderId` — two issuers can share a ticker on XRPL, so the issuer
+  is what identifies a token. The lookup fails soft: an unlisted token or an
+  unreachable registry still resolves, just without a logo.
+
+- [#1653](https://github.com/vultisig/vultisig-sdk/pull/1653) [`6763ddb`](https://github.com/vultisig/vultisig-sdk/commit/6763ddbd382bd71cdf9f24bbd3bde0116a694906) Thanks [@aminsato](https://github.com/aminsato)! - Sign Sei as EIP-1559 (enveloped) instead of legacy, matching iOS
+  (`EVMHelper.setGasParameters`) and Android (`EthereumGasHelper.setGasParameters`),
+  which sign every EVM chain except BSC as EIP-1559. Sei was the only
+  enveloped-capable EVM chain still mapped to `'legacy'` in
+  `evmChainTxFeeFormat`, so the pre-signing hash (and therefore the relay
+  `message_id`) diverged between mobile and extension/desktop, deadlocking
+  Sei co-signing between them (vultisig-windows#4369).
+
+- [#1433](https://github.com/vultisig/vultisig-sdk/pull/1433) [`259837f`](https://github.com/vultisig/vultisig-sdk/commit/259837f482717624d6422797e088a9341d4f1a23) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Return the tx hash string (not the full RPC envelope object) from the Tron broadcast resolver, consistent with the other broadcast resolvers. The SDK's `BroadcastService` discards the broadcast resolver's return and derives the hash itself, so no consumer read the object — this is a shape-consistency fix.
+
 ## 2.29.1
 
 ### Patch Changes
