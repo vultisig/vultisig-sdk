@@ -3,6 +3,7 @@ import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
+import type { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
 import {
@@ -45,6 +46,26 @@ const createLegacyBackupMigrationNotice = (vault: VaultBase): LegacyVaultBackupM
   message:
     'This vault came from a legacy backup with a weak password KDF. The SDK upgraded its stored copy, but the password and every old backup must be treated as compromised. Export a fresh backup with a new password, replace all legacy copies, and securely delete the old files.',
 })
+
+export type VaultImportConflictResolution = 'reject' | 'replace'
+
+export type VaultImportOptions = {
+  /**
+   * Existing logical vaults are rejected by default. `replace` is accepted only
+   * when both backups contain the exact same share for the same local party.
+   */
+  conflictResolution?: VaultImportConflictResolution
+}
+
+const recordsEqual = <T>(left?: Partial<Record<string, T>>, right?: Partial<Record<string, T>>): boolean => {
+  const normalize = (record?: Partial<Record<string, T>>) =>
+    Object.entries(record ?? {}).sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right))
+}
+
+const arraysEqual = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index])
 
 /**
  * VaultManager handles vault lifecycle operations
@@ -90,6 +111,165 @@ export class VaultManager {
     }
   }
 
+  private decodeVaultPayload(vultContent: string, password?: string): CoreVault {
+    const container = vaultContainerFromString(vultContent.trim())
+    let vaultBase64 = container.vault
+
+    if (container.isEncrypted) {
+      if (!password) {
+        throw new Error('Password required')
+      }
+      vaultBase64 = Buffer.from(decryptVaultBackupWithPassword(password, fromBase64(container.vault))).toString(
+        'base64'
+      )
+    }
+
+    return fromCommVault(fromBinary(VaultSchema, fromBase64(vaultBase64)))
+  }
+
+  private async decodeStoredVault(existing: VaultData, importedPassword?: string): Promise<CoreVault> {
+    let container
+    try {
+      container = vaultContainerFromString(existing.vultFileContent.trim())
+    } catch (error) {
+      throw new VaultImportError(
+        VaultImportErrorCode.INCOMPATIBLE_VAULT,
+        'The existing local vault cannot be validated safely',
+        error as Error
+      )
+    }
+
+    if (!container.isEncrypted) {
+      try {
+        return this.decodeVaultPayload(existing.vultFileContent)
+      } catch (error) {
+        throw new VaultImportError(
+          VaultImportErrorCode.INCOMPATIBLE_VAULT,
+          'The existing local vault cannot be validated safely',
+          error as Error
+        )
+      }
+    }
+
+    const passwordCandidates = [this.context.passwordCache.get(existing.id), importedPassword].filter(
+      (candidate, index, candidates): candidate is string =>
+        Boolean(candidate) && candidates.indexOf(candidate) === index
+    )
+
+    for (const candidate of passwordCandidates) {
+      try {
+        return this.decodeVaultPayload(existing.vultFileContent, candidate)
+      } catch {
+        // Try the next locally available password candidate.
+      }
+    }
+
+    if (this.context.config.onPasswordRequired) {
+      try {
+        const requestedPassword = await this.context.config.onPasswordRequired(existing.id, existing.name)
+        if (requestedPassword && !passwordCandidates.includes(requestedPassword)) {
+          return this.decodeVaultPayload(existing.vultFileContent, requestedPassword)
+        }
+      } catch {
+        // Fail closed below without replacing the local record.
+      }
+    }
+
+    throw new VaultImportError(
+      VaultImportErrorCode.EXISTING_VAULT_PASSWORD_REQUIRED,
+      'The existing encrypted vault must be unlocked before its local share can be validated'
+    )
+  }
+
+  private validateReplacement(existing: CoreVault, imported: CoreVault): void {
+    if (existing.localPartyId !== imported.localPartyId) {
+      throw new VaultImportError(
+        VaultImportErrorCode.OTHER_DEVICE_SHARE,
+        `A vault for this public key already exists for local party "${existing.localPartyId}"`
+      )
+    }
+
+    const sameKeyDomains =
+      existing.publicKeys.ecdsa === imported.publicKeys.ecdsa &&
+      existing.publicKeys.eddsa === imported.publicKeys.eddsa &&
+      existing.publicKeyMldsa === imported.publicKeyMldsa &&
+      recordsEqual(existing.chainPublicKeys, imported.chainPublicKeys)
+
+    if (!sameKeyDomains) {
+      throw new VaultImportError(
+        VaultImportErrorCode.INCOMPATIBLE_VAULT,
+        'The imported backup does not match every public-key domain of the existing vault'
+      )
+    }
+
+    const sameShareMetadata =
+      arraysEqual(existing.signers, imported.signers) &&
+      existing.hexChainCode === imported.hexChainCode &&
+      existing.libType === imported.libType &&
+      existing.resharePrefix === imported.resharePrefix &&
+      existing.createdAt === imported.createdAt
+    const sameShares =
+      recordsEqual(existing.keyShares, imported.keyShares) &&
+      recordsEqual(existing.chainKeyShares, imported.chainKeyShares) &&
+      existing.keyShareMldsa === imported.keyShareMldsa
+
+    if (!sameShareMetadata || !sameShares) {
+      throw new VaultImportError(
+        VaultImportErrorCode.STALE_SHARE,
+        'The imported backup contains different share metadata or key material for this local party'
+      )
+    }
+  }
+
+  private async persistImportedVault(vault: VaultBase, existing: VaultData | null): Promise<void> {
+    const vaultKey = `vault:${vault.id}`
+    const compareAndSet = this.storage.compareAndSet?.bind(this.storage)
+    if (!compareAndSet) {
+      throw new VaultImportError(
+        VaultImportErrorCode.PERSISTENCE_FAILED,
+        'The configured storage adapter cannot atomically protect vault imports from concurrent overwrites'
+      )
+    }
+
+    let vaultPersisted = false
+
+    try {
+      vaultPersisted = await compareAndSet(vaultKey, existing, vault.data)
+      if (!vaultPersisted) {
+        throw new VaultImportError(
+          VaultImportErrorCode.PERSISTENCE_FAILED,
+          'The local vault changed during import; no data was overwritten. Retry against the current record.'
+        )
+      }
+      await this.storage.set('activeVaultId', vault.id)
+    } catch (error) {
+      if (error instanceof VaultImportError && !vaultPersisted) {
+        throw error
+      }
+
+      const rollbackErrors: Error[] = []
+
+      try {
+        const rolledBack = await compareAndSet(vaultKey, vault.data, existing)
+        if (!rolledBack) {
+          rollbackErrors.push(new Error('the vault changed again before rollback'))
+        }
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError as Error)
+      }
+
+      const rollbackSuffix =
+        rollbackErrors.length === 0
+          ? ' The previous local state was restored.'
+          : ` Rollback also failed: ${rollbackErrors.map(rollbackError => rollbackError.message).join('; ')}`
+      throw new VaultImportError(
+        VaultImportErrorCode.PERSISTENCE_FAILED,
+        `Failed to persist imported vault.${rollbackSuffix}`,
+        error as Error
+      )
+    }
+  }
+
   /**
    * Create Vault instance with proper service injection
    * Internal helper for consistent vault instantiation
@@ -130,9 +310,9 @@ export class VaultManager {
    * const vultContent = fs.readFileSync('my-vault.vult', 'utf-8')
    * const vault = await vaultManager.importVault(vultContent, 'password123')
    */
-  async importVault(vultContent: string, password?: string): Promise<VaultBase> {
+  async importVault(vultContent: string, password?: string, options: VaultImportOptions = {}): Promise<VaultBase> {
     return (
-      await this.importVaultWithResult(vultContent, password, notice => {
+      await this.importVaultWithResult(vultContent, password, options, notice => {
         console.warn(`[Vultisig SDK] ${notice.message}`)
       })
     ).vault
@@ -148,10 +328,10 @@ export class VaultManager {
   async importVaultWithResult(
     vultContent: string,
     password?: string,
+    options: VaultImportOptions = {},
     onLegacyBackupMigrated?: LegacyBackupMigrationHandler
   ): Promise<VaultImportResult> {
     let decryptedVaultBytes: Buffer | undefined
-
     try {
       let container
       try {
@@ -248,54 +428,65 @@ export class VaultManager {
       const vaultId = parsedVault.publicKeys.ecdsa
       const persistedVaultData = await this.storage.get<VaultData>(`vault:${vaultId}`)
 
-      // Determine vault type from parsed vault
-      const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
+      {
+        const existingVault = persistedVaultData
+        if (existingVault) {
+          const existingCoreVault = await this.decodeStoredVault(existingVault, password)
+          this.validateReplacement(existingCoreVault, parsedVault)
 
-      // Create vault context from SDK context
-      const vaultContext = this.createVaultContext()
+          if ((options.conflictResolution ?? 'reject') !== 'replace') {
+            throw new VaultImportError(
+              VaultImportErrorCode.DUPLICATE_VAULT,
+              'This exact local vault share already exists; pass conflictResolution: "replace" to replace it explicitly'
+            )
+          }
+        }
 
-      // Create vault instance using static factory methods
-      // Pass parsedVault to avoid parsing encrypted content synchronously
-      let vaultInstance: VaultBase
-      if (vaultType === 'fast') {
-        const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-        vaultInstance = FastVault.fromImport(
-          vaultId,
-          persistedVultContent,
-          parsedVault,
-          fastSigningService,
-          vaultContext,
-          persistedVaultData ?? undefined
-        )
-      } else {
-        vaultInstance = SecureVault.fromImport(
-          vaultId,
-          persistedVultContent,
-          parsedVault,
-          vaultContext,
-          persistedVaultData ?? undefined
-        )
+        // Determine vault type from parsed vault
+        const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
+
+        // Create vault context from SDK context
+        const vaultContext = this.createVaultContext()
+
+        // Create vault instance using static factory methods
+        // Pass parsedVault to avoid parsing encrypted content synchronously
+        let vaultInstance: VaultBase
+        if (vaultType === 'fast') {
+          const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
+          vaultInstance = FastVault.fromImport(
+            vaultId,
+            persistedVultContent,
+            parsedVault,
+            fastSigningService,
+            vaultContext,
+            persistedVaultData ?? undefined
+          )
+        } else {
+          vaultInstance = SecureVault.fromImport(
+            vaultId,
+            persistedVultContent,
+            parsedVault,
+            vaultContext,
+            persistedVaultData ?? undefined
+          )
+        }
+
+        await this.persistImportedVault(vaultInstance, existingVault)
+
+        // Only change password state after the vault record and active pointer
+        // have both committed successfully.
+        if (password && container.isEncrypted) {
+          this.context.passwordCache.set(vaultId, password)
+        } else if (!container.isEncrypted) {
+          this.context.passwordCache.delete(vaultId)
+        }
+
+        if (legacyBackupMigrated) {
+          onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
+        }
+
+        return { vault: vaultInstance, legacyBackupMigrated }
       }
-
-      // Cache password if provided (for encrypted vaults)
-      if (password && container.isEncrypted) {
-        this.context.passwordCache.set(vaultId, password)
-      }
-
-      // Save to storage
-      await vaultInstance.save()
-
-      // Notify at the durable-save boundary. This guarantees consumers learn
-      // about password rotation even if setting the active-vault pointer fails
-      // after the upgraded vault has already been persisted.
-      if (legacyBackupMigrated) {
-        onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
-      }
-
-      // Set as active vault
-      await this.storage.set('activeVaultId', vaultId)
-
-      return { vault: vaultInstance, legacyBackupMigrated }
     } catch (error) {
       if (error instanceof VaultImportError) {
         throw error

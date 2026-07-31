@@ -149,6 +149,19 @@ class ThrowingStorage implements VaultStorage {
   async set<T>(key: string, value: T): Promise<void> {
     this.store.set(key, value)
   }
+  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+    const currentValue = (this.store.get(key) as T) ?? null
+    if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+      return false
+    }
+
+    if (value === null) {
+      this.store.delete(key)
+    } else {
+      this.store.set(key, value)
+    }
+    return true
+  }
   async remove(key: string): Promise<void> {
     this.removed.push(key)
     this.store.delete(key)

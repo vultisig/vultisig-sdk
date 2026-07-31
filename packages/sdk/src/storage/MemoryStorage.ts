@@ -42,6 +42,20 @@ export class MemoryStorage implements Storage {
     this.store.set(key, { value: cloneStoredValue(value), metadata })
   }
 
+  async compareAndSet<T>(key: string, expectedValue: T | null, value: T | null): Promise<boolean> {
+    const currentValue = this.store.get(key)?.value ?? null
+    if (JSON.stringify(currentValue) !== JSON.stringify(expectedValue)) {
+      return false
+    }
+
+    if (value === null) {
+      this.store.delete(key)
+    } else {
+      await this.set(key, value)
+    }
+    return true
+  }
+
   async remove(key: string): Promise<void> {
     this.store.delete(key)
   }

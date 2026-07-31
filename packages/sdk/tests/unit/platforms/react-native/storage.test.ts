@@ -47,6 +47,39 @@ describe('ReactNativeStorage', () => {
     expect(await storage.get<{ a: number }>('key1')).toEqual({ a: 1 })
   })
 
+  it('serializes ordinary writes with conditional writes across adapter instances', async () => {
+    const mod = await import('@react-native-async-storage/async-storage')
+    const getItem = vi.mocked(mod.default.getItem)
+    let releaseRead!: () => void
+    const readGate = new Promise<void>(resolve => {
+      releaseRead = resolve
+    })
+    let signalRead!: () => void
+    const readStarted = new Promise<void>(resolve => {
+      signalRead = resolve
+    })
+    getItem.mockImplementationOnce(async () => {
+      signalRead()
+      await readGate
+      return null
+    })
+
+    const replacing = storage.compareAndSet('vault:shared', null, { version: 'conditional' })
+    await readStarted
+    const other = new ReactNativeStorage()
+    let ordinaryFinished = false
+    const saving = other.set('vault:shared', { version: 'ordinary' }).then(() => {
+      ordinaryFinished = true
+    })
+    await Promise.resolve()
+    expect(ordinaryFinished).toBe(false)
+
+    releaseRead()
+    await expect(replacing).resolves.toBe(true)
+    await saving
+    await expect(storage.get('vault:shared')).resolves.toEqual({ version: 'ordinary' })
+  })
+
   it('removes a value', async () => {
     await storage.set('key1', 'value')
     await storage.remove('key1')
