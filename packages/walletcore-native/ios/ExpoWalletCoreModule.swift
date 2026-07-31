@@ -92,6 +92,7 @@ public class ExpoWalletCoreModule: Module {
                 "polygon": .polygon, "optimism": .optimism,
                 "cronosChain": .cronosChain, "blast": .blast,
                 "zksync": .zksync, "osmosis": .osmosis,
+                "robinhoodChain": .robinhoodChain,
                 "terraV2": .terraV2, "terra": .terra,
                 "noble": .noble, "kujira": .kujira,
                 "dydx": .dydx, "akash": .akash, "mantle": .mantle, "sei": .sei,
