@@ -201,19 +201,17 @@ describe('findEvmCoins', () => {
     const aaplId = aaplCatalog.id!
     const pepeAddress = '0x2222222222222222222222222222222222222222'
 
-    queryOneInchMock
-      .mockResolvedValueOnce({ [aaplId.toLowerCase()]: '3', [pepeAddress]: '5' })
-      .mockResolvedValueOnce({
-        [pepeAddress]: {
-          address: pepeAddress,
-          symbol: 'PEPE',
-          decimals: 18,
-          name: 'Pepe',
-          eip2612: false,
-          tags: [],
-          providers: ['CoinGecko'],
-        },
-      })
+    queryOneInchMock.mockResolvedValueOnce({ [aaplId.toLowerCase()]: '3', [pepeAddress]: '5' }).mockResolvedValueOnce({
+      [pepeAddress]: {
+        address: pepeAddress,
+        symbol: 'PEPE',
+        decimals: 18,
+        name: 'Pepe',
+        eip2612: false,
+        tags: [],
+        providers: ['CoinGecko'],
+      },
+    })
     getEvmTokenMetadataMock.mockRejectedValue(new NoDataError())
     getEvmChainBalancesMock.mockResolvedValue({
       [accountCoinKeyToString({ chain: EvmChain.Robinhood, id: aaplId, address })]: 3n,
@@ -236,9 +234,7 @@ describe('findEvmCoins', () => {
       [accountCoinKeyToString({ chain: EvmChain.Robinhood, id: aaplCatalog.id!, address })]: 10n,
     })
 
-    await expect(findEvmCoins({ chain: EvmChain.Robinhood, address })).resolves.toEqual([
-      { ...aaplCatalog, address },
-    ])
+    await expect(findEvmCoins({ chain: EvmChain.Robinhood, address })).resolves.toEqual([{ ...aaplCatalog, address }])
   })
 
   it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {
