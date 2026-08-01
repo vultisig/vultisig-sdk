@@ -144,6 +144,13 @@ export class AskInterface {
       },
 
       onTurnOutcome: (outcome: TurnOutcome) => {
+        // A local signing refusal is the terminal truth for this client turn. The
+        // backend may have already emitted (or may race in with) its pre-ceremony
+        // `success` outcome while the queued hl_order retrieval is still running;
+        // never let that stale server classification overwrite the local gate.
+        if (this.outcome?.kind === 'blocked' && this.outcome.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          return
+        }
         // Latch the LAST outcome of the turn. The backend emits exactly one at turn
         // end, but a multi-request action loop (a sign that triggers a follow-up
         // recent_actions turn) can produce more than one across requests — the last

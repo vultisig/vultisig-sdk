@@ -172,7 +172,11 @@ describe('agent ask --json output contract', () => {
   it('turn_outcome=blocked → exit 10 (AGENT_TURN_BLOCKED) + outcome on the envelope', async () => {
     driver.run = cb => {
       cb.onAssistantMessage("I can't complete that safely — please try again.")
-      cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim', detail: 'unverifiable broadcast' })
+      cb.onTurnOutcome?.({
+        kind: 'blocked',
+        code: 'broadcast-claim',
+        detail: 'unverifiable broadcast',
+      })
     }
     const { exitCode } = await runAsk()
     expect(exitCode).toBe(ExitCode.AGENT_TURN_BLOCKED)
@@ -180,15 +184,24 @@ describe('agent ask --json output contract', () => {
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.error.code).toBe(AgentErrorCode.AGENT_TURN_BLOCKED)
-    expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
+    expect(envelope.data.outcome).toMatchObject({
+      kind: 'blocked',
+      code: 'broadcast-claim',
+    })
   })
 
   it('broadcast + turn_outcome=blocked → BROADCAST_COMMITTED with transactions and outcome preserved', async () => {
     driver.run = cb => {
-      cb.onToolResult('approval-call', 'execute_swap', true, { phase: 'approval' })
+      cb.onToolResult('approval-call', 'execute_swap', true, {
+        phase: 'approval',
+      })
       cb.onTxStatus('0xapproval', 'ethereum', 'broadcast', 'https://etherscan.io/tx/0xapproval')
       cb.onAssistantMessage("I couldn't complete the swap. Please try again.")
-      cb.onTurnOutcome?.({ kind: 'blocked', code: 'broadcast-claim', detail: 'unverifiable broadcast' })
+      cb.onTurnOutcome?.({
+        kind: 'blocked',
+        code: 'broadcast-claim',
+        detail: 'unverifiable broadcast',
+      })
     }
 
     const { exitCode } = await runAsk()
@@ -198,7 +211,10 @@ describe('agent ask --json output contract', () => {
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
-    expect(envelope.data.outcome).toMatchObject({ kind: 'blocked', code: 'broadcast-claim' })
+    expect(envelope.data.outcome).toMatchObject({
+      kind: 'blocked',
+      code: 'broadcast-claim',
+    })
     expect(envelope.data.transactions).toEqual([
       {
         hash: '0xapproval',
@@ -223,7 +239,10 @@ describe('agent ask --json output contract', () => {
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
     expect(envelope.data.transactions[0].status).toBe('pending')
-    expect(envelope.data.outcome).toEqual({ kind: 'error', code: 'follow_up_failed' })
+    expect(envelope.data.outcome).toEqual({
+      kind: 'error',
+      code: 'follow_up_failed',
+    })
   })
 
   it('confirmation timeout + turn_outcome=error remains committed because the transaction may still confirm', async () => {
@@ -282,7 +301,10 @@ describe('agent ask --json output contract', () => {
     expect(envelope.success).toBe(false)
     expect(envelope.error.code).toBe(AgentErrorCode.BROADCAST_COMMITTED)
     expect(envelope.data.transactions[0].hash).toBe('0xrefusal')
-    expect(envelope.data.outcome).toEqual({ kind: 'refusal', code: 'clarify_remaining_step' })
+    expect(envelope.data.outcome).toEqual({
+      kind: 'refusal',
+      code: 'clarify_remaining_step',
+    })
   })
 
   it('turn_outcome=error with no stream error frame → exit 1 (not a false 0)', async () => {
@@ -310,7 +332,10 @@ describe('agent ask --json output contract', () => {
     const envelope = JSON.parse(stdout.join(''))
     expect(envelope.success).toBe(false)
     // Same relative slot as the success envelope: data.outcome (not top-level).
-    expect(envelope.data.outcome).toEqual({ kind: 'error', code: 'stream_error' })
+    expect(envelope.data.outcome).toEqual({
+      kind: 'error',
+      code: 'stream_error',
+    })
   })
 
   it('no turn_outcome (older backend) → exit 0 unchanged', async () => {
@@ -329,7 +354,10 @@ describe('agent ask --json output contract', () => {
         'sign-call',
         'sign_tx',
         false,
-        { error: 'Password not provided', code: AgentErrorCode.PASSWORD_REQUIRED },
+        {
+          error: 'Password not provided',
+          code: AgentErrorCode.PASSWORD_REQUIRED,
+        },
         'Password not provided',
         AgentErrorCode.PASSWORD_REQUIRED
       )
@@ -355,13 +383,19 @@ describe('agent ask --json output contract', () => {
   // that succeeded. 13 is the non-retryable partial slot (#1233).
   it('failed second sign leg after a committed broadcast → exit 13, not the leg error’s retryable code', async () => {
     driver.run = cb => {
-      cb.onToolResult('sign-approve', 'sign_tx', true, { tx_hash: '0xapproved', chain: 'ethereum' })
+      cb.onToolResult('sign-approve', 'sign_tx', true, {
+        tx_hash: '0xapproved',
+        chain: 'ethereum',
+      })
       cb.onTxStatus('0xapproved', 'ethereum', 'pending', 'https://etherscan.io/tx/0xapproved')
       cb.onToolResult(
         'sign-swap',
         'sign_tx',
         false,
-        { error: 'Failed to broadcast: node unavailable', code: AgentErrorCode.TRANSACTION_FAILED },
+        {
+          error: 'Failed to broadcast: node unavailable',
+          code: AgentErrorCode.TRANSACTION_FAILED,
+        },
         'Failed to broadcast: node unavailable',
         AgentErrorCode.TRANSACTION_FAILED
       )
@@ -407,7 +441,10 @@ describe('agent ask --json output contract', () => {
         'gas price too low',
         AgentErrorCode.TRANSACTION_FAILED
       )
-      cb.onToolResult('sign-2', 'sign_tx', true, { tx_hash: '0xretried', chain: 'ethereum' })
+      cb.onToolResult('sign-2', 'sign_tx', true, {
+        tx_hash: '0xretried',
+        chain: 'ethereum',
+      })
       cb.onTxStatus('0xretried', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xretried')
       cb.onTurnOutcome?.({ kind: 'success' })
       cb.onAssistantMessage('Sent 0.1 ETH.')
@@ -426,7 +463,10 @@ describe('agent ask --json output contract', () => {
         'sign-call',
         'sign_tx',
         false,
-        { error: 'Transaction not confirmed', code: AgentErrorCode.CONFIRMATION_REQUIRED },
+        {
+          error: 'Transaction not confirmed',
+          code: AgentErrorCode.CONFIRMATION_REQUIRED,
+        },
         'Transaction not confirmed',
         AgentErrorCode.CONFIRMATION_REQUIRED
       )
@@ -438,6 +478,58 @@ describe('agent ask --json output contract', () => {
     expect(envelope.success).toBe(false)
     expect(envelope.error.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
   })
+
+  it.each(['server outcome before local card', 'server outcome after local card'])(
+    'Hyperliquid refusal overrides stale success: %s',
+    async order => {
+      driver.run = cb => {
+        const emitCard = () =>
+          cb.onHlOrderConfirmation?.({
+            surface: 'hyperliquid_order_confirmation',
+            status: 'confirmation_required',
+            order_ref: '12345678-1234-1234-1234-123456789abc',
+            operation: 'close',
+            coin: 'BTC',
+            asset_index: 0,
+            side: 'long',
+            size: '0.001',
+            notional_usd: '65',
+            order_type: 'market',
+            price_cap: '65000',
+            limit_price: null,
+            tif: 'Ioc',
+            reduce_only: true,
+            proposed: 'Close BTC position',
+          })
+        if (order === 'server outcome before local card') cb.onTurnOutcome?.({ kind: 'success' })
+        emitCard()
+        if (order === 'server outcome after local card') cb.onTurnOutcome?.({ kind: 'success' })
+        cb.onToolResult(
+          'hl-order',
+          'hl_order',
+          false,
+          {
+            error: 'Order not confirmed',
+            code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          },
+          'Order not confirmed',
+          AgentErrorCode.CONFIRMATION_REQUIRED
+        )
+      }
+
+      const { exitCode } = await runAsk()
+      expect(exitCode).toBe(ExitCode.CONFIRMATION_REQUIRED)
+      const envelope = JSON.parse(stdout.join(''))
+      expect(envelope.success).toBe(false)
+      expect(envelope.error.code).toBe(AgentErrorCode.CONFIRMATION_REQUIRED)
+      expect(envelope.data.response).toBeUndefined()
+      expect(envelope.data.outcome).toMatchObject({
+        kind: 'blocked',
+        code: AgentErrorCode.CONFIRMATION_REQUIRED,
+      })
+      expect(envelope.data.cards).toHaveLength(1)
+    }
+  )
 
   it('failed sign human output is non-zero and error-shaped', async () => {
     driver.run = cb => {
@@ -537,7 +629,9 @@ describe('agent ask --json output contract', () => {
   it('confirmed broadcast followed by a later thrown network failure remains non-retryable partial success', async () => {
     driver.unacknowledgedBroadcast = false
     driver.run = cb => {
-      cb.onToolResult('tool-call-1', 'execute_send', true, { to: '0xrecipient' })
+      cb.onToolResult('tool-call-1', 'execute_send', true, {
+        to: '0xrecipient',
+      })
       cb.onTxStatus('0xacked', 'ethereum', 'confirmed', 'https://etherscan.io/tx/0xacked')
       throw new Error('fetch failed talking to backend')
     }

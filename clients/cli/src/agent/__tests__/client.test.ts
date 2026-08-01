@@ -309,6 +309,29 @@ describe('AgentClient.sendMessageStream', () => {
       ).toEqual({ order_ref: ready.order_ref })
     })
 
+    it('bridges one canonical reduce-only close builder frame to one local ceremony', async () => {
+      const onClientSideToolCall = vi.fn()
+      const close = { ...ready, action: 'close', reduce_only: true }
+      globalThis.fetch = mockFetchSSE([
+        'data: {"type":"tool-input-start","toolCallId":"hl-close","toolName":"build_hyperliquid_close_position"}\n\n',
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'hl-close',
+          output: JSON.stringify(close),
+        })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content: 'close my BTC perp' },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
+      expect(onClientSideToolCall).toHaveBeenCalledWith('hl-close:hl_order', 'hl_order', { order_ref: ready.order_ref })
+    })
+
     it.each([
       ['open missing action', 'build_hyperliquid_open_position', { action: undefined }],
       ['open wrong action', 'build_hyperliquid_open_position', { action: 'close' }],
@@ -871,7 +894,11 @@ describe('AgentClient.sendMessageStream', () => {
   // caller learns the typed ending without parsing prose.
   it('routes data-turn_outcome to onTurnOutcome with the typed payload', async () => {
     const onTurnOutcome = vi.fn()
-    const outcome = { kind: 'blocked', code: 'broadcast-claim', detail: 'I cannot confirm that broadcast' }
+    const outcome = {
+      kind: 'blocked',
+      code: 'broadcast-claim',
+      detail: 'I cannot confirm that broadcast',
+    }
 
     globalThis.fetch = mockFetchSSE([
       `data: ${JSON.stringify({ type: 'data-turn_outcome', id: 'turn-outcome', data: outcome })}\n\n`,
