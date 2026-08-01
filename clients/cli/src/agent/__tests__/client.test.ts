@@ -346,11 +346,21 @@ describe('AgentClient.sendMessageStream', () => {
       ],
     ])('bridges exactly one local order for the QA natural-language fixture: %s', async (content, toolName, output) => {
       const onClientSideToolCall = vi.fn()
-      globalThis.fetch = mockFetchSSE([
-        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'hl-nlp', toolName })}\n\n`,
-        `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'hl-nlp', output: JSON.stringify(output) })}\n\n`,
-        'data: {"type":"finish"}\n\n',
-      ])
+      globalThis.fetch = vi.fn(async (_url, init) => {
+        const sent = JSON.parse(String(init?.body)) as { content?: string }
+        // Captured backend contract fixture: the server wire is selected by the
+        // exact NL request actually sent. A random/changed request cannot receive
+        // this successful builder response and therefore cannot make the test pass.
+        expect(sent.content).toBe(content)
+        return new Response(
+          makeChunkedStream([
+            `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'hl-nlp', toolName })}\n\n`,
+            `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'hl-nlp', output: JSON.stringify(output) })}\n\n`,
+            'data: {"type":"finish"}\n\n',
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }) as typeof fetch
 
       await new AgentClient('http://example.com').sendMessageStream(
         'c1',
@@ -364,14 +374,22 @@ describe('AgentClient.sendMessageStream', () => {
 
     it('keeps the QA preview-only wording read-only with zero local order actions', async () => {
       const onClientSideToolCall = vi.fn()
-      globalThis.fetch = mockFetchSSE([
-        'data: {"type":"text-delta","delta":"BTC perpetual market preview"}\n\n',
-        'data: {"type":"finish"}\n\n',
-      ])
+      const content = 'Preview only: Open a $10 BTC long at 2x on Hyperliquid'
+      globalThis.fetch = vi.fn(async (_url, init) => {
+        const sent = JSON.parse(String(init?.body)) as { content?: string }
+        expect(sent.content).toBe(content)
+        return new Response(
+          makeChunkedStream([
+            'data: {"type":"text-delta","delta":"BTC perpetual market preview"}\n\n',
+            'data: {"type":"finish"}\n\n',
+          ]),
+          { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+        )
+      }) as typeof fetch
 
       await new AgentClient('http://example.com').sendMessageStream(
         'c1',
-        { public_key: 'pk', content: 'Preview only: Open a $10 BTC long at 2x on Hyperliquid' },
+        { public_key: 'pk', content },
         { onClientSideToolCall }
       )
 
