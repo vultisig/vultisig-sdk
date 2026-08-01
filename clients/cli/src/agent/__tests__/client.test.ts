@@ -333,6 +333,52 @@ describe('AgentClient.sendMessageStream', () => {
     })
 
     it.each([
+      ['Open a $10 BTC long at 2x on Hyperliquid', 'build_hyperliquid_open_position', ready],
+      [
+        'close 50% of my BTC long',
+        'build_hyperliquid_close_position',
+        { ...ready, action: 'close', reduce_only: true },
+      ],
+      [
+        'close my ETH short',
+        'build_hyperliquid_close_position',
+        { ...ready, action: 'close', coin: 'ETH', reduce_only: true },
+      ],
+    ])('bridges exactly one local order for the QA natural-language fixture: %s', async (content, toolName, output) => {
+      const onClientSideToolCall = vi.fn()
+      globalThis.fetch = mockFetchSSE([
+        `data: ${JSON.stringify({ type: 'tool-input-start', toolCallId: 'hl-nlp', toolName })}\n\n`,
+        `data: ${JSON.stringify({ type: 'tool-output-available', toolCallId: 'hl-nlp', output: JSON.stringify(output) })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
+      expect(onClientSideToolCall).toHaveBeenCalledWith('hl-nlp:hl_order', 'hl_order', { order_ref: ready.order_ref })
+    })
+
+    it('keeps the QA preview-only wording read-only with zero local order actions', async () => {
+      const onClientSideToolCall = vi.fn()
+      globalThis.fetch = mockFetchSSE([
+        'data: {"type":"text-delta","delta":"BTC perpetual market preview"}\n\n',
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content: 'Preview only: Open a $10 BTC long at 2x on Hyperliquid' },
+        { onClientSideToolCall }
+      )
+
+      expect(onClientSideToolCall).not.toHaveBeenCalled()
+    })
+
+    it.each([
       ['open missing action', 'build_hyperliquid_open_position', { action: undefined }],
       ['open wrong action', 'build_hyperliquid_open_position', { action: 'close' }],
       ['open wrong reduce-only', 'build_hyperliquid_open_position', { reduce_only: true }],
