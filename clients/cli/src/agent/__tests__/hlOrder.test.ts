@@ -365,7 +365,12 @@ describe('Hyperliquid executor ceremony', () => {
     marketAction.orders[0]!.p = '64557.825000000004'
     marketAction.orders[0]!.s = '0.00016'
     marketAction.orders[0]!.t.limit.tif = 'Ioc'
-    const marketStep = { kind: 'order' as const, action: marketAction, nonce: 1000, is_mainnet: true }
+    const marketStep = {
+      kind: 'order' as const,
+      action: marketAction,
+      nonce: 1000,
+      is_mainnet: true,
+    }
     signingPayload.steps = [{ ...marketStep, digest: computeHlDigest(marketStep) }]
     const signAndSubmitHlOrder = vi.fn()
     const fakeThis = {
@@ -401,14 +406,22 @@ describe('Hyperliquid executor ceremony', () => {
       status: 'ready_to_sign',
     }
     const frames = [
-      { type: 'tool-input-start', toolCallId: 'nl-hl-1', toolName: 'build_hyperliquid_open_position' },
+      {
+        type: 'tool-input-start',
+        toolCallId: 'nl-hl-1',
+        toolName: 'build_hyperliquid_open_position',
+      },
       {
         type: 'tool-input-available',
         toolCallId: 'nl-hl-1',
         toolName: 'build_hyperliquid_open_position',
         input: { coin: 'BTC', side: 'buy', size_usd: 10, leverage: 3 },
       },
-      { type: 'tool-output-available', toolCallId: 'nl-hl-1', output: JSON.stringify(builderResult) },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'nl-hl-1',
+        output: JSON.stringify(builderResult),
+      },
       { type: 'finish' },
     ]
     const originalFetch = globalThis.fetch
@@ -457,7 +470,11 @@ describe('Hyperliquid executor ceremony', () => {
     const signingPayload = payload()
     const requests: Array<{ url: string; authorization: string | null }> = []
     const frames = [
-      { type: 'tool-input-start', toolCallId: 'wire-builder-1', toolName: 'build_hyperliquid_open_position' },
+      {
+        type: 'tool-input-start',
+        toolCallId: 'wire-builder-1',
+        toolName: 'build_hyperliquid_open_position',
+      },
       {
         type: 'tool-output-available',
         toolCallId: 'wire-builder-1',
@@ -480,7 +497,10 @@ describe('Hyperliquid executor ceremony', () => {
     const originalFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const headers = new Headers(init?.headers)
-      requests.push({ url: String(url), authorization: headers.get('authorization') })
+      requests.push({
+        url: String(url),
+        authorization: headers.get('authorization'),
+      })
       if (String(url).endsWith('/signing-payload')) {
         return new Response(JSON.stringify(signingPayload), {
           status: 200,
@@ -515,6 +535,7 @@ describe('Hyperliquid executor ceremony', () => {
         storeServerTransaction: vi.fn(() => false),
       },
       withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
+      processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
@@ -543,9 +564,130 @@ describe('Hyperliquid executor ceremony', () => {
     expect(requests.every(r => r.authorization === 'Bearer wire-jwt')).toBe(true)
     expect(signAndSubmitHlOrder).not.toHaveBeenCalled()
     expect(ui.onHlOrderConfirmation).toHaveBeenCalledWith(
-      expect.objectContaining({ order_ref: ORDER_REF, status: 'confirmation_required' })
+      expect.objectContaining({
+        order_ref: ORDER_REF,
+        status: 'confirmation_required',
+      })
     )
     expect(ui.onAssistantMessage).not.toHaveBeenCalled()
     expect(fakeThis.pendingToolResults).toEqual([])
+  })
+
+  it.each([
+    ['refusal', false],
+    ['--yes', true],
+  ])('claims only the first distinct Hyperliquid order in one SSE turn under %s', async (_mode, approved) => {
+    const secondOrderRef = '87654321-4321-4321-4321-cba987654321'
+    const signingPayload = payload()
+    const builderOutput = (orderRef: string) => ({
+      surface: 'hyperliquid_order',
+      status: 'ready_to_sign',
+      action: 'open',
+      coin: 'BTC',
+      asset_index: 0,
+      wire_size: signingPayload.summary.size,
+      price_cap: signingPayload.summary.price_cap,
+      wire_notional_usd: signingPayload.summary.notional_usd,
+      tif: signingPayload.summary.tif,
+      reduce_only: false,
+      order_ref: orderRef,
+    })
+    const firstTurnFrames = [
+      {
+        type: 'tool-input-start',
+        toolCallId: 'builder-first',
+        toolName: 'build_hyperliquid_open_position',
+      },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'builder-first',
+        output: JSON.stringify(builderOutput(ORDER_REF)),
+      },
+      {
+        type: 'tool-input-start',
+        toolCallId: 'builder-second',
+        toolName: 'build_hyperliquid_open_position',
+      },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'builder-second',
+        output: JSON.stringify(builderOutput(secondOrderRef)),
+      },
+      { type: 'finish' },
+    ]
+    let messageRequests = 0
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith('/signing-payload')) {
+        return new Response(JSON.stringify(signingPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      messageRequests += 1
+      const frames = messageRequests === 1 ? firstTurnFrames : [{ type: 'finish' }]
+      return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join(''), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })
+    }) as typeof fetch
+    const client = new AgentClient('http://example.com')
+    client.setAuthToken('wire-jwt')
+    client.setClientSideToolNames(new Set(['hl_order']))
+    const retrieveHlOrder = vi.fn(async () => signingPayload)
+    const signAndSubmitHlOrder = vi.fn(async () => ({
+      tool: 'hl_order',
+      success: true,
+      data: { order_ref: ORDER_REF, state: 'accepted' },
+    }))
+    const fakeThis: any = {
+      conversationId: CONVERSATION_ID,
+      publicKey: PUBLIC_KEY,
+      cachedContext: {},
+      config: { password: 'pw', askMode: true, verbose: false },
+      pendingToolResults: [],
+      abortController: null,
+      terminalHlConfirmation: false,
+      firstHlOrderRef: null,
+      seenHlOrderRefs: new Set(),
+      client,
+      executor: {
+        retrieveHlOrder,
+        signAndSubmitHlOrder,
+        hasPassword: vi.fn(() => true),
+        storeServerTransaction: vi.fn(() => false),
+      },
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
+      processMessageLoop: (AgentSession.prototype as any).processMessageLoop,
+      dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+    }
+    const ui: any = {
+      onTextDelta: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onAssistantMessage: vi.fn(),
+      onSuggestions: vi.fn(),
+      onTxStatus: vi.fn(),
+      onError: vi.fn(),
+      onDone: vi.fn(),
+      onHlOrderConfirmation: vi.fn(),
+      requestPassword: vi.fn(),
+      requestConfirmation: vi.fn(async () => approved),
+    }
+    try {
+      await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'open two distinct BTC orders', ui, 0)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    expect(retrieveHlOrder).toHaveBeenCalledTimes(1)
+    expect(retrieveHlOrder).toHaveBeenCalledWith(client, { order_ref: ORDER_REF }, CONVERSATION_ID)
+    expect(ui.requestConfirmation).toHaveBeenCalledTimes(1)
+    expect(signAndSubmitHlOrder).toHaveBeenCalledTimes(approved ? 1 : 0)
+    expect(ui.onHlOrderConfirmation).toHaveBeenCalledTimes(approved ? 0 : 1)
+    expect(fakeThis.firstHlOrderRef).toBe(ORDER_REF)
   })
 })

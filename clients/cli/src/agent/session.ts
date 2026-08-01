@@ -163,6 +163,7 @@ export class AgentSession {
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
   private terminalHlConfirmation = false
+  private firstHlOrderRef: string | null = null
   private seenHlOrderRefs = new Set<string>()
   // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
   // queue), of whether an already-broadcast tx result was still UNDELIVERED to
@@ -490,6 +491,7 @@ export class AgentSession {
 
     this.abortController = new AbortController()
     this.terminalHlConfirmation = false
+    this.firstHlOrderRef = null
     this.seenHlOrderRefs = new Set<string>()
     // Fresh turn — clear the prior turn's ack snapshot.
     this.unacknowledgedBroadcastAtError = false
@@ -633,6 +635,16 @@ export class AgentSession {
         }
       },
       onClientSideToolCall: (toolCallId: string, toolName: string, input: Record<string, unknown>) => {
+        if (toolName === 'hl_order') {
+          // Claim synchronously while parsing SSE: serialized dispatch alone is too late because a
+          // second distinct ref would already be queued and could retrieve/sign after the first.
+          const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+          if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+            this.firstHlOrderRef = orderRef
+          } else if (this.firstHlOrderRef !== orderRef) {
+            return
+          }
+        }
         const dispatch = dispatchChain.then(() => this.dispatchClientSideTool(toolCallId, toolName, input, ui))
         dispatchChain = dispatch.catch(() => {})
         pendingDispatches.push(dispatch)
@@ -1285,6 +1297,11 @@ export class AgentSession {
         const conversationId = this.conversationId
         if (!conversationId) throw new Error('HL_CONVERSATION_REQUIRED')
         const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+        if (this.firstHlOrderRef === null || this.firstHlOrderRef === undefined) {
+          this.firstHlOrderRef = orderRef
+        } else if (this.firstHlOrderRef !== orderRef) {
+          return
+        }
         const seenRefs = this.seenHlOrderRefs ?? (this.seenHlOrderRefs = new Set<string>())
         if (seenRefs.has(orderRef)) return
         seenRefs.add(orderRef)
