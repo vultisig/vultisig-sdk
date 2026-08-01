@@ -614,6 +614,101 @@ describe('SwapService', () => {
       expect(result.fees.total).toBe(0n)
     })
 
+    it('should not mix an asset-aware non-native Solana swap fee into native fee totals', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+      const getPrice = vi.fn().mockResolvedValue(200)
+      const serviceWithFiat = new SwapService(mockVaultData, mockGetAddress, mockEmitEvent, mockWasmProvider, {
+        getPrice,
+      } as any)
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: 'swapkit',
+            tx: {
+              solana: {
+                data: 'base64-transaction',
+                networkFee: 100_000_000n,
+                swapFee: {
+                  amount: 492_298_648n,
+                  decimals: 6,
+                  chain: Chain.Ethereum,
+                  id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await serviceWithFiat.getQuote({
+        fromCoin: {
+          chain: Chain.Solana,
+          address: 'solana-source-address',
+          ticker: 'SOL',
+          decimals: 9,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1,
+        fiatCurrency: 'usd',
+      })
+
+      expect(result.fees).toEqual({ network: 100_000_000n, total: 100_000_000n })
+      expect(result.feesFiat).toEqual({ network: 20, affiliate: undefined, total: 20, currency: 'usd' })
+      expect((result.quote.quote as any).general.tx.solana.swapFee.amount).toBe(492_298_648n)
+      expect(getPrice).toHaveBeenNthCalledWith(1, Chain.Solana, undefined, 'usd')
+    })
+
+    it('should include a native SOL swap fee in native fee totals', async () => {
+      const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
+
+      vi.mocked(findSwapQuote).mockResolvedValue({
+        quote: {
+          general: {
+            dstAmount: '1000000000000000000',
+            provider: 'swapkit',
+            tx: {
+              solana: {
+                data: 'base64-transaction',
+                networkFee: 5_000n,
+                swapFee: {
+                  amount: 25_000n,
+                  decimals: 9,
+                  chain: Chain.Solana,
+                },
+              },
+            },
+          },
+        },
+        discounts: [],
+      } as any)
+
+      const result = await service.getQuote({
+        fromCoin: {
+          chain: Chain.Solana,
+          address: 'solana-source-address',
+          ticker: 'SOL',
+          decimals: 9,
+        },
+        toCoin: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        amount: 1,
+      })
+
+      expect(result.fees).toEqual({ network: 5_000n, total: 30_000n })
+    })
+
     it('should handle quote errors gracefully', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
