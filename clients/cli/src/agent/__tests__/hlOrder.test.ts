@@ -112,16 +112,66 @@ const expected = {
 
 describe('Hyperliquid signing payload validation', () => {
   const enumLocations: Array<[string, (candidate: any, value: unknown) => void]> = [
-    ['summary.operation', (p, value) => { p.summary.operation = value }],
-    ['summary.side', (p, value) => { p.summary.side = value }],
-    ['summary.margin_mode', (p, value) => { p.summary.margin_mode = value }],
-    ['summary.order_type', (p, value) => { p.summary.order_type = value }],
-    ['summary.tif', (p, value) => { p.summary.tif = value }],
-    ['step.kind', (p, value) => { p.steps[0].kind = value }],
-    ['leverage action.type', (p, value) => { p.steps[0].action.type = value }],
-    ['order action.type', (p, value) => { p.steps[1].action.type = value }],
-    ['order action.grouping', (p, value) => { p.steps[1].action.grouping = value }],
-    ['nested order tif', (p, value) => { p.steps[1].action.orders[0].t.limit.tif = value }],
+    [
+      'summary.operation',
+      (p, value) => {
+        p.summary.operation = value
+      },
+    ],
+    [
+      'summary.side',
+      (p, value) => {
+        p.summary.side = value
+      },
+    ],
+    [
+      'summary.margin_mode',
+      (p, value) => {
+        p.summary.margin_mode = value
+      },
+    ],
+    [
+      'summary.order_type',
+      (p, value) => {
+        p.summary.order_type = value
+      },
+    ],
+    [
+      'summary.tif',
+      (p, value) => {
+        p.summary.tif = value
+      },
+    ],
+    [
+      'step.kind',
+      (p, value) => {
+        p.steps[0].kind = value
+      },
+    ],
+    [
+      'leverage action.type',
+      (p, value) => {
+        p.steps[0].action.type = value
+      },
+    ],
+    [
+      'order action.type',
+      (p, value) => {
+        p.steps[1].action.type = value
+      },
+    ],
+    [
+      'order action.grouping',
+      (p, value) => {
+        p.steps[1].action.grouping = value
+      },
+    ],
+    [
+      'nested order tif',
+      (p, value) => {
+        p.steps[1].action.orders[0].t.limit.tif = value
+      },
+    ],
   ]
   const coercibleEnumValues: Array<[string, unknown]> = [
     ['array', ['open']],
@@ -132,9 +182,11 @@ describe('Hyperliquid signing payload validation', () => {
     ['String object', new String('open')],
   ]
 
-  it.each(enumLocations.flatMap(([location, mutate]) =>
-    coercibleEnumValues.map(([valueName, value]) => [location, valueName, mutate, value] as const)
-  ))('rejects coercible runtime enum at %s: %s', async (_location, _valueName, mutate, value) => {
+  it.each(
+    enumLocations.flatMap(([location, mutate]) =>
+      coercibleEnumValues.map(([valueName, value]) => [location, valueName, mutate, value] as const)
+    )
+  )('rejects coercible runtime enum at %s: %s', async (_location, _valueName, mutate, value) => {
     const candidate: any = payload()
     mutate(candidate, value)
     // Rebind action mutations to their new digest so enum validation, rather
@@ -207,6 +259,99 @@ describe('Hyperliquid signing payload validation', () => {
     const tampered = payload()
     ;(tampered.steps[1]!.action.orders as Array<Record<string, unknown>>)[0]!.s = '1.0'
     await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow('HL_DIGEST_MISMATCH')
+  })
+
+  it.each([
+    [
+      'nested side alias',
+      (order: any) => {
+        order.side = 'long'
+      },
+    ],
+    [
+      'nested operation alias',
+      (order: any) => {
+        order.operation = 'open'
+      },
+    ],
+    [
+      'nested reduce-only alias',
+      (order: any) => {
+        order.reduce_only = false
+      },
+    ],
+    [
+      'unknown benign-looking field',
+      (order: any) => {
+        order.clientOrderLabel = 'vault-cli'
+      },
+    ],
+    [
+      'prototype-like constructor key',
+      (order: any) => {
+        order.constructor = 'order'
+      },
+    ],
+    [
+      'prototype-like JSON key',
+      (order: any) => {
+        Object.defineProperty(order, '__proto__', {
+          value: { side: 'short' },
+          enumerable: true,
+        })
+      },
+    ],
+    [
+      'order type sibling',
+      (order: any) => {
+        order.t.trigger = { isMarket: true }
+      },
+    ],
+    [
+      'limit sibling',
+      (order: any) => {
+        order.t.limit.price = '30000.0'
+      },
+    ],
+  ])('rejects recomputed-digest order schema extension: %s', async (_name, mutate) => {
+    const candidate: any = payload()
+    const orderStep = candidate.steps[1]
+    mutate(orderStep.action.orders[0])
+    orderStep.digest = computeHlDigest(orderStep)
+    await expect(validateHlSigningPayload(candidate, expected, vault())).rejects.toThrow()
+  })
+
+  it.each([
+    [
+      'order action alias',
+      (action: any) => {
+        action.side = 'long'
+      },
+    ],
+    [
+      'order action unknown',
+      (action: any) => {
+        action.builder = null
+      },
+    ],
+    [
+      'leverage action alias',
+      (action: any) => {
+        action.margin_mode = 'cross'
+      },
+    ],
+    [
+      'leverage action unknown',
+      (action: any) => {
+        action.note = '5x'
+      },
+    ],
+  ])('rejects recomputed-digest action schema extension: %s', async (_name, mutate) => {
+    const candidate: any = payload()
+    const step = _name.startsWith('leverage') ? candidate.steps[0] : candidate.steps[1]
+    mutate(step.action)
+    step.digest = computeHlDigest(step)
+    await expect(validateHlSigningPayload(candidate, expected, vault())).rejects.toThrow()
   })
 
   it('rejects WYSIWYS size and side drift even when the backend digest is self-consistent', async () => {

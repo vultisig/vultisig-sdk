@@ -115,16 +115,23 @@ export function computeHlDigest(step: Omit<HlSigningStep, 'digest' | 'kind'>): `
   })
 }
 
+function hasExactObjectKeys(value: unknown, allowed: readonly string[]): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return false
+  const keys = Object.keys(value)
+  return keys.length === allowed.length && keys.every(key => allowed.includes(key))
+}
+
 function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
-  for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
-    if (key in action) throw new Error('HL_CONFLICTING_ORDER_FIELD')
-  }
+  if (!hasExactObjectKeys(action, ['type', 'orders', 'grouping'])) throw new Error('HL_INVALID_ORDER_ACTION_SCHEMA')
   if (!summary.coin.trim()) throw new Error('HL_INVALID_COIN')
   if (!isExactStringMember(action.type, ['order']) || !Array.isArray(action.orders) || action.orders.length !== 1) {
     throw new Error('HL_INVALID_ORDER_ACTION')
   }
   if (!isExactStringMember(action.grouping, ['na'])) throw new Error('HL_INVALID_ORDER_GROUPING')
-  const order = action.orders[0] as Record<string, unknown>
+  const order = action.orders[0]
+  if (!hasExactObjectKeys(order, ['a', 'b', 'p', 'r', 's', 't'])) throw new Error('HL_INVALID_ORDER_SCHEMA')
   if (!Number.isInteger(order.a) || typeof order.b !== 'boolean') throw new Error('HL_INVALID_ORDER_ACTION')
   if (order.a !== summary.asset_index) throw new Error('HL_ASSET_MISMATCH')
   if (typeof order.p !== 'string' || !Number.isFinite(Number(order.p)) || Number(order.p) <= 0) {
@@ -140,7 +147,10 @@ function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSu
     throw new Error('HL_INVALID_ORDER_NOTIONAL')
   }
   if (summary.price_cap !== order.p) throw new Error('HL_ORDER_PRICE_CAP_MISMATCH')
-  const tif = (order.t as { limit?: { tif?: unknown } } | undefined)?.limit?.tif
+  if (!hasExactObjectKeys(order.t, ['limit'])) throw new Error('HL_INVALID_ORDER_TYPE_SCHEMA')
+  const limit = order.t.limit
+  if (!hasExactObjectKeys(limit, ['tif'])) throw new Error('HL_INVALID_LIMIT_SCHEMA')
+  const tif = limit.tif
   if (!isExactStringMember(tif, ['Ioc', 'Gtc', 'Alo']) || tif !== summary.tif) throw new Error('HL_TIF_MISMATCH')
   const expectedOrderType = tif === 'Ioc' ? 'market' : 'limit'
   if (summary.order_type !== expectedOrderType) throw new Error('HL_ORDER_TYPE_MISMATCH')
@@ -169,10 +179,13 @@ export function multiplyDecimalStrings(left: unknown, right: unknown): string {
 }
 
 function validateLeverageAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
-  for (const key of ['operation', 'side', 'margin_mode', 'reduce_only']) {
-    if (key in action) throw new Error('HL_CONFLICTING_LEVERAGE_FIELD')
-  }
-  if (!isExactStringMember(action.type, ['updateLeverage']) || !Number.isInteger(action.asset) || !Number.isInteger(action.leverage)) {
+  if (!hasExactObjectKeys(action, ['type', 'asset', 'isCross', 'leverage']))
+    throw new Error('HL_INVALID_LEVERAGE_ACTION_SCHEMA')
+  if (
+    !isExactStringMember(action.type, ['updateLeverage']) ||
+    !Number.isInteger(action.asset) ||
+    !Number.isInteger(action.leverage)
+  ) {
     throw new Error('HL_INVALID_LEVERAGE_ACTION')
   }
   if (typeof action.isCross !== 'boolean' || action.leverage !== summary.leverage) {
@@ -205,7 +218,10 @@ export async function validateHlSigningPayload(
   if (!isExactStringMember(payload.summary.side, ['long', 'short'])) throw new Error('HL_INVALID_SIDE')
   if (!isExactStringMember(payload.summary.order_type, ['market', 'limit'])) throw new Error('HL_INVALID_ORDER_TYPE')
   if (!isExactStringMember(payload.summary.tif, ['Ioc', 'Gtc', 'Alo'])) throw new Error('HL_INVALID_TIF')
-  if (payload.summary.margin_mode !== undefined && !isExactStringMember(payload.summary.margin_mode, ['cross', 'isolated']))
+  if (
+    payload.summary.margin_mode !== undefined &&
+    !isExactStringMember(payload.summary.margin_mode, ['cross', 'isolated'])
+  )
     throw new Error('HL_INVALID_MARGIN_MODE')
   if (typeof payload.summary.reduce_only !== 'boolean') throw new Error('HL_INVALID_REDUCE_ONLY')
   if (payload.order_ref !== expected.orderRef || payload.conversation_id !== expected.conversationId) {
