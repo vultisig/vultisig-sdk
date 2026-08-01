@@ -685,7 +685,12 @@ describe('SwapService', () => {
         total: 20,
         currency: 'usd',
       })
-      expect((result.quote.quote as any).general.tx.solana.swapFee.amount).toBe(492_298_648n)
+      expect((result.quote.quote as any).general.tx.solana.swapFee).toEqual({
+        amount: 492_298_648n,
+        decimals: 6,
+        chain: Chain.Ethereum,
+        id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      })
       expect(getPrice).toHaveBeenNthCalledWith(1, Chain.Solana, undefined, 'usd')
     })
 
