@@ -6,9 +6,13 @@ import { concat, hashTypedData, hexToBytes, keccak256 } from 'viem'
 export type HlOrderSummary = {
   operation: 'open' | 'close'
   coin: string
+  asset_index: number
   side: 'long' | 'short'
   size: string
   notional_usd: string
+  order_type: 'market' | 'limit'
+  limit_price: string | null
+  tif: 'Ioc' | 'Gtc' | 'Alo'
   reduce_only: boolean
   leverage?: number
   margin_mode?: 'cross' | 'isolated'
@@ -42,7 +46,7 @@ export type HlOrderSignature = {
 }
 
 export type HlOrderStatus = {
-  state: 'accepted' | 'resting' | 'filled' | 'rejected' | 'cancelled'
+  state: 'submitting' | 'accepted' | 'resting' | 'filled' | 'rejected' | 'cancelled'
   order_id?: string
   filled_size?: string
   average_price?: string
@@ -106,27 +110,51 @@ export function computeHlDigest(step: Omit<HlSigningStep, 'digest' | 'kind'>): `
 }
 
 function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
+  if (!summary.coin.trim()) throw new Error('HL_INVALID_COIN')
   if (action.type !== 'order' || !Array.isArray(action.orders) || action.orders.length !== 1) {
     throw new Error('HL_INVALID_ORDER_ACTION')
   }
   const order = action.orders[0] as Record<string, unknown>
   if (!Number.isInteger(order.a) || typeof order.b !== 'boolean') throw new Error('HL_INVALID_ORDER_ACTION')
+  if (order.a !== summary.asset_index) throw new Error('HL_ASSET_MISMATCH')
   if (typeof order.p !== 'string' || !Number.isFinite(Number(order.p)) || Number(order.p) <= 0) {
     throw new Error('HL_INVALID_ORDER_PRICE')
   }
   if (typeof order.s !== 'string' || !Number.isFinite(Number(order.s)) || Number(order.s) <= 0) {
     throw new Error('HL_INVALID_ORDER_SIZE')
   }
-  if (!Number.isFinite(Number(summary.size)) || Number(summary.size) !== Number(order.s)) {
+  if (summary.size !== order.s) {
     throw new Error('HL_ORDER_SIZE_MISMATCH')
   }
-  if (!Number.isFinite(Number(summary.notional_usd)) || Number(summary.notional_usd) <= 0) {
+  if (summary.notional_usd !== multiplyDecimalStrings(order.p, order.s)) {
     throw new Error('HL_INVALID_ORDER_NOTIONAL')
   }
+  const tif = (order.t as { limit?: { tif?: unknown } } | undefined)?.limit?.tif
+  if (tif !== summary.tif || !['Ioc', 'Gtc', 'Alo'].includes(String(tif))) throw new Error('HL_TIF_MISMATCH')
+  const expectedOrderType = tif === 'Ioc' ? 'market' : 'limit'
+  if (summary.order_type !== expectedOrderType) throw new Error('HL_ORDER_TYPE_MISMATCH')
+  if (summary.limit_price !== (expectedOrderType === 'limit' ? order.p : null))
+    throw new Error('HL_LIMIT_PRICE_MISMATCH')
   if (order.r !== summary.reduce_only) throw new Error('HL_REDUCE_ONLY_MISMATCH')
   if (summary.operation === 'close' && order.r !== true) throw new Error('HL_CLOSE_NOT_REDUCE_ONLY')
   const expectedBuy = summary.operation === 'open' ? summary.side === 'long' : summary.side === 'short'
   if (order.b !== expectedBuy) throw new Error('HL_ORDER_SIDE_MISMATCH')
+}
+
+export function multiplyDecimalStrings(left: unknown, right: unknown): string {
+  const parse = (value: unknown): { digits: bigint; scale: number } => {
+    if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) throw new Error('HL_INVALID_DECIMAL')
+    const [whole, fraction = ''] = value.split('.')
+    return { digits: BigInt(`${whole}${fraction}`), scale: fraction.length }
+  }
+  const a = parse(left)
+  const b = parse(right)
+  const scale = a.scale + b.scale
+  const raw = (a.digits * b.digits).toString().padStart(scale + 1, '0')
+  if (scale === 0) return raw
+  const whole = raw.slice(0, -scale)
+  const fraction = raw.slice(-scale).replace(/0+$/, '')
+  return fraction ? `${whole}.${fraction}` : whole
 }
 
 function validateLeverageAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
@@ -184,7 +212,8 @@ export async function validateHlSigningPayload(
 export function formatHlConfirmation(payload: HlOrderSigningPayload): string {
   const s = payload.summary
   const leverage = s.leverage === undefined ? '' : ` at ${s.leverage}x ${s.margin_mode ?? 'cross'}`
-  return `Hyperliquid ${s.operation} ${s.side} ${s.size} ${s.coin} (~$${s.notional_usd})${leverage}; reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
+  const limit = s.limit_price === null ? 'market price cap from signed wire' : `limit $${s.limit_price}`
+  return `Hyperliquid ${s.operation} ${s.side} ${s.size} ${s.coin} (asset #${s.asset_index}, signed notional $${s.notional_usd})${leverage}; ${s.order_type}/${s.tif}, ${limit}, reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
 }
 
 export async function pollHlOrderStatus(
@@ -197,11 +226,11 @@ export async function pollHlOrderStatus(
     sleep?: (ms: number) => Promise<void>
   } = {}
 ): Promise<HlOrderStatus> {
-  if (initial.state !== 'accepted') return initial
+  if (initial.state !== 'accepted' && initial.state !== 'submitting') return initial
   const attempts = options.attempts ?? 20
   const sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)))
   let status = initial
-  for (let i = 1; i < attempts && status.state === 'accepted'; i++) {
+  for (let i = 1; i < attempts && (status.state === 'accepted' || status.state === 'submitting'); i++) {
     await sleep(options.intervalMs ?? 1_000)
     status = await transport.getHlOrderStatus(params.orderRef, params.conversationId, params.publicKey)
   }

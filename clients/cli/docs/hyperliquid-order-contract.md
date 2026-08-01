@@ -29,9 +29,13 @@ Retrieve response:
   "summary": {
     "operation": "open",
     "coin": "BTC",
+    "asset_index": 0,
     "side": "long",
     "size": "0.001",
-    "notional_usd": "30.00",
+    "notional_usd": "30",
+    "order_type": "limit",
+    "limit_price": "30000.0",
+    "tif": "Gtc",
     "reduce_only": false,
     "leverage": 3,
     "margin_mode": "cross"
@@ -76,8 +80,9 @@ Retrieve response:
 The CLI recomputes every phantom-agent digest byte-for-byte from msgpack action,
 nonce, vault marker, network source, and the Exchange EIP-712 domain. It refuses
 owner/conversation/address/reference drift, expired or overlong leases, digest
-tampering, missing leverage updates, and non-reduce-only closes. Leverage update
-must precede the order.
+tampering, missing leverage updates, non-reduce-only closes, or any drift in the
+explicit asset index, exact decimal size, signed price, derived decimal notional,
+order type, limit price, or TIF. Leverage update must precede the order.
 
 After explicit high-distrust confirmation, the CLI MPC-signs each digest locally
 and sends signatures only to the submit endpoint:
@@ -103,7 +108,7 @@ Submit/status response:
 
 ```json
 {
-  "state": "accepted|resting|filled|rejected|cancelled",
+  "state": "submitting|accepted|resting|filled|rejected|cancelled",
   "order_id": "...",
   "filled_size": "...",
   "average_price": "...",
@@ -111,10 +116,12 @@ Submit/status response:
 }
 ```
 
-HTTP 200 alone is not success. The CLI polls an `accepted` result until the
+HTTP 200 alone is not success. The CLI polls a `submitting` or `accepted` result until the
 backend reports a venue state; `rejected` and `cancelled` become failed actions.
 The backend must apply the leverage step first and must not submit the order if
-that step fails. The CLI reports only safe status fields through
+that step fails. Backend submission state is durable: an ambiguous leverage update
+may resume only after its lease, while an ambiguous order submission requires
+reconciliation and is never retried automatically. The CLI reports only safe status fields through
 `recent_actions`. Raw actions and signatures never enter chat, stdout, or verbose
 logs. The backend must make retrieval and submission replay-safe and idempotent,
 and must keep `HL_PERPS_ENABLED` off by default until review and no-broadcast QA

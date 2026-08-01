@@ -51,9 +51,13 @@ function payload(overrides: Partial<HlOrderSigningPayload> = {}): HlOrderSigning
     summary: {
       operation: 'open',
       coin: 'BTC',
+      asset_index: 0,
       side: 'long',
       size: '0.001',
-      notional_usd: '30.00',
+      notional_usd: '30',
+      order_type: 'limit',
+      limit_price: '30000.0',
+      tif: 'Gtc',
       reduce_only: false,
     },
     steps: [{ ...orderStep, digest: computeHlDigest(orderStep) }],
@@ -125,6 +129,18 @@ describe('Hyperliquid signing payload validation', () => {
       summary: { ...payload().summary, side: 'short' },
     })
     await expect(validateHlSigningPayload(wrongSide, expected, vault())).rejects.toThrow('HL_ORDER_SIDE_MISMATCH')
+  })
+
+  it.each([
+    ['asset index', { asset_index: 1 }, 'HL_ASSET_MISMATCH'],
+    ['decimal size spelling', { size: '0.0010' }, 'HL_ORDER_SIZE_MISMATCH'],
+    ['derived notional', { notional_usd: '30.01' }, 'HL_INVALID_ORDER_NOTIONAL'],
+    ['order type', { order_type: 'market' as const }, 'HL_ORDER_TYPE_MISMATCH'],
+    ['limit price', { limit_price: '29999.0' }, 'HL_LIMIT_PRICE_MISMATCH'],
+    ['time in force', { tif: 'Ioc' as const }, 'HL_TIF_MISMATCH'],
+  ])('rejects adversarial %s summary drift', async (_name, summaryOverride, code) => {
+    const tampered = payload({ summary: { ...payload().summary, ...summaryOverride } })
+    await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow(code)
   })
 
   it('requires a real leverage-update step before an order advertised at leverage', async () => {
@@ -218,7 +234,7 @@ describe('Hyperliquid executor ceremony', () => {
         conversationId: CONVERSATION_ID,
         publicKey: PUBLIC_KEY,
       },
-      { state: 'accepted' },
+      { state: 'submitting' },
       { attempts: 3, intervalMs: 0, sleep: async () => undefined }
     )
     expect(status).toEqual({ state: 'resting', order_id: 'oid-2' })
@@ -245,6 +261,10 @@ describe('Hyperliquid executor ceremony', () => {
       summary: { ...payload().summary, leverage: 3, margin_mode: 'cross' },
     })
     expect(formatHlConfirmation(p)).toContain('3x cross')
+    expect(formatHlConfirmation(p)).toContain('asset #0')
+    expect(formatHlConfirmation(p)).toContain('signed notional $30')
+    expect(formatHlConfirmation(p)).toContain('limit/Gtc')
+    expect(formatHlConfirmation(p)).toContain('limit $30000.0')
     expect(formatHlConfirmation(p)).toContain('signs and submits a live leveraged order')
     expect(formatHlConfirmation(p)).toContain('reduce-only=false')
   })
