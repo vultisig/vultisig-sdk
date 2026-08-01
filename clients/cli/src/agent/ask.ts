@@ -11,9 +11,8 @@
  *   vultisig agent ask "What is my HYPE balance?" --vault t1 --password 1
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
-import type { AgentErrorCode } from './agentErrors'
-import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, TurnOutcome } from './cards'
+import { AgentErrorCode, isTerminalAgentErrorCode } from './agentErrors'
+import type { AgentCard, BalanceSummaryCard, HlOrderConfirmationCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
 import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -39,7 +38,7 @@ export type AskResult = {
     status?: TxLifecycleStatus
   }>
   /** Server-built balance_summary cards rendered this turn. */
-  cards: BalanceSummaryCard[]
+  cards: AgentCard[]
   warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
@@ -66,7 +65,7 @@ export class AskInterface {
   private responseParts: string[] = []
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
-  private cards: BalanceSummaryCard[] = []
+  private cards: AgentCard[] = []
   private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
   private error: AskResult['error']
@@ -133,6 +132,15 @@ export class AskInterface {
 
       onBalanceSummary: (card: BalanceSummaryCard) => {
         this.cards.push(card)
+      },
+
+      onHlOrderConfirmation: (card: HlOrderConfirmationCard) => {
+        this.cards.push(card)
+        this.outcome = {
+          kind: 'blocked',
+          code: AgentErrorCode.CONFIRMATION_REQUIRED,
+          detail: 'Explicit approval is required before signing this Hyperliquid order.',
+        }
       },
 
       onTurnOutcome: (outcome: TurnOutcome) => {

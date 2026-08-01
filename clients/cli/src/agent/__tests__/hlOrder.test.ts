@@ -343,11 +343,8 @@ describe('Hyperliquid executor ceremony', () => {
     )
     expect(ui.requestConfirmation).toHaveBeenCalledWith(formatHlConfirmation(signingPayload))
     expect(signAndSubmitHlOrder).not.toHaveBeenCalled()
-    expect(fakeThis.pendingToolResults[0]).toMatchObject({
-      tool: 'hl_order',
-      success: false,
-      data: { code: 'CONFIRMATION_REQUIRED' },
-    })
+    expect(fakeThis.pendingToolResults).toEqual([])
+    expect((fakeThis as any).terminalHlConfirmation).toBe(true)
   })
 
   it('bridges the authenticated NL backend builder frame to exact confirmation before MPC', async () => {
@@ -452,12 +449,103 @@ describe('Hyperliquid executor ceremony', () => {
     expect(formatHlConfirmation(signingPayload)).toContain('market/Ioc')
     expect(formatHlConfirmation(signingPayload)).toContain('reduce-only=false')
     expect(signAndSubmitHlOrder).not.toHaveBeenCalled()
-    expect(fakeThis.pendingToolResults).toEqual([
-      expect.objectContaining({
-        tool: 'hl_order',
-        success: false,
-        data: expect.objectContaining({ code: 'CONFIRMATION_REQUIRED' }),
-      }),
-    ])
+    expect(fakeThis.pendingToolResults).toEqual([])
+    expect((fakeThis as any).terminalHlConfirmation).toBe(true)
+  })
+
+  it('terminates the authenticated AgentClient→Session ceremony after one builder/order dispatch', async () => {
+    const signingPayload = payload()
+    const requests: Array<{ url: string; authorization: string | null }> = []
+    const frames = [
+      { type: 'tool-input-start', toolCallId: 'wire-builder-1', toolName: 'build_hyperliquid_open_position' },
+      {
+        type: 'tool-output-available',
+        toolCallId: 'wire-builder-1',
+        output: JSON.stringify({
+          surface: 'hyperliquid_order',
+          status: 'ready_to_sign',
+          action: 'open',
+          coin: 'BTC',
+          asset_index: 0,
+          wire_size: signingPayload.summary.size,
+          price_cap: signingPayload.summary.price_cap,
+          wire_notional_usd: signingPayload.summary.notional_usd,
+          tif: signingPayload.summary.tif,
+          reduce_only: false,
+          order_ref: ORDER_REF,
+        }),
+      },
+      { type: 'finish' },
+    ]
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      requests.push({ url: String(url), authorization: headers.get('authorization') })
+      if (String(url).endsWith('/signing-payload')) {
+        return new Response(JSON.stringify(signingPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join(''), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })
+    }) as typeof fetch
+    const client = new AgentClient('http://example.com')
+    client.setAuthToken('wire-jwt')
+    client.setClientSideToolNames(new Set(['hl_order']))
+    const signAndSubmitHlOrder = vi.fn()
+    const fakeThis: any = {
+      conversationId: CONVERSATION_ID,
+      publicKey: PUBLIC_KEY,
+      cachedContext: {},
+      config: { password: 'pw', askMode: true, verbose: false },
+      pendingToolResults: [],
+      abortController: null,
+      terminalHlConfirmation: false,
+      seenHlOrderRefs: new Set(),
+      client,
+      executor: {
+        retrieveHlOrder: vi.fn((_client, input) =>
+          client.retrieveHlOrderSigningPayload(String(input.order_ref), CONVERSATION_ID, PUBLIC_KEY)
+        ),
+        signAndSubmitHlOrder,
+        hasPassword: vi.fn(() => true),
+        storeServerTransaction: vi.fn(() => false),
+      },
+      withAuthRetry: (AgentSession.prototype as any).withAuthRetry,
+      dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+      selectAndBufferSignable: (AgentSession.prototype as any).selectAndBufferSignable,
+      renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+    }
+    const ui: any = {
+      onTextDelta: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+      onAssistantMessage: vi.fn(),
+      onSuggestions: vi.fn(),
+      onTxStatus: vi.fn(),
+      onError: vi.fn(),
+      onDone: vi.fn(),
+      onHlOrderConfirmation: vi.fn(),
+      requestPassword: vi.fn(),
+      requestConfirmation: vi.fn(async () => false),
+    }
+    try {
+      await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'open $10 BTC long 3x', ui, 0)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+    expect(requests.filter(r => r.url.includes('/messages'))).toHaveLength(1)
+    expect(requests.filter(r => r.url.endsWith('/signing-payload'))).toHaveLength(1)
+    expect(requests.every(r => r.authorization === 'Bearer wire-jwt')).toBe(true)
+    expect(signAndSubmitHlOrder).not.toHaveBeenCalled()
+    expect(ui.onHlOrderConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({ order_ref: ORDER_REF, status: 'confirmation_required' })
+    )
+    expect(ui.onAssistantMessage).not.toHaveBeenCalled()
+    expect(fakeThis.pendingToolResults).toEqual([])
   })
 })

@@ -16,7 +16,12 @@ import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } fro
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { recordResolution } from './broadcastJournal'
-import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
+import {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  type HlOrderConfirmationCard,
+  parseBalanceSummaryEnvelope,
+} from './cards'
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
@@ -157,6 +162,8 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  private terminalHlConfirmation = false
+  private seenHlOrderRefs = new Set<string>()
   // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
   // queue), of whether an already-broadcast tx result was still UNDELIVERED to
   // the backend. This is the true "ack failed" signal: a successful broadcast
@@ -482,6 +489,8 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    this.terminalHlConfirmation = false
+    this.seenHlOrderRefs = new Set<string>()
     // Fresh turn — clear the prior turn's ack snapshot.
     this.unacknowledgedBroadcastAtError = false
 
@@ -712,6 +721,14 @@ export class AgentSession {
     // Wait for client-side dispatches (they push onto pendingToolResults).
     if (pendingDispatches.length > 0) {
       await Promise.all(pendingDispatches)
+    }
+
+    // Confirmation refusal terminates locally. Feeding it back as a failed tool result makes the
+    // model rebuild/re-dispatch orders and can fabricate a card or success above the real client gate.
+    if (this.terminalHlConfirmation) {
+      this.pendingToolResults = []
+      ui.onDone()
+      return
     }
 
     // Mid-turn disconnect recovery: the SSE stream dropped before the backend
@@ -1267,6 +1284,10 @@ export class AgentSession {
       try {
         const conversationId = this.conversationId
         if (!conversationId) throw new Error('HL_CONVERSATION_REQUIRED')
+        const orderRef = typeof input.order_ref === 'string' ? input.order_ref : ''
+        const seenRefs = this.seenHlOrderRefs ?? (this.seenHlOrderRefs = new Set<string>())
+        if (seenRefs.has(orderRef)) return
+        seenRefs.add(orderRef)
         const payload = await this.executor.retrieveHlOrder(this.client, input, conversationId)
         recent = await this.runPasswordGatedTool(
           toolName,
@@ -1276,13 +1297,26 @@ export class AgentSession {
           input,
           formatHlConfirmation(payload)
         )
+        if (recent.data?.code === AgentErrorCode.CONFIRMATION_REQUIRED) {
+          const proposed = String(recent.data.proposed ?? formatHlConfirmation(payload))
+          const card: HlOrderConfirmationCard = {
+            surface: 'hyperliquid_order_confirmation',
+            status: 'confirmation_required',
+            order_ref: payload.order_ref,
+            ...payload.summary,
+            proposed,
+          }
+          recent.data.confirmation_card = card
+          this.terminalHlConfirmation = true
+          ui.onHlOrderConfirmation?.(card)
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         recent = { tool: toolName, success: false, data: { error: message } }
         ui.onToolCall(toolCallId, toolName, input)
         ui.onToolResult(toolCallId, toolName, false, recent.data, message)
       }
-      this.pendingToolResults.push(recent)
+      if (!this.terminalHlConfirmation) this.pendingToolResults.push(recent)
       return
     }
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]

@@ -7,7 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, TurnOutcome } from './cards'
+import type { BalanceSummaryCard, HlOrderConfirmationCard, TurnOutcome } from './cards'
 
 export type ProtocolWarning = {
   code: 'PROTOCOL_DRIFT'
@@ -467,6 +467,7 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  onHlOrderConfirmation?: (card: HlOrderConfirmationCard) => void
   /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
    *  once at turn end when the client advertised the `turn_outcome` surface. */
   onTurnOutcome?: (outcome: TurnOutcome) => void

@@ -158,6 +158,7 @@ function outputAskError(
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
     if (result?.warnings.length) data.warnings = result.warnings
+    if (result?.cards.length) data.cards = result.cards
     // a2a-02: the typed turn ending, when the backend advertised it. Placed under
     // `data` so a caller reads `data.outcome` on BOTH the success and error
     // envelopes (the success envelope wraps its fields under `data` via outputJson).
@@ -192,7 +193,7 @@ function hasCommittedBroadcast(result: AskResult | undefined): boolean {
   return !!result?.transactions.some(tx => tx.hash.trim().length > 0 && tx.status !== 'failed')
 }
 
-const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data'])
+const SIGNING_TOOLS = new Set(['sign_tx', 'sign_typed_data', 'hl_order'])
 
 /**
  * The turn's signing verdict, or undefined if it signed cleanly (or never tried).
@@ -292,7 +293,11 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
   }
   // Balance cards (rendered as a table instead of raw JSON)
   for (const card of result.cards) {
-    process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
+    if (card.surface === 'balance_summary') {
+      process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
+    } else {
+      process.stdout.write(`\nconfirmation:${card.proposed}\n`)
+    }
   }
   // Response text
   if (result.response) {
