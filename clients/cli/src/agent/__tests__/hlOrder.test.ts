@@ -56,10 +56,12 @@ function payload(overrides: Partial<HlOrderSigningPayload> = {}): HlOrderSigning
       size: '0.001',
       notional_usd: '30',
       order_type: 'limit',
+      price_cap: '30000.0',
       limit_price: '30000.0',
       tif: 'Gtc',
       reduce_only: false,
     },
+    asset_binding: { coin: 'BTC', asset_index: 0 },
     steps: [{ ...orderStep, digest: computeHlDigest(orderStep) }],
     ...overrides,
   }
@@ -132,15 +134,25 @@ describe('Hyperliquid signing payload validation', () => {
   })
 
   it.each([
-    ['asset index', { asset_index: 1 }, 'HL_ASSET_MISMATCH'],
+    ['asset index', { asset_index: 1 }, 'HL_ASSET_BINDING_MISMATCH'],
     ['decimal size spelling', { size: '0.0010' }, 'HL_ORDER_SIZE_MISMATCH'],
     ['derived notional', { notional_usd: '30.01' }, 'HL_INVALID_ORDER_NOTIONAL'],
+    ['price cap', { price_cap: '30001.0' }, 'HL_ORDER_PRICE_CAP_MISMATCH'],
     ['order type', { order_type: 'market' as const }, 'HL_ORDER_TYPE_MISMATCH'],
     ['limit price', { limit_price: '29999.0' }, 'HL_LIMIT_PRICE_MISMATCH'],
     ['time in force', { tif: 'Ioc' as const }, 'HL_TIF_MISMATCH'],
   ])('rejects adversarial %s summary drift', async (_name, summaryOverride, code) => {
-    const tampered = payload({ summary: { ...payload().summary, ...summaryOverride } })
+    const tampered = payload({
+      summary: { ...payload().summary, ...summaryOverride },
+    })
     await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow(code)
+  })
+
+  it('rejects a coin/index mismatch against the authenticated asset binding', async () => {
+    const tampered = payload({
+      summary: { ...payload().summary, coin: 'ETH' },
+    })
+    await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow('HL_ASSET_BINDING_MISMATCH')
   })
 
   it('requires a real leverage-update step before an order advertised at leverage', async () => {
@@ -267,6 +279,34 @@ describe('Hyperliquid executor ceremony', () => {
     expect(formatHlConfirmation(p)).toContain('limit $30000.0')
     expect(formatHlConfirmation(p)).toContain('signs and submits a live leveraged order')
     expect(formatHlConfirmation(p)).toContain('reduce-only=false')
+  })
+
+  it('displays and validates the exact signed IOC maximum execution price', async () => {
+    const marketAction = structuredClone(orderAction)
+    marketAction.orders[0]!.t.limit.tif = 'Ioc'
+    const marketStep = {
+      kind: 'order' as const,
+      action: marketAction,
+      nonce: 1000,
+      is_mainnet: true,
+    }
+    const market = payload({
+      summary: {
+        ...payload().summary,
+        order_type: 'market',
+        tif: 'Ioc',
+        price_cap: '30000.0',
+        limit_price: null,
+      },
+      steps: [{ ...marketStep, digest: computeHlDigest(marketStep) }],
+    })
+    await expect(validateHlSigningPayload(market, expected, vault())).resolves.toBeUndefined()
+    expect(formatHlConfirmation(market)).toContain('market max execution price $30000.0')
+    const mismatched = {
+      ...market,
+      summary: { ...market.summary, price_cap: '30001.0' },
+    }
+    await expect(validateHlSigningPayload(mismatched, expected, vault())).rejects.toThrow('HL_ORDER_PRICE_CAP_MISMATCH')
   })
 
   it('routes hl_order through explicit confirmation before any signing or submission', async () => {

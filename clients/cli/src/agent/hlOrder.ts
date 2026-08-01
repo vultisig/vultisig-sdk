@@ -11,6 +11,7 @@ export type HlOrderSummary = {
   size: string
   notional_usd: string
   order_type: 'market' | 'limit'
+  price_cap: string
   limit_price: string | null
   tif: 'Ioc' | 'Gtc' | 'Alo'
   reduce_only: boolean
@@ -33,6 +34,7 @@ export type HlOrderSigningPayload = {
   owner_public_key: string
   vault_address: string
   expires_at: string
+  asset_binding: { coin: string; asset_index: number }
   summary: HlOrderSummary
   steps: HlSigningStep[]
 }
@@ -129,6 +131,7 @@ function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSu
   if (summary.notional_usd !== multiplyDecimalStrings(order.p, order.s)) {
     throw new Error('HL_INVALID_ORDER_NOTIONAL')
   }
+  if (summary.price_cap !== order.p) throw new Error('HL_ORDER_PRICE_CAP_MISMATCH')
   const tif = (order.t as { limit?: { tif?: unknown } } | undefined)?.limit?.tif
   if (tif !== summary.tif || !['Ioc', 'Gtc', 'Alo'].includes(String(tif))) throw new Error('HL_TIF_MISMATCH')
   const expectedOrderType = tif === 'Ioc' ? 'market' : 'limit'
@@ -196,6 +199,11 @@ export async function validateHlSigningPayload(
   const leverageSteps = payload.steps.filter(step => step.kind === 'update_leverage')
   if (orderSteps.length !== 1 || leverageSteps.length > 1) throw new Error('HL_INVALID_STEP_SEQUENCE')
   if (payload.summary.leverage !== undefined && leverageSteps.length !== 1) throw new Error('HL_LEVERAGE_NOT_APPLIED')
+  if (
+    payload.asset_binding.coin !== payload.summary.coin ||
+    payload.asset_binding.asset_index !== payload.summary.asset_index
+  )
+    throw new Error('HL_ASSET_BINDING_MISMATCH')
   if (leverageSteps.length && payload.steps[0]?.kind !== 'update_leverage') throw new Error('HL_INVALID_STEP_SEQUENCE')
 
   for (const step of payload.steps) {
@@ -212,8 +220,8 @@ export async function validateHlSigningPayload(
 export function formatHlConfirmation(payload: HlOrderSigningPayload): string {
   const s = payload.summary
   const leverage = s.leverage === undefined ? '' : ` at ${s.leverage}x ${s.margin_mode ?? 'cross'}`
-  const limit = s.limit_price === null ? 'market price cap from signed wire' : `limit $${s.limit_price}`
-  return `Hyperliquid ${s.operation} ${s.side} ${s.size} ${s.coin} (asset #${s.asset_index}, signed notional $${s.notional_usd})${leverage}; ${s.order_type}/${s.tif}, ${limit}, reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
+  const price = s.limit_price === null ? `market max execution price $${s.price_cap}` : `limit $${s.limit_price}`
+  return `Hyperliquid ${s.operation} ${s.side} ${s.size} ${s.coin} (asset #${s.asset_index}, signed notional $${s.notional_usd})${leverage}; ${s.order_type}/${s.tif}, ${price}, reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
 }
 
 export async function pollHlOrderStatus(

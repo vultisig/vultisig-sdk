@@ -26,6 +26,7 @@ Retrieve response:
   "owner_public_key": "<ecdsa-pubkey>",
   "vault_address": "0x...",
   "expires_at": "<RFC3339, no more than 10 minutes ahead>",
+  "asset_binding": { "coin": "BTC", "asset_index": 0 },
   "summary": {
     "operation": "open",
     "coin": "BTC",
@@ -34,6 +35,7 @@ Retrieve response:
     "size": "0.001",
     "notional_usd": "30",
     "order_type": "limit",
+    "price_cap": "30000.0",
     "limit_price": "30000.0",
     "tif": "Gtc",
     "reduce_only": false,
