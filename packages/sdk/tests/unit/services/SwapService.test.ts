@@ -194,7 +194,12 @@ describe('SwapService', () => {
             swapChain: 'THORChain' as const,
             expected_amount_out: '1000000000',
             expiry: Math.floor(Date.now() / 1000) + 600,
-            fees: { affiliate: '0', asset: 'ETH', outbound: '100000', total: '100000' },
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
             inbound_address: '0x...',
             memo: '=:ETH.ETH:0x...',
             notes: '',
@@ -244,7 +249,12 @@ describe('SwapService', () => {
             swapChain: 'THORChain' as const,
             expected_amount_out: '1000000000',
             expiry: Math.floor(Date.now() / 1000) + 600,
-            fees: { affiliate: '0', asset: 'ETH', outbound: '100000', total: '100000' },
+            fees: {
+              affiliate: '0',
+              asset: 'ETH',
+              outbound: '100000',
+              total: '100000',
+            },
             inbound_address: '0x...',
             memo: '=:ETH.ETH:0x...',
             notes: '',
@@ -264,7 +274,12 @@ describe('SwapService', () => {
           ticker: 'ETH',
           decimals: 18,
         },
-        toCoin: { chain: Chain.Bitcoin, address: 'bc1qxxx...', ticker: 'BTC', decimals: 8 },
+        toCoin: {
+          chain: Chain.Bitcoin,
+          address: 'bc1qxxx...',
+          ticker: 'BTC',
+          decimals: 8,
+        },
         amount: 1.0,
       })
 
@@ -660,8 +675,16 @@ describe('SwapService', () => {
         fiatCurrency: 'usd',
       })
 
-      expect(result.fees).toEqual({ network: 100_000_000n, total: 100_000_000n })
-      expect(result.feesFiat).toEqual({ network: 20, affiliate: undefined, total: 20, currency: 'usd' })
+      expect(result.fees).toEqual({
+        network: 100_000_000n,
+        total: 100_000_000n,
+      })
+      expect(result.feesFiat).toEqual({
+        network: 20,
+        affiliate: undefined,
+        total: 20,
+        currency: 'usd',
+      })
       expect((result.quote.quote as any).general.tx.solana.swapFee.amount).toBe(492_298_648n)
       expect(getPrice).toHaveBeenNthCalledWith(1, Chain.Solana, undefined, 'usd')
     })
