@@ -78,6 +78,10 @@ const HL_AGENT_TYPES = {
   ],
 } as const
 
+function isExactStringMember(value: unknown, allowed: readonly string[]): boolean {
+  return typeof value === 'string' && allowed.includes(value)
+}
+
 function nonceBytes(nonce: number): Uint8Array {
   if (!Number.isSafeInteger(nonce) || nonce < 0) throw new Error('HL_INVALID_NONCE')
   const bytes = new Uint8Array(8)
@@ -116,9 +120,10 @@ function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSu
     if (key in action) throw new Error('HL_CONFLICTING_ORDER_FIELD')
   }
   if (!summary.coin.trim()) throw new Error('HL_INVALID_COIN')
-  if (action.type !== 'order' || !Array.isArray(action.orders) || action.orders.length !== 1) {
+  if (!isExactStringMember(action.type, ['order']) || !Array.isArray(action.orders) || action.orders.length !== 1) {
     throw new Error('HL_INVALID_ORDER_ACTION')
   }
+  if (!isExactStringMember(action.grouping, ['na'])) throw new Error('HL_INVALID_ORDER_GROUPING')
   const order = action.orders[0] as Record<string, unknown>
   if (!Number.isInteger(order.a) || typeof order.b !== 'boolean') throw new Error('HL_INVALID_ORDER_ACTION')
   if (order.a !== summary.asset_index) throw new Error('HL_ASSET_MISMATCH')
@@ -136,7 +141,7 @@ function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSu
   }
   if (summary.price_cap !== order.p) throw new Error('HL_ORDER_PRICE_CAP_MISMATCH')
   const tif = (order.t as { limit?: { tif?: unknown } } | undefined)?.limit?.tif
-  if (tif !== summary.tif || !['Ioc', 'Gtc', 'Alo'].includes(String(tif))) throw new Error('HL_TIF_MISMATCH')
+  if (!isExactStringMember(tif, ['Ioc', 'Gtc', 'Alo']) || tif !== summary.tif) throw new Error('HL_TIF_MISMATCH')
   const expectedOrderType = tif === 'Ioc' ? 'market' : 'limit'
   if (summary.order_type !== expectedOrderType) throw new Error('HL_ORDER_TYPE_MISMATCH')
   if (summary.limit_price !== (expectedOrderType === 'limit' ? order.p : null))
@@ -167,7 +172,7 @@ function validateLeverageAction(action: Record<string, unknown>, summary: HlOrde
   for (const key of ['operation', 'side', 'margin_mode', 'reduce_only']) {
     if (key in action) throw new Error('HL_CONFLICTING_LEVERAGE_FIELD')
   }
-  if (action.type !== 'updateLeverage' || !Number.isInteger(action.asset) || !Number.isInteger(action.leverage)) {
+  if (!isExactStringMember(action.type, ['updateLeverage']) || !Number.isInteger(action.asset) || !Number.isInteger(action.leverage)) {
     throw new Error('HL_INVALID_LEVERAGE_ACTION')
   }
   if (typeof action.isCross !== 'boolean' || action.leverage !== summary.leverage) {
@@ -196,9 +201,11 @@ export async function validateHlSigningPayload(
   for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
     if (key in rawPayload) throw new Error('HL_CONFLICTING_TOP_LEVEL_FIELD')
   }
-  if (!['open', 'close'].includes(String(payload.summary.operation))) throw new Error('HL_INVALID_OPERATION')
-  if (!['long', 'short'].includes(String(payload.summary.side))) throw new Error('HL_INVALID_SIDE')
-  if (payload.summary.margin_mode !== undefined && !['cross', 'isolated'].includes(String(payload.summary.margin_mode)))
+  if (!isExactStringMember(payload.summary.operation, ['open', 'close'])) throw new Error('HL_INVALID_OPERATION')
+  if (!isExactStringMember(payload.summary.side, ['long', 'short'])) throw new Error('HL_INVALID_SIDE')
+  if (!isExactStringMember(payload.summary.order_type, ['market', 'limit'])) throw new Error('HL_INVALID_ORDER_TYPE')
+  if (!isExactStringMember(payload.summary.tif, ['Ioc', 'Gtc', 'Alo'])) throw new Error('HL_INVALID_TIF')
+  if (payload.summary.margin_mode !== undefined && !isExactStringMember(payload.summary.margin_mode, ['cross', 'isolated']))
     throw new Error('HL_INVALID_MARGIN_MODE')
   if (typeof payload.summary.reduce_only !== 'boolean') throw new Error('HL_INVALID_REDUCE_ONLY')
   if (payload.order_ref !== expected.orderRef || payload.conversation_id !== expected.conversationId) {
@@ -211,6 +218,9 @@ export async function validateHlSigningPayload(
   if (!Number.isFinite(expiry) || expiry <= now) throw new Error('HL_ORDER_EXPIRED')
   if (expiry - now > 10 * 60_000) throw new Error('HL_EXPIRY_OUT_OF_RANGE')
   if (payload.steps.length < 1 || payload.steps.length > 2) throw new Error('HL_INVALID_STEP_COUNT')
+  if (payload.steps.some(step => !isExactStringMember(step.kind, ['update_leverage', 'order'])))
+    throw new Error('HL_INVALID_STEP_KIND')
+  if (payload.steps.some(step => typeof step.is_mainnet !== 'boolean')) throw new Error('HL_INVALID_NETWORK_FLAG')
   const orderSteps = payload.steps.filter(step => step.kind === 'order')
   const leverageSteps = payload.steps.filter(step => step.kind === 'update_leverage')
   if (payload.summary.operation === 'open') {

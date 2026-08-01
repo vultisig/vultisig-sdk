@@ -111,6 +111,38 @@ const expected = {
 }
 
 describe('Hyperliquid signing payload validation', () => {
+  const enumLocations: Array<[string, (candidate: any, value: unknown) => void]> = [
+    ['summary.operation', (p, value) => { p.summary.operation = value }],
+    ['summary.side', (p, value) => { p.summary.side = value }],
+    ['summary.margin_mode', (p, value) => { p.summary.margin_mode = value }],
+    ['summary.order_type', (p, value) => { p.summary.order_type = value }],
+    ['summary.tif', (p, value) => { p.summary.tif = value }],
+    ['step.kind', (p, value) => { p.steps[0].kind = value }],
+    ['leverage action.type', (p, value) => { p.steps[0].action.type = value }],
+    ['order action.type', (p, value) => { p.steps[1].action.type = value }],
+    ['order action.grouping', (p, value) => { p.steps[1].action.grouping = value }],
+    ['nested order tif', (p, value) => { p.steps[1].action.orders[0].t.limit.tif = value }],
+  ]
+  const coercibleEnumValues: Array<[string, unknown]> = [
+    ['array', ['open']],
+    ['object', {}],
+    ['number', 1],
+    ['boolean', true],
+    ['null', null],
+    ['String object', new String('open')],
+  ]
+
+  it.each(enumLocations.flatMap(([location, mutate]) =>
+    coercibleEnumValues.map(([valueName, value]) => [location, valueName, mutate, value] as const)
+  ))('rejects coercible runtime enum at %s: %s', async (_location, _valueName, mutate, value) => {
+    const candidate: any = payload()
+    mutate(candidate, value)
+    // Rebind action mutations to their new digest so enum validation, rather
+    // than the independent digest check, is the rejection boundary under test.
+    for (const step of candidate.steps) step.digest = computeHlDigest(step)
+    await expect(validateHlSigningPayload(candidate, expected, vault())).rejects.toThrow()
+  })
+
   it.each([
     [
       'unknown operation',
