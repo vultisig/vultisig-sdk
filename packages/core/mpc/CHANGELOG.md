@@ -1,5 +1,12 @@
 # @vultisig/core-mpc
 
+## 1.14.3
+
+### Patch Changes
+
+- Updated dependencies [[`7603f32`](https://github.com/vultisig/vultisig-sdk/commit/7603f32e612a7d575b05c49e604aed228817f38c)]:
+  - @vultisig/core-chain@2.29.3
+
 ## 1.14.2
 
 ### Patch Changes

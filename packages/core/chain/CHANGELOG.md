@@ -1,5 +1,17 @@
 # @vultisig/core-chain
 
+## 2.29.3
+
+### Patch Changes
+
+- [#1678](https://github.com/vultisig/vultisig-sdk/pull/1678) [`7603f32`](https://github.com/vultisig/vultisig-sdk/commit/7603f32e612a7d575b05c49e604aed228817f38c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Compare VULT discount tier balances in bigint base units instead of float64.
+  `100000n * 10n**18n` is not representable in float64 (`Number` round-trips it
+  to 99999.99999999999), so a wallet holding exactly 100,000 VULT — the diamond
+  minimum — was demoted to platinum and paid a 25 bps affiliate fee instead of
+  15 on every swap. The float rounding also swallowed one-base-unit differences
+  around every tier boundary. Comparisons now stay exact via `toChainAmount`
+  (vultisig-sdk#1677).
+
 ## 2.29.2
 
 ### Patch Changes
