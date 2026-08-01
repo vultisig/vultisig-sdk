@@ -20,6 +20,7 @@ import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSumm
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import { formatHlConfirmation } from './hlOrder'
 import {
   type AgentTokenCacheScope,
   clearCachedToken,
@@ -46,7 +47,7 @@ import type {
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
 // reached via the tool-output signing path (not a registry tool name) but uses
 // the same gate via `runPasswordGatedTool('sign_tx', …)` below.
-const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx', 'hl_order'])
 const AUTO_SUBMIT_MARKERS = new Set([
   '__pm_auto_submit',
   '__pm_auto_submit_batch',
@@ -91,6 +92,7 @@ export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
   'sign_typed_data',
   'polymarket_sign_bet',
   'polymarket_sign_batch',
+  'hl_order',
 ]
 
 // Every tool name the SSE layer intercepts for local dispatch: the backend's
@@ -327,7 +329,9 @@ export class AgentSession {
             new Error(
               `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
             ),
-            { code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND }
+            {
+              code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND,
+            }
           )
         }
 
@@ -1131,7 +1135,8 @@ export class AgentSession {
     toolCallId: string,
     ui: UICallbacks,
     body: () => Promise<RecentAction>,
-    input?: Record<string, unknown>
+    input?: Record<string, unknown>,
+    confirmationSummary?: string
   ): Promise<RecentAction> {
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
@@ -1146,6 +1151,7 @@ export class AgentSession {
       // sign_typed_data must NOT pick it up — the user would be approving
       // typed-data while reading a stale send/swap summary.
       const summary =
+        confirmationSummary ??
         (toolName === 'sign_tx' ? this.executor.getPendingSummary() : null) ??
         `${toolName}${input ? ` ${JSON.stringify(input)}` : ''}`
       const approved = await ui.requestConfirmation(summary)
@@ -1256,6 +1262,29 @@ export class AgentSession {
     input: Record<string, unknown>,
     ui: UICallbacks
   ): Promise<void> {
+    if (toolName === 'hl_order') {
+      let recent: RecentAction
+      try {
+        const conversationId = this.conversationId
+        if (!conversationId) throw new Error('HL_CONVERSATION_REQUIRED')
+        const payload = await this.executor.retrieveHlOrder(this.client, input, conversationId)
+        recent = await this.runPasswordGatedTool(
+          toolName,
+          toolCallId,
+          ui,
+          () => this.executor.signAndSubmitHlOrder(this.client, payload),
+          input,
+          formatHlConfirmation(payload)
+        )
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        recent = { tool: toolName, success: false, data: { error: message } }
+        ui.onToolCall(toolCallId, toolName, input)
+        ui.onToolResult(toolCallId, toolName, false, recent.data, message)
+      }
+      this.pendingToolResults.push(recent)
+      return
+    }
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
@@ -1267,7 +1296,10 @@ export class AgentSession {
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
+        data: {
+          code: AgentErrorCode.TOOL_UNSUPPORTED,
+          error: `unimplemented in CLI: ${toolName}`,
+        },
       })
       return
     }

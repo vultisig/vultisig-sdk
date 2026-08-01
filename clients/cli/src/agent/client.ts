@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { IdempotencyKeyReusedError, IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
+import type { HlOrderSignature, HlOrderSigningPayload, HlOrderStatus, HlOrderTransport } from './hlOrder'
 import {
   CLI_SIGNABLE_FLAT_TOOLS,
   CLI_SIGNABLE_PREP_TOOLS,
@@ -34,7 +35,12 @@ import type {
   TxReadyPayload,
 } from './types'
 
-type JsonErrorBody = { error?: string; code?: string; conversation_id?: string; first_request_at?: string }
+type JsonErrorBody = {
+  error?: string
+  code?: string
+  conversation_id?: string
+  first_request_at?: string
+}
 
 /** Generate a server-valid visible-ASCII key for one agent turn POST attempt.
  *
@@ -274,7 +280,7 @@ function getToolInput(parsed: SSEPayload): Record<string, unknown> {
     : {}
 }
 
-export class AgentClient {
+export class AgentClient implements HlOrderTransport {
   private baseUrl: string
   private authToken: string | null = null
   private profile: string = ''
@@ -377,7 +383,10 @@ export class AgentClient {
     try {
       res = await fetch(`${this.baseUrl}/auth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...this.profileHeader() },
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.profileHeader(),
+        },
         body: JSON.stringify(req),
         signal: this.timeoutSignal(),
       })
@@ -401,7 +410,9 @@ export class AgentClient {
     try {
       // A timeout aborts the fetch → caught here → reported unhealthy, so a
       // hung backend never blocks init indefinitely.
-      const res = await fetch(`${this.baseUrl}/healthz`, { signal: this.timeoutSignal() })
+      const res = await fetch(`${this.baseUrl}/healthz`, {
+        signal: this.timeoutSignal(),
+      })
       return res.ok
     } catch {
       return false
@@ -429,6 +440,40 @@ export class AgentClient {
 
   async deleteConversation(conversationId: string, publicKey: string): Promise<void> {
     await this.delete(`/agent/conversations/${conversationId}`, {
+      public_key: publicKey,
+    })
+  }
+
+  async retrieveHlOrderSigningPayload(
+    orderRef: string,
+    conversationId: string,
+    publicKey: string
+  ): Promise<HlOrderSigningPayload> {
+    return this.post<HlOrderSigningPayload>(
+      `/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/signing-payload`,
+      {
+        conversation_id: conversationId,
+        public_key: publicKey,
+      }
+    )
+  }
+
+  async submitHlOrder(
+    orderRef: string,
+    conversationId: string,
+    publicKey: string,
+    signatures: HlOrderSignature[]
+  ): Promise<HlOrderStatus> {
+    return this.post<HlOrderStatus>(`/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/submit`, {
+      conversation_id: conversationId,
+      public_key: publicKey,
+      signatures,
+    })
+  }
+
+  async getHlOrderStatus(orderRef: string, conversationId: string, publicKey: string): Promise<HlOrderStatus> {
+    return this.post<HlOrderStatus>(`/agent/hyperliquid/orders/${encodeURIComponent(orderRef)}/status`, {
+      conversation_id: conversationId,
       public_key: publicKey,
     })
   }
@@ -787,7 +832,12 @@ export class AgentClient {
     process.stderr.write(`[SSE] unknown frame type: ${type}\n`)
     let warning = result.protocolWarnings[0]
     if (!warning) {
-      warning = { code: 'PROTOCOL_DRIFT', message: '', count: 0, eventTypes: [] }
+      warning = {
+        code: 'PROTOCOL_DRIFT',
+        message: '',
+        count: 0,
+        eventTypes: [],
+      }
       result.protocolWarnings.push(warning)
     }
     warning.count += 1
