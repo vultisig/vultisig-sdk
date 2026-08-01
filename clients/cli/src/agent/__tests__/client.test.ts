@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ExitCode } from '../../core/errors'
 import { AgentErrorCode, agentErrorCodeToExitCode, normalizeAgentError } from '../agentErrors'
-import { AgentClient, AgentStreamIdleTimeoutError, resolveHttpTimeoutMs, resolveSseIdleTimeoutMs } from '../client'
+import {
+  AgentClient,
+  AgentStreamIdleTimeoutError,
+  deriveHlOrderClientAction,
+  resolveHttpTimeoutMs,
+  resolveSseIdleTimeoutMs,
+} from '../client'
 
 /**
  * Creates a ReadableStream that yields one chunk per read() call.
@@ -273,6 +279,80 @@ describe('AgentClient.sendMessageStream', () => {
       'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
       AgentErrorCode.INVALID_INPUT
     )
+  })
+
+  describe('Hyperliquid builder/action binding', () => {
+    const ready = {
+      surface: 'hyperliquid_order',
+      status: 'ready_to_sign',
+      action: 'open',
+      order_ref: '12345678-1234-4234-8234-123456789abc',
+      coin: 'BTC',
+      asset_index: 0,
+      wire_size: '0.00016',
+      price_cap: '64557.825000000004',
+      wire_notional_usd: '10.32925200000000064',
+      tif: 'Ioc',
+      reduce_only: false,
+    }
+
+    it('accepts only the exact open/open/false and close/close/true tuples', () => {
+      expect(deriveHlOrderClientAction('build_hyperliquid_open_position', ready)).toEqual({
+        order_ref: ready.order_ref,
+      })
+      expect(
+        deriveHlOrderClientAction('build_hyperliquid_close_position', {
+          ...ready,
+          action: 'close',
+          reduce_only: true,
+        })
+      ).toEqual({ order_ref: ready.order_ref })
+    })
+
+    it.each([
+      ['open missing action', 'build_hyperliquid_open_position', { action: undefined }],
+      ['open wrong action', 'build_hyperliquid_open_position', { action: 'close' }],
+      ['open wrong reduce-only', 'build_hyperliquid_open_position', { reduce_only: true }],
+      ['close missing action', 'build_hyperliquid_close_position', { action: undefined, reduce_only: true }],
+      ['close wrong action', 'build_hyperliquid_close_position', { action: 'open', reduce_only: true }],
+      ['close wrong reduce-only', 'build_hyperliquid_close_position', { action: 'close', reduce_only: false }],
+      ['action case variant', 'build_hyperliquid_open_position', { action: 'Open' }],
+      ['surface case variant', 'build_hyperliquid_open_position', { surface: 'Hyperliquid_Order' }],
+      ['status case variant', 'build_hyperliquid_open_position', { status: 'READY_TO_SIGN' }],
+      ['TIF case variant', 'build_hyperliquid_open_position', { tif: 'IOC' }],
+      ['boolean schema variant', 'build_hyperliquid_open_position', { reduce_only: 0 }],
+    ])('rejects %s', (_name, toolName, override) => {
+      expect(deriveHlOrderClientAction(toolName, { ...ready, ...override })).toBeNull()
+    })
+
+    it('marks a mismatched terminal frame failed and never dispatches the local action', async () => {
+      const onClientSideToolCall = vi.fn()
+      const onToolProgress = vi.fn()
+      const onError = vi.fn()
+      const mismatched = { ...ready, action: 'close', reduce_only: true }
+      globalThis.fetch = mockFetchSSE([
+        'data: {"type":"tool-input-start","toolCallId":"hl-bind","toolName":"build_hyperliquid_open_position"}\n\n',
+        `data: ${JSON.stringify({
+          type: 'tool-output-available',
+          toolCallId: 'hl-bind',
+          output: JSON.stringify(mismatched),
+        })}\n\n`,
+        'data: {"type":"finish"}\n\n',
+      ])
+
+      await new AgentClient('http://example.com').sendMessageStream(
+        'c1',
+        { public_key: 'pk', content: 'open $10 BTC long 3x' },
+        { onClientSideToolCall, onToolProgress, onError }
+      )
+
+      expect(onToolProgress).toHaveBeenLastCalledWith('build_hyperliquid_open_position', 'done', undefined, false)
+      expect(onClientSideToolCall).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(
+        'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+        AgentErrorCode.INVALID_INPUT
+      )
+    })
   })
 
   // H2 (review of #1305): unknown `data-*` kinds are FORWARD-COMPATIBLE by the

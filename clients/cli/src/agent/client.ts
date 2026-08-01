@@ -168,9 +168,12 @@ export function deriveHlOrderClientAction(toolName: string, output: unknown): { 
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const result = value as Record<string, unknown>
+  const expectedAction = toolName === 'build_hyperliquid_open_position' ? 'open' : 'close'
+  const expectedReduceOnly = expectedAction === 'close'
   if (
     result.surface !== 'hyperliquid_order' ||
     result.status !== 'ready_to_sign' ||
+    result.action !== expectedAction ||
     typeof result.order_ref !== 'string' ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.order_ref) ||
     typeof result.coin !== 'string' ||
@@ -179,7 +182,7 @@ export function deriveHlOrderClientAction(toolName: string, output: unknown): { 
     typeof result.price_cap !== 'string' ||
     typeof result.wire_notional_usd !== 'string' ||
     !['Ioc', 'Gtc', 'Alo'].includes(String(result.tif)) ||
-    typeof result.reduce_only !== 'boolean'
+    result.reduce_only !== expectedReduceOnly
   ) {
     return null
   }
