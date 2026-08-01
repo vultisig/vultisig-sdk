@@ -112,6 +112,9 @@ export function computeHlDigest(step: Omit<HlSigningStep, 'digest' | 'kind'>): `
 }
 
 function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
+  for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
+    if (key in action) throw new Error('HL_CONFLICTING_ORDER_FIELD')
+  }
   if (!summary.coin.trim()) throw new Error('HL_INVALID_COIN')
   if (action.type !== 'order' || !Array.isArray(action.orders) || action.orders.length !== 1) {
     throw new Error('HL_INVALID_ORDER_ACTION')
@@ -161,6 +164,9 @@ export function multiplyDecimalStrings(left: unknown, right: unknown): string {
 }
 
 function validateLeverageAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
+  for (const key of ['operation', 'side', 'margin_mode', 'reduce_only']) {
+    if (key in action) throw new Error('HL_CONFLICTING_LEVERAGE_FIELD')
+  }
   if (action.type !== 'updateLeverage' || !Number.isInteger(action.asset) || !Number.isInteger(action.leverage)) {
     throw new Error('HL_INVALID_LEVERAGE_ACTION')
   }
@@ -186,6 +192,15 @@ export async function validateHlSigningPayload(
   vault: VaultBase,
   now = Date.now()
 ): Promise<void> {
+  const rawPayload = payload as unknown as Record<string, unknown>
+  for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
+    if (key in rawPayload) throw new Error('HL_CONFLICTING_TOP_LEVEL_FIELD')
+  }
+  if (!['open', 'close'].includes(String(payload.summary.operation))) throw new Error('HL_INVALID_OPERATION')
+  if (!['long', 'short'].includes(String(payload.summary.side))) throw new Error('HL_INVALID_SIDE')
+  if (payload.summary.margin_mode !== undefined && !['cross', 'isolated'].includes(String(payload.summary.margin_mode)))
+    throw new Error('HL_INVALID_MARGIN_MODE')
+  if (typeof payload.summary.reduce_only !== 'boolean') throw new Error('HL_INVALID_REDUCE_ONLY')
   if (payload.order_ref !== expected.orderRef || payload.conversation_id !== expected.conversationId) {
     throw new Error('HL_REFERENCE_MISMATCH')
   }
@@ -206,8 +221,10 @@ export async function validateHlSigningPayload(
       leverageSteps.length !== 1 ||
       orderSteps.length !== 1 ||
       payload.summary.leverage === undefined ||
-      payload.summary.margin_mode === undefined
-    ) throw new Error('HL_INVALID_OPEN_CEREMONY')
+      payload.summary.margin_mode === undefined ||
+      payload.summary.reduce_only !== false
+    )
+      throw new Error('HL_INVALID_OPEN_CEREMONY')
   } else if (
     payload.steps.length !== 1 ||
     payload.steps[0]?.kind !== 'order' ||
@@ -216,7 +233,8 @@ export async function validateHlSigningPayload(
     payload.summary.leverage !== undefined ||
     payload.summary.margin_mode !== undefined ||
     payload.summary.reduce_only !== true
-  ) throw new Error('HL_INVALID_CLOSE_CEREMONY')
+  )
+    throw new Error('HL_INVALID_CLOSE_CEREMONY')
   if (
     payload.asset_binding.coin !== payload.summary.coin ||
     payload.asset_binding.asset_index !== payload.summary.asset_index

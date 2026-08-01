@@ -111,6 +111,49 @@ const expected = {
 }
 
 describe('Hyperliquid signing payload validation', () => {
+  it.each([
+    [
+      'unknown operation',
+      (p: any) => {
+        p.summary.operation = 'hold'
+      },
+    ],
+    [
+      'unknown side',
+      (p: any) => {
+        p.summary.side = 'buy'
+      },
+    ],
+    [
+      'unknown margin mode',
+      (p: any) => {
+        p.summary.margin_mode = 'portfolio'
+      },
+    ],
+    [
+      'open reduce-only',
+      (p: any) => {
+        p.summary.reduce_only = true
+        p.steps[1].action.orders[0].r = true
+      },
+    ],
+    [
+      'conflicting top-level operation',
+      (p: any) => {
+        p.operation = 'close'
+      },
+    ],
+    [
+      'conflicting nested side',
+      (p: any) => {
+        p.steps[1].action.side = 'short'
+      },
+    ],
+  ])('rejects strict runtime invariant: %s', async (_name, mutate) => {
+    const candidate: any = payload()
+    mutate(candidate)
+    await expect(validateHlSigningPayload(candidate, expected, vault())).rejects.toThrow()
+  })
   it('matches the backend/Python reference digest exactly', () => {
     expect(payload().steps[1]?.digest).toBe('0x670fb12c6b39e9d2469fe74bb5fae5db5cb51051ec4882a9b7e1064fbd07a1ab')
   })
@@ -174,8 +217,16 @@ describe('Hyperliquid signing payload validation', () => {
     await expect(validateHlSigningPayload(missing, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
     const reversed = payload({ steps: [...payload().steps].reverse() })
     await expect(validateHlSigningPayload(reversed, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
-    const missingSummary = payload({ summary: { ...payload().summary, leverage: undefined, margin_mode: undefined } })
-    await expect(validateHlSigningPayload(missingSummary, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
+    const missingSummary = payload({
+      summary: {
+        ...payload().summary,
+        leverage: undefined,
+        margin_mode: undefined,
+      },
+    })
+    await expect(validateHlSigningPayload(missingSummary, expected, vault())).rejects.toThrow(
+      'HL_INVALID_OPEN_CEREMONY'
+    )
     const wrongAsset = payload()
     wrongAsset.steps[0]!.action.asset = 1
     wrongAsset.steps[0]!.digest = computeHlDigest(wrongAsset.steps[0]!)
@@ -188,7 +239,13 @@ describe('Hyperliquid signing payload validation', () => {
     ;(order.action.orders as Array<Record<string, unknown>>)[0]!.b = false
     order.digest = computeHlDigest(order)
     const close = payload({
-      summary: { ...payload().summary, operation: 'close', reduce_only: true, leverage: undefined, margin_mode: undefined },
+      summary: {
+        ...payload().summary,
+        operation: 'close',
+        reduce_only: true,
+        leverage: undefined,
+        margin_mode: undefined,
+      },
       steps: [order],
     })
     await expect(validateHlSigningPayload(close, expected, vault())).resolves.toBeUndefined()
@@ -196,7 +253,9 @@ describe('Hyperliquid signing payload validation', () => {
       summary: { ...close.summary, leverage: 5, margin_mode: 'cross' },
       steps: payload().steps,
     })
-    await expect(validateHlSigningPayload(extraLeverage, expected, vault())).rejects.toThrow('HL_INVALID_CLOSE_CEREMONY')
+    await expect(validateHlSigningPayload(extraLeverage, expected, vault())).rejects.toThrow(
+      'HL_INVALID_CLOSE_CEREMONY'
+    )
   })
 })
 
