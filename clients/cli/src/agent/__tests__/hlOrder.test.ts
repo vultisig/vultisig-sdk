@@ -43,6 +43,12 @@ function payload(overrides: Partial<HlOrderSigningPayload> = {}): HlOrderSigning
     nonce: 1000,
     is_mainnet: true,
   }
+  const leverageStep = {
+    kind: 'update_leverage' as const,
+    action: { type: 'updateLeverage', asset: 0, isCross: true, leverage: 5 },
+    nonce: 999,
+    is_mainnet: true,
+  }
   return {
     order_ref: ORDER_REF,
     conversation_id: CONVERSATION_ID,
@@ -61,9 +67,14 @@ function payload(overrides: Partial<HlOrderSigningPayload> = {}): HlOrderSigning
       limit_price: '30000.0',
       tif: 'Gtc',
       reduce_only: false,
+      leverage: 5,
+      margin_mode: 'cross',
     },
     asset_binding: { coin: 'BTC', asset_index: 0 },
-    steps: [{ ...orderStep, digest: computeHlDigest(orderStep) }],
+    steps: [
+      { ...leverageStep, digest: computeHlDigest(leverageStep) },
+      { ...orderStep, digest: computeHlDigest(orderStep) },
+    ],
     ...overrides,
   }
 }
@@ -101,7 +112,7 @@ const expected = {
 
 describe('Hyperliquid signing payload validation', () => {
   it('matches the backend/Python reference digest exactly', () => {
-    expect(payload().steps[0]?.digest).toBe('0x670fb12c6b39e9d2469fe74bb5fae5db5cb51051ec4882a9b7e1064fbd07a1ab')
+    expect(payload().steps[1]?.digest).toBe('0x670fb12c6b39e9d2469fe74bb5fae5db5cb51051ec4882a9b7e1064fbd07a1ab')
   })
 
   it('accepts a bound, unexpired open payload', async () => {
@@ -119,7 +130,7 @@ describe('Hyperliquid signing payload validation', () => {
 
   it('rejects action tampering against the stored digest', async () => {
     const tampered = payload()
-    ;(tampered.steps[0]!.action.orders as Array<Record<string, unknown>>)[0]!.s = '1.0'
+    ;(tampered.steps[1]!.action.orders as Array<Record<string, unknown>>)[0]!.s = '1.0'
     await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow('HL_DIGEST_MISMATCH')
   })
 
@@ -156,36 +167,36 @@ describe('Hyperliquid signing payload validation', () => {
     await expect(validateHlSigningPayload(tampered, expected, vault())).rejects.toThrow('HL_ASSET_BINDING_MISMATCH')
   })
 
-  it('requires a real leverage-update step before an order advertised at leverage', async () => {
+  it('requires an open ceremony to contain exactly leverage then order', async () => {
     const missing = payload({
-      summary: { ...payload().summary, leverage: 5, margin_mode: 'cross' },
+      steps: [payload().steps[1]!],
     })
-    await expect(validateHlSigningPayload(missing, expected, vault())).rejects.toThrow('HL_LEVERAGE_NOT_APPLIED')
-
-    const leverage = {
-      type: 'updateLeverage',
-      asset: 0,
-      isCross: true,
-      leverage: 5,
-    }
-    const leverageStep = {
-      kind: 'update_leverage' as const,
-      action: leverage,
-      nonce: 999,
-      is_mainnet: true,
-    }
-    const complete = payload({
-      summary: { ...payload().summary, leverage: 5, margin_mode: 'cross' },
-      steps: [{ ...leverageStep, digest: computeHlDigest(leverageStep) }, payload().steps[0]!],
-    })
-    await expect(validateHlSigningPayload(complete, expected, vault())).resolves.toBeUndefined()
+    await expect(validateHlSigningPayload(missing, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
+    const reversed = payload({ steps: [...payload().steps].reverse() })
+    await expect(validateHlSigningPayload(reversed, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
+    const missingSummary = payload({ summary: { ...payload().summary, leverage: undefined, margin_mode: undefined } })
+    await expect(validateHlSigningPayload(missingSummary, expected, vault())).rejects.toThrow('HL_INVALID_OPEN_CEREMONY')
+    const wrongAsset = payload()
+    wrongAsset.steps[0]!.action.asset = 1
+    wrongAsset.steps[0]!.digest = computeHlDigest(wrongAsset.steps[0]!)
+    await expect(validateHlSigningPayload(wrongAsset, expected, vault())).rejects.toThrow('HL_LEVERAGE_ASSET_MISMATCH')
   })
 
-  it('requires every close to be reduce-only', async () => {
+  it('requires a close ceremony to contain exactly one reduce-only order and no leverage', async () => {
+    const order = structuredClone(payload().steps[1]!)
+    ;(order.action.orders as Array<Record<string, unknown>>)[0]!.r = true
+    ;(order.action.orders as Array<Record<string, unknown>>)[0]!.b = false
+    order.digest = computeHlDigest(order)
     const close = payload({
-      summary: { ...payload().summary, operation: 'close', reduce_only: true },
+      summary: { ...payload().summary, operation: 'close', reduce_only: true, leverage: undefined, margin_mode: undefined },
+      steps: [order],
     })
-    await expect(validateHlSigningPayload(close, expected, vault())).rejects.toThrow('HL_REDUCE_ONLY_MISMATCH')
+    await expect(validateHlSigningPayload(close, expected, vault())).resolves.toBeUndefined()
+    const extraLeverage = payload({
+      summary: { ...close.summary, leverage: 5, margin_mode: 'cross' },
+      steps: payload().steps,
+    })
+    await expect(validateHlSigningPayload(extraLeverage, expected, vault())).rejects.toThrow('HL_INVALID_CLOSE_CEREMONY')
   })
 })
 
@@ -204,7 +215,7 @@ describe('Hyperliquid executor ceremony', () => {
     const executor = new AgentExecutor(vault(), false, PUBLIC_KEY)
     const retrieved = await executor.retrieveHlOrder(
       transport,
-      { order_ref: ORDER_REF, digest: signingPayload.steps[0]!.digest },
+      { order_ref: ORDER_REF, digest: signingPayload.steps[1]!.digest },
       CONVERSATION_ID
     )
     const recent = await executor.signAndSubmitHlOrder(transport, retrieved)
@@ -221,8 +232,12 @@ describe('Hyperliquid executor ceremony', () => {
     expect(JSON.stringify(recent)).not.toMatch(/signature|\br\b|\bs\b/)
     expect(transport.submitHlOrder).toHaveBeenCalledWith(ORDER_REF, CONVERSATION_ID, PUBLIC_KEY, [
       expect.objectContaining({
-        kind: 'order',
+        kind: 'update_leverage',
         digest: signingPayload.steps[0]!.digest,
+      }),
+      expect.objectContaining({
+        kind: 'order',
+        digest: signingPayload.steps[1]!.digest,
         r: expect.any(String),
         s: expect.any(String),
         v: expect.any(Number),
@@ -299,7 +314,7 @@ describe('Hyperliquid executor ceremony', () => {
         price_cap: '30000.0',
         limit_price: null,
       },
-      steps: [{ ...marketStep, digest: computeHlDigest(marketStep) }],
+      steps: [payload().steps[0]!, { ...marketStep, digest: computeHlDigest(marketStep) }],
     })
     await expect(validateHlSigningPayload(market, expected, vault())).resolves.toBeUndefined()
     expect(formatHlConfirmation(market)).toContain('market max execution price $30000.0')

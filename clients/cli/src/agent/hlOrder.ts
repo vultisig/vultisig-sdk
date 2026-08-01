@@ -167,6 +167,7 @@ function validateLeverageAction(action: Record<string, unknown>, summary: HlOrde
   if (typeof action.isCross !== 'boolean' || action.leverage !== summary.leverage) {
     throw new Error('HL_LEVERAGE_MISMATCH')
   }
+  if (action.asset !== summary.asset_index) throw new Error('HL_LEVERAGE_ASSET_MISMATCH')
   if ((action.leverage as number) < 1 || (action.leverage as number) > 100) {
     throw new Error('HL_INVALID_LEVERAGE')
   }
@@ -197,14 +198,30 @@ export async function validateHlSigningPayload(
   if (payload.steps.length < 1 || payload.steps.length > 2) throw new Error('HL_INVALID_STEP_COUNT')
   const orderSteps = payload.steps.filter(step => step.kind === 'order')
   const leverageSteps = payload.steps.filter(step => step.kind === 'update_leverage')
-  if (orderSteps.length !== 1 || leverageSteps.length > 1) throw new Error('HL_INVALID_STEP_SEQUENCE')
-  if (payload.summary.leverage !== undefined && leverageSteps.length !== 1) throw new Error('HL_LEVERAGE_NOT_APPLIED')
+  if (payload.summary.operation === 'open') {
+    if (
+      payload.steps.length !== 2 ||
+      payload.steps[0]?.kind !== 'update_leverage' ||
+      payload.steps[1]?.kind !== 'order' ||
+      leverageSteps.length !== 1 ||
+      orderSteps.length !== 1 ||
+      payload.summary.leverage === undefined ||
+      payload.summary.margin_mode === undefined
+    ) throw new Error('HL_INVALID_OPEN_CEREMONY')
+  } else if (
+    payload.steps.length !== 1 ||
+    payload.steps[0]?.kind !== 'order' ||
+    orderSteps.length !== 1 ||
+    leverageSteps.length !== 0 ||
+    payload.summary.leverage !== undefined ||
+    payload.summary.margin_mode !== undefined ||
+    payload.summary.reduce_only !== true
+  ) throw new Error('HL_INVALID_CLOSE_CEREMONY')
   if (
     payload.asset_binding.coin !== payload.summary.coin ||
     payload.asset_binding.asset_index !== payload.summary.asset_index
   )
     throw new Error('HL_ASSET_BINDING_MISMATCH')
-  if (leverageSteps.length && payload.steps[0]?.kind !== 'update_leverage') throw new Error('HL_INVALID_STEP_SEQUENCE')
 
   for (const step of payload.steps) {
     const computed = computeHlDigest(step)
