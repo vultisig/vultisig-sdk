@@ -2,6 +2,7 @@ import type { VaultBase } from '@vultisig/sdk'
 import { privateKeyToAddress, sign } from 'viem/accounts'
 import { describe, expect, it, vi } from 'vitest'
 
+import { AgentClient } from '../client'
 import { AgentExecutor } from '../executor'
 import {
   computeHlDigest,
@@ -347,5 +348,116 @@ describe('Hyperliquid executor ceremony', () => {
       success: false,
       data: { code: 'CONFIRMATION_REQUIRED' },
     })
+  })
+
+  it('bridges the authenticated NL backend builder frame to exact confirmation before MPC', async () => {
+    const signingPayload = payload({
+      summary: {
+        ...payload().summary,
+        leverage: 3,
+        margin_mode: 'cross',
+        order_type: 'market',
+        tif: 'Ioc',
+        price_cap: '64557.825000000004',
+        limit_price: null,
+        size: '0.00016',
+        notional_usd: '10.32925200000000064',
+      },
+    })
+    const marketAction = structuredClone(orderAction)
+    marketAction.orders[0]!.p = '64557.825000000004'
+    marketAction.orders[0]!.s = '0.00016'
+    marketAction.orders[0]!.t.limit.tif = 'Ioc'
+    const marketStep = { kind: 'order' as const, action: marketAction, nonce: 1000, is_mainnet: true }
+    signingPayload.steps = [{ ...marketStep, digest: computeHlDigest(marketStep) }]
+    const signAndSubmitHlOrder = vi.fn()
+    const fakeThis = {
+      conversationId: CONVERSATION_ID,
+      config: { password: 'pw' },
+      vault: { isEncrypted: false },
+      client: {},
+      executor: {
+        retrieveHlOrder: vi.fn(async () => signingPayload),
+        signAndSubmitHlOrder,
+        hasPassword: vi.fn(() => true),
+      },
+      pendingToolResults: [],
+      runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
+    }
+    const ui = {
+      requestConfirmation: vi.fn(async () => false),
+      requestPassword: vi.fn(),
+      onToolCall: vi.fn(),
+      onToolResult: vi.fn(),
+    }
+    const builderResult = {
+      surface: 'hyperliquid_order',
+      action: 'open',
+      coin: 'BTC',
+      asset_index: 0,
+      wire_size: '0.00016',
+      price_cap: '64557.825000000004',
+      wire_notional_usd: '10.32925200000000064',
+      tif: 'Ioc',
+      reduce_only: false,
+      order_ref: ORDER_REF,
+      status: 'ready_to_sign',
+    }
+    const frames = [
+      { type: 'tool-input-start', toolCallId: 'nl-hl-1', toolName: 'build_hyperliquid_open_position' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'nl-hl-1',
+        toolName: 'build_hyperliquid_open_position',
+        input: { coin: 'BTC', side: 'buy', size_usd: 10, leverage: 3 },
+      },
+      { type: 'tool-output-available', toolCallId: 'nl-hl-1', output: JSON.stringify(builderResult) },
+      { type: 'finish' },
+    ]
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join(''), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+    ) as typeof fetch
+    const dispatches: Promise<void>[] = []
+    try {
+      await new AgentClient('http://example.com').sendMessageStream(
+        CONVERSATION_ID,
+        { public_key: PUBLIC_KEY, content: 'open $10 BTC long 3x' },
+        {
+          onClientSideToolCall: (id, name, input) => {
+            dispatches.push((AgentSession.prototype as any).dispatchClientSideTool.call(fakeThis, id, name, input, ui))
+          },
+        }
+      )
+      await Promise.all(dispatches)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+
+    expect(fakeThis.executor.retrieveHlOrder).toHaveBeenCalledWith(
+      fakeThis.client,
+      { order_ref: ORDER_REF },
+      CONVERSATION_ID
+    )
+    expect(ui.requestConfirmation).toHaveBeenCalledWith(formatHlConfirmation(signingPayload))
+    expect(formatHlConfirmation(signingPayload)).toContain('BTC (asset #0')
+    expect(formatHlConfirmation(signingPayload)).toContain('0.00016')
+    expect(formatHlConfirmation(signingPayload)).toContain('market max execution price $64557.825000000004')
+    expect(formatHlConfirmation(signingPayload)).toContain('signed notional $10.32925200000000064')
+    expect(formatHlConfirmation(signingPayload)).toContain('3x cross')
+    expect(formatHlConfirmation(signingPayload)).toContain('market/Ioc')
+    expect(formatHlConfirmation(signingPayload)).toContain('reduce-only=false')
+    expect(signAndSubmitHlOrder).not.toHaveBeenCalled()
+    expect(fakeThis.pendingToolResults).toEqual([
+      expect.objectContaining({
+        tool: 'hl_order',
+        success: false,
+        data: expect.objectContaining({ code: 'CONFIRMATION_REQUIRED' }),
+      }),
+    ])
   })
 })

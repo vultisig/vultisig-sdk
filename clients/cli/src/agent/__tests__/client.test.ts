@@ -253,6 +253,28 @@ describe('AgentClient.sendMessageStream', () => {
     expect(onMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('fails closed instead of reporting success when a Hyperliquid preview lacks its ready action', async () => {
+    const onClientSideToolCall = vi.fn()
+    const onError = vi.fn()
+    globalThis.fetch = mockFetchSSE([
+      'data: {"type":"tool-input-start","toolCallId":"hl-1","toolName":"build_hyperliquid_open_position"}\n\n',
+      'data: {"type":"tool-output-available","toolCallId":"hl-1","output":"{\\"surface\\":\\"hyperliquid_order\\",\\"status\\":\\"ready_to_sign\\"}"}\n\n',
+      'data: {"type":"finish"}\n\n',
+    ])
+
+    await new AgentClient('http://example.com').sendMessageStream(
+      'c1',
+      { public_key: 'pk', content: 'open $10 BTC long 3x' },
+      { onClientSideToolCall, onError }
+    )
+
+    expect(onClientSideToolCall).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+      AgentErrorCode.INVALID_INPUT
+    )
+  })
+
   // H2 (review of #1305): unknown `data-*` kinds are FORWARD-COMPATIBLE by the
   // backend's own V1 contract (`v1_wire_schema_test.go`) and some are emitted
   // from a dynamic site — `V1Data(streamSurface, …)` over the mutable

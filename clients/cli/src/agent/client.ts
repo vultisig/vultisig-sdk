@@ -150,6 +150,42 @@ type StreamCallbacks = {
 
 type SSEPayload = Record<string, any>
 
+const HL_ORDER_BUILD_TOOLS = new Set(['build_hyperliquid_open_position', 'build_hyperliquid_close_position'])
+
+/** Convert the backend's sanitized Hyperliquid builder result into the canonical
+ * client-side hl_order action. The raw sign_action intentionally never crosses
+ * the chat stream; order_ref is the only capability the CLI needs to retrieve
+ * the authenticated WYSIWYS payload over the dedicated endpoint. */
+export function deriveHlOrderClientAction(toolName: string, output: unknown): { order_ref: string } | null {
+  if (!HL_ORDER_BUILD_TOOLS.has(toolName)) return null
+  let value = output
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const result = value as Record<string, unknown>
+  if (
+    result.surface !== 'hyperliquid_order' ||
+    result.status !== 'ready_to_sign' ||
+    typeof result.order_ref !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(result.order_ref) ||
+    typeof result.coin !== 'string' ||
+    !Number.isInteger(result.asset_index) ||
+    typeof result.wire_size !== 'string' ||
+    typeof result.price_cap !== 'string' ||
+    typeof result.wire_notional_usd !== 'string' ||
+    !['Ioc', 'Gtc', 'Alo'].includes(String(result.tif)) ||
+    typeof result.reduce_only !== 'boolean'
+  ) {
+    return null
+  }
+  return { order_ref: result.order_ref }
+}
+
 // Map a v1 frame type to the legacy 'running' | 'done' lifecycle. The v1
 // protocol never sends `status` on tool frames (see protocol_v1.go) so the
 // client derives it from the frame type itself.
@@ -921,8 +957,23 @@ export class AgentClient implements HlOrderTransport {
     const label = typeof parsed.label === 'string' ? parsed.label : undefined
     this.maybeEmitClientSideToolCall(parsed, callbacks, v1Type, callId, toolName)
 
-    const ok = deriveToolDoneOk(status, parsed.output, v1Type)
+    const hlOrderAction =
+      status === 'done' && toolName && HL_ORDER_BUILD_TOOLS.has(toolName)
+        ? deriveHlOrderClientAction(toolName, parsed.output)
+        : undefined
+    const derivedOk = deriveToolDoneOk(status, parsed.output, v1Type)
+    const ok = hlOrderAction === null ? false : derivedOk
     if (status && toolName) callbacks.onToolProgress?.(toolName, status, label, ok)
+    if (status === 'done' && toolName && HL_ORDER_BUILD_TOOLS.has(toolName)) {
+      if (hlOrderAction && callId && callbacks.onClientSideToolCall) {
+        callbacks.onClientSideToolCall(`${callId}:hl_order`, 'hl_order', hlOrderAction)
+      } else {
+        callbacks.onError?.(
+          'Hyperliquid preview was not delivered as a complete ready-to-sign action.',
+          AgentErrorCode.INVALID_INPUT
+        )
+      }
+    }
     this.maybeSignToolOutput(status, toolName, parsed.output, callbacks, v1Type)
     if (status === 'done' && callId) toolNameByCallId.delete(callId)
   }
