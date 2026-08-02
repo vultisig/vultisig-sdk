@@ -49,6 +49,15 @@ describe('getThorchainLimitOrderBucketKey', () => {
     expect(ratio).toBe('100000000000000000')
   })
 
+  // Reachable before any memo is validated, so bigint division by zero would
+  // crash a duplicate check that is meant to fail closed.
+  it.each([
+    ['a zero trade target', 100n, 0n],
+    ['a zero source amount', 0n, 100n],
+  ])('throws on %s rather than dividing', (_label, sourceAmount, tradeTarget) => {
+    expect(() => getThorchainLimitOrderBucketKey(order(sourceAmount, tradeTarget))).toThrow(/must be positive/)
+  })
+
   // A secured representation and the plain L1 asset collapse to the same key
   // on-chain, so a verbatim string comparison would miss a real collision.
   it('treats a secured leg as its layer-1 asset', () => {

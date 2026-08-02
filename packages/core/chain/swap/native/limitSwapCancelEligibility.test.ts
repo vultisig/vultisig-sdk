@@ -127,6 +127,12 @@ describe('getLimitSwapCancelEligibility', () => {
     ).toBeNull()
   })
 
+  // The memo builder does not check routability, so an unrecognised prefix used
+  // to throw out of a function whose contract is to answer with a blocker.
+  it('blocks an unroutable source chain instead of throwing', () => {
+    expect(blockerOf(candidate({ sourceAsset: 'NOPE.NOPE', targetAsset: 'BTC.BTC' }))).toBe('unroutableSourceChain')
+  })
+
   // Nothing in a cancel memo can be shortened, so the order refunds at expiry.
   it('blocks a full-contract target from a UTXO source', () => {
     expect(blockerOf(candidate({ sourceAsset: 'BTC.BTC', targetAsset: fullUsdc }))).toBe('memoTooLongForSourceChain')

@@ -45,6 +45,22 @@ describe('getLimitSwapCancelDust', () => {
     expect(() => getLimitSwapCancelDust({ inbound: inbound(threshold), decimals: 18 })).toThrow()
   })
 
+  // The bound has to be ABSOLUTE: a ceiling expressed as a multiple of the
+  // threshold scales both sides equally and can never fire, which is what the
+  // first version of this module got wrong.
+  it('refuses an implausibly large threshold', () => {
+    expect(() => getLimitSwapCancelDust({ inbound: inbound('100000001'), decimals: 18 })).toThrow(/plausible ceiling/)
+  })
+
+  it('accepts a threshold at the ceiling', () => {
+    expect(() => getLimitSwapCancelDust({ inbound: inbound('100000000'), decimals: 8 })).not.toThrow()
+  })
+
+  // Unbounded precision yields a 993-digit multiplier and a meaningless amount.
+  it('refuses an absurd precision', () => {
+    expect(() => getLimitSwapCancelDust({ inbound: inbound('1000'), decimals: 1000 })).toThrow(/precision/)
+  })
+
   it('refuses an unusable precision', () => {
     expect(() => getLimitSwapCancelDust({ inbound: inbound('1000'), decimals: -1 })).toThrow(/precision/)
   })

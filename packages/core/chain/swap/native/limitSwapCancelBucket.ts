@@ -65,6 +65,16 @@ export const getThorchainLimitOrderBucketKey = ({
   targetAsset,
   tradeTarget,
 }: LimitSwapCancelInputs): string => {
+  // Exported separately from the memo builder, so it can be reached before any
+  // memo is validated — `areLimitOrdersCancelIndistinguishable` runs it over
+  // stored orders. A zero trade target would make bigint division throw
+  // `RangeError`, crashing a duplicate check that is supposed to fail closed.
+  if (sourceAmount <= 0n || tradeTarget <= 0n) {
+    throw new Error(
+      `limit order bucket key: amounts must be positive, got source ${sourceAmount} and trade target ${tradeTarget}`
+    )
+  }
+
   const ratio = (sourceAmount * 10n ** thorchainFixedPointExponent) / tradeTarget
   const source = toThorchainLayer1MemoAsset(sourceAsset)
   const target = toThorchainLayer1MemoAsset(targetAsset)

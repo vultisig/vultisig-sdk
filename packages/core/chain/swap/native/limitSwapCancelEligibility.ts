@@ -4,7 +4,7 @@ import {
   isAbbreviatedThorchainMemoAsset,
   LimitSwapCancelInputs,
 } from './limitSwapCancelMemo'
-import { getLimitSwapSourceChainKind } from './limitSwapMemo'
+import { getLimitSwapSourceChainKind, LimitSwapSourceChainKind } from './limitSwapMemo'
 
 export const limitSwapCancelBlockers = [
   /** The order has already closed. Nothing left to cancel. */
@@ -32,6 +32,11 @@ export const limitSwapCancelBlockers = [
    * can be shortened, so the order simply refunds at expiry instead.
    */
   'memoTooLongForSourceChain',
+  /**
+   * The source asset names a chain THORChain cannot route, so there is no
+   * inbound vault to send the cancel to and no byte budget to size it against.
+   */
+  'unroutableSourceChain',
 ] as const
 
 export type LimitSwapCancelBlocker = (typeof limitSwapCancelBlockers)[number]
@@ -209,7 +214,18 @@ export const getLimitSwapCancelEligibility = (candidate: LimitSwapCancelCandidat
   } catch {
     return { blocked: 'missingSignedData' }
   }
-  if (!doesCancelLimitSwapMemoFit(memo, getLimitSwapSourceChainKind(inputs.sourceAsset))) {
+
+  // Resolved in its own guarded step: the memo builder does not check
+  // routability, so an unrecognised prefix reaches this call and throws —
+  // escaping a function whose whole contract is to answer with a blocker.
+  let sourceChainKind: LimitSwapSourceChainKind
+  try {
+    sourceChainKind = getLimitSwapSourceChainKind(inputs.sourceAsset)
+  } catch {
+    return { blocked: 'unroutableSourceChain' }
+  }
+
+  if (!doesCancelLimitSwapMemoFit(memo, sourceChainKind)) {
     return { blocked: 'memoTooLongForSourceChain' }
   }
 

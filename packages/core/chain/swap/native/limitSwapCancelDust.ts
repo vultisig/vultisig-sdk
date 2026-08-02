@@ -18,15 +18,28 @@ const thorchainFixedPointDecimals = 8
 const dustSafetyMultiple = 2n
 
 /**
- * Hard ceiling as a multiple of the published threshold.
+ * Largest `dust_threshold`, in THORChain's own 1e8 units, that is plausible for
+ * any chain — one whole unit of the asset.
  *
  * `dust_threshold` is a REMOTE value that directly decides how much of the
- * user's money is irreversibly donated — there is no refund path for anything
- * attached to an `m=<`. A wrong or hostile value would otherwise be honoured
- * verbatim and then doubled. Every other floor here is a lower bound; this is
- * the only upper one.
+ * user's money is irreversibly donated: there is no refund path for anything
+ * attached to an `m=<`. So the bound has to be ABSOLUTE. A ceiling expressed as
+ * a multiple of the threshold itself cannot work — a hostile value scales both
+ * sides equally and is honoured verbatim.
+ *
+ * Real thresholds are orders of magnitude below this (Bitcoin's is 10000, or
+ * 0.0001 BTC), so the bound rejects only the absurd.
  */
-const dustCeilingMultiple = 100n
+const maximumThresholdIn1e8 = 100_000_000n
+
+/**
+ * Largest coin precision this rescaling supports.
+ *
+ * Without it, any non-negative integer is accepted and `decimals: 1000` yields
+ * a 993-digit multiplier and a meaningless amount. 36 is far above every real
+ * chain (18 is the EVM maximum) while keeping the arithmetic bounded.
+ */
+const maximumDecimals = 36
 
 export const limitSwapCancelDustErrors = [
   'thresholdUnavailable',
@@ -90,7 +103,7 @@ export const getLimitSwapCancelDust = ({ inbound, decimals }: GetLimitSwapCancel
       `cancel dust: ${chain} dust_threshold is not an integer: ${JSON.stringify(threshold)}`
     )
   }
-  if (!Number.isInteger(decimals) || decimals < 0) {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > maximumDecimals) {
     throw new LimitSwapCancelDustError(
       'unusablePrecision',
       `cancel dust: ${chain} source coin declares an unusable precision (${decimals})`
@@ -98,6 +111,13 @@ export const getLimitSwapCancelDust = ({ inbound, decimals }: GetLimitSwapCancel
   }
 
   const thresholdIn1e8 = BigInt(threshold.trim())
+
+  if (thresholdIn1e8 > maximumThresholdIn1e8) {
+    throw new LimitSwapCancelDustError(
+      'exceedsCeiling',
+      `cancel dust: ${chain} dust_threshold ${thresholdIn1e8} (1e8) exceeds the plausible ceiling ${maximumThresholdIn1e8}`
+    )
+  }
 
   // Rescale from THORChain's 1e8 into the coin's own precision. Integer-only,
   // in a direction chosen per branch so nothing is silently lost.
@@ -113,14 +133,6 @@ export const getLimitSwapCancelDust = ({ inbound, decimals }: GetLimitSwapCancel
       'belowObservableMinimum',
       `cancel dust: ${chain} threshold ${thresholdIn1e8} (1e8) rounds away at ${decimals} decimals, ` +
         'so no attachable amount would be observed'
-    )
-  }
-
-  const ceiling = scaled * dustCeilingMultiple
-  if (ceiling > 0n && dust > ceiling) {
-    throw new LimitSwapCancelDustError(
-      'exceedsCeiling',
-      `cancel dust: computed ${dust} exceeds the ${chain} ceiling ${ceiling}`
     )
   }
 

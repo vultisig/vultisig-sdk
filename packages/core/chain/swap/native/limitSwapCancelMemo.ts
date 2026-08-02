@@ -152,9 +152,15 @@ export class LimitSwapCancelMemoBuildError extends Error {
  *   different bucket.
  */
 export const buildCancelLimitSwapMemo = (inputs: LimitSwapCancelInputs): string => {
-  const { sourceAsset, sourceAmount, targetAsset, tradeTarget } = inputs
+  const { sourceAmount, tradeTarget } = inputs
+  // Trimmed once and used throughout: validating the trimmed form while
+  // emitting the raw one would let ' THOR.RUNE' produce `100000000 THOR.RUNE`,
+  // and THORNode's getCoin splices its own space in — so the stray one corrupts
+  // the coin field and the cancel matches nothing.
+  const sourceAsset = inputs.sourceAsset.trim()
+  const targetAsset = inputs.targetAsset.trim()
 
-  if (!sourceAsset.trim() || !targetAsset.trim()) {
+  if (!sourceAsset || !targetAsset) {
     throw new LimitSwapCancelMemoBuildError('emptyAsset', 'cancel memo: source and target assets are required')
   }
   if (sourceAmount <= 0n || tradeTarget <= 0n) {

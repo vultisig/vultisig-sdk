@@ -66,6 +66,14 @@ describe('buildCancelLimitSwapMemo', () => {
     expect(() => buildCancelLimitSwapMemo({ ...runeToUsdc, ...overrides })).toThrow(/positive/)
   })
 
+  // THORNode's getCoin splices its own space between amount and asset, so a
+  // stray one corrupts the coin field and the cancel matches nothing.
+  it('trims surrounding whitespace rather than emitting it', () => {
+    expect(buildCancelLimitSwapMemo({ ...runeToUsdc, sourceAsset: '  THOR.RUNE  ' })).toBe(
+      buildCancelLimitSwapMemo(runeToUsdc)
+    )
+  })
+
   it.each([
     ['an empty source asset', { sourceAsset: '' }],
     ['a whitespace target asset', { targetAsset: '   ' }],
