@@ -206,37 +206,35 @@ function validateLeverageAction(action: Record<string, unknown>, summary: HlOrde
   if (action.isCross !== expectedCross) throw new Error('HL_MARGIN_MODE_MISMATCH')
 }
 
-export async function validateHlSigningPayload(
-  payload: HlOrderSigningPayload,
-  expected: {
-    orderRef: string
-    conversationId: string
-    publicKey: string
-    digest?: string
-  },
-  vault: VaultBase,
-  now = Date.now()
-): Promise<void> {
+function validatePayloadShape(payload: HlOrderSigningPayload): void {
   if (!isPlainRecord(payload)) throw new Error('HL_INVALID_PAYLOAD')
-  const rawPayload = payload as unknown as Record<string, unknown>
   if (!isPlainRecord(payload.summary)) throw new Error('HL_INVALID_SUMMARY')
   if (!isPlainRecord(payload.asset_binding)) throw new Error('HL_INVALID_ASSET_BINDING')
   if (!Array.isArray(payload.steps)) throw new Error('HL_INVALID_STEPS')
   for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
-    if (key in rawPayload) throw new Error('HL_CONFLICTING_TOP_LEVEL_FIELD')
+    if (key in payload) throw new Error('HL_CONFLICTING_TOP_LEVEL_FIELD')
   }
-  if (!isExactStringMember(payload.summary.operation, ['open', 'close'])) throw new Error('HL_INVALID_OPERATION')
-  if (!isExactStringMember(payload.summary.side, ['long', 'short'])) throw new Error('HL_INVALID_SIDE')
-  if (!isExactStringMember(payload.summary.order_type, ['market', 'limit'])) throw new Error('HL_INVALID_ORDER_TYPE')
-  if (!isExactStringMember(payload.summary.tif, ['Ioc', 'Gtc', 'Alo'])) throw new Error('HL_INVALID_TIF')
-  if (typeof payload.summary.coin !== 'string' || !payload.summary.coin.trim()) throw new Error('HL_INVALID_COIN')
-  if (!Number.isInteger(payload.summary.asset_index)) throw new Error('HL_INVALID_ASSET_INDEX')
-  if (
-    payload.summary.margin_mode !== undefined &&
-    !isExactStringMember(payload.summary.margin_mode, ['cross', 'isolated'])
-  )
+}
+
+function validateSummary(summary: HlOrderSummary): void {
+  if (!isExactStringMember(summary.operation, ['open', 'close'])) throw new Error('HL_INVALID_OPERATION')
+  if (!isExactStringMember(summary.side, ['long', 'short'])) throw new Error('HL_INVALID_SIDE')
+  if (!isExactStringMember(summary.order_type, ['market', 'limit'])) throw new Error('HL_INVALID_ORDER_TYPE')
+  if (!isExactStringMember(summary.tif, ['Ioc', 'Gtc', 'Alo'])) throw new Error('HL_INVALID_TIF')
+  if (typeof summary.coin !== 'string' || !summary.coin.trim()) throw new Error('HL_INVALID_COIN')
+  if (!Number.isInteger(summary.asset_index)) throw new Error('HL_INVALID_ASSET_INDEX')
+  if (summary.margin_mode !== undefined && !isExactStringMember(summary.margin_mode, ['cross', 'isolated'])) {
     throw new Error('HL_INVALID_MARGIN_MODE')
-  if (typeof payload.summary.reduce_only !== 'boolean') throw new Error('HL_INVALID_REDUCE_ONLY')
+  }
+  if (typeof summary.reduce_only !== 'boolean') throw new Error('HL_INVALID_REDUCE_ONLY')
+}
+
+async function validateRequestBinding(
+  payload: HlOrderSigningPayload,
+  expected: { orderRef: string; conversationId: string; publicKey: string },
+  vault: VaultBase,
+  now: number
+): Promise<void> {
   if (payload.order_ref !== expected.orderRef || payload.conversation_id !== expected.conversationId) {
     throw new Error('HL_REFERENCE_MISMATCH')
   }
@@ -249,6 +247,9 @@ export async function validateHlSigningPayload(
   const expiry = Date.parse(payload.expires_at)
   if (!Number.isFinite(expiry) || expiry <= now) throw new Error('HL_ORDER_EXPIRED')
   if (expiry - now > 10 * 60_000) throw new Error('HL_EXPIRY_OUT_OF_RANGE')
+}
+
+function validateSteps(payload: HlOrderSigningPayload): HlSigningStep[] {
   if (payload.steps.length < 1 || payload.steps.length > 2) throw new Error('HL_INVALID_STEP_COUNT')
   if (payload.steps.some(step => !isPlainRecord(step) || !isPlainRecord(step.action)))
     throw new Error('HL_INVALID_STEP')
@@ -257,7 +258,10 @@ export async function validateHlSigningPayload(
   if (payload.steps.some(step => typeof step.is_mainnet !== 'boolean')) throw new Error('HL_INVALID_NETWORK_FLAG')
   const isMainnet = payload.steps[0]!.is_mainnet
   if (payload.steps.some(step => step.is_mainnet !== isMainnet)) throw new Error('HL_NETWORK_MISMATCH')
-  const orderSteps = payload.steps.filter(step => step.kind === 'order')
+  return payload.steps.filter(step => step.kind === 'order')
+}
+
+function validateCeremony(payload: HlOrderSigningPayload, orderSteps: HlSigningStep[]): void {
   const leverageSteps = payload.steps.filter(step => step.kind === 'update_leverage')
   if (payload.summary.operation === 'open') {
     if (
@@ -271,7 +275,9 @@ export async function validateHlSigningPayload(
       payload.summary.reduce_only !== false
     )
       throw new Error('HL_INVALID_OPEN_CEREMONY')
-  } else if (
+    return
+  }
+  if (
     payload.steps.length !== 1 ||
     payload.steps[0]?.kind !== 'order' ||
     orderSteps.length !== 1 ||
@@ -281,12 +287,9 @@ export async function validateHlSigningPayload(
     payload.summary.reduce_only !== true
   )
     throw new Error('HL_INVALID_CLOSE_CEREMONY')
-  if (
-    payload.asset_binding.coin !== payload.summary.coin ||
-    payload.asset_binding.asset_index !== payload.summary.asset_index
-  )
-    throw new Error('HL_ASSET_BINDING_MISMATCH')
+}
 
+function validateSignedSteps(payload: HlOrderSigningPayload): void {
   for (const step of payload.steps) {
     if (typeof step.digest !== 'string') throw new Error('HL_INVALID_DIGEST')
     const computed = computeHlDigest(step)
@@ -294,6 +297,31 @@ export async function validateHlSigningPayload(
     if (step.kind === 'order') validateOrderAction(step.action, payload.summary)
     else validateLeverageAction(step.action, payload.summary)
   }
+}
+
+export async function validateHlSigningPayload(
+  payload: HlOrderSigningPayload,
+  expected: {
+    orderRef: string
+    conversationId: string
+    publicKey: string
+    digest?: string
+  },
+  vault: VaultBase,
+  now = Date.now()
+): Promise<void> {
+  validatePayloadShape(payload)
+  validateSummary(payload.summary)
+  await validateRequestBinding(payload, expected, vault, now)
+  const orderSteps = validateSteps(payload)
+  validateCeremony(payload, orderSteps)
+  if (
+    payload.asset_binding.coin !== payload.summary.coin ||
+    payload.asset_binding.asset_index !== payload.summary.asset_index
+  )
+    throw new Error('HL_ASSET_BINDING_MISMATCH')
+
+  validateSignedSteps(payload)
   if (expected.digest && orderSteps[0]?.digest.toLowerCase() !== expected.digest.toLowerCase()) {
     throw new Error('HL_EXPECTED_DIGEST_MISMATCH')
   }
