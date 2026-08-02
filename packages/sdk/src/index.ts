@@ -499,6 +499,47 @@ export {
 } from '@vultisig/core-chain/swap/native/limitSwapOutcome'
 export type { LimitSwapQueueEntry } from '@vultisig/core-chain/swap/native/limitSwapQueue'
 export { getLimitSwapQueue, parseLimitSwapQueue } from '@vultisig/core-chain/swap/native/limitSwapQueue'
+// Limit-order cancellation (`m=<`, modify-limit-swap). Every failure mode here
+// is silent — the cancel is accepted, costs a fee, matches nothing, and looks
+// exactly like success — so the builder enforces the memo's rules rather than
+// documenting them, and eligibility fails closed at every unknown.
+export {
+  areLimitOrdersCancelIndistinguishable,
+  getThorchainLimitOrderBucketKey,
+  toThorchainLayer1MemoAsset,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelBucket'
+export type { LimitSwapCancelDustErrorReason } from '@vultisig/core-chain/swap/native/limitSwapCancelDust'
+export {
+  getLimitSwapCancelDust,
+  LimitSwapCancelDustError,
+  limitSwapCancelDustErrors,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelDust'
+export type {
+  LimitSwapCancelAssetResolution,
+  LimitSwapCancelBlocker,
+  LimitSwapCancelCandidate,
+  LimitSwapCancelEligibility,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelEligibility'
+export {
+  getLimitSwapCancelEligibility,
+  limitSwapCancelBlockers,
+  resolveLimitSwapCancelAsset,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelEligibility'
+export type {
+  LimitSwapCancelInputs,
+  LimitSwapCancelMemoError,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
+export {
+  buildCancelLimitSwapMemo,
+  doesCancelLimitSwapMemoFit,
+  doesCancelLimitSwapMemoFitSourceAsset,
+  isAbbreviatedThorchainMemoAsset,
+  isCancelLimitSwapMemo,
+  isModifyLimitSwapMemo,
+  LimitSwapCancelMemoBuildError,
+  limitSwapCancelMemoErrors,
+  modifyLimitSwapMemoPrefix,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 

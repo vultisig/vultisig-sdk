@@ -1773,6 +1773,26 @@
       "import": "./dist/swap/native/limitSwapAvailability.js",
       "default": "./dist/swap/native/limitSwapAvailability.js"
     },
+    "./swap/native/limitSwapCancelBucket": {
+      "types": "./dist/swap/native/limitSwapCancelBucket.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelBucket.js",
+      "default": "./dist/swap/native/limitSwapCancelBucket.js"
+    },
+    "./swap/native/limitSwapCancelDust": {
+      "types": "./dist/swap/native/limitSwapCancelDust.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelDust.js",
+      "default": "./dist/swap/native/limitSwapCancelDust.js"
+    },
+    "./swap/native/limitSwapCancelEligibility": {
+      "types": "./dist/swap/native/limitSwapCancelEligibility.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelEligibility.js",
+      "default": "./dist/swap/native/limitSwapCancelEligibility.js"
+    },
+    "./swap/native/limitSwapCancelMemo": {
+      "types": "./dist/swap/native/limitSwapCancelMemo.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelMemo.js",
+      "default": "./dist/swap/native/limitSwapCancelMemo.js"
+    },
     "./swap/native/limitSwapInbound": {
       "types": "./dist/swap/native/limitSwapInbound.d.ts",
       "import": "./dist/swap/native/limitSwapInbound.js",
