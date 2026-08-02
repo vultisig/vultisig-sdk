@@ -410,6 +410,11 @@
       "import": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js",
       "default": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js"
     },
+    "./chains/cosmos/thor/getThorchainTxResult": {
+      "types": "./dist/chains/cosmos/thor/getThorchainTxResult.d.ts",
+      "import": "./dist/chains/cosmos/thor/getThorchainTxResult.js",
+      "default": "./dist/chains/cosmos/thor/getThorchainTxResult.js"
+    },
     "./chains/cosmos/thor/getThorNetworkInfo": {
       "types": "./dist/chains/cosmos/thor/getThorNetworkInfo.d.ts",
       "import": "./dist/chains/cosmos/thor/getThorNetworkInfo.js",
@@ -1777,6 +1782,21 @@
       "types": "./dist/swap/native/limitSwapMemo.d.ts",
       "import": "./dist/swap/native/limitSwapMemo.js",
       "default": "./dist/swap/native/limitSwapMemo.js"
+    },
+    "./swap/native/limitSwapOrderStatus": {
+      "types": "./dist/swap/native/limitSwapOrderStatus.d.ts",
+      "import": "./dist/swap/native/limitSwapOrderStatus.js",
+      "default": "./dist/swap/native/limitSwapOrderStatus.js"
+    },
+    "./swap/native/limitSwapOutcome": {
+      "types": "./dist/swap/native/limitSwapOutcome.d.ts",
+      "import": "./dist/swap/native/limitSwapOutcome.js",
+      "default": "./dist/swap/native/limitSwapOutcome.js"
+    },
+    "./swap/native/limitSwapQueue": {
+      "types": "./dist/swap/native/limitSwapQueue.d.ts",
+      "import": "./dist/swap/native/limitSwapQueue.js",
+      "default": "./dist/swap/native/limitSwapQueue.js"
     },
     "./swap/native/minimum/getNativeSwapMinAmountIn": {
       "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
