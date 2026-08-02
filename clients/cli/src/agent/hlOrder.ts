@@ -123,9 +123,16 @@ function hasExactObjectKeys(value: unknown, allowed: readonly string[]): value i
   return keys.length === allowed.length && keys.every(key => allowed.includes(key))
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
 function validateOrderAction(action: Record<string, unknown>, summary: HlOrderSummary): void {
   if (!hasExactObjectKeys(action, ['type', 'orders', 'grouping'])) throw new Error('HL_INVALID_ORDER_ACTION_SCHEMA')
-  if (!summary.coin.trim()) throw new Error('HL_INVALID_COIN')
+  if (typeof summary.coin !== 'string' || !summary.coin.trim()) throw new Error('HL_INVALID_COIN')
+  if (!Number.isInteger(summary.asset_index)) throw new Error('HL_INVALID_ASSET_INDEX')
   if (!isExactStringMember(action.type, ['order']) || !Array.isArray(action.orders) || action.orders.length !== 1) {
     throw new Error('HL_INVALID_ORDER_ACTION')
   }
@@ -210,7 +217,11 @@ export async function validateHlSigningPayload(
   vault: VaultBase,
   now = Date.now()
 ): Promise<void> {
+  if (!isPlainRecord(payload)) throw new Error('HL_INVALID_PAYLOAD')
   const rawPayload = payload as unknown as Record<string, unknown>
+  if (!isPlainRecord(payload.summary)) throw new Error('HL_INVALID_SUMMARY')
+  if (!isPlainRecord(payload.asset_binding)) throw new Error('HL_INVALID_ASSET_BINDING')
+  if (!Array.isArray(payload.steps)) throw new Error('HL_INVALID_STEPS')
   for (const key of ['operation', 'side', 'margin_mode', 'reduce_only', 'leverage']) {
     if (key in rawPayload) throw new Error('HL_CONFLICTING_TOP_LEVEL_FIELD')
   }
@@ -218,6 +229,8 @@ export async function validateHlSigningPayload(
   if (!isExactStringMember(payload.summary.side, ['long', 'short'])) throw new Error('HL_INVALID_SIDE')
   if (!isExactStringMember(payload.summary.order_type, ['market', 'limit'])) throw new Error('HL_INVALID_ORDER_TYPE')
   if (!isExactStringMember(payload.summary.tif, ['Ioc', 'Gtc', 'Alo'])) throw new Error('HL_INVALID_TIF')
+  if (typeof payload.summary.coin !== 'string' || !payload.summary.coin.trim()) throw new Error('HL_INVALID_COIN')
+  if (!Number.isInteger(payload.summary.asset_index)) throw new Error('HL_INVALID_ASSET_INDEX')
   if (
     payload.summary.margin_mode !== undefined &&
     !isExactStringMember(payload.summary.margin_mode, ['cross', 'isolated'])
@@ -227,16 +240,23 @@ export async function validateHlSigningPayload(
   if (payload.order_ref !== expected.orderRef || payload.conversation_id !== expected.conversationId) {
     throw new Error('HL_REFERENCE_MISMATCH')
   }
+  if (typeof payload.owner_public_key !== 'string') throw new Error('HL_INVALID_OWNER_PUBLIC_KEY')
   if (payload.owner_public_key.toLowerCase() !== expected.publicKey.toLowerCase()) throw new Error('HL_OWNER_MISMATCH')
+  if (typeof payload.vault_address !== 'string') throw new Error('HL_INVALID_VAULT_ADDRESS')
   const localAddress = await vault.address(Chain.Ethereum)
   if (payload.vault_address.toLowerCase() !== localAddress.toLowerCase()) throw new Error('HL_VAULT_ADDRESS_MISMATCH')
+  if (typeof payload.expires_at !== 'string') throw new Error('HL_INVALID_EXPIRY')
   const expiry = Date.parse(payload.expires_at)
   if (!Number.isFinite(expiry) || expiry <= now) throw new Error('HL_ORDER_EXPIRED')
   if (expiry - now > 10 * 60_000) throw new Error('HL_EXPIRY_OUT_OF_RANGE')
   if (payload.steps.length < 1 || payload.steps.length > 2) throw new Error('HL_INVALID_STEP_COUNT')
+  if (payload.steps.some(step => !isPlainRecord(step) || !isPlainRecord(step.action)))
+    throw new Error('HL_INVALID_STEP')
   if (payload.steps.some(step => !isExactStringMember(step.kind, ['update_leverage', 'order'])))
     throw new Error('HL_INVALID_STEP_KIND')
   if (payload.steps.some(step => typeof step.is_mainnet !== 'boolean')) throw new Error('HL_INVALID_NETWORK_FLAG')
+  const isMainnet = payload.steps[0]!.is_mainnet
+  if (payload.steps.some(step => step.is_mainnet !== isMainnet)) throw new Error('HL_NETWORK_MISMATCH')
   const orderSteps = payload.steps.filter(step => step.kind === 'order')
   const leverageSteps = payload.steps.filter(step => step.kind === 'update_leverage')
   if (payload.summary.operation === 'open') {
@@ -268,6 +288,7 @@ export async function validateHlSigningPayload(
     throw new Error('HL_ASSET_BINDING_MISMATCH')
 
   for (const step of payload.steps) {
+    if (typeof step.digest !== 'string') throw new Error('HL_INVALID_DIGEST')
     const computed = computeHlDigest(step)
     if (computed.toLowerCase() !== step.digest.toLowerCase()) throw new Error('HL_DIGEST_MISMATCH')
     if (step.kind === 'order') validateOrderAction(step.action, payload.summary)
@@ -280,9 +301,10 @@ export async function validateHlSigningPayload(
 
 export function formatHlConfirmation(payload: HlOrderSigningPayload): string {
   const s = payload.summary
+  const network = payload.steps[0]?.is_mainnet === false ? 'Testnet' : 'Mainnet'
   const leverage = s.leverage === undefined ? '' : ` at ${s.leverage}x ${s.margin_mode ?? 'cross'}`
   const price = s.limit_price === null ? `market max execution price $${s.price_cap}` : `limit $${s.limit_price}`
-  return `Hyperliquid ${s.operation} ${s.side} ${s.size} ${s.coin} (asset #${s.asset_index}, signed notional $${s.notional_usd})${leverage}; ${s.order_type}/${s.tif}, ${price}, reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
+  return `Hyperliquid ${network} ${s.operation} ${s.side} ${s.size} ${s.coin} (asset #${s.asset_index}, signed notional $${s.notional_usd})${leverage}; ${s.order_type}/${s.tif}, ${price}, reduce-only=${s.reduce_only}. This signs and submits a live leveraged order.`
 }
 
 export async function pollHlOrderStatus(
@@ -301,7 +323,11 @@ export async function pollHlOrderStatus(
   let status = initial
   for (let i = 1; i < attempts && (status.state === 'accepted' || status.state === 'submitting'); i++) {
     await sleep(options.intervalMs ?? 1_000)
-    status = await transport.getHlOrderStatus(params.orderRef, params.conversationId, params.publicKey)
+    try {
+      status = await transport.getHlOrderStatus(params.orderRef, params.conversationId, params.publicKey)
+    } catch {
+      // Submission already succeeded. Keep the last authoritative state and use the remaining poll budget.
+    }
   }
   return status
 }

@@ -738,7 +738,7 @@ export class AgentSession {
     // Confirmation refusal terminates locally. Feeding it back as a failed tool result makes the
     // model rebuild/re-dispatch orders and can fabricate a card or success above the real client gate.
     if (this.terminalHlConfirmation) {
-      this.pendingToolResults = []
+      this.pendingToolResults = this.pendingToolResults.filter(result => result.tool !== 'hl_order')
       ui.onDone()
       return
     }

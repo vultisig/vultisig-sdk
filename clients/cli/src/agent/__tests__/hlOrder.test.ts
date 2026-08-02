@@ -247,6 +247,48 @@ describe('Hyperliquid signing payload validation', () => {
   })
 
   it.each([
+    ['null payload', null, 'HL_INVALID_PAYLOAD'],
+    ['missing summary', { ...payload(), summary: null }, 'HL_INVALID_SUMMARY'],
+    ['missing asset binding', { ...payload(), asset_binding: null }, 'HL_INVALID_ASSET_BINDING'],
+    ['non-array steps', { ...payload(), steps: {} }, 'HL_INVALID_STEPS'],
+    ['non-string owner', { ...payload(), owner_public_key: null }, 'HL_INVALID_OWNER_PUBLIC_KEY'],
+    ['non-string vault address', { ...payload(), vault_address: null }, 'HL_INVALID_VAULT_ADDRESS'],
+    ['non-string expiry', { ...payload(), expires_at: null }, 'HL_INVALID_EXPIRY'],
+    [
+      'non-string digest',
+      { ...payload(), steps: [{ ...payload().steps[0]!, digest: null }, payload().steps[1]!] },
+      'HL_INVALID_DIGEST',
+    ],
+    [
+      'non-string coin',
+      {
+        ...payload(),
+        summary: { ...payload().summary, coin: null },
+        asset_binding: { ...payload().asset_binding, coin: null },
+      },
+      'HL_INVALID_COIN',
+    ],
+    [
+      'non-integer asset index',
+      {
+        ...payload(),
+        summary: { ...payload().summary, asset_index: 0.5 },
+        asset_binding: { ...payload().asset_binding, asset_index: 0.5 },
+      },
+      'HL_INVALID_ASSET_INDEX',
+    ],
+  ])('rejects malformed network payload with a stable code: %s', async (_name, candidate, code) => {
+    await expect(validateHlSigningPayload(candidate as any, expected, vault())).rejects.toThrow(code)
+  })
+
+  it('requires every signed step to use the same Hyperliquid network', async () => {
+    const candidate = payload()
+    candidate.steps[1]!.is_mainnet = false
+    candidate.steps[1]!.digest = computeHlDigest(candidate.steps[1]!)
+    await expect(validateHlSigningPayload(candidate, expected, vault())).rejects.toThrow('HL_NETWORK_MISMATCH')
+  })
+
+  it.each([
     ['cross-owner', { owner_public_key: `03${'b'.repeat(64)}` }, 'HL_OWNER_MISMATCH'],
     ['cross-conversation', { conversation_id: '22222222-2222-2222-2222-222222222222' }, 'HL_REFERENCE_MISMATCH'],
     ['expired', { expires_at: new Date(Date.now() - 1).toISOString() }, 'HL_ORDER_EXPIRED'],
@@ -504,6 +546,32 @@ describe('Hyperliquid executor ceremony', () => {
     expect(status).toEqual({ state: 'resting', order_id: 'oid-2' })
   })
 
+  it('continues after transient poll errors and preserves the last submitted state when exhausted', async () => {
+    const recoveredTransport = {
+      getHlOrderStatus: vi.fn().mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({ state: 'resting' }),
+    } as unknown as HlOrderTransport
+    await expect(
+      pollHlOrderStatus(
+        recoveredTransport,
+        { orderRef: ORDER_REF, conversationId: CONVERSATION_ID, publicKey: PUBLIC_KEY },
+        { state: 'accepted' },
+        { attempts: 3, intervalMs: 0, sleep: async () => undefined }
+      )
+    ).resolves.toEqual({ state: 'resting' })
+
+    const failingTransport = {
+      getHlOrderStatus: vi.fn().mockRejectedValue(new Error('temporary status outage')),
+    } as unknown as HlOrderTransport
+    await expect(
+      pollHlOrderStatus(
+        failingTransport,
+        { orderRef: ORDER_REF, conversationId: CONVERSATION_ID, publicKey: PUBLIC_KEY },
+        { state: 'submitting' },
+        { attempts: 3, intervalMs: 0, sleep: async () => undefined }
+      )
+    ).resolves.toEqual({ state: 'submitting' })
+  })
+
   it('reports a venue rejection as failure despite HTTP success', async () => {
     const signingPayload = payload()
     const transport: HlOrderTransport = {
@@ -525,12 +593,16 @@ describe('Hyperliquid executor ceremony', () => {
       summary: { ...payload().summary, leverage: 3, margin_mode: 'cross' },
     })
     expect(formatHlConfirmation(p)).toContain('3x cross')
+    expect(formatHlConfirmation(p)).toContain('Hyperliquid Mainnet')
     expect(formatHlConfirmation(p)).toContain('asset #0')
     expect(formatHlConfirmation(p)).toContain('signed notional $30')
     expect(formatHlConfirmation(p)).toContain('limit/Gtc')
     expect(formatHlConfirmation(p)).toContain('limit $30000.0')
     expect(formatHlConfirmation(p)).toContain('signs and submits a live leveraged order')
     expect(formatHlConfirmation(p)).toContain('reduce-only=false')
+
+    const testnet = payload({ steps: payload().steps.map(step => ({ ...step, is_mainnet: false })) })
+    expect(formatHlConfirmation(testnet)).toContain('Hyperliquid Testnet')
   })
 
   it('displays and validates the exact signed IOC maximum execution price', async () => {
@@ -778,9 +850,13 @@ describe('Hyperliquid executor ceremony', () => {
       seenHlOrderRefs: new Set(),
       client,
       executor: {
-        retrieveHlOrder: vi.fn((_client, input) =>
-          client.retrieveHlOrderSigningPayload(String(input.order_ref), CONVERSATION_ID, PUBLIC_KEY)
-        ),
+        retrieveHlOrder: vi.fn(async (_client, input) => {
+          fakeThis.pendingToolResults.push(
+            { tool: 'vault_coin', success: true, data: { action: 'add', chain: 'Ethereum' } },
+            { tool: 'hl_order', success: false, data: { code: 'CONFIRMATION_REQUIRED' } }
+          )
+          return client.retrieveHlOrderSigningPayload(String(input.order_ref), CONVERSATION_ID, PUBLIC_KEY)
+        }),
         signAndSubmitHlOrder,
         hasPassword: vi.fn(() => true),
         storeServerTransaction: vi.fn(() => false),
@@ -821,7 +897,9 @@ describe('Hyperliquid executor ceremony', () => {
       })
     )
     expect(ui.onAssistantMessage).not.toHaveBeenCalled()
-    expect(fakeThis.pendingToolResults).toEqual([])
+    expect(fakeThis.pendingToolResults).toEqual([
+      { tool: 'vault_coin', success: true, data: { action: 'add', chain: 'Ethereum' } },
+    ])
   })
 
   it.each([
