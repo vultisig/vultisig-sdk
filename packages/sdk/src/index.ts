@@ -530,6 +530,7 @@ export type {
   LimitSwapCancelMemoError,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 export {
+  assertPositiveLimitSwapCancelAmounts,
   buildCancelLimitSwapMemo,
   doesCancelLimitSwapMemoFit,
   doesCancelLimitSwapMemoFitSourceAsset,

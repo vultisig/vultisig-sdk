@@ -5,6 +5,7 @@ import {
   getThorchainLimitOrderBucketKey,
   toThorchainLayer1MemoAsset,
 } from './limitSwapCancelBucket'
+import { LimitSwapCancelMemoBuildError } from './limitSwapCancelMemo'
 
 const order = (sourceAmount: bigint, tradeTarget: bigint, overrides = {}) => ({
   sourceAsset: 'THOR.RUNE',
@@ -50,12 +51,22 @@ describe('getThorchainLimitOrderBucketKey', () => {
   })
 
   // Reachable before any memo is validated, so bigint division by zero would
-  // crash a duplicate check that is meant to fail closed.
+  // crash a duplicate check that is meant to fail closed. Typed rather than a
+  // bare Error, so callers branch on `reason` the way they do for the sibling
+  // modules — an unguarded division would surface as RangeError instead.
   it.each([
     ['a zero trade target', 100n, 0n],
     ['a zero source amount', 0n, 100n],
-  ])('throws on %s rather than dividing', (_label, sourceAmount, tradeTarget) => {
-    expect(() => getThorchainLimitOrderBucketKey(order(sourceAmount, tradeTarget))).toThrow(/must be positive/)
+  ])('raises a typed error on %s rather than dividing', (_label, sourceAmount, tradeTarget) => {
+    const build = () => getThorchainLimitOrderBucketKey(order(sourceAmount, tradeTarget))
+
+    expect(build).toThrow(LimitSwapCancelMemoBuildError)
+    try {
+      build()
+      expect.unreachable('expected a typed cancel error')
+    } catch (error) {
+      expect((error as LimitSwapCancelMemoBuildError).reason).toBe('nonPositiveAmount')
+    }
   })
 
   // A secured representation and the plain L1 asset collapse to the same key

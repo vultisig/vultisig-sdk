@@ -127,6 +127,26 @@ export class LimitSwapCancelMemoBuildError extends Error {
 }
 
 /**
+ * Both amounts must be positive, for every consumer of these inputs.
+ *
+ * Shared because two modules depend on it for different reasons: the memo would
+ * encode a coin THORNode cannot parse, and the bucket key divides by the trade
+ * target — where a zero would raise `RangeError` rather than a domain error a
+ * caller can branch on.
+ */
+export const assertPositiveLimitSwapCancelAmounts = ({
+  sourceAmount,
+  tradeTarget,
+}: Pick<LimitSwapCancelInputs, 'sourceAmount' | 'tradeTarget'>): void => {
+  if (sourceAmount <= 0n || tradeTarget <= 0n) {
+    throw new LimitSwapCancelMemoBuildError(
+      'nonPositiveAmount',
+      `limit order cancel: amounts must be positive, got source ${sourceAmount} and trade target ${tradeTarget}`
+    )
+  }
+}
+
+/**
  * Build the `m=<` memo that cancels a resting limit order.
  *
  *     m=<:<SRC_AMOUNT><SRC_ASSET>:<TRADE_TARGET><TGT_ASSET>:0
@@ -163,12 +183,7 @@ export const buildCancelLimitSwapMemo = (inputs: LimitSwapCancelInputs): string 
   if (!sourceAsset || !targetAsset) {
     throw new LimitSwapCancelMemoBuildError('emptyAsset', 'cancel memo: source and target assets are required')
   }
-  if (sourceAmount <= 0n || tradeTarget <= 0n) {
-    throw new LimitSwapCancelMemoBuildError(
-      'nonPositiveAmount',
-      `cancel memo: amounts must be positive, got source ${sourceAmount} and trade target ${tradeTarget}`
-    )
-  }
+  assertPositiveLimitSwapCancelAmounts({ sourceAmount, tradeTarget })
   if (isAbbreviatedThorchainMemoAsset(sourceAsset) || isAbbreviatedThorchainMemoAsset(targetAsset)) {
     throw new LimitSwapCancelMemoBuildError(
       'abbreviatedAsset',

@@ -1,4 +1,4 @@
-import { LimitSwapCancelInputs } from './limitSwapCancelMemo'
+import { assertPositiveLimitSwapCancelAmounts, LimitSwapCancelInputs } from './limitSwapCancelMemo'
 
 /**
  * THORChain's fixed-point exponent, the `1e8` the ratio is scaled by.
@@ -67,13 +67,11 @@ export const getThorchainLimitOrderBucketKey = ({
 }: LimitSwapCancelInputs): string => {
   // Exported separately from the memo builder, so it can be reached before any
   // memo is validated — `areLimitOrdersCancelIndistinguishable` runs it over
-  // stored orders. A zero trade target would make bigint division throw
-  // `RangeError`, crashing a duplicate check that is supposed to fail closed.
-  if (sourceAmount <= 0n || tradeTarget <= 0n) {
-    throw new Error(
-      `limit order bucket key: amounts must be positive, got source ${sourceAmount} and trade target ${tradeTarget}`
-    )
-  }
+  // stored orders. A zero trade target would make bigint division raise
+  // `RangeError`, crashing a duplicate check that is supposed to fail closed;
+  // the shared assertion raises the same typed error the sibling modules do, so
+  // a caller can branch on `reason` rather than string-matching.
+  assertPositiveLimitSwapCancelAmounts({ sourceAmount, tradeTarget })
 
   const ratio = (sourceAmount * 10n ** thorchainFixedPointExponent) / tradeTarget
   const source = toThorchainLayer1MemoAsset(sourceAsset)
