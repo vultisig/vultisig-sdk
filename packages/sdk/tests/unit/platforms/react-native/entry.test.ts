@@ -79,6 +79,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
   })
 
+  it('exports the shared THORChain secured-asset catalog from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.getThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.createThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof rn.getThorchainSecuredAssetMintQuote).toBe('function')
+    expect(typeof rn.isSameUnderlyingThorchainSecuredAsset).toBe('function')
+    expect(typeof rn.getThorchainSwapDestinationAssets).toBe('function')
+    expect(rn.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
+  })
+
   // sdk#1538 - the memo-cap family was already exported from the root SDK
   // entrypoint but omitted from the RN allow-list, pushing mobile consumers
   // toward local memo-cap tables. An over-long memo signs fine but gets

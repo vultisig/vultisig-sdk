@@ -158,6 +158,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
+  it('exports the shared THORChain secured-asset catalog and SECURE+ routing helpers', () => {
+    expect(typeof sdk.getThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof sdk.createThorchainSecuredAssetCatalog).toBe('function')
+    expect(typeof sdk.getThorchainSecuredAssetL1Asset).toBe('function')
+    expect(typeof sdk.getThorchainSecuredAssetMintQuote).toBe('function')
+    expect(typeof sdk.isSameUnderlyingThorchainSecuredAsset).toBe('function')
+    expect(typeof sdk.getThorchainSwapDestinationAssets).toBe('function')
+    expect(sdk.thorchainSecuredAssetFallback.length).toBeGreaterThan(10)
+  })
+
   it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
     expect(typeof sdk.getEvmChainId).toBe('function')
     expect(typeof sdk.getEvmChainByChainId).toBe('function')
