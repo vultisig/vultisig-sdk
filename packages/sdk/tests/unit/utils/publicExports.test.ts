@@ -152,12 +152,17 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
     expect(typeof sdk.VaultBase).toBe('function')
+    expect(typeof sdk.BroadcastPartialFailureError).toBe('function')
   })
 
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
     expect(typeof sdk.getChainKind).toBe('function')
     expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
+  })
+
+  it('exports the THOR/Maya swap-memo parser for downstream consumers', () => {
+    expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
   it('exports canonical EVM chain-id helpers from the root sdk surface', () => {

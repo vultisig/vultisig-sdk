@@ -271,6 +271,7 @@ const evmChains = [
   'katana',
   'plasma',
   'mantle',
+  'robinhood',
   'blast',
   'cronos',
   'zksync',

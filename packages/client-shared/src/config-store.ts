@@ -2,19 +2,14 @@
 // Chain/token persistence is handled by the SDK's vault.save() mechanism.
 
 import * as fs from 'node:fs/promises'
-import * as os from 'node:os'
 import * as path from 'node:path'
+
+import { getVultisigConfigDir } from './config-dir.js'
 
 // Resolve at call time (not module load) so VULTISIG_CONFIG_DIR is honored,
 // matching credential-store — keeps the vault registry and credentials co-located.
 function getConfigDir(): string {
-  return process.env.VULTISIG_CONFIG_DIR || path.join(os.homedir(), '.vultisig')
-}
-
-// Public form of the resolver above, for CLI state that must stay co-located
-// with the config store (version cache, vault state). Same call-time contract.
-export function getVultisigConfigDir(): string {
-  return getConfigDir()
+  return getVultisigConfigDir()
 }
 
 function getConfigFilePath(): string {
