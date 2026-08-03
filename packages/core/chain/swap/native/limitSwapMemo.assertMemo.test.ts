@@ -80,6 +80,12 @@ describe('parseLimitSwapMemo', () => {
     expect(parseLimitSwapMemo(big).limit).toBe(99_999_999_999_999_999_999n)
   })
 
+  it('rejects a destination that is valid for a different chain', () => {
+    const wrongChain = '=<:BTC.BTC:0x742d35Cc6634C0532925a3b844Bc454e4438f44e:100/14400/0'
+
+    expect(() => parseLimitSwapMemo(wrongChain)).toThrow(/dest_addr is not a valid Bitcoin address/)
+  })
+
   it('round-trips the memo it was given', () => {
     const { targetAsset, destinationAddress, limit, intervalBlocks, quantity } = parseLimitSwapMemo(validMemo)
 
