@@ -59,6 +59,26 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
   })
 
+  it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const deriveAddressFromPublicKey = vi.fn(() => '0x1234')
+    const walletCore = {
+      CoinType: { ethereum: 60, robinhoodChain: 10_004_663 },
+      CoinTypeExt: { deriveAddressFromPublicKey },
+    } as unknown as import('@vultisig/walletcore-native').WalletCoreLike
+    const publicKey = { _handle: 7 }
+
+    const coinType = rn.getCoinType({ chain: rn.Chain.Robinhood, walletCore })
+    const robinhoodAddress = rn.deriveAddress({ chain: rn.Chain.Robinhood, publicKey, walletCore })
+    const ethereumAddress = rn.deriveAddress({ chain: rn.Chain.Ethereum, publicKey, walletCore })
+
+    expect(coinType).toBe(10_004_663)
+    expect(Number.isInteger(coinType)).toBe(true)
+    expect(robinhoodAddress).toBe(ethereumAddress)
+    expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(1, 10_004_663, publicKey)
+    expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
+  })
+
   // sdk#1538 - the memo-cap family was already exported from the root SDK
   // entrypoint but omitted from the RN allow-list, pushing mobile consumers
   // toward local memo-cap tables. An over-long memo signs fine but gets
@@ -185,5 +205,19 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(typeof rn.getEvmChainByChainId).toBe('function')
     expect(rn.getEvmChainId(rn.Chain.Ethereum)).toBe('0x1')
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
+  })
+
+  it('re-exports root-public pure helpers needed by React Native consumers', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.parseChain).toBe('function')
+    expect(rn.parseChain('cosmos')).toEqual({ success: true, chain: 'Cosmos' })
+
+    expect(typeof rn.parseTicker).toBe('function')
+    expect(rn.parseTicker('USDC')).toEqual({ success: true, ticker: 'USDC' })
+
+    expect(typeof rn.isKnownContract).toBe('function')
+    expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
+    expect(typeof rn.knownContracts.isKnownContract).toBe('function')
   })
 })

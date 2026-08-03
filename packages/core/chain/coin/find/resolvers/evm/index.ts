@@ -2,10 +2,11 @@ import { EvmChain } from '@vultisig/core-chain/Chain'
 import { getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { evmNativeCoinAddress } from '@vultisig/core-chain/chains/evm/config'
 import { getErc20Balance } from '@vultisig/core-chain/chains/evm/erc20/getErc20Balance'
-import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { AccountCoin, accountCoinKeyToString, extractAccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
+import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { queryOneInch } from '@vultisig/core-chain/coin/find/resolvers/evm/queryOneInch'
-import { vult } from '@vultisig/core-chain/coin/knownTokens'
+import { knownTokens, vult } from '@vultisig/core-chain/coin/knownTokens'
 import { OneInchToken } from '@vultisig/core-chain/coin/oneInch/token'
 import { getEvmTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/evm'
 import { toBatches } from '@vultisig/lib-utils/array/toBatches'
@@ -87,7 +88,13 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
     EvmChain.Zksync,
   ]
 
-  if (!oneInchSupportedChains.includes(chain)) {
+  // 1inch /balance indexes these chains but /token metadata is incomplete
+  // (Robinhood's 96 stock tokens 404), so the 1inch pass is unioned with a
+  // multicall scan of the curated knownTokens catalog — either path alone
+  // drops holdings (curated also carries LINK, absent from 1inch's index).
+  const hybridDiscoveryChains: EvmChain[] = [EvmChain.Robinhood]
+
+  if (!oneInchSupportedChains.includes(chain) && !hybridDiscoveryChains.includes(chain)) {
     return []
   }
 
@@ -147,6 +154,33 @@ export const findEvmCoins: FindCoinsResolver<EvmChain> = async ({ address, chain
       ),
       undefined
     )
+  }
+
+  if (hybridDiscoveryChains.includes(chain)) {
+    const catalogCoins: AccountCoin<EvmChain>[] = (knownTokens[chain] ?? []).map(coin => ({
+      ...coin,
+      chain,
+      address,
+    }))
+    const catalogBalancesResult = await attempt(() =>
+      getEvmChainBalances({
+        chain,
+        address: address as Address,
+        coins: catalogCoins.map(({ chain, id, address }) => ({ chain, id, address })),
+      })
+    )
+    if ('data' in catalogBalancesResult && catalogBalancesResult.data) {
+      const balances = catalogBalancesResult.data
+      const heldCatalogCoins = catalogCoins.filter(
+        coin => (balances[accountCoinKeyToString(extractAccountCoinKey(coin))] ?? 0n) > 0n
+      )
+      const heldCatalogIds = new Set(heldCatalogCoins.map(coin => coin.id?.toLowerCase()))
+      // Curated entries first so their hand-verified metadata wins the dedupe.
+      discoveredCoins = [
+        ...heldCatalogCoins,
+        ...discoveredCoins.filter(coin => !heldCatalogIds.has(coin.id?.toLowerCase())),
+      ]
+    }
   }
 
   if (chain !== EvmChain.Ethereum || discoveredCoins.some(coin => coin.id?.toLowerCase() === vult.id.toLowerCase())) {

@@ -21,7 +21,8 @@ function createMockVault(): VaultBase {
     addChain: vi.fn().mockResolvedValue(undefined),
     removeChain: vi.fn().mockResolvedValue(undefined),
     addToken: vi.fn().mockResolvedValue(undefined),
-    removeToken: vi.fn().mockResolvedValue(undefined),
+    // removeToken resolves to whether a tracked token was actually removed.
+    removeToken: vi.fn().mockResolvedValue(true),
   } as unknown as VaultBase
 }
 
@@ -132,6 +133,39 @@ describe('AgentExecutor — per-tool handlers (new tool-path API)', () => {
     expect(recent.success).toBe(true)
     expect(vault.removeToken).toHaveBeenCalledWith(Chain.Ethereum, '0xabc')
     expect(recent.data?.removed).toBe(true)
+  })
+
+  it('remove_coin reports removed=false when the coin was never tracked', async () => {
+    // The model reads `removed` to decide what to tell the user. Reporting a
+    // removal that did not happen is the same defect `tokens --remove` had.
+    const vault = createMockVault()
+    vi.mocked(vault.removeToken).mockResolvedValue(false)
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.removeCoin('call-7b', {
+      chain: 'Ethereum',
+      token_id: '0xnot-tracked',
+    })
+
+    expect(recent.data?.removed).toBe(false)
+  })
+
+  it('remove_coin reports per-coin outcomes for a batch', async () => {
+    const vault = createMockVault()
+    vi.mocked(vault.removeToken).mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    const executor = new AgentExecutor(vault)
+
+    const recent = await executor.removeCoin('call-7c', {
+      coins: [
+        { chain: 'Ethereum', contract_address: '0xabc' },
+        { chain: 'Ethereum', contract_address: '0xnot-tracked' },
+      ],
+    })
+
+    expect(recent.data?.removed).toEqual([
+      { chain: 'Ethereum', tokenId: '0xabc', removed: true },
+      { chain: 'Ethereum', tokenId: '0xnot-tracked', removed: false },
+    ])
   })
 
   it('address_book_add fails without vultisig SDK instance', async () => {

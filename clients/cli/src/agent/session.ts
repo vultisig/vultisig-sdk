@@ -32,6 +32,7 @@ import {
   type AgentTokenCacheScope,
   clearCachedToken,
   getCachedTokenEntry,
+  getTokenCachePath,
   loadCachedToken,
   saveCachedToken,
 } from './tokenCache'
@@ -1473,3 +1474,7 @@ export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? '')
   return /\b(401|403)\b/.test(msg)
 }
+// Re-exported for callers/tests that resolve the agent token-cache path
+// through the session module (the cache itself now lives in ./tokenCache,
+// scoped by vault/backend/profile rather than bare publicKey).
+export { getTokenCachePath }
