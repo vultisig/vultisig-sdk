@@ -3,10 +3,10 @@
  *
  * Provides tab completion for bash, zsh, and fish shells using tabtab
  */
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 import { SUPPORTED_CHAINS } from '@vultisig/sdk'
 import { type Command, program } from 'commander'
 import { existsSync, readdirSync, readFileSync } from 'fs'
-import { homedir } from 'os'
 import { join } from 'path'
 
 import { ExitCode } from '../core/errors'
@@ -56,10 +56,9 @@ function getChains(): string[] {
  */
 function getVaultNames(): string[] {
   try {
-    const vaultDir = join(homedir(), '.vultisig', 'vaults')
+    const vaultDir = getVultisigConfigDir()
     if (!existsSync(vaultDir)) return []
 
-    // Read vault files and extract names
     const files = readdirSync(vaultDir) as string[]
     const names: string[] = []
 
@@ -67,9 +66,10 @@ function getVaultNames(): string[] {
       if (file.startsWith('vault:') && file.endsWith('.json')) {
         try {
           const content = readFileSync(join(vaultDir, file), 'utf-8')
-          const vault = JSON.parse(content)
-          if (vault.name) names.push(vault.name)
-          if (vault.id) names.push(vault.id)
+          const parsed = JSON.parse(content)
+          const vault = parsed?.value ?? parsed
+          if (vault?.name) names.push(vault.name)
+          if (vault?.id) names.push(vault.id)
         } catch {
           // Skip invalid vault files
         }
