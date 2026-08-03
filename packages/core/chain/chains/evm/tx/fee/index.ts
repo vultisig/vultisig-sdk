@@ -21,4 +21,5 @@ export const evmChainTxFeeFormat: Record<EvmChain, EvmTxFeeFormat> = {
   // the relay message_id, so extension<->mobile Sei co-signing deadlocks
   // (vultisig-windows#4369).
   [EvmChain.Sei]: 'enveloped',
+  [EvmChain.Robinhood]: 'enveloped',
 }

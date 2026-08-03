@@ -20,6 +20,7 @@ export { Vultisig } from './Vultisig'
 export type { VaultConfig } from './vault'
 export type { ResolvedTokenInfo } from './vault'
 export {
+  BroadcastPartialFailureError,
   FastVault,
   resolveTokenRef,
   resolveTokenRefId,
@@ -479,6 +480,70 @@ export {
   limitSwapMemoPrefix,
   parseLimitSwapMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapMemo'
+
+// Limit-order tracking: the queue is the source of truth for a RESTING order
+// (fill split, TTL); Midgard answers what happened to one that LEFT it; the
+// cosmos tx result is the only place a rejected MsgDeposit is visible at all
+// (it produces no Midgard action, ever). `unresolved`/`null` mean "no answer
+// yet", never an outcome — infrastructure hiccups must not close a live order.
+export type { ThorchainTxResult } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainTxResult'
+export { getThorchainTxResult } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainTxResult'
+export type { LimitSwapOrderStatus } from '@vultisig/core-chain/swap/native/limitSwapOrderStatus'
+export {
+  isTerminalLimitSwapOrderStatus,
+  limitSwapOrderStatuses,
+} from '@vultisig/core-chain/swap/native/limitSwapOrderStatus'
+export type { LimitSwapOutcome, MidgardLimitSwapAction } from '@vultisig/core-chain/swap/native/limitSwapOutcome'
+export {
+  classifyLimitSwapActions,
+  getLimitSwapCloseOutcome,
+  limitSwapOutcomes,
+  resolveLimitSwapOutcome,
+} from '@vultisig/core-chain/swap/native/limitSwapOutcome'
+export type { LimitSwapQueueEntry } from '@vultisig/core-chain/swap/native/limitSwapQueue'
+export { getLimitSwapQueue, parseLimitSwapQueue } from '@vultisig/core-chain/swap/native/limitSwapQueue'
+// Limit-order cancellation (`m=<`, modify-limit-swap). Every failure mode here
+// is silent — the cancel is accepted, costs a fee, matches nothing, and looks
+// exactly like success — so the builder enforces the memo's rules rather than
+// documenting them, and eligibility fails closed at every unknown.
+export {
+  areLimitOrdersCancelIndistinguishable,
+  getThorchainLimitOrderBucketKey,
+  toThorchainLayer1MemoAsset,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelBucket'
+export type { LimitSwapCancelDustErrorReason } from '@vultisig/core-chain/swap/native/limitSwapCancelDust'
+export {
+  getLimitSwapCancelDust,
+  LimitSwapCancelDustError,
+  limitSwapCancelDustErrors,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelDust'
+export type {
+  LimitSwapCancelAssetResolution,
+  LimitSwapCancelBlocker,
+  LimitSwapCancelCandidate,
+  LimitSwapCancelEligibility,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelEligibility'
+export {
+  getLimitSwapCancelEligibility,
+  limitSwapCancelBlockers,
+  resolveLimitSwapCancelAsset,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelEligibility'
+export type {
+  LimitSwapCancelInputs,
+  LimitSwapCancelMemoError,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
+export {
+  assertPositiveLimitSwapCancelAmounts,
+  buildCancelLimitSwapMemo,
+  doesCancelLimitSwapMemoFit,
+  doesCancelLimitSwapMemoFitSourceAsset,
+  isAbbreviatedThorchainMemoAsset,
+  isCancelLimitSwapMemo,
+  isModifyLimitSwapMemo,
+  LimitSwapCancelMemoBuildError,
+  limitSwapCancelMemoErrors,
+  modifyLimitSwapMemoPrefix,
+} from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 

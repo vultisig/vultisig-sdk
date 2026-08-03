@@ -469,6 +469,16 @@ function summarizeData(data: Record<string, unknown>): string {
     return `tx: ${(data.tx_hash as string).slice(0, 12)}...`
   }
   if (data.added) return 'added'
+  if (Array.isArray(data.removed)) {
+    // Batch removal reports per-coin outcomes. The array is non-empty even when
+    // nothing was tracked, so summarise what the SDK actually removed rather
+    // than letting a list of misses read as a success.
+    const entries = data.removed as { removed?: boolean }[]
+    const removed = entries.filter(entry => entry.removed).length
+    if (removed === 0) return 'not tracked'
+    return removed === entries.length ? 'removed' : `removed ${removed}/${entries.length}`
+  }
+  if (data.removed === false) return 'not tracked'
   if (data.removed) return 'removed'
   if (data.message) return data.message as string
   return ''
