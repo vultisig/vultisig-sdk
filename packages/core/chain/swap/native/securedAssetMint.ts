@@ -12,6 +12,7 @@ import {
   type ThorchainSecuredAssetCatalog,
 } from '@vultisig/core-chain/chains/cosmos/thor/securedAssets'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { toNativeSwapAsset } from '@vultisig/core-chain/swap/native/asset/toNativeSwapAsset'
 import { getNativeSwapChainId } from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { NativeSwapQuote } from '@vultisig/core-chain/swap/native/NativeSwapQuote'
@@ -107,7 +108,9 @@ export const getThorchainSecuredAssetMintQuote = async ({
   } catch {
     throw new Error(`THORChain returned an invalid dust threshold for ${from.chain}`)
   }
-  if (dustThreshold < 0n || amount < dustThreshold) {
+  const sourceAmount = rebaseDecimalAmount(amount, from.decimals, 8)
+  const recommendedMinAmountIn = isFeeCoin(from) ? dustThreshold : 0n
+  if (dustThreshold < 0n || (isFeeCoin(from) && sourceAmount < dustThreshold)) {
     throw new Error(`SECURE+ mint amount is below the ${from.chain} inbound dust threshold`)
   }
 
@@ -116,7 +119,6 @@ export const getThorchainSecuredAssetMintQuote = async ({
     throw new Error('THORChain live secured-asset share status is unavailable')
   }
 
-  const sourceAmount = rebaseDecimalAmount(amount, from.decimals, 8)
   const supply = BigInt(securedAssetStatus.supply)
   const depth = BigInt(securedAssetStatus.depth)
   const expectedAmountOut = supply === 0n || depth === 0n ? sourceAmount : (sourceAmount * supply) / depth
@@ -145,7 +147,7 @@ export const getThorchainSecuredAssetMintQuote = async ({
     notes: 'Direct THORChain secured-asset mint.',
     outbound_delay_blocks: 0,
     outbound_delay_seconds: 0,
-    recommended_min_amount_in: dustThreshold.toString(),
+    recommended_min_amount_in: recommendedMinAmountIn.toString(),
     liquidity_tolerance_bps: 0,
     warning: 'Do not send funds after the expiry.',
     router: inbound.router || undefined,

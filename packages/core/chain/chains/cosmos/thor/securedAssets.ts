@@ -167,17 +167,19 @@ export const createThorchainSecuredAssetCatalog = ({
 }: CreateThorchainSecuredAssetCatalogOptions = {}): ThorchainSecuredAssetCatalogFetcher => {
   let snapshot: { catalog: ThorchainSecuredAssetCatalog; expiresAt: number } | undefined
   let inFlight: Promise<ThorchainSecuredAssetCatalog> | undefined
+  let requestGeneration = 0
 
   return async ({ forceRefresh = false } = {}) => {
     const currentTime = now()
     if (!forceRefresh && snapshot && currentTime < snapshot.expiresAt) {
       return copyCatalog(snapshot.catalog)
     }
-    if (inFlight) {
+    if (inFlight && !forceRefresh) {
       return copyCatalog(await inFlight)
     }
 
-    inFlight = (async () => {
+    const generation = ++requestGeneration
+    const request = (async () => {
       let catalog: ThorchainSecuredAssetCatalog
       try {
         catalog = {
@@ -190,17 +192,23 @@ export const createThorchainSecuredAssetCatalog = ({
           source: 'fallback',
         }
       }
-      snapshot = {
-        catalog,
-        expiresAt: now() + cacheTtlMs,
-      }
       return catalog
     })()
+    inFlight = request
 
     try {
-      return copyCatalog(await inFlight)
+      const catalog = await request
+      if (generation === requestGeneration) {
+        snapshot = {
+          catalog,
+          expiresAt: now() + cacheTtlMs,
+        }
+      }
+      return copyCatalog(catalog)
     } finally {
-      inFlight = undefined
+      if (inFlight === request) {
+        inFlight = undefined
+      }
     }
   }
 }
