@@ -969,7 +969,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+      this.emit('legacyVaultBackupMigrated', notice)
+    })
 
     // VaultManager already handles storage, just emit event
     this.emit('vaultChanged', { vaultId: vault.id })

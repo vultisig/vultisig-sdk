@@ -11,6 +11,7 @@ import { VaultBase } from './VaultBase'
 export { FastVault, SecureVault, VaultBase }
 
 // Export errors
+export { BroadcastPartialFailureError } from './services/BroadcastService'
 export { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './VaultError'
 
 // Export vault configuration

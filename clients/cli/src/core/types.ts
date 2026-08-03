@@ -41,6 +41,8 @@ export type SendDryRunResult = {
   total: string
   balance: string
   destinationTag?: number
+  /** User-visible memo the signer will include, excluding XRP's legacy destination-tag carrier. */
+  memo?: string
   warning?: string
 }
 
