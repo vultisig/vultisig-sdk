@@ -1521,7 +1521,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
    * @param chain - The blockchain chain
    * @param tokenId - Token contract address or identifier
    */
-  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+  async removeToken(chain: Chain, tokenId: string): Promise<boolean> {
     return this.balanceService.removeToken(chain, tokenId)
   }
 
