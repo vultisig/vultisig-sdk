@@ -60,6 +60,37 @@ export const thorchainAssetPrefixToChain: Readonly<Partial<Record<string, Chain>
 )
 
 /**
+ * Every separator a THORChain memo asset can use: L1 (`.`), synth (`/`), trade
+ * (`~`) and secured (`-`). Shared so the modules that have to find where a
+ * chain prefix ends cannot disagree about which flavours exist.
+ */
+export const thorchainMemoAssetSeparators: readonly string[] = Object.freeze(['.', '/', '~', '-'])
+
+/**
+ * The chain a memo asset ORIGINATES from — what `Asset.GetLayer1Asset().Chain`
+ * resolves to on THORNode's side.
+ *
+ * Reads the prefix up to the first separator, so it holds for every flavour:
+ * `ETH.USDC-0x…`, `BTC/BTC` and the secured `eth-usdc-0x…` all resolve to their
+ * L1 chain. Splitting on `.` alone would return the whole denom for a secured
+ * asset and resolve nothing.
+ *
+ * Note this is the asset's home chain, NOT necessarily the chain a transaction
+ * touching it is signed from — a secured asset lives on THORChain while still
+ * reporting Ethereum here.
+ *
+ * `undefined` for a prefix this SDK cannot route, which a caller should treat as
+ * "unknown chain" rather than an error: an asset THORChain understands and this
+ * SDK does not is still a real order.
+ */
+export const getThorchainMemoAssetChain = (asset: string): Chain | undefined => {
+  const separatorIndex = [...asset].findIndex(char => thorchainMemoAssetSeparators.includes(char))
+  const prefix = separatorIndex === -1 ? asset : asset.slice(0, separatorIndex)
+
+  return thorchainAssetPrefixToChain[prefix.toUpperCase()]
+}
+
+/**
  * Whether a chain can be encoded as a THORChain memo asset — i.e. whether it is
  * routable through THORChain at all.
  *
@@ -101,6 +132,29 @@ const abbreviateContractSuffix = (asset: string): string => {
 }
 
 /**
+ * Notation shared by both memo spellings: the routability and ticker checks a
+ * memo asset must pass, then the one converter that decides what a THORChain
+ * asset string looks like.
+ *
+ * Both callers reject the same inputs for the same reasons, so an asset that is
+ * unbuildable for a placement cannot become buildable for a cancel.
+ */
+const toValidatedNativeSwapAsset = ({ chain, id, ticker }: ThorchainMemoAssetInput, caller: string): string => {
+  if (!isThorchainRoutable(chain)) {
+    throw new Error(`${caller}: ${chain} is not routable through THORChain`)
+  }
+
+  const normalizedTicker = ticker.trim()
+  if (!normalizedTicker) {
+    throw new Error(`${caller}: ticker must be a non-empty string for ${chain}`)
+  }
+
+  const normalizedId = id?.trim()
+
+  return toNativeSwapAsset({ chain, id: normalizedId || undefined, ticker: normalizedTicker })
+}
+
+/**
  * Build the THORChain memo-asset string for a coin — the `source_asset` /
  * `target_asset` a limit-swap memo is built from.
  *
@@ -126,20 +180,34 @@ const abbreviateContractSuffix = (asset: string): string => {
  * too short to abbreviate — a malformed asset segment must fail here rather than
  * at broadcast time, once funds are committed.
  */
-export const getThorchainMemoAsset = ({ chain, id, ticker }: ThorchainMemoAssetInput): string => {
-  if (!isThorchainRoutable(chain)) {
-    throw new Error(`getThorchainMemoAsset: ${chain} is not routable through THORChain`)
-  }
-
-  const normalizedTicker = ticker.trim()
-  if (!normalizedTicker) {
-    throw new Error(`getThorchainMemoAsset: ticker must be a non-empty string for ${chain}`)
-  }
-
-  const normalizedId = id?.trim()
-  const asset = toNativeSwapAsset({ chain, id: normalizedId || undefined, ticker: normalizedTicker })
+export const getThorchainMemoAsset = (input: ThorchainMemoAssetInput): string => {
+  const asset = toValidatedNativeSwapAsset(input, 'getThorchainMemoAsset')
 
   // THORChain-held assets (secured denoms, `THOR.TCY`) carry no L1 contract to
   // shorten -- the trailing address of a secured denom identifies the asset.
-  return chain === Chain.THORChain ? asset : abbreviateContractSuffix(asset)
+  return input.chain === Chain.THORChain ? asset : abbreviateContractSuffix(asset)
 }
+
+/**
+ * Build the THORChain memo-asset string a **cancel** memo must use — the same
+ * notation {@link getThorchainMemoAsset} emits, minus the abbreviation.
+ *
+ * - native → `CHAIN.TICKER` (`BTC.BTC`, `THOR.RUNE`)
+ * - THORChain tokens → `THOR.TICKER` (`THOR.TCY`)
+ * - THORChain secured assets → `CHAIN-ASSET` (`XRP-XRP`, `ETH-USDC-0x…`)
+ * - any other token → `CHAIN.TICKER-<full contract>` (`ETH.USDC-0xA0b8…`)
+ *
+ * The difference from the placement spelling is the entire point. A placement
+ * memo abbreviates an L1 contract to its last six characters because memo bytes
+ * are scarce and `fuzzyAssetMatch` expands it again on arrival. A cancel gets no
+ * such treatment: `ModifyLimitSwapMemo` is the one inbound memo type
+ * `processOneTxIn` does NOT route through `fuzzyAssetMatch`, so its asset string
+ * builds the order-index key verbatim. An abbreviation there addresses a bucket
+ * that by construction holds no order — the cancel is accepted, costs a fee, and
+ * cancels nothing.
+ *
+ * Both spellings share their notation source and their validation, so the two
+ * cannot drift apart in anything except the abbreviation.
+ */
+export const getThorchainCancelMemoAsset = (input: ThorchainMemoAssetInput): string =>
+  toValidatedNativeSwapAsset(input, 'getThorchainCancelMemoAsset')

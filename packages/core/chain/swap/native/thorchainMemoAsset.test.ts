@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { Chain } from '../../Chain'
+import { buildCancelLimitSwapMemo } from './limitSwapCancelMemo'
 import { buildLimitSwapMemo } from './limitSwapMemo'
 import {
+  getThorchainCancelMemoAsset,
   getThorchainMemoAsset,
+  getThorchainMemoAssetChain,
   isThorchainRoutable,
   isThorchainSecuredAssetId,
   thorchainAssetPrefixToChain,
@@ -171,5 +174,71 @@ describe('prefix map consistency', () => {
     })
 
     expect(memo.startsWith(`=<:${target}:`)).toBe(true)
+  })
+})
+
+describe('getThorchainCancelMemoAsset', () => {
+  // Same notation as the placement spelling, minus the abbreviation. Anything
+  // else here silently addresses a bucket holding no order.
+  it.each([
+    [{ chain: Chain.Bitcoin, ticker: 'BTC' }, 'BTC.BTC'],
+    [{ chain: Chain.Ethereum, ticker: 'ETH' }, 'ETH.ETH'],
+    [{ chain: Chain.THORChain, ticker: 'RUNE' }, 'THOR.RUNE'],
+    [{ chain: Chain.THORChain, ticker: 'TCY', id: 'tcy' }, 'THOR.TCY'],
+    [{ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' }, 'XRP-XRP'],
+    [{ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }, `ETH.USDC-${usdcContract}`],
+  ])('encodes %j in full', (coin, expected) => {
+    expect(getThorchainCancelMemoAsset(coin)).toBe(expected)
+  })
+
+  it('keeps the full contract the placement spelling abbreviates', () => {
+    const coin = { chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }
+
+    expect(getThorchainMemoAsset(coin)).toBe('ETH.USDC-06EB48')
+    expect(getThorchainCancelMemoAsset(coin)).toContain(usdcContract)
+  })
+
+  it('rejects the same inputs the placement spelling rejects', () => {
+    expect(() => getThorchainCancelMemoAsset({ chain: Chain.Solana, ticker: '  ' })).toThrow(/non-empty string/)
+    expect(() => getThorchainCancelMemoAsset({ chain: Chain.Ton, ticker: 'TON' })).toThrow(/not routable/)
+  })
+
+  // The acceptance test for this helper existing at all: the cancel memo builder
+  // rejects abbreviated assets, so a spelling it will not accept is useless.
+  it.each([
+    ['an L1 leg', { chain: Chain.Bitcoin, ticker: 'BTC' }],
+    ['a token leg', { chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }],
+    ['a secured leg', { chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' }],
+  ])('produces %s the cancel memo builder accepts', (_, coin) => {
+    const sourceAsset = getThorchainCancelMemoAsset(coin)
+
+    const memo = buildCancelLimitSwapMemo({
+      sourceAsset,
+      sourceAmount: 100_000_000n,
+      targetAsset: 'THOR.RUNE',
+      tradeTarget: 43_079_145n,
+    })
+
+    expect(memo).toContain(`100000000${sourceAsset}`)
+  })
+})
+
+describe('getThorchainMemoAssetChain', () => {
+  it.each([
+    ['BTC.BTC', Chain.Bitcoin],
+    [`ETH.USDC-${usdcContract}`, Chain.Ethereum],
+    ['ETH.USDC-06EB48', Chain.Ethereum],
+    ['THOR.RUNE', Chain.THORChain],
+    ['BTC/BTC', Chain.Bitcoin],
+    // Secured denoms are lower-case and use `-` throughout, so splitting on `.`
+    // would hand the whole denom to the lookup and resolve nothing.
+    ['eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', Chain.Ethereum],
+    ['xrp-xrp', Chain.Ripple],
+  ])('resolves %s to its home chain', (asset, expected) => {
+    expect(getThorchainMemoAssetChain(asset)).toBe(expected)
+  })
+
+  it('returns undefined for a prefix this SDK cannot route', () => {
+    expect(getThorchainMemoAssetChain('NOPE.NOPE')).toBeUndefined()
   })
 })
