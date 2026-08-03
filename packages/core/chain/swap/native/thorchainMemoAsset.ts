@@ -67,6 +67,20 @@ export const thorchainAssetPrefixToChain: Readonly<Partial<Record<string, Chain>
 export const thorchainMemoAssetSeparators: readonly string[] = Object.freeze(['.', '/', '~', '-'])
 
 /**
+ * Index of the separator that ends a memo asset's CHAIN prefix, or `-1` when the
+ * asset carries none.
+ *
+ * Always the FIRST separator, never the last. A secured asset spells the whole
+ * denom with `-` (`eth-usdc-0x…`), so searching from the right would put the
+ * boundary inside the token identifier and make every secured asset read as a
+ * different chain, or as truncated. Shared with the traversal rather than only
+ * the character list, so the three modules that need this boundary cannot
+ * disagree about where it falls.
+ */
+export const findThorchainMemoAssetSeparatorIndex = (asset: string): number =>
+  [...asset].findIndex(char => thorchainMemoAssetSeparators.includes(char))
+
+/**
  * The chain a memo asset ORIGINATES from — what `Asset.GetLayer1Asset().Chain`
  * resolves to on THORNode's side.
  *
@@ -84,7 +98,7 @@ export const thorchainMemoAssetSeparators: readonly string[] = Object.freeze(['.
  * SDK does not is still a real order.
  */
 export const getThorchainMemoAssetChain = (asset: string): Chain | undefined => {
-  const separatorIndex = [...asset].findIndex(char => thorchainMemoAssetSeparators.includes(char))
+  const separatorIndex = findThorchainMemoAssetSeparatorIndex(asset)
   const prefix = separatorIndex === -1 ? asset : asset.slice(0, separatorIndex)
 
   return thorchainAssetPrefixToChain[prefix.toUpperCase()]

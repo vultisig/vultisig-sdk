@@ -1,5 +1,5 @@
 import { getLimitSwapSourceChainKind, limitSwapMemoByteLimit, LimitSwapSourceChainKind } from './limitSwapMemo'
-import { thorchainMemoAssetSeparators } from './thorchainMemoAsset'
+import { findThorchainMemoAssetSeparatorIndex } from './thorchainMemoAsset'
 
 /**
  * THORChain's modify-limit-swap prefix. Distinct from `limitSwapMemoPrefix`
@@ -101,7 +101,7 @@ const minimumFullTokenIdentifierLength = 20
  * `btc-btc` carry no identifier at all and are full by construction.
  */
 export const isAbbreviatedThorchainMemoAsset = (asset: string): boolean => {
-  const chainEnd = [...asset].findIndex(char => thorchainMemoAssetSeparators.includes(char))
+  const chainEnd = findThorchainMemoAssetSeparatorIndex(asset)
   const symbol = chainEnd === -1 ? asset : asset.slice(chainEnd + 1)
   const identifierStart = symbol.indexOf('-')
   if (identifierStart === -1) {
