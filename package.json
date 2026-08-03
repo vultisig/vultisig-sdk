@@ -220,6 +220,9 @@
     "linkify-it": "5.0.2",
     "bigint-buffer@npm:^1.1.5": "patch:bigint-buffer@npm%3A1.1.5#~/.yarn/patches/bigint-buffer-npm-1.1.5-785f4ccd92.patch",
     "postcss": "^8.5.18",
-    "brace-expansion@npm:^5.0.5": "5.0.8"
+    "brace-expansion@npm:^1.1.7": "1.1.18",
+    "brace-expansion@npm:^2.0.1": "2.1.4",
+    "brace-expansion@npm:^2.0.2": "2.1.4",
+    "brace-expansion@npm:^5.0.5": "5.0.9"
   }
 }
