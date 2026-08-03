@@ -7303,7 +7303,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=4.0.0"
+    "@vultisig/sdk": ">=4.0.1"
   languageName: unknown
   linkType: soft
 

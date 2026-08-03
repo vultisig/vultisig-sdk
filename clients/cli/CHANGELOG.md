@@ -1,5 +1,14 @@
 # @vultisig/cli
 
+## 4.0.1
+
+### Patch Changes
+
+- [#1561](https://github.com/vultisig/vultisig-sdk/pull/1561) [`38be8ef`](https://github.com/vultisig/vultisig-sdk/commit/38be8eff97b061d241c7ac1c1616b48115fbb974) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Render `yield_opportunities` and `polymarket_markets` agent surfaces as prose instead of leaking raw `{"surface":...}` JSON into the terminal. The CLI only advertised `balance_summary`/`turn_outcome` in `supported_surfaces`, so any other surface fell back to the backend's legacy verbatim-echo path. Adds parsers, prose renderers, and a legacy-echo fallback for both surfaces, mirroring the existing `balance_summary` handling, and wires them through the TUI, pipe mode, and `agent ask`.
+
+- Updated dependencies [[`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4), [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623)]:
+  - @vultisig/sdk@4.0.1
+
 ## 4.0.0
 
 ### Minor Changes
