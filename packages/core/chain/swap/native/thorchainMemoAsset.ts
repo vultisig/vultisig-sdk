@@ -208,8 +208,8 @@ export const getThorchainMemoAsset = (input: ThorchainMemoAssetInput): string =>
  *
  * - native → `CHAIN.TICKER` (`BTC.BTC`, `THOR.RUNE`)
  * - THORChain tokens → `THOR.TICKER` (`THOR.TCY`)
- * - THORChain secured assets → `CHAIN-ASSET` (`XRP-XRP`, `ETH-USDC-0x…`)
- * - any other token → `CHAIN.TICKER-<full contract>` (`ETH.USDC-0xA0b8…`)
+ * - THORChain secured assets → `CHAIN-ASSET` (`XRP-XRP`, `ETH-USDC-0X…`)
+ * - any other token → `CHAIN.TICKER-<full contract>` (`ETH.USDC-0XA0B8…`)
  *
  * The difference from the placement spelling is the entire point. A placement
  * memo abbreviates an L1 contract to its last six characters because memo bytes
@@ -220,8 +220,18 @@ export const getThorchainMemoAsset = (input: ThorchainMemoAssetInput): string =>
  * that by construction holds no order — the cancel is accepted, costs a fee, and
  * cancels nothing.
  *
+ * UPPER-CASED, unlike the coin's own contract id. Case is not semantic to
+ * THORNode — `common.ParseAsset` upper-cases whatever it is given, and the queue
+ * index key is built from an upper-cased asset — but it IS semantic to this
+ * package's own pool-id validation, which the cancel eligibility check routes
+ * through to size the memo against its source chain. Left in the contract's
+ * native lower case, every ERC20-funded order would be reported as an
+ * unroutable source chain and become uncancellable. Upper-casing also makes this
+ * byte-identical to what the queue reports the order's assets as, which is what
+ * the two are cross-checked against.
+ *
  * Both spellings share their notation source and their validation, so the two
- * cannot drift apart in anything except the abbreviation.
+ * cannot drift apart in anything except the abbreviation and that case.
  */
 export const getThorchainCancelMemoAsset = (input: ThorchainMemoAssetInput): string =>
-  toValidatedNativeSwapAsset(input, 'getThorchainCancelMemoAsset')
+  toValidatedNativeSwapAsset(input, 'getThorchainCancelMemoAsset').toUpperCase()

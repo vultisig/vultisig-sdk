@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { Chain } from '../../Chain'
 import { buildCancelLimitSwapMemo } from './limitSwapCancelMemo'
-import { buildLimitSwapMemo } from './limitSwapMemo'
+import { buildLimitSwapMemo, getLimitSwapSourceChainKind } from './limitSwapMemo'
 import {
   getThorchainCancelMemoAsset,
   getThorchainMemoAsset,
@@ -30,23 +30,45 @@ describe('getThorchainMemoAsset', () => {
     })
 
     it('treats an empty id as native', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.Bitcoin, ticker: 'BTC', id: '   ' })).toBe('BTC.BTC')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.Bitcoin,
+          ticker: 'BTC',
+          id: '   ',
+        })
+      ).toBe('BTC.BTC')
     })
   })
 
   describe('tokens', () => {
     it('suffixes an EVM token with the last 6 contract chars, uppercased', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract })).toBe('ETH.USDC-06EB48')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.Ethereum,
+          ticker: 'USDC',
+          id: usdcContract,
+        })
+      ).toBe('ETH.USDC-06EB48')
     })
 
     it('uppercases a suffix that is already partly uppercase', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.BSC, ticker: 'CAKE', id: '0xAbCdEf123456' })).toBe('BSC.CAKE-123456')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.BSC,
+          ticker: 'CAKE',
+          id: '0xAbCdEf123456',
+        })
+      ).toBe('BSC.CAKE-123456')
     })
 
     it('rejects an id too short to form a suffix', () => {
-      expect(() => getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'FOO', id: '0x123' })).toThrow(
-        /shorter than 6 characters/
-      )
+      expect(() =>
+        getThorchainMemoAsset({
+          chain: Chain.Ethereum,
+          ticker: 'FOO',
+          id: '0x123',
+        })
+      ).toThrow(/shorter than 6 characters/)
     })
   })
 
@@ -54,13 +76,23 @@ describe('getThorchainMemoAsset', () => {
     // Secured assets use `CHAIN-ASSET` notation, matching `toNativeSwapAsset`.
     // The dotted form makes THORNode read the target as the L1 asset instead.
     it('encodes a secured asset in CHAIN-ASSET notation', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'USDC', id: `eth-usdc-${usdcContract}` })).toBe(
-        `ETH-USDC-${usdcContract}`
-      )
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'USDC',
+          id: `eth-usdc-${usdcContract}`,
+        })
+      ).toBe(`ETH-USDC-${usdcContract}`)
     })
 
     it('leaves a secured asset un-abbreviated -- its trailing address identifies it', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' })).toBe('XRP-XRP')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'XRP',
+          id: 'xrp-xrp',
+        })
+      ).toBe('XRP-XRP')
     })
 
     it.each([
@@ -75,7 +107,13 @@ describe('getThorchainMemoAsset', () => {
     // fails closed rather than building a memo for an asset THORChain would not
     // route.
     it('strips the x/ prefix from a synth, matching toNativeSwapAsset', () => {
-      expect(getThorchainMemoAsset({ chain: Chain.THORChain, ticker: 'sBTC', id: 'x/btc-btc' })).toBe('BTC-BTC')
+      expect(
+        getThorchainMemoAsset({
+          chain: Chain.THORChain,
+          ticker: 'sBTC',
+          id: 'x/btc-btc',
+        })
+      ).toBe('BTC-BTC')
     })
   })
 
@@ -90,9 +128,13 @@ describe('getThorchainMemoAsset', () => {
   })
 
   it('trims surrounding whitespace from ticker and id', () => {
-    expect(getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: '  USDC  ', id: `  ${usdcContract}  ` })).toBe(
-      'ETH.USDC-06EB48'
-    )
+    expect(
+      getThorchainMemoAsset({
+        chain: Chain.Ethereum,
+        ticker: '  USDC  ',
+        id: `  ${usdcContract}  `,
+      })
+    ).toBe('ETH.USDC-06EB48')
   })
 })
 
@@ -161,8 +203,15 @@ describe('prefix map consistency', () => {
   })
 
   it('produces assets the limit-swap memo builder accepts', () => {
-    const source = getThorchainMemoAsset({ chain: Chain.Bitcoin, ticker: 'BTC' })
-    const target = getThorchainMemoAsset({ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract })
+    const source = getThorchainMemoAsset({
+      chain: Chain.Bitcoin,
+      ticker: 'BTC',
+    })
+    const target = getThorchainMemoAsset({
+      chain: Chain.Ethereum,
+      ticker: 'USDC',
+      id: usdcContract,
+    })
 
     const memo = buildLimitSwapMemo({
       source_asset: source,
@@ -186,7 +235,7 @@ describe('getThorchainCancelMemoAsset', () => {
     [{ chain: Chain.THORChain, ticker: 'RUNE' }, 'THOR.RUNE'],
     [{ chain: Chain.THORChain, ticker: 'TCY', id: 'tcy' }, 'THOR.TCY'],
     [{ chain: Chain.THORChain, ticker: 'XRP', id: 'xrp-xrp' }, 'XRP-XRP'],
-    [{ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }, `ETH.USDC-${usdcContract}`],
+    [{ chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }, `ETH.USDC-${usdcContract.toUpperCase()}`],
   ])('encodes %j in full', (coin, expected) => {
     expect(getThorchainCancelMemoAsset(coin)).toBe(expected)
   })
@@ -195,7 +244,22 @@ describe('getThorchainCancelMemoAsset', () => {
     const coin = { chain: Chain.Ethereum, ticker: 'USDC', id: usdcContract }
 
     expect(getThorchainMemoAsset(coin)).toBe('ETH.USDC-06EB48')
-    expect(getThorchainCancelMemoAsset(coin)).toContain(usdcContract)
+    expect(getThorchainCancelMemoAsset(coin)).toContain(usdcContract.toUpperCase())
+  })
+
+  // Case is not semantic to THORNode, but it IS to this package's pool-id
+  // validation, which cancel eligibility routes through to size the memo. Left
+  // lower-case, every ERC20-funded order reads as an unroutable source chain and
+  // becomes uncancellable.
+  it('upper-cases the contract so the cancel eligibility check can route it', () => {
+    const sourceAsset = getThorchainCancelMemoAsset({
+      chain: Chain.Ethereum,
+      ticker: 'USDC',
+      id: usdcContract,
+    })
+
+    expect(sourceAsset).not.toContain(usdcContract)
+    expect(getLimitSwapSourceChainKind(sourceAsset)).toBe('other')
   })
 
   it('rejects the same inputs the placement spelling rejects', () => {
