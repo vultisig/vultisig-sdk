@@ -93,7 +93,12 @@ describe('THORChain secured-asset catalog', () => {
       fetchCatalog: async () => ({ source: 'thorchain', assets: dynamic }),
     })
 
-    expect(assets).toContainEqual(expect.objectContaining({ id: 'newchain-coin', l1Asset: 'NEWCHAIN.COIN' }))
+    expect(assets).toContainEqual(
+      expect.objectContaining({
+        id: 'newchain-coin',
+        l1Asset: 'NEWCHAIN.COIN',
+      })
+    )
     expect(assets).toContainEqual(expect.objectContaining({ id: 'x/staking-x/ruji', ticker: 'sRUJI' }))
     expect(assets).not.toContainEqual(expect.objectContaining({ id: 'btc-btc' }))
   })
@@ -109,6 +114,37 @@ describe('THORChain secured-asset catalog', () => {
     expect(first).toEqual(second)
     expect(fetchJson).toHaveBeenCalledTimes(2)
     expect(first.source).toBe('thorchain')
+  })
+
+  it('starts forced refreshes after older reads and keeps the newest snapshot', async () => {
+    let resolveOlder: (value: unknown) => void = () => undefined
+    let resolveForced: (value: unknown) => void = () => undefined
+    const olderResponse = new Promise<unknown>(resolve => {
+      resolveOlder = resolve
+    })
+    const forcedResponse = new Promise<unknown>(resolve => {
+      resolveForced = resolve
+    })
+    const fetchJson = vi.fn().mockReturnValueOnce(olderResponse).mockReturnValueOnce(forcedResponse)
+    const getCatalog = createThorchainSecuredAssetCatalog({ fetchJson })
+
+    const older = getCatalog()
+    const forced = getCatalog({ forceRefresh: true })
+
+    expect(fetchJson).toHaveBeenCalledTimes(2)
+    resolveForced([{ asset: 'BTC-BTC', supply: '2', depth: '2' }])
+    await expect(forced).resolves.toMatchObject({
+      assets: [expect.objectContaining({ supply: '2' })],
+    })
+
+    resolveOlder([{ asset: 'BTC-BTC', supply: '1', depth: '1' }])
+    await expect(older).resolves.toMatchObject({
+      assets: [expect.objectContaining({ supply: '1' })],
+    })
+    await expect(getCatalog()).resolves.toMatchObject({
+      assets: [expect.objectContaining({ supply: '2' })],
+    })
+    expect(fetchJson).toHaveBeenCalledTimes(2)
   })
 
   it('resolves the L1 identity only for valid THORChain secured denoms', () => {
