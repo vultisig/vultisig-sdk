@@ -74,7 +74,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
 
 vi.mock('@vultisig/core-chain/chains/sui/client', () => ({
   getSuiClient: () => ({
-    executeTransactionBlock: mockExecuteSuiTx,
+    executeTransaction: mockExecuteSuiTx,
   }),
 }))
 
@@ -99,8 +99,12 @@ describe('RawBroadcastService', () => {
     mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash', code: 0 })
     mockCosmosGetTx.mockResolvedValue(null)
     mockExecuteSuiTx.mockResolvedValue({
-      digest: 'sui-digest',
-      effects: { status: { status: 'success' } },
+      $kind: 'Transaction',
+      Transaction: {
+        digest: 'sui-digest',
+        status: { success: true, error: null },
+        effects: { transactionDigest: 'sui-digest' },
+      },
     })
     mockRippleRequest.mockResolvedValue({
       result: {
@@ -400,27 +404,50 @@ describe('RawBroadcastService', () => {
   it('broadcasts Sui transaction from JSON payload', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Sui,
-      rawTx: JSON.stringify({ unsignedTx: 'tx-block', signature: 'sig-bytes' }),
+      // base64 of 'tx-block' — the raw path decodes it to BCS bytes for the unified client.
+      rawTx: JSON.stringify({ unsignedTx: 'dHgtYmxvY2s=', signature: 'sig-bytes' }),
     })
     expect(hash).toBe('sui-digest')
-    expect(mockExecuteSuiTx).toHaveBeenCalledWith({
-      transactionBlock: 'tx-block',
-      signature: ['sig-bytes'],
-      options: { showEffects: true },
+
+    const request = mockExecuteSuiTx.mock.calls[0]?.[0]
+    expect(request.transaction).toBeInstanceOf(Uint8Array)
+    expect(new TextDecoder().decode(request.transaction)).toBe('tx-block')
+    expect(request.signatures).toEqual(['sig-bytes'])
+    expect(request.include).toEqual({ effects: true })
+  })
+
+  it('falls back to the effects digest when the response omits the top-level one', async () => {
+    mockExecuteSuiTx.mockResolvedValue({
+      $kind: 'Transaction',
+      Transaction: {
+        status: { success: true, error: null },
+        effects: { transactionDigest: 'effects-digest' },
+      },
     })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({ unsignedTx: 'dHgtYmxvY2s=', signature: 'sig-bytes' }),
+      })
+    ).resolves.toBe('effects-digest')
   })
 
   it('rejects finalized Sui transactions with failed execution effects', async () => {
     mockExecuteSuiTx.mockResolvedValue({
-      digest: 'sui-digest',
-      effects: { status: { status: 'failure', error: 'MoveAbort(42)' } },
+      $kind: 'FailedTransaction',
+      FailedTransaction: {
+        digest: 'sui-digest',
+        status: { success: false, error: { message: 'MoveAbort(42)' } },
+        effects: { transactionDigest: 'sui-digest' },
+      },
     })
 
     await expect(
       service.broadcastRawTx({
         chain: Chain.Sui,
         rawTx: JSON.stringify({
-          unsignedTx: 'tx-block',
+          unsignedTx: 'dHgtYmxvY2s=',
           signature: 'sig-bytes',
         }),
       })
@@ -430,25 +457,25 @@ describe('RawBroadcastService', () => {
     })
   })
 
-  it.each([{ digest: 'sui-digest' }, { digest: 'sui-digest', effects: { status: {} } }])(
-    'rejects Sui responses without explicit successful execution effects',
-    async response => {
-      mockExecuteSuiTx.mockResolvedValue(response)
+  it.each([
+    { $kind: 'Transaction', Transaction: { digest: 'sui-digest' } },
+    { $kind: 'Transaction', Transaction: { digest: 'sui-digest', effects: { transactionDigest: 'sui-digest' } } },
+  ])('rejects Sui responses without explicit successful execution status', async response => {
+    mockExecuteSuiTx.mockResolvedValue(response)
 
-      await expect(
-        service.broadcastRawTx({
-          chain: Chain.Sui,
-          rawTx: JSON.stringify({
-            unsignedTx: 'tx-block',
-            signature: 'sig-bytes',
-          }),
-        })
-      ).rejects.toMatchObject({
-        code: VaultErrorCode.BroadcastFailed,
-        message: expect.stringContaining('no effects status returned'),
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({
+          unsignedTx: 'dHgtYmxvY2s=',
+          signature: 'sig-bytes',
+        }),
       })
-    }
-  )
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('no execution status returned'),
+    })
+  })
 
   it('broadcasts TON BOC via root API', async () => {
     mockQueryUrl.mockResolvedValue({ result: { hash: 'ton-hash' } })

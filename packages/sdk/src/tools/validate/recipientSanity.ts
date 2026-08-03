@@ -22,6 +22,13 @@
  * unambiguous EVM-shaped attempts are flagged as `malformedEvm`.
  */
 
+import {
+  isEvmBurnAddress,
+  SOLANA_DANGEROUS_ADDRESSES,
+  UTXO_DANGEROUS_ADDRESSES,
+  XRP_DANGEROUS_ADDRESSES,
+} from '../../utils/dangerousAddresses'
+
 /** A single deterministic finding about a recipient address. */
 export type RecipientSanityFlag = 'null' | 'selfSend' | 'malformedEvm'
 
@@ -52,25 +59,6 @@ export type RecipientSanityResult = {
   isMalformedEvm: boolean
 }
 
-/**
- * Canonical EVM "dead" burn address (0x...000dEaD). Holds no private key and
- * is a near-universal convention for intentionally destroying tokens.
- */
-const EVM_DEAD_BURN_ADDRESS = '0x000000000000000000000000000000000000dead'
-
-/**
- * Solana's documented Incinerator burn address. The runtime destroys any
- * lamports / tokens sent there; no private key controls it. Case-sensitive
- * base58.
- */
-const SOLANA_INCINERATOR = '1nc1nerator11111111111111111111111111111111'
-
-/**
- * Solana System Program address (base58 encoding of 32 zero-bytes). No
- * private key controls it. Case-sensitive base58.
- */
-const SOLANA_SYSTEM_PROGRAM = '11111111111111111111111111111111'
-
 /** Matches a 0x-prefixed all-hex string of any length. */
 const EVM_PREFIX_RE = /^0x[0-9a-fA-F]+$/
 
@@ -78,11 +66,19 @@ const EVM_PREFIX_RE = /^0x[0-9a-fA-F]+$/
  * Returns true when `addr` is an all-zero / burn address that no real user
  * wallet controls.
  *
- * Coverage (ported from null_recipient.go:isNullAddress):
- *   - EVM: 0x + exactly 40 hex zero-digits (case-insensitive), AND the
- *     canonical 0x...dEaD burn address.
- *   - Solana: the System Program address (32 zero-bytes base58), AND the
- *     documented Incinerator burn address.
+ * Routed through the canonical shared burn-address table
+ * (`@vultisig/core-chain/security/dangerousAddresses`) so it can never drift
+ * from the other guards again. This is STRICTLY additive vs the old inline copy
+ * (EVM zero + `0x...dEaD` + Solana System Program + Incinerator): the shared
+ * table also covers the third EVM burn variant (`0xdead...42069`), the SPL Token
+ * Program + Wrapped SOL mint, the Bitcoin null/eater burns, and the XRP Ledger
+ * black-hole accounts.
+ *
+ *   - EVM: matched by SHAPE (0x + 40 hex, case-insensitive) against the EVM burn
+ *     set — covers all three canonical EVM burn addresses.
+ *   - Non-EVM: this check has no chain context, so it vets against the UNION of
+ *     the Solana / UTXO / XRP family maps. Those keys are unambiguous distinct
+ *     sentinel strings, so a family-specific burn is caught wherever it appears.
  *
  * Conservative: partial-zero addresses (e.g. 0x0000...0001) are NOT flagged
  * because 0x...01 is a valid if unusual address.
@@ -90,18 +86,11 @@ const EVM_PREFIX_RE = /^0x[0-9a-fA-F]+$/
 export function isNullAddress(addr: string): boolean {
   const trimmed = addr.trim()
   if (trimmed === '') return false
-  const lower = trimmed.toLowerCase()
 
-  // EVM zero address: 0x + 40 hex zeros.
-  if (lower.startsWith('0x') && lower.length === 42) {
-    if (/^0+$/.test(lower.slice(2))) return true
-  }
-  // EVM dead / burn address (0x...000dEaD) — case-insensitive.
-  if (lower === EVM_DEAD_BURN_ADDRESS) return true
-  // Solana System Program (base58 of 32 zero-bytes) — case-sensitive.
-  if (trimmed === SOLANA_SYSTEM_PROGRAM) return true
-  // Solana Incinerator burn address — case-sensitive base58.
-  if (trimmed === SOLANA_INCINERATOR) return true
+  if (isEvmBurnAddress(trimmed)) return true
+  if (trimmed in SOLANA_DANGEROUS_ADDRESSES) return true
+  if (trimmed in UTXO_DANGEROUS_ADDRESSES) return true
+  if (trimmed in XRP_DANGEROUS_ADDRESSES) return true
 
   return false
 }
