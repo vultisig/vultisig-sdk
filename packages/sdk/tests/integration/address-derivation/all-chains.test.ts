@@ -74,6 +74,7 @@ const CHAIN_VALIDATORS: Record<string, (address: string) => boolean> = {
   Optimism: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
   Zksync: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
   Mantle: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
+  Robinhood: addr => /^0x[a-fA-F0-9]{40}$/.test(addr),
 
   // Cosmos Chains
   Cosmos: addr => /^cosmos1[a-z0-9]{38,}$/.test(addr),

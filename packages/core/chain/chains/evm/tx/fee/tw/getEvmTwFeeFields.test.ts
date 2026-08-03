@@ -32,4 +32,13 @@ describe('getEvmTwFeeFields', () => {
     expect(fields).toHaveProperty('gasPrice')
     expect(fields).not.toHaveProperty('maxFeePerGas')
   })
+
+  it('builds Robinhood as EIP-1559 with an explicit zero priority fee', () => {
+    const fields = getEvmTwFeeFields({ chain: EvmChain.Robinhood, ...input, priorityFee: 0n })
+
+    expect(fields.txMode).toBe(TW.Ethereum.Proto.TransactionMode.Enveloped)
+    expect(fields).toHaveProperty('maxFeePerGas')
+    expect(fields).toHaveProperty('maxInclusionFeePerGas', Buffer.from([0]))
+    expect(fields).not.toHaveProperty('gasPrice')
+  })
 })

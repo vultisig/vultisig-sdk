@@ -42,6 +42,7 @@ const chainToPlatform: Readonly<Record<string, string>> = {
   CronosChain: 'cronos',
   Hyperliquid: 'hyperliquid',
   Sei: 'sei-network',
+  Robinhood: 'robinhood',
 }
 
 /** Parameters describing the token to price. Provide at least one identity. */
