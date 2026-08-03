@@ -5,6 +5,7 @@ import type { Chain, DiscoveredToken } from '@vultisig/sdk'
 import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
+import { TokenNotFoundError } from '../core/errors'
 import {
   createSpinner,
   info,
@@ -130,7 +131,10 @@ export async function addToken(ctx: CommandContext, options: AddTokenOptions): P
 export async function removeToken(ctx: CommandContext, chain: Chain, tokenId: string): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
-  await vault.removeToken(chain, tokenId)
+  const removed = await vault.removeToken(chain, tokenId)
+  if (!removed) {
+    throw new TokenNotFoundError(`Token "${tokenId}" not found on ${chain}`)
+  }
   success(`\n+ Removed token ${tokenId} from ${chain}`)
 }
 
