@@ -18,6 +18,7 @@ import { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/ge
 import { isRippleInFlightEngineResult } from '@vultisig/core-chain/tx/broadcast/resolvers/ripple'
 import { assertSuiTxSucceeded } from '@vultisig/core-chain/tx/broadcast/resolvers/sui'
 import { getBittensorTxHash } from '@vultisig/core-chain/tx/hash/resolvers/bittensor'
+import { isValidTxHash } from '@vultisig/core-chain/tx/isValidTxHash'
 import { getTxStatus } from '@vultisig/core-chain/tx/status'
 import { rootApiUrl } from '@vultisig/core-config'
 import { attempt } from '@vultisig/lib-utils/attempt'
@@ -98,6 +99,23 @@ const deriveTronRawTxHash = (txJson: { raw_data_hex?: unknown; txID?: unknown })
   }
 
   return derivedHash
+}
+
+const isBittensorDuplicateError = (error: unknown): boolean =>
+  /^(?:transaction )?already imported$/i.test(extractErrorMsg(error).trim())
+
+const isBittensorTimeoutError = (error: unknown): boolean => {
+  if (error && typeof error === 'object') {
+    const { code, name } = error as { code?: unknown; name?: unknown }
+    if (code === 'ETIMEDOUT' || code === 'ESOCKETTIMEDOUT') return true
+    if (name === 'TimeoutError' || name === 'FetchTimeoutError') return true
+  }
+
+  const message = extractErrorMsg(error).trim()
+  return (
+    /^(?:request )?(?:timed out|timeout)(?: after \d+(?:\.\d+)? ?(?:ms|milliseconds?|s|seconds?))?$/i.test(message) ||
+    /^queryUrl: request timed out after \d+ms \(https?:\/\/[^)]+\)$/i.test(message)
+  )
 }
 
 const verifyKnownRawTx = async (chain: Chain, hash: string, chainName: string): Promise<string> => {
@@ -493,21 +511,18 @@ export class RawBroadcastService {
     const rawTxHash = () => this.getBittensorRawTxHash(hexWithPrefix)
 
     const { data: response, error } = await attempt(
-      queryUrl<{ result: string; error?: { message: string } }>(
-        getCustomRpcOverride(OtherChain.Bittensor) ?? bittensorRpcUrl,
-        {
-          body: {
-            jsonrpc: '2.0',
-            method: 'author_submitExtrinsic',
-            params: [hexWithPrefix],
-            id: 1,
-          },
-        }
-      )
+      queryUrl<{ result?: unknown; error?: unknown }>(getCustomRpcOverride(OtherChain.Bittensor) ?? bittensorRpcUrl, {
+        body: {
+          jsonrpc: '2.0',
+          method: 'author_submitExtrinsic',
+          params: [hexWithPrefix],
+          id: 1,
+        },
+      })
     )
 
     if (error) {
-      if (isInError(error, 'Already Imported', 'already imported', 'timed out', 'timeout')) {
+      if (isBittensorDuplicateError(error) || isBittensorTimeoutError(error)) {
         return rawTxHash()
       }
       throw error
@@ -517,17 +532,32 @@ export class RawBroadcastService {
       throw new Error('Bittensor broadcast returned no response')
     }
 
-    if (response.error) {
-      if (isInError(response.error.message, 'Already Imported', 'already imported', 'timed out', 'timeout')) {
-        return rawTxHash()
-      }
-      throw new Error(`Bittensor broadcast failed: ${response.error.message}`)
+    const hasResult = Object.prototype.hasOwnProperty.call(response, 'result')
+    const hasError = Object.prototype.hasOwnProperty.call(response, 'error')
+    if (hasResult === hasError) {
+      throw new Error('Bittensor broadcast failed: malformed JSON-RPC response')
     }
 
-    // Same JSON-RPC 2.0 invariant as Polkadot: a response with neither `result` nor `error`
-    // is malformed, not a success - fail closed instead of returning `undefined` as a hash.
-    if (!response.result) {
-      throw new Error('Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    if (hasError) {
+      if (!response.error || typeof response.error !== 'object' || !('message' in response.error)) {
+        throw new Error('Bittensor broadcast failed: malformed JSON-RPC error')
+      }
+      const message = (response.error as { message?: unknown }).message
+      if (typeof message !== 'string') {
+        throw new Error('Bittensor broadcast failed: malformed JSON-RPC error')
+      }
+      if (isBittensorDuplicateError(message) || isBittensorTimeoutError(response.error)) {
+        return rawTxHash()
+      }
+      throw new Error(`Bittensor broadcast failed: ${message}`)
+    }
+
+    if (
+      typeof response.result !== 'string' ||
+      response.result !== response.result.trim() ||
+      !isValidTxHash(Chain.Bittensor, response.result)
+    ) {
+      throw new Error('Bittensor broadcast failed: invalid extrinsic hash in RPC response')
     }
 
     return response.result
