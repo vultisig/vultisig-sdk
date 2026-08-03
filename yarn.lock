@@ -7027,6 +7027,7 @@ __metadata:
     "@types/ws": "npm:^8.18.1"
     "@vultisig/client-shared": "workspace:^"
     "@vultisig/core-chain": "workspace:^"
+    "@vultisig/core-mpc": "workspace:^"
     "@vultisig/rujira": "workspace:^"
     "@vultisig/sdk": "workspace:^"
     chalk: "npm:^5.6.2"
@@ -7108,7 +7109,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@vultisig/core-mpc@workspace:packages/core/mpc":
+"@vultisig/core-mpc@workspace:^, @vultisig/core-mpc@workspace:packages/core/mpc":
   version: 0.0.0-use.local
   resolution: "@vultisig/core-mpc@workspace:packages/core/mpc"
   dependencies:
