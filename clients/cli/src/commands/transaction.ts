@@ -2,14 +2,42 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
-import type { VaultBase } from '@vultisig/sdk'
+import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
+import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
 import { Chain, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
 import { createSpinner, info, isJsonOutput, isNonInteractive, outputJson, warn } from '../lib/output'
-import { confirmTransaction, displayTransactionPreview, displayTransactionResult } from '../ui'
+import { confirmTransaction, displayTransactionPreview, displayTransactionResult, escapeTerminalControls } from '../ui'
+
+const getSendPreviewDetails = (
+  chain: Chain,
+  keysignPayload: KeysignPayload
+): { memo: string | undefined; destinationTag: number | undefined } => {
+  let memo = keysignPayload.memo || undefined
+
+  if (chain !== Chain.Ripple) {
+    return { memo, destinationTag: undefined }
+  }
+
+  const rippleSpecific = keysignPayload.blockchainSpecific
+  if (rippleSpecific.case !== 'rippleSpecific') {
+    throw new Error('Ripple send payload is missing Ripple-specific data')
+  }
+
+  const destinationTag = resolveDestinationTag({
+    destinationTag: rippleSpecific.value.destinationTag,
+    memo,
+  })
+  const legacyMemoDestinationTag = getLegacyDestinationTag(memo)
+  if (legacyMemoDestinationTag !== undefined && legacyMemoDestinationTag === destinationTag) {
+    memo = undefined
+  }
+
+  return { memo, destinationTag }
+}
 
 /**
  * Execute send command - send tokens to an address
@@ -42,12 +70,15 @@ export async function executeSend(
 async function previewDryRun(
   vault: VaultBase,
   params: SendParams,
-  dryResult: { fee: string; feeSymbol: string; total: string },
-  to: string,
-  destinationTag: number | undefined
+  dryResult: { fee: string; feeSymbol: string; total: string; keysignPayload: KeysignPayload },
+  to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
   const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
+    params.chain,
+    dryResult.keysignPayload
+  )
 
   // A token send pays its fee out of the NATIVE balance, which `total` no
   // longer covers — so check it separately. Holding the token but no gas is
@@ -91,7 +122,8 @@ async function previewDryRun(
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
     balance: balance.formattedAmount,
-    destinationTag,
+    destinationTag: payloadDestinationTag,
+    ...(previewMemo ? { memo: previewMemo } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
   }
 
@@ -105,6 +137,7 @@ async function previewDryRun(
   info(`  To:      ${result.to}`)
   info(`  Amount:  ${result.amount} ${result.symbol}`)
   if (result.destinationTag !== undefined) info(`  Destination tag: ${result.destinationTag}`)
+  if (result.memo) info(`  Memo:    ${escapeTerminalControls(result.memo)}`)
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
   info(`  Total:   ${result.total} ${result.symbol}`)
   info(`  Balance: ${result.balance} ${result.symbol}`)
@@ -162,7 +195,7 @@ export async function sendTransaction(
 
   // If user asked for dry-run only, return preview
   if (params.dryRun) {
-    return previewDryRun(vault, params, dryResult, to, destinationTag)
+    return previewDryRun(vault, params, dryResult, to)
   }
 
   // 2. Show preview and get gas estimate
@@ -176,14 +209,15 @@ export async function sendTransaction(
   const balance = await vault.balance(params.chain, params.tokenId)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
+    const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
     displayTransactionPreview(
       address,
       to,
       dryResult.total,
       balance.symbol,
       params.chain,
-      params.memo,
-      destinationTag,
+      preview.memo,
+      preview.destinationTag,
       gas
     )
   }

@@ -38,6 +38,34 @@ const extractResolverTxHash = (broadcastResult: unknown): string | undefined => 
   return undefined
 }
 
+type BroadcastPartialFailureInput = {
+  chain: Chain
+  broadcastedTxHashes: string[]
+  failedInputIndex: number
+  cause: unknown
+}
+
+export class BroadcastPartialFailureError extends Error {
+  readonly broadcastedTxHashes: string[]
+  readonly failedInputIndex: number
+  readonly originalError?: Error
+
+  constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
+    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+    super(
+      `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
+        broadcastedTxHashes.length
+      } transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
+        ', '
+      )}`
+    )
+    this.name = 'BroadcastPartialFailureError'
+    this.broadcastedTxHashes = broadcastedTxHashes
+    this.failedInputIndex = failedInputIndex
+    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+  }
+}
+
 /**
  * BroadcastService
  *
@@ -53,7 +81,8 @@ const extractResolverTxHash = (broadcastResult: unknown): string | undefined => 
 export class BroadcastService {
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
-    private wasmProvider: WasmProvider
+    private wasmProvider: WasmProvider,
+    private broadcastTransaction: typeof coreBroadcastTx = coreBroadcastTx
   ) {}
 
   /**
@@ -125,7 +154,8 @@ export class BroadcastService {
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
-      for (const txInputData of txInputsArray) {
+      const broadcastedTxHashes: string[] = []
+      for (const [index, txInputData] of txInputsArray.entries()) {
         const compiledTx = compileTx({
           publicKey,
           txInputData,
@@ -140,13 +170,27 @@ export class BroadcastService {
         })
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
+        let broadcastResult: unknown
+        try {
+          broadcastResult = await this.broadcastTransaction({
+            chain,
+            tx: signingOutput,
+          })
+        } catch (error) {
+          if (broadcastedTxHashes.length > 0) {
+            throw new BroadcastPartialFailureError({
+              chain,
+              broadcastedTxHashes,
+              failedInputIndex: index,
+              cause: error,
+            })
+          }
+          throw error
+        }
 
-        const broadcastResult = await coreBroadcastTx({
-          chain,
-          tx: signingOutput,
-        })
-
-        txHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        broadcastedTxHashes.push(inputTxHash)
+        txHash = inputTxHash
       }
 
       return txHash
