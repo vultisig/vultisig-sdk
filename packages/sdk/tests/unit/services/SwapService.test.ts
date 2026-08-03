@@ -59,6 +59,7 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
     Cosmos: { ticker: 'ATOM', decimals: 6 },
     Hyperliquid: { ticker: 'HYPE', decimals: 18 },
     Optimism: { ticker: 'ETH', decimals: 18 },
+    Robinhood: { ticker: 'ETH', decimals: 18 },
   },
 }))
 

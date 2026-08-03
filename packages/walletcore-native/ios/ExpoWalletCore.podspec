@@ -13,5 +13,5 @@ Pod::Spec.new do |s|
   s.source_files   = '*.swift'
 
   s.dependency 'ExpoModulesCore'
-  s.dependency 'TrustWalletCore', '4.3.22'
+  s.dependency 'TrustWalletCore', '4.7.0'
 end
