@@ -468,10 +468,13 @@ export class SwapService {
     // Solana has explicit fees in the quote
     if ('solana' in tx) {
       const networkFee = tx.solana.networkFee
-      const swapFee = tx.solana.swapFee.amount
+      const swapFee = tx.solana.swapFee
+      // SwapFees is native-denominated. Preserve a non-native swap fee on the
+      // raw quote without mixing its units into the native network-fee total.
+      const nativeSwapFee = swapFee.chain === fromChain && swapFee.id === undefined ? swapFee.amount : 0n
       return {
         network: networkFee,
-        total: networkFee + swapFee,
+        total: networkFee + nativeSwapFee,
       }
     }
 
