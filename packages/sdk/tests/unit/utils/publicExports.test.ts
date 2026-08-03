@@ -169,6 +169,7 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
     expect(typeof sdk.VaultBase).toBe('function')
+    expect(typeof sdk.BroadcastPartialFailureError).toBe('function')
   })
 
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {

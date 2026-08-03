@@ -71,6 +71,19 @@ function memoSendPayload(to: string, amountBaseUnits: string, memo: string): Key
   } as unknown as KeysignPayload
 }
 
+function rippleSendPayload(to: string, amountBaseUnits: string, destinationTag: number): KeysignPayload {
+  return {
+    coin: { isNativeToken: true, ticker: 'XRP', contractAddress: '', chain: 'Ripple', address: 'rSender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo: destinationTag.toString(),
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: { destinationTag },
+    },
+  } as unknown as KeysignPayload
+}
+
 function tokenSendPayload(to: string, amountBaseUnits: string, contract: string): KeysignPayload {
   return {
     coin: { isNativeToken: false, ticker: 'USDC', contractAddress: contract, chain: 'Ethereum', address: '0xsender' },
@@ -260,7 +273,7 @@ describe('send — broadcast dedupe guard', () => {
   it('includes an XRP DestinationTag in a dry-run result', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rRecipient', '1000000'),
+      payload: rippleSendPayload('rRecipient', '1000000', 123),
       txHash: 'xrp-dry-run',
       realSends,
     })
@@ -280,7 +293,7 @@ describe('send — broadcast dedupe guard', () => {
   it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      payload: rippleSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000', 495),
       txHash: 'xrp-x-address-dry-run',
       realSends,
     })
