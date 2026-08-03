@@ -13,6 +13,17 @@ import type {
 import type { SwapQuoteBase } from '../vault/swap-types'
 import type { VaultBase } from '../vault/VaultBase'
 
+export type LegacyVaultBackupMigrationNotice = {
+  vaultId: string
+  vaultName: string
+  sourceFormat: 'legacy-sha256'
+  storedFormat: 'pbkdf2-hmac-sha256'
+  pbkdf2Iterations: 600_000
+  passwordRotationRecommended: true
+  replaceLegacyBackupsRecommended: true
+  message: string
+}
+
 /**
  * Events emitted by the Vultisig SDK for state changes.
  * Consumers can listen to these for reactive updates.
@@ -22,6 +33,14 @@ export type SdkEvents = {
   vaultChanged: {
     vaultId: string
   }
+
+  /**
+   * Emitted after a legacy SHA-256(password) vault backup is successfully
+   * imported and its stored copy has been upgraded to salted PBKDF2.
+   * Consumers should show this as a security warning and guide the user through
+   * a fresh export with a new password before replacing every legacy copy.
+   */
+  legacyVaultBackupMigrated: LegacyVaultBackupMigrationNotice
 
   /** Emitted on SDK-level errors */
   error: Error
