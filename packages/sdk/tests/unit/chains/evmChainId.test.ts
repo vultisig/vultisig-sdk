@@ -26,6 +26,7 @@ const CANONICAL_EVM_CHAIN_IDS = {
   [Chain.CronosChain]: 25,
   [Chain.Hyperliquid]: 999,
   [Chain.Sei]: 1329,
+  [Chain.Robinhood]: 4663,
 } satisfies Record<EvmChain, number>
 
 describe('EVM chainId public API', () => {

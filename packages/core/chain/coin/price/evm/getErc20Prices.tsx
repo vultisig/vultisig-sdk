@@ -27,6 +27,7 @@ const coinGeckoNetwork: Record<EvmChain, string> = {
   [EvmChain.Mantle]: 'mantle',
   [EvmChain.Hyperliquid]: 'hyperliquid',
   [EvmChain.Sei]: 'sei-network',
+  [EvmChain.Robinhood]: 'robinhood',
 }
 
 export const getErc20Prices = async ({ ids, fiatCurrency = defaultFiatCurrency, chain }: Input) => {
