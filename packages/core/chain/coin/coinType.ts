@@ -45,6 +45,7 @@ export const getCoinType = ({ walletCore: { CoinType }, chain }: Input): CoinTyp
     [Chain.Zcash]: () => CoinType.zcash,
     [Chain.Cardano]: () => CoinType.cardano,
     [Chain.Mantle]: () => CoinType.mantle,
+    [Chain.Robinhood]: () => CoinType.robinhoodChain,
     [Chain.Hyperliquid]: () => CoinType.ethereum,
     [Chain.Sei]: () => CoinType.ethereum,
     [Chain.QBTC]: () => CoinType.cosmos,

@@ -156,6 +156,7 @@ describe('convertToKeysignSignatures', () => {
             r: '0xab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d',
             s: '0x7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
             der: '0x3045022100ab3c7b6a9e8f2c1d5e4a3f2b1c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d02207f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e',
+            recovery: 1,
           },
           {
             r: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
@@ -181,7 +182,7 @@ describe('convertToKeysignSignatures', () => {
         r: signature.signatures![0].r,
         s: signature.signatures![0].s,
         der_signature: signature.signatures![0].der,
-        recovery_id: '0',
+        recovery_id: '1',
       })
 
       // Second signature
