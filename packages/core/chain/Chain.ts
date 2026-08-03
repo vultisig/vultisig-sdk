@@ -6,6 +6,7 @@ export const EthereumL2Chain = {
   Optimism: 'Optimism',
   Zksync: 'Zksync',
   Mantle: 'Mantle',
+  Robinhood: 'Robinhood',
 } as const
 
 export type EthereumL2Chain = (typeof EthereumL2Chain)[keyof typeof EthereumL2Chain]

@@ -15,6 +15,7 @@ const platformToChain: Record<string, Chain> = {
   base: Chain.Base,
   blast: Chain.Blast,
   mantle: Chain.Mantle,
+  robinhood: Chain.Robinhood,
   'zksync-era': Chain.Zksync,
   cronos: Chain.CronosChain,
   sei: Chain.Sei,
