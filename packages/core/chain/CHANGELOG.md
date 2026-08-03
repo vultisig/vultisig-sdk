@@ -1,5 +1,168 @@
 # @vultisig/core-chain
 
+## 2.31.0
+
+### Minor Changes
+
+- [#1541](https://github.com/vultisig/vultisig-sdk/pull/1541) [`b9f81af`](https://github.com/vultisig/vultisig-sdk/commit/b9f81af9065a5c0bfc2f86f8fb20aa51e670ab77) Thanks [@realpaaao](https://github.com/realpaaao)! - Add Robinhood Chain (Arbitrum Orbit EVM L2, chain id 4663, ETH gas). Swaps enabled via LiFi and KyberSwap.
+
+- [#1686](https://github.com/vultisig/vultisig-sdk/pull/1686) [`c0e260f`](https://github.com/vultisig/vultisig-sdk/commit/c0e260f89d159d14b170384864b24b101b23dfb0) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Limit-order cancellation primitives: the `m=<` modify-limit-swap memo in its cancel form, eligibility, bucket-key duplicate detection, and L1 dust.
+
+  Cancellation is not a variation on placement. Every failure mode is silent — the transaction confirms, the fee is spent, and the order carries on resting with nothing to distinguish it from success — so each rule is enforced rather than documented.
+
+  `buildCancelLimitSwapMemo` refuses abbreviated assets outright: `ModifyLimitSwapMemo` is the one inbound memo type `processOneTxIn` does not run through `fuzzyAssetMatch`, so the placement memo's six-character contract suffix would address a bucket that by construction holds no order. Amounts are emitted as plain decimal integers, never compressed — these coins parse through `cosmos.ParseCoins`, which does not understand the scientific notation a placement LIM may use.
+
+  `getLimitSwapCancelEligibility` fails closed at every unknown and cross-checks what was recorded at signing against what the queue reports — **assets as well as amounts**. Absence is not disagreement (an order placed seconds ago has not been polled), but a present-and-unparseable observation blocks exactly as a mismatch does.
+
+  `getThorchainLimitOrderBucketKey` reproduces the advanced-swap-queue index key, including its zero-padding _and_ right-truncation at 18 characters. Orders are addressed by `(layer-1 pair, ratio) + FromAddress` and the first match in the bucket wins, so orders sharing a ratio are not independently cancellable — compared on the key rather than on equal amounts, which would under-report collisions.
+
+  `getLimitSwapCancelDust` rescales the live `dust_threshold` from THORChain's 1e8 into the source coin's own precision, with a safety multiple and an upper ceiling, refusing rather than defaulting when the threshold is missing, unparseable, or rounds away. A cancel once signed for 2000 wei — the 1e8 threshold used verbatim as an 18-decimal chain's smallest unit — was truncated to zero and never observed; that case is pinned by a test.
+
+### Patch Changes
+
+- [#1683](https://github.com/vultisig/vultisig-sdk/pull/1683) [`2ef8f3f`](https://github.com/vultisig/vultisig-sdk/commit/2ef8f3f42f5d44673568b39a91c42bd0fe410311) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Reject malformed or wrong-chain limit-swap destinations while decoding a memo, so co-signers fall back to generic payload review instead of seeing an invalid destination as an enriched order.
+
+## 2.30.0
+
+### Minor Changes
+
+- [#1630](https://github.com/vultisig/vultisig-sdk/pull/1630) [`9436de6`](https://github.com/vultisig/vultisig-sdk/commit/9436de627b4d123d7f9bb76e4981722cd84266d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Limit-order tracking primitives: queue client, outcome resolution, and a shared status model.
+
+  `getLimitSwapQueue`/`parseLimitSwapQueue` read THORNode's `/thorchain/queue/limit_swaps` (sender-scoped — one call covers all of an address's orders) into typed resting orders: fill split, TTL, trade target, and the target asset as THORChain holds it after fuzzy-match expansion. An absent `limit_swaps` key parses as `null` ("no information"), never as an empty queue — an order's disappearance from this list is what marks it terminal, so a response we didn't understand must not close every tracked order at once.
+
+  `resolveLimitSwapOutcome`/`classifyLimitSwapActions` answer what happened to an order that left the queue, from Midgard `/v2/actions`. A `refund` action's reason is authoritative regardless of its outbound status. The `"swap has been completed."` reason is THORNode's TTL-expiry settle signal, not a fill confirmation — verified live on mainnet, a refund carrying that reason returned the full deposit to the sender with zero of the destination asset ever paid out — so it classifies as `expired` rather than `filled`. Rate limits, server errors and empty responses are all `unresolved`: an answer THORChain hasn't given, never an outcome.
+
+  `getThorchainTxResult` reads `/cosmos/tx/v1beta1/txs/{hash}` — the only place a rejected `MsgDeposit` is visible, since it never produces a Midgard action — so a rejected placement cannot sit "pending" forever.
+
+  `limitSwapOrderStatuses` + `isTerminalLimitSwapOrderStatus` give every platform the same order lifecycle to render.
+
+### Patch Changes
+
+- [#1456](https://github.com/vultisig/vultisig-sdk/pull/1456) [`645e291`](https://github.com/vultisig/vultisig-sdk/commit/645e2917aa1b6cd58c5599ddb32b1c89fa73e20e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve SwapKit fee asset metadata for Solana-source quotes, including Chainflip's independent stable USDC fee asset, and sum repeated fee entries before fiat valuation.
+
+## 2.29.3
+
+### Patch Changes
+
+- [#1678](https://github.com/vultisig/vultisig-sdk/pull/1678) [`7603f32`](https://github.com/vultisig/vultisig-sdk/commit/7603f32e612a7d575b05c49e604aed228817f38c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Compare VULT discount tier balances in bigint base units instead of float64.
+  `100000n * 10n**18n` is not representable in float64 (`Number` round-trips it
+  to 99999.99999999999), so a wallet holding exactly 100,000 VULT — the diamond
+  minimum — was demoted to platinum and paid a 25 bps affiliate fee instead of
+  15 on every swap. The float rounding also swallowed one-base-unit differences
+  around every tier boundary. Comparisons now stay exact via `toChainAmount`
+  (vultisig-sdk#1677).
+
+## 2.29.2
+
+### Patch Changes
+
+- [#1650](https://github.com/vultisig/vultisig-sdk/pull/1650) [`8061f30`](https://github.com/vultisig/vultisig-sdk/commit/8061f3072cc299196894b3c118bf7046eff8a004) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Validate Bittensor SS58 prefix and checksum before reading TAO balances.
+
+- [#1661](https://github.com/vultisig/vultisig-sdk/pull/1661) [`ec4aac7`](https://github.com/vultisig/vultisig-sdk/commit/ec4aac78e96db00cae283fe8a506983a30c42412) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Floor the signed EVM `maxPriorityFeePerGas` on tip-auction chains: 1 gwei on
+  Ethereum (parity with iOS `FeeService.calculateMaxPriorityFeePerGas` and
+  Android `EthereumFeeService`, which both floor at 1 gwei) and 30 gwei on
+  Polygon (validators enforce a ~25 gwei minimum tip). In quiet fee markets the
+  raw `eth_maxPriorityFeePerGas` suggestion collapses to near zero (~0.0004 gwei
+  observed live), and a tx signed with that tip is never picked up by block
+  builders — it sat in the public mempool until evicted, so Ethereum mainnet
+  sends from extension/desktop broadcast fine but vanished unmined. Rollup L2s
+  and the zkSync `estimateFee` path keep their current no-floor behavior, and
+  explicit user fee settings still bypass the clamp (vultisig-sdk#1659).
+
+- [#1193](https://github.com/vultisig/vultisig-sdk/pull/1193) [`d1ed4bb`](https://github.com/vultisig/vultisig-sdk/commit/d1ed4bbd459bfed006cf9f319d9e39356ffe25b9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Reconcile and publicly export the dangerous/burn-address guard.
+
+  The SDK's `dangerousAddresses.ts` list had drifted from its own authoritative
+  parity source (mcp-ts `src/lib/dangerous-addresses.ts`) and from
+  agent-backend-ts's copy — the exact drift class the file's own header documents
+  via the CCTP `mintRecipient` burn incident. Reconciled to the **union** of all
+  three copies (additive/tightening only, never weakening an existing entry):
+
+  - Solana: added the SPL Token Program and Wrapped SOL mint (from mcp-ts), kept
+    the Solana Incinerator (which only this SDK copy carried).
+  - UTXO (Bitcoin/Litecoin/Dogecoin/Bitcoin-Cash/Dash/Zcash): added the Bitcoin
+    null-script and eater burn addresses.
+  - XRP (Ripple): added the ACCOUNT_ZERO black-hole and ACCOUNT_ONE reserved
+    system account.
+
+  The guard (`assertSafeDestination`, `assertSafeEvmDestination`,
+  `isEvmBurnAddress`, `getEvmDangerousReason`, `getChainDangerousReason`, and the
+  per-family tables) is now exported from the SDK's public API so the app and
+  agent-backend-ts can consume the single source of truth instead of maintaining
+  divergent copies. Non-EVM lists stay chain-family-scoped, so a burn address for
+  one family never blocks an unrelated chain.
+
+  The canonical table now lives in `@vultisig/core-chain`
+  (`security/dangerousAddresses`) — re-exported unchanged from the SDK — so the
+  lower-level core-chain swap guard can share it too (core-chain cannot depend on
+  the SDK). Two in-repo siblings that still held private, incomplete copies now
+  route through it:
+
+  - `recipientSanity.isNullAddress` (SDK) previously missed the SPL Token
+    Program + Wrapped SOL mint, the Bitcoin/XRP burns, and the third EVM variant;
+    it now flags all of them.
+  - `findSwapQuote`'s custom-recipient guard (core-chain) previously vetted only
+    the EVM zero + `…dEaD` addresses; it now rejects the `0xdead…42069` variant
+    and the base58 (Solana / UTXO / XRP) family burns on the destination chain.
+
+  The shared EVM shape check is now case-insensitive on the `0x` prefix, so a
+  `0X…`-prefixed burn can't slip past (parity with the Go guard).
+
+- [#1655](https://github.com/vultisig/vultisig-sdk/pull/1655) [`648d932`](https://github.com/vultisig/vultisig-sdk/commit/648d932b7e3c6f3c30ff7007f3c4e4387879ba38) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): resolve logos for XRPL issued currencies
+
+  Only curated issued currencies (RLUSD) carried a logo, so every other trust-line
+  token — SOLO, an issuer's USD, anything added by id or surfaced by ledger
+  discovery — resolved with no logo and rendered as a broken-image placeholder in
+  clients.
+
+  `getRippleTokenMetadata` now reads an uncurated token's official icon from the
+  XRPL token registry (xrplmeta), keyed by the `<currency>:<issuer>` pair. This is
+  the same shape as the EVM resolver reading `logoURI` from 1inch and the Solana
+  resolver returning `icon`; XRPL was the outlier because it has no on-ledger token
+  metadata registry of its own.
+
+  A curated token is unchanged: it keeps its bundled logo and price provider and
+  performs no lookup. An uncurated token may borrow an icon but never a curated
+  token's `priceProviderId` — two issuers can share a ticker on XRPL, so the issuer
+  is what identifies a token. The lookup fails soft: an unlisted token or an
+  unreachable registry still resolves, just without a logo.
+
+- [#1653](https://github.com/vultisig/vultisig-sdk/pull/1653) [`6763ddb`](https://github.com/vultisig/vultisig-sdk/commit/6763ddbd382bd71cdf9f24bbd3bde0116a694906) Thanks [@aminsato](https://github.com/aminsato)! - Sign Sei as EIP-1559 (enveloped) instead of legacy, matching iOS
+  (`EVMHelper.setGasParameters`) and Android (`EthereumGasHelper.setGasParameters`),
+  which sign every EVM chain except BSC as EIP-1559. Sei was the only
+  enveloped-capable EVM chain still mapped to `'legacy'` in
+  `evmChainTxFeeFormat`, so the pre-signing hash (and therefore the relay
+  `message_id`) diverged between mobile and extension/desktop, deadlocking
+  Sei co-signing between them (vultisig-windows#4369).
+
+- [#1433](https://github.com/vultisig/vultisig-sdk/pull/1433) [`259837f`](https://github.com/vultisig/vultisig-sdk/commit/259837f482717624d6422797e088a9341d4f1a23) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Return the tx hash string (not the full RPC envelope object) from the Tron broadcast resolver, consistent with the other broadcast resolvers. The SDK's `BroadcastService` discards the broadcast resolver's return and derives the hash itself, so no consumer read the object — this is a shape-consistency fix.
+
+## 2.29.1
+
+### Patch Changes
+
+- [#1568](https://github.com/vultisig/vultisig-sdk/pull/1568) [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - feat(ripple): add XRPL issued-currency (custom token) support
+
+  XRPL issued currencies (trust-line tokens / IOUs) had no token metadata resolver,
+  so custom tokens could not be added on Ripple. Adds `getRippleTokenMetadata` and
+  registers Ripple in `chainsWithTokenMetadataDiscovery`. Unlike EVM/Tron there is no
+  on-ledger metadata call: XRPL exposes no per-token decimal metadata — so the SDK
+  applies its fixed issued-currency decimal policy (`rippleIssuedCurrencyDecimals`) —
+  and the ticker is derived from the currency code, so the resolver fetches nothing.
+  Curated tokens
+  (RLUSD) get their logo and price provider merged in; an arbitrary token gets neither
+  rather than borrowing a known token's identity, since two issuers can share a ticker
+  on XRPL.
+
+  `isValidTokenId` now also accepts a human ticker (`SOLO`, `RLUSD`) wherever an
+  on-ledger currency code is accepted — the form shown on explorers like xrpscan — and
+  a new `normalizeTokenId` canonicalises a pasted id to the on-ledger form.
+
+  `BalanceService.addToken`/`removeToken` normalise the token id (and its matching
+  `contractAddress`) before it enters persisted state, so a manually added
+  `RLUSD.<issuer>` collapses onto the canonical `524C…<issuer>` that ledger discovery
+  stores instead of being kept as a second, distinct token. A no-op for chains whose
+  ids are already canonical.
+
 ## 2.29.0
 
 ### Minor Changes

@@ -1,27 +1,50 @@
-import { fromBinary } from '@bufbuild/protobuf'
+import { fromBinary, toBinary } from '@bufbuild/protobuf'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
+import { VaultContainerSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_container_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
+import { encryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/encryptVaultBackupWithPassword'
 import {
+  DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
   VAULT_BACKUP_BLOB_MAGIC,
   VAULT_BACKUP_MAGIC_LEN,
   VAULT_BACKUP_PBKDF2_HEADER_LEN,
 } from '@vultisig/lib-utils/encryption/vaultBackup/vaultBackupConstants'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
-/** Legacy SHA-256(password)+AES-GCM: 12-byte nonce + ciphertext + 16-byte tag (minimum empty plaintext ⇒ 28 bytes). */
-const MIN_LEGACY_ENCRYPTED_VAULT_LEN = 28
-
-const GCM_AUTH_TAG_BYTES = 16
-
 import type { SdkContext, VaultContext } from './context/SdkContext'
+import type { LegacyVaultBackupMigrationNotice } from './events/types'
 import { FastSigningService } from './services/FastSigningService'
 import { VaultData } from './types'
 import { FastVault } from './vault/FastVault'
 import { SecureVault } from './vault/SecureVault'
 import { VaultBase } from './vault/VaultBase'
 import { VaultError, VaultErrorCode, VaultImportError, VaultImportErrorCode } from './vault/VaultError'
+
+/** Legacy SHA-256(password)+AES-GCM: 12-byte nonce + ciphertext + 16-byte tag (minimum empty plaintext ⇒ 28 bytes). */
+const MIN_LEGACY_ENCRYPTED_VAULT_LEN = 28
+
+const GCM_AUTH_TAG_BYTES = 16
+
+type VaultImportResult = {
+  vault: VaultBase
+  legacyBackupMigrated: boolean
+}
+
+type LegacyBackupMigrationHandler = (notice: LegacyVaultBackupMigrationNotice) => void
+
+const createLegacyBackupMigrationNotice = (vault: VaultBase): LegacyVaultBackupMigrationNotice => ({
+  vaultId: vault.id,
+  vaultName: vault.name,
+  sourceFormat: 'legacy-sha256',
+  storedFormat: 'pbkdf2-hmac-sha256',
+  pbkdf2Iterations: DEFAULT_VAULT_BACKUP_PBKDF2_ITERATIONS,
+  passwordRotationRecommended: true,
+  replaceLegacyBackupsRecommended: true,
+  message:
+    'This vault came from a legacy backup with a weak password KDF. The SDK upgraded its stored copy, but the password and every old backup must be treated as compromised. Export a fresh backup with a new password, replace all legacy copies, and securely delete the old files.',
+})
 
 /**
  * VaultManager handles vault lifecycle operations
@@ -108,6 +131,27 @@ export class VaultManager {
    * const vault = await vaultManager.importVault(vultContent, 'password123')
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
+    return (
+      await this.importVaultWithResult(vultContent, password, notice => {
+        console.warn(`[Vultisig SDK] ${notice.message}`)
+      })
+    ).vault
+  }
+
+  /**
+   * Import a vault and report whether its persisted backup was upgraded from the
+   * legacy SHA-256(password) format. The public SDK uses this metadata to emit a
+   * user-facing security notice without changing importVault's return contract.
+   *
+   * @internal
+   */
+  async importVaultWithResult(
+    vultContent: string,
+    password?: string,
+    onLegacyBackupMigrated?: LegacyBackupMigrationHandler
+  ): Promise<VaultImportResult> {
+    let decryptedVaultBytes: Buffer | undefined
+
     try {
       let container
       try {
@@ -123,6 +167,8 @@ export class VaultManager {
       // We need to peek at the public key to check for duplicates
       // This requires partial parsing
       let vaultBase64: string
+      let persistedVultContent = vultContent.trim()
+      let legacyBackupMigrated = false
       if (container.isEncrypted) {
         if (!password) {
           throw new VaultImportError(VaultImportErrorCode.PASSWORD_REQUIRED, 'Password required for encrypted vault')
@@ -150,8 +196,9 @@ export class VaultManager {
         }
 
         try {
-          const decryptedBuffer = decryptVaultBackupWithPassword(password, encryptedData)
-          vaultBase64 = Buffer.from(decryptedBuffer).toString('base64')
+          decryptedVaultBytes = decryptVaultBackupWithPassword(password, encryptedData)
+          vaultBase64 = decryptedVaultBytes.toString('base64')
+          legacyBackupMigrated = !isPbkdf2Format
         } catch (error) {
           throw new VaultImportError(
             VaultImportErrorCode.INVALID_PASSWORD,
@@ -186,6 +233,17 @@ export class VaultManager {
         )
       }
 
+      // Legacy decryption remains import-only. Once the password and inner
+      // vault have both been validated, replace the stored ciphertext with the
+      // salted 600k-iteration PBKDF2 format before any VaultData is persisted.
+      // The caller's original file/string is immutable and remains their
+      // responsibility to replace after the migration notice is emitted.
+      if (legacyBackupMigrated && password && decryptedVaultBytes) {
+        const migratedEncryptedData = encryptVaultBackupWithPassword(password, decryptedVaultBytes)
+        container.vault = migratedEncryptedData.toString('base64')
+        persistedVultContent = Buffer.from(toBinary(VaultContainerSchema, container)).toString('base64')
+      }
+
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
 
@@ -200,9 +258,15 @@ export class VaultManager {
       let vaultInstance: VaultBase
       if (vaultType === 'fast') {
         const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-        vaultInstance = FastVault.fromImport(vaultId, vultContent.trim(), parsedVault, fastSigningService, vaultContext)
+        vaultInstance = FastVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          fastSigningService,
+          vaultContext
+        )
       } else {
-        vaultInstance = SecureVault.fromImport(vaultId, vultContent.trim(), parsedVault, vaultContext)
+        vaultInstance = SecureVault.fromImport(vaultId, persistedVultContent, parsedVault, vaultContext)
       }
 
       // Cache password if provided (for encrypted vaults)
@@ -213,10 +277,17 @@ export class VaultManager {
       // Save to storage
       await vaultInstance.save()
 
+      // Notify at the durable-save boundary. This guarantees consumers learn
+      // about password rotation even if setting the active-vault pointer fails
+      // after the upgraded vault has already been persisted.
+      if (legacyBackupMigrated) {
+        onLegacyBackupMigrated?.(createLegacyBackupMigrationNotice(vaultInstance))
+      }
+
       // Set as active vault
       await this.storage.set('activeVaultId', vaultId)
 
-      return vaultInstance
+      return { vault: vaultInstance, legacyBackupMigrated }
     } catch (error) {
       if (error instanceof VaultImportError) {
         throw error
@@ -226,6 +297,8 @@ export class VaultManager {
         `Failed to import vault: ${(error as Error).message}`,
         error as Error
       )
+    } finally {
+      decryptedVaultBytes?.fill(0)
     }
   }
 
