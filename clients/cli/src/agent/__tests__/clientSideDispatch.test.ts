@@ -2,19 +2,92 @@
 // SSE parser routing, dispatch chain serialization, queue state contracts).
 import { describe, expect, it, vi } from 'vitest'
 
+import { AgentErrorCode } from '../agentErrors'
 import { AgentClient } from '../client'
-import { AgentSession, CLIENT_SIDE_TOOL_DISPATCH as registry } from '../session'
+import {
+  AgentSession,
+  BACKEND_CLIENT_SIDE_TOOL_NAMES,
+  CLIENT_SIDE_DISPATCH_TOOL_NAMES,
+  CLIENT_SIDE_TOOL_DISPATCH as registry,
+} from '../session'
 import type { RecentAction } from '../types'
 
-describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => {
-  // Locks the registry surface — drift is caught at test time, not runtime.
-  // Discriminator tools (vault_coin / vault_chain / address_book) carry an
-  // inner `action: 'add' | 'remove'` so two-letter CRUD is one tool name on
-  // the wire, matching the agent-backend's `clientSideToolNames`.
-  const EXPECTED_ENTRIES = ['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book']
+// ────────────────────────────────────────────────────────────────────────────
+// Backend contract source of truth.
+//
+// SYNC MECHANISM: `BACKEND_CLIENT_SIDE_TOOL_NAMES` (in session.ts, imported
+// above) is the single hand-mirrored copy of the agent-backend's
+// `clientSideToolNames` map (Go) at internal/service/agent/tools.go:549-559 —
+// it lives in PRODUCTION code because the session routes SSE dispatch on it, so
+// the test and the runtime can't drift from each other. The SDK repo can't
+// import Go, so when the backend adds/renames/removes a client-side tool, update
+// that one production constant — the parity test below then forces every entry
+// to be reclassified (implemented / mobile-only-excluded / rewritten), so a real
+// CLI↔backend contract drift fails red instead of silently shipping.
+const backendClientSideTools = [...BACKEND_CLIENT_SIDE_TOOL_NAMES].sort()
 
-  it('has exactly the expected tool names', () => {
-    expect(Object.keys(registry).sort()).toEqual(EXPECTED_ENTRIES.slice().sort())
+// How each backend client-side tool maps onto the CLI. Every entry of
+// backendClientSideTools must land in EXACTLY ONE of these three buckets —
+// the exhaustiveness test below enforces that, so a newly-added backend tool
+// (absent from all three) fails red until a human classifies it.
+
+// (a) Implemented locally by the CLI — present in CLIENT_SIDE_TOOL_DISPATCH.
+const cliImplemented = ['vault_coin', 'vault_chain', 'sign_typed_data']
+
+// (b) Intentionally NOT implemented — mobile-only flows (VultiServer /
+//     multi-device / plugin+policy UX) that the headless CLI can't drive.
+const mobileOnlyExcluded = ['create_vault', 'plugin_install', 'create_policy', 'delete_policy']
+
+// (c) Never reach the CLI under their own name: agent-backend/mcp rewrites
+//     Polymarket bet/batch signing into a `sign_typed_data` client call
+//     (see the "Polymarket marker echo" suite below), so the CLI handles them
+//     via the sign_typed_data dispatcher, not a dedicated tool.
+const backendRewrittenToSignTypedData = ['polymarket_sign_bet', 'polymarket_sign_batch']
+
+// CLI-local client-side tool the backend DEFINES (`AddressBookTool`,
+// tools.go:423 — flat add/remove discriminator, validated in action_tools.go)
+// but OMITS from the canonical `clientSideToolNames` map (tools.go:549-559).
+// The CLI implements it, so it's listed here as a known backend-map gap rather
+// than silently folded into the parity assertion. If the backend later adds
+// `address_book` to clientSideToolNames, move it into cliImplemented.
+const cliLocalNotInBackendMap = ['address_book']
+
+describe('CLIENT_SIDE_TOOL_DISPATCH registry — backend parity / drift guard', () => {
+  // The expected CLI registry surface, DERIVED from the backend contract:
+  // everything the CLI implements (backend tools it runs) plus the documented
+  // CLI-local tool the backend map omits. Deriving it (rather than hardcoding a
+  // frozen literal) is what makes drift fail red — change the backend set or a
+  // classification bucket and this expectation shifts with it.
+  const EXPECTED_REGISTRY_KEYS = [...cliImplemented, ...cliLocalNotInBackendMap].sort()
+
+  it('registry keys equal the backend-derived expected set (fails red on drift)', () => {
+    expect(Object.keys(registry).sort()).toEqual(EXPECTED_REGISTRY_KEYS)
+  })
+
+  it('every backend client-side tool is classified exactly once (catches a new backend tool once the vendored constant is updated)', () => {
+    const classified = [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData].sort()
+    // Exhaustive + disjoint: the union of the three buckets is precisely the
+    // backend set. A backend tool missing from all buckets (or listed twice)
+    // breaks this — forcing a deliberate classification on every contract change.
+    expect(classified).toEqual(backendClientSideTools)
+    expect(classified.length).toBe(new Set(classified).size) // no duplicates across buckets
+  })
+
+  it('classification buckets only name real backend tools (catches a backend rename)', () => {
+    const backend = new Set(backendClientSideTools)
+    for (const name of [...cliImplemented, ...mobileOnlyExcluded, ...backendRewrittenToSignTypedData]) {
+      expect(backend.has(name), `${name} is not in backendClientSideTools — stale classification`).toBe(true)
+    }
+    // The CLI-local tool is genuinely absent from the backend map (that's the point).
+    for (const name of cliLocalNotInBackendMap) {
+      expect(backend.has(name), `${name} unexpectedly appeared in the backend map — reclassify it`).toBe(false)
+    }
+  })
+
+  it('every CLI-implemented tool is actually present in the dispatch registry', () => {
+    for (const name of cliImplemented) {
+      expect(registry, `${name} classified cliImplemented but missing from registry`).toHaveProperty(name)
+    }
   })
 
   it('does NOT include create_vault (mobile-only, needs VultiServer/multi-device flow)', () => {
@@ -27,6 +100,11 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     expect(registry).not.toHaveProperty('delete_policy')
   })
 
+  it('does NOT include the rewritten Polymarket tools (they arrive as sign_typed_data)', () => {
+    expect(registry).not.toHaveProperty('polymarket_sign_bet')
+    expect(registry).not.toHaveProperty('polymarket_sign_batch')
+  })
+
   it('does NOT include sign_tx (handled via tx_ready SSE channel, not client-side tool dispatch)', () => {
     expect(registry).not.toHaveProperty('sign_tx')
   })
@@ -35,6 +113,96 @@ describe('CLIENT_SIDE_TOOL_DISPATCH registry — capability drift guard', () => 
     for (const value of Object.values(registry)) {
       expect(typeof value).toBe('function')
     }
+  })
+})
+
+describe('CLIENT_SIDE_DISPATCH_TOOL_NAMES — routing surface is the backend superset', () => {
+  // The SSE layer routes a tool-input-available frame to dispatch iff its
+  // toolName is in this set (session.ts passes it to setClientSideToolNames).
+  // It MUST be a superset of the implemented registry — otherwise an
+  // unimplemented backend tool never reaches dispatchClientSideTool and the
+  // TOOL_UNSUPPORTED path is dead code (the bug this PR fixes).
+  it('is exactly the backend contract ∪ the implemented registry keys', () => {
+    const expected = new Set([...BACKEND_CLIENT_SIDE_TOOL_NAMES, ...Object.keys(registry)])
+    expect([...CLIENT_SIDE_DISPATCH_TOOL_NAMES].sort()).toEqual([...expected].sort())
+  })
+
+  it('routes every IMPLEMENTED tool (so it reaches its handler)', () => {
+    for (const name of Object.keys(registry)) {
+      expect(CLIENT_SIDE_DISPATCH_TOOL_NAMES.has(name), `${name} must route to its handler`).toBe(true)
+    }
+  })
+
+  it('routes the UNIMPLEMENTED backend tools too (so they reach the TOOL_UNSUPPORTED path)', () => {
+    const unimplemented = BACKEND_CLIENT_SIDE_TOOL_NAMES.filter(n => !(n in registry))
+    expect(unimplemented.length).toBeGreaterThan(0) // sanity: there ARE unimplemented backend tools
+    for (const name of unimplemented) {
+      expect(CLIENT_SIDE_DISPATCH_TOOL_NAMES.has(name), `${name} must route so it can report TOOL_UNSUPPORTED`).toBe(
+        true
+      )
+    }
+  })
+
+  it('the session wires the full dispatch set into the client (constructor production path)', () => {
+    // Guards the actual glue: AgentSession must hand the SUPERSET routing set to
+    // the client, not just Object.keys(CLIENT_SIDE_TOOL_DISPATCH). Without this,
+    // reverting session.ts:setClientSideToolNames to the registry keys would
+    // silently kill the TOOL_UNSUPPORTED path while every set-level test above
+    // stayed green (they inject the set directly rather than via the session).
+    const spy = vi.spyOn(AgentClient.prototype, 'setClientSideToolNames')
+    try {
+      // Empty ecdsa pubkey ⇒ AgentExecutor skips VaultStateStore (no fs side effect).
+      const fakeVault = { publicKeys: { ecdsa: '' }, isEncrypted: false } as any
+      new AgentSession(fakeVault, { backendUrl: 'http://localhost:8084' } as any)
+      expect(spy).toHaveBeenCalledTimes(1)
+      const passed = spy.mock.calls[0][0] as Set<string>
+      expect([...passed].sort()).toEqual([...CLIENT_SIDE_DISPATCH_TOOL_NAMES].sort())
+    } finally {
+      spy.mockRestore()
+    }
+  })
+})
+
+describe('dispatchClientSideTool — unimplemented tool emits a typed error code', () => {
+  // A tool the backend asks the client to run but that has no entry in
+  // CLIENT_SIDE_TOOL_DISPATCH must push a failure RecentAction carrying the
+  // structured AgentErrorCode.TOOL_UNSUPPORTED (not just a prose string) so the
+  // backend/LLM can branch — "this client can't run it, don't retry".
+  async function dispatchUnknown(toolName: string): Promise<RecentAction[]> {
+    const pendingToolResults: RecentAction[] = []
+    const fakeThis = { pendingToolResults }
+    await (AgentSession.prototype as any).dispatchClientSideTool.call(
+      fakeThis,
+      'tc-x',
+      toolName,
+      {},
+      {
+        onToolCall: vi.fn(),
+        onToolResult: vi.fn(),
+      }
+    )
+    return pendingToolResults
+  }
+
+  it('pushes success:false with AgentErrorCode.TOOL_UNSUPPORTED in data.code', async () => {
+    const results = await dispatchUnknown('definitely_not_a_real_tool')
+    expect(results).toHaveLength(1)
+    expect(results[0].tool).toBe('definitely_not_a_real_tool')
+    expect(results[0].success).toBe(false)
+    // The structured discriminator — a machine-branchable code, not just prose.
+    expect(results[0].data?.code).toBe(AgentErrorCode.TOOL_UNSUPPORTED)
+    // Human-readable line preserved alongside the code.
+    expect(results[0].data?.error).toContain('unimplemented in CLI')
+  })
+
+  it('reports TOOL_UNSUPPORTED for a REAL backend client-side tool the CLI does not implement', async () => {
+    // create_vault is in the backend contract (so it routes to dispatch) but
+    // has no handler in CLIENT_SIDE_TOOL_DISPATCH — the exact production case.
+    expect(BACKEND_CLIENT_SIDE_TOOL_NAMES).toContain('create_vault')
+    expect(registry).not.toHaveProperty('create_vault')
+    const results = await dispatchUnknown('create_vault')
+    expect(results[0].success).toBe(false)
+    expect(results[0].data?.code).toBe(AgentErrorCode.TOOL_UNSUPPORTED)
   })
 })
 
@@ -257,11 +425,12 @@ describe('SF + CR2 — pendingToolResults catch-block contract', () => {
 
 describe('AgentClient SSE parser — registry-based client-side tool routing', () => {
   // The backend's V1ToolInputAvailable frame carries NO `clientExecuted`
-  // discriminator (the flag was removed). The client must identify client-side
-  // tools via its own registry (mirroring the app's toolUIRegistry), injected
-  // by the session via setClientSideToolNames. These names mirror
-  // CLIENT_SIDE_TOOL_DISPATCH.
-  const CLIENT_SIDE_NAMES = new Set(['sign_typed_data', 'vault_coin', 'vault_chain', 'address_book'])
+  // discriminator (the flag was removed). The client identifies client-side
+  // tools via the dispatch-routing set the session injects through
+  // setClientSideToolNames. Derive it from the SAME production constant the
+  // session uses (not a hand-copied literal) so this suite can't drift from the
+  // real routing surface.
+  const CLIENT_SIDE_NAMES = new Set(CLIENT_SIDE_DISPATCH_TOOL_NAMES)
 
   function makeClient(registry: Set<string> | null = CLIENT_SIDE_NAMES): AgentClient {
     const c = new AgentClient('http://localhost:8084')
@@ -323,7 +492,7 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
     expect(onToolProgress).toHaveBeenCalled()
   })
 
-  it('dispatches every registry tool from a current-backend frame (all 4 tools alive again)', () => {
+  it('dispatches every routed client-side tool name from a current-backend frame', () => {
     for (const toolName of CLIENT_SIDE_NAMES) {
       const client = makeClient()
       const onClientSideToolCall = vi.fn()
@@ -336,6 +505,34 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
         action: 'add',
       })
     }
+  })
+
+  it('routes an UNIMPLEMENTED backend client-side tool to dispatch (production path for TOOL_UNSUPPORTED)', () => {
+    // The bug Codex caught: if the routing set were only the implemented
+    // registry keys, create_vault's frame would fall through as display-only
+    // progress and never reach dispatchClientSideTool — so TOOL_UNSUPPORTED
+    // would be dead code. Routing on the backend superset makes it reachable.
+    const client = makeClient()
+    const onClientSideToolCall = vi.fn()
+    const onToolProgress = vi.fn()
+
+    feedEvent(
+      client,
+      JSON.stringify({ type: 'tool-input-available', toolCallId: 'cv', toolName: 'create_vault', input: {} }),
+      { onClientSideToolCall, onToolProgress }
+    )
+
+    // It IS intercepted for dispatch (where the !handler branch emits the
+    // structured failure — verified at the dispatch level above).
+    expect(onClientSideToolCall).toHaveBeenCalledTimes(1)
+    expect(onClientSideToolCall).toHaveBeenCalledWith('cv', 'create_vault', {})
+    // It ALSO emits a 'running' progress frame: dispatch and progress are
+    // independent signals — handleToolProgress fires onToolProgress for every
+    // tool-input frame AND routes registry tools to dispatch (not a fallback).
+    // Pinning the progress call documents that; the dispatch-times(1) above is
+    // what fails red if a routing regression drops dispatch and leaves only
+    // this progress frame behind.
+    expect(onToolProgress).toHaveBeenCalledWith('create_vault', 'running', undefined, undefined)
   })
 
   it('does NOT fire for a non-client-side toolName (server-side / MCP) — no over-trigger', () => {
@@ -418,10 +615,8 @@ describe('AgentClient SSE parser — registry-based client-side tool routing', (
 describe('Polymarket marker echo — dispatchClientSideTool protocol contract', () => {
   // agent-backend's autoSubmitPolymarketOrder consumes pm_order_ref +
   // __pm_auto_submit + __pm_submit_token from the recent_action data on the
-  // return leg. The CLI never interprets these — dispatchClientSideTool
-  // copies every input key starting with "__" (plus pm_order_ref) into the
-  // result data so they survive the signing roundtrip. If this echo breaks,
-  // every Polymarket auto-submit fails closed at the server's token gate.
+  // return leg. The CLI must fail closed unless the operator explicitly opted
+  // into that submit semantic; signing alone is not submission consent.
   function makeUi() {
     return {
       onToolCall: vi.fn(),
@@ -457,7 +652,11 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     __pm_submit_token: 'token-24236b30',
   }
 
-  async function dispatch(input: Record<string, unknown>, executorResult: Record<string, unknown>) {
+  async function dispatch(
+    input: Record<string, unknown>,
+    executorResult: Record<string, unknown>,
+    allowAutoSubmit = false
+  ) {
     const pendingToolResults: Array<{
       tool: string
       success: boolean
@@ -476,7 +675,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
         getPendingSummary: () => null,
         clearPendingTransaction: vi.fn(),
       },
-      config: { password: 'pw', autoApprove: true },
+      config: { password: 'pw', autoApprove: true, allowAutoSubmit },
       pendingToolResults,
       // dispatchClientSideTool routes through runPasswordGatedTool — reuse
       // the real prototype method so the gate behavior stays integrated.
@@ -492,7 +691,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     return pendingToolResults
   }
 
-  it('echoes __pm markers + pm_order_ref into the recent_action data', async () => {
+  it('strips auto-submit markers and forces auto_submit=false by default', async () => {
     const results = await dispatch(POLYMARKET_SIGN_INPUT, {
       signatures: [
         { id: 'order', signature: '0xorder' },
@@ -506,12 +705,29 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect(results[0].tool).toBe('sign_typed_data')
     expect(results[0].success).toBe(true)
     const data = results[0].data!
-    // The server-side auto-submit gate needs all three of these.
+    expect(data.__pm_submit_token).toBeUndefined()
+    expect(data.__pm_auto_submit).toBeUndefined()
+    expect(data.auto_submit).toBe(false)
+    // Correlation alone is harmless and remains available to the backend.
+    expect(data.pm_order_ref).toBe('ref-fb415704')
+    expect((data.signatures as unknown[]).length).toBe(2)
+  })
+
+  it('echoes order auto-submit markers only with an explicit local opt-in', async () => {
+    const results = await dispatch(
+      POLYMARKET_SIGN_INPUT,
+      {
+        signatures: [{ id: 'order', signature: '0xorder' }],
+        pm_order_ref: 'ref-fb415704',
+        auto_submit: true,
+      },
+      true
+    )
+
+    const data = results[0].data!
     expect(data.__pm_submit_token).toBe('token-24236b30')
     expect(data.__pm_auto_submit).toBe(true)
-    expect(data.pm_order_ref).toBe('ref-fb415704')
-    // The executor's own result fields ride along untouched.
-    expect((data.signatures as unknown[]).length).toBe(2)
+    expect(data.auto_submit).toBe(true)
   })
 
   it('echoes pm_batch_ref (+ __pm_auto_submit_batch) for Polymarket BATCH auto-submit', async () => {
@@ -526,21 +742,27 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
       ],
       pm_batch_ref: 'batch-ref-789',
       __pm_auto_submit_batch: true,
+      __pm_batch_submit_token: 'batch-token-123',
     }
     // Deliberately OMIT pm_batch_ref from the executor result so the only way
     // it can reach recent.data is the session input-echo loop under test. If
     // the mock pre-seeded it, this assertion would pass even with the echo
     // condition reverted (tautology). Mirrors the bare-result pattern below.
-    const results = await dispatch(batchInput, {
-      signatures: [{ id: 'order', signature: '0xorder' }],
-      auto_submit: true,
-    })
+    const results = await dispatch(
+      batchInput,
+      {
+        signatures: [{ id: 'order', signature: '0xorder' }],
+        auto_submit: true,
+      },
+      true
+    )
 
     const data = results[0].data!
     // bare pm_batch_ref survives the echo loop...
     expect(data.pm_batch_ref).toBe('batch-ref-789')
     // ...and the __-prefixed batch flag rides through on the __ branch.
     expect(data.__pm_auto_submit_batch).toBe(true)
+    expect(data.__pm_batch_submit_token).toBe('batch-token-123')
   })
 
   it('does NOT echo non-marker input keys (payloads stay out of the result)', async () => {
@@ -549,7 +771,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
     expect(data).not.toHaveProperty('payloads')
   })
 
-  it('echoes markers even when the handler fails (server can still classify)', async () => {
+  it('does not leak submit markers when the signing handler fails', async () => {
     const pendingToolResults: Array<{
       tool: string
       success: boolean
@@ -563,7 +785,7 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
         getPendingSummary: () => null,
         clearPendingTransaction: vi.fn(),
       },
-      config: { password: 'pw', autoApprove: true },
+      config: { password: 'pw', autoApprove: true, allowAutoSubmit: false },
       pendingToolResults,
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
     }
@@ -577,9 +799,8 @@ describe('Polymarket marker echo — dispatchClientSideTool protocol contract', 
 
     expect(pendingToolResults).toHaveLength(1)
     expect(pendingToolResults[0].success).toBe(false)
-    // Markers still echoed on failure — the server's gate (not the CLI)
-    // decides what a failed-sign return means.
-    expect(pendingToolResults[0].data?.__pm_submit_token).toBe('token-24236b30')
+    expect(pendingToolResults[0].data?.__pm_submit_token).toBeUndefined()
+    expect(pendingToolResults[0].data?.__pm_auto_submit).toBeUndefined()
     expect(pendingToolResults[0].data?.pm_order_ref).toBe('ref-fb415704')
   })
 })

@@ -3,8 +3,9 @@
  *
  * Handles CLI configuration files and environment variables
  */
+import { getVultisigConfigDir } from '@vultisig/client-shared'
+import { FileStorage } from '@vultisig/sdk/node'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
 import { join } from 'path'
 
 /**
@@ -41,7 +42,7 @@ const DEFAULT_CONFIG: CLIConfig = {
  * Get the configuration directory path
  */
 export function getConfigDir(): string {
-  return process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
+  return getVultisigConfigDir()
 }
 
 /**
@@ -49,6 +50,16 @@ export function getConfigDir(): string {
  */
 export function getConfigPath(): string {
   return join(getConfigDir(), 'config.json')
+}
+
+/**
+ * Build the SDK vault storage rooted at the CLI config directory so that
+ * vaults, active-vault pointer and cache honor VULTISIG_CONFIG_DIR the same
+ * way config.json does. When the env var is unset getConfigDir() falls back to
+ * ~/.vultisig, matching the SDK's own default (unchanged behavior).
+ */
+export function createVaultStorage(): FileStorage {
+  return new FileStorage({ basePath: getConfigDir() })
 }
 
 /**

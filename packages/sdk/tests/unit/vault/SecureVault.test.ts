@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { RelaySigningService } from '../../../src/services/RelaySigningService'
+import type { VaultData } from '../../../src/types'
 import { SecureVault } from '../../../src/vault/SecureVault'
 import { VaultError, VaultErrorCode } from '../../../src/vault/VaultError'
 
@@ -44,6 +46,35 @@ vi.mock('../../../src/services/RelaySigningService', () => ({
     })
   }),
 }))
+
+const makeMockContext = () =>
+  ({
+    storage: {} as any,
+    config: {},
+    serverManager: {} as any,
+    passwordCache: {} as any,
+    wasmProvider: {} as any,
+  }) as any
+
+const makeSecureVaultData = (signers: string[]): VaultData => ({
+  id: 'test-id',
+  name: 'Secure Vault',
+  type: 'secure',
+  vultFileContent: '',
+  isEncrypted: false,
+  signers,
+  localPartyId: signers[0],
+  publicKeys: { ecdsa: 'abc', eddsa: 'def' },
+  hexChainCode: 'abc',
+  libType: 'DKLS',
+  createdAt: Date.now(),
+  isBackedUp: false,
+  order: 0,
+  lastModified: Date.now(),
+  currency: 'usd',
+  chains: [],
+  tokens: {},
+})
 
 describe('SecureVault', () => {
   describe('static properties', () => {
@@ -172,22 +203,29 @@ describe('SecureVault', () => {
   })
 
   describe('instance properties', () => {
-    // Test the expected interface of SecureVault instances
-    it('should define availableSigningModes', () => {
-      // SecureVault.availableSigningModes returns [] until signing is implemented
-      // This is a design check - actual instance testing requires more setup
-      expect(true).toBe(true) // Placeholder for now
+    it('should expose relay signing mode on stored secure vaults', () => {
+      const vault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+
+      expect(vault.availableSigningModes).toEqual(['relay'])
     })
 
-    it('should calculate threshold correctly', () => {
-      // Threshold formula: ceil((n+1)/2)
-      const thresholdFor2 = Math.ceil((2 + 1) / 2) // 2
-      const thresholdFor3 = Math.ceil((3 + 1) / 2) // 2
-      const thresholdFor5 = Math.ceil((5 + 1) / 2) // 3
+    it('should calculate stored secure vault threshold from signer count', () => {
+      const twoSignerVault = SecureVault.fromStorage(makeSecureVaultData(['device-1', 'device-2']), makeMockContext())
+      const threeSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      )
+      const fiveSignerVault = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      )
 
-      expect(thresholdFor2).toBe(2)
-      expect(thresholdFor3).toBe(2)
-      expect(thresholdFor5).toBe(3)
+      expect(twoSignerVault.threshold).toBe(2)
+      expect(threeSignerVault.threshold).toBe(2)
+      expect(fiveSignerVault.threshold).toBe(4)
     })
   })
 })
@@ -254,6 +292,191 @@ describe('SecureVault type safety', () => {
 })
 
 describe('SecureVault signing', () => {
+  const customRelayUrl = 'https://relay.example.test/router'
+
+  const makeSecureVault = () =>
+    new (SecureVault as any)(
+      'secure-vault-id',
+      'Secure Vault',
+      '',
+      {
+        storage: {} as any,
+        config: {},
+        serverManager: { messageRelay: customRelayUrl },
+        passwordCache: {} as any,
+        wasmProvider: {
+          getWalletCore: vi.fn().mockResolvedValue({}),
+        },
+        pushNotificationService: undefined,
+      },
+      {
+        name: 'Secure Vault',
+        publicKeys: { ecdsa: 'ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        signers: ['local-party-1', 'remote-party-2', 'remote-party-3'],
+        hexChainCode: 'b'.repeat(64),
+        localPartyId: 'local-party-1',
+        createdAt: Date.now(),
+        libType: 'DKLS',
+        isBackedUp: true,
+        order: 0,
+        keyShares: { ecdsa: 'ecdsa-key-share', eddsa: 'eddsa-key-share' },
+      }
+    ) as SecureVault
+
+  describe('session-correlated lifecycle events', () => {
+    it('keeps concurrent secure-signing events correlated to distinct sessions', async () => {
+      const vault = makeSecureVault()
+      const events: Array<{
+        type: string
+        sessionId: string
+        marker?: string
+      }> = []
+      const unsubscribers = [
+        vault.on('signingProgress', event =>
+          events.push({
+            type: 'progress',
+            sessionId: event.sessionId!,
+            marker: event.step.message,
+          })
+        ),
+        vault.on('qrCodeReady', event =>
+          events.push({
+            type: 'qr',
+            sessionId: event.sessionId,
+            marker: event.qrPayload,
+          })
+        ),
+        vault.on('deviceJoined', event =>
+          events.push({
+            type: 'joined',
+            sessionId: event.sessionId,
+            marker: event.deviceId,
+          })
+        ),
+        vault.on('transactionSigned', event =>
+          events.push({
+            type: 'signed',
+            sessionId: event.sessionId!,
+            marker: event.payload.messageHashes?.[0],
+          })
+        ),
+      ]
+
+      const installRelay = (marker: string) => {
+        vi.mocked(RelaySigningService).mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signWithRelay: vi.fn(async (_vault, payload, _walletCore, options) => {
+              const sessionId = options.sessionId as string
+              options.onProgress?.({
+                step: 'coordinating',
+                progress: 40,
+                message: marker,
+                mode: 'relay',
+              })
+              await Promise.resolve()
+              options.onQRCodeReady?.(`qr-${marker}`)
+              options.onDeviceJoined?.(`device-${marker}`, 2, 2)
+              return {
+                signature: `signature-${payload.messageHashes[0]}`,
+                recovery: 0,
+                format: 'ECDSA',
+                sessionId,
+              }
+            }),
+          })
+        } as any)
+      }
+
+      installRelay('first')
+      installRelay('second')
+
+      try {
+        await Promise.all([
+          vault.sign({
+            chain: 'Ethereum',
+            transaction: {},
+            messageHashes: ['hash-first'],
+          }),
+          vault.sign({
+            chain: 'Ethereum',
+            transaction: {},
+            messageHashes: ['hash-second'],
+          }),
+        ])
+      } finally {
+        unsubscribers.forEach(unsubscribe => unsubscribe())
+      }
+
+      const sessionIds = [...new Set(events.map(event => event.sessionId))]
+      expect(sessionIds).toHaveLength(2)
+      expect(sessionIds.every(Boolean)).toBe(true)
+
+      for (const sessionId of sessionIds) {
+        expect(events.filter(event => event.sessionId === sessionId).map(event => event.type)).toEqual([
+          'progress',
+          'qr',
+          'joined',
+          'signed',
+        ])
+      }
+
+      const signedEvents = events.filter(event => event.type === 'signed')
+      expect(signedEvents.map(event => event.marker).sort()).toEqual(['hash-first', 'hash-second'])
+    })
+
+    it('emits correlated terminal events for failures and cancellations', async () => {
+      const vault = makeSecureVault()
+      const failed: Array<{ sessionId: string; error: Error }> = []
+      const cancelled: Array<{ sessionId: string; error: Error }> = []
+      const unsubscribeFailed = vault.on('signingFailed', event => failed.push(event))
+      const unsubscribeCancelled = vault.on('signingCancelled', event => cancelled.push(event))
+      const lateAbortController = new AbortController()
+      const abortError = new Error('Operation aborted')
+      abortError.name = 'AbortError'
+
+      vi.mocked(RelaySigningService)
+        .mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signWithRelay: vi.fn(async () => {
+              lateAbortController.abort()
+              throw new Error('relay failure after an unrelated abort')
+            }),
+          })
+        } as any)
+        .mockImplementationOnce(function (this: object) {
+          Object.assign(this, {
+            signBytesWithRelay: vi.fn().mockRejectedValue(abortError),
+          })
+        } as any)
+
+      try {
+        const results = await Promise.allSettled([
+          vault.sign(
+            {
+              chain: 'Ethereum',
+              transaction: {},
+              messageHashes: ['hash-failure'],
+            },
+            { signal: lateAbortController.signal }
+          ),
+          vault.signBytes({ chain: 'Ethereum', data: '0x1234' }),
+        ])
+        expect(results.map(result => result.status)).toEqual(['rejected', 'rejected'])
+      } finally {
+        unsubscribeFailed()
+        unsubscribeCancelled()
+      }
+
+      expect(failed).toHaveLength(1)
+      expect(cancelled).toHaveLength(1)
+      expect(failed[0].sessionId).toBeTruthy()
+      expect(cancelled[0].sessionId).toBeTruthy()
+      expect(failed[0].sessionId).not.toBe(cancelled[0].sessionId)
+      expect(failed[0].error.message).toBe('relay failure after an unrelated abort')
+      expect(cancelled[0].error.message).toBe('Operation aborted')
+    })
+  })
+
   describe('sign() method interface', () => {
     it('should accept SigningPayload with messageHashes', () => {
       const payload = {
@@ -297,6 +520,18 @@ describe('SecureVault signing', () => {
       const options = {}
       expect(options).toBeDefined()
     })
+
+    it('passes the configured relay URL to the relay signing service', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().sign({
+        chain: 'Ethereum',
+        transaction: { to: '0x123', value: '1000000000000000000' },
+        messageHashes: ['abc123def456'],
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
+    })
   })
 
   describe('signBytes() method interface', () => {
@@ -338,6 +573,17 @@ describe('SecureVault signing', () => {
 
       expect(typeof signingOptions.onQRCodeReady).toBe('function')
       expect(typeof signingOptions.onDeviceJoined).toBe('function')
+    })
+
+    it('passes the configured relay URL to raw-bytes relay signing', async () => {
+      vi.mocked(RelaySigningService).mockClear()
+
+      await makeSecureVault().signBytes({
+        data: '0xabcdef123456',
+        chain: 'Ethereum',
+      })
+
+      expect(RelaySigningService).toHaveBeenCalledWith(customRelayUrl)
     })
   })
 
@@ -473,10 +719,16 @@ describe('SecureVault vs FastVault signing differences', () => {
 
   describe('threshold', () => {
     it('SecureVault has variable threshold based on signers', () => {
-      // (n+1)/2 threshold
-      const threshold3of5 = Math.ceil((5 + 1) / 2) // 3
-      const threshold2of3 = Math.ceil((3 + 1) / 2) // 2
-      expect(threshold3of5).toBe(3)
+      const threshold3of5 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3', 'device-4', 'device-5']),
+        makeMockContext()
+      ).threshold
+      const threshold2of3 = SecureVault.fromStorage(
+        makeSecureVaultData(['device-1', 'device-2', 'device-3']),
+        makeMockContext()
+      ).threshold
+
+      expect(threshold3of5).toBe(4)
       expect(threshold2of3).toBe(2)
     })
 

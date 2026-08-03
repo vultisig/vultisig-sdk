@@ -10,9 +10,11 @@ export {
   JUPITER_API_BASE_URL,
   JUPITER_DEFAULT_SLIPPAGE_BPS,
   JUPITER_PLATFORM_FEE_BPS,
+  PriceImpactTooHighError,
   resolveJupiterFeeAccount,
   SOL_NATIVE_MINT,
 } from './jupiter'
+export { MAX_PRICE_IMPACT_PCT } from '@vultisig/core-chain/swap/general/priceImpactGuard'
 export type { NativeSwapMinAmountIn } from '@vultisig/core-chain/swap/native/minimum/getNativeSwapMinAmountIn'
 export {
   getNativeSwapMinAmountIn,

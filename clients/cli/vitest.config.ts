@@ -18,5 +18,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/__tests__/**/*.{test,spec}.{ts,tsx}', 'src/**/*.test.ts', 'tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
+    setupFiles: ['./tests/setup/cliTestEnv.ts'],
   },
 })

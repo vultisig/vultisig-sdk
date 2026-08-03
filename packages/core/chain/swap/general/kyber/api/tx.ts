@@ -8,6 +8,7 @@ import { AccountCoin } from '../../../../coin/AccountCoin'
 import { isFeeCoin } from '../../../../coin/utils/isFeeCoin'
 import { SwapFee } from '../../../SwapFee'
 import { GeneralSwapQuote } from '../../GeneralSwapQuote'
+import { assertKnownAggregatorRouter } from '../../knownAggregatorRouters'
 import { KyberSwapEnabledChain } from '../chains'
 import {
   getKyberSwapAffiliateParams,
@@ -117,14 +118,34 @@ export const getKyberSwapTx = async ({
     throw new Error('Failed to build transaction')
   }
 
-  const { amountOut, data, gas } = buildResponse.data
+  const { amountOut, data, gas, routerAddress: buildRouterAddress } = buildResponse.data
+
+  // AGG-02 fund-safety fix: verify BOTH the /routes response's routerAddress (route.ts,
+  // threaded in as the `routerAddress` param) AND /route/build's OWN routerAddress field
+  // are Kyber's actual router before this untrusted data can become a signable
+  // GeneralSwapQuote. The two calls are separate HTTP round-trips; if they ever disagree
+  // (API drift/version mismatch), `data` (the calldata /route/build just generated) may
+  // have been built against a DIFFERENT router than the one this quote's tx.to claims —
+  // codex review finding, PR #1079. See knownAggregatorRouters.ts.
+  assertKnownAggregatorRouter('kyber', routerAddress, from.chain)
+  assertKnownAggregatorRouter('kyber', buildRouterAddress, from.chain)
+  if (buildRouterAddress.toLowerCase() !== routerAddress.toLowerCase()) {
+    throw new Error(
+      `Kyber /route and /route/build disagree on the router address (${routerAddress} vs ${buildRouterAddress}) — refusing to build a signable transaction against mismatched calldata.`
+    )
+  }
+
   return {
     dstAmount: amountOut,
     provider: 'kyber',
     tx: {
       evm: {
         from: from.address,
-        to: routerAddress,
+        // AGG-04: bind tx.to to /route/build's OWN routerAddress — the router paired with
+        // `data` (the calldata this call just generated) — not the stale /routes param.
+        // The equality guard above already proves they match today (AGG-02 / #1079); this
+        // keeps tx.to authoritative-by-construction as defense-in-depth if that guard ever moves.
+        to: buildRouterAddress,
         data,
         value: isFeeCoin(from) ? amount.toString() : '0',
         gasLimit: gas ? BigInt(gas) : undefined,

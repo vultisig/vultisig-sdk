@@ -1,10 +1,14 @@
 import { Chain, CosmosChain, VaultBasedCosmosChain } from '@vultisig/core-chain/Chain'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasLimitRecord'
+import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
-import { nativeSwapChainIds } from '@vultisig/core-chain/swap/native/NativeSwapChain'
+import {
+  getNativeSwapChainIdFromDenomPrefix,
+  nativeSwapChainIds,
+} from '@vultisig/core-chain/swap/native/NativeSwapChain'
 import { THORChainSpecific, TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
 import { fromBase64 } from '@cosmjs/encoding'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
@@ -14,7 +18,7 @@ import { TW } from '@trustwallet/wallet-core'
 import { AuthInfo, TxBody } from 'cosmjs-types/cosmos/tx/v1beta1/tx'
 import Long from 'long'
 
-import { getKeysignSwapPayload } from '../../../swap/getKeysignSwapPayload'
+import { getKeysignSwapPayload, isSecuredAssetWithdrawal } from '../../../swap/getKeysignSwapPayload'
 import { getKeysignTwPublicKey } from '../../../tw/getKeysignTwPublicKey'
 import { getTwChainId } from '@vultisig/core-chain/chains/evm/tx/tw/getTwChainId'
 import { toTwAddress } from '../../../tw/toTwAddress'
@@ -23,6 +27,90 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
 import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
+
+const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPayload>[0]) => {
+  const swapPayload = getKeysignSwapPayload(keysignPayload)
+  if (!swapPayload) {
+    return null
+  }
+
+  return getRecordUnionValue(swapPayload, 'native')
+}
+
+const getThorchainDepositAsset = ({
+  assetCoin,
+  chain,
+  secured,
+}: {
+  assetCoin: {
+    chain: string
+    contractAddress?: string
+    ticker: string
+  }
+  chain: CosmosChain
+  secured: boolean
+}) => {
+  const chainId =
+    (nativeSwapChainIds as Record<string, string>)[assetCoin.chain] ??
+    nativeSwapChainIds[chain as VaultBasedCosmosChain]
+  const { contractAddress } = assetCoin
+  // The `TICKER-CONTRACT` symbol form belongs to secured-asset withdrawals only,
+  // where `assetCoin` is the L1 coin being pulled off THORChain and
+  // `contractAddress` is its L1 token contract (`USDC` + `0xa0b8…` ->
+  // `USDC-0XA0B8…`, matching THORNode's `ETH.USDC-0XA0B8…`).
+  //
+  // For a plain swap the contract address is the THORChain bank denom
+  // (`tcy`, `x/ruji`), and appending it produced `TCY-tcy` — an asset THORNode
+  // has no pool for, and a pre-image hash that no longer matched the one iOS
+  // (`thorchain.swift` getSwapPreSignedInputData) and Android
+  // (`ThorchainSwapHelper.getSwapPreSignedInputData`) derive from the same
+  // payload. A co-signing joiner then polled a `message_id` the initiator never
+  // uploaded and died on `404 Timed out while waiting for setup message`.
+  // See vultisig/vultisig-windows#4464.
+  const rawSymbol =
+    secured && typeof contractAddress === 'string' && contractAddress.trim()
+      ? `${assetCoin.ticker}-${contractAddress}`
+      : assetCoin.ticker
+
+  return TW.Cosmos.Proto.THORChainAsset.create({
+    chain: secured ? chainId.toUpperCase() : chainId,
+    symbol: secured ? rawSymbol.toUpperCase() : rawSymbol,
+    ticker: secured ? assetCoin.ticker.toUpperCase() : assetCoin.ticker,
+    synth: false,
+    secured,
+  })
+}
+
+// Mirrors iOS THORChainHelper.isSecuredAsset (thorchain.swift): a THORChain-held
+// token whose denom encodes an L1 chain prefix + '-' (e.g. `xrp-xrp`,
+// `eth-usdc-0x…`). RUNE and `x/…` THORChain-native tokens are not secured assets.
+const isSecuredAssetSwapCoin = (assetCoin: { chain: string; contractAddress?: string }): boolean =>
+  assetCoin.chain === Chain.THORChain &&
+  !!assetCoin.contractAddress &&
+  !assetCoin.contractAddress.startsWith('x/') &&
+  assetCoin.contractAddress.includes('-')
+
+// Builds the MsgDeposit asset for a THORChain secured asset spent in a swap.
+// Mirrors iOS THORChainHelper: the L1 chain and symbol are derived from the
+// secured denom (`eth-usdc-0x…` -> chain `ETH`, symbol `USDC-0X…`) with the
+// `secured` flag set, so THORNode matches the deposited coin against the same
+// secured asset referenced by the server-issued swap memo (`=:ETH-USDC:…`).
+const getSecuredAssetDepositAsset = (assetCoin: { contractAddress: string; ticker: string }) => {
+  const [chainPrefix, ...symbolParts] = assetCoin.contractAddress.split('-')
+  const chainId = getNativeSwapChainIdFromDenomPrefix(chainPrefix)
+  if (!chainId) {
+    throw new Error(`Unsupported secured asset chain prefix: "${chainPrefix}"`)
+  }
+  const symbol = symbolParts.join('-')
+
+  return TW.Cosmos.Proto.THORChainAsset.create({
+    chain: chainId,
+    symbol: (symbol || assetCoin.ticker).toUpperCase(),
+    ticker: assetCoin.ticker.toUpperCase().replace(/X\//g, ''),
+    synth: false,
+    secured: true,
+  })
+}
 
 export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysignPayload, walletCore }) => {
   const chain = getKeysignChain<'cosmos'>(keysignPayload)
@@ -84,7 +172,35 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         const memo = shouldBePresent(keysignPayload.memo)
         const [, channel] = memo.split(':')
 
+        // COSMOS-03: sourceChannel is derived from an unvalidated memo
+        // split. An undefined/empty/malformed channel would sign a
+        // MsgTransfer that either fails on-chain or (worse) routes
+        // through an unintended channel. Fail closed.
+        if (!channel || !/^channel-\d+$/.test(channel)) {
+          throw new Error(
+            `Cosmos signing input: IBC transfer memo "${memo}" does not contain a well-formed source channel (expected "<prefix>:channel-<n>[:...]").`
+          )
+        }
+
         const timeoutTimestamp = Long.fromString(ibcDenomTraces?.latestBlock?.split('_')?.[1] || '0')
+        const timeoutHeight = {
+          revisionNumber: Long.fromString('0'),
+          revisionHeight: Long.fromString('0'),
+        }
+
+        // COSMOS-01: a missing ibcDenomTraces (or missing latestBlock)
+        // previously fell back to timeoutTimestamp=0, and timeoutHeight
+        // is always {0,0} here, so the packet ended up with NO expiry.
+        // Relayers accept a no-timeout MsgTransfer, but the destination
+        // side never gets a chance to unwind on failure, leaving funds
+        // stuck indefinitely. Mirror the app's guard
+        // (vultiagent-app/src/services/cosmosTx.ts) and refuse to build.
+        const heightDisabled = timeoutHeight.revisionNumber.isZero() && timeoutHeight.revisionHeight.isZero()
+        if (timeoutTimestamp.isZero() && heightDisabled) {
+          throw new Error(
+            'Cosmos signing input: IBC transfer has no usable timeout (missing ibcDenomTraces.latestBlock and no timeoutHeight set); refusing to build a no-timeout MsgTransfer (relayers accept it but the packet has no expiry, leaving funds stuck).'
+          )
+        }
 
         return {
           messages: [
@@ -95,10 +211,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
                 token: getCosmosCoinAmount(keysignPayload),
                 sender: coin.address,
                 receiver: toAddress,
-                timeoutHeight: {
-                  revisionNumber: Long.fromString('0'),
-                  revisionHeight: Long.fromString('0'),
-                },
+                timeoutHeight,
                 timeoutTimestamp,
               }),
             }),
@@ -299,30 +412,31 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         }
       }
 
-      const getSwapPayload = () => {
-        const swapPayload = getKeysignSwapPayload(keysignPayload)
-        if (!swapPayload) {
-          return null
-        }
-
-        return getRecordUnionValue(swapPayload, 'native')
-      }
-
-      const swapPayload = getSwapPayload()
+      const swapPayload = getNativeSwapPayload(keysignPayload)
 
       if (isDeposit || (swapPayload && coin.chain === chain && swapPayload.chain === chain)) {
         const amountStr = isDeposit ? (keysignPayload.toAmount ?? '0') : swapPayload!.fromAmount
 
         const isPositive = +/^[0-9]+$/.test(amountStr) && BigInt(amountStr) > 0n
 
+        const assetCoin = swapPayload?.fromCoin ?? coin
+        const isSecuredWithdrawal = isSecuredAssetWithdrawal({ chain, keysignPayload, native: swapPayload })
+        const securedSwapFromCoin =
+          swapPayload?.fromCoin && isSecuredAssetSwapCoin(swapPayload.fromCoin) ? swapPayload.fromCoin : undefined
+
         const depositCoin = TW.Cosmos.Proto.THORChainCoin.create({
-          asset: TW.Cosmos.Proto.THORChainAsset.create({
-            chain: nativeSwapChainIds[chain as VaultBasedCosmosChain],
-            symbol: coin.ticker,
-            ticker: coin.ticker,
-            synth: false,
-          }),
-          ...(isPositive ? { amount: amountStr, decimals: new Long(coin.decimals) } : {}),
+          asset: securedSwapFromCoin
+            ? getSecuredAssetDepositAsset({
+                contractAddress: securedSwapFromCoin.contractAddress,
+                ticker: securedSwapFromCoin.ticker,
+              })
+            : getThorchainDepositAsset({ assetCoin, chain, secured: isSecuredWithdrawal }),
+          ...(isPositive
+            ? {
+                amount: amountStr,
+                decimals: new Long(isSecuredWithdrawal ? 0 : assetCoin.decimals),
+              }
+            : {}),
         })
 
         return {
@@ -394,14 +508,14 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return fee
     }
 
-    const getFeeAmounts = () => {
+    const getFeeAmounts = (feeAmount: bigint) => {
       if (chainKind !== 'ibcEnabled') return
 
-      const { gas, ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
       const amounts: TW.Cosmos.Proto.Amount[] = [
         TW.Cosmos.Proto.Amount.create({
-          amount: gas.toString(),
+          amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
@@ -425,9 +539,21 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return amounts
     }
 
+    const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
+
+    // `CosmosSpecific.gas` (proto field 3) IS the fee amount — signed verbatim,
+    // never re-derived here. The initiator prices it against the gas limit it
+    // relays in field 7 (`getCosmosChainSpecific`), so any headroom is already
+    // baked in. Doing arithmetic on it in this read path is what diverged the
+    // SignDoc from iOS / Android — see resolveCosmosGasLimit.ts.
+    const resolvedGasLimit = resolveCosmosGasLimit({
+      relayedGasLimit: ibcSpecific?.gasLimit,
+      staticGasLimit: getCosmosGasLimit(coin),
+    })
+
     return TW.Cosmos.Proto.Fee.create({
-      gas: Long.fromBigInt(getCosmosGasLimit(coin)),
-      amounts: getFeeAmounts(),
+      gas: Long.fromBigInt(resolvedGasLimit),
+      amounts: getFeeAmounts(ibcSpecific?.gas ?? 0n),
     })
   }
 
@@ -444,8 +570,8 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     publicKey,
     signingMode,
     chainId,
-    accountNumber: new Long(Number(accountNumber)),
-    sequence: new Long(Number(sequence)),
+    accountNumber: Long.fromString(accountNumber.toString(), true),
+    sequence: Long.fromString(sequence.toString(), true),
     mode: TW.Cosmos.Proto.BroadcastMode.SYNC,
     memo: txMemo,
     messages,

@@ -6,69 +6,30 @@
  * Each handler takes `(toolCallId, input)` and returns a `RecentAction` ready
  * to be flushed into the next outbound `context.recent_actions`.
  */
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import { Chain, VaultError, VaultErrorCode, Vultisig as VultisigSdk } from '@vultisig/sdk'
+import {
+  Chain,
+  chainFeeCoin,
+  getChainKind,
+  parseThorSwapMemo,
+  resolveChainReference,
+  VaultError,
+  VaultErrorCode,
+  Vultisig as VultisigSdk,
+} from '@vultisig/sdk'
 import { formatUnits, hashTypedData, recoverAddress } from 'viem'
 
 import { VaultStateStore } from '../core/VaultStateStore'
 import { normalizeAgentError } from './agentErrors'
+import {
+  assertNoRecentDuplicate,
+  type BroadcastIntent,
+  type BroadcastReservation,
+  computeFingerprint,
+  recordBroadcast,
+  reserveBroadcast,
+} from './broadcastJournal'
 import type { RecentAction } from './types'
-
-/**
- * THORChain swap-memo chain codes → SDK Chain enum. Used to resolve the
- * destination chain encoded in `=:CHAIN.ASSET:DEST::v0:slippage` memos
- * back to a Chain enum so vault.swap can dispatch.
- *
- * Reference: https://docs.thorchain.org/concepts/memos
- * Maya uses similar codes — additions here cover both ecosystems.
- */
-const THOR_MEMO_CHAIN_TO_ENUM: Record<string, Chain> = {
-  BTC: Chain.Bitcoin,
-  ETH: Chain.Ethereum,
-  BSC: Chain.BSC,
-  AVAX: Chain.Avalanche,
-  BASE: Chain.Base, // L2 — THORChain routinely quotes Base destinations (PR #439 review finding 1)
-  ARB: Chain.Arbitrum, // L1-via-bridge path (PR #439 review finding 1)
-  BCH: Chain.BitcoinCash,
-  LTC: Chain.Litecoin,
-  DOGE: Chain.Dogecoin,
-  GAIA: Chain.Cosmos,
-  THOR: Chain.THORChain,
-  RUNE: Chain.THORChain,
-  XRP: Chain.Ripple,
-  DASH: Chain.Dash,
-  ZEC: Chain.Zcash,
-  MAYA: Chain.MayaChain,
-  CACAO: Chain.MayaChain,
-}
-
-/**
- * THORChain abbreviated asset shortcuts → expanded `CHAIN.ASSET`. THORChain
- * memos accept both full (`XRP.XRP`) and abbreviated (`x`) notation for
- * common native assets to fit within the 250-byte memo limit when paired
- * with long destination addresses. Reference:
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- */
-const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
-  b: 'BTC.BTC',
-  e: 'ETH.ETH',
-  s: 'BSC.BNB',
-  a: 'AVAX.AVAX',
-  c: 'BCH.BCH',
-  l: 'LTC.LTC',
-  d: 'DOGE.DOGE',
-  g: 'GAIA.ATOM',
-  r: 'THOR.RUNE',
-  x: 'XRP.XRP',
-  cacao: 'MAYA.CACAO',
-  dash: 'DASH.DASH',
-  zec: 'ZEC.ZEC',
-  // BASE / ARB don't have documented single-letter shortcuts; THORChain
-  // emits these as the full CHAIN.ASSET form in memos. Listed in
-  // THOR_MEMO_CHAIN_TO_ENUM only.
-}
 
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
@@ -141,11 +102,20 @@ export class AgentExecutor {
   /** Held chain lock release functions, keyed by chain name */
   private chainLockReleases = new Map<string, () => Promise<void>>()
   private evmLastBroadcast = new Map<string, number>()
+  // When true, bypass the persistent broadcast-journal duplicate guard (the
+  // `--force` escape hatch). Off by default: a fresh retry process must refuse
+  // to re-broadcast an intent a prior process already sent (double-spend).
+  private forceBroadcast = false
+  // The owning vault's ecdsa public key — namespaces broadcast-journal
+  // fingerprints so two different vaults sending an identical tx don't collide
+  // in the single global journal (see BroadcastIntent.owner).
+  private readonly vaultPublicKey: string
 
   constructor(vault: VaultBase, verbose = false, vaultId?: string, vultisig?: Vultisig) {
     this.vault = vault
     this.verbose = verbose
     this.vultisig = vultisig
+    this.vaultPublicKey = vaultId ?? vault.publicKeys?.ecdsa ?? ''
     if (vaultId) {
       this.stateStore = new VaultStateStore(vaultId)
     }
@@ -153,6 +123,85 @@ export class AgentExecutor {
 
   setPassword(password: string): void {
     this.password = password
+  }
+
+  /**
+   * Whether a password is already held (set at unlock via the keyring/env chain
+   * or `--password`). The sign gate consults this so a session unlocked
+   * non-interactively doesn't get re-prompted for a secret it already has.
+   */
+  hasPassword(): boolean {
+    return this.password != null
+  }
+
+  /** Opt out of the persistent broadcast-journal duplicate guard (`--force`). */
+  setForceBroadcast(force: boolean): void {
+    this.forceBroadcast = force
+  }
+
+  /**
+   * Derive the chain-agnostic broadcast intent (fingerprint basis) from a
+   * buffered tx_ready payload. Prefers the nested EVM/`tx` shape; falls back to
+   * the non-EVM `txArgs.{to,amount,memo}` shape. `overrideTx` lets a multi-leg
+   * caller fingerprint a specific leg (e.g. the approve leg's `approvalTxArgs`).
+   * Always namespaced by the owning vault (owner) so a shared journal can't
+   * cross-match two vaults' transactions.
+   */
+  private buildBroadcastIntent(payload: any, chain: Chain, overrideTx?: any): BroadcastIntent {
+    const source = overrideTx ?? payload
+    // `data` is EVM calldata iff the chain is an EVM chain — the single authority
+    // that decides whether an empty `"0x"` folds (calldata) or stays literal (a
+    // memo on a memo-routed chain, PR #1259). Derived from chain kind, never
+    // hardcoded per branch, so a new chain family can't silently reintroduce the
+    // memo collision. The nested-tx branch is EVM by construction (extractNestedTx
+    // only yields EVM `tx`/`send_tx` shapes); the flat branch is a non-EVM memo —
+    // but if an EVM send ever reaches it, its `0x` memo is still calldata, so gate
+    // both on the same rule rather than assuming which branch runs.
+    const dataIsEvmCalldata = getChainKind(chain) === 'evm'
+    const nested = extractNestedTx(source)
+    if (nested && (nested.to || nested.value || nested.data)) {
+      return {
+        owner: this.vaultPublicKey,
+        chain: chain.toString(),
+        to: nested.to != null ? String(nested.to) : undefined,
+        value: nested.value != null ? String(nested.value) : undefined,
+        data: nested.data != null ? String(nested.data) : undefined,
+        dataIsEvmCalldata,
+      }
+    }
+    const txArgs = source?.txArgs ?? source
+    // Non-EVM: the token identity isn't in `to`/`data`, so fold in whatever
+    // asset/denom discriminator the envelope carries to avoid conflating two
+    // same-amount sends of different assets.
+    const asset =
+      txArgs?.denom ?? txArgs?.ticker ?? txArgs?.symbol ?? txArgs?.asset ?? txArgs?.coin ?? txArgs?.contract_address
+    return {
+      owner: this.vaultPublicKey,
+      chain: chain.toString(),
+      to: txArgs?.to != null ? String(txArgs.to) : undefined,
+      value: txArgs?.amount != null ? String(txArgs.amount) : undefined,
+      data: txArgs?.memo != null ? String(txArgs.memo) : undefined,
+      dataIsEvmCalldata,
+      asset: asset != null ? String(asset) : undefined,
+    }
+  }
+
+  /**
+   * Journal a broadcast the instant it lands, computing the fingerprint from the
+   * same intent basis the pre-sign duplicate check uses. Called at each signer's
+   * broadcast chokepoint (not at signTxFromBuffer's return) so a post-broadcast
+   * step that throws — e.g. a multi-leg approve receipt timeout — can't strand an
+   * already-broadcast tx unrecorded and let a retry re-send it. Best-effort:
+   * never throw back into a completed broadcast.
+   */
+  private recordBroadcastForTx(serverTxData: any, chain: Chain, txHash: string | undefined): void {
+    if (!txHash) return
+    try {
+      const intent = this.buildBroadcastIntent(serverTxData, chain)
+      recordBroadcast(computeFingerprint(intent), String(txHash), chain.toString())
+    } catch (err) {
+      if (this.verbose) process.stderr.write(`[broadcast-journal] record skipped: ${(err as Error)?.message ?? err}\n`)
+    }
   }
 
   /**
@@ -315,6 +364,26 @@ export class AgentExecutor {
     if (!stored) return null
     const p = stored.payload as any
     const labels = (p?.resolved?.labels ?? {}) as Record<string, string>
+
+    // Design B: Polymarket flat-tx-builder bridge envelopes carry no swap/send
+    // token labels, so the generic summaries below degrade to "send ? to ?".
+    // Summarize the destination contract + value (and the bundled approval leg)
+    // so the confirm gate / `--yes` log always shows what is being signed. Keyed
+    // on the bridge's `__buildTx` marker so existing swap/send summaries are
+    // untouched. These are always contract calls (approve / wrap calldata).
+    if (p?.__buildTx) {
+      const action = typeof p?.action === 'string' && p.action ? ` [${p.action}]` : ''
+      if (p?.__multiLeg) {
+        const wrapTo = (p?.txArgs?.tx?.to as string) || '?'
+        return `contract call on ${stored.chain} to ${wrapTo} (+ token approval — 2 transactions)${action}`
+      }
+      const flat = (p?.tx ?? {}) as Record<string, unknown>
+      const to = typeof flat.to === 'string' ? flat.to : '?'
+      const valueRaw = typeof flat.value === 'string' ? flat.value : '0'
+      const valuePart = valueRaw && valueRaw !== '0' ? ` value ${valueRaw}` : ''
+      return `contract call on ${stored.chain} to ${to}${valuePart}${action}`
+    }
+
     const isSwap = !!(p?.approvalTxArgs || p?.swap_tx || labels.quote_summary || labels.to_token_symbol)
     if (isSwap) {
       // quote_summary already embeds the provider ("… via kyber"); only append
@@ -505,7 +574,7 @@ export class AgentExecutor {
   private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
     if (coins && Array.isArray(coins)) {
-      const results: { chain: string; tokenId: string }[] = []
+      const results: { chain: string; tokenId: string; removed: boolean }[] = []
       for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
@@ -515,8 +584,10 @@ export class AgentExecutor {
             `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
           )
         }
-        await this.vault.removeToken(chain, tokenId)
-        results.push({ chain: chain.toString(), tokenId })
+        // Report per-coin what the SDK actually did — a coin that was never
+        // tracked must not be reported back to the model as removed.
+        const removed = await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId, removed })
       }
       return { removed: results }
     }
@@ -531,8 +602,8 @@ export class AgentExecutor {
     if (!tokenId) {
       throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
     }
-    await this.vault.removeToken(chain, tokenId)
-    return { chain: chain.toString(), removed: true }
+    const removed = await this.vault.removeToken(chain, tokenId)
+    return { chain: chain.toString(), removed }
   }
 
   async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
@@ -580,40 +651,90 @@ export class AgentExecutor {
         throw new Error('Pending transaction is not a server-built tx (no __serverTx flag).')
       }
 
-      // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
-      // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
-      // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
-      // chain that's a programming error, not a missing branch.
-      let result: Record<string, unknown> | undefined
-      if (payload.__multiLeg) {
-        if (this.pendingLegs.length !== 2) {
-          throw new VaultError(
-            VaultErrorCode.InvalidConfig,
-            `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
-          )
-        }
-        result = await this.signMultiLeg(payload, chain, {})
-      }
+      // F1/F14 double-spend guard. Fingerprint the intent(s) BEFORE any signing
+      // and refuse if a prior (or sibling) process already broadcast the same
+      // intent recently and it hasn't definitively failed — the persistent
+      // journal is what survives the process death that the in-memory
+      // `evmLastBroadcast` guard can't. Multi-leg checks BOTH legs so a retry
+      // after the approve broadcast (but before the main) can't re-approve.
+      // `--force` (setForceBroadcast) bypasses.
+      const isMultiLeg = !!payload.__multiLeg
+      const primaryIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.txArgs })
+        : this.buildBroadcastIntent(payload, chain)
+      const approveIntent = isMultiLeg
+        ? this.buildBroadcastIntent(payload, chain, { txArgs: payload.approvalTxArgs })
+        : undefined
+      const primaryFp = computeFingerprint(primaryIntent)
+      const approveFp = approveIntent ? computeFingerprint(approveIntent) : undefined
+      assertNoRecentDuplicate(primaryIntent, { force: this.forceBroadcast })
+      if (approveIntent) assertNoRecentDuplicate(approveIntent, { force: this.forceBroadcast })
 
-      // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
-      // since the server-built tx format doesn't match signServerTx's EVM assumptions.
-      // Only the quote/prepare phase falls back to signServerTx — once signing starts,
-      // failures must propagate to avoid double-submitting a broadcast transaction.
-      if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
-        try {
-          result = await this.buildAndSignSolanaSwapLocally(payload)
-        } catch (e: any) {
-          if (e._phase === 'prepare') {
-            if (this.verbose)
-              process.stderr.write(`[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`)
-          } else {
-            throw e
+      // Atomic reservation (closes the check-then-record TOCTOU): the journal
+      // check above only sees COMMITTED broadcasts, so two sibling processes can
+      // both pass it before either records. Take an exclusive lock per intent
+      // BEFORE signing so exactly one wins; the loser throws
+      // ConcurrentBroadcastError (→ DUPLICATE_BROADCAST) and never signs. Held
+      // across the whole sign+broadcast+record, released in the finally once the
+      // durable journal record has taken over as the guard. `--force` no-ops it.
+      const reservations: BroadcastReservation[] = []
+      try {
+        reservations.push(reserveBroadcast(primaryFp, { force: this.forceBroadcast }))
+        if (approveFp) reservations.push(reserveBroadcast(approveFp, { force: this.forceBroadcast }))
+
+        // Multi-leg mcp-ts envelope (approve + main) — dispatched first so it
+        // pre-empts the Solana-local-swap and signServerTx fallbacks. Phase B
+        // is intentionally EVM-only; if `__multiLeg` is ever set on a non-EVM
+        // chain that's a programming error, not a missing branch.
+        let result: Record<string, unknown> | undefined
+        if (payload.__multiLeg) {
+          if (this.pendingLegs.length !== 2) {
+            throw new VaultError(
+              VaultErrorCode.InvalidConfig,
+              `signMultiLeg: expected 2 pending legs, got ${this.pendingLegs.length}`
+            )
+          }
+          result = await this.signMultiLeg(payload, chain, {})
+        }
+
+        // Solana swaps: prefer local SDK build (vault.getSwapQuote → prepareSwapTx)
+        // since the server-built tx format doesn't match signServerTx's EVM assumptions.
+        // Only the quote/prepare phase falls back to signServerTx — once signing starts,
+        // failures must propagate to avoid double-submitting a broadcast transaction.
+        if (!result && chain === ('Solana' as Chain) && (payload.swap_tx || payload.provider)) {
+          try {
+            result = await this.buildAndSignSolanaSwapLocally(payload)
+          } catch (e: any) {
+            if (e._phase === 'prepare') {
+              if (this.verbose)
+                process.stderr.write(
+                  `[sign_tx] Solana local build failed (${e.message}), falling back to signServerTx\n`
+                )
+            } else {
+              throw e
+            }
           }
         }
+        if (!result) result = await this.signServerTx(payload, chain, {})
+
+        // Journal the single-leg broadcast so a later retry recognises this intent
+        // and refuses to double-send. Multi-leg legs are journaled INSIDE
+        // signMultiLeg at each leg's broadcast point (so an approve whose 90s
+        // receipt-wait times out is still recorded and can't be re-broadcast on
+        // retry — audit F14); recording them here would miss that window.
+        if (!isMultiLeg && result?.tx_hash) {
+          recordBroadcast(primaryFp, String(result.tx_hash), chain.toString())
+        }
+
+        if (payload.sequence_id) result.sequence_id = payload.sequence_id
+        return result
+      } finally {
+        // Release AFTER the broadcast has been recorded above: the durable
+        // journal record is now the guard, so dropping the in-flight lock can't
+        // reopen the double-send window. On a throw (e.g. multi-leg receipt
+        // timeout) the leg-level record inside signMultiLeg has already landed.
+        for (const reservation of reservations) reservation.release()
       }
-      if (!result) result = await this.signServerTx(payload, chain, {})
-      if (payload.sequence_id) result.sequence_id = payload.sequence_id
-      return result
     })
   }
 
@@ -762,14 +883,7 @@ export class AgentExecutor {
     const txArgs = serverTxData?.txArgs ?? {}
     const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
     const parsed = parseThorSwapMemo(memo)
-
-    const toChain = THOR_MEMO_CHAIN_TO_ENUM[parsed.destChainCode]
-    if (!toChain) {
-      throw new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        `signThorMsgDepositSwap: unsupported destination chain code '${parsed.destChainCode}' in memo '${memo}'.`
-      )
-    }
+    const toChain = parsed.toChain
 
     // Fund-safety: require memo destination to equal the vault's own
     // destination address. vault.swap silently substitutes the vault's
@@ -1095,6 +1209,11 @@ export class AgentExecutor {
         throw new VaultError(VaultErrorCode.BroadcastFailed, 'signMultiLeg: approve leg returned no tx_hash')
       }
 
+      // Journal the approve BEFORE the receipt-wait (audit F14). If waitForEvmReceipt
+      // times out or the main leg later throws, this record still stops a retry
+      // from re-broadcasting an approve that already hit the chain.
+      this.recordBroadcastForTx(approveEnvelope, chain, approveTxHash)
+
       if (this.verbose)
         process.stderr.write(`[signMultiLeg] approve broadcast: ${approveTxHash}, waiting for receipt...\n`)
 
@@ -1126,6 +1245,10 @@ export class AgentExecutor {
         tx: undefined,
       }
       const mainResult = await this.signServerTx(mainEnvelope, chain, params)
+
+      // Journal the main leg at its broadcast point too (symmetry with the
+      // approve leg; the top-level signTxFromBuffer record skips multi-leg).
+      this.recordBroadcastForTx(mainEnvelope, chain, mainResult.tx_hash as string | undefined)
 
       return {
         tx_hash: mainResult.tx_hash,
@@ -1733,50 +1856,9 @@ export class AgentExecutor {
 // Helpers
 // ============================================================================
 
+/** Resolve a CLI chain name or ID through the SDK's canonical resolver. */
 export function resolveChain(name: string): Chain | null {
-  if (!name) return null
-
-  // Direct enum match
-  if (Object.values(Chain).includes(name as Chain)) {
-    return name as Chain
-  }
-
-  // Case-insensitive search
-  const lower = name.toLowerCase()
-  for (const [, value] of Object.entries(Chain)) {
-    if (typeof value === 'string' && value.toLowerCase() === lower) {
-      return value as Chain
-    }
-  }
-
-  // Common aliases
-  const aliases: Record<string, string> = {
-    eth: 'Ethereum',
-    btc: 'Bitcoin',
-    sol: 'Solana',
-    bnb: 'BSC',
-    avax: 'Avalanche',
-    matic: 'Polygon',
-    arb: 'Arbitrum',
-    op: 'Optimism',
-    ltc: 'Litecoin',
-    doge: 'Dogecoin',
-    dot: 'Polkadot',
-    atom: 'Cosmos',
-    rune: 'THORChain',
-    thor: 'THORChain',
-    sui: 'Sui',
-    ton: 'Ton',
-    trx: 'Tron',
-    xrp: 'Ripple',
-  }
-
-  const aliased = aliases[lower]
-  if (aliased && Object.values(Chain).includes(aliased as Chain)) {
-    return aliased as Chain
-  }
-
-  return null
+  return resolveChainReference(name) ?? null
 }
 
 /**
@@ -1964,92 +2046,10 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
 }
 
 /**
- * Parsed shape of a THORChain swap memo (`=:CHAIN.ASSET:DEST[::v0:slippage]`).
- *
- * - `destChainCode` is the raw memo chain prefix (`XRP`, `ETH`, ...).
- *   Caller is responsible for mapping it to a `Chain` enum via
- *   `THOR_MEMO_CHAIN_TO_ENUM` and rejecting unsupported codes.
- * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
- *   (`USDC-0X...`) is stripped because vault.swap takes the ticker.
- * - `destAddress` is the user-supplied destination on the destination
- *   chain. May be empty when the memo omits it (THORChain treats this
- *   as "refund to source"); callers should still validate against the
- *   vault's own destination address before broadcasting since vault.swap
- *   silently substitutes its own address into the broadcast memo.
- */
-export type ParsedThorSwapMemo = {
-  destChainCode: string
-  destAsset: string
-  destAddress: string
-}
-
-/**
- * Parse a THORChain swap memo into its destination-routing components.
- *
- * Accepts the shorthand notation documented at
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...) — common shortcuts let memos
- * fit inside THORChain's 250-byte limit when paired with long EVM
- * destination addresses.
- *
- * Throws `VaultError(NotImplemented)` for non-swap memos (anything that
- * doesn't start with the `=:` swap prefix — e.g. LP `+:POOL` or `-:POOL`,
- * which are deferred to Phase E). Throws `VaultError(InvalidConfig)`
- * when the swap memo is structurally malformed (no CHAIN.ASSET segment).
- */
-export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
-  if (!memo.startsWith('=:')) {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      `parseThorSwapMemo: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
-        `LP memos (+:/-:) route through signThorMsgDepositLp; loan / validator ops out of scope.`
-    )
-  }
-
-  const memoBody = memo.slice(2) // strip leading '=:'
-  const parts = memoBody.split(':')
-
-  let chainAsset = parts[0]
-  if (chainAsset && !chainAsset.includes('.')) {
-    const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
-    if (expanded) chainAsset = expanded
-  }
-  if (!chainAsset || !chainAsset.includes('.')) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
-    )
-  }
-
-  const [destChainCode, destAssetRaw] = chainAsset.split('.')
-  // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...");
-  // for vault.swap we only need the ticker (part before `-`).
-  const destAsset = destAssetRaw?.split('-')[0] ?? ''
-  const destAddress = typeof parts[1] === 'string' ? parts[1] : ''
-
-  return { destChainCode, destAsset, destAddress }
-}
-
-/**
  * Resolve a Chain from a numeric EVM chain ID.
  */
-function resolveChainId(chainId: string | number): Chain | null {
-  const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId
-  if (isNaN(id)) return null
-
-  const chainIdMap: Record<number, Chain> = {
-    1: Chain.Ethereum,
-    56: Chain.BSC,
-    137: Chain.Polygon,
-    43114: Chain.Avalanche,
-    42161: Chain.Arbitrum,
-    10: Chain.Optimism,
-    8453: Chain.Base,
-    81457: Chain.Blast,
-    324: Chain.Zksync,
-    25: Chain.CronosChain,
-  }
-  return chainIdMap[id] || null
+export function resolveChainId(chainId: string | number): Chain | null {
+  return resolveChainReference(chainId) ?? null
 }
 
 // ============================================================================

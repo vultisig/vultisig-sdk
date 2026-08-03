@@ -7,7 +7,14 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import type { BalanceSummaryCard, TurnOutcome } from './cards'
+
+export type ProtocolWarning = {
+  code: 'PROTOCOL_DRIFT'
+  message: string
+  count: number
+  eventTypes: string[]
+}
 
 // ============================================================================
 // Configuration
@@ -32,6 +39,11 @@ export type AgentConfig = {
   /** Billing profile api_id slug — sent as X-Vultisig-Abe-Profile header.
    *  Empty falls back to the backend's default profile. */
   profile?: string
+  /** Bypass the persistent broadcast-journal duplicate guard (`--force`). */
+  force?: boolean
+  /** Permit signed Polymarket payloads to be submitted by the backend. Signing
+   *  alone does not imply this; default false strips submit markers/tokens. */
+  allowAutoSubmit?: boolean
 }
 
 // ============================================================================
@@ -48,6 +60,12 @@ export type AuthTokenRequest = {
 export type AuthTokenResponse = {
   token: string
   expires_at: number
+  // agent-backend /auth/token also returns `access_token` (a duplicate of
+  // `token` under the shape vultiagent-poc's auth layer writes to) and a
+  // `refresh_token`. Modeled as optional so the CLI can capture + persist the
+  // refresh token for a future POST /auth/refresh exchange; see auth.ts.
+  access_token?: string
+  refresh_token?: string
 }
 
 export type CreateConversationRequest = {
@@ -112,14 +130,15 @@ export type ConversationMessage = {
   created_at: string
   // AI-SDK UIMessagePart list, present on messages fetched from
   // /messages/since (the disconnect-recovery endpoint). Text parts carry the
-  // assistant answer; `data-tx_ready` parts carry a persisted signable card so
-  // a turn that dropped its SSE stream mid-flight can still recover both.
+  // assistant answer; `tool-<name>` parts let recovery detect a signable tool
+  // that ran (#927 Phase 2: its payload rides tool-output-available and is NOT
+  // reconstructable, so recovery warns to re-run rather than signing).
   parts?: ConversationMessagePart[]
 }
 
 // Minimal projection of the backend's UIMessagePart (internal/types/parts.go).
 // Only the fields the CLI recovery path reads are typed; `type` is the
-// discriminator ("text", "data-tx_ready", "tool-<name>", …).
+// discriminator ("text", "data-balance_summary", "tool-<name>", …).
 export type ConversationMessagePart = {
   type: string
   text?: string
@@ -296,6 +315,23 @@ export type TxReadyPayload = {
   swap_tx?: Record<string, unknown>
   send_tx?: Record<string, unknown>
   tx?: Record<string, unknown>
+  /**
+   * Multi-leg (approve + main) envelope legs. The executor's
+   * `storeServerTransaction` buffers both legs and `signMultiLeg` signs the
+   * approve, waits for its receipt, then signs the main leg. Each leg nests its
+   * own flat tx under `.tx`. Populated by the client-side tool-output enrichment
+   * for a bundled approve→main (see `toolOutputSigning.ts`) and by mcp-ts
+   * `execute_*` envelopes.
+   */
+  approvalTxArgs?: Record<string, unknown>
+  txArgs?: Record<string, unknown>
+  /**
+   * Internal marker: this signable envelope was synthesized client-side by
+   * `toolOutputSigning.ts` from a `tool-output-available` frame, not received on
+   * the `tx_ready` channel. Used only to render an accurate confirm-gate summary
+   * (`AgentExecutor.getPendingSummary`); inert to signing.
+   */
+  __buildTx?: boolean
 }
 
 export type TokenSearchResult = {
@@ -334,7 +370,6 @@ export type SSEToolProgress = {
 }
 export type SSETitle = { title: string }
 export type SSESuggestions = { suggestions: Suggestion[] }
-export type SSETxReady = TxReadyPayload
 export type SSEPolicyReady = PolicyReady
 export type SSEInstallRequired = InstallRequired
 export type SSEMessage = { message: ConversationMessage }
@@ -345,7 +380,6 @@ export type SSEEvent =
   | { type: 'tool_progress'; data: SSEToolProgress }
   | { type: 'title'; data: SSETitle }
   | { type: 'suggestions'; data: SSESuggestions }
-  | { type: 'tx_ready'; data: SSETxReady }
   | { type: 'policy_ready'; data: SSEPolicyReady }
   | { type: 'install_required'; data: SSEInstallRequired }
   | { type: 'message'; data: SSEMessage }
@@ -405,6 +439,7 @@ export type PipeOutputEvent =
   // /messages/since to recover the answer — lets an agent consumer
   // distinguish "still working" from "failed".
   | { type: 'reconnecting' }
+  | { type: 'warning'; warning: ProtocolWarning }
   | { type: 'error'; message: string; code: AgentErrorCode }
   | { type: 'done' }
 
@@ -432,9 +467,15 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
+   *  once at turn end when the client advertised the `turn_outcome` surface. */
+  onTurnOutcome?: (outcome: TurnOutcome) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void
+  /** Non-fatal wire-contract drift. The turn continues, but machine callers
+   *  receive the ignored frame count/types instead of silently losing them. */
+  onProtocolWarning?: (warning: ProtocolWarning) => void
   onDone: () => void
   // Fired when a mid-turn SSE disconnect is detected and the session begins
   // polling /messages/since to recover the dropped answer/tx_ready.

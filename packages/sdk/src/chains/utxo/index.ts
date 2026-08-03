@@ -8,6 +8,8 @@ export type {
   UtxoApiOptions,
 } from './rpc'
 export { broadcastUtxoTx, estimateUtxoFee, getUtxoBalance, getUtxos } from './rpc'
+export type { SelectUtxoInputsOptions, SelectUtxoInputsResult } from './select'
+export { selectUtxoInputs } from './select'
 export type {
   BuildUtxoSendOptions,
   DecodedAddress,
@@ -21,8 +23,10 @@ export {
   buildUtxoSendTx,
   decodeAddressToPubKeyHash,
   deriveUtxoPubkey,
+  estimateUtxoTxFee,
   getSighashBIP143,
   getSighashLegacy,
+  getSighashZcash,
   getUtxoChainSpec,
   ZCASH_BRANCH_ID_NU6_1,
   ZCASH_BRANCH_ID_NU6_2,

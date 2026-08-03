@@ -10,7 +10,7 @@ import { TW, type WalletCore } from '@trustwallet/wallet-core'
 
 import { getCardanoSigningInputs } from '../../signingInputs/resolvers/cardano'
 import { KeysignPayload } from '../../../types/vultisig/keysign/v1/keysign_message_pb'
-import { buildCip20AuxData, patchTxBodyWithAuxHash } from '../../../tx/compile/cardano/buildCip20AuxData'
+import { buildCip20AuxData } from '../../../tx/compile/cardano/buildCip20AuxData'
 import { getKeysignAmount } from '../../utils/getKeysignAmount'
 import { GetChainSpecificResolver } from '../resolver'
 
@@ -34,10 +34,12 @@ const getCardanoPricedSize = ({ txBodyCbor, memo }: { txBodyCbor: Uint8Array; me
     return txBodyCbor.length + CARDANO_SIGNED_TX_ENVELOPE_SIZE + 1
   }
 
-  const { auxDataCbor, auxDataHash } = buildCip20AuxData(memo)
-  const patchedTxBodyCbor = patchTxBodyWithAuxHash(txBodyCbor, auxDataHash)
+  // With native auxiliary_data, the WalletCore-produced body already commits
+  // the aux hash at key 7, so price it as-is and add the aux-data bytes that
+  // land as signed-tx element [3].
+  const { auxDataCbor } = buildCip20AuxData(memo)
 
-  return patchedTxBodyCbor.length + CARDANO_SIGNED_TX_ENVELOPE_SIZE + auxDataCbor.length
+  return txBodyCbor.length + CARDANO_SIGNED_TX_ENVELOPE_SIZE + auxDataCbor.length
 }
 
 const estimateCardanoByteFee = async ({

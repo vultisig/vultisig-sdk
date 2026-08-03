@@ -172,7 +172,7 @@ export type CreateSecureVaultResult = {
 
 // Transaction status
 export type TxStatusResult = {
-  status: 'pending' | 'success' | 'error'
+  status: 'pending' | 'success' | 'error' | 'not_found'
   receipt?: {
     feeAmount: string
     feeDecimals: number

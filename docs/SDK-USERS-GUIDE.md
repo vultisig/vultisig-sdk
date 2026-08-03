@@ -304,7 +304,6 @@ import { Vultisig } from '@vultisig/sdk'
 import * as readline from 'readline'
 
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -325,7 +324,6 @@ const sdk = new Vultisig({
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   onPasswordRequired: async (vaultId: string, vaultName: string) => {
     // Retrieve from OS keychain, secure enclave, etc.
     return await secureStorage.getPassword(vaultId)
@@ -1343,6 +1341,9 @@ const checkStatus = async () => {
     case 'pending':
       console.log('Still pending...')
       return false
+    case 'not_found':
+      console.log('The node does not currently know this transaction hash')
+      return false
   }
 }
 ```
@@ -1351,11 +1352,13 @@ const checkStatus = async () => {
 
 **Return type (`TxStatusResult`):**
 
-- `status: 'pending' | 'success' | 'error'` - Current on-chain status
+- `status: 'pending' | 'success' | 'error' | 'not_found'` - Current on-chain status. `not_found` means the node has no record of the hash; it can be transient immediately after broadcast.
 - `receipt?: TxReceiptInfo` - Fee details when available:
   - `feeAmount: bigint` - Fee paid in base units
   - `feeDecimals: number` - Decimal places for the fee token
   - `feeTicker: string` - Fee token symbol (e.g., "ETH", "BTC")
+
+EVM RPCs can explicitly distinguish a missing receipt from an unknown hash and return `not_found`. Some non-EVM providers do not distinguish an absent transaction from a failed lookup; those resolvers conservatively return `pending` with `isKnown: false`.
 
 **Error handling:**
 
@@ -1851,10 +1854,12 @@ import { Vultisig, Chain } from '@vultisig/sdk'
 // Get all known tokens for a chain
 const tokens = Vultisig.getKnownTokens(Chain.Ethereum)
 for (const token of tokens) {
-  console.log(`${token.ticker}: ${token.contractAddress}`)
+  console.log(`${token.ticker}: ${token.tokenId}`)
 }
 
-// Look up a specific token by contract address (case-insensitive)
+// contractAddress remains as a deprecated alias for existing consumers
+
+// Look up a specific token by its canonical chain-specific token ID
 const usdc = Vultisig.getKnownToken(Chain.Ethereum, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')
 if (usdc) {
   console.log(`${usdc.ticker} - ${usdc.decimals} decimals`)
@@ -1888,7 +1893,7 @@ const solTokens = await vault.discoverTokens(Chain.Solana)
 
 ### Resolving Token Metadata
 
-Resolve token metadata by contract address. Checks the built-in registry first (fast, no network), then falls back to chain APIs:
+Resolve token metadata by canonical chain-specific token ID. Checks the built-in registry first (fast, no network), then falls back to chain APIs:
 
 ```typescript
 // Known token → instant, no network call
@@ -2192,8 +2197,7 @@ All configuration is passed to the `Vultisig` constructor. The SDK uses instance
 import { Vultisig, Chain } from '@vultisig/sdk'
 
 const sdk = new Vultisig({
-  // Required: Storage implementation
-  storage: new FileStorage(), // Or MemoryStorage, or custom implementation
+  // Storage is optional; omit it to use the persistent platform default.
 
   // Optional: Default chains for new vaults
   defaultChains: [Chain.Bitcoin, Chain.Ethereum, Chain.Solana],
@@ -2237,15 +2241,17 @@ sdk.dispose()
 You can create multiple isolated SDK instances, each with its own storage and configuration:
 
 ```typescript
+import { FileStorage, Vultisig } from '@vultisig/sdk/node'
+
 // Instance for user 1
 const sdk1 = new Vultisig({
-  storage: new FileStorage('./user1/vaults'),
+  storage: new FileStorage({ basePath: './user1/vaults' }),
   defaultCurrency: 'USD',
 })
 
 // Instance for user 2
 const sdk2 = new Vultisig({
-  storage: new FileStorage('./user2/vaults'),
+  storage: new FileStorage({ basePath: './user2/vaults' }),
   defaultCurrency: 'EUR',
 })
 
@@ -2267,7 +2273,7 @@ import { Vultisig, type VaultStorage } from '@vultisig/sdk'
 import * as fs from 'fs'
 import * as path from 'path'
 
-class CustomStorage implements Storage {
+class CustomStorage implements VaultStorage {
   constructor(private basePath: string) {}
 
   async get(key: string): Promise<string | null> {
@@ -2306,6 +2312,15 @@ await sdk.initialize()
 // ... use the SDK ...
 sdk.dispose()
 ```
+
+Custom adapters may share a backing store with application data. The SDK
+reserves `vault:*`, `pending:*`, `cache:*`, `addressBook:*`, `activeVaultId`,
+`pushNotificationRegistrations`, `config:defaultCurrency`, and
+`config:defaultChains`. `sdk.clearVaults()` removes the vault-scoped keys,
+saved and vault address-book entries, and local push registrations but
+intentionally retains the two SDK preference keys. The adapter's `clear()`
+method remains an explicit adapter-wide operation that may also remove
+unrelated host keys.
 
 ---
 
@@ -2349,7 +2364,6 @@ Configure cache TTLs:
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   cacheConfig: {
     balanceTTL: 300000, // 5 minutes (default)
     priceTTL: 300000, // 5 minutes (default)
@@ -2363,7 +2377,6 @@ Passwords are cached to avoid repeated prompts (see [Password Management](#passw
 
 ```typescript
 const sdk = new Vultisig({
-  storage: new FileStorage(),
   passwordCache: {
     defaultTTL: 300000, // 5 minutes
   },
@@ -2625,7 +2638,7 @@ class Vultisig {
 
   // Token registry (static, no vault needed)
   static getKnownTokens(chain: Chain): TokenInfo[]
-  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null
+  static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null
   static getFeeCoin(chain: Chain): FeeCoinInfo
   static getBanxaSupportedChains(): Chain[]
 
@@ -2768,7 +2781,7 @@ class VaultBase {
 
   // Token Discovery & Metadata
   discoverTokens(chain: Chain): Promise<DiscoveredToken[]>
-  resolveToken(chain: Chain, contractAddress: string): Promise<TokenInfo>
+  resolveToken(chain: Chain, tokenId: string): Promise<TokenInfo>
 
   // Fiat On-Ramp
   getBuyUrl(chain: Chain, ticker?: string): Promise<string | null>
@@ -2785,7 +2798,7 @@ class VaultBase {
   getTokens(chain: Chain): Token[]
   setTokens(chain: Chain, tokens: Token[]): Promise<void>
   addToken(chain: Chain, token: Token): Promise<void>
-  removeToken(chain: Chain, tokenId: string): Promise<void>
+  removeToken(chain: Chain, tokenId: string): Promise<boolean>
 
   // Portfolio
   getValue(chain: Chain, tokenId?: string, fiatCurrency?: FiatCurrency): Promise<Value>

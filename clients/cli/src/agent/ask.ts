@@ -12,9 +12,10 @@
  *   vultisig agent ask "Send 0.01567 HYPE to myself" --session <id> --vault t1 --password 1
  */
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard } from './cards'
+import { isTerminalAgentErrorCode } from './agentErrors'
+import type { BalanceSummaryCard, TurnOutcome } from './cards'
 import type { AgentSession } from './session'
-import type { Suggestion, TxLifecycleStatus, UICallbacks } from './types'
+import type { ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
 export type AskResult = {
   sessionId: string
@@ -39,6 +40,7 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
    * failure (which rejects sendMessage and surfaces via the catch), an SSE
@@ -46,6 +48,15 @@ export type AskResult = {
    * to exit non-zero instead of reporting false success.
    */
   error?: { message: string; code: AgentErrorCode }
+  /**
+   * Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Present
+   * only when the backend honored the advertised `turn_outcome` surface (a current
+   * backend); absent against an older backend, in which case the caller falls back
+   * to its `error`-frame / exit-0 classification. Lets a headless caller tell a
+   * genuine success from a fund-safety block, a model refusal/clarifying-question,
+   * or an infra error without parsing prose.
+   */
+  outcome?: TurnOutcome
 }
 
 export class AskInterface {
@@ -56,12 +67,28 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private warnings: ProtocolWarning[] = []
+  private outcome: TurnOutcome | undefined
   private error: AskResult['error']
+  // Tracks whether the currently-latched `error` is a terminal one (e.g. the
+  // depth cap). A terminal error may overwrite a prior non-terminal one; once a
+  // terminal error is recorded, later frames cannot replace it. See onError.
+  private errorIsTerminal = false
 
   constructor(session: AgentSession, verbose = false, autoApprove = false) {
     this.session = session
     this.verbose = verbose
     this.autoApprove = autoApprove
+  }
+
+  /**
+   * Whether the turn threw with a still-unacknowledged broadcast (the F1
+   * ack-failure case). The command's catch uses this to gate the ACK_FAILED
+   * re-tag so a later, unrelated retryable error after an already-acked
+   * broadcast keeps its own (retryable) classification instead of exit 8.
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.session.hasUnacknowledgedBroadcast()
   }
 
   /**
@@ -108,6 +135,14 @@ export class AskInterface {
         this.cards.push(card)
       },
 
+      onTurnOutcome: (outcome: TurnOutcome) => {
+        // Latch the LAST outcome of the turn. The backend emits exactly one at turn
+        // end, but a multi-request action loop (a sign that triggers a follow-up
+        // recent_actions turn) can produce more than one across requests — the last
+        // reflects the turn's true ending.
+        this.outcome = outcome
+      },
+
       onSuggestions: (_suggestions: Suggestion[]) => {
         // Silently ignored in ask mode
       },
@@ -129,13 +164,22 @@ export class AskInterface {
       },
 
       onError: (message: string, code: AgentErrorCode) => {
-        // Record the first backend/stream error so ask() can surface it to the
-        // caller (non-zero exit + error envelope). Keep the human-readable
-        // stderr breadcrumb for verbose/interactive observers.
-        if (!this.error) {
+        // Latch the first error, but let a terminal code overwrite a previously
+        // recorded non-terminal one (LOOP_DEPTH_EXCEEDED etc.); once a terminal
+        // error is latched, later frames cannot replace it. Keep the stderr
+        // breadcrumb either way. (Ask mode's initialize() fails closed by THROWING
+        // on a resume error, so no onError ever fires before the first ask().)
+        const isTerminal = isTerminalAgentErrorCode(code)
+        if (!this.error || (isTerminal && !this.errorIsTerminal)) {
           this.error = { message, code }
+          this.errorIsTerminal = isTerminal
         }
         process.stderr.write(`[error] ${message} [${code}]\n`)
+      },
+
+      onProtocolWarning: (warning: ProtocolWarning) => {
+        this.warnings.push(warning)
+        process.stderr.write(`[warning] ${warning.message} [${warning.code}]\n`)
       },
 
       onDone: () => {
@@ -171,7 +215,11 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.warnings = []
+    this.outcome = undefined
+    // Each turn's error (and its terminal flag) is turn-local — reset every turn.
     this.error = undefined
+    this.errorIsTerminal = false
 
     const callbacks = this.getCallbacks()
     await this.session.sendMessage(message, callbacks)
@@ -194,7 +242,9 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
+      warnings: this.warnings,
       error: this.error,
+      ...(this.outcome ? { outcome: this.outcome } : {}),
     }
   }
 }

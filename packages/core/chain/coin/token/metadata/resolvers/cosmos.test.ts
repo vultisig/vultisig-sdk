@@ -215,6 +215,36 @@ describe('getCosmosTokenMetadata', () => {
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
   })
 
+  it('throws a clean typed error when id is undefined - not a raw TypeError', async () => {
+    let caught: unknown
+    try {
+      await getCosmosTokenMetadata({ chain: Chain.TerraClassic, id: undefined as unknown as string })
+    } catch (e) {
+      caught = e
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    const msg = (caught as Error).message
+    expect(msg).toMatch(/required/)
+    expect(msg).not.toMatch(/is not a function/)
+    expect(msg).not.toMatch(/Cannot read properties/)
+  })
+
+  it('throws a clean typed error when id is empty string', async () => {
+    let caught: unknown
+    try {
+      await getCosmosTokenMetadata({ chain: Chain.TerraClassic, id: '' })
+    } catch (e) {
+      caught = e
+    }
+
+    expect(caught).toBeInstanceOf(Error)
+    const msg = (caught as Error).message
+    expect(msg).toMatch(/required/)
+    expect(msg).not.toMatch(/is not a function/)
+    expect(msg).not.toMatch(/Cannot read properties/)
+  })
+
   it('does not cache missing bank denom metadata', async () => {
     queryUrlMock.mockImplementation((url: string) => {
       if (url.includes('/denoms_metadata/uappears')) {

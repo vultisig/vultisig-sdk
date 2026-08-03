@@ -16,6 +16,10 @@ vi.mock('@vultisig/core-chain/chains/cardano/submit/submitCardanoCbor', () => ({
   submitCardanoCbor: mocks.submitCardanoCbor,
 }))
 
+vi.mock('../../../chains/cardano/submit/submitCardanoCbor', () => ({
+  submitCardanoCbor: mocks.submitCardanoCbor,
+}))
+
 vi.mock('@vultisig/core-chain/tx/hash/resolvers/cardano', () => ({
   getCardanoTxHash: mocks.getCardanoTxHash,
 }))
@@ -26,7 +30,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 
 import { OtherChain } from '@vultisig/core-chain/Chain'
 
-import { broadcastCardanoTx } from './cardano'
+import { broadcastCardanoTx, getCardanoTtlFreshnessError } from './cardano'
 
 const txWithTtl = (ttl: number) =>
   ({
@@ -59,6 +63,37 @@ describe('broadcastCardanoTx', () => {
 
     expect(mocks.submitCardanoCbor).not.toHaveBeenCalled()
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('submits when the Cardano tip fetch fails twice before broadcast', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockRejectedValue(new Error('tip route unavailable'))
+    mocks.submitCardanoCbor.mockResolvedValue({ txHash: 'cardano-hash' })
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBe('cardano-hash')
+
+    expect(mocks.getCardanoCurrentSlot).toHaveBeenCalledTimes(2)
+    expect(mocks.submitCardanoCbor).toHaveBeenCalledWith(Buffer.from(tx.encoded).toString('hex'))
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('still fails before submit when a retry proves the signed transaction TTL is stale', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockRejectedValueOnce(new Error('tip route unavailable')).mockResolvedValueOnce(940n)
+
+    await expect(broadcastCardanoTx({ chain, tx })).rejects.toThrow(/TTL is expired or too close to expiry/)
+
+    expect(mocks.getCardanoCurrentSlot).toHaveBeenCalledTimes(2)
+    expect(mocks.submitCardanoCbor).not.toHaveBeenCalled()
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+  })
+
+  it('treats unavailable tip data as unknown while preserving stale TTL failures', () => {
+    expect(getCardanoTtlFreshnessError({ currentSlot: null, ttl: 1_000n })).toBeNull()
+    expect(getCardanoTtlFreshnessError({ currentSlot: 939n, ttl: 1_000n })).toBeNull()
+    expect(getCardanoTtlFreshnessError({ currentSlot: 940n, ttl: 1_000n })?.message).toContain(
+      'TTL is expired or too close to expiry'
+    )
   })
 
   it('fails before submit when the signed transaction does not expose a TTL', async () => {
@@ -100,13 +135,40 @@ describe('broadcastCardanoTx', () => {
     await expect(broadcastCardanoTx({ chain, tx })).rejects.toBe(verifyError)
   })
 
-  it('continues swallowing duplicate Cardano broadcast errors without hash verification', async () => {
+  it('routes an "already known" duplicate through hash verification instead of blanket-swallowing it (false-success fix)', async () => {
+    // Before the fix, 'txn-mempool-conflict'/'already known'/'BadInputsUTxO' were bucketed together and
+    // returned null unconditionally — but BadInputsUTxO is a GENUINE failure (spent/invalid inputs), not
+    // an MPC-race duplicate. Verification is now mandatory for every ambiguous submit error.
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'txn-mempool-conflict' })
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
 
     await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
 
-    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a BadInputsUTxO error when the tx is NOT actually on chain (the false-success bug this fixes)', async () => {
+    const tx = txWithTtl(1_000)
+    const verifyError = new Error('Failed to broadcast transaction: BadInputsUTxO')
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'BadInputsUTxO' })
+    // verifyBroadcastByHash rethrows the original error when the tx isn't confirmed on-chain — see its
+    // own contract in verifyBroadcastByHash.ts.
+    mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
+
+    await expect(broadcastCardanoTx({ chain, tx })).rejects.toBe(verifyError)
+  })
+
+  it('still succeeds on a genuine MPC-race "already known" when hash verification confirms the tx IS on chain', async () => {
+    const tx = txWithTtl(1_000)
+    mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
+    mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'already known' })
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
   })
 })

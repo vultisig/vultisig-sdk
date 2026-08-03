@@ -1,5 +1,27 @@
 # @vultisig/lib-utils
 
+## 0.10.4
+
+### Patch Changes
+
+- [#918](https://github.com/vultisig/vultisig-sdk/pull/918) [`6302825`](https://github.com/vultisig/vultisig-sdk/commit/63028250c7a17bf165046f0bb0c2263354dab66a) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Show tiny fiat amounts (e.g. LUNC-style prices below one cent) with significant
+  digits and compact subscript notation instead of rounding them to "$0.00"
+  (e.g. 0.00000003 now renders as $0.0₇3).
+
+## 0.10.3
+
+### Patch Changes
+
+- [#880](https://github.com/vultisig/vultisig-sdk/pull/880) [`2ff65f3`](https://github.com/vultisig/vultisig-sdk/commit/2ff65f31bbbf64919c456e05dc6d274625127c2e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Add a 20s default deadline to `queryUrl` (the shared HTTP helper behind
+  prices/balances/swap quotes/broadcast/MPC-server calls). An unbounded `fetch`
+  against a hung upstream previously wedged the caller forever — a stalled
+  `/coingeicko` price proxy made `fiatToAmount -> execute_send` hang and
+  perma-loaded the agent send card's "Network fee" row until the app's own 60s
+  build-timeout fired. The deadline is implemented with a Hermes-compatible
+  `AbortController` + `setTimeout` and only applies when the caller passes no
+  `signal`; callers that supply their own `signal` keep owning cancellation. A
+  new `timeoutMs` option lets callers override the default.
+
 ## 0.10.2
 
 ### Patch Changes

@@ -15,8 +15,10 @@
  */
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { attempt } from '@vultisig/lib-utils/attempt'
+import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { memoize } from '@vultisig/lib-utils/memoize'
-import { createPublicClient, erc20Abi, http, type PublicClient } from 'viem'
+import { createPublicClient, erc20Abi, http, keccak256, type PublicClient } from 'viem'
 
 import { getEvmNumericChainId } from './tx'
 
@@ -111,9 +113,10 @@ export const getEvmChainIdFromRpc = async (rpcUrl: string, chain: EvmChain): Pro
 /**
  * Broadcast a pre-signed raw EVM transaction. Returns the tx hash.
  *
- * Treats "already known"-class errors as non-fatal (same list as the SDK's
- * RawBroadcastService) by re-throwing a more descriptive error that lets
- * the caller decide whether to ignore.
+ * Treats "already known"-class errors as idempotent success. For every other
+ * error, verifies the deterministic transaction hash with the same RPC before
+ * deciding whether the send succeeded. Verification is fail-closed: when the
+ * node cannot confirm the receipt or transaction, the original error is thrown.
  */
 export const broadcastEvmRawTx = async (
   rpcUrl: string,
@@ -121,7 +124,28 @@ export const broadcastEvmRawTx = async (
   rawTxHex: `0x${string}`
 ): Promise<`0x${string}`> => {
   const client = getClient(chain, rpcUrl)
-  return client.sendRawTransaction({ serializedTransaction: rawTxHex })
+  const txHash = keccak256(rawTxHex)
+  const result = await attempt(client.sendRawTransaction({ serializedTransaction: rawTxHex }))
+
+  if ('data' in result) {
+    return txHash
+  }
+
+  if (isInError(result.error, 'already known', 'transaction already exists', 'tx already in mempool')) {
+    return txHash
+  }
+
+  const receipt = await attempt(client.getTransactionReceipt({ hash: txHash }))
+  if ('data' in receipt && receipt.data?.transactionHash.toLowerCase() === txHash.toLowerCase()) {
+    return txHash
+  }
+
+  const transaction = await attempt(client.getTransaction({ hash: txHash }))
+  if ('data' in transaction && transaction.data?.hash.toLowerCase() === txHash.toLowerCase()) {
+    return txHash
+  }
+
+  throw result.error
 }
 
 // ---------------------------------------------------------------------------

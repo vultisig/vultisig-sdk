@@ -1,11 +1,13 @@
 import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
+import { buildCip20AuxData } from '../../../tx/compile/cardano/buildCip20AuxData'
 import { SigningInputsResolver } from '../resolver'
 
 /** Encodes a token amount as big-endian bytes for WalletCore's Cardano proto. */
@@ -20,6 +22,26 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
 
   const coin = shouldBePresent(keysignPayload.coin)
   const isTokenSend = coin.contractAddress !== ''
+
+  // Send-max fee convergence (sdk#1382). WalletCore's Cardano planner IGNORES
+  // `forceFee` whenever `useMaxAmount` is set — it returns TransactionPlan{ amount:
+  // <full input>, fee: 0 }, an unbroadcastable zero-fee tx (nodes require
+  // fee >= minFeeA + minFeeB*txSize). So we never take that path: a max send is
+  // built as an EXPLICIT transfer of (totalInput - fee) with the converged fee
+  // forced and `useMaxAmount: false`, which the planner honors (fee > 0, change
+  // consumed to 0). The fee itself is converged by getCardanoChainSpecific, whose
+  // loop calls back into this resolver — so it now prices the real fee-bearing
+  // body instead of the fee=0 one. `useMaxAmount` without `forceFee` is not an
+  // option: the planner aborts (uncatchable WASM assert) with no forced fee.
+  const isSendMax = sendMaxAmount && !isTokenSend
+  const sendAmount = isSendMax
+    ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount)) - byteFee
+    : BigInt(keysignPayload.toAmount)
+
+  // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
+  // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the
+  // bytes in the signed transaction. No client-side body patching needed.
+  const auxiliaryData = keysignPayload.memo ? buildCip20AuxData(keysignPayload.memo).auxDataCbor : undefined
 
   const tokenBundle = isTokenSend
     ? (() => {
@@ -41,14 +63,15 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: Long.fromString(keysignPayload.toAmount),
-      useMaxAmount: sendMaxAmount,
+      amount: Long.fromString(sendAmount.toString()),
+      useMaxAmount: false,
       tokenAmount: tokenBundle,
       forceFee: Long.fromString(byteFee.toString()),
     }),
     ttl: Long.fromString(ttl.toString()),
+    auxiliaryData,
 
-    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index }) =>
+    utxos: keysignPayload.utxoInfo.map(({ hash, amount, index, cardanoTokens }) =>
       TW.Cardano.Proto.TxInput.create({
         outPoint: TW.Cardano.Proto.OutPoint.create({
           txHash: walletCore.HexCoding.decode(stripHexPrefix(hash)),
@@ -56,6 +79,24 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
         }),
         amount: Long.fromString(amount.toString()),
         address: coin.address,
+        // Per-UTXO native assets, read verbatim off the keysign wire (the
+        // initiator attached them). Without these WalletCore's planner cannot
+        // reconcile input tokens into the change output: co-signing an
+        // iOS-initiated send diverges on the pre-image hash, and an
+        // SDK-initiated send builds a body that drops the input tokens (node
+        // rejects it as value-not-conserved). Amounts are minimal big-endian
+        // unsigned bytes — byte-identical to the iOS signer. Left unset for
+        // token-free UTXOs, matching iOS.
+        tokenAmount:
+          cardanoTokens.length > 0
+            ? cardanoTokens.map(token =>
+                TW.Cardano.Proto.TokenAmount.create({
+                  policyId: token.policyId,
+                  assetNameHex: token.assetNameHex,
+                  amount: amountToBytes(BigInt(token.amount)),
+                })
+              )
+            : undefined,
       })
     ),
   })

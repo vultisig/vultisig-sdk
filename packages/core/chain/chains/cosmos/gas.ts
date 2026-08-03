@@ -1,20 +1,57 @@
-import { Chain, IbcEnabledCosmosChain } from '../../Chain'
+import { Chain, CosmosChain, IbcEnabledCosmosChain } from '../../Chain'
 import type { CoinKey } from '../../coin/Coin'
+import { getFeeAmountFromGasPrice, type ParsedDecimal, parseDecimal } from './cosmosDecimal'
 import { cosmosFeeCoinDenom } from './cosmosFeeCoinDenom'
 import { getCosmosGasLimit } from './cosmosGasLimitRecord'
 import { getCosmosRpcUrl } from './getCosmosRpcUrl'
+import { getOsmosisDynamicFeeFloor } from './osmosisDynamicFee'
 
-const defaultGas = 7500n
+export { getFeeAmountFromGasPrice } from './cosmosDecimal'
+
+/** Canonical signable send-fee floor for IBC-enabled Cosmos chains without a chain-specific override. */
+export const COSMOS_SEND_FEE_DEFAULT = 7500n
+
+/** Canonical fixed MayaChain native-send fee in CACAO base units. */
+export const MAYA_SEND_FEE_BASE_UNITS = 2000000000n
+
+/**
+ * Terra Classic's `uluna` fee at the static 300k gas limit:
+ * `300_000 × 28.325 uluna/gas`. 28.325 is the chain's own minimum gas price,
+ * live-verifiable at `/terra/tax/v1beta1/params` (`gas_prices[uluna]`), and
+ * real columbus-5 sends pay exactly `gas_wanted × 28.325`.
+ *
+ * This is a derived price, NOT a hand-tuned floor. It previously sat at
+ * 20_000_000 (20 LUNC) — 2.35× the chain's requirement — which overcharged
+ * every send while ALSO under-covering large ones, because the burn tax it
+ * was implicitly absorbing scales with the transfer amount and this constant
+ * does not. The burn tax is now added explicitly by the initiator (see
+ * `applyTerraClassicBurnTax`), so this is purely the gas component.
+ *
+ * Matches iOS `TerraClassicTax.ulunaBaseGas` and Android
+ * `TerraClassicTax.ULUNA_BASE_GAS`.
+ */
+export const TERRA_CLASSIC_ULUNA_BASE_GAS = 8_497_500n
 
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
-  [Chain.Cosmos]: defaultGas,
+  [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,
-  [Chain.Kujira]: defaultGas,
-  [Chain.Terra]: defaultGas,
+  [Chain.Kujira]: COSMOS_SEND_FEE_DEFAULT,
+  [Chain.Terra]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Dydx]: 2500000000000000n,
-  [Chain.TerraClassic]: 100000000n,
+  [Chain.TerraClassic]: TERRA_CLASSIC_ULUNA_BASE_GAS,
   [Chain.Noble]: 30000n,
   [Chain.Akash]: 200000n,
+}
+
+/**
+ * Returns the canonical static native-send fee in base units.
+ * THORChain returns `undefined` because its fee must be read from live
+ * `native_tx_fee_rune` network data rather than a static fallback.
+ */
+export const getCosmosSendFeeBaseUnits = (chain: CosmosChain): bigint | undefined => {
+  if (chain === Chain.THORChain) return undefined
+  if (chain === Chain.MayaChain) return MAYA_SEND_FEE_BASE_UNITS
+  return cosmosGasRecord[chain]
 }
 
 type FetchOpts = {
@@ -26,24 +63,9 @@ type CosmosNodeConfigResponse = {
   minimum_gas_price?: string
 }
 
-type ParsedDecimal = {
-  numerator: bigint
-  denominator: bigint
-}
-
 const minGasPriceConfigPath = '/cosmos/base/node/v1beta1/config'
 const minGasPriceFetchTimeoutMs = 3_000
 const maxLiveFeeMultiplier = 10n
-
-const parseDecimal = (value: string): ParsedDecimal | undefined => {
-  if (!/^\d+(?:\.\d+)?$/.test(value)) return undefined
-
-  const [whole, fraction = ''] = value.split('.')
-  const denominator = 10n ** BigInt(fraction.length)
-  const numerator = BigInt(`${whole}${fraction}`)
-
-  return { numerator, denominator }
-}
 
 const parseMinGasPriceEntry = (entry: string) => {
   const match = entry.trim().match(/^(\d+(?:\.\d+)?)([a-zA-Z][a-zA-Z0-9/._:-]*)$/)
@@ -54,12 +76,6 @@ const parseMinGasPriceEntry = (entry: string) => {
   if (!decimal) return undefined
 
   return { ...decimal, denom }
-}
-
-export const getFeeAmountFromGasPrice = (gasLimit: bigint, gasPrice: ParsedDecimal): bigint => {
-  const total = gasLimit * gasPrice.numerator
-
-  return (total + gasPrice.denominator - 1n) / gasPrice.denominator
 }
 
 export const getMinGasPriceForDenom = (minimumGasPrice: string, targetDenom: string): ParsedDecimal | undefined => {
@@ -131,10 +147,7 @@ const fetchMinGasPrice = async (chain: IbcEnabledCosmosChain, { fetchImpl = fetc
   }
 }
 
-export const getCosmosFeeAmount = async (
-  coin: CoinKey<IbcEnabledCosmosChain>,
-  opts: FetchOpts = {}
-): Promise<bigint> => {
+const getGenericCosmosFeeAmount = async (coin: CoinKey<IbcEnabledCosmosChain>, opts: FetchOpts): Promise<bigint> => {
   const floor = cosmosGasRecord[coin.chain]
 
   try {
@@ -149,4 +162,24 @@ export const getCosmosFeeAmount = async (
   } catch {
     return floor
   }
+}
+
+export const getCosmosFeeAmount = async (
+  coin: CoinKey<IbcEnabledCosmosChain>,
+  opts: FetchOpts = {}
+): Promise<bigint> => {
+  if (coin.chain !== Chain.Osmosis) return getGenericCosmosFeeAmount(coin, opts)
+
+  // Osmosis's real fee floor is enforced by its EIP-1559 `x/txfees` module,
+  // NOT the generic node-config `minimum-gas-price` (a per-node/operator-
+  // configurable value that doesn't track the live protocol floor, and can
+  // be clamped away by the anomaly guard above when it legitimately spikes).
+  // Run both lookups concurrently (each has its own timeout budget) rather
+  // than sequentially, and never pay less than the higher of the two -
+  // see osmosisDynamicFee.ts.
+  const [genericFee, dynamicFloor] = await Promise.all([
+    getGenericCosmosFeeAmount(coin, opts),
+    getOsmosisDynamicFeeFloor(getCosmosGasLimit(coin), opts),
+  ])
+  return dynamicFloor !== null && dynamicFloor > genericFee ? dynamicFloor : genericFee
 }

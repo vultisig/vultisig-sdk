@@ -26,6 +26,8 @@
  * Skip's grpc-gateway returns structured `{code, message, details}` errors;
  * `SkipApiError` surfaces `code` (stable) rather than regexing messages.
  */
+import { getCosmosMemoMaxBytesByChainId } from '@vultisig/core-chain/chains/cosmos/cosmosMemoCap'
+
 import { buildSkipAffiliates, type SkipChainIdsToAffiliates } from './affiliateConfig'
 import { skipChainIdToChainName } from './chainMapping'
 import { assertNotValidatorHrp } from './cosmosAddressGuard'
@@ -222,37 +224,52 @@ function firstUnsupportedCustodyChain(
 }
 
 /**
- * Per-tx `MaxMemoCharacters` cap (bytes) from each chain's `x/auth` module. Skip
- * PFM routes encode the downstream flow in the source-leg memo, which can exceed
- * the cap (LUNC→USDC.eth observed at 1584 bytes vs columbus-5's 256-byte cap).
- * Values sourced from each chain's live `/cosmos/auth/v1beta1/params`.
+ * Extract the SDK transaction-level memo byte length for EVERY cosmos leg in a
+ * Skip /msgs_direct response. Returns one entry per cosmos tx (empty array when
+ * the route is EVM-only and the cap check doesn't apply).
+ *
+ * cosmoshub-4 / columbus-5 / etc. enforce `x/auth.MaxMemoCharacters` against
+ * the SDK **transaction**-level memo (`cosmos_tx.memo`), NOT against the inner
+ * ICS-20 packet `memo` (which is unbounded).
  */
-const COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID: Readonly<Record<string, number>> = {
-  'columbus-5': 256,
-  'phoenix-1': 256,
-  'cosmoshub-4': 256,
-  'osmosis-1': 256,
-  'kaiyo-1': 256,
-  'noble-1': 256,
-}
-
-/**
- * Extract the cosmos source-leg SDK transaction-level memo byte length from a
- * Skip /msgs_direct response, or `null` when no cosmos leg exists. cosmoshub-4 /
- * columbus-5 enforce the cap against the SDK transaction-level memo
- * (`cosmos_tx.memo`), NOT the inner ICS-20 packet memo (which is unbounded).
- */
-function getSourceLegMemoByteLength(
+function getCosmosLegMemoInfos(
   txs: ReadonlyArray<SkipMsgsDirectTx>
-): { sourceChainId: string; memoBytes: number } | null {
+): Array<{ sourceChainId: string; memoBytes: number }> {
+  const out: Array<{ sourceChainId: string; memoBytes: number }> = []
   for (const tx of txs) {
     if (!tx || !('cosmos_tx' in tx)) continue
     const cosmosTx = tx.cosmos_tx
+    // A malformed multi-tx response can carry the `cosmos_tx` key with a
+    // null/undefined value - skip rather than crash. validateTxEnvelopes
+    // (later in the pipeline) is what surfaces a structured error for a
+    // malformed tx envelope; this preflight only cares about well-formed legs.
+    if (!cosmosTx || typeof cosmosTx.chain_id !== 'string') continue
     const memo = typeof cosmosTx.memo === 'string' ? cosmosTx.memo : ''
-    return {
+    out.push({
       sourceChainId: cosmosTx.chain_id,
-      memoBytes: Buffer.byteLength(memo, 'utf-8'),
-    }
+      memoBytes: new TextEncoder().encode(memo).length,
+    })
+  }
+  return out
+}
+
+/**
+ * Return the first cosmos leg whose top-level memo exceeds its chain's
+ * `MaxMemoCharacters` cap, or `null` when every cosmos leg fits.
+ *
+ * Checks EVERY leg, including multi-tx routes — a leg whose own memo exceeds
+ * its own chain's cap fails on-chain no matter how the route is split. This
+ * previously only ran for single-tx routes and only inspected the first
+ * cosmos leg, which meant a multi-tx route (`allowMultiTx:true`) with an
+ * over-cap non-first leg would sail through undetected and fail at broadcast
+ * (sdk code 12, "memo too long") AFTER signing.
+ */
+function firstCosmosLegOverMemoCap(
+  txs: ReadonlyArray<SkipMsgsDirectTx>
+): { sourceChainId: string; memoBytes: number; cap: number } | null {
+  for (const memoInfo of getCosmosLegMemoInfos(txs)) {
+    const cap = getCosmosMemoMaxBytesByChainId(memoInfo.sourceChainId)
+    if (memoInfo.memoBytes > cap) return { ...memoInfo, cap }
   }
   return null
 }
@@ -941,23 +958,22 @@ function validateMsgsResponse(
     }
   }
 
-  if (!isMultiTx) {
-    const memoInfo = getSourceLegMemoByteLength(msgs.txs)
-    const cap = memoInfo ? COSMOS_MEMO_MAX_BYTES_BY_CHAIN_ID[memoInfo.sourceChainId] : undefined
-    if (memoInfo && cap !== undefined && memoInfo.memoBytes > cap) {
-      return {
-        error: {
-          error: 'skip_source_memo_too_long',
-          message:
-            `Skip route's source-leg memo is ${memoInfo.memoBytes} bytes, but ` +
-            `${memoInfo.sourceChainId} enforces a ${cap}-byte limit. Broadcast would fail with ` +
-            `sdk code 12 "memo too long" after signing. This corridor requires a multi-step ` +
-            `route (pass allowMultiTx:true) or a different routing strategy.`,
-          source_chain_id: memoInfo.sourceChainId,
-          memo_bytes: memoInfo.memoBytes,
-          memo_max_bytes: cap,
-        },
-      }
+  const overCap = firstCosmosLegOverMemoCap(msgs.txs)
+  if (overCap) {
+    const reroute = isMultiTx
+      ? `This corridor's memo exceeds the cap even when split; try a different routing strategy.`
+      : `This corridor requires a multi-step route (pass allowMultiTx:true) or a different routing strategy.`
+    return {
+      error: {
+        error: 'skip_source_memo_too_long',
+        message:
+          `Skip route's cosmos leg memo is ${overCap.memoBytes} bytes, but ` +
+          `${overCap.sourceChainId} enforces a ${overCap.cap}-byte limit. Broadcast would fail with ` +
+          `sdk code 12 "memo too long" after signing. ${reroute}`,
+        source_chain_id: overCap.sourceChainId,
+        memo_bytes: overCap.memoBytes,
+        memo_max_bytes: overCap.cap,
+      },
     }
   }
 

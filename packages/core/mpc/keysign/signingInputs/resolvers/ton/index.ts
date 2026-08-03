@@ -1,3 +1,4 @@
+import { isTonStakingComment } from '@vultisig/core-chain/chains/ton/staking'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { TW } from '@trustwallet/wallet-core'
@@ -15,7 +16,7 @@ export const getTonSigningInputs: SigningInputsResolver<'ton'> = ({ keysignPaylo
   const { expireAt, sequenceNumber, bounceable, sendMaxAmount, jettonAddress, isActiveDestination } =
     getBlockchainSpecificValue(keysignPayload.blockchainSpecific, 'tonSpecific')
 
-  const isStakeOp = !!keysignPayload.memo && ['d', 'w'].includes(keysignPayload.memo.trim())
+  const isStakeOp = isTonStakingComment(keysignPayload.memo)
 
   const signTonMessages =
     keysignPayload.signData?.case === 'signTon' ? keysignPayload.signData.value.tonMessages : undefined

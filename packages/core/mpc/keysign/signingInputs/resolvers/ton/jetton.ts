@@ -1,14 +1,12 @@
-import { Buffer } from 'buffer'
 import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
-import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { TW } from '@trustwallet/wallet-core'
 import { WalletCore } from '@trustwallet/wallet-core'
 
 import { getKeysignAmount } from '../../../utils/getKeysignAmount'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
-import { toSafeComment } from './native'
+import { toSafeComment, tonAmountToBytes } from './native'
 
 type BuildJettonTransferInput = {
   keysignPayload: KeysignPayload
@@ -30,10 +28,10 @@ export const buildJettonTransfer = ({
   const forwardAmount = isActiveDestination ? 1n : 0n
 
   const jettonTransfer = TW.TheOpenNetwork.Proto.JettonTransfer.create({
-    jettonAmount: Buffer.from(numberToEvenHex(shouldBePresent(getKeysignAmount(keysignPayload))), 'hex'),
+    jettonAmount: tonAmountToBytes(shouldBePresent(getKeysignAmount(keysignPayload))),
     toOwner: destinationAddress,
     responseAddress: coin.address,
-    forwardAmount: Buffer.from(numberToEvenHex(forwardAmount), 'hex'),
+    forwardAmount: tonAmountToBytes(forwardAmount),
   })
 
   const mode =
@@ -41,7 +39,7 @@ export const buildJettonTransfer = ({
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
-    amount: Buffer.from(numberToEvenHex(tonConfig.jettonAmount), 'hex'),
+    amount: tonAmountToBytes(tonConfig.jettonAmount),
     bounceable: true,
     comment: toSafeComment(keysignPayload.memo ?? ''),
     mode,

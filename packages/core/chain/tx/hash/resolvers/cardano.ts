@@ -1,6 +1,6 @@
 import { blake2b } from '@noble/hashes/blake2b'
 import { OtherChain } from '@vultisig/core-chain/Chain'
-import { decode, encode } from 'cbor-x'
+import { cardanoCborEncoder } from '@vultisig/core-chain/chains/cardano/cip30/cborEncoder'
 
 import { TxHashResolver } from '../resolver'
 
@@ -11,8 +11,11 @@ export const getCardanoTxHash: TxHashResolver<OtherChain.Cardano> = tx => {
     return Buffer.from(tx.txId).toString('hex')
   }
 
-  const decoded = decode(tx.encoded)
-  const bodyCbor = encode(decoded[0])
+  // Fallback decode must go through cardanoCborEncoder (maps stay `Map`):
+  // token-carrying txs have byte-string map keys that cbor-x's default
+  // decode-to-object rejects with "Invalid property name type object".
+  const decoded = cardanoCborEncoder.decode(tx.encoded)
+  const bodyCbor = cardanoCborEncoder.encode(decoded[0])
   const digest = blake2b(bodyCbor, { dkLen: 32 })
 
   return Buffer.from(digest).toString('hex')

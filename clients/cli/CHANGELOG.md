@@ -1,5 +1,707 @@
 # @vultisig/cli
 
+## 4.0.0
+
+### Minor Changes
+
+- [#1608](https://github.com/vultisig/vultisig-sdk/pull/1608) [`791d344`](https://github.com/vultisig/vultisig-sdk/commit/791d344c2dacc289c9fb7fbcbc38488aeeb47542) Thanks [@neavra](https://github.com/neavra)! - Fix tracked token balance fetching and make token removal report the truth.
+
+  A token added with `tokens --add` is stored under an id of the form `<Chain>-<address>`. That id was passed to the RPC as if it were a contract address; the RPC rejected it, the throw was swallowed per-chain, and the **whole chain's balances disappeared** — native asset included — leaving only a `console.warn`. Balance lookups now resolve a stored token reference to its real contract address / chain-level asset id before both the per-coin and batched calls. What is written to the vault file is unchanged, and balance result keys still use the stored id.
+
+  **Behavior change — `tokens --remove` now fails when nothing was removed.** Removal previously matched on an exact id comparison, so removing by symbol (or by contract address for a token added under the prefixed id form) matched nothing while the command still printed `Removed token …` and exited 0. Removal now goes through the shared token resolver, and a reference that matches no tracked token raises the existing not-found error and exits **5** (`RESOURCE_NOT_FOUND`) instead of exiting 0. A script that removed an untracked token and relied on a zero exit will now see a failure. Removal by symbol and by contract address, which previously silently no-op'd, now work.
+
+  **Behavior change — the agent `vault_coin remove` tool reports per-coin outcomes.** It previously returned `removed: true` unconditionally; it now returns the SDK's actual result, so the model is told when a coin was not tracked. Batch removals return `{ chain, tokenId, removed }` per coin rather than `{ chain, tokenId }`.
+
+  **Breaking SDK API change — `VaultBase.removeToken` now returns `Promise<boolean>` instead of `Promise<void>`.** It resolves to `true` when a tracked token was removed and persisted, and `false` when the reference matched nothing. Consumers with callbacks, interfaces, or overrides typed to the previous `Promise<void>` signature must update those types.
+
+### Patch Changes
+
+- [#1642](https://github.com/vultisig/vultisig-sdk/pull/1642) [`ac5becb`](https://github.com/vultisig/vultisig-sdk/commit/ac5becb7939bc8c6b45d04cd00067e0d2caf6297) Thanks [@neavra](https://github.com/neavra)! - Show the user-visible memo and XRP destination tag from the signable transaction payload in both send dry-run and pre-signing confirmation previews, with terminal-safe dry-run rendering.
+
+- Updated dependencies [[`b9f81af`](https://github.com/vultisig/vultisig-sdk/commit/b9f81af9065a5c0bfc2f86f8fb20aa51e670ab77), [`c0e260f`](https://github.com/vultisig/vultisig-sdk/commit/c0e260f89d159d14b170384864b24b101b23dfb0), [`2ef8f3f`](https://github.com/vultisig/vultisig-sdk/commit/2ef8f3f42f5d44673568b39a91c42bd0fe410311), [`791d344`](https://github.com/vultisig/vultisig-sdk/commit/791d344c2dacc289c9fb7fbcbc38488aeeb47542)]:
+  - @vultisig/core-chain@2.31.0
+  - @vultisig/sdk@4.0.0
+  - @vultisig/client-shared@0.3.2
+  - @vultisig/rujira@59.0.0
+
+## 3.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`645e291`](https://github.com/vultisig/vultisig-sdk/commit/645e2917aa1b6cd58c5599ddb32b1c89fa73e20e), [`9436de6`](https://github.com/vultisig/vultisig-sdk/commit/9436de627b4d123d7f9bb76e4981722cd84266d1)]:
+  - @vultisig/core-chain@2.30.0
+  - @vultisig/sdk@3.1.0
+  - @vultisig/rujira@58.0.0
+
+## 3.0.0
+
+### Minor Changes
+
+- [#1606](https://github.com/vultisig/vultisig-sdk/pull/1606) [`c593ba0`](https://github.com/vultisig/vultisig-sdk/commit/c593ba0693f6a02402aac0912a97d9e36e8efad0) Thanks [@neavra](https://github.com/neavra)! - Make token references resolve consistently across the vault and CLI surfaces.
+
+  **`@vultisig/sdk` — consumer-visible behaviour change on `send`, `swap` and `balance`:**
+
+  - A token reference (the `symbol` on `send`/`swap`, the `tokenId` on `balance`)
+    now resolves by contract address / stored vault token id as well as by symbol
+    or well-known ticker, through one shared resolver. Previously `send` matched
+    by symbol only while `balance` treated the same value as a raw contract
+    address, so no single value worked on both paths and an ERC-20 send could not
+    be built at all.
+  - The change is additive. Symbol/ticker is still matched first and the vault's
+    own tokens still shadow the well-known registry, so every reference that
+    resolved before resolves to the same token and produces the same signed
+    payload. Only references that previously threw now resolve. A reference
+    matching nothing is still passed through to the balance layer untouched.
+  - `send({ dryRun: true })` gains `feeSymbol` and reports the network fee in the
+    chain's native asset. For a token send, `fee` was previously formatted with
+    the token's decimals and `total` was amount + fee — both meaningless when the
+    fee is paid in a different asset. `total` is now denominated in the asset
+    being sent. Native sends are unaffected.
+  - A `Balance` for a token is labelled by the same resolution. Previously the
+    token was found by an exact match against the vault's stored token id, so a
+    well-known token the vault does not track — or one added with an id that is
+    not its bare contract address — fell through to a default of 18 decimals with
+    the raw id as `symbol`. `formatBalance` now resolves the same way everything
+    else does; a token in no registry still falls back as before.
+
+  **`@vultisig/cli`:**
+
+  - `send --token` works with either a contract address or a symbol, and its
+    dry-run preview quotes the fee in the native asset. The preview also warns
+    separately when the native balance cannot cover the fee — a token send draws
+    its fee from a different balance than the one `total` is checked against.
+  - `portfolio`'s total now equals the sum of the breakdown printed under it, with
+    each held token itemized as its own row (`chainBalances[].tokens`).
+  - `balance <chain> --tokens` returns token balances instead of silently
+    ignoring the flag; without the flag the output is unchanged.
+  - `tokens --discover` documents that it saves discovered tokens to the vault.
+
+### Patch Changes
+
+- [#1174](https://github.com/vultisig/vultisig-sdk/pull/1174) [`0d73d9f`](https://github.com/vultisig/vultisig-sdk/commit/0d73d9f5d08b10e52b9461678d7d700afba52e01) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix CLI shell completion so vault suggestions read the SDK's real storage layout and honor `VULTISIG_CONFIG_DIR`.
+
+- [#1163](https://github.com/vultisig/vultisig-sdk/pull/1163) [`286e342`](https://github.com/vultisig/vultisig-sdk/commit/286e342962e8fa63525c8de25bed84295fd468cd) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Promote THOR/Maya swap-memo parsing into the public SDK API and update the CLI executor to consume the shared helper.
+
+- [#1165](https://github.com/vultisig/vultisig-sdk/pull/1165) [`f3fd265`](https://github.com/vultisig/vultisig-sdk/commit/f3fd2654b8d90f5d5aaa3c578fcd5fad752203d3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the RN-safe `parseChain`, `parseTicker`, and `knownContracts` helpers from `@vultisig/sdk/platforms/react-native` so mobile consumers can use the SDK's canonical public helpers without maintaining local copies or reaching into non-RN entrypoints.
+
+- [#1171](https://github.com/vultisig/vultisig-sdk/pull/1171) [`a24771a`](https://github.com/vultisig/vultisig-sdk/commit/a24771afba7c210423c586f9492d3531cdcd47f5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Make the SDK's default Node/Electron `FileStorage` honor `VULTISIG_CONFIG_DIR` so default vault storage stays co-located with the CLI config, credentials, cache, and broadcast journal paths.
+
+- [#1168](https://github.com/vultisig/vultisig-sdk/pull/1168) [`e40aab2`](https://github.com/vultisig/vultisig-sdk/commit/e40aab24e02c46fd2c3fe95873b14aad4fd2fe6d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Consolidate `VULTISIG_CONFIG_DIR` resolution into a shared helper so empty or whitespace-only overrides consistently fall back to the default config directory across credentials, config storage, token cache, and broadcast journal paths.
+
+- Updated dependencies [[`8061f30`](https://github.com/vultisig/vultisig-sdk/commit/8061f3072cc299196894b3c118bf7046eff8a004), [`4c76c50`](https://github.com/vultisig/vultisig-sdk/commit/4c76c507df970c6bbb1542c72a7ab0e06d039e65), [`bb752e2`](https://github.com/vultisig/vultisig-sdk/commit/bb752e25dc318488a72d9b6b7aa8d484c568dbaa), [`0d73d9f`](https://github.com/vultisig/vultisig-sdk/commit/0d73d9f5d08b10e52b9461678d7d700afba52e01), [`ec4aac7`](https://github.com/vultisig/vultisig-sdk/commit/ec4aac78e96db00cae283fe8a506983a30c42412), [`286e342`](https://github.com/vultisig/vultisig-sdk/commit/286e342962e8fa63525c8de25bed84295fd468cd), [`c593ba0`](https://github.com/vultisig/vultisig-sdk/commit/c593ba0693f6a02402aac0912a97d9e36e8efad0), [`d1ed4bb`](https://github.com/vultisig/vultisig-sdk/commit/d1ed4bbd459bfed006cf9f319d9e39356ffe25b9), [`648d932`](https://github.com/vultisig/vultisig-sdk/commit/648d932b7e3c6f3c30ff7007f3c4e4387879ba38), [`f3fd265`](https://github.com/vultisig/vultisig-sdk/commit/f3fd2654b8d90f5d5aaa3c578fcd5fad752203d3), [`a24771a`](https://github.com/vultisig/vultisig-sdk/commit/a24771afba7c210423c586f9492d3531cdcd47f5), [`6763ddb`](https://github.com/vultisig/vultisig-sdk/commit/6763ddbd382bd71cdf9f24bbd3bde0116a694906), [`e40aab2`](https://github.com/vultisig/vultisig-sdk/commit/e40aab24e02c46fd2c3fe95873b14aad4fd2fe6d), [`259837f`](https://github.com/vultisig/vultisig-sdk/commit/259837f482717624d6422797e088a9341d4f1a23)]:
+  - @vultisig/core-chain@2.29.2
+  - @vultisig/sdk@3.0.0
+  - @vultisig/client-shared@0.3.1
+  - @vultisig/rujira@57.0.0
+
+## 2.23.0
+
+### Patch Changes
+
+- [#1262](https://github.com/vultisig/vultisig-sdk/pull/1262) [`10164ae`](https://github.com/vultisig/vultisig-sdk/commit/10164ae94af2183a63e908318ed4e675d2fe1e6e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve exact decimal swap amounts from CLI input through preview and execution.
+
+- Updated dependencies [[`23563f4`](https://github.com/vultisig/vultisig-sdk/commit/23563f41da7b142e5ae9d34d4287eaaaa3fef701), [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198)]:
+  - @vultisig/sdk@2.23.0
+  - @vultisig/core-chain@2.29.1
+  - @vultisig/rujira@56.0.0
+
+## 2.22.0
+
+### Patch Changes
+
+- [#1583](https://github.com/vultisig/vultisig-sdk/pull/1583) [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27) Thanks [@Toby1009](https://github.com/Toby1009)! - Move every Sui read, simulation and broadcast off JSON-RPC.
+
+  Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+  week of 2026-07-27 and full decommission (code removal) lands mid-October 2026,
+  after which no provider can serve it. This is a scheduled migration ahead of
+  that date, NOT a fix for a live outage — as of 2026-07-27 both
+  `sui-rpc.publicnode.com` and `fullnode.mainnet.sui.io` still answer JSON-RPC.
+
+  - `getSuiClient()` now returns a `SuiGrpcClient` pointed at
+    `https://fullnode.mainnet.sui.io:443` (gRPC-web over HTTPS).
+  - React Native uses `SuiGraphQLClient` against
+    `https://graphql.mainnet.sui.io/graphql` instead: grpc-web needs
+    `Response.body` streaming, which Hermes' fetch does not provide. Both clients
+    implement the same unified transport interface, so callsites are identical.
+  - Balance, coin metadata, coin listing, tx hash, tx status, broadcast and
+    keysign gas refinement moved to `getBalance` / `getCoinMetadata` / `listCoins`
+    / `simulateTransaction` / `getTransaction` / `executeTransaction`.
+  - The dependency-free `@vultisig/sdk` balance tools (`getSuiBalance`,
+    `getSuiTokenBalance`, `getSuiAllBalances`) now POST Sui GraphQL and follow the
+    paginated `balances` connection to completion, returning `tokens_unavailable`
+    rather than a silently truncated portfolio.
+
+  Broadcast-error classification follows the transport. A gRPC failure carries the
+  grpc-status NAME in `code` (not a JSON-RPC number) and a percent-encoded message,
+  so both classifiers were re-pointed:
+
+  - `isTransientBroadcastError` retries `UNAVAILABLE` / `DEADLINE_EXCEEDED` /
+    `RESOURCE_EXHAUSTED` and decodes the message before pattern-matching. A
+    grpc-web response is HTTP 200 with the real status in the trailer, so the
+    existing 5xx branch never saw a busy or restarting node.
+  - The CLI's permanent-vs-retryable gate matches `INVALID_ARGUMENT` instead of
+    the numeric `-32002`. Left unchanged, that gate would have gone dead and every
+    permanent Sui rejection would have been re-broadcast as if transient.
+
+  Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
+  client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
+  instead of a JSON-RPC effects object.
+
+- Updated dependencies [[`4b14790`](https://github.com/vultisig/vultisig-sdk/commit/4b14790fb5f0fa5b9a58f6fe5575ad4c2bab3867), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`98ec3bf`](https://github.com/vultisig/vultisig-sdk/commit/98ec3bfdcf0831df00ceec6618c796dbfa2c4d13), [`bb5b62c`](https://github.com/vultisig/vultisig-sdk/commit/bb5b62c60ca298d0aa98614e8c2b01eeef0d8bdb), [`d7fd8fd`](https://github.com/vultisig/vultisig-sdk/commit/d7fd8fd891d2bb9f007b3feff5b31cc961bae497), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`f99133d`](https://github.com/vultisig/vultisig-sdk/commit/f99133dc7a99f44bbe78ba43fa59e7ec761c73e1), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`6142529`](https://github.com/vultisig/vultisig-sdk/commit/6142529abc39bb548be8b1f32453f0207584c4e2), [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`e76ba9b`](https://github.com/vultisig/vultisig-sdk/commit/e76ba9ba78ec52f30f3678ef4acc933ef5712cdc), [`4777264`](https://github.com/vultisig/vultisig-sdk/commit/47772647b90336ae3297d208777523592f69dde4), [`89410fb`](https://github.com/vultisig/vultisig-sdk/commit/89410fbb0abf3ad05919fb38d1abc74a5acf9a6b), [`787e755`](https://github.com/vultisig/vultisig-sdk/commit/787e755d230d1e0fa012583d6edd8b7fa5aad88d)]:
+  - @vultisig/core-chain@2.29.0
+  - @vultisig/sdk@2.22.0
+  - @vultisig/rujira@55.0.0
+
+## 2.21.1
+
+### Patch Changes
+
+- [#1435](https://github.com/vultisig/vultisig-sdk/pull/1435) [`69e2fc2`](https://github.com/vultisig/vultisig-sdk/commit/69e2fc2f92c053294b0276440306be5871988be9) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep browser vault storage on the backend selected during initialization. IndexedDB failures and quota errors now surface without silently switching to a partial localStorage or in-memory view, while legacy localStorage vaults retain their backend across reloads.
+
+- [#1179](https://github.com/vultisig/vultisig-sdk/pull/1179) [`0c80a06`](https://github.com/vultisig/vultisig-sdk/commit/0c80a062bde65c4938a29ce8c1fb6052028615e1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Route the CLI version cache, version output, and VaultStateStore local state through `VULTISIG_CONFIG_DIR` so they stay co-located with SDK vault storage and other shared CLI state.
+
+- Updated dependencies [[`69e2fc2`](https://github.com/vultisig/vultisig-sdk/commit/69e2fc2f92c053294b0276440306be5871988be9), [`0c80a06`](https://github.com/vultisig/vultisig-sdk/commit/0c80a062bde65c4938a29ce8c1fb6052028615e1), [`1292e83`](https://github.com/vultisig/vultisig-sdk/commit/1292e83b1d370eff35ecd95b94e83689b724ca36), [`aa47b4a`](https://github.com/vultisig/vultisig-sdk/commit/aa47b4a03c7391d13c738cba68b13a1526d1c502), [`b8d0639`](https://github.com/vultisig/vultisig-sdk/commit/b8d063904673890f0a956a56f6474d678ceaba3c), [`32e5d36`](https://github.com/vultisig/vultisig-sdk/commit/32e5d369ae4723299a6cb8f694da1782dbf207c2)]:
+  - @vultisig/sdk@2.21.1
+  - @vultisig/client-shared@0.3.0
+  - @vultisig/core-chain@2.28.0
+
+## 2.21.0
+
+### Minor Changes
+
+- [#1291](https://github.com/vultisig/vultisig-sdk/pull/1291) [`11f0c0c`](https://github.com/vultisig/vultisig-sdk/commit/11f0c0c362d0fca0a935acd396216c379b50ea1b) Thanks [@neavra](https://github.com/neavra)! - Send a fresh idempotency key for each agent message attempt, reuse it for the attempt's auth retry, and expose keyed-turn duplicates as a typed error with exit code 14.
+
+- [#1281](https://github.com/vultisig/vultisig-sdk/pull/1281) [`feb2137`](https://github.com/vultisig/vultisig-sdk/commit/feb213783534fc4a424cbc7e01bd97ae90320c11) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose canonical EIP-191 hashing and ECDSA 65-byte signature formatting helpers, and use them in vault message signing and CLI authentication.
+
+- [#1305](https://github.com/vultisig/vultisig-sdk/pull/1305) [`7cbcfa7`](https://github.com/vultisig/vultisig-sdk/commit/7cbcfa7d792229e7558417ff5a5f0fdd5ef96991) Thanks [@neavra](https://github.com/neavra)! - Harden agent channels with an SSE frame-idle timeout, backend/profile-scoped token caching, protocol-drift warnings, and explicit Polymarket auto-submit authorization.
+
+  **Behavior change — auto-submit is now opt-in.** Backend-requested Polymarket order submission previously flowed by default; it now requires the new `--allow-auto-submit` flag. Without it the CLI strips the submit markers and forces `auto_submit=false`, so a script that relied on `--yes` alone to place an order will sign and exit 0 without submitting. Add `--allow-auto-submit` to restore the old behavior.
+
+  Also: the agent token cache is re-keyed by (vault, backend URL, profile), so cached credentials from a previous version are dropped and the next run re-authenticates. New `VULTISIG_SSE_IDLE_TIMEOUT_MS` env var (default 60s) bounds an established but silent SSE stream; `agent ask --output json` may now carry an additive `warnings` field, and `agent --via-agent` now emits warning events on the NDJSON stream for consumers to handle alongside other event frames.
+
+### Patch Changes
+
+- [#1474](https://github.com/vultisig/vultisig-sdk/pull/1474) [`c443b9c`](https://github.com/vultisig/vultisig-sdk/commit/c443b9ce699ef76f1407d0386ed20fbc7e3f253f) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Route SwapKit transaction links through its public tracker across the shared core and SDK APIs.
+
+- [#1256](https://github.com/vultisig/vultisig-sdk/pull/1256) [`20a0fd0`](https://github.com/vultisig/vultisig-sdk/commit/20a0fd0dafab088d92bc53e5bd84acaf5cc20cc6) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix typed EVM transaction decoding so newer supported chain ids resolve through the canonical SDK registry instead of a stale local map.
+
+- [#1346](https://github.com/vultisig/vultisig-sdk/pull/1346) [`662eed0`](https://github.com/vultisig/vultisig-sdk/commit/662eed02fac61e3e138d3e3629f0d48aa951b531) Thanks [@neavra](https://github.com/neavra)! - Classify permanent UTXO, Solana, Sui, and Cosmos broadcast validation failures as non-retryable invalid input while leaving ambiguous and transient failures retryable.
+
+- [#1286](https://github.com/vultisig/vultisig-sdk/pull/1286) [`4f111d1`](https://github.com/vultisig/vultisig-sdk/commit/4f111d1f448e5dbd8cb99e71b1f9e7a5cd875e30) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Infer EVM and Cosmos decoder families from canonical SDK chain metadata.
+
+- [#1437](https://github.com/vultisig/vultisig-sdk/pull/1437) [`620648a`](https://github.com/vultisig/vultisig-sdk/commit/620648a43e67c4804e27520a98c160af8932e8da) Thanks [@neavra](https://github.com/neavra)! - Classify a Cosmos DeliverTx execution failure honestly, and journal its on-chain hash.
+
+  A Cosmos transaction can be included in a block and still fail execution (DeliverTx code !== 0 — out-of-gas, a wasm revert, a THORChain/Maya deposit-handler rejection). The SDK now surfaces that truthfully (cosmjs `assertIsDeliverTxSuccess`, [#1316](https://github.com/vultisig/vultisig-sdk/issues/1316)), but the CLI mishandled it:
+
+  - **Classification.** The DeliverTx-failure message (`Error when broadcasting tx <hash> at height <N>. Code: <c>; Raw log: <log>`) did not match the CheckTx-shaped classifier, so it fell through to `EXTERNAL_SERVICE` (exit 6, retryable) with a "the node may be temporarily unavailable / Retry" hint — for a transaction that is on-chain and has failed. It now classifies as `INVALID_INPUT` (exit 4, non-retryable) with an honest message: the transaction was included on-chain and its execution failed, the on-chain result is authoritative — inspect it via the hash and rebuild rather than blindly re-broadcasting the identical bytes. The chain is resolved from the SDK broadcast wrapper (never from wrapped payload text), so a foreign chain's program log cannot spoof the marker and strand a genuinely-retryable error.
+  - **Journaling.** On the direct `send` / `swap` guard, a DeliverTx failure previously journaled nothing (the throw preceded hash computation), discarding a hash we definitively have. The guard now records the hash cosmjs embedded in the message as a broadcast plus a `failed` resolution, so the transaction is on the record (tx-status / explorer / audit) while the guard correctly re-opens for a legitimate retry. Gated on the intent's own (trusted) chain so a non-Cosmos error can't get a spoofed hash journaled.
+
+- [#1436](https://github.com/vultisig/vultisig-sdk/pull/1436) [`8471b88`](https://github.com/vultisig/vultisig-sdk/commit/8471b88cb0403e28506d82c380115eed50acdc25) Thanks [@neavra](https://github.com/neavra)! - fix(cli): an interactive `send`/`execute`/`swap` decline now exits 12
+  `CONFIRMATION_REQUIRED` (`success:false` in JSON), matching the non-interactive
+  refusal, instead of the old swallowed exit 0 that told a scripted caller a declined
+  transaction had succeeded. A decline inside the interactive REPL still just returns
+  to the prompt. **Behavior change scripted consumers branch on:** answering "no" at
+  a confirm prompt flips `$?` from 0 → 12.
+
+  Also corrects the ask-mode taxonomy so a persistent auth failure while resuming a
+  `--session` fails closed as `AUTH_FAILED` (exit 2) rather than `SESSION_NOT_FOUND`
+  (exit 5).
+
+- [#1387](https://github.com/vultisig/vultisig-sdk/pull/1387) [`c837c0b`](https://github.com/vultisig/vultisig-sdk/commit/c837c0b524dea366a77d2d5eccd6ad737d15cb29) Thanks [@neavra](https://github.com/neavra)! - Two CLI developer-experience fixes:
+
+  - Silence the `bigint: Failed to load bindings, pure JS will be used` warning that
+    `bigint-buffer` printed to stderr on every invocation, including `--version`. It
+    warns at module load, before any flag has been parsed, so it cannot be gated behind
+    `--debug`; it is silenced with a `yarn patch`. The SDK's node bundle inlines the
+    patched copy, which is why `@vultisig/sdk` is bumped here too.
+  - Generate shell completion from the Commander command table and the SDK chain
+    registry instead of a stale hardcoded list, which was missing eleven commands
+    (sign/broadcast/tx-status/execute/discount/agent/auth/delete/join/rujira/add-mldsa)
+    and 17 of 38 chains.
+
+- [#1386](https://github.com/vultisig/vultisig-sdk/pull/1386) [`a2ea19a`](https://github.com/vultisig/vultisig-sdk/commit/a2ea19a386b77d4135e56cd9ce4b6bf8e70b5e60) Thanks [@neavra](https://github.com/neavra)! - Tighten the handling of files that carry key shares:
+
+  - Write exported `.vult` files owner-only (0600) instead of with the default umask
+    (0644, world-readable), matching the SDK's own vault store. The export is written to
+    a fresh temp file and renamed over the target, so the shares are never on disk at a
+    looser mode — `writeFile`'s `mode` only applies when it creates the file, so writing
+    straight to a pre-existing path would have left the shares world-readable for a window.
+  - Stop `rename` rejecting vault names the ecosystem itself creates (e.g. the `#` in
+    "Vultisig Cluster [#1](https://github.com/vultisig/vultisig-sdk/issues/1)"), which made rename a one-way door. The alphanumeric allowlist
+    is replaced with a denylist of what is genuinely unsafe for the export filename the
+    name is interpolated into: path separators and control characters.
+  - Enforce that denylist at the real lifecycle boundary — `export()` — rather than only
+    at rename. A vault imported or created via a path that ran no name validation could
+    otherwise carry an unsafe name or `localPartyId` (path separators, control chars, a
+    bare `..`) straight into the export filename. `export()` now encodes every filename
+    component to a single safe path segment (same policy as rename), encoding rather than
+    refusing so a legitimately-imported vault is never stranded behind its own backup file.
+
+- [#1385](https://github.com/vultisig/vultisig-sdk/pull/1385) [`8998264`](https://github.com/vultisig/vultisig-sdk/commit/8998264d3136a2ab0ea051b31ce0626dceeb6c08) Thanks [@neavra](https://github.com/neavra)! - Make CLI machine output tell the truth about what happened:
+
+  - Emit a result envelope from every successful mutation in `-o json`
+    (switch/rename/currency/address-book/import/export/add-mldsa previously exited 0
+    with no output at all).
+  - Emit exactly one JSON envelope from a failed `verify` — it previously wrote two
+    documents, so `JSON.parse` on the output failed — and list vaults pending
+    verification in `vaults`, which were otherwise only named in the create-time output.
+  - Validate the chain argument for `tokens` and `swap-quote`, which previously reported
+    `success: true` with an empty list / a raw TypeError for an unknown chain. Both now
+    throw a typed `INVALID_CHAIN` (exit 4).
+  - Add `NO_ACTIVE_VAULT` (15) and `CORRUPT_STATE` (16) exit codes with recovery hints,
+    replacing a generic `UNKNOWN_ERROR`/7 for both states.
+  - Report `fee` and `total` from `send --dry-run` in JSON — the human preview already
+    printed the fee, and `total` is the number the insufficient-balance warning is
+    derived from.
+
+  Note: a failed `verify` now exits 4 (wrong/expired code) or 5 (unknown pending vault)
+  instead of 1. This is a deliberate change on a published surface — see the PR body.
+
+- [#1239](https://github.com/vultisig/vultisig-sdk/pull/1239) [`937a58c`](https://github.com/vultisig/vultisig-sdk/commit/937a58cce27f935346f44f4bae4b3e40f464cba9) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix `formatBalance`/`formatBigintAmount` computing the display divisor via `BigInt(10 ** decimals)` — a float64 power that's only exact up to decimals=22, silently corrupting balance display for higher-decimal assets. Both now delegate to the pure-bigint `fromChainAmountExact`, which is also exported from the root `@vultisig/sdk` entrypoint alongside `getBlockExplorerUrl` — including the React Native platform entry (the one Metro actually resolves for Station), not just the node/default condition, so RN consumers can reach both without a `@vultisig/core-chain` deep import.
+
+- [#1266](https://github.com/vultisig/vultisig-sdk/pull/1266) [`98e715a`](https://github.com/vultisig/vultisig-sdk/commit/98e715a0c770ae2a776314763fb18ffa309c1e2b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Keep the direct Jupiter swap tool's affiliate-fee state in sync with the canonical shared Jupiter path when the quoted platform fee floors to zero.
+
+- [#1282](https://github.com/vultisig/vultisig-sdk/pull/1282) [`6f32745`](https://github.com/vultisig/vultisig-sdk/commit/6f327454c04c42f6771e53584026ec7283aa2ac3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical prep constants from `@vultisig/sdk` and `@vultisig/sdk/react-native` so consumers can import `TRC20_TRANSFER_SELECTOR`, `SUI_NATIVE_COIN_TYPE`, and `CONSOLIDATE_CHAINS` from the public SDK surfaces instead of copying local literals.
+
+- [#1345](https://github.com/vultisig/vultisig-sdk/pull/1345) [`5cd0a12`](https://github.com/vultisig/vultisig-sdk/commit/5cd0a12957d05e324e056ca3453e76c3668c2071) Thanks [@neavra](https://github.com/neavra)! - Make the agent SSE idle deadline bound a hung backend, and handle the frame types that carry turn-outcome semantics.
+
+  Follow-up to the agent-channel hardening in [#1305](https://github.com/vultisig/vultisig-sdk/issues/1305); both are behavior changes worth reading.
+
+  **The idle deadline now measures progress, not traffic.** Keep-alive comments no longer extend it. Both backends emit those from a timer that runs independently of whether the turn is advancing, so a deadline they reset bounded only a dead connection — a backend wedged in a model or tool call kept pinging and `agent ask` hung forever, which is the exact failure the deadline was added to stop. The default rises 60s → 180s to match what it now measures: real backend silence, which a healthy turn is documented to produce for up to ~150s (a model call is bounded at 90s, the swap builder at 90s + 60s MCP). A slow-but-progressing turn still resets the clock on every real frame. `VULTISIG_SSE_IDLE_TIMEOUT_MS` is unchanged, and the timeout still throws a typed `TIMEOUT` → exit 3.
+
+  **`tool-output-error` and `text-replace` are now handled.** Both were counted as unknown frames and dropped, and both carry semantics the turn result depends on:
+
+  - `tool-output-error` is the backend's tool-failure terminal. Ignored, the call never closed, so a FAILED tool was reported as a running one and the turn recorded no failure. It now surfaces as a failed tool result. It can never produce a signable transaction.
+  - `text-replace` retracts prose the backend has decided is wrong and supplies a correction. Ignored, the retracted claim stayed as the turn's answer — a turn could answer "I sent your 5 ETH." after the backend had withdrawn exactly that sentence. The correction is now applied, or declined outright if it cannot be applied cleanly, never half-applied.
+
+  **`PROTOCOL_DRIFT` warnings are now `--verbose`-only,** and unknown `data-*` card kinds no longer produce them at all. The backend's V1 wire treats unknown data kinds as forward-compatible and emits some from a dynamic call site no static client list can track, so warning by default fired on healthy turns against a newer backend. Automation that read `warnings` for drift will no longer receive it unless `--verbose` is set; the field was already documented as omitted-when-empty. Frames whose absence is a real defect are handled explicitly instead of enumerated.
+
+- [#1355](https://github.com/vultisig/vultisig-sdk/pull/1355) [`42e5e36`](https://github.com/vultisig/vultisig-sdk/commit/42e5e36350a2e6cc71681f6ac5545051c045381a) Thanks [@neavra](https://github.com/neavra)! - Correct the non-EVM permanent broadcast classification so it only declares a failure permanent when the fault is in the signed bytes themselves.
+
+  - Cosmos: `insufficient funds` (5), `insufficient fee` (13) and `unknown address` (9) are no longer permanent. A CheckTx rejection does not increment the account sequence, so these stay replayable verbatim once the account is funded, a cheaper node accepts the fee, or the account exists — they now classify as retryable (`EXTERNAL_SERVICE`, exit 6) instead of `INVALID_INPUT`, exit 4.
+  - UTXO: dropped matching on bitcoind's `-26`/`-27` reject codes. Blockchair is the only UTXO broadcast backend and does not preserve those codes — it reformats the node's reply as `Invalid transaction. Error: <reason>` — so the branch never fired, and `-26` is a bucket that also covers recoverable rejections (`non-final`, `too-long-mempool-chain`, `min relay fee not met`) that must not be stranded.
+  - Chain detection now reads the SDK's own wrapper rather than scanning the whole error text for any ` on <chain>:` substring, so chain-labelled text inside a wrapped payload (e.g. a Solana program log) can no longer route an error to another family's vocabulary.
+
+  EVM classification and the exit 9/13 broadcast-safety semantics are unchanged.
+
+- [#1202](https://github.com/vultisig/vultisig-sdk/pull/1202) [`7ae91d9`](https://github.com/vultisig/vultisig-sdk/commit/7ae91d9231add2e4063966aa9cdfbddf12883564) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export `toChainAmount` and `ChainAmountParseError` from the root `@vultisig/sdk` entrypoint so downstream consumers can use the hardened amount parser without deep-importing core-chain internals.
+
+- [#1277](https://github.com/vultisig/vultisig-sdk/pull/1277) [`7c1570e`](https://github.com/vultisig/vultisig-sdk/commit/7c1570e528c30e6b037ddbaea538add5353a7dcc) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export XRPL issued-currency canonicals from the root and React Native SDK entrypoints so first-party consumers can reuse the SDK's token-id and currency-code helpers instead of mirroring them locally.
+
+- [#1279](https://github.com/vultisig/vultisig-sdk/pull/1279) [`ab018c7`](https://github.com/vultisig/vultisig-sdk/commit/ab018c7f747bbbc48984f2ab7a2f244f8179d137) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Forward `recipient`, `slippageTolerance`, and `excludeProviders` through `vault.swap()` and make the CLI `swap --slippage` flag reach the SDK quote builder instead of being silently dropped.
+
+- [#1225](https://github.com/vultisig/vultisig-sdk/pull/1225) [`52f90bd`](https://github.com/vultisig/vultisig-sdk/commit/52f90bd00a9dfa2937f2cf31f883b444a76a486b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the SDK's pure parse/tx-normalize/decode helpers from the React Native entrypoint so RN consumers get the same public surface as other first-party platforms.
+
+- [#1222](https://github.com/vultisig/vultisig-sdk/pull/1222) [`6b71775`](https://github.com/vultisig/vultisig-sdk/commit/6b71775956d244d291883fd90b9a121f227dfa4b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix the CLI agent push-notification listener to register/connect with the canonical hashed notification vault id instead of the raw ECDSA pubkey, restoring parity with SDK secure-vault notification delivery.
+
+- [#1182](https://github.com/vultisig/vultisig-sdk/pull/1182) [`ec6c810`](https://github.com/vultisig/vultisig-sdk/commit/ec6c810e81798b8dab7d004c931f2ecc1b859bd2) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export `prepareThorchainMsgDepositTxFromKeys` and its params type from the SDK root surface so downstream signers can consume the canonical THOR/Maya MsgDeposit prep helper instead of maintaining local shims.
+
+- [#1220](https://github.com/vultisig/vultisig-sdk/pull/1220) [`855ac6b`](https://github.com/vultisig/vultisig-sdk/commit/855ac6bdd4be566743ddc7c4f7a248029f6d2d47) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix React Native `getCoinBalance()` so Ripple balances use the RN-safe fetch path instead of the websocket `xrpl` client.
+
+- Updated dependencies [[`8c1ad1e`](https://github.com/vultisig/vultisig-sdk/commit/8c1ad1ec73152ad161b2d17ffceeb166abafe30a), [`5d46269`](https://github.com/vultisig/vultisig-sdk/commit/5d46269396fd0dbcf9d84f0201a494dffafc1a36), [`9d50ac5`](https://github.com/vultisig/vultisig-sdk/commit/9d50ac5c586d058aabdbfb413e7be163a222da89), [`c443b9c`](https://github.com/vultisig/vultisig-sdk/commit/c443b9ce699ef76f1407d0386ed20fbc7e3f253f), [`ce7271f`](https://github.com/vultisig/vultisig-sdk/commit/ce7271fe009092d995b87a86c33cb830b37fc0a8), [`20a0fd0`](https://github.com/vultisig/vultisig-sdk/commit/20a0fd0dafab088d92bc53e5bd84acaf5cc20cc6), [`4f111d1`](https://github.com/vultisig/vultisig-sdk/commit/4f111d1f448e5dbd8cb99e71b1f9e7a5cd875e30), [`802910d`](https://github.com/vultisig/vultisig-sdk/commit/802910d74219ba11e7e819d38bbafd88843028b8), [`c837c0b`](https://github.com/vultisig/vultisig-sdk/commit/c837c0b524dea366a77d2d5eccd6ad737d15cb29), [`a2ea19a`](https://github.com/vultisig/vultisig-sdk/commit/a2ea19a386b77d4135e56cd9ce4b6bf8e70b5e60), [`a4d8bbe`](https://github.com/vultisig/vultisig-sdk/commit/a4d8bbe81a94019aea5193a411a091ccb2e98682), [`69a3f75`](https://github.com/vultisig/vultisig-sdk/commit/69a3f75c265e19682e6dbdac0fdb640c53d73b33), [`e3d8568`](https://github.com/vultisig/vultisig-sdk/commit/e3d8568a04a6dcd977ccaeeeb5bcf5da080fd275), [`47a63df`](https://github.com/vultisig/vultisig-sdk/commit/47a63dfc8613405b7be1105233627e66a163d7c7), [`feb2137`](https://github.com/vultisig/vultisig-sdk/commit/feb213783534fc4a424cbc7e01bd97ae90320c11), [`937a58c`](https://github.com/vultisig/vultisig-sdk/commit/937a58cce27f935346f44f4bae4b3e40f464cba9), [`5303d70`](https://github.com/vultisig/vultisig-sdk/commit/5303d704e792bb7ed70df08eab7140aac81a519a), [`9b5d103`](https://github.com/vultisig/vultisig-sdk/commit/9b5d103500cce4f984dc7049a316529a193716f2), [`069176b`](https://github.com/vultisig/vultisig-sdk/commit/069176bc0d0edf44911cb131a2fe609075cab5d2), [`ceccf56`](https://github.com/vultisig/vultisig-sdk/commit/ceccf5633ebd7d838e26e2fcbac151c52d26af85), [`98e715a`](https://github.com/vultisig/vultisig-sdk/commit/98e715a0c770ae2a776314763fb18ffa309c1e2b), [`b5f880a`](https://github.com/vultisig/vultisig-sdk/commit/b5f880a2dea1e06239b6ccb1a35fbdb4994d5917), [`338ef32`](https://github.com/vultisig/vultisig-sdk/commit/338ef3229d778bb012d915977f512121d330ac1f), [`6f32745`](https://github.com/vultisig/vultisig-sdk/commit/6f327454c04c42f6771e53584026ec7283aa2ac3), [`0c4a090`](https://github.com/vultisig/vultisig-sdk/commit/0c4a090bc4f3868e2a3a20c9f12742344cf8350e), [`a8c10f0`](https://github.com/vultisig/vultisig-sdk/commit/a8c10f02423760c805593b0a1ad9c25a83609e1f), [`8a0bca6`](https://github.com/vultisig/vultisig-sdk/commit/8a0bca688ec606292df587559115cafcc3287fcf), [`8c02c8c`](https://github.com/vultisig/vultisig-sdk/commit/8c02c8c7e8463b5d57fbd5c338a1f95c6129feb2), [`01a66cf`](https://github.com/vultisig/vultisig-sdk/commit/01a66cf5c0110ea1ea439ddbca8e6b75179fc0c5), [`7226d49`](https://github.com/vultisig/vultisig-sdk/commit/7226d49d42cec673465aac5b49b54d4e47628ab6), [`7ae91d9`](https://github.com/vultisig/vultisig-sdk/commit/7ae91d9231add2e4063966aa9cdfbddf12883564), [`7c1570e`](https://github.com/vultisig/vultisig-sdk/commit/7c1570e528c30e6b037ddbaea538add5353a7dcc), [`ab018c7`](https://github.com/vultisig/vultisig-sdk/commit/ab018c7f747bbbc48984f2ab7a2f244f8179d137), [`b3d17d8`](https://github.com/vultisig/vultisig-sdk/commit/b3d17d855c2e2250c78641912d70203a43fdf332), [`afa17b2`](https://github.com/vultisig/vultisig-sdk/commit/afa17b2aee9abea47a52cfdee433d2cf2ae58ced), [`0de8684`](https://github.com/vultisig/vultisig-sdk/commit/0de8684706f1b538a459acca0e55bf15c95a91f3), [`52f90bd`](https://github.com/vultisig/vultisig-sdk/commit/52f90bd00a9dfa2937f2cf31f883b444a76a486b), [`6b71775`](https://github.com/vultisig/vultisig-sdk/commit/6b71775956d244d291883fd90b9a121f227dfa4b), [`300dabf`](https://github.com/vultisig/vultisig-sdk/commit/300dabf232bfe49d9628d4026c55bb72b6472b97), [`ec6c810`](https://github.com/vultisig/vultisig-sdk/commit/ec6c810e81798b8dab7d004c931f2ecc1b859bd2), [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235), [`77e2401`](https://github.com/vultisig/vultisig-sdk/commit/77e24018c906a8dcf1cb21d2c1fc8e337a4b2b8e), [`83df849`](https://github.com/vultisig/vultisig-sdk/commit/83df8496aa01cfe7d59f48b32686ba863cf87a02), [`d01ac2e`](https://github.com/vultisig/vultisig-sdk/commit/d01ac2ee87d080def76454adcf5313726a916ed8), [`358c27b`](https://github.com/vultisig/vultisig-sdk/commit/358c27ba3bdd94813d00ec966ba43c8cc46f49e0), [`a971dfa`](https://github.com/vultisig/vultisig-sdk/commit/a971dfa99274b419863f83a078868f25a8241235), [`3a40960`](https://github.com/vultisig/vultisig-sdk/commit/3a40960cc6391b69bbe6371874889b64399d64b9), [`855ac6b`](https://github.com/vultisig/vultisig-sdk/commit/855ac6bdd4be566743ddc7c4f7a248029f6d2d47), [`9510a9d`](https://github.com/vultisig/vultisig-sdk/commit/9510a9d8099c52a482dff05a3cf49938e06d9a85), [`3bc880a`](https://github.com/vultisig/vultisig-sdk/commit/3bc880a06b90fa64793983ba498f11fdc55e2115), [`ffc174c`](https://github.com/vultisig/vultisig-sdk/commit/ffc174c56d72990e6ee387ac389c96a2f4812cf5), [`e710f0c`](https://github.com/vultisig/vultisig-sdk/commit/e710f0c97274732312e965db467a31de040d7533), [`e92fa0c`](https://github.com/vultisig/vultisig-sdk/commit/e92fa0cb47d8607587798ca3f167c150b2f73d7d)]:
+  - @vultisig/sdk@2.21.0
+  - @vultisig/core-chain@2.27.0
+  - @vultisig/rujira@54.0.0
+
+## 2.20.0
+
+### Minor Changes
+
+- [#1284](https://github.com/vultisig/vultisig-sdk/pull/1284) [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose generic CosmWasm Amino and protobuf execute builders from the root SDK and reuse the canonical Amino envelope in the CLI.
+
+- [#1128](https://github.com/vultisig/vultisig-sdk/pull/1128) [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Add first-class XRP DestinationTag support alongside transaction memos.
+
+### Patch Changes
+
+- [#1234](https://github.com/vultisig/vultisig-sdk/pull/1234) [`3f4ead5`](https://github.com/vultisig/vultisig-sdk/commit/3f4ead52fe5722a9c22ebf0aa517fba41c1c86a9) Thanks [@neavra](https://github.com/neavra)! - Support JSON-formatted per-vault passwords for names with spaces and document the complete headless credential setup flow.
+
+- [#1259](https://github.com/vultisig/vultisig-sdk/pull/1259) [`955486c`](https://github.com/vultisig/vultisig-sdk/commit/955486cd3c749888ce9d37a0b8a0b59eabc8ac0d) Thanks [@neavra](https://github.com/neavra)! - Persist direct transaction confirmation and failure resolutions in the shared broadcast journal.
+
+- [#1304](https://github.com/vultisig/vultisig-sdk/pull/1304) [`63f7b6c`](https://github.com/vultisig/vultisig-sdk/commit/63f7b6c4d01b5bec5552c7002ee936b9486908fa) Thanks [@neavra](https://github.com/neavra)! - Report failed or declined agent signing, non-success turn outcomes, stale sessions, invalid command input, and permanent raw-broadcast validation errors with truthful non-success envelopes and typed exit codes.
+
+  Exit codes change for previously-mis-reported paths, so callers branching on `$?` should re-check: a declined/failed agent sign now exits non-zero (`CONFIRMATION_REQUIRED`/12 for a decline) instead of 0; a failure that follows an on-chain broadcast exits `BROADCAST_COMMITTED`/13 (never a retryable code); `send` to a malformed address now exits `INVALID_ADDRESS`/4 instead of `USAGE_ERROR`/1, matching the documented table and `address-book`.
+
+- [#1280](https://github.com/vultisig/vultisig-sdk/pull/1280) [`5b99730`](https://github.com/vultisig/vultisig-sdk/commit/5b99730019a462bb8489dd32d154483f705b2a23) Thanks [@neavra](https://github.com/neavra)! - Give `tx-status` a dedicated `INVALID_HASH` error before vault access and expose consistent CLI-facing statuses: `pending`, `not_found`, `confirmed`, and `failed`.
+
+- [#1233](https://github.com/vultisig/vultisig-sdk/pull/1233) [`88f0ee6`](https://github.com/vultisig/vultisig-sdk/commit/88f0ee617627fa85b0ff5057c4adcd7f1927e81d) Thanks [@neavra](https://github.com/neavra)! - Classify agent errors that occur after a transaction broadcast as a non-retryable partial success, preserving transaction hashes and original diagnostics while warning callers not to blindly retry.
+
+- [#1259](https://github.com/vultisig/vultisig-sdk/pull/1259) [`955486c`](https://github.com/vultisig/vultisig-sdk/commit/955486cd3c749888ce9d37a0b8a0b59eabc8ac0d) Thanks [@neavra](https://github.com/neavra)! - Scope the broadcast-journal empty-calldata canonicalization (`"0x"` → `""`) to EVM calldata only. `intent.data` also carries non-EVM memos, so canonicalizing it for every intent made a real memo of `"0x"` collide with an empty memo and falsely dedupe two different memo-chain sends inside the double-spend guard window. The fingerprint now folds `"0x"` only when the intent marks its data as EVM calldata, and every intent builder derives that mark from the chain kind (`getChainKind(chain) === 'evm'`): an EVM `"0x"` memo is empty calldata and still folds (so cross-path dedup is preserved), while a `"0x"` memo on a memo-routed chain stays distinct from an empty memo.
+
+- [#1308](https://github.com/vultisig/vultisig-sdk/pull/1308) [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Expose one SDK chain-reference resolver and use it for CLI and MCP chain names, aliases, and IDs.
+
+- Updated dependencies [[`747b6c6`](https://github.com/vultisig/vultisig-sdk/commit/747b6c68a81e14f3242003f39a4b58499ef44a21), [`b6fbbe3`](https://github.com/vultisig/vultisig-sdk/commit/b6fbbe3705d6aae02b483de0b7dd1b8a097acd6b), [`a08a52b`](https://github.com/vultisig/vultisig-sdk/commit/a08a52bb0933fd5470ea849613e147baa29286ad), [`9e366db`](https://github.com/vultisig/vultisig-sdk/commit/9e366db273e87e62d260867ea6702466b325d7fc), [`c3168e2`](https://github.com/vultisig/vultisig-sdk/commit/c3168e24a32d733da85b2f6038e7e55c4dbe8d72), [`7bb79ba`](https://github.com/vultisig/vultisig-sdk/commit/7bb79ba9ef968bc20ba88e1bdd189ca8864b0221), [`a8e873e`](https://github.com/vultisig/vultisig-sdk/commit/a8e873e41a41693dcdee575c5271422fe6c6b6e3), [`1c4fc80`](https://github.com/vultisig/vultisig-sdk/commit/1c4fc80be959af4b650e32b4db30859f449dfa60), [`30b76c6`](https://github.com/vultisig/vultisig-sdk/commit/30b76c6d0fbe7f0ad3015fee9bc77b5ee9fa7927), [`421e8da`](https://github.com/vultisig/vultisig-sdk/commit/421e8da0b11a35bcc95351e7b644318fe171c5ec), [`846d6c2`](https://github.com/vultisig/vultisig-sdk/commit/846d6c24e96ba4f8133721f1030dd9d023376570), [`6de79ab`](https://github.com/vultisig/vultisig-sdk/commit/6de79ab1ec6e3566ea8511a0a6c7afde87752c48), [`21ca074`](https://github.com/vultisig/vultisig-sdk/commit/21ca07454d5ac462882317da4f49d5f80ef32837), [`72da781`](https://github.com/vultisig/vultisig-sdk/commit/72da781743fad0664edfc5ffcd72720ac7f0d0bd), [`32aaf40`](https://github.com/vultisig/vultisig-sdk/commit/32aaf40edb28ea46f8275341ce4205411197a652), [`48ad7a2`](https://github.com/vultisig/vultisig-sdk/commit/48ad7a269186965b2b7a20d4b9d52ccd3b77fcbd), [`dda2e90`](https://github.com/vultisig/vultisig-sdk/commit/dda2e9084859eae02dd16149ac3ab2240a7d37e5), [`eb11e50`](https://github.com/vultisig/vultisig-sdk/commit/eb11e50b2f478fbb21db2970f8616d5f296b49f5), [`4815346`](https://github.com/vultisig/vultisig-sdk/commit/4815346d794f4a198e84a562c503b3bdd5ae10b8), [`f885e91`](https://github.com/vultisig/vultisig-sdk/commit/f885e91da06674dbef2ca1495291ca7d201e4c58)]:
+  - @vultisig/core-chain@2.26.0
+  - @vultisig/sdk@2.20.0
+  - @vultisig/rujira@53.0.0
+
+## 2.19.18
+
+### Patch Changes
+
+- [#1223](https://github.com/vultisig/vultisig-sdk/pull/1223) [`6296248`](https://github.com/vultisig/vultisig-sdk/commit/62962482d8499f697e0634260a2e6083b944e649) Thanks [@neavra](https://github.com/neavra)! - Fix `agent ask` headless signing so a vault unlocked via `VAULT_PASSWORD` (or the OS keyring) can sign without also passing `--password`. The sign-time gate now keys off whether a password is actually needed — an encrypted vault that is still locked with no password in hand — and retries the same non-interactive chain (cache → keyring → `VAULT_PASSWORDS`/`VAULT_PASSWORD`) before prompting, instead of always re-prompting when `--password` was absent. Unencrypted vaults skip the gate entirely. The transaction confirmation gate is unchanged. Also corrects the `VAULT_PASSWORD` help text.
+
+## 2.19.14
+
+### Patch Changes
+
+- [#1034](https://github.com/vultisig/vultisig-sdk/pull/1034) [`6643df7`](https://github.com/vultisig/vultisig-sdk/commit/6643df76cf2ff2ffe08ca4985bcaf46289714e4f) Thanks [@neavra](https://github.com/neavra)! - fix(cli): fail closed on interactive prompts in non-TTY sessions instead of corrupting stdout. A piped/redirected stdout is the machine-output (JSON) channel, but bare `send`/`execute`/`swap`/`tokens --add`/`join`/`rujira swap`/`rujira withdraw` and the password/seedphrase prompts still rendered an inquirer prompt there and then died with a generic `UNKNOWN_ERROR`/exit 7 (or, for `completion --install`, a raw `ERR_USE_AFTER_CLOSE` readline stack trace).
+
+  The session is now treated as non-interactive whenever stdout OR stdin is not a TTY — mirroring how `--output` already defaults to `json` when stdout isn't a TTY, and closing the fund-safety gap where a piped `y` could otherwise auto-confirm a signing prompt. The fail-closed guard now lives at the shared prompt chokepoint (`src/lib/prompt.ts`), so **every** command that reaches an interactive prompt — including `import`, `export`, `verify`, and `address-book --add`, which previously slipped past the per-command confirm gates — throws a stable `CONFIRMATION_REQUIRED` code (exit 12) with a clear stderr hint _before_ any prompt is drawn (a password prompt points at `--password`/`VAULT_PASSWORD`/keyring; other prompts at the relevant value flags). All interactive prompts (including the create/import/verify/reshare/settings and interactive-shell paths) are routed to stderr so they can never land on the machine-output channel, `completion --install` and `-i` refuse to run without a TTY with a graceful message, and the rujira swap/withdraw flows now unlock the vault only after the confirmation gate. `--yes`/`--confirm`, a supplied `--password`/`VAULT_PASSWORD`/keyring credential, and real interactive TTY use are unchanged.
+
+- Updated dependencies [[`4483754`](https://github.com/vultisig/vultisig-sdk/commit/4483754748190fe25654de79fc12fba0edb73963), [`6643df7`](https://github.com/vultisig/vultisig-sdk/commit/6643df76cf2ff2ffe08ca4985bcaf46289714e4f)]:
+  - @vultisig/core-chain@2.24.3
+  - @vultisig/sdk@2.19.14
+
+## 2.19.11
+
+### Patch Changes
+
+- [#1129](https://github.com/vultisig/vultisig-sdk/pull/1129) [`5949742`](https://github.com/vultisig/vultisig-sdk/commit/59497426a238a75576e92d18023747d66c9d4e7a) Thanks [@neavra](https://github.com/neavra)! - fix(portfolio): report per-chain failures instead of silently swallowing them. The `portfolio` command now fetches each chain independently — one unreachable chain no longer fails the whole command, and a fiat-value lookup failure no longer silently drops the value. The `-o json` envelope always carries a `failures: [{ chain, stage, error }]` array (empty on full success), partial failures still exit 0, and an all-chains-failed run exits with a network error (code 3).
+
+- Updated dependencies [[`3bf18a1`](https://github.com/vultisig/vultisig-sdk/commit/3bf18a18606fd1b45d50abb562eb6c3011182d48)]:
+  - @vultisig/sdk@2.19.11
+
+## 2.19.10
+
+### Patch Changes
+
+- [#1076](https://github.com/vultisig/vultisig-sdk/pull/1076) [`5179edd`](https://github.com/vultisig/vultisig-sdk/commit/5179edd9eb25b392941f9649a455e92bfd5bf8b5) Thanks [@neavra](https://github.com/neavra)! - fix(chains): validate `chains --add <chain>` against the registry before persisting
+
+  An invalid `chains --add fakechain` correctly reported INVALID_CHAIN but still wrote
+  "fakechain" to the vault's chain list (chain resolution falls back to the raw user
+  string when the name doesn't match the registry). Every subsequent address-deriving
+  command then re-derived the bogus chain and dumped a stack trace to stderr until it was
+  manually removed. The `--add` path now validates against the supported-chain registry
+  first and fails closed — nothing is persisted for an unsupported chain.
+
+- [#1127](https://github.com/vultisig/vultisig-sdk/pull/1127) [`dea1efa`](https://github.com/vultisig/vultisig-sdk/commit/dea1efae6fbd2975de4ac5a26b2e8210999a0f4f) Thanks [@neavra](https://github.com/neavra)! - fix(cli): honor VULTISIG_CONFIG_DIR for vault storage
+
+  The documented `VULTISIG_CONFIG_DIR` env var was a no-op for vault storage: the
+  CLI constructed the SDK without a storage override, so vaults, the active-vault
+  pointer and cache always resolved to `~/.vultisig` even when the var pointed
+  elsewhere — only `config.json` and the agent journal honored it, producing a
+  split-brain config location that broke CI/container isolation and multi-tenant
+  use. The CLI now roots SDK vault storage at `getConfigDir()` via a shared
+  `createVaultStorage()` helper. When the var is unset it falls back to
+  `~/.vultisig`, so the default location is unchanged.
+
+- [#1126](https://github.com/vultisig/vultisig-sdk/pull/1126) [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb) Thanks [@neavra](https://github.com/neavra)! - fix(mpc): keep keygen tracing off stdout so `-o json` output stays parseable
+
+  The DKLS and Schnorr keygen/reshare/key-import ceremonies logged progress
+  (session ids, raw wire messages, "keygen complete", …) to stdout via ungated
+  `console.log`. stdout is the machine channel for the CLI's `-o json` mode, so
+  the documented `create fast … -o json` agent flow produced unparseable stdout
+  (`JSON.parse(stdout)` failed on the leading garbage) and leaked MPC internals
+  into terminals and CI logs.
+
+  Route that tracing through a gated logger that writes to stderr only when
+  `VULTISIG_DEBUG=1`, so stdout carries only the final JSON envelope while
+  the debug output stays available to humans on demand. No keygen behavior
+  changes — only the log sink moves off stdout.
+
+- [#1077](https://github.com/vultisig/vultisig-sdk/pull/1077) [`5e5494c`](https://github.com/vultisig/vultisig-sdk/commit/5e5494cf103ea5c17431b6a6231b30931eb004bb) Thanks [@neavra](https://github.com/neavra)! - Tolerate a corrupt `activeVaultId.json` at startup. A truncated or unparseable
+  active-vault pointer used to throw during CLI initialization, which broke every
+  command — including `vultisig vaults`, the one you run to recover. The pointer
+  read now fails open (treated as "no active vault") and self-heals by clearing
+  the bad pointer, so vaults still list with none marked active.
+- Updated dependencies [[`280956f`](https://github.com/vultisig/vultisig-sdk/commit/280956f1743564ea271a03c4735f70151b63f161), [`90070f3`](https://github.com/vultisig/vultisig-sdk/commit/90070f39be011821f7508c7ff094025861dce040), [`0e3f86d`](https://github.com/vultisig/vultisig-sdk/commit/0e3f86db82ed086b1e200a6f83434a638f593c17), [`6054ff5`](https://github.com/vultisig/vultisig-sdk/commit/6054ff599e4133c9853f31e8ca2413ab52f606fb), [`b37e726`](https://github.com/vultisig/vultisig-sdk/commit/b37e7264db3291adca1cb366f1311446d6add439), [`1b2636b`](https://github.com/vultisig/vultisig-sdk/commit/1b2636b535736a711fc537a87d2f51090fe6342d), [`2c9d34e`](https://github.com/vultisig/vultisig-sdk/commit/2c9d34e0837f68d92769c7aefa566ffb1c0c52c7), [`ffc75a6`](https://github.com/vultisig/vultisig-sdk/commit/ffc75a6e76af699a78b0fc3411ab052ce5000c91), [`fc595a1`](https://github.com/vultisig/vultisig-sdk/commit/fc595a17cb4901af1dfeac2521b93bb75823068f), [`776c539`](https://github.com/vultisig/vultisig-sdk/commit/776c5398764314f140f18ab4f86a1801fe9fdfe6)]:
+  - @vultisig/sdk@2.19.10
+  - @vultisig/core-chain@2.24.2
+
+## 2.19.7
+
+### Patch Changes
+
+- [#1027](https://github.com/vultisig/vultisig-sdk/pull/1027) [`47908cf`](https://github.com/vultisig/vultisig-sdk/commit/47908cfff78942be6220438f08ab08c61178f282) Thanks [@neavra](https://github.com/neavra)! - Wire the broadcast-journal double-spend guard into the direct `send` and `swap`
+  commands. Previously only the `agent ask` path consulted the persistent journal,
+  so a retried `send`/`swap` re-broadcast an identical intent (audit P5-1, HIGH —
+  double-spend). Both paths now share ONE journal: an identical send/swap within
+  the dedupe window is refused (exit code 9) instead of broadcasting a second time,
+  and `send`/`swap` gain a `--force` flag to override the guard.
+
+  `--max` sends/swaps fingerprint a stable sentinel (not the drift-prone resolved
+  amount) so a `--max` retry can't slip past the guard when the fee/balance moves.
+  The journal is namespaced by the vault's ECDSA key (falling back to the vault id),
+  so a native/EVM `send` and an identical `agent ask` cross-dedupe against the one
+  journal; ERC-20-token cross-path and swap cross-path dedup are out of scope (a
+  missed dedup, never a double-spend).
+
+- Updated dependencies [[`b1f2887`](https://github.com/vultisig/vultisig-sdk/commit/b1f288758ba627061c9c26085f96a3541b131163), [`f54d53a`](https://github.com/vultisig/vultisig-sdk/commit/f54d53a0252d133c2d2d6b37c649542cb4069fd3)]:
+  - @vultisig/sdk@2.19.7
+
+## 2.19.0
+
+### Patch Changes
+
+- Updated dependencies [[`ad6196b`](https://github.com/vultisig/vultisig-sdk/commit/ad6196b32ae879e7b0e0fda48e462fc7a05eb1de)]:
+  - @vultisig/core-chain@2.24.0
+  - @vultisig/sdk@2.19.0
+  - @vultisig/rujira@52.0.0
+
+## 2.18.7
+
+### Patch Changes
+
+- [#1033](https://github.com/vultisig/vultisig-sdk/pull/1033) [`f682eda`](https://github.com/vultisig/vultisig-sdk/commit/f682eda5607a8263e90b18d9ff7167eb2e0a7004) Thanks [@neavra](https://github.com/neavra)! - docs(cli): regenerate the README "Exit Codes" table from the `ExitCode` enum (the single source of truth in `src/core/errors.ts`). The shipped table was stale and mislabelled every non-zero code — e.g. it called `2` "invalid usage" and `3` "configuration error" when the CLI actually returns `2` for authentication-required and `3` for a retryable network error, so a script written to the README's codes misclassified every failure. Codes `8`–`11` (ACK_FAILED, DUPLICATE_BROADCAST, and the two `agent ask` turn-outcome codes) were also undocumented. Also corrects the "disable colored output" env var to `NO_COLOR` (the cross-tool standard the CLI honours; `VULTISIG_NO_COLOR` still works). Adds a doc-lint test that fails if the README table drifts from the enum. Docs-only, but the README ships in the npm package, so this is a patch.
+
+## 2.18.6
+
+### Patch Changes
+
+- [#1003](https://github.com/vultisig/vultisig-sdk/pull/1003) [`b27786d`](https://github.com/vultisig/vultisig-sdk/commit/b27786d8ac596ea3d2d4a13da958b266f589b73c) Thanks [@neavra](https://github.com/neavra)! - fix(agent): sign purely from the `tool-output-available` channel and remove the `tx_ready` signing path ([#927](https://github.com/vultisig/vultisig-sdk/issues/927) Phase 2). The client-enriched tool-output candidate (flat builders and `execute_*` prep) is now the sole signing source, matching what the production backend emits — it writes the signable payload on tool-output and emits `data-tx_ready` only as a hollow `{typed_confirm}` marker the CLI never consumed. Removes the Phase-1 dual-read + parity cross-check machinery, the tx_ready capture/selection, and the recovered-tx_ready replay. Fail-closed postures are preserved (a structurally-unsignable candidate is never buffered), and a disconnect that ran a signable tool now warns to re-run rather than signing. Patch: no CLI API change and the same real transactions still sign — this aligns the internal signing source with production.
+
+- [#1024](https://github.com/vultisig/vultisig-sdk/pull/1024) [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921) Thanks [@neavra](https://github.com/neavra)! - Stop `tx-status` from reporting malformed or never-seen transaction hashes as `pending` forever.
+
+  - The EVM status resolver now distinguishes a genuinely-pending tx (the node knows the hash, receipt still lagging) from one the node has never seen, returning a new terminal `not_found` status for the latter instead of an indefinite `pending`.
+  - New `isValidTxHash(chain, hash)` helper validates a hash's shape per chain-kind; the CLI `tx-status` command validates `--tx-hash` before any RPC and fails fast with `INVALID_INPUT` (exit 4) on a malformed hash.
+  - CLI `tx-status` polling is now bounded by a total wait budget (`--timeout <seconds>`, default 120) and exits non-zero on give-up — `TX_NOT_FOUND` (exit 5) when the node has no record of the hash, `TX_STATUS_TIMEOUT` (exit 3, retryable) when it is still pending.
+  - The poll loop now caps each sleep at the remaining wait budget instead of always sleeping the full poll interval, so a small `--timeout` gives up promptly instead of overshooting by up to one poll interval.
+
+- Updated dependencies [[`ce38186`](https://github.com/vultisig/vultisig-sdk/commit/ce381864b977b19668702eae6e1ecad63ecbdf2b), [`3bc7904`](https://github.com/vultisig/vultisig-sdk/commit/3bc790403483dd7e90dac2efc33d7bc64c18b921)]:
+  - @vultisig/sdk@2.18.6
+  - @vultisig/core-chain@2.23.3
+
+## 2.18.0
+
+### Minor Changes
+
+- [#1004](https://github.com/vultisig/vultisig-sdk/pull/1004) [`42fe389`](https://github.com/vultisig/vultisig-sdk/commit/42fe3893196e7d8945f852695387828eb49bfb41) Thanks [@neavra](https://github.com/neavra)! - feat(cli): surface a typed turn-outcome for `agent ask` (success / blocked / refusal / error)
+
+  The CLI now advertises the `turn_outcome` surface and parses the backend's
+  `data-turn_outcome` SSE part, so a headless `agent ask` caller can tell four turn
+  endings apart WITHOUT parsing prose:
+
+  - **success** — the turn completed normally
+  - **blocked** — a fund-safety guardrail deliberately blocked the requested action
+  - **refusal** — the model refused or asked a clarifying question (no action taken)
+  - **error** — an infrastructure error ended the turn
+
+  Two additive surfaces:
+
+  - `agent ask --output json` gains a top-level `outcome` field
+    (`{ kind, code?, detail? }`) on both the success and error envelopes. Human
+    output prints a greppable `outcome:<kind>[:<code>]` line for non-success turns.
+  - New dedicated exit codes (additive; the 0–9 taxonomy is unchanged):
+    `10` = a fund-safety block, `11` = a refusal/clarifying question. A frame-less
+    infrastructure error now exits `1` instead of a false `0`. Success stays `0`.
+
+  Behavior change to note: a turn the backend BLOCKS or the model REFUSES previously
+  exited `0` (indistinguishable from success); it now exits `10`/`11`. Scripts that
+  treated every `agent ask` as success-on-0 should branch on `outcome.kind` (or the
+  exit code). Against an older backend that does not emit `data-turn_outcome`, the
+  `outcome` field is absent and exit codes are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`31814c4`](https://github.com/vultisig/vultisig-sdk/commit/31814c4b452ef5b2628dc12bc46e427fcf0b7237), [`b37dc3c`](https://github.com/vultisig/vultisig-sdk/commit/b37dc3c31d6f93af982cd1e082e0b4d1382dc19d), [`01c5630`](https://github.com/vultisig/vultisig-sdk/commit/01c56303d0b872a76de07da9685331106f586c80)]:
+  - @vultisig/sdk@2.18.0
+  - @vultisig/rujira@51.0.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [[`2585dc1`](https://github.com/vultisig/vultisig-sdk/commit/2585dc1830dd7b28694edd411991b24c3fad1538), [`152bb4a`](https://github.com/vultisig/vultisig-sdk/commit/152bb4a2b717efa2f1edb14b7e19cdeba87450c7), [`4a58c6c`](https://github.com/vultisig/vultisig-sdk/commit/4a58c6c1294c88e5d937c3dde24e50edd3fdf2a0), [`ed46385`](https://github.com/vultisig/vultisig-sdk/commit/ed46385358883ed5277f8771ba73000afec9859e), [`72082a6`](https://github.com/vultisig/vultisig-sdk/commit/72082a65eab226cebf562863bcb99346b81ca831), [`a9266a1`](https://github.com/vultisig/vultisig-sdk/commit/a9266a1753ca474b3f337f8a605900acdd7508b0), [`2791af8`](https://github.com/vultisig/vultisig-sdk/commit/2791af8a1e539103678ba71b774d62d2e7691a29), [`b68ddad`](https://github.com/vultisig/vultisig-sdk/commit/b68ddadbc6295957cbb4b37c365a4062b0a2576f), [`ab5e413`](https://github.com/vultisig/vultisig-sdk/commit/ab5e413ead62da47dc144e591ac310d1d4328a56), [`90f6ae5`](https://github.com/vultisig/vultisig-sdk/commit/90f6ae5a1865321e08bf6f03c17e23ed11006649), [`7cfa332`](https://github.com/vultisig/vultisig-sdk/commit/7cfa332787f7646e049813a9f3b15613454f19d1), [`c60d7c6`](https://github.com/vultisig/vultisig-sdk/commit/c60d7c6ecdf46e46bf1098cc57342d5fb79d2194), [`99db752`](https://github.com/vultisig/vultisig-sdk/commit/99db752f093575f90b99b30674ec9be8af49fed9)]:
+  - @vultisig/sdk@2.17.0
+  - @vultisig/rujira@50.0.0
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [[`0147158`](https://github.com/vultisig/vultisig-sdk/commit/0147158ac6955aa420cdad2da704cba998e4a5f1)]:
+  - @vultisig/sdk@2.16.0
+  - @vultisig/rujira@49.0.0
+
+## 2.15.0
+
+### Minor Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`4c31be8`](https://github.com/vultisig/vultisig-sdk/commit/4c31be8f66f40bff4c544aecf635c36d417930d8) Thanks [@neavra](https://github.com/neavra)! - Make the `agent ask` process truthful and idempotent around broadcast (fund-safety, audit F1/F3/F14).
+
+  - **Broadcast-before-ack truthfulness (F1):** a throw AFTER a tx broadcast (the follow-up `recent_actions` report failing) now exits with a distinct `ACK_FAILED` code (8) instead of a generic error — the emitted tx hash is valid and carried in the envelope, so a headless caller knows NOT to blindly retry (which would double-spend).
+  - **Persistent broadcast journal (F1/F14):** every broadcast is recorded to `~/.vultisig/broadcasts.jsonl` (intent fingerprint, hash, chain, ts). If an identical intent was broadcast in the last 10 minutes and hasn't definitively failed, signing is refused (exit 9, `DUPLICATE_BROADCAST`) to prevent a double-broadcast on a retry in a fresh process. Multi-leg approve legs are journaled too. Pass `--force` to override.
+  - **Exit-code taxonomy (F3):** SSE/backend `error` frames and thrown errors now map onto the typed `ExitCode` taxonomy (network/auth/invalid-input/…) instead of a blanket `0`/`1`, and the codes are documented in `agent ask --help`.
+
+### Patch Changes
+
+- [#952](https://github.com/vultisig/vultisig-sdk/pull/952) [`db9bb38`](https://github.com/vultisig/vultisig-sdk/commit/db9bb38691dac0e5ff63e02b3d357cde83606f64) Thanks [@neavra](https://github.com/neavra)! - Harden the `agent ask` broadcast dedupe guard per PR review (fund-safety, audit F1/F3/F14):
+
+  - **Cross-process TOCTOU:** an atomic reservation (exclusive-create lock keyed by the broadcast fingerprint) is now taken BEFORE signing, so two sibling processes can't both pass the duplicate check and both broadcast. The loser refuses with `DUPLICATE_BROADCAST`; a stale reservation (crashed owner) is stolen after a TTL so retries aren't wedged.
+  - **ACK_FAILED no longer masks retryable errors:** exit 8 is now gated on an actual still-unacknowledged broadcast (a broadcast whose follow-up report was undelivered when the turn threw), not merely "some non-failed tx exists". A later independent retryable error after an already-acked broadcast keeps its retryable classification.
+  - **Dedicated exit code for `DUPLICATE_BROADCAST` (9):** no longer shares 4 with generic invalid input, so `$?` alone can branch the fund-safety refusal. Documented in the CLI exit-code taxonomy and `agent ask --help`; the JSON error `code` is unchanged.
+  - **Journal growth bounded:** `broadcasts.jsonl` is pruned on write (size-gated compaction dropping records strictly outside the dedupe window), so a later sign no longer parses an ever-growing file.
+
+- [#927](https://github.com/vultisig/vultisig-sdk/pull/927) [`576d7c4`](https://github.com/vultisig/vultisig-sdk/commit/576d7c49439b767ef424d64133d1426751b22180) Thanks [@neavra](https://github.com/neavra)! - feat(cli): read signable tool outputs off `tool-output-available` with a tx_ready parity cross-check
+
+  Generalizes the Polymarket flat-tx-builder bridge into a client-side tool-output
+  signing + parity layer, the same mechanism the mobile app uses: the CLI derives
+  a signable candidate from the raw `tool-output-available` envelope (client-side
+  enrichment — a 1:1 port of the backend's `enrichBuildResult` flat→nested wrap
+  plus the approve→main split), and cross-checks it against the backend `tx_ready`.
+
+  - The backend `tx_ready` stays authoritative for signing whenever it is signable
+    (unchanged behavior). The client-side candidate is the parity reference, and
+    the sign source only when no usable `tx_ready` arrives — flat off-chain tools
+    that emit no `tx_ready` (`polymarket_deposit`, `polymarket_setup_trading`), and
+    flat tools whose `tx_ready` is structurally unsignable (`build_custom_*`, which
+    use divergent `to_address`/`calldata` field names normalized client-side).
+  - Parity cross-check: when both channels produce a payload for a turn, their
+    `{to, value, data, chain, chain_id, tx_encoding, amount, memo}` leg tuples are
+    compared and any divergence is logged loudly (`[parity][DIVERGENCE] …`).
+  - Guards every non-transaction result (`no_op`, `insufficient_*`, errors,
+    missing/disagreeing chain) so only a real tx is ever signed; the chain guard is
+    generalized past Polygon to any supported EVM chain (fail-closed on a
+    missing/inconsistent chain — never defaults to a chain).
+  - Maps a bundled approve→main envelope onto the executor's existing two-leg
+    machinery so the approve is confirmed (receipt-wait) before the main tx.
+  - First-wins per turn: a second signable frame can never silently overwrite the
+    first; the deferral is reported.
+  - Fail-closed on parity divergence: a flat tool-output candidate is enqueued as a
+    sign source only when there is no `tx_ready` at all, or when the same-turn
+    `tx_ready` matched parity. A client-derived candidate that is not proven equal to
+    a present `tx_ready` (diverged, or unpaired) is never signed — the turn falls
+    closed to the `tx_ready` path (a hard error at sign time) instead of signing the
+    client-enriched bytes.
+  - Parity pairing (telemetry only): the two channels are diffed only when they are
+    the SAME tool call (paired by tool-call id — the `tx_ready` inherits the id of
+    its wire-adjacent tool-output twin), so an unrelated same-turn `tool_output` +
+    `tx_ready` pair no longer emits a false `[DIVERGENCE]`. This pairing affects only
+    the divergence log; the sign decision above is deliberately independent of it, so
+    the fund-safety guarantee rests on parity equality alone, not on the wire-ordering
+    invariant.
+
+  Zero agent-backend / mcp-ts change; entirely within `clients/cli`.
+
+- Updated dependencies [[`f72cbc3`](https://github.com/vultisig/vultisig-sdk/commit/f72cbc35a23edb2b14984fce0a16495a3339e5e6), [`119d96d`](https://github.com/vultisig/vultisig-sdk/commit/119d96d5b2c9e1e2d8b322bf31d83f3ac4294244)]:
+  - @vultisig/core-chain@2.23.1
+  - @vultisig/sdk@2.15.0
+  - @vultisig/rujira@48.0.0
+
+## 2.14.0
+
+### Patch Changes
+
+- Updated dependencies [[`66113c2`](https://github.com/vultisig/vultisig-sdk/commit/66113c2fb2ff61ecda39a7ae5ac83e8c7cd67adc), [`45fb0ae`](https://github.com/vultisig/vultisig-sdk/commit/45fb0ae83611dfcd481b1aa9dbcd19fe215642f5), [`17a43be`](https://github.com/vultisig/vultisig-sdk/commit/17a43beadda6d3f4f7d97c193067564a2c85bd37), [`e11d55f`](https://github.com/vultisig/vultisig-sdk/commit/e11d55f51dc4a65230ca4daa6bbad2580a3d1a81), [`6ff9d7e`](https://github.com/vultisig/vultisig-sdk/commit/6ff9d7eba5699e1db897c5aedbac52632c131cc5)]:
+  - @vultisig/core-chain@2.23.0
+  - @vultisig/sdk@2.14.0
+  - @vultisig/rujira@47.0.0
+
+## 2.13.0
+
+### Patch Changes
+
+- Updated dependencies [[`17fcbc0`](https://github.com/vultisig/vultisig-sdk/commit/17fcbc0acf983959be7faaf4ab789b4268a83c31), [`4941508`](https://github.com/vultisig/vultisig-sdk/commit/4941508f5002e1251b5cc1cbc08ed0ebc379646a)]:
+  - @vultisig/core-chain@2.22.0
+  - @vultisig/sdk@2.13.0
+  - @vultisig/rujira@46.0.0
+
+## 2.12.1
+
+### Patch Changes
+
+- [#898](https://github.com/vultisig/vultisig-sdk/pull/898) [`8daa669`](https://github.com/vultisig/vultisig-sdk/commit/8daa6696670cefb6f5fa3e800ff433ba7a95c132) Thanks [@neavra](https://github.com/neavra)! - Agent: when the backend asks the CLI to run a client-side tool it doesn't implement, emit a structured `TOOL_UNSUPPORTED` error code (in the failure `RecentAction`'s `data.code`) so the backend/LLM can branch — pick an alternative instead of retrying or waiting on an action that will never report. The CLI now routes SSE `tool-input-available` frames on the backend's full client-side tool contract (a superset of the implemented dispatch registry), so an unimplemented tool reaches the dispatcher and reports `TOOL_UNSUPPORTED` instead of silently degrading to display-only progress. The human-readable stderr line and `error` string are preserved.
+
+## 2.12.0
+
+### Patch Changes
+
+- Updated dependencies [[`403d5d5`](https://github.com/vultisig/vultisig-sdk/commit/403d5d5f7c7dba3e45cb818899db00f765541ecf)]:
+  - @vultisig/core-chain@2.21.0
+  - @vultisig/sdk@2.12.0
+  - @vultisig/rujira@45.0.0
+
+## 2.11.0
+
+### Patch Changes
+
+- [#899](https://github.com/vultisig/vultisig-sdk/pull/899) [`00ede74`](https://github.com/vultisig/vultisig-sdk/commit/00ede74e6db1bd08ded0b25cc32c1f477e6b0d22) Thanks [@neavra](https://github.com/neavra)! - agent: resolve the vault password from the keyring/env chain before prompting
+
+  `vultisig agent` (including `agent ask` and `--via-agent`) now resolves the vault
+  password from the in-memory cache → OS keyring (`vsig auth setup`) →
+  `VAULT_PASSWORDS`/`VAULT_PASSWORD` env chain before falling back to an
+  interactive prompt. Headless operators who configured the keyring or env no
+  longer have to pass `--password` on argv (which exposed the secret to `ps` and
+  shell history). `--password` still works but is de-emphasized and now emits a
+  stderr warning pointing at the keyring/env path.
+
+- Updated dependencies [[`9e72781`](https://github.com/vultisig/vultisig-sdk/commit/9e7278125bd8bc722a26ab3a1f91ba1be03054d1)]:
+  - @vultisig/core-chain@2.20.0
+  - @vultisig/sdk@2.11.0
+  - @vultisig/rujira@44.0.0
+
+## 2.10.0
+
+### Patch Changes
+
+- Updated dependencies [[`baedd96`](https://github.com/vultisig/vultisig-sdk/commit/baedd96e9d75a9d73880a59503f95b527d692428), [`605fbba`](https://github.com/vultisig/vultisig-sdk/commit/605fbbaf107c553898f11f4f7eb6b56a59c01b9e), [`552064c`](https://github.com/vultisig/vultisig-sdk/commit/552064cbfb7307867f9897734c010e856f8a08f9)]:
+  - @vultisig/core-chain@2.19.0
+  - @vultisig/sdk@2.10.0
+  - @vultisig/rujira@43.0.0
+
+## 2.9.0
+
+### Patch Changes
+
+- Updated dependencies [[`b61410e`](https://github.com/vultisig/vultisig-sdk/commit/b61410ef8b1d0b1baa7d249440176df23bfa471c)]:
+  - @vultisig/core-chain@2.18.0
+  - @vultisig/sdk@2.9.0
+  - @vultisig/rujira@42.0.0
+
+## 2.8.4
+
+### Patch Changes
+
+- [#879](https://github.com/vultisig/vultisig-sdk/pull/879) [`f34ef93`](https://github.com/vultisig/vultisig-sdk/commit/f34ef932ba18c19accccc716098c3c16b83da625) Thanks [@neavra](https://github.com/neavra)! - Fix `agent ask` error reporting so a real first-turn backend/stream error is no
+  longer masked by the initialize-time `SESSION_NOT_FOUND` signal. The
+  stale-`--session` fallback signal is now kept separately and used only as a
+  lowest-priority fallback when the turn produced no error of its own, so a
+  genuine turn error wins while a clean turn after a stale-session fallback still
+  reports `SESSION_NOT_FOUND` (non-zero exit).
+
+- [#875](https://github.com/vultisig/vultisig-sdk/pull/875) [`a1d711b`](https://github.com/vultisig/vultisig-sdk/commit/a1d711beaf1694883688cd8e430c8b38162975b6) Thanks [@neavra](https://github.com/neavra)! - agent: surface a loop-depth overrun as a typed `LOOP_DEPTH_EXCEEDED` error instead of a success-shaped `done`.
+
+  When the agent message loop exceeds `MAX_MESSAGE_LOOP_DEPTH` (16), `processMessageLoop` previously cleared the queued tool results and called `ui.onDone()` — the same callback used on a clean finish — so a headless caller (`agent ask --json` / `--via-agent` pipe) could not distinguish a depth-capped truncation from a completed turn. It now emits `AgentErrorCode.LOOP_DEPTH_EXCEEDED` via `ui.onError` first (ask exits non-zero with an error envelope; pipe gets a typed `error` frame), then `onDone()` as the turn terminator.
+
+- Updated dependencies [[`26dd218`](https://github.com/vultisig/vultisig-sdk/commit/26dd218282b198fdea9c1118e7fe5bc800c071fb), [`69bb830`](https://github.com/vultisig/vultisig-sdk/commit/69bb8307de72883f0c7693871a6ca040b7a0756c)]:
+  - @vultisig/client-shared@0.2.17
+  - @vultisig/core-chain@2.17.10
+  - @vultisig/sdk@2.8.4
+
+## 2.8.2
+
+### Patch Changes
+
+- [#869](https://github.com/vultisig/vultisig-sdk/pull/869) [`2623ca0`](https://github.com/vultisig/vultisig-sdk/commit/2623ca0dd04c5ca3c65126b6008a93c1d7559793) Thanks [@neavra](https://github.com/neavra)! - Harden agent conversation auth across every path. A revoked-but-unexpired
+  cached token now recovers uniformly: a new `withAuthRetry` helper does
+  clear→reauth→retry-once and wraps the fresh-conversation `createConversation`
+  (previously unguarded — it hard-threw `Authentication failed`), the resume
+  `getConversation`, the send-message stream, and the `agent sessions
+list`/`delete` commands.
+
+  A `--session-id` resume whose 401 survives the single retry — or that fails for
+  any other reason — now falls back to a fresh conversation instead of throwing
+  uncaught, and emits a typed, non-fatal `SESSION_NOT_FOUND` signal carrying the
+  new conversation id so a headless caller knows prior context was dropped. In
+  `agent ask`, that initialize-time signal is now preserved into the first turn's
+  result envelope (it was previously cleared at turn start, so a stale-session
+  `ask --json` returned a false-success envelope instead of the promised non-zero
+  `SESSION_NOT_FOUND`).
+
+  Models the backend's `refresh_token`/`access_token` in `AuthTokenResponse` and
+  persists the refresh token in the token cache (0o600) for a future
+  `POST /auth/refresh` exchange; the retry path re-auths via MPC re-sign today.
+  The retry preserves a previously cached refresh token when the re-auth response
+  omits one, and the cache directory is chmod'd to 0o700 on every write (not only
+  on create) so a pre-existing `~/.vultisig` can't retain looser perms on upgrade.
+
+  Adds the first `auth.ts` unit tests (EIP-191 hash cross-checked against viem,
+  DER→65-byte formatting, signing-retry classification) plus session
+  auth-retry/fallback coverage.
+
+- Updated dependencies [[`0dc1620`](https://github.com/vultisig/vultisig-sdk/commit/0dc16206bedcdde8832a068b15383565a6b98896)]:
+  - @vultisig/sdk@2.8.2
+
 ## 2.8.1
 
 ### Patch Changes

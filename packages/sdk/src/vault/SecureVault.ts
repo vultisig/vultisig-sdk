@@ -8,6 +8,7 @@ import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/v
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
 import type { SdkContext, VaultContext } from '../context/SdkContext'
+import { randomUUID } from '../crypto'
 import { RelaySigningService } from '../services/RelaySigningService'
 import { SecureVaultCreationService, type SecureVaultCreationStep } from '../services/SecureVaultCreationService'
 import type {
@@ -20,6 +21,7 @@ import type {
   VaultData,
 } from '../types'
 import { normalizeToHex } from '../utils/bytes'
+import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { createVaultBackup } from '../utils/export'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
@@ -96,47 +98,104 @@ export class SecureVault extends VaultBase {
     payload: SigningPayload,
     options: {
       signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number, sessionId: string) => void
     } = {}
   ): Promise<Signature> {
-    // Ensure keyShares are loaded (will decrypt if encrypted)
-    await this.ensureKeySharesLoaded()
+    const sessionId = randomUUID()
 
-    // Get WalletCore for chain utilities
-    const walletCore = await this.wasmProvider.getWalletCore()
+    try {
+      // Ensure keyShares are loaded (will decrypt if encrypted)
+      await this.ensureKeySharesLoaded()
 
-    // Create relay signing service
-    const relaySigningService = new RelaySigningService()
+      // Get WalletCore for chain utilities
+      const walletCore = await this.wasmProvider.getWalletCore()
 
-    // Sign using relay service with event emission
-    const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
-      signal: options.signal,
-      onProgress: (step: SigningStep) => {
-        this.emit('signingProgress', { step })
-      },
-      onQRCodeReady: qrPayload => {
-        this.emit('qrCodeReady', {
-          qrPayload,
-          action: 'keysign',
-          sessionId: '',
-        })
-        if (options.onQRCodeReady) {
-          options.onQRCodeReady(qrPayload)
-        }
-      },
-      onDeviceJoined: (deviceId, totalJoined, required) => {
-        this.emit('deviceJoined', { deviceId, totalJoined, required })
-        if (options.onDeviceJoined) {
-          options.onDeviceJoined(deviceId, totalJoined, required)
-        }
-      },
+      // Create relay signing service
+      const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
+
+      // Sign using relay service with event emission
+      const signature = await relaySigningService.signWithRelay(this.coreVault, payload, walletCore, {
+        sessionId,
+        signal: options.signal,
+        onProgress: (step: SigningStep) => {
+          this.emit('signingProgress', { step, sessionId })
+        },
+        onQRCodeReady: qrPayload => {
+          this.handleQRCodeReady(qrPayload, sessionId, options.onQRCodeReady)
+        },
+        onDeviceJoined: (deviceId, totalJoined, required) => {
+          this.emit('deviceJoined', {
+            deviceId,
+            totalJoined,
+            required,
+            sessionId,
+          })
+          options.onDeviceJoined?.(deviceId, totalJoined, required, sessionId)
+        },
+      })
+
+      // Emit completion event
+      this.emit('transactionSigned', { signature, payload, sessionId })
+
+      return signature
+    } catch (error) {
+      this.emitSigningError(sessionId, error)
+      throw error
+    }
+  }
+
+  private handleQRCodeReady(
+    qrPayload: string,
+    sessionId: string,
+    onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+  ): void {
+    this.emit('qrCodeReady', {
+      qrPayload,
+      action: 'keysign',
+      sessionId,
     })
+    void this.notifyDevices(qrPayload)
+    onQRCodeReady?.(qrPayload, sessionId)
+  }
 
-    // Emit completion event
-    this.emit('transactionSigned', { signature, payload })
+  private emitSigningError(sessionId: string, error: unknown): void {
+    const normalizedError = error instanceof Error ? error : new Error(String(error))
 
-    return signature
+    if (normalizedError.name === 'AbortError') {
+      this.emit('signingCancelled', { sessionId, error: normalizedError })
+    } else {
+      this.emit('signingFailed', { sessionId, error: normalizedError })
+    }
+    this.emit('error', normalizedError)
+  }
+
+  /**
+   * ponytail: notify the vault's registered devices (mobile/laptop) that a
+   * keysign QR is ready, so a co-signer gets a native push instead of manually
+   * watching for the QR. The keysign path (RelaySigningService) never called
+   * this; it only generated the QR + polled the relay. Best-effort: swallows
+   * errors and no-ops when no push service / keys / registered devices.
+   * vault_id MUST be computeNotificationVaultId (SHA256(utf8(ecdsa+chainCode))),
+   * NOT the raw pubkey — that mismatch was why pushes never landed.
+   */
+  private async notifyDevices(qrPayload: string): Promise<void> {
+    try {
+      const push = this.context.pushNotificationService
+      const ecdsa = this.coreVault.publicKeys?.ecdsa
+      const chainCode = this.coreVault.hexChainCode
+      if (!push || !ecdsa || !chainCode) return
+      const vaultId = await computeNotificationVaultId(ecdsa, chainCode)
+      await push.notifyVaultMembers({
+        vaultId,
+        vaultName: this.coreVault.name,
+        localPartyId: this.coreVault.localPartyId,
+        qrCodeData: qrPayload,
+      })
+    } catch (error) {
+      // push is a convenience layer — never let it break signing
+      this.emit('error', error as Error)
+    }
   }
 
   /**
@@ -162,10 +221,12 @@ export class SecureVault extends VaultBase {
     options: SignBytesOptions,
     signingOptions: {
       signal?: AbortSignal
-      onQRCodeReady?: (qrPayload: string) => void
-      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number) => void
+      onQRCodeReady?: (qrPayload: string, sessionId: string) => void
+      onDeviceJoined?: (deviceId: string, totalJoined: number, required: number, sessionId: string) => void
     } = {}
   ): Promise<Signature> {
+    const sessionId = randomUUID()
+
     try {
       // Normalize input to hex string
       const messageHash = normalizeToHex(options.data)
@@ -177,7 +238,7 @@ export class SecureVault extends VaultBase {
       const walletCore = await this.wasmProvider.getWalletCore()
 
       // Create relay signing service
-      const relaySigningService = new RelaySigningService()
+      const relaySigningService = new RelaySigningService(this.context.serverManager.messageRelay)
 
       // Sign using relay service with event emission
       const signature = await relaySigningService.signBytesWithRelay(
@@ -188,25 +249,22 @@ export class SecureVault extends VaultBase {
         },
         walletCore,
         {
+          sessionId,
           signal: signingOptions.signal,
           onProgress: (step: SigningStep) => {
-            this.emit('signingProgress', { step })
+            this.emit('signingProgress', { step, sessionId })
           },
           onQRCodeReady: qrPayload => {
-            this.emit('qrCodeReady', {
-              qrPayload,
-              action: 'keysign',
-              sessionId: '',
-            })
-            if (signingOptions.onQRCodeReady) {
-              signingOptions.onQRCodeReady(qrPayload)
-            }
+            this.handleQRCodeReady(qrPayload, sessionId, signingOptions.onQRCodeReady)
           },
           onDeviceJoined: (deviceId, totalJoined, required) => {
-            this.emit('deviceJoined', { deviceId, totalJoined, required })
-            if (signingOptions.onDeviceJoined) {
-              signingOptions.onDeviceJoined(deviceId, totalJoined, required)
-            }
+            this.emit('deviceJoined', {
+              deviceId,
+              totalJoined,
+              required,
+              sessionId,
+            })
+            signingOptions.onDeviceJoined?.(deviceId, totalJoined, required, sessionId)
           },
         }
       )
@@ -214,12 +272,17 @@ export class SecureVault extends VaultBase {
       // Emit signing complete event
       this.emit('transactionSigned', {
         signature,
-        payload: { chain: options.chain, transaction: null, messageHashes: [messageHash] },
+        payload: {
+          chain: options.chain,
+          transaction: null,
+          messageHashes: [messageHash],
+        },
+        sessionId,
       })
 
       return signature
     } catch (error) {
-      this.emit('error', error as Error)
+      this.emitSigningError(sessionId, error)
 
       if (error instanceof VaultError) {
         throw error

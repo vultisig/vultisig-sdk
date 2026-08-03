@@ -15,19 +15,34 @@ vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: vi.fn(),
 }))
 
-function makeQuoteResponse(chainId: number, buyAmount = '990000000000000000') {
+function makeQuoteResponse(
+  chainId: number,
+  buyAmount = '990000000000000000',
+  overrides: {
+    sellToken?: string
+    buyToken?: string
+    kind?: 'sell' | 'buy'
+    partiallyFillable?: boolean
+    sellAmount?: string
+    feeAmount?: string
+    validTo?: number
+  } = {}
+) {
   return {
     quote: {
-      sellToken: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
-      buyToken: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+      sellToken: overrides.sellToken ?? '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+      buyToken: overrides.buyToken ?? '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
       receiver: '0xreceiver',
-      sellAmount: '1000000000000000000',
+      // AGG-01: sellAmount + feeAmount must equal baseInput.sellAmount (1e18) exactly — CoW's
+      // sellAmountBeforeFee request param solves for that split precisely (live-verified
+      // 2026-07-08 against the real api.cow.fi/mainnet quote endpoint).
+      sellAmount: overrides.sellAmount ?? '990000000000000000',
       buyAmount,
-      validTo: Math.floor(Date.now() / 1000) + 900,
+      validTo: overrides.validTo ?? Math.floor(Date.now() / 1000) + 900,
       appData: '{}',
-      feeAmount: '10000000000000000',
-      kind: 'sell' as const,
-      partiallyFillable: false,
+      feeAmount: overrides.feeAmount ?? '10000000000000000',
+      kind: overrides.kind ?? ('sell' as const),
+      partiallyFillable: overrides.partiallyFillable ?? false,
       sellTokenBalance: 'erc20',
       buyTokenBalance: 'erc20',
     },
@@ -99,9 +114,9 @@ describe('getCowSwapQuote', () => {
     if (!('cowswap_order' in quote.tx)) {
       throw new Error('Expected cowswap_order')
     }
-    // makeQuoteResponse: sellAmount 1e18 + feeAmount 1e16 = 1.01e18 gross.
+    // makeQuoteResponse: sellAmount 0.99e18 + feeAmount 1e16 = 1e18 gross (== baseInput.sellAmount).
     expect(quote.tx.cowswap_order.feeAmount).toBe('0')
-    expect(quote.tx.cowswap_order.sellAmount).toBe('1010000000000000000')
+    expect(quote.tx.cowswap_order.sellAmount).toBe('1000000000000000000')
   })
 
   it('appData hash varies with affiliateBps (50 bps vs 0 bps)', async () => {
@@ -160,7 +175,7 @@ describe('getCowSwapQuote', () => {
 
   it('sets permitRequired=true for USDC on Ethereum (known permit token)', async () => {
     const usdcEthereum = KNOWN_PERMIT_TOKENS[1][0]
-    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { sellToken: usdcEthereum }))
 
     const quote = await getCowSwapQuote({
       ...baseInput,
@@ -200,7 +215,7 @@ describe('getCowSwapQuote', () => {
     ['mainnet DAI (Maker-style permit, not EIP-2612)', '0x6B175474E89094C44Da98b954EedeAC495271d0F'],
     ['mainnet USDT (no EIP-2612 permit)', '0xdAC17F958D2ee523a2206206994597C13D831ec7'],
   ])('does not flag permitRequired for %s', async (_label, sellToken) => {
-    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+    vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { sellToken }))
 
     const quote = await getCowSwapQuote({
       ...baseInput,
@@ -240,5 +255,153 @@ describe('getCowSwapQuote', () => {
 
     const expectedAppData = buildCowSwapAppData(COWSWAP_DEFAULT_AFFILIATE_BPS, COWSWAP_FEE_RECIPIENT)
     expect(appData).toBe(expectedAppData)
+  })
+
+  // AGG-01 (round-2 spec-level fund-safety audit): sellToken/buyToken/kind/partiallyFillable
+  // used to be taken straight from this untrusted /quote response and signed as-is via the
+  // EIP-712 GPv2 Order struct. A response matching the request builds; any mismatch on a
+  // signed field must throw BEFORE a signable order is constructed.
+  describe('AGG-01 — order fields must match the request before signing', () => {
+    it('builds when the response matches the request exactly (the happy path, unaffected)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+      const quote = await getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })
+
+      if (!('cowswap_order' in quote.tx)) throw new Error('Expected cowswap_order')
+      expect(quote.tx.cowswap_order.sellToken).toBe('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2')
+      expect(quote.tx.cowswap_order.buyToken).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+    })
+
+    it('REJECTS a response with a swapped sellToken (a different token than requested)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellToken: '0x000000000000000000000000000000deadbeef' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /mismatched sellToken/
+      )
+    })
+
+    it('REJECTS a response with a swapped buyToken (a different token than requested)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { buyToken: '0x000000000000000000000000000000deadbeef' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /mismatched buyToken/
+      )
+    })
+
+    it("REJECTS a response with kind flipped to 'buy' (inverts GPv2's sell/buy semantics — the order's sellAmount/buyAmount authority swaps)", async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { kind: 'buy' }))
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /kind 'buy'/
+      )
+    })
+
+    it('REJECTS a response with partiallyFillable flipped to true (the request always asks for false)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { partiallyFillable: true }))
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /partiallyFillable=true/
+      )
+    })
+
+    // codex review (PR #1082): grossSellAmount (sellAmount + feeAmount) becomes the signed
+    // Order's sellAmount — the authorized spend — and was just as untrusted as the 4 fields
+    // above. Live-verified against api.cow.fi/mainnet (2026-07-08, two pairs/amounts) that
+    // sellAmount + feeAmount === sellAmountBeforeFee holds exactly, so an exact-equality
+    // fail-closed check is safe (won't false-reject a real quote).
+    it('REJECTS a response whose sellAmount+feeAmount is INFLATED above what was requested (would authorize selling more than the user asked)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '1990000000000000000', feeAmount: '10000000000000000' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /does not match the requested sellAmountBeforeFee/
+      )
+    })
+
+    it('REJECTS a response whose sellAmount+feeAmount is UNDER what was requested too (any mismatch is refused, not just the dangerous direction)', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '490000000000000000', feeAmount: '10000000000000000' })
+      )
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+        /does not match the requested sellAmountBeforeFee/
+      )
+    })
+
+    it('accepts a response whose sellAmount+feeAmount matches the requested amount exactly', async () => {
+      vi.mocked(queryUrl).mockResolvedValueOnce(
+        makeQuoteResponse(1, undefined, { sellAmount: '999866862516704140', feeAmount: '133137483295860' })
+      )
+
+      const quote = await getCowSwapQuote({
+        ...baseInput,
+        sellAmount: 1_000_000_000_000_000_000n,
+        chainConfig: cowSwapChainConfig.Ethereum,
+      })
+
+      if (!('cowswap_order' in quote.tx)) throw new Error('Expected cowswap_order')
+      expect(quote.tx.cowswap_order.sellAmount).toBe('1000000000000000000')
+    })
+
+    // codex review (PR #1082): validTo is entirely server-determined (no request-side value to
+    // equality-check), so it's bounded to a sane multiple of the SDK's own intended TTL instead.
+    describe('validTo reasonableness (no request-side equality check possible, so bounded instead)', () => {
+      it('REJECTS a validTo unreasonably far in the future (order executable far beyond user intent)', async () => {
+        const farFuture = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 // 1 year out
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: farFuture }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+          /unreasonable validTo/
+        )
+      })
+
+      it('REJECTS a validTo already in the past (expired/garbage quote)', async () => {
+        const past = Math.floor(Date.now() / 1000) - 60
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: past }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).rejects.toThrow(
+          /unreasonable validTo/
+        )
+      })
+
+      it('accepts a validTo within the mocked ~15 minute quote window', async () => {
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
+
+      // Team-lead review (PR #1082): the initial 2x/30-min ceiling sat RIGHT AT CoW's real
+      // returned validTo with zero headroom for clock skew — live-re-verified (2026-07-08,
+      // real api.cow.fi/mainnet request) that CoW actually returns validTo = now + 1800s (30
+      // min) exactly, not ~15 min as COWSWAP_VALID_TO_SECONDS alone would suggest. Widened to
+      // 4x/60-min. This test locks in the REAL observed value so a future regression back to
+      // a too-tight ceiling gets caught here, not in production.
+      it('accepts a validTo at the REAL observed CoW value (now + 1800s / 30 min) with headroom to spare', async () => {
+        const realObservedValidTo = Math.floor(Date.now() / 1000) + 1800
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: realObservedValidTo }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
+
+      it('accepts a validTo with generous headroom for clock skew above the real 30-min value (e.g. 45 min)', async () => {
+        const withSkewMargin = Math.floor(Date.now() / 1000) + 45 * 60
+        vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1, undefined, { validTo: withSkewMargin }))
+
+        await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+      })
+    })
+
+    it('token comparison is case-insensitive (checksum vs lowercase is not a mismatch)', async () => {
+      // baseInput.sellToken/buyToken are EIP-55 checksummed; the mocked response
+      // (and the real CoW API) returns lowercase — must not false-reject on casing alone.
+      vi.mocked(queryUrl).mockResolvedValueOnce(makeQuoteResponse(1))
+
+      await expect(getCowSwapQuote({ ...baseInput, chainConfig: cowSwapChainConfig.Ethereum })).resolves.toBeDefined()
+    })
   })
 })

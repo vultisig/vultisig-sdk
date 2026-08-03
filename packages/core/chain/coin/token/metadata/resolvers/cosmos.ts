@@ -82,9 +82,11 @@ const decimalsFromMeta = (meta: DenomMetadata): number | null => {
   return null
 }
 
-const deriveTicker = (denom: string, meta: DenomMetadata): string => {
+const deriveTicker = (denom: string | undefined, meta: DenomMetadata): string => {
   if (meta.symbol) return meta.symbol
   if (meta.display) return meta.display
+
+  if (!denom) return ''
 
   if (denom.startsWith('x/staking-')) {
     const base = denom.replace('x/staking-', '')
@@ -197,6 +199,8 @@ const getCw20MetaFromLCD = async (chain: CosmosChain, id: string): Promise<CoinM
 }
 
 export const getCosmosTokenMetadata: TokenMetadataResolver<CosmosChain> = async ({ chain, id }) => {
+  if (!id) throw new Error('getCosmosTokenMetadata: denom id is required')
+
   const knownMeta = knownCosmosTokens[chain]?.[id]
   if (knownMeta) {
     return {

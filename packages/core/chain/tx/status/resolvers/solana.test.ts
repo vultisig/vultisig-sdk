@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  getBlockHeight: vi.fn(),
   getSignatureStatuses: vi.fn(),
   getTransaction: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-chain/chains/solana/client', () => ({
   getSolanaClient: () => ({
+    getBlockHeight: mocks.getBlockHeight,
     getSignatureStatuses: mocks.getSignatureStatuses,
     getTransaction: mocks.getTransaction,
   }),
@@ -29,6 +31,51 @@ describe('getSolanaTxStatus', () => {
       status: 'pending',
       isKnown: false,
     })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('marks an unknown signature as not_found when its last valid block height has expired', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockResolvedValue(101)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'not_found',
+      isKnown: false,
+    })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown signature pending when its last valid block height has not expired', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockResolvedValue(100)
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown signature pending when block-height lookup fails', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({ value: [null] })
+    mocks.getBlockHeight.mockRejectedValue(new Error('rpc down'))
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
+  })
+
+  it('keeps a signature-status lookup failure pending without attempting expiry classification', async () => {
+    mocks.getSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash, lastValidBlockHeight: 100 })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+    expect(mocks.getBlockHeight).not.toHaveBeenCalled()
     expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 
@@ -42,5 +89,25 @@ describe('getSolanaTxStatus', () => {
       status: 'pending',
       isKnown: true,
     })
+  })
+
+  // The AUTHORITY step for the broadcast-layer trade-off documented in
+  // ../../broadcast/resolvers/solana.ts: an AlreadyProcessed broadcast can be a
+  // *processed-but-reverted* tx that the broadcast resolver optimistically
+  // reports as success. This proves the confirmation poll detects that revert —
+  // a non-null `signatureStatus.err` returns status 'error' WITHOUT needing the
+  // (possibly not-yet-indexed) transaction details, so a reverted Solana tx is
+  // surfaced as a failure downstream.
+  it('returns error when the signature status carries an execution error', async () => {
+    mocks.getSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] }, confirmationStatus: 'finalized' }],
+    })
+
+    await expect(getSolanaTxStatus({ chain: Chain.Solana, hash })).resolves.toEqual({
+      status: 'error',
+      isKnown: true,
+    })
+    // The error is decided from the signature status alone — no tx fetch needed.
+    expect(mocks.getTransaction).not.toHaveBeenCalled()
   })
 })

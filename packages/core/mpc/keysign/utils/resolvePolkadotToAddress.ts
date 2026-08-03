@@ -11,9 +11,18 @@ type ResolvePolkadotToAddressInput = {
 
 export const resolvePolkadotToAddress = ({ keysignPayload, walletCore }: ResolvePolkadotToAddressInput): string => {
   const { toAddress } = keysignPayload
-  const { chain, address } = getKeysignCoin(keysignPayload)
+  const { chain } = getKeysignCoin(keysignPayload)
 
-  const shouldUseOriginalAddress =
+  // Fail LOUD on a missing/invalid destination. Both callers
+  // (getPolkadotSigningInputs, getBittensorSigningInputs) build plain
+  // amount+recipient transfers, so there is no legitimate empty-toAddress
+  // (e.g. self-bond) case here. The previous fallback returned the SENDER's own
+  // address, which would silently sign a transfer whose on-chain destination
+  // diverges from the recipient shown on the pre-sign card the user approved -
+  // a "sign something other than what was displayed" defect. Rejecting matches
+  // the rest of this surface (Sui memo throw, TON comment-length throw,
+  // preparePolkadotAssetSend's decodePolkadotAccountId throw).
+  const isValid =
     toAddress &&
     isValidAddress({
       chain,
@@ -21,5 +30,9 @@ export const resolvePolkadotToAddress = ({ keysignPayload, walletCore }: Resolve
       walletCore,
     })
 
-  return shouldUseOriginalAddress ? toAddress : address
+  if (!isValid) {
+    throw new Error(`Invalid ${chain} destination address; refusing to fall back to the sender's own address`)
+  }
+
+  return toAddress
 }

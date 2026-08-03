@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { fromBinary } from '@bufbuild/protobuf'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import base58 from 'bs58'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
@@ -11,11 +12,12 @@ import { signatureFormats } from '@vultisig/core-chain/signing/SignatureFormat'
 import { assertSignature } from '@vultisig/core-chain/utils/assertSignature'
 
 import { getQBTCSignedTransaction } from '../../chains/cosmos/qbtc/QBTCHelper'
-import { buildCip20AuxData, patchTxBodyWithAuxHash } from './cardano/buildCip20AuxData'
+import { buildCip20AuxData } from './cardano/buildCip20AuxData'
 import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
+import { spliceSolanaSignature } from '../../keysign/signingInputs/resolvers/solana/rawTx'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
@@ -80,6 +82,39 @@ export const compileTx = ({
   const chainKind = getChainKind(chain)
   const signatureFormat = signatureFormats[chainKind]
 
+  // dApp-supplied raw Solana transaction (sdk#1204): txInputData is the
+  // ORIGINAL serialized transaction and hashes[0] is its wire-format message
+  // (see getPreSigningHashes). Splice the 64-byte signature into the original
+  // bytes at signer index 0 instead of letting TransactionCompiler assemble
+  // from a WalletCore re-encode that may not match what was signed
+  // (ios#4419 / android#5223 parity).
+  if (chainKind === 'solana' && keysignPayload?.signData.case === 'signSolana') {
+    const message = hashes[0]
+
+    const signature = generateSignature({
+      walletCore,
+      signature: keysignSignatures[Buffer.from(message).toString('hex')],
+      signatureFormat,
+    })
+
+    assertSignature({
+      publicKey,
+      message,
+      signature,
+      signatureFormat,
+    })
+
+    const signedTx = spliceSolanaSignature(txInputData, new Uint8Array(signature))
+
+    return TW.Solana.Proto.SigningOutput.encode(
+      TW.Solana.Proto.SigningOutput.create({
+        // WalletCore's Solana SigningOutput.encoded is base58 — the broadcast
+        // resolver (`broadcastSolanaTx`) and Blockaid inputs decode it as such.
+        encoded: base58.encode(signedTx),
+      })
+    ).finish()
+  }
+
   if (chain === Chain.Bittensor) {
     const hash = hashes[0]
     const hashHex = Buffer.from(hash).toString('hex')
@@ -110,9 +145,10 @@ export const compileTx = ({
   }
 
   if (chain === Chain.Cardano) {
-    // hashes[0] is blake2b-256 of the tx body. When a memo is set,
-    // getPreSigningHashes returns blake2b of the patched body (with aux_data_hash
-    // at key 7) so both signing phase and compile phase agree on the same bytes.
+    // hashes[0] is blake2b-256 of the tx body. When a memo is set, WalletCore
+    // already committed the aux_data_hash into the body (key 7) from
+    // SigningInput.auxiliary_data, so the signing and compile phases agree on
+    // the same bytes without any client-side patching.
     const hash = hashes[0]
     const hashHex = Buffer.from(hash).toString('hex')
 
@@ -129,21 +165,16 @@ export const compileTx = ({
       signatureFormat,
     })
 
-    // Re-derive the tx body (and aux data when memo is set) to wrap it with
-    // the witness set and produce the final signed transaction.
+    // Re-derive the tx body to wrap it with the witness set. WalletCore already
+    // committed the aux_data_hash into this body when a memo was set, so it is
+    // used as-is; the matching aux-data bytes go into element [3] of the tx.
     const preOutput = TW.TxCompiler.Proto.PreSigningOutput.decode(
       walletCore.TransactionCompiler.preImageHashes(getCoinType({ chain, walletCore }), txInputData)
     )
 
     const memo = keysignPayload?.memo
-    let txBodyCbor = preOutput.data
-    let auxDataCbor: Uint8Array | undefined
-
-    if (memo) {
-      const cip20 = buildCip20AuxData(memo)
-      auxDataCbor = cip20.auxDataCbor
-      txBodyCbor = patchTxBodyWithAuxHash(txBodyCbor, cip20.auxDataHash)
-    }
+    const txBodyCbor = preOutput.data
+    const auxDataCbor = memo ? buildCip20AuxData(memo).auxDataCbor : undefined
 
     const spendingKey = new Uint8Array(publicKey.data()).slice(0, 32)
     const encoded = buildSignedCardanoTx({

@@ -6,21 +6,34 @@
  * - Conversation management
  * - Message sending and SSE streaming
  * - Client-side tool dispatch (`tool-input-available` SSE events) and
- *   tx_ready synthesis (server-built transactions buffered then signed)
+ *   tool-output signing (#927 Phase 2: the client-enriched candidate off the
+ *   `tool-output-available` channel is buffered then signed — the sole sign source)
  * - RecentAction reporting back to backend via `context.recent_actions`
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { computeNotificationVaultId, MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
 
-import { MemoryStorage, PushNotificationService, type VaultBase } from '@vultisig/sdk'
-
+import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } from '../core/password-manager'
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
+import { recordResolution } from './broadcastJournal'
 import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
-import { AgentClient, type SSEStreamResult } from './client'
+import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
+import {
+  type AgentTokenCacheScope,
+  clearCachedToken,
+  getCachedTokenEntry,
+  getTokenCachePath,
+  loadCachedToken,
+  saveCachedToken,
+} from './tokenCache'
+import {
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  payloadLooksSignable,
+  type ToolOutputCandidate,
+} from './toolOutputSigning'
 import type {
   AgentConfig,
   ConversationMessage,
@@ -31,18 +44,27 @@ import type {
 } from './types'
 
 // Tools that prompt for the vault password before dispatch. `sign_tx` is
-// reached via tx_ready synthesis (not a registry tool name) but uses the
-// same gate via `runPasswordGatedTool('sign_tx', …)` below.
+// reached via the tool-output signing path (not a registry tool name) but uses
+// the same gate via `runPasswordGatedTool('sign_tx', …)` below.
 const PASSWORD_REQUIRED_TOOLS = new Set(['sign_typed_data', 'sign_tx'])
+const AUTO_SUBMIT_MARKERS = new Set([
+  '__pm_auto_submit',
+  '__pm_auto_submit_batch',
+  '__pm_submit_token',
+  '__pm_batch_submit_token',
+])
 
-// Client-side tool dispatch table. Each entry maps an inbound
-// `tool-input-available` toolName to the matching per-tool executor method.
-// The factory is invoked lazily so the executor pointer is captured at
-// dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
+// Client-side tool dispatch table — the tools the CLI IMPLEMENTS locally. Each
+// entry maps an inbound `tool-input-available` toolName to the matching per-tool
+// executor method. The factory is invoked lazily so the executor pointer is
+// captured at dispatch time (lets `dispatchClientSideTool` swap mocks for tests).
 //
-// Must stay aligned with backend's `clientSideToolNames`. `sign_tx` uses
-// the tx_ready channel instead; create_vault / plugin_install /
-// create_policy / delete_policy are mobile-only. The CRUD trio
+// This is a SUBSET of the backend's client-side contract
+// (`BACKEND_CLIENT_SIDE_TOOL_NAMES`): `sign_tx` uses the tool-output signing
+// path instead; create_vault / plugin_install / create_policy / delete_policy are
+// mobile-only; the Polymarket bet/batch tools arrive rewritten as
+// `sign_typed_data`. Backend client-side tools NOT in this table dispatch to the
+// `TOOL_UNSUPPORTED` path (see `dispatchClientSideTool`). The CRUD trio
 // (vault_coin / vault_chain / address_book) carries an `action: 'add'|'remove'`
 // discriminator that each wrapper method switches on internally.
 export const CLIENT_SIDE_TOOL_DISPATCH: Record<
@@ -54,6 +76,37 @@ export const CLIENT_SIDE_TOOL_DISPATCH: Record<
   vault_chain: (ex, id, input) => ex.vaultChain(id, input),
   address_book: (ex, id, input) => ex.addressBook(id, input),
 }
+
+// The agent-backend's client-side tool contract — `clientSideToolNames`
+// (agent-backend internal/service/agent/tools.go:549-559). These are the tools
+// the backend hands to the CLIENT to execute: it emits a `tool-input-available`
+// SSE frame and expects the outcome back via `recent_actions`.
+export const BACKEND_CLIENT_SIDE_TOOL_NAMES: readonly string[] = [
+  'vault_coin',
+  'vault_chain',
+  'create_vault',
+  'plugin_install',
+  'create_policy',
+  'delete_policy',
+  'sign_typed_data',
+  'polymarket_sign_bet',
+  'polymarket_sign_batch',
+]
+
+// Every tool name the SSE layer intercepts for local dispatch: the backend's
+// client-side contract PLUS `address_book` (which the CLI implements and the
+// backend treats as a client-side action via AddressBookTool/tools.go:423,
+// though it's currently omitted from the clientSideToolNames map). Routing on
+// this SUPERSET of the implemented registry — rather than on the registry keys
+// alone — is what makes the `TOOL_UNSUPPORTED` signal reachable: a backend
+// client-side tool the CLI doesn't implement (create_vault, plugin_install, …)
+// now reaches `dispatchClientSideTool` and gets a structured failure
+// RecentAction, instead of silently degrading to display-only tool progress and
+// leaving the backend/LLM waiting on an action that will never report.
+export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  ...BACKEND_CLIENT_SIDE_TOOL_NAMES,
+  ...Object.keys(CLIENT_SIDE_TOOL_DISPATCH),
+])
 
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
@@ -72,6 +125,23 @@ const RECOVERY_MAX_POLLS = 90
 const TX_CONFIRM_POLL_INTERVAL_MS = 3000
 const TX_CONFIRM_MAX_POLLS = 40
 
+/**
+ * Does this batch of queued (not-yet-delivered) tool results contain a
+ * SUCCESSFUL broadcast — a result carrying a real `tx_hash`? When such a result
+ * is still in the queue at error time, the broadcast happened on-chain but its
+ * follow-up `recent_actions` report to the backend never landed: the true
+ * ACK_FAILED case. A broadcast already delivered in an earlier turn is gone from
+ * the queue, so a later unrelated failure is NOT mis-tagged. Exported for direct
+ * unit testing of the discriminating logic.
+ */
+export function hasUnacknowledgedBroadcastResult(results: RecentAction[]): boolean {
+  return results.some(r => {
+    if (!r.success || !r.data) return false
+    const hash = (r.data as { tx_hash?: unknown }).tx_hash
+    return typeof hash === 'string' && hash.length > 0
+  })
+}
+
 export class AgentSession {
   private client: AgentClient
   private vault: VaultBase
@@ -85,6 +155,14 @@ export class AgentSession {
   private pushService: PushNotificationService | null = null
   // Flushed into context.recent_actions on the next outbound request.
   private pendingToolResults: RecentAction[] = []
+  // Snapshot, taken the instant sendMessage's catch fires (BEFORE it clears the
+  // queue), of whether an already-broadcast tx result was still UNDELIVERED to
+  // the backend. This is the true "ack failed" signal: a successful broadcast
+  // whose follow-up recent_actions report never landed. A later independent
+  // retryable error (after an earlier broadcast WAS acked) leaves an empty/
+  // broadcast-free queue here, so `agent ask` keeps the retryable classification
+  // instead of masking it as ACK_FAILED. See executeAgentAsk's catch (F1).
+  private unacknowledgedBroadcastAtError = false
   // Disconnect-recovery poll cadence — instance fields so tests can drive the
   // poll loop without real 2s waits.
   private recoveryPollIntervalMs = RECOVERY_POLL_INTERVAL_MS
@@ -94,16 +172,27 @@ export class AgentSession {
   private txConfirmPollIntervalMs = TX_CONFIRM_POLL_INTERVAL_MS
   private txConfirmMaxPolls = TX_CONFIRM_MAX_POLLS
 
+  private get tokenCacheScope(): AgentTokenCacheScope {
+    return {
+      publicKey: this.publicKey,
+      backendUrl: this.config.backendUrl,
+      profile: this.config.profile,
+    }
+  }
+
   constructor(vault: VaultBase, config: AgentConfig) {
     this.vault = vault
     this.config = config
     this.client = new AgentClient(config.backendUrl)
     this.client.verbose = !!config.verbose
     // Registry-based client-side tool identification: tell the client which
-    // tools the CLI executes locally so a `tool-input-available` frame is
-    // dispatched on toolName membership (mirroring the app's toolUIRegistry),
-    // not on a `clientExecuted` wire flag the backend no longer sends.
-    this.client.setClientSideToolNames(new Set(Object.keys(CLIENT_SIDE_TOOL_DISPATCH)))
+    // tool names to dispatch locally so a `tool-input-available` frame is routed
+    // on toolName membership (mirroring the app's toolUIRegistry), not on a
+    // `clientExecuted` wire flag the backend no longer sends. This is the
+    // backend's full client-side contract (a superset of the implemented
+    // registry), so an unimplemented tool still reaches dispatch and reports a
+    // structured TOOL_UNSUPPORTED rather than vanishing as display-only progress.
+    this.client.setClientSideToolNames(new Set(CLIENT_SIDE_DISPATCH_TOOL_NAMES))
     if (config.profile) {
       this.client.setProfile(config.profile)
     }
@@ -113,6 +202,77 @@ export class AgentSession {
     if (config.password) {
       this.executor.setPassword(config.password)
     }
+    // `--force` bypasses the persistent broadcast-journal duplicate guard.
+    this.executor.setForceBroadcast(!!config.force)
+  }
+
+  /**
+   * Unlock the vault before auth when it's encrypted. Resolve the password from
+   * the keyring/env chain (in-memory cache → OS keyring → VAULT_PASSWORDS/
+   * VAULT_PASSWORD env) BEFORE prompting, so a headless operator who set up the
+   * keyring or env never has to put a funds-controlling secret on argv. argv
+   * `--password` (config.password) still works but is de-emphasized: it lands
+   * the secret in `ps`/shell history, so its use warns. Only when the chain
+   * resolves nothing do we fall back to the mode's own interactive prompt (TUI
+   * readline / via-agent protocol; ask-mode throws). A stale stored password is
+   * cleared and re-prompted in interactive modes rather than stranding init.
+   */
+  private async unlockEncryptedVault(ui: UICallbacks): Promise<void> {
+    if (!this.vault.isEncrypted) {
+      return
+    }
+    let password: string
+    // Whether `password` came from the non-interactive keyring/env chain — a
+    // stale stored value gets cleared and re-prompted; an argv/typed value does
+    // not (it was the caller's explicit choice).
+    let fromStoredChain = false
+    if (this.config.password) {
+      process.stderr.write(
+        'Warning: passing the vault password via --password exposes it to `ps` and shell history. ' +
+          'Prefer the OS keyring (`vsig auth setup`) or the VAULT_PASSWORD env var.\n'
+      )
+      password = this.config.password
+    } else {
+      const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+      if (resolved !== null) {
+        password = resolved
+        fromStoredChain = true
+      } else {
+        password = await ui.requestPassword()
+      }
+    }
+    try {
+      await (this.vault as any).unlock?.(password)
+    } catch (unlockErr) {
+      if (!fromStoredChain) throw unlockErr
+      password = await this.recoverFromStaleStoredPassword(ui)
+    }
+    this.executor.setPassword(password)
+  }
+
+  /**
+   * The stored (keyring/env) password was rejected by unlock. Drop it so it
+   * isn't reused, then recover: ask mode has no interactive prompt (its
+   * requestPassword throws the misleading "use --password flag"), so surface the
+   * real cause; interactive modes (TUI / via-agent) re-prompt once and cache the
+   * winner. Returns the password that successfully unlocked the vault.
+   */
+  private async recoverFromStaleStoredPassword(ui: UICallbacks): Promise<string> {
+    // Guard the name delete — clearCachedPassword('') would wipe the WHOLE cache
+    // (every other vault loaded this process), and name is typed `string`.
+    clearCachedPassword(this.vault.id)
+    if (this.vault.name) clearCachedPassword(this.vault.name)
+    if (this.config.askMode) {
+      throw new Error(
+        `Stored vault password (keyring/env) was rejected for "${this.vault.name || this.vault.id}". ` +
+          'Update it with `vsig auth setup` or the VAULT_PASSWORD env var, or pass --password.'
+      )
+    }
+    const password = await ui.requestPassword()
+    await (this.vault as any).unlock?.(password)
+    cachePassword(this.vault.id, password)
+    if (this.vault.name) cachePassword(this.vault.name, password)
+    return password
   }
 
   /**
@@ -127,51 +287,68 @@ export class AgentSession {
 
     // Authenticate - use cached token if valid, otherwise sign a new one
     try {
-      // Unlock vault first if encrypted
-      if (this.vault.isEncrypted) {
-        const password = this.config.password || (await ui.requestPassword())
-        await (this.vault as any).unlock?.(password)
-        this.executor.setPassword(password)
-      }
+      await this.unlockEncryptedVault(ui)
 
-      const cached = loadCachedToken(this.publicKey)
+      const cached = await loadCachedToken(this.tokenCacheScope).catch(() => null)
       if (cached) {
         this.client.setAuthToken(cached)
       } else {
         const auth = await authenticateVault(this.client, this.vault, this.config.password)
         this.client.setAuthToken(auth.token)
-        saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
+        await saveCachedToken(this.tokenCacheScope, auth.token, auth.expiresAt, auth.refreshToken).catch(() => {})
       }
     } catch (err: any) {
       throw new Error(`Authentication failed: ${err.message}`)
     }
 
-    // Create or resume conversation
+    // Create or resume conversation. Every conversation request routes through
+    // withAuthRetry so a revoked-but-unexpired cached token recovers uniformly
+    // (clear → re-auth → retry once) on EVERY path — the fresh-convo create
+    // used to skip this and hard-throw `Authentication failed` (finding a).
     if (this.config.sessionId) {
       this.conversationId = this.config.sessionId
-      // Fetch historical messages for resumed sessions
+      // Fetch historical messages for resumed sessions.
       try {
-        const conv = await this.client.getConversation(this.conversationId, this.publicKey)
+        const conv = await this.withAuthRetry(() => this.client.getConversation(this.conversationId!, this.publicKey))
         this.historyMessages = conv.messages || []
       } catch (err: any) {
-        // Re-authenticate on 401/403 and retry once
-        if (err.message?.includes('401') || err.message?.includes('403')) {
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          const conv = await this.client.getConversation(this.conversationId!, this.publicKey)
-          this.historyMessages = conv.messages || []
-        } else {
-          // Session not found or other error — reset to new conversation
+        // One-shot ask mode must fail closed when the requested context is
+        // unavailable. Sending the user's message in a fresh conversation can
+        // execute an intent without the history the caller explicitly named.
+        // Interactive/pipe sessions retain the recoverable fallback below.
+        if (this.config.askMode) {
           this.conversationId = null
           this.historyMessages = []
-          const conv = await this.client.createConversation(this.publicKey)
-          this.conversationId = conv.id
+          // An auth failure that survived withAuthRetry's single retry is an AUTH
+          // problem (→ exit 2), not a missing session (→ exit 5): classify by cause
+          // so a headless caller re-auths rather than treating the session id as
+          // stale. Any other resume failure stays SESSION_NOT_FOUND.
+          throw Object.assign(
+            new Error(
+              `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); refusing to execute the request without its conversation context`
+            ),
+            { code: isAuthError(err) ? AgentErrorCode.AUTH_FAILED : AgentErrorCode.SESSION_NOT_FOUND }
+          )
         }
+
+        // Resume failed: a stale/typo'd --session-id, a persistent backend
+        // error, or an auth failure that survived the single retry. Fall back
+        // to a fresh conversation rather than hard-failing (finding b — the old
+        // 401 branch retried getConversation once with no fallback and threw
+        // uncaught on a second failure), but surface a typed, NON-FATAL signal
+        // so a headless caller knows prior context was dropped and can persist
+        // the NEW conversation id (finding c — the fallback used to be silent).
+        this.conversationId = null
+        this.historyMessages = []
+        const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
+        this.conversationId = conv.id
+        ui.onError(
+          `Session ${this.config.sessionId} could not be resumed (${err?.message ?? 'unknown error'}); started a new conversation ${conv.id}`,
+          AgentErrorCode.SESSION_NOT_FOUND
+        )
       }
     } else {
-      const conv = await this.client.createConversation(this.publicKey)
+      const conv = await this.withAuthRetry(() => this.client.createConversation(this.publicKey))
       this.conversationId = conv.id
     }
 
@@ -193,9 +370,10 @@ export class AgentSession {
 
         const token = crypto.randomUUID()
         this.pushService = new PushNotificationService(new MemoryStorage(), this.config.notificationUrl)
+        const notificationVaultId = await computeNotificationVaultId(this.publicKey, this.vault.hexChainCode)
 
         await this.pushService.registerDevice({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
           deviceType: 'electron',
@@ -207,7 +385,7 @@ export class AgentSession {
         })
 
         this.pushService.connect({
-          vaultId: this.publicKey,
+          vaultId: notificationVaultId,
           partyName: 'cli-agent',
           token,
         })
@@ -219,8 +397,61 @@ export class AgentSession {
     }
   }
 
+  /**
+   * Run an authenticated backend request and, on a 401/403, do a single
+   * clear → re-auth → retry. This is the ONE chokepoint every conversation
+   * request shares (resume fetch, fresh-convo create, error-fallback create,
+   * and the send-message stream) so a revoked-but-unexpired cached token
+   * recovers identically everywhere instead of throwing on some paths.
+   *
+   * The retry replays the EXACT same `request` closure, which matters for the
+   * send-message path: the replayed body must carry the same content +
+   * recent_actions or the LLM re-emits tool calls (runaway loop). Re-auth is a
+   * full MPC re-sign via authenticateVault — the backend also exposes
+   * POST /auth/refresh, but exchanging the refresh token is a future
+   * enhancement (see auth.ts); the re-sign is always available.
+   *
+   * `onReauth` (optional) fires the instant a re-auth is committed to — BEFORE
+   * authenticateVault runs — so a caller in a retry loop (recoverDisconnectedTurn)
+   * can record that its single re-auth has been spent even if the MPC re-sign
+   * itself then throws. Without this hook a re-auth that fails with a non-auth
+   * error would let the caller re-enter and re-sign on every iteration.
+   */
+  private async withAuthRetry<T>(request: () => Promise<T>, onReauth?: () => void): Promise<T> {
+    try {
+      return await request()
+    } catch (err) {
+      if (!isAuthError(err)) throw err
+      onReauth?.()
+      // authenticateVault (MPC re-sign) may not return a refreshToken; capture
+      // the previously cached one before clearing so it survives the re-auth and
+      // the later /auth/refresh path stays available.
+      const previousRefreshToken = getCachedTokenEntry(this.tokenCacheScope)?.refreshToken
+      await clearCachedToken(this.tokenCacheScope).catch(() => {})
+      const auth = await authenticateVault(this.client, this.vault, this.config.password)
+      this.client.setAuthToken(auth.token)
+      await saveCachedToken(
+        this.tokenCacheScope,
+        auth.token,
+        auth.expiresAt,
+        auth.refreshToken ?? previousRefreshToken
+      ).catch(() => {})
+      return await request()
+    }
+  }
+
   getConversationId(): string | null {
     return this.conversationId
+  }
+
+  /**
+   * Whether the most recent failed turn threw with a broadcast whose
+   * follow-up report was still undelivered — the F1 ACK_FAILED signal. False
+   * after a clean turn, or when the failure was unrelated to an unacked
+   * broadcast (so the caller keeps the error's retryable classification).
+   */
+  hasUnacknowledgedBroadcast(): boolean {
+    return this.unacknowledgedBroadcastAtError
   }
 
   getHistoryMessages(): ConversationMessage[] {
@@ -247,6 +478,8 @@ export class AgentSession {
     }
 
     this.abortController = new AbortController()
+    // Fresh turn — clear the prior turn's ack snapshot.
+    this.unacknowledgedBroadcastAtError = false
 
     // Refresh context before each message — skip balance fetches in agent modes
     try {
@@ -261,6 +494,12 @@ export class AgentSession {
     try {
       await this.processMessageLoop(content, ui)
     } catch (err: any) {
+      // Snapshot BEFORE clearing: if a just-broadcast tx result is still queued
+      // (its follow-up recent_actions report never landed), this is the F1
+      // ack-failure case and executeAgentAsk will surface exit 8. Capturing here
+      // — rather than after the throw reaches the command — is essential because
+      // the very next line wipes the queue.
+      this.unacknowledgedBroadcastAtError = hasUnacknowledgedBroadcastResult(this.pendingToolResults)
       // SF: any failure that escaped processMessageLoop's internal 401
       // retry — clear the queue so the next user turn doesn't silently
       // inherit stale tool results and trigger phantom auto-submit or
@@ -284,6 +523,23 @@ export class AgentSession {
         `[session] processMessageLoop exceeded MAX_MESSAGE_LOOP_DEPTH (${MAX_MESSAGE_LOOP_DEPTH}); stopping. pendingToolResults=${this.pendingToolResults.length}\n`
       )
       this.pendingToolResults = [] // don't leak into next sendMessage
+      // A depth-capped abort truncates the conversation mid-flight and drops the
+      // queued results above — it is NOT a clean finish. Emit a distinct typed
+      // error FIRST so headless callers can detect the truncation (ask --json
+      // surfaces it in the error envelope and exits non-zero; pipe gets a typed
+      // `error` frame) instead of reading a bare `done` as success. onDone()
+      // still fires after, purely as the turn terminator (pipe consumers read
+      // frames until `done`). This error-then-done shape matches the precedent in
+      // pipe.ts handleCommand, whose sendMessage catch emits an `error` frame then
+      // `done`. It is deliberately NOT the requestPassword/requestConfirmation
+      // shape: those emit NON-terminal `error` frames and keep the turn alive
+      // awaiting a reply. Pipe-consumer contract: inspect for an `error` frame
+      // before treating `done` as success — the error code, not onDone, is the
+      // signal.
+      ui.onError(
+        `agent message loop exceeded ${MAX_MESSAGE_LOOP_DEPTH} turns; conversation truncated`,
+        AgentErrorCode.LOOP_DEPTH_EXCEEDED
+      )
       ui.onDone()
       return
     }
@@ -321,8 +577,15 @@ export class AgentSession {
       }
     }
 
-    // tx_ready count is NOT streamResult.transactions.length — errors/empty events also push there.
-    let serverTxStoredFromStream = 0
+    // #927 Phase 2: the client-enriched candidate off the `tool-output-available`
+    // channel is the SOLE signing source. First-wins per turn; buffered AFTER the
+    // stream by `selectAndBufferSignable`. (Production emits the signable payload
+    // on tool-output; `data-tx_ready` is a hollow marker the CLI doesn't consume.)
+    let toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: ToolOutputCandidate['source']
+    } | null = null
     // Whether a balance_summary card was rendered from the SSE data part this
     // turn. When true, the message-content fallback still runs to STRIP any
     // leftover echoed JSON from the displayed text, but does not render a second
@@ -367,13 +630,18 @@ export class AgentSession {
       onSuggestions: (suggestions: any[]) => {
         ui.onSuggestions(suggestions)
       },
-      onTxReady: (tx: any) => {
-        if (this.executor.storeServerTransaction(tx)) {
-          serverTxStoredFromStream++
-          if (this.config.password) {
-            this.executor.setPassword(this.config.password)
-          }
+      onToolOutputTx: (payload: TxReadyPayload, toolName: string, source: ToolOutputCandidate['source']) => {
+        // Client-enriched candidate from a `tool-output-available` frame — the sole
+        // sign source (buffered after the stream by `selectAndBufferSignable`).
+        // First-wins per turn: a SECOND signable frame is deferred (the executor
+        // signs one payload per turn); the dropped tool's output stays in the
+        // backend conversation and re-emerges next turn once its on-chain
+        // precondition still holds — fail-safe, never a partial/wrong sign.
+        if (toolOutputCandidate !== null) {
+          this.reportDeferredSignable(ui)
+          return
         }
+        toolOutputCandidate = { payload, toolName, source }
       },
       onBalanceSummary: (raw: unknown) => {
         const card = parseBalanceSummaryEnvelope(raw)
@@ -381,6 +649,12 @@ export class AgentSession {
           balanceCardRendered = true
           ui.onBalanceSummary?.(card)
         }
+      },
+      onTurnOutcome: outcome => {
+        // a2a-02: forward the typed turn-outcome straight through (already
+        // validated by parseTurnOutcome in the client). The ask layer latches it
+        // onto AskResult.outcome for the JSON envelope + exit-code mapping.
+        ui.onTurnOutcome?.(outcome)
       },
       onMessage: (_msg: any) => {
         // Final message received
@@ -390,41 +664,45 @@ export class AgentSession {
       },
     }
 
+    // One key belongs to this exact POST attempt (body + recent_actions). A
+    // recursive continuation calls processMessageLoop again and gets a fresh
+    // key, as does a new user-initiated send after any failure. The one automatic
+    // 401/403 re-POST below deliberately closes over and reuses this key because
+    // it replays the identical attempt. SSE disconnect recovery does not share
+    // or regenerate it: that path only polls GET /messages/since and never
+    // re-POSTs the turn. This lifetime honors the backend's poison-on-failure
+    // contract: only a genuinely new attempt receives a new execution identity.
+    const idempotencyKey = createTurnIdempotencyKey()
+
     // CR2: 401/403 retry at the request boundary so the replay uses the
     // EXACT same request body (same content, same recent_actions). Doing
     // this in sendMessage's catch would re-deliver the original user
     // message and trigger an LLM-loop where it re-emits the same tool
-    // calls forever.
+    // calls forever. withAuthRetry replays this exact closure once on auth
+    // failure; a non-auth error (or a persistent auth failure) rethrows here.
     let streamResult
-    let authRetried = false
-    while (true) {
-      try {
-        streamResult = await this.client.sendMessageStream(
-          this.conversationId,
+    try {
+      streamResult = await this.withAuthRetry(() =>
+        this.client.sendMessageStream(
+          this.conversationId!,
           request,
           callbacks,
-          this.abortController?.signal
+          this.abortController?.signal,
+          idempotencyKey
         )
-        break
-      } catch (err: any) {
-        const isAuthErr = err.message?.includes('401') || err.message?.includes('403')
-        if (isAuthErr && !authRetried) {
-          authRetried = true
-          clearCachedToken(this.publicKey)
-          const auth = await authenticateVault(this.client, this.vault, this.config.password)
-          this.client.setAuthToken(auth.token)
-          saveCachedToken(this.publicKey, auth.token, auth.expiresAt)
-          continue
-        }
-        // Non-401 or already retried: restore the spliced batch so the
-        // caller (or next user turn) can resume from the same queue
-        // state. SF in sendMessage's catch will clear if the user
-        // doesn't retry.
-        if (flushedThisCall.length > 0) {
-          this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
-        }
-        throw err
+      )
+    } catch (err) {
+      // Non-401 or already-retried auth failure: restore the spliced batch so
+      // the caller (or next user turn) can resume from the same queue state.
+      // SF in sendMessage's catch will clear if the user doesn't retry.
+      if (flushedThisCall.length > 0) {
+        this.pendingToolResults = [...flushedThisCall, ...this.pendingToolResults]
       }
+      throw err
+    }
+
+    for (const warning of streamResult.protocolWarnings ?? []) {
+      ui.onProtocolWarning?.(warning)
     }
 
     // Wait for client-side dispatches (they push onto pendingToolResults).
@@ -434,14 +712,15 @@ export class AgentSession {
 
     // Mid-turn disconnect recovery: the SSE stream dropped before the backend
     // delivered the final assistant message. The backend keeps processing on a
-    // detached context and persists the answer (+ any tx_ready card), so poll
+    // detached context and persists the answer, so poll
     // /messages/since to recover what the dropped stream missed. Bounded so a
-    // backend that never persists can't hang the turn. `onTxReady` reuses the
-    // same callback the live stream uses, so a recovered tx_ready flows through
-    // the identical confirm/sign gate below.
+    // backend that never persists can't hang the turn. The recovery path can only
+    // reconstruct the persisted TEXT answer (and balance cards); a signable
+    // tool-output candidate cannot be rebuilt from persisted parts, so a recovered
+    // turn never signs — it warns to re-run (see applyRecoveredMessage).
     if (streamResult.disconnected && !streamResult.message) {
       ui.onReconnecting?.()
-      await this.recoverDisconnectedTurn(streamResult, callbacks.onTxReady, callbacks.onBalanceSummary)
+      await this.recoverDisconnectedTurn(streamResult, callbacks.onBalanceSummary)
     }
 
     // Final message event wins over streamed deltas (which may be partial).
@@ -457,26 +736,28 @@ export class AgentSession {
       ui.onAssistantMessage(displayText)
     }
 
-    // tx_ready → synthetic sign_tx → executor.signTxFromBuffer.
-    // Routed straight to the executor (no Action wrapper); result is
-    // pushed onto pendingToolResults and recursed for the next turn.
-    //
-    // Backend contract: the agent emits at most one tx_ready per stream
-    // turn. storeServerTransaction overwrites a single 'latest' buffer
-    // slot — if the backend ever emits two tx_ready events in one turn,
-    // only the last would be signed. That is not a currently supported
-    // flow; multi-leg sequences use separate turns via recursion.
-    if (serverTxStoredFromStream > 0) {
-      if (this.config.verbose)
-        process.stderr.write(
-          `[session] ${serverTxStoredFromStream} stored server tx from tx_ready, signing client-side\n`
-        )
+    // Tool-output candidate → synthetic sign_tx → executor.signTxFromBuffer.
+    // Routed straight to the executor (no Action wrapper); result is pushed onto
+    // pendingToolResults and recursed for the next turn. One signable tx per turn
+    // — multi-leg approve→main runs within signMultiLeg; multi-step flows advance
+    // across turns via the recursion below.
+    const bufferedSignable = this.selectAndBufferSignable(toolOutputCandidate)
+    if (bufferedSignable) {
+      if (this.config.verbose) process.stderr.write(`[session] buffered a signable server tx, signing client-side\n`)
       // tx_sign_<ts> is a label only — preserves prior log-grep semantics.
       const signToolCallId = `tx_sign_${Date.now()}`
       const recent = await this.runPasswordGatedTool('sign_tx', signToolCallId, ui, () =>
         this.executor.signTxFromBuffer(signToolCallId)
       )
       this.pendingToolResults.push(recent)
+      // A DUPLICATE_BROADCAST refusal (persistent broadcast-journal hit) never
+      // broadcast anything — surface it as a hard error so a headless caller
+      // exits non-zero with a clear, actionable signal instead of reading a
+      // success envelope that hides a silently-failed sign. The failed result is
+      // still queued+recursed above so the backend/LLM learns the sign refused.
+      if (!recent.success && recent.data?.code === AgentErrorCode.DUPLICATE_BROADCAST) {
+        ui.onError(String(recent.data.error ?? 'duplicate broadcast refused'), AgentErrorCode.DUPLICATE_BROADCAST)
+      }
       // Emit tx_status when broadcast succeeded so pipe-mode consumers see it,
       // then poll for the final on-chain outcome (audit F1) so a headless caller
       // learns confirmed/failed/timeout instead of treating broadcast as success.
@@ -502,43 +783,116 @@ export class AgentSession {
   }
 
   /**
+   * Report that a second signable frame arrived in the same turn and was
+   * deferred (the executor signs one payload per turn). Never silent: the
+   * dropped tool's output stays in the backend conversation, so the frame
+   * re-emerges next turn if its on-chain precondition still holds. We neither
+   * fail the turn (risks a no-progress loop) nor overwrite the first (would drop
+   * it unsigned).
+   */
+  private reportDeferredSignable(ui: UICallbacks): void {
+    process.stderr.write(
+      '[session] additional signable tx deferred this turn (one already buffered); it will re-emit next turn if still needed\n'
+    )
+    ui.onNotification?.(
+      'Transaction deferred',
+      'Another signable transaction arrived in the same step; it was deferred and will be offered again on the next step.'
+    )
+  }
+
+  /**
+   * #927 Phase 2 sign gate. Buffer the client-enriched tool-output candidate —
+   * the SOLE signing source — into the executor. Returns true when something was
+   * buffered (signed downstream), false otherwise.
+   *
+   * FAIL-CLOSED, two structural gates:
+   *  1. `deriveToolOutputCandidate` (client.ts) already rejected non-tx envelopes
+   *     (`no_op` / `insufficient_*` / errors) and phantom-card prep envelopes
+   *     (no `tx_encoding`) — so a candidate that reaches here is well-formed.
+   *  2. `payloadLooksSignable` mirrors the executor's real signer requirements
+   *     (`extractNestedTx().to` for EVM; `txArgs.{to,amount}` for non-EVM; both
+   *     legs for multi-leg). A structurally-present-but-unsignable candidate is
+   *     NOT routed to the signer — the mutation-check target for this gate.
+   * `storeServerTransaction` is the final backstop (returns false if it can't
+   * resolve a tx body / cross-chain multi-leg), so a false is never a wrong sign.
+   */
+  private selectAndBufferSignable(
+    toolOutputCandidate: {
+      payload: TxReadyPayload
+      toolName: string
+      source: ToolOutputCandidate['source']
+    } | null
+  ): boolean {
+    if (!toolOutputCandidate) return false
+
+    if (!payloadLooksSignable(toolOutputCandidate.payload)) {
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[session] tool-output candidate (${toolOutputCandidate.toolName}, ${toolOutputCandidate.source}) not structurally signable; not buffering\n`
+        )
+      }
+      return false
+    }
+
+    if (this.executor.storeServerTransaction(toolOutputCandidate.payload)) {
+      if (this.config.password) this.executor.setPassword(this.config.password)
+      if (this.config.verbose) {
+        process.stderr.write(
+          `[session] buffered signable from tool-output (${toolOutputCandidate.toolName}, ${toolOutputCandidate.source})\n`
+        )
+      }
+      return true
+    }
+    return false
+  }
+
+  /**
    * Recover a turn whose SSE stream dropped before delivering the final
    * assistant message. Polls /messages/since (server-clock anchored via
    * X-Server-Now) until the persisted assistant message lands or the bounded
    * budget is exhausted. On success it patches `streamResult.message` so the
-   * normal downstream flow surfaces the answer, and replays any persisted
-   * `data-tx_ready` part through `onTxReady` so a recovered signable card hits
-   * the same confirm/sign gate as a live one.
+   * normal downstream flow surfaces the answer, and replays any persisted balance
+   * card. #927 Phase 2: a signable tx is NEVER recovered — the signable payload
+   * rides tool-output-available, which the persisted parts don't reconstruct — so
+   * a recovered turn that ran a signable tool warns to re-run instead of signing.
    */
   private async recoverDisconnectedTurn(
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): Promise<void> {
     if (!this.conversationId) return
 
     // Prefer the server clock (X-Server-Now, epoch ms); fall back to a slightly
     // back-dated local clock so a missing header can't skew the anchor past the
-    // just-persisted message.
-    //
-    // Fund-safety: the local-clock fallback is only trustworthy enough to
-    // recover the *text* answer. Under clock skew between rapid consecutive
-    // turns, a back-dated local anchor can reach back far enough that
-    // /messages/since returns a PRIOR turn's assistant row; replaying that
-    // row's `data-tx_ready` would route an already-superseded transaction into
-    // the sign gate (and auto-broadcast it under --yes). So signable cards are
-    // replayed only when the anchor came from the server clock — which reliably
-    // excludes earlier turns. A stale recovered *text* answer is at worst a
-    // cosmetic glitch; a stale recovered *transaction* is not.
-    const serverAnchor = serverNowToIso(streamResult.serverNow)
-    const since = serverAnchor ?? new Date(Date.now() - 2000).toISOString()
-    const replaySignableCards = serverAnchor !== null
+    // just-persisted message. The anchor only recovers the TEXT answer (a stale
+    // recovered answer is at worst cosmetic); nothing signable is ever replayed.
+    const since = serverNowToIso(streamResult.serverNow) ?? new Date(Date.now() - 2000).toISOString()
     let cursor: string | undefined
+
+    // A token revoked mid-recovery must self-heal, but re-auth is a full MPC
+    // re-sign — so spend AT MOST ONE per recovery window. The first auth-failing
+    // poll routes through withAuthRetry (clear→reauth→retry once); its onReauth
+    // hook flips authRecovered the instant the re-sign is committed to, so even a
+    // re-auth that itself fails (MPC error, auth endpoint down) can't re-arm. Once
+    // spent, later polls call messagesSince directly with the (best-effort)
+    // refreshed token, so a *persistent* 401 can't trigger an MPC re-sign on every
+    // poll (bounded re-sign work, no key-share amplification). Later polls still
+    // recover the turn if the refreshed token starts working; otherwise the loop
+    // exhausts as before. Without the wrap a revoked token would spin through
+    // recoveryMaxPolls and silently lose the assistant reply / tx_ready (M1).
+    let authRecovered = false
 
     for (let attempt = 0; attempt < this.recoveryMaxPolls; attempt++) {
       let resp
       try {
-        resp = await this.client.messagesSince(this.conversationId, cursor ? { cursor } : { since })
+        resp = authRecovered
+          ? await this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since })
+          : await this.withAuthRetry(
+              () => this.client.messagesSince(this.conversationId!, cursor ? { cursor } : { since }),
+              () => {
+                authRecovered = true
+              }
+            )
       } catch (err: any) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovery poll ${attempt + 1} failed: ${err?.message ?? err}\n`)
@@ -551,29 +905,20 @@ export class AgentSession {
       if (resp.cursor) cursor = resp.cursor
 
       // The detached backend writes the assistant message last; take the newest
-      // assistant row that actually carries content or a recovered card. Newest
-      // (not oldest) is deliberate: a single turn can persist several assistant
-      // rows (clarifier / fast-path ack, then the final answer), and we want the
-      // final one — oldest-after-anchor would surface an early clarifier instead.
-      //
-      // Fund-safety cross-repo invariant: this "newest qualifying row" is only
-      // safe to route to the sign gate because no concurrent writer persists an
-      // *executable* tx_ready (full txArgs/send_tx/swap_tx) into a live
-      // conversation during the recovery window. The single concurrent writer
-      // today — the scheduler — persists an inert `{ proposal_id }` sidecar that
-      // `storeServerTransaction` rejects (no tx envelope → returns false → never
-      // signed). If a future background path ever persists an executable
-      // tx_ready into a shared conversation, this selection + the server-anchor
-      // gate would route it straight to the signer (auto-broadcast under --yes);
-      // such a writer must scope its conversation or this must filter by turn.
+      // assistant row that carries content or a signable tool part. Newest (not
+      // oldest) is deliberate: a single turn can persist several assistant rows
+      // (clarifier / fast-path ack, then the final answer), and we want the final
+      // one — oldest-after-anchor would surface an early clarifier instead. A
+      // signable-tool part qualifies a row even without content so the recovery
+      // can WARN the user that the tx was not signed (see applyRecoveredMessage).
       const assistant = [...resp.messages]
         .reverse()
-        .find(m => m.role === 'assistant' && (!!m.content || hasTxReadyPart(m.parts)))
+        .find(m => m.role === 'assistant' && (!!m.content || hasSignableToolPart(m.parts)))
       if (assistant) {
         if (this.config.verbose) {
           process.stderr.write(`[session] recovered assistant message after ${attempt + 1} poll(s)\n`)
         }
-        this.applyRecoveredMessage(assistant, streamResult, onTxReady, replaySignableCards, onBalanceSummary)
+        this.applyRecoveredMessage(assistant, streamResult, onBalanceSummary)
         return
       }
 
@@ -659,18 +1004,24 @@ export class AgentSession {
     for (let attempt = 0; attempt < this.txConfirmMaxPolls; attempt++) {
       if (this.abortController?.signal?.aborted) return
       try {
-        // TxStatusResult.status is the SDK's exhaustive union
-        // `'pending' | 'success' | 'error'`. Only the two terminal states
-        // resolve the poll; `'pending'` (and, by the type, nothing else) keeps
+        // TxStatusResult.status is the SDK's union
+        // `'pending' | 'success' | 'error' | 'not_found'`. Only the two terminal
+        // on-chain states resolve the poll; `'pending'` and `'not_found'` both keep
         // polling until the budget is spent and we emit `timeout` below — a safe
-        // default since the tx may still confirm later.
+        // default since a not-yet-propagated tx may still confirm later.
         const result = await this.vault.getTxStatus({ chain, txHash })
         if (result.status === 'success') {
           ui.onTxStatus(txHash, chainName ?? '', 'confirmed', explorerUrl)
+          // Resolve the broadcast-journal record: a confirmed tx stays guarded
+          // (re-sending would double-spend), but the terminal status is logged.
+          recordResolution(txHash, 'confirmed')
           return
         }
         if (result.status === 'error') {
           ui.onTxStatus(txHash, chainName ?? '', 'failed', explorerUrl)
+          // A definitive on-chain failure is the ONE resolution that clears the
+          // journal guard so an automatic retry of the same intent is allowed.
+          recordResolution(txHash, 'failed')
           return
         }
       } catch (err: any) {
@@ -691,6 +1042,9 @@ export class AgentSession {
       )
     }
     ui.onTxStatus(txHash, chainName ?? '', 'timeout', explorerUrl)
+    // Timeout is NOT a definitive failure — the tx may still land later — so the
+    // journal keeps the intent guarded. Log the terminal poll status all the same.
+    recordResolution(txHash, 'timeout')
   }
 
   /** Sleep between confirmation polls. Separate method so tests can stub it out. */
@@ -700,41 +1054,49 @@ export class AgentSession {
 
   /**
    * Fold a recovered assistant message back into the live stream result: the
-   * authoritative message wins over any partial deltas, and any persisted
-   * `data-tx_ready` part is replayed through the live tx_ready callback so the
-   * card flows through the same confirm/sign gate.
-   *
-   * `replaySignableCards` gates the tx_ready replay: it is false when the
-   * recovery anchor was the local-clock fallback (no X-Server-Now), where a
-   * recovered card cannot be proven to belong to the current turn. See
-   * recoverDisconnectedTurn — a stale tx_ready must never reach the signer.
+   * authoritative message wins over any partial deltas, and any persisted balance
+   * card is replayed. #927 Phase 2: a signable transaction is NEVER recovered —
+   * the signable payload rides tool-output-available, which the persisted parts
+   * do not reconstruct — so a recovered turn that ran a signable tool warns the
+   * user to re-run rather than signing (fail-CLOSED, never a wrong sign).
    */
   private applyRecoveredMessage(
     msg: ConversationMessage,
     streamResult: SSEStreamResult,
-    onTxReady: ((tx: TxReadyPayload) => void) | undefined,
-    replaySignableCards: boolean,
     onBalanceSummary: ((raw: unknown) => void) | undefined
   ): void {
     streamResult.message = msg
+    let signableToolPart: string | undefined
     for (const part of msg.parts ?? []) {
-      // Balance-summary cards are read-only display, so replay them
-      // UNCONDITIONALLY — they are never gated by replaySignableCards. A stale
+      // Balance-summary cards are read-only display, so replay them. A stale
       // recovered balance card is at worst cosmetic (the live path renders the
-      // same data); only a stale tx_ready is a fund-safety concern. Without this
-      // a balance query whose stream dropped mid-turn recovers the text answer
-      // but silently loses the card.
+      // same data). Without this a balance query whose stream dropped mid-turn
+      // recovers the text answer but silently loses the card.
       if (part.type === 'data-balance_summary' && part.data) {
         onBalanceSummary?.(part.data)
         continue
       }
-      // Signable cards stay gated: a stale tx_ready must never reach the signer
-      // (see recoverDisconnectedTurn's server-anchor rationale).
-      if (replaySignableCards && part.type === 'data-tx_ready' && part.data && typeof part.data === 'object') {
-        const tx = part.data as TxReadyPayload
-        streamResult.transactions.push(tx)
-        onTxReady?.(tx)
+      // Detect a persisted signable tool part (flat: polymarket / build_custom_* /
+      // erc20_approve; prep: execute_*). Their signable output rides the
+      // tool-output-available channel, which the recovery path does NOT
+      // reconstruct. Track it so we can WARN — nothing signable is replayed.
+      if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+        const toolName = part.type.slice('tool-'.length)
+        if (CLI_SIGNABLE_FLAT_TOOLS.has(toolName) || CLI_SIGNABLE_PREP_TOOLS.has(toolName)) {
+          signableToolPart = toolName
+        }
       }
+    }
+    // A mid-turn disconnect on a signable tool cannot have its client-side
+    // candidate reconstructed from the persisted parts, so the transaction is not
+    // signed this turn. Fail-CLOSED (never a wrong sign), but warn LOUDLY rather
+    // than drop it silently — full tool-output replay in recovery is a follow-up.
+    if (signableToolPart) {
+      process.stderr.write(
+        `[session][recovery] recovered turn ran signable tool '${signableToolPart}', whose signable output ` +
+          `rides tool-output-available. The recovery path does not reconstruct that candidate, so NO transaction ` +
+          `was signed this turn — re-run the request to sign.\n`
+      )
     }
   }
 
@@ -815,33 +1177,55 @@ export class AgentSession {
       }
     }
 
+    // Gate signing on whether a password is actually NEEDED, not on the
+    // --password flag. An encrypted vault is unlocked at init from the
+    // keyring/env chain (#899), which also seeds the executor's password, so a
+    // headless session that set VAULT_PASSWORD (or the OS keyring) already has
+    // the secret and must not be re-prompted. Only a still-locked vault with no
+    // executor password requires one — and even then we retry the same
+    // non-interactive chain (cache → keyring → VAULT_PASSWORDS/VAULT_PASSWORD)
+    // before prompting, so #899's "never prompt when the chain resolves"
+    // contract holds at sign time too. Unencrypted vaults are always
+    // "unlocked", so they skip this entirely. `--password` (config.password)
+    // short-circuits the whole block: it was applied to the executor at
+    // construction.
+    //
     // Delay caching the prompted password until after body() succeeds so a
-    // wrong password triggers a re-prompt on the next call rather than
-    // staying silently locked in to a bad value.
+    // wrong password triggers a re-prompt on the next call rather than staying
+    // silently locked in to a bad value.
     let promptedPassword: string | undefined
     if (PASSWORD_REQUIRED_TOOLS.has(toolName) && !this.config.password) {
-      try {
-        promptedPassword = await ui.requestPassword()
-        this.executor.setPassword(promptedPassword)
-      } catch {
-        const failure: RecentAction = {
-          tool: toolName,
-          success: false,
-          data: {
-            error: 'Password not provided',
-            code: AgentErrorCode.PASSWORD_REQUIRED,
-          },
+      const vaultLocked = this.vault.isEncrypted && !this.vault.isUnlocked()
+      const needsPassword = vaultLocked && !this.executor.hasPassword()
+      if (needsPassword) {
+        const resolved = await resolvePasswordNonInteractive(this.vault.id, this.vault.name)
+        if (resolved) {
+          this.executor.setPassword(resolved)
+        } else {
+          try {
+            promptedPassword = await ui.requestPassword()
+            this.executor.setPassword(promptedPassword)
+          } catch {
+            const failure: RecentAction = {
+              tool: toolName,
+              success: false,
+              data: {
+                error: 'Password not provided',
+                code: AgentErrorCode.PASSWORD_REQUIRED,
+              },
+            }
+            ui.onToolCall(toolCallId, toolName, input)
+            ui.onToolResult(
+              toolCallId,
+              toolName,
+              false,
+              failure.data,
+              'Password not provided',
+              AgentErrorCode.PASSWORD_REQUIRED
+            )
+            return failure
+          }
         }
-        ui.onToolCall(toolCallId, toolName, input)
-        ui.onToolResult(
-          toolCallId,
-          toolName,
-          false,
-          failure.data,
-          'Password not provided',
-          AgentErrorCode.PASSWORD_REQUIRED
-        )
-        return failure
       }
     }
 
@@ -875,10 +1259,15 @@ export class AgentSession {
     const handler = CLIENT_SIDE_TOOL_DISPATCH[toolName]
     if (!handler) {
       process.stderr.write(`[cli] unimplemented client-side tool: ${toolName}\n`)
+      // Carry a structured code (not just prose) so the backend/LLM can branch:
+      // TOOL_UNSUPPORTED means this client can't run the tool at all, so retry
+      // is pointless — pick an alternative. This early return pushes straight to
+      // pendingToolResults (bypassing runPasswordGatedTool / ui.onToolResult);
+      // the code reaches the backend on the next flush into context.recent_actions.
       this.pendingToolResults.push({
         tool: toolName,
         success: false,
-        data: { error: `unimplemented in CLI: ${toolName}` },
+        data: { code: AgentErrorCode.TOOL_UNSUPPORTED, error: `unimplemented in CLI: ${toolName}` },
       })
       return
     }
@@ -905,7 +1294,23 @@ export class AgentSession {
     // has no __ prefix and isn't the order ref, so it must be named here or
     // it's dropped and BATCH approvals never auto-submit.
     if (recent.data === undefined) recent.data = {}
+    const requestedAutoSubmit =
+      input.auto_submit === true || input.__pm_auto_submit === true || input.__pm_auto_submit_batch === true
+    if (!this.config.allowAutoSubmit) {
+      // The executor may have derived auto_submit=true from the signed input.
+      // Override that result and withhold the one-time submit tokens: a backend
+      // can request a signature, but only this explicit local flag authorizes it
+      // to turn that signature into a live order.
+      recent.data.auto_submit = false
+      for (const marker of AUTO_SUBMIT_MARKERS) delete recent.data[marker]
+      if (requestedAutoSubmit) {
+        process.stderr.write(
+          '[session] backend requested Polymarket auto-submit; signed payload returned without submit authorization (pass --allow-auto-submit to opt in)\n'
+        )
+      }
+    }
     for (const key of Object.keys(input)) {
+      if (AUTO_SUBMIT_MARKERS.has(key) && !this.config.allowAutoSubmit) continue
       if (key.startsWith('__') || key === 'pm_order_ref' || key === 'pm_batch_ref') {
         recent.data[key] = input[key]
       }
@@ -985,84 +1390,36 @@ export function serverNowToIso(serverNow: string | null): string | null {
   return new Date(ms).toISOString()
 }
 
-/** True if any message part is a persisted `data-tx_ready` signable card. */
-function hasTxReadyPart(parts: ConversationMessage['parts']): boolean {
-  return !!parts?.some(p => p.type === 'data-tx_ready' && !!p.data)
-}
-
-// ============================================================================
-// Agent Token Cache
-//
-// Persists JWT tokens to ~/.vultisig/agent-tokens.json keyed by vault public key.
-// Tokens are reused on startup if not expired, avoiding a costly MPC signing round.
-// ============================================================================
-
-type TokenEntry = { token: string; expiresAt: number }
-type TokenStore = Record<string, TokenEntry>
-
-function getTokenCachePath(): string {
-  const dir = process.env.VULTISIG_CONFIG_DIR ?? join(homedir(), '.vultisig')
-  return join(dir, 'agent-tokens.json')
-}
-
-function readTokenStore(): TokenStore {
-  try {
-    const path = getTokenCachePath()
-    if (!existsSync(path)) return {}
-    return JSON.parse(readFileSync(path, 'utf-8'))
-  } catch {
-    return {}
-  }
-}
-
-function writeTokenStore(store: TokenStore): void {
-  const path = getTokenCachePath()
-  const dir = join(path, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  writeFileSync(path, JSON.stringify(store, null, 2), { mode: 0o600 })
+/**
+ * True if any message part is a persisted signable tool part (`tool-<name>` for
+ * a flat or prep signable tool). Used to qualify a recovered assistant row even
+ * without content, so the recovery path can WARN that the tx was not signed
+ * (#927 Phase 2: the signable payload rides tool-output-available, which the
+ * persisted parts don't reconstruct — nothing signable is ever recovered).
+ */
+function hasSignableToolPart(parts: ConversationMessage['parts']): boolean {
+  return !!parts?.some(p => {
+    if (typeof p.type !== 'string' || !p.type.startsWith('tool-')) return false
+    const toolName = p.type.slice('tool-'.length)
+    return CLI_SIGNABLE_FLAT_TOOLS.has(toolName) || CLI_SIGNABLE_PREP_TOOLS.has(toolName)
+  })
 }
 
 /**
- * Load a cached token for a vault if it exists and hasn't expired.
- * Adds a 60-second buffer to avoid using tokens right at expiry.
+ * Classify a thrown backend error as an auth failure (401/403). The AgentClient
+ * surfaces HTTP status by embedding it in the Error message (e.g.
+ * "Request failed (401): ..."). A word-boundary match keeps every real status
+ * format (`(401)`, `HTTP 401`, bare `401`) while avoiding false positives on
+ * digits embedded in a larger number (a `1401` amount, a `4034` port). We do
+ * NOT tighten to a parens-only shape: a false NEGATIVE silently breaks auth
+ * recovery (the point of this helper), whereas a false positive only costs one
+ * wasted re-auth + an idempotent replay of the exact same request.
  */
-function loadCachedToken(publicKey: string): string | null {
-  const store = readTokenStore()
-  const entry = store[publicKey]
-  if (!entry) return null
-
-  const now = Date.now()
-  const expiresMs = entry.expiresAt * (entry.expiresAt < 1e12 ? 1000 : 1)
-  if (now >= expiresMs - 60_000) {
-    // Expired or about to expire - clean it up
-    delete store[publicKey]
-    try {
-      writeTokenStore(store)
-    } catch {
-      /* ignore */
-    }
-    return null
-  }
-
-  return entry.token
+export function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /\b(401|403)\b/.test(msg)
 }
-
-function saveCachedToken(publicKey: string, token: string, expiresAt: number): void {
-  const store = readTokenStore()
-  store[publicKey] = { token, expiresAt }
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
-}
-
-function clearCachedToken(publicKey: string): void {
-  const store = readTokenStore()
-  delete store[publicKey]
-  try {
-    writeTokenStore(store)
-  } catch {
-    /* ignore */
-  }
-}
+// Re-exported for callers/tests that resolve the agent token-cache path
+// through the session module (the cache itself now lives in ./tokenCache,
+// scoped by vault/backend/profile rather than bare publicKey).
+export { getTokenCachePath }

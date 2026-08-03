@@ -213,6 +213,21 @@ describe('fiatToAmount', () => {
     expect(result).toBe('5')
   })
 
+  it('rejects a case-variant Solana mint instead of using the canonical token price', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+
+    await expect(
+      fiatToAmount({
+        fiatValue: 25,
+        chain: Chain.Solana,
+        tokenId: 'EpjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        decimals: 6,
+      })
+    ).rejects.toThrow(/could not resolve a price provider id/i)
+
+    expect(getCoinPrices).not.toHaveBeenCalled()
+  })
+
   it('resolves EVM USDC on Ethereum via getErc20Prices — no regression', async () => {
     const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
     const usdcAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
@@ -243,6 +258,20 @@ describe('fiatToAmount', () => {
     expect(result).not.toMatch(/e/i)
     expect(result).toMatch(/^0\.\d{1,18}$/)
     expect(parseFloat(result)).toBeCloseTo(1e-10, 20)
+  })
+
+  it('expands large scientific-notation results into plain decimal strings', async () => {
+    const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+    vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 1 })
+
+    const result = await fiatToAmount({
+      fiatValue: 1.5e21,
+      chain: Chain.Ethereum,
+      decimals: 18,
+    })
+
+    expect(result).toBe('1500000000000000000000')
+    expect(result).not.toMatch(/e/i)
   })
 
   it('returns whole-number results without a trailing dot or zeros', async () => {

@@ -1,0 +1,20 @@
+{
+  "_description": "Shared Layer-1 (WalletCore/WASM, packages/core) / Layer-2 (RN-JS/viem, packages/sdk) golden vector for an ERC-20 transfer on Polygon, in BOTH legacy and EIP-1559 form. Read via a plain readFileSync (not an import) by packages/core/mpc/tx/compile/compileTx.golden.test.ts AND packages/sdk/tests/unit/platforms/react-native/tx-builder-golden-vectors.test.ts, since packages/sdk does not depend on packages/core and a file read sidesteps the workspace dependency graph entirely. This is the SINGLE source of truth for this fixture - do not duplicate these values as literals in either test file.",
+  "_calldataNote": "The two families do NOT share calldata construction either: the RN path encodes transfer(recipient, amount) via viem's encodeFunctionData, while WalletCore builds the same calldata internally from its ERC20Transfer proto message. Binding both to one expectedSigningHashHex therefore cross-checks selector + argument packing on top of RLP/typed-envelope encoding. expectedSigningHashHex is keccak-256 of the unsigned envelope - the value fed to MPC signing by both families.",
+  "chainName": "Polygon",
+  "chainId": 137,
+  "nonce": 3,
+  "gasLimit": 65000,
+  "tokenAddress": "0x4444444444444444444444444444444444444444",
+  "recipientAddress": "0x5555555555555555555555555555555555555555",
+  "amountBaseUnits": "987654321000000000",
+  "legacy": {
+    "gasPriceWei": "42000000000",
+    "expectedSigningHashHex": "0x6af2740817e7cf4c0980e77931a791952b11ec6416d203c3c9411d9c85d01720"
+  },
+  "eip1559": {
+    "maxFeePerGasWei": "42000000000",
+    "maxPriorityFeePerGasWei": "2000000000",
+    "expectedSigningHashHex": "0xcac2341f1bf899149c64476b9fa2905483febd7252be7a396c35626115abb473"
+  }
+}

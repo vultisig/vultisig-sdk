@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { AgentErrorCode } from '../agentErrors'
 import { AskInterface } from '../ask'
 import type { AgentSession } from '../session'
 import type { UICallbacks } from '../types'
@@ -26,8 +27,16 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('hello')
 
     expect(result.toolCalls).toHaveLength(2)
-    expect(result.toolCalls[0]).toMatchObject({ action: 'get_balances', success: true, data: { x: 1 } })
-    expect(result.toolCalls[1]).toMatchObject({ action: 'list_vaults', success: false, error: 'failed' })
+    expect(result.toolCalls[0]).toMatchObject({
+      action: 'get_balances',
+      success: true,
+      data: { x: 1 },
+    })
+    expect(result.toolCalls[1]).toMatchObject({
+      action: 'list_vaults',
+      success: false,
+      error: 'failed',
+    })
   })
 
   it('onTxStatus accumulates transactions and records status', async () => {
@@ -43,8 +52,18 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('send')
 
     expect(result.transactions).toEqual([
-      { hash: '0xhash1', chain: 'Ethereum', explorerUrl: 'https://explorer.example/1', status: 'pending' },
-      { hash: '0xhash2', chain: 'Bitcoin', explorerUrl: undefined, status: 'pending' },
+      {
+        hash: '0xhash1',
+        chain: 'Ethereum',
+        explorerUrl: 'https://explorer.example/1',
+        status: 'pending',
+      },
+      {
+        hash: '0xhash2',
+        chain: 'Bitcoin',
+        explorerUrl: undefined,
+        status: 'pending',
+      },
     ])
   })
 
@@ -61,7 +80,12 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('send')
 
     expect(result.transactions).toEqual([
-      { hash: '0xhash1', chain: 'Ethereum', explorerUrl: 'https://explorer.example/1', status: 'confirmed' },
+      {
+        hash: '0xhash1',
+        chain: 'Ethereum',
+        explorerUrl: 'https://explorer.example/1',
+        status: 'confirmed',
+      },
     ])
   })
 
@@ -79,6 +103,26 @@ describe('AskInterface.getCallbacks', () => {
     const result = await ask.ask('q')
 
     expect(result.response).toBe('final answer')
+  })
+
+  it('collects protocol-drift warnings for the machine result', async () => {
+    const warning = {
+      code: 'PROTOCOL_DRIFT' as const,
+      message: 'Ignored 2 unknown SSE frames: data-confirmation',
+      count: 2,
+      eventTypes: ['data-confirmation'],
+    }
+    const session = {
+      getConversationId: () => 'c1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onProtocolWarning?.(warning)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('q')
+
+    expect(result.warnings).toEqual([warning])
   })
 
   it('requestConfirmation defaults to DENY (no --yes) so a misrouted prompt cannot sign', async () => {
@@ -101,5 +145,54 @@ describe('AskInterface.getCallbacks', () => {
     const ask = createAsk()
     const ui = ask.getCallbacks()
     await expect(ui.requestPassword()).rejects.toThrow(/password/i)
+  })
+
+  // Error-latching precedence. SSE/stream `error` frames are non-terminal —
+  // sendMessageStream can emit onError and keep parsing, and the loop can recurse
+  // into later turns. A transient earlier frame must not mask the TERMINAL error
+  // that actually ended the turn (e.g. LOOP_DEPTH_EXCEEDED).
+  it('lets a terminal LOOP_DEPTH_EXCEEDED override a prior NON-terminal error code', async () => {
+    const session = {
+      getConversationId: () => 'conv-1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onError('transient backend hiccup', AgentErrorCode.NETWORK_ERROR)
+        ui.onError('conversation truncated', AgentErrorCode.LOOP_DEPTH_EXCEEDED)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('go')
+
+    expect(result.error?.code).toBe(AgentErrorCode.LOOP_DEPTH_EXCEEDED)
+  })
+
+  it('does NOT let a later non-terminal error overwrite an already-recorded terminal error', async () => {
+    const session = {
+      getConversationId: () => 'conv-1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onError('conversation truncated', AgentErrorCode.LOOP_DEPTH_EXCEEDED)
+        ui.onError('late hiccup', AgentErrorCode.NETWORK_ERROR)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('go')
+
+    expect(result.error?.code).toBe(AgentErrorCode.LOOP_DEPTH_EXCEEDED)
+  })
+
+  it('keeps the FIRST non-terminal error when no terminal error follows (latch unchanged)', async () => {
+    const session = {
+      getConversationId: () => 'conv-1',
+      sendMessage: vi.fn().mockImplementation(async (_message: string, ui: UICallbacks) => {
+        ui.onError('first', AgentErrorCode.NETWORK_ERROR)
+        ui.onError('second', AgentErrorCode.TIMEOUT)
+      }),
+    } as unknown as AgentSession
+
+    const ask = new AskInterface(session)
+    const result = await ask.ask('go')
+
+    expect(result.error?.code).toBe(AgentErrorCode.NETWORK_ERROR)
   })
 })

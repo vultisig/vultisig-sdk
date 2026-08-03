@@ -31,7 +31,7 @@ export { executeBroadcast } from './broadcast'
 
 // Transaction status command
 export type { TxStatusParams } from './tx-status'
-export { executeTxStatus } from './tx-status'
+export { executeTxStatus, resolveTxStatusParams } from './tx-status'
 
 // Vault management commands
 export type {

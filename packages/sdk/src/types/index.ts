@@ -8,7 +8,7 @@ export type { ChainKind } from '@vultisig/core-chain/ChainKind'
 export type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 export type { Coin } from '@vultisig/core-chain/coin/Coin'
 export type { PublicKeys } from '@vultisig/core-chain/publicKey/PublicKeys'
-export type { TxReceiptInfo } from '@vultisig/core-chain/tx/status'
+export type { TxReceiptInfo, TxStatusInput } from '@vultisig/core-chain/tx/status'
 export type { TxStatusResult } from '@vultisig/core-chain/tx/status/resolver'
 export type { FiatCurrency } from '@vultisig/core-config/FiatCurrency'
 export type { MpcServerType } from '@vultisig/core-mpc/MpcServerType'
@@ -168,11 +168,12 @@ export type Signature = {
   signature: string
   recovery?: number
   format: 'DER' | 'ECDSA' | 'EdDSA' | 'Ed25519' | 'MLDSA'
-  // For UTXO chains with multiple inputs, includes all signatures
+  // For transactions with multiple message hashes, includes each signature's metadata.
   signatures?: Array<{
     r: string
     s: string
     der: string
+    recovery?: number
   }>
   // ML-DSA-44 post-quantum signature (hex-encoded), present when vault has MLDSA keys
   mldsaSignature?: string
@@ -615,7 +616,20 @@ export type Portfolio = {
 
 export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
-  | { dryRun: true; fee: string; total: string; keysignPayload: KeysignPayload }
+  | {
+      dryRun: true
+      /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
+      fee: string
+      /** Ticker of the asset the fee is paid in — always the chain's native asset. */
+      feeSymbol: string
+      /**
+       * What the send costs in the asset being sent, comparable against that
+       * asset's balance: `amount` for a token send (the fee is paid separately
+       * in the native asset), `amount + fee` for a native send.
+       */
+      total: string
+      keysignPayload: KeysignPayload
+    }
 
 export type CompoundSwapResult =
   | { dryRun: false; txHash: string; chain: Chain; quote: SwapQuoteResult }

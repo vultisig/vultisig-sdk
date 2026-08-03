@@ -19,6 +19,10 @@ type Input = {
 }
 
 export const getPublicKey = ({ chain, walletCore, hexChainCode, publicKeys, chainPublicKeys }: Input) => {
+  if (!chain) {
+    throw new Error('getPublicKey: chain is required')
+  }
+
   if (chain === Chain.QBTC) {
     throw new Error('QBTC uses MLDSA; use vault.publicKeyMldsa and deriveQbtcAddress instead of WalletCore public keys')
   }

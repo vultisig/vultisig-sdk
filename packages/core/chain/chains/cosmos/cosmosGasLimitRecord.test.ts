@@ -6,7 +6,15 @@ import { getCosmosGasLimit, getCosmosStakingGasLimit } from './cosmosGasLimitRec
 describe('cosmosGasLimitRecord', () => {
   it('keeps existing send gas limits unchanged', () => {
     expect(getCosmosGasLimit({ chain: Chain.Cosmos })).toBe(200_000n)
-    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(1_000_000n)
+  })
+
+  it('uses 300000 for every TerraClassic send denom to match iOS/Android SignDoc', () => {
+    // The gas limit is part of the pre-sign image; iOS (TerraHelperStruct)
+    // and Android (CosmosHelper.getChainGasLimit) hardcode 300000 for all
+    // columbus-5 sends, so cross-device co-signing requires the same value
+    // here regardless of denom (uluna, uusd, ...).
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uluna' })).toBe(300_000n)
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(300_000n)
   })
 
   it('returns higher staking gas limits and scales bulk reward claim messages', () => {

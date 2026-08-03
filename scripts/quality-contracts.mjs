@@ -490,8 +490,8 @@ function packedMcpBinSmoke(workRoot, tgzPath, sdkTgzPath, clientSharedTgzPath) {
 }
 
 function main() {
-  smokeCli()
   assertSdkBuilt()
+  smokeCli()
 
   let workRoot
   try {

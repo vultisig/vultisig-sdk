@@ -158,6 +158,72 @@ describe('findSwapQuote external recipient', () => {
     expect(getCowSwapQuote).not.toHaveBeenCalled()
   })
 
+  // All three canonical EVM burns are vetted via the shared table — incl. the 0xdead…42069 variant the
+  // old inline copy MISSED (#1193). Shape-based + case-insensitive.
+  it.each([
+    ['0x0000000000000000000000000000000000000000'],
+    ['0x000000000000000000000000000000000000dEaD'],
+    ['0xdEaD000000000000000042069420694206942069'],
+  ])(
+    'throws InvalidConfig for a zero/burn recipient %s before any provider (the swap output would be unrecoverable)',
+    async burn => {
+      await expect(
+        findSwapQuote({ from: erc20A, to: erc20B, amount: 1_000_000n, recipient: burn })
+      ).rejects.toMatchObject({
+        code: SwapErrorCode.InvalidConfig,
+        message: expect.stringContaining('unrecoverable'),
+      })
+      expect(getCowSwapQuote).not.toHaveBeenCalled()
+      expect(getNativeSwapQuote).not.toHaveBeenCalled()
+      expect(getKyberSwapQuote).not.toHaveBeenCalled()
+      expect(getOneInchSwapQuote).not.toHaveBeenCalled()
+      expect(getLifiSwapQuote).not.toHaveBeenCalled()
+      expect(getSwapKitQuote).not.toHaveBeenCalled()
+    }
+  )
+
+  // Non-EVM (base58) burn — the old inline copy checked EVM only. The shared table's chain-keyed lists
+  // catch a family-specific black-hole on the destination chain (#1193).
+  it.each([
+    ['1nc1nerator11111111111111111111111111111111'], // Solana Incinerator
+    ['So11111111111111111111111111111111111111112'], // Wrapped SOL mint (a program, not a wallet)
+  ])('throws InvalidConfig for a Solana burn/program recipient %s before any provider', async burn => {
+    const solTo = { chain: Chain.Solana, address: 'soLsender', id: 'someSplMint', decimals: 6, ticker: 'SPL' }
+    await expect(findSwapQuote({ from: erc20A, to: solTo, amount: 1_000_000n, recipient: burn })).rejects.toMatchObject(
+      {
+        code: SwapErrorCode.InvalidConfig,
+        message: expect.stringContaining('unrecoverable'),
+      }
+    )
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
+  it('rejects a 0X-prefixed (uppercase-X) burn recipient on a cross-chain native route', async () => {
+    // Regression: the case-sensitive isEvmAddress gate let `0X…dead` bypass the zero/burn
+    // check. On a BTC→ETH THORChain route the CowSwap path is unreachable, so the bypassed
+    // burn was passed straight through as the swap destination — an unrecoverable sink.
+    // assertValidCustomRecipient runs before any provider, so this throws up front.
+    vi.mocked(getNativeSwapQuote).mockResolvedValue({
+      expected_amount_out: '10000000',
+      swapChain: Chain.THORChain,
+    } as never)
+
+    await expect(
+      findSwapQuote({
+        from: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        to: { chain: Chain.Ethereum, address: '0xowner', decimals: 18, ticker: 'ETH' },
+        amount: 1_000_000n,
+        recipient: '0X000000000000000000000000000000000000dEaD',
+      })
+    ).rejects.toMatchObject({
+      code: SwapErrorCode.InvalidConfig,
+      // Message format is now sourced from the shared dangerousAddresses table (#1193),
+      // which always ends with "... — the swap output would be unrecoverable."
+      message: expect.stringContaining('unrecoverable'),
+    })
+    expect(getNativeSwapQuote).not.toHaveBeenCalled()
+  })
+
   it('accepts a valid 40-hex EVM address and forwards it to CowSwap as receiver', async () => {
     vi.mocked(getCowSwapQuote).mockResolvedValue(generalQuote)
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))

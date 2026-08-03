@@ -23,10 +23,13 @@ describe('estimateCosmosSwapFeeLabel', () => {
     expect(estimateCosmosSwapFeeLabel(Chain.Osmosis)).toBe('~0.009 OSMO')
   })
 
-  // TerraClassic carries the 100 LUNC sign-time fee. This is the highest-blast
-  // assertion: under-displaying it would badly mislead the user.
-  it('formats the canonical TerraClassic swap fee (100_000_000 uluna = 100 LUNC)', () => {
-    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~100 LUNC')
+  // TerraClassic is now priced from the chain's own gas price rather than a
+  // hand-tuned constant: 300_000 × 28.325 uluna/gas. (Was a flat 20 LUNC, and
+  // 100 LUNC before that.) The label deliberately excludes the x/tax burn tax —
+  // that is 0.5% OF THE TRANSFER, and this amount-independent estimate has
+  // nothing to apply it to; the signer adds it at payload-build time.
+  it('formats the canonical TerraClassic swap fee (8_497_500 uluna = 8.4975 LUNC)', () => {
+    expect(estimateCosmosSwapFeeLabel(Chain.TerraClassic)).toBe('~8.4975 LUNC')
   })
 
   // Terra (phoenix-1, LUNA) must not be confused with TerraClassic (columbus-5,
@@ -97,8 +100,8 @@ describe('getCosmosGasLimit (re-export from core-chain)', () => {
     expect(getCosmosGasLimit({ chain: Chain.Osmosis, id: 'uosmo' })).toBe(300_000n)
   })
 
-  it('applies the TerraClassic uusd burn-tax override (1M)', () => {
-    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(1_000_000n)
-    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uluna' })).toBe(400_000n)
+  it('uses 300000 for all TerraClassic send denoms (matches iOS/Android SignDoc)', () => {
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })).toBe(300_000n)
+    expect(getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uluna' })).toBe(300_000n)
   })
 })

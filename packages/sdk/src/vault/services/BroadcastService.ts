@@ -5,6 +5,7 @@ import { decodeSigningOutput } from '@vultisig/core-chain/tw/signingOutput'
 import { broadcastTx as coreBroadcastTx } from '@vultisig/core-chain/tx/broadcast'
 import { getTxHash } from '@vultisig/core-chain/tx/hash'
 import { getEncodedSigningInputs } from '@vultisig/core-mpc/keysign/signingInputs'
+import { assertNativeSwapReadyForBroadcast } from '@vultisig/core-mpc/keysign/swap/assertNativeSwapReadyForBroadcast'
 import { getKeysignTwPublicKey } from '@vultisig/core-mpc/keysign/tw/getKeysignTwPublicKey'
 import { compileTx } from '@vultisig/core-mpc/tx/compile/compileTx'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
@@ -13,7 +14,57 @@ import type { WasmProvider } from '../../context/SdkContext'
 import type { Signature } from '../../types'
 import { convertToKeysignSignatures } from '../utils/convertSignature'
 import { VaultError, VaultErrorCode } from '../VaultError'
-import { assertNativeSwapReadyForBroadcast } from './nativeSwapBroadcastGuard'
+
+/**
+ * Broadcast resolvers return `Promise<unknown>` and are inconsistent in shape: utxo/cardano
+ * resolve a bare hash string, tron resolves the raw RPC response object (`{ txid, ... }`), and
+ * most others (evm/cosmos/sui/ripple/ton/polkadot/bittensor) resolve void. When the resolver DID
+ * echo back a hash, prefer it over a locally re-derived one - it is the node's own authoritative
+ * value, not a client-side guess about what the node will have computed.
+ */
+const extractResolverTxHash = (broadcastResult: unknown): string | undefined => {
+  if (typeof broadcastResult === 'string' && broadcastResult.length > 0) {
+    return broadcastResult
+  }
+  if (
+    broadcastResult &&
+    typeof broadcastResult === 'object' &&
+    'txid' in broadcastResult &&
+    typeof (broadcastResult as { txid?: unknown }).txid === 'string' &&
+    (broadcastResult as { txid: string }).txid.length > 0
+  ) {
+    return (broadcastResult as { txid: string }).txid
+  }
+  return undefined
+}
+
+type BroadcastPartialFailureInput = {
+  chain: Chain
+  broadcastedTxHashes: string[]
+  failedInputIndex: number
+  cause: unknown
+}
+
+export class BroadcastPartialFailureError extends Error {
+  readonly broadcastedTxHashes: string[]
+  readonly failedInputIndex: number
+  readonly originalError?: Error
+
+  constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
+    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+    super(
+      `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
+        broadcastedTxHashes.length
+      } transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
+        ', '
+      )}`
+    )
+    this.name = 'BroadcastPartialFailureError'
+    this.broadcastedTxHashes = broadcastedTxHashes
+    this.failedInputIndex = failedInputIndex
+    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+  }
+}
 
 /**
  * BroadcastService
@@ -30,7 +81,8 @@ import { assertNativeSwapReadyForBroadcast } from './nativeSwapBroadcastGuard'
 export class BroadcastService {
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
-    private wasmProvider: WasmProvider
+    private wasmProvider: WasmProvider,
+    private broadcastTransaction: typeof coreBroadcastTx = coreBroadcastTx
   ) {}
 
   /**
@@ -102,23 +154,43 @@ export class BroadcastService {
       // Broadcast all transaction inputs (e.g., approve + swap for EVM token flows).
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
-      for (const txInputData of txInputsArray) {
+      const broadcastedTxHashes: string[] = []
+      for (const [index, txInputData] of txInputsArray.entries()) {
         const compiledTx = compileTx({
           publicKey,
           txInputData,
           signatures: keysignSignatures,
           chain,
           walletCore,
+          // Required for payload-keyed compile branches (signSolana raw
+          // transactions splice the signature into the original bytes,
+          // sdk#1204 — matches the keysignPayload extractMessageHashes
+          // already passes to getPreSigningHashes).
+          keysignPayload,
         })
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
+        let broadcastResult: unknown
+        try {
+          broadcastResult = await this.broadcastTransaction({
+            chain,
+            tx: signingOutput,
+          })
+        } catch (error) {
+          if (broadcastedTxHashes.length > 0) {
+            throw new BroadcastPartialFailureError({
+              chain,
+              broadcastedTxHashes,
+              failedInputIndex: index,
+              cause: error,
+            })
+          }
+          throw error
+        }
 
-        await coreBroadcastTx({
-          chain,
-          tx: signingOutput,
-        })
-
-        txHash = await getTxHash({ chain, tx: signingOutput })
+        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        broadcastedTxHashes.push(inputTxHash)
+        txHash = inputTxHash
       }
 
       return txHash

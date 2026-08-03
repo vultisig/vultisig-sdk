@@ -1,6 +1,8 @@
 import chalk from 'chalk'
 import ora, { type Ora } from 'ora'
 
+import { ConfirmationRequiredError } from '../core/errors'
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -37,9 +39,30 @@ export function isNonInteractive(): boolean {
   return nonInteractive
 }
 
+/**
+ * Resolve whether the session is non-interactive.
+ *
+ * Two signals force non-interactive, both fail-closed:
+ * - a non-TTY **stdout** is the machine-output (JSON) channel — rendering an inquirer
+ *   prompt there corrupts it — mirroring how `--output` already defaults to json when
+ *   stdout is not a TTY;
+ * - a non-TTY **stdin** means there is no human to answer, and inquirer would otherwise
+ *   consume piped bytes as answers (e.g. a piped `y` silently confirming a send).
+ */
+export function resolveNonInteractive(
+  explicit: boolean,
+  stdout: { isTTY?: boolean } = process.stdout,
+  stdin: { isTTY?: boolean } = process.stdin
+): boolean {
+  return explicit || !stdout.isTTY || !stdin.isTTY
+}
+
 export function requireInteractive(hint: string): void {
   if (nonInteractive) {
-    throw new Error(`Interactive prompt required but --non-interactive is set. ${hint}`)
+    throw new ConfirmationRequiredError(
+      'Interactive input required but the session is non-interactive (piped/redirected stdout or stdin, or --non-interactive/--ci).',
+      hint
+    )
   }
 }
 

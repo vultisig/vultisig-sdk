@@ -1,12 +1,15 @@
 import { CosmosChain } from '@vultisig/core-chain/Chain'
+import { getAllCosmosBalances } from '@vultisig/core-chain/chains/cosmos/account/getAllCosmosBalances'
 import { getCosmosClient } from '@vultisig/core-chain/chains/cosmos/client'
 import { cosmosFeeCoinDenom } from '@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom'
+import { bruneBondConfig } from '@vultisig/core-chain/chains/cosmos/thor/brune-bond/config'
 import { tcyAutoCompounderConfig } from '@vultisig/core-chain/chains/cosmos/thor/tcy-autocompound/config'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { CoinMetadata } from '@vultisig/core-chain/coin/Coin'
 import { FindCoinsResolver } from '@vultisig/core-chain/coin/find/resolver'
 import { getCosmosTokenMetadata } from '@vultisig/core-chain/coin/token/metadata/resolvers/cosmos'
 import { without } from '@vultisig/lib-utils/array/without'
+import { attempt } from '@vultisig/lib-utils/attempt'
 
 const AUTO_DISCOVERY_CHAINS = new Set<CosmosChain>([
   CosmosChain.THORChain,
@@ -64,13 +67,19 @@ const getDiscoveredDenom = async (chain: CosmosChain, denom: string): Promise<Di
 export const findCosmosCoins: FindCoinsResolver<CosmosChain> = async ({ address, chain }) => {
   if (!AUTO_DISCOVERY_CHAINS.has(chain)) return []
 
-  const client = await getCosmosClient(chain)
-  const balances = await client.getAllBalances(address)
+  // Prefer the LCD path, which paginates over every denom. cosmjs's
+  // getAllBalances issues a single unpaginated query capped at the node's
+  // default page limit (100), silently dropping tokens past 100 on IBC-heavy
+  // wallets. Fall back to cosmjs on any LCD failure so we never regress below
+  // today's behavior.
+  const { data: lcdBalances } = await attempt(getAllCosmosBalances(chain, address))
+  const balances = lcdBalances ?? (await (await getCosmosClient(chain)).getAllBalances(address))
   const coins = await Promise.all(
     without(
       balances.map(({ denom }) => denom),
       cosmosFeeCoinDenom[chain],
-      tcyAutoCompounderConfig.shareDenom
+      tcyAutoCompounderConfig.shareDenom,
+      bruneBondConfig.shareDenom
     ).map(denom => getDiscoveredDenom(chain, denom))
   )
 

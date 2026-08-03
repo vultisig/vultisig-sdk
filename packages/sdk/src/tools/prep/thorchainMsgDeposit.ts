@@ -3,6 +3,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
+import { assertValidThorchainDepositMemo } from '@vultisig/core-chain/swap/native/thorchainDepositMemo'
 // Import THOR/Maya resolvers directly rather than going through the
 // `keysign/chainSpecific` barrel — the barrel imports every chain's
 // resolver (TON, Tron, Polkadot, …), which pulls in their per-chain
@@ -64,6 +65,7 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
   if (!memo) {
     throw new Error('prepareThorchainMsgDepositTxFromKeys: memo is required')
   }
+  assertValidThorchainDepositMemo(memo)
 
   const walletCore = walletCoreOverride ?? (await getWalletCore())
 
@@ -91,12 +93,19 @@ export const prepareThorchainMsgDepositTxFromKeys = async (
   })
 
   // Dispatch directly to the per-chain resolver so we don't pull the
-  // full `getChainSpecific` barrel (see import comment).
-  const resolver = coin.chain === Chain.THORChain ? getThorchainChainSpecific : getMayaChainSpecific
-  const value = await resolver({ keysignPayload, walletCore, isDeposit: true })
-  keysignPayload.blockchainSpecific = {
-    case: coin.chain === Chain.THORChain ? 'thorchainSpecific' : 'mayaSpecific',
-    value: value as any,
+  // full `getChainSpecific` barrel (see import comment). Branched (rather
+  // than picking a resolver reference and reusing one `case`/`value` pair)
+  // so each branch's literal `case` and its resolver's return type stay
+  // statically paired by the KeysignPayload oneof — a mismatch between the
+  // two (e.g. a future refactor swapping one resolver but not the other)
+  // fails at compile time instead of being silently accepted by an
+  // `as any` cast (SDK-CORRECTNESS-08).
+  if (coin.chain === Chain.THORChain) {
+    const value = await getThorchainChainSpecific({ keysignPayload, walletCore, isDeposit: true })
+    keysignPayload.blockchainSpecific = { case: 'thorchainSpecific', value }
+  } else {
+    const value = await getMayaChainSpecific({ keysignPayload, walletCore, isDeposit: true })
+    keysignPayload.blockchainSpecific = { case: 'mayaSpecific', value }
   }
 
   return keysignPayload

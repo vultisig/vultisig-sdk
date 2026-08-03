@@ -6,9 +6,8 @@
  */
 import { randomBytes } from 'node:crypto'
 
-import { keccak_256 } from '@noble/hashes/sha3.js'
 import type { VaultBase } from '@vultisig/sdk'
-import { Chain } from '@vultisig/sdk'
+import { Chain, computePersonalSignHash, formatEcdsaSignature65 } from '@vultisig/sdk'
 
 import type { AgentClient } from './client'
 
@@ -28,7 +27,7 @@ export async function authenticateVault(
   vault: VaultBase,
   password?: string,
   maxAttempts = 3
-): Promise<{ token: string; expiresAt: number }> {
+): Promise<{ token: string; expiresAt: number; refreshToken?: string }> {
   // Get vault keys
   const publicKey = vault.publicKeys.ecdsa
   const chainCode = vault.hexChainCode
@@ -64,7 +63,10 @@ export async function authenticateVault(
       const signature = await vault.signBytes({ data: Buffer.from(messageHash), chain: Chain.Ethereum }, {})
 
       // Format signature as 65-byte hex (r + s + v)
-      const sigHex = formatSignature65(signature.signature, signature.recovery ?? 0)
+      if (signature.recovery === undefined) {
+        throw new Error('Agent authentication requires an ECDSA recovery id')
+      }
+      const sigHex = formatEcdsaSignature65(signature.signature, signature.recovery)
 
       // Authenticate with the backend
       const authResponse = await client.authenticate({
@@ -77,6 +79,12 @@ export async function authenticateVault(
       return {
         token: authResponse.token,
         expiresAt: authResponse.expires_at,
+        // Captured + persisted by the session token cache. The backend exposes
+        // POST /auth/refresh to exchange it for a fresh access token without a
+        // new MPC round; wiring that exchange is a future enhancement — today
+        // the CLI re-auths via a full MPC re-sign (authenticateVault), which is
+        // always available and avoids depending on refresh-token rotation.
+        refreshToken: authResponse.refresh_token,
       }
     } catch (err: any) {
       lastError = err
@@ -90,100 +98,5 @@ export async function authenticateVault(
   throw lastError || new Error('Authentication failed after all attempts')
 }
 
-/**
- * Compute EIP-191 personal_sign hash.
- *
- * Hash = keccak256("\x19Ethereum Signed Message:\n" + len(message) + message)
- *
- * Returns 32-byte Uint8Array hash.
- */
-function computePersonalSignHash(message: string): Uint8Array {
-  const messageBytes = new TextEncoder().encode(message)
-  const prefix = `\x19Ethereum Signed Message:\n${messageBytes.length}`
-  const prefixBytes = new TextEncoder().encode(prefix)
-
-  // Concatenate prefix + message
-  const combined = new Uint8Array(prefixBytes.length + messageBytes.length)
-  combined.set(prefixBytes)
-  combined.set(messageBytes, prefixBytes.length)
-
-  return keccak_256(combined)
-}
-
-/**
- * Format a DER-encoded ECDSA signature into 65-byte hex string (r || s || v).
- *
- * The SDK returns signature as DER-encoded hex for ECDSA.
- * The backend expects raw r || s || v (65 bytes total).
- * v = 27 or 28 (from recovery id 0 or 1).
- */
-function formatSignature65(sigHex: string, recovery: number): string {
-  // Remove 0x prefix if present
-  const hex = sigHex.startsWith('0x') ? sigHex.slice(2) : sigHex
-  const bytes = Buffer.from(hex, 'hex')
-
-  // Check if DER-encoded (starts with 0x30 = SEQUENCE)
-  if (bytes[0] === 0x30) {
-    const { r, s } = decodeDERSignature(bytes)
-    const v = (recovery + 27).toString(16).padStart(2, '0')
-    return r + s + v
-  }
-
-  // If already raw format (128 hex chars = 64 bytes r+s)
-  if (hex.length >= 128) {
-    const rs = hex.slice(0, 128)
-    const v = (recovery + 27).toString(16).padStart(2, '0')
-    return rs + v
-  }
-
-  throw new Error(`Cannot format signature: unrecognized format (${hex.length} hex chars)`)
-}
-
-/**
- * Decode a DER-encoded ECDSA signature into 32-byte r and s values.
- *
- * DER format:
- *   30 <total_len>
- *     02 <r_len> <r_bytes>
- *     02 <s_len> <s_bytes>
- *
- * Returns r and s as 32-byte zero-padded hex strings.
- */
-function decodeDERSignature(der: Buffer): { r: string; s: string } {
-  let offset = 0
-
-  // SEQUENCE tag
-  if (der[offset++] !== 0x30) throw new Error('Invalid DER: expected SEQUENCE')
-  offset++ // skip total length
-
-  // INTEGER for r
-  if (der[offset++] !== 0x02) throw new Error('Invalid DER: expected INTEGER for r')
-  const rLen = der[offset++]
-  const rBytes = der.subarray(offset, offset + rLen)
-  offset += rLen
-
-  // INTEGER for s
-  if (der[offset++] !== 0x02) throw new Error('Invalid DER: expected INTEGER for s')
-  const sLen = der[offset++]
-  const sBytes = der.subarray(offset, offset + sLen)
-
-  // Strip leading zero bytes (used for positive sign in DER) and pad to 32 bytes
-  const r = padTo32Bytes(stripLeadingZeros(rBytes))
-  const s = padTo32Bytes(stripLeadingZeros(sBytes))
-
-  return { r, s }
-}
-
-function stripLeadingZeros(buf: Buffer | Uint8Array): Buffer {
-  let start = 0
-  while (start < buf.length - 1 && buf[start] === 0) start++
-  return Buffer.from(buf.subarray(start))
-}
-
-function padTo32Bytes(buf: Buffer): string {
-  if (buf.length > 32) {
-    // Take the last 32 bytes
-    return buf.subarray(buf.length - 32).toString('hex')
-  }
-  return buf.toString('hex').padStart(64, '0')
-}
+// Backwards-compatible test/import aliases while the CLI consumes the public SDK helpers.
+export { computePersonalSignHash, formatEcdsaSignature65 as formatSignature65 }

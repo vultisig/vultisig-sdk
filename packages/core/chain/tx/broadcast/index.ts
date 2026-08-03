@@ -13,6 +13,7 @@ import { broadcastSuiTx } from './resolvers/sui'
 import { broadcastTonTx } from './resolvers/ton'
 import { broadcastTronTx } from './resolvers/tron'
 import { broadcastUtxoTx } from './resolvers/utxo'
+import { withTransientBroadcastRetry } from './transientRetry'
 
 const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   bittensor: broadcastBittensorTx,
@@ -29,4 +30,15 @@ const resolvers: Record<ChainKind, BroadcastTxResolver<any>> = {
   tron: broadcastTronTx,
 }
 
-export const broadcastTx: BroadcastTxResolver = input => resolvers[getChainKind(input.chain)](input)
+const hasResolverOwnedRetry = (chainKind: ChainKind): boolean => chainKind === 'evm' || chainKind === 'solana'
+
+export const broadcastTx: BroadcastTxResolver = input => {
+  const chainKind = getChainKind(input.chain)
+  const resolver = resolvers[chainKind]
+
+  if (hasResolverOwnedRetry(chainKind)) {
+    return resolver(input)
+  }
+
+  return withTransientBroadcastRetry(() => resolver(input))
+}

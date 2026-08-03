@@ -1,5 +1,11 @@
 # @vultisig/walletcore-native
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1541](https://github.com/vultisig/vultisig-sdk/pull/1541) [`b9f81af`](https://github.com/vultisig/vultisig-sdk/commit/b9f81af9065a5c0bfc2f86f8fb20aa51e670ab77) Thanks [@realpaaao](https://github.com/realpaaao)! - Add Robinhood Chain (Arbitrum Orbit EVM L2, chain id 4663, ETH gas). Swaps enabled via LiFi and KyberSwap.
+
 ## 0.1.2
 
 ### Patch Changes

@@ -60,6 +60,26 @@ describe('findSwapQuote (tools/swap)', () => {
     })
   })
 
+  it('forwards slippageTolerance and recipient to core (previously dropped)', async () => {
+    core.mockResolvedValue({} as Awaited<ReturnType<typeof findSwapQuote>>)
+
+    await findSwapQuote({
+      fromChain: Chain.Ethereum,
+      fromAddress: '0xfrom',
+      fromSymbol: 'ETH',
+      fromDecimals: 18,
+      toChain: Chain.Arbitrum,
+      toAddress: '0xto',
+      toSymbol: 'USDC',
+      toDecimals: 6,
+      amount: 1_000_000_000_000_000_000n,
+      slippageTolerance: 3,
+      recipient: '0xrecipient',
+    })
+
+    expect(core).toHaveBeenCalledWith(expect.objectContaining({ slippageTolerance: 3, recipient: '0xrecipient' }))
+  })
+
   it('propagates rejection from core findSwapQuote', async () => {
     core.mockRejectedValue(new Error('no routes'))
 

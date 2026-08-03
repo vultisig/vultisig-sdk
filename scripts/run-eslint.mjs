@@ -5,8 +5,11 @@ import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { formatCiToolchain } from './toolchain-package-manager.mjs'
+
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const eslintCli = join(repoRoot, 'node_modules', 'eslint', 'bin', 'eslint.js')
+const ciToolchain = formatCiToolchain(repoRoot)
 
 if (!existsSync(eslintCli)) {
   process.stderr.write(
@@ -17,7 +20,7 @@ if (!existsSync(eslintCli)) {
       '  corepack enable',
       '  yarn install --immutable',
       '',
-      'Then rerun `yarn lint`. CI uses Yarn 4.13.0 and the repo-local ESLint binary.',
+      `Then rerun \`yarn lint\`. CI uses ${ciToolchain} and the repo-local ESLint binary.`,
     ].join('\n') + '\n'
   )
   process.exit(127)

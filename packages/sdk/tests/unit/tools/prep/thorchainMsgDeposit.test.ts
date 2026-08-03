@@ -173,4 +173,47 @@ describe('prepareThorchainMsgDepositTxFromKeys', () => {
       })
     ).rejects.toThrow(/memo is required/)
   })
+
+  // SDK-CORRECTNESS-06: prepareThorchainMsgDepositTxFromKeys used to pass an
+  // arbitrary memo through with no structural validation, unlike the fully
+  // validated limit-swap memo path — a malformed memo would sign a
+  // value-bearing MsgDeposit.
+  it('rejects a memo with an unrecognized action prefix', async () => {
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: thorCoin,
+        amountBaseUnits: 100_000_000n,
+        memo: 'garbage:whatever',
+      })
+    ).rejects.toThrow(/not a recognized THORChain\/MayaChain deposit memo action/)
+  })
+
+  it('rejects an LP add memo with a malformed pool id', async () => {
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: thorCoin,
+        amountBaseUnits: 100_000_000n,
+        memo: '+:not-a-pool',
+      })
+    ).rejects.toThrow(/not a valid THORChain pool id/)
+  })
+
+  it('rejects a memo with non-printable characters', async () => {
+    await expect(
+      prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+        coin: thorCoin,
+        amountBaseUnits: 100_000_000n,
+        memo: '+:BTC.BTC\n:evil',
+      })
+    ).rejects.toThrow(/printable ASCII/)
+  })
+
+  it('accepts a non-LP recognized deposit action without validating a pool id', async () => {
+    const result = await prepareThorchainMsgDepositTxFromKeys(baseIdentity, {
+      coin: thorCoin,
+      amountBaseUnits: 100_000_000n,
+      memo: 'bond:thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm',
+    })
+    expect(result.memo).toBe('bond:thor149ekc6vu5ez775hd7y7ukgdq86e43t88pk7njm')
+  })
 })

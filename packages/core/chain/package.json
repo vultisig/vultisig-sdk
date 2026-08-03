@@ -1,6 +1,6 @@
 {
   "name": "@vultisig/core-chain",
-  "version": "2.17.8",
+  "version": "2.31.0",
   "description": "Blockchain chain logic shared across Vultisig clients",
   "license": "MIT",
   "repository": {
@@ -19,6 +19,11 @@
       "types": "./dist/amount/fromChainAmount.d.ts",
       "import": "./dist/amount/fromChainAmount.js",
       "default": "./dist/amount/fromChainAmount.js"
+    },
+    "./amount/fromChainAmountExact": {
+      "types": "./dist/amount/fromChainAmountExact.d.ts",
+      "import": "./dist/amount/fromChainAmountExact.js",
+      "default": "./dist/amount/fromChainAmountExact.js"
     },
     "./amount/getMaxValue": {
       "types": "./dist/amount/getMaxValue.d.ts",
@@ -185,6 +190,11 @@
       "import": "./dist/chains/cardano/utxo/getCardanoUtxos.js",
       "default": "./dist/chains/cardano/utxo/getCardanoUtxos.js"
     },
+    "./chains/cosmos/account/getAllCosmosBalances": {
+      "types": "./dist/chains/cosmos/account/getAllCosmosBalances.d.ts",
+      "import": "./dist/chains/cosmos/account/getAllCosmosBalances.js",
+      "default": "./dist/chains/cosmos/account/getAllCosmosBalances.js"
+    },
     "./chains/cosmos/account/getCosmosAccountInfo": {
       "types": "./dist/chains/cosmos/account/getCosmosAccountInfo.d.ts",
       "import": "./dist/chains/cosmos/account/getCosmosAccountInfo.js",
@@ -205,15 +215,30 @@
       "import": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js",
       "default": "./dist/chains/cosmos/computeCosmosTxReceiptFeeAmount.js"
     },
+    "./chains/cosmos/cosmosDecimal": {
+      "types": "./dist/chains/cosmos/cosmosDecimal.d.ts",
+      "import": "./dist/chains/cosmos/cosmosDecimal.js",
+      "default": "./dist/chains/cosmos/cosmosDecimal.js"
+    },
     "./chains/cosmos/cosmosFeeCoinDenom": {
       "types": "./dist/chains/cosmos/cosmosFeeCoinDenom.d.ts",
       "import": "./dist/chains/cosmos/cosmosFeeCoinDenom.js",
       "default": "./dist/chains/cosmos/cosmosFeeCoinDenom.js"
     },
+    "./chains/cosmos/cosmosFeeDenomAllowlist": {
+      "types": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.d.ts",
+      "import": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.js",
+      "default": "./dist/chains/cosmos/cosmosFeeDenomAllowlist.js"
+    },
     "./chains/cosmos/cosmosGasLimitRecord": {
       "types": "./dist/chains/cosmos/cosmosGasLimitRecord.d.ts",
       "import": "./dist/chains/cosmos/cosmosGasLimitRecord.js",
       "default": "./dist/chains/cosmos/cosmosGasLimitRecord.js"
+    },
+    "./chains/cosmos/cosmosMemoCap": {
+      "types": "./dist/chains/cosmos/cosmosMemoCap.d.ts",
+      "import": "./dist/chains/cosmos/cosmosMemoCap.js",
+      "default": "./dist/chains/cosmos/cosmosMemoCap.js"
     },
     "./chains/cosmos/cosmosMsgTypes": {
       "types": "./dist/chains/cosmos/cosmosMsgTypes.d.ts",
@@ -234,6 +259,16 @@
       "types": "./dist/chains/cosmos/getCosmosRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/getCosmosRpcUrl.js",
       "default": "./dist/chains/cosmos/getCosmosRpcUrl.js"
+    },
+    "./chains/cosmos/osmosisDynamicFee": {
+      "types": "./dist/chains/cosmos/osmosisDynamicFee.d.ts",
+      "import": "./dist/chains/cosmos/osmosisDynamicFee.js",
+      "default": "./dist/chains/cosmos/osmosisDynamicFee.js"
+    },
+    "./chains/cosmos/parseUint64": {
+      "types": "./dist/chains/cosmos/parseUint64.d.ts",
+      "import": "./dist/chains/cosmos/parseUint64.js",
+      "default": "./dist/chains/cosmos/parseUint64.js"
     },
     "./chains/cosmos/protoEncoding": {
       "types": "./dist/chains/cosmos/protoEncoding.d.ts",
@@ -290,6 +325,41 @@
       "import": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js",
       "default": "./dist/chains/cosmos/qbtc/getQbtcAccountInfo.js"
     },
+    "./chains/cosmos/qbtc/governance/getQbtcGovParams": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcGovParams.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcMyVote": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcMyVote.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposals": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposals.js"
+    },
+    "./chains/cosmos/qbtc/governance/getQbtcProposalTally": {
+      "types": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/getQbtcProposalTally.js"
+    },
+    "./chains/cosmos/qbtc/governance/parseGov": {
+      "types": "./dist/chains/cosmos/qbtc/governance/parseGov.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/parseGov.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/parseGov.js"
+    },
+    "./chains/cosmos/qbtc/governance/proposal": {
+      "types": "./dist/chains/cosmos/qbtc/governance/proposal.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/proposal.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/proposal.js"
+    },
+    "./chains/cosmos/qbtc/governance/voteOption": {
+      "types": "./dist/chains/cosmos/qbtc/governance/voteOption.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/governance/voteOption.js",
+      "default": "./dist/chains/cosmos/qbtc/governance/voteOption.js"
+    },
     "./chains/cosmos/qbtc/protoEncoding": {
       "types": "./dist/chains/cosmos/qbtc/protoEncoding.d.ts",
       "import": "./dist/chains/cosmos/qbtc/protoEncoding.js",
@@ -299,6 +369,16 @@
       "types": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.d.ts",
       "import": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js",
       "default": "./dist/chains/cosmos/qbtc/tendermintRpcUrl.js"
+    },
+    "./chains/cosmos/qbtc/waitForQbtcTxInclusion": {
+      "types": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.d.ts",
+      "import": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js",
+      "default": "./dist/chains/cosmos/qbtc/waitForQbtcTxInclusion.js"
+    },
+    "./chains/cosmos/resolveCosmosGasLimit": {
+      "types": "./dist/chains/cosmos/resolveCosmosGasLimit.d.ts",
+      "import": "./dist/chains/cosmos/resolveCosmosGasLimit.js",
+      "default": "./dist/chains/cosmos/resolveCosmosGasLimit.js"
     },
     "./chains/cosmos/staking/lcdQueries": {
       "types": "./dist/chains/cosmos/staking/lcdQueries.d.ts",
@@ -320,10 +400,20 @@
       "import": "./dist/chains/cosmos/terraClassicTax.js",
       "default": "./dist/chains/cosmos/terraClassicTax.js"
     },
+    "./chains/cosmos/thor/brune-bond/config": {
+      "types": "./dist/chains/cosmos/thor/brune-bond/config.d.ts",
+      "import": "./dist/chains/cosmos/thor/brune-bond/config.js",
+      "default": "./dist/chains/cosmos/thor/brune-bond/config.js"
+    },
     "./chains/cosmos/thor/getThorchainInboundAddress": {
       "types": "./dist/chains/cosmos/thor/getThorchainInboundAddress.d.ts",
       "import": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js",
       "default": "./dist/chains/cosmos/thor/getThorchainInboundAddress.js"
+    },
+    "./chains/cosmos/thor/getThorchainTxResult": {
+      "types": "./dist/chains/cosmos/thor/getThorchainTxResult.d.ts",
+      "import": "./dist/chains/cosmos/thor/getThorchainTxResult.js",
+      "default": "./dist/chains/cosmos/thor/getThorchainTxResult.js"
     },
     "./chains/cosmos/thor/getThorNetworkInfo": {
       "types": "./dist/chains/cosmos/thor/getThorNetworkInfo.d.ts",
@@ -600,15 +690,35 @@
       "import": "./dist/chains/ripple/account/info.js",
       "default": "./dist/chains/ripple/account/info.js"
     },
+    "./chains/ripple/account/lines": {
+      "types": "./dist/chains/ripple/account/lines.d.ts",
+      "import": "./dist/chains/ripple/account/lines.js",
+      "default": "./dist/chains/ripple/account/lines.js"
+    },
+    "./chains/ripple/address": {
+      "types": "./dist/chains/ripple/address.d.ts",
+      "import": "./dist/chains/ripple/address.js",
+      "default": "./dist/chains/ripple/address.js"
+    },
     "./chains/ripple/client": {
       "types": "./dist/chains/ripple/client.d.ts",
       "import": "./dist/chains/ripple/client.js",
       "default": "./dist/chains/ripple/client.js"
     },
+    "./chains/ripple/issuedCurrency": {
+      "types": "./dist/chains/ripple/issuedCurrency.d.ts",
+      "import": "./dist/chains/ripple/issuedCurrency.js",
+      "default": "./dist/chains/ripple/issuedCurrency.js"
+    },
     "./chains/ripple/network/info": {
       "types": "./dist/chains/ripple/network/info.d.ts",
       "import": "./dist/chains/ripple/network/info.js",
       "default": "./dist/chains/ripple/network/info.js"
+    },
+    "./chains/solana/assertSafeSolanaSwapInstructions": {
+      "types": "./dist/chains/solana/assertSafeSolanaSwapInstructions.d.ts",
+      "import": "./dist/chains/solana/assertSafeSolanaSwapInstructions.js",
+      "default": "./dist/chains/solana/assertSafeSolanaSwapInstructions.js"
     },
     "./chains/solana/client": {
       "types": "./dist/chains/solana/client.d.ts",
@@ -645,6 +755,61 @@
       "import": "./dist/chains/solana/spl/getSplAssociatedAccount.js",
       "default": "./dist/chains/solana/spl/getSplAssociatedAccount.js"
     },
+    "./chains/solana/staking/apyResolver": {
+      "types": "./dist/chains/solana/staking/apyResolver.d.ts",
+      "import": "./dist/chains/solana/staking/apyResolver.js",
+      "default": "./dist/chains/solana/staking/apyResolver.js"
+    },
+    "./chains/solana/staking/config": {
+      "types": "./dist/chains/solana/staking/config.d.ts",
+      "import": "./dist/chains/solana/staking/config.js",
+      "default": "./dist/chains/solana/staking/config.js"
+    },
+    "./chains/solana/staking/cooldownGate": {
+      "types": "./dist/chains/solana/staking/cooldownGate.d.ts",
+      "import": "./dist/chains/solana/staking/cooldownGate.js",
+      "default": "./dist/chains/solana/staking/cooldownGate.js"
+    },
+    "./chains/solana/staking/metadata/enrichValidators": {
+      "types": "./dist/chains/solana/staking/metadata/enrichValidators.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/enrichValidators.js",
+      "default": "./dist/chains/solana/staking/metadata/enrichValidators.js"
+    },
+    "./chains/solana/staking/metadata/stakewizProvider": {
+      "types": "./dist/chains/solana/staking/metadata/stakewizProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/stakewizProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/stakewizProvider.js"
+    },
+    "./chains/solana/staking/metadata/ValidatorMetadataProvider": {
+      "types": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.d.ts",
+      "import": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js",
+      "default": "./dist/chains/solana/staking/metadata/ValidatorMetadataProvider.js"
+    },
+    "./chains/solana/staking/models/stakeAccount": {
+      "types": "./dist/chains/solana/staking/models/stakeAccount.d.ts",
+      "import": "./dist/chains/solana/staking/models/stakeAccount.js",
+      "default": "./dist/chains/solana/staking/models/stakeAccount.js"
+    },
+    "./chains/solana/staking/models/validator": {
+      "types": "./dist/chains/solana/staking/models/validator.d.ts",
+      "import": "./dist/chains/solana/staking/models/validator.js",
+      "default": "./dist/chains/solana/staking/models/validator.js"
+    },
+    "./chains/solana/staking/rpc": {
+      "types": "./dist/chains/solana/staking/rpc.d.ts",
+      "import": "./dist/chains/solana/staking/rpc.js",
+      "default": "./dist/chains/solana/staking/rpc.js"
+    },
+    "./chains/solana/staking/tx/buildUnsignedStakingTx": {
+      "types": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.d.ts",
+      "import": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js",
+      "default": "./dist/chains/solana/staking/tx/buildUnsignedStakingTx.js"
+    },
+    "./chains/solana/staking/tx/stakingPayload": {
+      "types": "./dist/chains/solana/staking/tx/stakingPayload.d.ts",
+      "import": "./dist/chains/solana/staking/tx/stakingPayload.js",
+      "default": "./dist/chains/solana/staking/tx/stakingPayload.js"
+    },
     "./chains/sui/buildTransactionFromJson": {
       "types": "./dist/chains/sui/buildTransactionFromJson.d.ts",
       "import": "./dist/chains/sui/buildTransactionFromJson.js",
@@ -660,10 +825,20 @@
       "import": "./dist/chains/sui/config.js",
       "default": "./dist/chains/sui/config.js"
     },
+    "./chains/sui/listAllCoins": {
+      "types": "./dist/chains/sui/listAllCoins.d.ts",
+      "import": "./dist/chains/sui/listAllCoins.js",
+      "default": "./dist/chains/sui/listAllCoins.js"
+    },
     "./chains/sui/sign": {
       "types": "./dist/chains/sui/sign.d.ts",
       "import": "./dist/chains/sui/sign.js",
       "default": "./dist/chains/sui/sign.js"
+    },
+    "./chains/sui/transactionResult": {
+      "types": "./dist/chains/sui/transactionResult.d.ts",
+      "import": "./dist/chains/sui/transactionResult.js",
+      "default": "./dist/chains/sui/transactionResult.js"
     },
     "./chains/thorchain/ruji/services/fetchMergeableTokenBalances": {
       "types": "./dist/chains/thorchain/ruji/services/fetchMergeableTokenBalances.d.ts",
@@ -719,6 +894,11 @@
       "types": "./dist/chains/ton/messageBody/types.d.ts",
       "import": "./dist/chains/ton/messageBody/types.js",
       "default": "./dist/chains/ton/messageBody/types.js"
+    },
+    "./chains/ton/staking": {
+      "types": "./dist/chains/ton/staking.d.ts",
+      "import": "./dist/chains/ton/staking.js",
+      "default": "./dist/chains/ton/staking.js"
     },
     "./chains/tron/config": {
       "types": "./dist/chains/tron/config.d.ts",
@@ -834,6 +1014,11 @@
       "types": "./dist/coin/balance/index.d.ts",
       "import": "./dist/coin/balance/index.js",
       "default": "./dist/coin/balance/index.js"
+    },
+    "./coin/balance/getEvmChainBalances": {
+      "types": "./dist/coin/balance/getEvmChainBalances.d.ts",
+      "import": "./dist/coin/balance/getEvmChainBalances.js",
+      "default": "./dist/coin/balance/getEvmChainBalances.js"
     },
     "./coin/balance/resolver": {
       "types": "./dist/coin/balance/resolver.d.ts",
@@ -965,6 +1150,11 @@
       "import": "./dist/coin/find/resolvers/evm/queryOneInch.js",
       "default": "./dist/coin/find/resolvers/evm/queryOneInch.js"
     },
+    "./coin/find/resolvers/ripple": {
+      "types": "./dist/coin/find/resolvers/ripple.d.ts",
+      "import": "./dist/coin/find/resolvers/ripple.js",
+      "default": "./dist/coin/find/resolvers/ripple.js"
+    },
     "./coin/find/resolvers/solana": {
       "types": "./dist/coin/find/resolvers/solana/index.d.ts",
       "import": "./dist/coin/find/resolvers/solana/index.js",
@@ -1060,6 +1250,11 @@
       "import": "./dist/coin/token/metadata/resolvers/evm.js",
       "default": "./dist/coin/token/metadata/resolvers/evm.js"
     },
+    "./coin/token/metadata/resolvers/ripple": {
+      "types": "./dist/coin/token/metadata/resolvers/ripple.d.ts",
+      "import": "./dist/coin/token/metadata/resolvers/ripple.js",
+      "default": "./dist/coin/token/metadata/resolvers/ripple.js"
+    },
     "./coin/token/metadata/resolvers/solana": {
       "types": "./dist/coin/token/metadata/resolvers/solana.d.ts",
       "import": "./dist/coin/token/metadata/resolvers/solana.js",
@@ -1115,6 +1310,7 @@
       "import": "./dist/coin/utils/sortCoinsByBalance.js",
       "default": "./dist/coin/utils/sortCoinsByBalance.js"
     },
+    "./fixtures/jupiter-swap-transactions.json": "./fixtures/jupiter-swap-transactions.json",
     "./fixtures/limit-swap-memos.json": "./fixtures/limit-swap-memos.json",
     "./package.json": "./package.json",
     "./publicKey/address/bittensor": {
@@ -1312,6 +1508,11 @@
       "import": "./dist/security/blockaid/validationChains.js",
       "default": "./dist/security/blockaid/validationChains.js"
     },
+    "./security/dangerousAddresses": {
+      "types": "./dist/security/dangerousAddresses.d.ts",
+      "import": "./dist/security/dangerousAddresses.js",
+      "default": "./dist/security/dangerousAddresses.js"
+    },
     "./signing/SignatureAlgorithm": {
       "types": "./dist/signing/SignatureAlgorithm.d.ts",
       "import": "./dist/signing/SignatureAlgorithm.js",
@@ -1407,6 +1608,31 @@
       "import": "./dist/swap/general/GeneralSwapQuote.js",
       "default": "./dist/swap/general/GeneralSwapQuote.js"
     },
+    "./swap/general/jupiter/api/getJupiterSwapQuote": {
+      "types": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.d.ts",
+      "import": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js",
+      "default": "./dist/swap/general/jupiter/api/getJupiterSwapQuote.js"
+    },
+    "./swap/general/jupiter/api/jupiterFeeAta": {
+      "types": "./dist/swap/general/jupiter/api/jupiterFeeAta.d.ts",
+      "import": "./dist/swap/general/jupiter/api/jupiterFeeAta.js",
+      "default": "./dist/swap/general/jupiter/api/jupiterFeeAta.js"
+    },
+    "./swap/general/jupiter/config": {
+      "types": "./dist/swap/general/jupiter/config.d.ts",
+      "import": "./dist/swap/general/jupiter/config.js",
+      "default": "./dist/swap/general/jupiter/config.js"
+    },
+    "./swap/general/jupiter/JupiterSwapEnabledChains": {
+      "types": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.d.ts",
+      "import": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js",
+      "default": "./dist/swap/general/jupiter/JupiterSwapEnabledChains.js"
+    },
+    "./swap/general/knownAggregatorRouters": {
+      "types": "./dist/swap/general/knownAggregatorRouters.d.ts",
+      "import": "./dist/swap/general/knownAggregatorRouters.js",
+      "default": "./dist/swap/general/knownAggregatorRouters.js"
+    },
     "./swap/general/kyber/api/baseUrl": {
       "types": "./dist/swap/general/kyber/api/baseUrl.d.ts",
       "import": "./dist/swap/general/kyber/api/baseUrl.js",
@@ -1447,6 +1673,11 @@
       "import": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js",
       "default": "./dist/swap/general/lifi/api/injectSolanaAtaIfMissing.js"
     },
+    "./swap/general/lifi/api/lifiSlippage": {
+      "types": "./dist/swap/general/lifi/api/lifiSlippage.d.ts",
+      "import": "./dist/swap/general/lifi/api/lifiSlippage.js",
+      "default": "./dist/swap/general/lifi/api/lifiSlippage.js"
+    },
     "./swap/general/lifi/config": {
       "types": "./dist/swap/general/lifi/config.d.ts",
       "import": "./dist/swap/general/lifi/config.js",
@@ -1477,6 +1708,11 @@
       "import": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js",
       "default": "./dist/swap/general/oneInch/OneInchSwapEnabledChains.js"
     },
+    "./swap/general/priceImpactGuard": {
+      "types": "./dist/swap/general/priceImpactGuard.d.ts",
+      "import": "./dist/swap/general/priceImpactGuard.js",
+      "default": "./dist/swap/general/priceImpactGuard.js"
+    },
     "./swap/general/swapkit/api/getSwapKitQuote": {
       "types": "./dist/swap/general/swapkit/api/getSwapKitQuote.d.ts",
       "import": "./dist/swap/general/swapkit/api/getSwapKitQuote.js",
@@ -1486,6 +1722,11 @@
       "types": "./dist/swap/general/swapkit/config.d.ts",
       "import": "./dist/swap/general/swapkit/config.js",
       "default": "./dist/swap/general/swapkit/config.js"
+    },
+    "./swap/general/swapkit/getSwapKitTrackerUrl": {
+      "types": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.d.ts",
+      "import": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js",
+      "default": "./dist/swap/general/swapkit/getSwapKitTrackerUrl.js"
     },
     "./swap/general/swapkit/SwapKitEnabledChains": {
       "types": "./dist/swap/general/swapkit/SwapKitEnabledChains.d.ts",
@@ -1527,10 +1768,55 @@
       "import": "./dist/swap/native/halts/getNativeSwapTradingHalt.js",
       "default": "./dist/swap/native/halts/getNativeSwapTradingHalt.js"
     },
+    "./swap/native/limitSwapAvailability": {
+      "types": "./dist/swap/native/limitSwapAvailability.d.ts",
+      "import": "./dist/swap/native/limitSwapAvailability.js",
+      "default": "./dist/swap/native/limitSwapAvailability.js"
+    },
+    "./swap/native/limitSwapCancelBucket": {
+      "types": "./dist/swap/native/limitSwapCancelBucket.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelBucket.js",
+      "default": "./dist/swap/native/limitSwapCancelBucket.js"
+    },
+    "./swap/native/limitSwapCancelDust": {
+      "types": "./dist/swap/native/limitSwapCancelDust.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelDust.js",
+      "default": "./dist/swap/native/limitSwapCancelDust.js"
+    },
+    "./swap/native/limitSwapCancelEligibility": {
+      "types": "./dist/swap/native/limitSwapCancelEligibility.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelEligibility.js",
+      "default": "./dist/swap/native/limitSwapCancelEligibility.js"
+    },
+    "./swap/native/limitSwapCancelMemo": {
+      "types": "./dist/swap/native/limitSwapCancelMemo.d.ts",
+      "import": "./dist/swap/native/limitSwapCancelMemo.js",
+      "default": "./dist/swap/native/limitSwapCancelMemo.js"
+    },
+    "./swap/native/limitSwapInbound": {
+      "types": "./dist/swap/native/limitSwapInbound.d.ts",
+      "import": "./dist/swap/native/limitSwapInbound.js",
+      "default": "./dist/swap/native/limitSwapInbound.js"
+    },
     "./swap/native/limitSwapMemo": {
       "types": "./dist/swap/native/limitSwapMemo.d.ts",
       "import": "./dist/swap/native/limitSwapMemo.js",
       "default": "./dist/swap/native/limitSwapMemo.js"
+    },
+    "./swap/native/limitSwapOrderStatus": {
+      "types": "./dist/swap/native/limitSwapOrderStatus.d.ts",
+      "import": "./dist/swap/native/limitSwapOrderStatus.js",
+      "default": "./dist/swap/native/limitSwapOrderStatus.js"
+    },
+    "./swap/native/limitSwapOutcome": {
+      "types": "./dist/swap/native/limitSwapOutcome.d.ts",
+      "import": "./dist/swap/native/limitSwapOutcome.js",
+      "default": "./dist/swap/native/limitSwapOutcome.js"
+    },
+    "./swap/native/limitSwapQueue": {
+      "types": "./dist/swap/native/limitSwapQueue.d.ts",
+      "import": "./dist/swap/native/limitSwapQueue.js",
+      "default": "./dist/swap/native/limitSwapQueue.js"
     },
     "./swap/native/minimum/getNativeSwapMinAmountIn": {
       "types": "./dist/swap/native/minimum/getNativeSwapMinAmountIn.d.ts",
@@ -1551,6 +1837,16 @@
       "types": "./dist/swap/native/NativeSwapQuote.d.ts",
       "import": "./dist/swap/native/NativeSwapQuote.js",
       "default": "./dist/swap/native/NativeSwapQuote.js"
+    },
+    "./swap/native/thorchainDepositMemo": {
+      "types": "./dist/swap/native/thorchainDepositMemo.d.ts",
+      "import": "./dist/swap/native/thorchainDepositMemo.js",
+      "default": "./dist/swap/native/thorchainDepositMemo.js"
+    },
+    "./swap/native/thorchainMemoAsset": {
+      "types": "./dist/swap/native/thorchainMemoAsset.d.ts",
+      "import": "./dist/swap/native/thorchainMemoAsset.js",
+      "default": "./dist/swap/native/thorchainMemoAsset.js"
     },
     "./swap/native/utils/getNativeSwapDecimals": {
       "types": "./dist/swap/native/utils/getNativeSwapDecimals.d.ts",
@@ -1586,6 +1882,11 @@
       "types": "./dist/swap/quote/SwapQuote.d.ts",
       "import": "./dist/swap/quote/SwapQuote.js",
       "default": "./dist/swap/quote/SwapQuote.js"
+    },
+    "./swap/skip/skipRouting": {
+      "types": "./dist/swap/skip/skipRouting.d.ts",
+      "import": "./dist/swap/skip/skipRouting.js",
+      "default": "./dist/swap/skip/skipRouting.js"
     },
     "./swap/swapEnabledChains": {
       "types": "./dist/swap/swapEnabledChains.d.ts",
@@ -1667,6 +1968,11 @@
       "import": "./dist/tx/broadcast/resolvers/solana.js",
       "default": "./dist/tx/broadcast/resolvers/solana.js"
     },
+    "./tx/broadcast/resolvers/substrate": {
+      "types": "./dist/tx/broadcast/resolvers/substrate.d.ts",
+      "import": "./dist/tx/broadcast/resolvers/substrate.js",
+      "default": "./dist/tx/broadcast/resolvers/substrate.js"
+    },
     "./tx/broadcast/resolvers/sui": {
       "types": "./dist/tx/broadcast/resolvers/sui.d.ts",
       "import": "./dist/tx/broadcast/resolvers/sui.js",
@@ -1687,6 +1993,11 @@
       "import": "./dist/tx/broadcast/resolvers/utxo.js",
       "default": "./dist/tx/broadcast/resolvers/utxo.js"
     },
+    "./tx/broadcast/transientRetry": {
+      "types": "./dist/tx/broadcast/transientRetry.d.ts",
+      "import": "./dist/tx/broadcast/transientRetry.js",
+      "default": "./dist/tx/broadcast/transientRetry.js"
+    },
     "./tx/broadcast/verifyBroadcastByHash": {
       "types": "./dist/tx/broadcast/verifyBroadcastByHash.d.ts",
       "import": "./dist/tx/broadcast/verifyBroadcastByHash.js",
@@ -1696,6 +2007,11 @@
       "types": "./dist/tx/fee/evm/baseFee.d.ts",
       "import": "./dist/tx/fee/evm/baseFee.js",
       "default": "./dist/tx/fee/evm/baseFee.js"
+    },
+    "./tx/fee/evm/clampEvmPriorityFee": {
+      "types": "./dist/tx/fee/evm/clampEvmPriorityFee.d.ts",
+      "import": "./dist/tx/fee/evm/clampEvmPriorityFee.js",
+      "default": "./dist/tx/fee/evm/clampEvmPriorityFee.js"
     },
     "./tx/fee/evm/evmGasLimit": {
       "types": "./dist/tx/fee/evm/evmGasLimit.d.ts",
@@ -1786,6 +2102,11 @@
       "types": "./dist/tx/hash/resolvers/utxo.d.ts",
       "import": "./dist/tx/hash/resolvers/utxo.js",
       "default": "./dist/tx/hash/resolvers/utxo.js"
+    },
+    "./tx/isValidTxHash": {
+      "types": "./dist/tx/isValidTxHash.d.ts",
+      "import": "./dist/tx/isValidTxHash.js",
+      "default": "./dist/tx/isValidTxHash.js"
     },
     "./tx/status": {
       "types": "./dist/tx/status/index.d.ts",
@@ -1898,13 +2219,13 @@
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",
-    "@bufbuild/protobuf": "^2.12.0",
+    "@bufbuild/protobuf": "^2.13.0",
     "@cosmjs/amino": "^0.39.0",
     "@cosmjs/encoding": "^0.39.0",
     "@cosmjs/proto-signing": "^0.39.0",
     "@cosmjs/stargate": "^0.39.0",
-    "@lifi/sdk": "^4.0.0",
-    "@mysten/sui": "^2.19.0",
+    "@lifi/sdk": "^4.1.0",
+    "@mysten/sui": "^2.22.1",
     "@noble/hashes": "^1.8.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/util": "^14.0.3",
@@ -1913,9 +2234,9 @@
     "@solana/web3.js": "^1.98.4",
     "@ton/core": "^0.63.1",
     "@ton/crypto": "^3.3.0",
-    "@trustwallet/wallet-core": "^4.6.15",
+    "@trustwallet/wallet-core": "^4.7.0",
     "@vultisig/core-config": "0.9.1",
-    "@vultisig/lib-utils": "0.10.2",
+    "@vultisig/lib-utils": "0.10.4",
     "bip32": "^5.0.1",
     "bitcoinjs-lib": "^7.0.1",
     "bs58": "^6.0.0",
@@ -1923,8 +2244,10 @@
     "cbor-x": "^1.6.4",
     "date-fns": "^4.4.0",
     "ethers": "^6.17.0",
+    "long": "^5.3.2",
+    "ripple-address-codec": "^5.0.1",
     "tiny-secp256k1": "^2.2.4",
-    "viem": "^2.52.2",
+    "viem": "^2.53.1",
     "xrpl": "^5.0.0"
   }
 }
