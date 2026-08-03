@@ -53,6 +53,7 @@ const evmChainIds: Record<EvmChain, number> = {
   Hyperliquid: 999,
   Sei: 1329,
   CronosChain: 25,
+  Robinhood: 4663,
 }
 
 /**
