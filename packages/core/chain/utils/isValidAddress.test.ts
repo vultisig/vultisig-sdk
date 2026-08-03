@@ -1,5 +1,5 @@
 import { initWasm, type WalletCore } from '@trustwallet/wallet-core'
-import { describe, expect, it, vi, beforeAll } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { Chain } from '../Chain'
 import { isValidAddress } from './isValidAddress'
