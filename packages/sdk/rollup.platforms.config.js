@@ -238,7 +238,7 @@ const createPlugins = (platformOptions = {}) => {
   ]
 }
 
-const createToolsSubpathConfigs = ({ input, distBase }) => [
+const createPublicSubpathConfigs = ({ input, distBase }) => [
   {
     input,
     output: {
@@ -320,13 +320,21 @@ const configs = {
         },
       }),
     },
-    ...createToolsSubpathConfigs({
+    ...createPublicSubpathConfigs({
       input: './src/tools/parse/index.ts',
       distBase: 'tools/parse',
     }),
-    ...createToolsSubpathConfigs({
+    ...createPublicSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
+    }),
+    ...createPublicSubpathConfigs({
+      input: './src/tools/decode/index.ts',
+      distBase: 'tools/decode',
+    }),
+    ...createPublicSubpathConfigs({
+      input: './src/tx/index.ts',
+      distBase: 'tx',
     }),
   ],
   browser: {
