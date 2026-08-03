@@ -233,11 +233,15 @@ const assertValidLimitSwapDestinationAddress = (targetChain: Chain, address: str
   }
 }
 
+const assertValidLimitSwapDestination = (targetAsset: string, address: string): void => {
+  const targetChain = getSupportedThorchainAssetChain(targetAsset, 'target_asset')
+  assertMemoSegmentSafe(address, 'dest_addr')
+  assertValidLimitSwapDestinationAddress(targetChain, address)
+}
+
 export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
   getSupportedThorchainAssetChain(inputs.source_asset, 'source_asset')
-  const targetChain = getSupportedThorchainAssetChain(inputs.target_asset, 'target_asset')
-  assertMemoSegmentSafe(inputs.dest_addr, 'dest_addr')
-  assertValidLimitSwapDestinationAddress(targetChain, inputs.dest_addr)
+  assertValidLimitSwapDestination(inputs.target_asset, inputs.dest_addr)
 
   parsePositiveInteger(inputs.source_amount, 'source_amount')
   parsePositiveDecimal(inputs.target_price, 'target_price')
@@ -337,6 +341,8 @@ export const parseLimitSwapMemo = (memo: string): ParsedLimitSwapMemo => {
       throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
     }
   }
+
+  assertValidLimitSwapDestination(targetAsset, destAddress)
 
   return {
     targetAsset,

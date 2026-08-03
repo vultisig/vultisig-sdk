@@ -1,5 +1,35 @@
 # @vultisig/core-chain
 
+## 2.30.0
+
+### Minor Changes
+
+- [#1630](https://github.com/vultisig/vultisig-sdk/pull/1630) [`9436de6`](https://github.com/vultisig/vultisig-sdk/commit/9436de627b4d123d7f9bb76e4981722cd84266d1) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Limit-order tracking primitives: queue client, outcome resolution, and a shared status model.
+
+  `getLimitSwapQueue`/`parseLimitSwapQueue` read THORNode's `/thorchain/queue/limit_swaps` (sender-scoped — one call covers all of an address's orders) into typed resting orders: fill split, TTL, trade target, and the target asset as THORChain holds it after fuzzy-match expansion. An absent `limit_swaps` key parses as `null` ("no information"), never as an empty queue — an order's disappearance from this list is what marks it terminal, so a response we didn't understand must not close every tracked order at once.
+
+  `resolveLimitSwapOutcome`/`classifyLimitSwapActions` answer what happened to an order that left the queue, from Midgard `/v2/actions`. A `refund` action's reason is authoritative regardless of its outbound status. The `"swap has been completed."` reason is THORNode's TTL-expiry settle signal, not a fill confirmation — verified live on mainnet, a refund carrying that reason returned the full deposit to the sender with zero of the destination asset ever paid out — so it classifies as `expired` rather than `filled`. Rate limits, server errors and empty responses are all `unresolved`: an answer THORChain hasn't given, never an outcome.
+
+  `getThorchainTxResult` reads `/cosmos/tx/v1beta1/txs/{hash}` — the only place a rejected `MsgDeposit` is visible, since it never produces a Midgard action — so a rejected placement cannot sit "pending" forever.
+
+  `limitSwapOrderStatuses` + `isTerminalLimitSwapOrderStatus` give every platform the same order lifecycle to render.
+
+### Patch Changes
+
+- [#1456](https://github.com/vultisig/vultisig-sdk/pull/1456) [`645e291`](https://github.com/vultisig/vultisig-sdk/commit/645e2917aa1b6cd58c5599ddb32b1c89fa73e20e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve SwapKit fee asset metadata for Solana-source quotes, including Chainflip's independent stable USDC fee asset, and sum repeated fee entries before fiat valuation.
+
+## 2.29.3
+
+### Patch Changes
+
+- [#1678](https://github.com/vultisig/vultisig-sdk/pull/1678) [`7603f32`](https://github.com/vultisig/vultisig-sdk/commit/7603f32e612a7d575b05c49e604aed228817f38c) Thanks [@Ehsan-saradar](https://github.com/Ehsan-saradar)! - Compare VULT discount tier balances in bigint base units instead of float64.
+  `100000n * 10n**18n` is not representable in float64 (`Number` round-trips it
+  to 99999.99999999999), so a wallet holding exactly 100,000 VULT — the diamond
+  minimum — was demoted to platinum and paid a 25 bps affiliate fee instead of
+  15 on every swap. The float rounding also swallowed one-base-unit differences
+  around every tier boundary. Comparisons now stay exact via `toChainAmount`
+  (vultisig-sdk#1677).
+
 ## 2.29.2
 
 ### Patch Changes
