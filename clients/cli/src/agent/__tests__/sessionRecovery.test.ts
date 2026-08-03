@@ -358,6 +358,8 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      renderEchoedYieldOpportunitiesCard: (AgentSession.prototype as any).renderEchoedYieldOpportunitiesCard,
+      renderEchoedPolymarketMarketsCard: (AgentSession.prototype as any).renderEchoedPolymarketMarketsCard,
       // No `vault` here, so confirmBroadcastedTx early-returns.
       confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
       emitAndConfirmTx: (AgentSession.prototype as any).emitAndConfirmTx,
@@ -434,6 +436,8 @@ describe('processMessageLoop — disconnect recovery wiring (end-to-end)', () =>
       recoverySleep: (AgentSession.prototype as any).recoverySleep,
       applyRecoveredMessage: (AgentSession.prototype as any).applyRecoveredMessage,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      renderEchoedYieldOpportunitiesCard: (AgentSession.prototype as any).renderEchoedYieldOpportunitiesCard,
+      renderEchoedPolymarketMarketsCard: (AgentSession.prototype as any).renderEchoedPolymarketMarketsCard,
     }
 
     await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'hi', ui, 0)

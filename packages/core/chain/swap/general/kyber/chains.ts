@@ -13,6 +13,7 @@ export const kyberSwapEnabledChains = [
   Chain.Optimism,
   Chain.Avalanche,
   Chain.Base,
+  Chain.Robinhood,
 ] as const
 
 export type KyberSwapEnabledChain = (typeof kyberSwapEnabledChains)[number]
