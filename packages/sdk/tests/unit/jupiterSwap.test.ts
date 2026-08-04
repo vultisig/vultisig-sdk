@@ -46,7 +46,7 @@ const fakeQuote = {
   otherAmountThreshold: '14087700',
   platformFee: { amount: '7100', feeBps: JUPITER_PLATFORM_FEE_BPS },
   swapMode: 'ExactIn',
-  slippageBps: 100,
+  slippageBps: 50,
   priceImpactPct: '0.0011',
   routePlan: [
     {
@@ -127,6 +127,62 @@ describe('buildJupiterSwapTx', () => {
     expect(res.routeLabels).toEqual(['Whirlpool'])
     expect(res.inputMint).toBe(SOL_NATIVE_MINT)
     expect(res.outputMint).toBe(USDC_MINT)
+  })
+
+  it('uses the 50 bps default slippage when callers omit slippageBps', async () => {
+    await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+
+    const quoteUrl = String(fetchSpy.mock.calls.find(([u]) => String(u).includes('/quote'))?.[0])
+    expect(quoteUrl).toContain('slippageBps=50')
+  })
+
+  it('retries a transient 429 from the Jupiter proxy and succeeds on the next quote attempt', async () => {
+    fetchSpy.mockImplementationOnce(async () =>
+      new Response(JSON.stringify({ error: 'Too Many Requests' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+
+    const res = await buildJupiterSwapTx({
+      userPublicKey: USER,
+      toContractAddress: USDC_MINT,
+      amountBaseUnits: 100_000_000n,
+    })
+
+    expect(res.swapTransaction).toBe('PREPENDED_UNSIGNED_TX==')
+    expect(fetchSpy.mock.calls.filter(([u]) => String(u).includes('/quote'))).toHaveLength(2)
+    expect(fetchSpy.mock.calls.filter(([u]) => String(u).includes('/swap/v1/swap'))).toHaveLength(1)
+  })
+
+  it('gives up after the bounded 429 retries and surfaces the original Jupiter error', async () => {
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/quote')) {
+        return new Response(JSON.stringify({ error: 'Too Many Requests' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(fakeSwap), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    await expect(
+      buildJupiterSwapTx({
+        userPublicKey: USER,
+        toContractAddress: USDC_MINT,
+        amountBaseUnits: 100_000_000n,
+      })
+    ).rejects.toThrow(/Jupiter API error \(429\): Too Many Requests/)
+    expect(fetchSpy.mock.calls.filter(([u]) => String(u).includes('/quote'))).toHaveLength(3)
+    expect(fetchSpy.mock.calls.some(([u]) => String(u).includes('/swap/v1/swap'))).toBe(false)
   })
 
   it('includes platformFeeBps + feeAccount and prepends the fee ATA for the default affiliate path', async () => {

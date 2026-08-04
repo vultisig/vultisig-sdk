@@ -76,15 +76,16 @@ export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
 /**
  * Default slippage in basis points (0.5%).
  *
- * SOL-04 (audit fix): this used to be 100 bps, mirroring `recipes/sdk/swap/
- * jupiter.go`'s fallback constant — which itself predates and was never
- * reconciled with the shared cross-platform spec (vultisig-ios#4669) that
- * explicitly settled on 50 bps, matching iOS/Android/the SDK's own
- * general-swap Jupiter path (getJupiterSwapQuote.ts) and 1inch.
+ * This matches the current same-chain Solana policy used by the backend/app
+ * Jupiter builder. Keeping the SDK on the same default avoids a silent
+ * economics drift when consumers delete their local copy and import this one.
  */
 export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
 const JUPITER_TIMEOUT_MS = 15_000
+const JUPITER_MAX_RETRIES = 2
+const JUPITER_RETRY_BACKOFF_MS = 300
+const JUPITER_MAX_PRICE_IMPACT_PCT = 10
 
 /** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
@@ -157,23 +158,39 @@ export type JupiterSwapResult = {
   outputMint: string
 }
 
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
 const fetchJupiter = async <T>(input: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(input, {
-    ...init,
-    signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
-  })
+  let lastErr: Error | undefined
 
-  const data = (await response.json().catch(() => undefined)) as unknown
+  for (let attempt = 0; attempt <= JUPITER_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await sleep(JUPITER_RETRY_BACKOFF_MS * attempt)
+    }
 
-  if (!response.ok) {
-    const msg =
-      typeof data === 'object' && data !== null && 'error' in data
-        ? (data as { error: string }).error
-        : response.statusText
-    throw new Error(`Jupiter API error (${response.status}): ${msg}`)
+    const response = await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(JUPITER_TIMEOUT_MS),
+    })
+
+    const data = (await response.json().catch(() => undefined)) as unknown
+
+    if (!response.ok) {
+      const msg =
+        typeof data === 'object' && data !== null && 'error' in data
+          ? (data as { error: string }).error
+          : response.statusText
+      lastErr = new Error(`Jupiter API error (${response.status}): ${msg}`)
+      if (response.status === 429 && attempt < JUPITER_MAX_RETRIES) {
+        continue
+      }
+      throw lastErr
+    }
+
+    return data as T
   }
 
-  return data as T
+  throw lastErr ?? new Error('Jupiter API error: exhausted retries')
 }
 
 /**
