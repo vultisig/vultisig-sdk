@@ -4,9 +4,10 @@
 // override cannot import from core's `getLifiSwapQuote` (that path redirects back to itself), so
 // this sibling module is the single source of truth for the stable-pair set + the two tiers.
 
-// The slippage fraction is baked into the LiFi-prebuilt tx's `minAmountOut` floor at quote time
-// (the underlying AMM reverts if simulation-time output drops below it). LiFi's default 0.5% is too
-// tight for MPC-signed flows: the keysign ceremony adds 30-90s of drift between quote and broadcast.
+// For same-chain swaps, the slippage fraction is baked into the LiFi-prebuilt tx's `minAmountOut`
+// floor at quote time (the underlying AMM reverts if simulation-time output drops below it). LiFi's
+// default 0.5% is too tight for MPC-signed flows: the keysign ceremony adds 30-90s of drift between
+// quote and broadcast.
 // Production repro (2026-05-22): a SOL→USDC route failed simulation with Raydium AMM error 50
 // (AmountExceedsMaximum / slippage exceeded) at 0.5%.
 //
@@ -16,9 +17,9 @@
 // - volatile pairs: 1% — covers the ceremony drift; typical realised slippage is <0.1%, so this is
 //   a ceiling, not the expected hit.
 //
-// Cross-chain caveat (NeOMakinG #513): this fraction applies to the FINAL destination amount only.
-// LiFi bridge+swap routes have a SECOND slippage point at the bridge pool exit that bridge protocols
-// manage themselves — total realised slippage on a cross-chain route can exceed this floor.
+// Cross-chain caveat (NeOMakinG #513): the source-chain bridge calldata may not enforce this against
+// the final destination asset at all. EVM keysign construction therefore accepts only LI.FI selectors
+// with a directly comparable final-output floor and rejects opaque bridge selectors.
 export const DEFAULT_LIFI_SLIPPAGE_TOLERANCE = 0.01
 export const STABLE_PAIR_LIFI_SLIPPAGE_TOLERANCE = 0.003
 
@@ -51,9 +52,8 @@ export const isStablePair = (from: { ticker?: string }, to: { ticker?: string })
 
 /**
  * Resolve the LiFi slippage fraction: honor an explicit consumer override, else pick the tier by
- * pair type. `slippageOverride` is a fraction (0.01 = 1%). This is what gets baked into the
- * LiFi-prebuilt tx's `minAmountOut` floor, so dropping the override silently widens the user's
- * slippage on an explicit tight-tolerance request.
+ * pair type. `slippageOverride` is a fraction (0.01 = 1%). Same-chain EVM calldata binds this to its
+ * final `minAmountOut`; opaque cross-chain selectors are rejected before keysign construction.
  */
 export const resolveLifiSlippage = ({
   slippageOverride,

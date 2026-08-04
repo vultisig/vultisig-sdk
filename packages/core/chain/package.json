@@ -1543,6 +1543,11 @@
       "import": "./dist/swap/discount/SwapDiscount.js",
       "default": "./dist/swap/discount/SwapDiscount.js"
     },
+    "./swap/general/calldataMinOutput": {
+      "types": "./dist/swap/general/calldataMinOutput.d.ts",
+      "import": "./dist/swap/general/calldataMinOutput.js",
+      "default": "./dist/swap/general/calldataMinOutput.js"
+    },
     "./swap/general/cowswap/api/getCowSwapOrderStatus": {
       "types": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.d.ts",
       "import": "./dist/swap/general/cowswap/api/getCowSwapOrderStatus.js",
