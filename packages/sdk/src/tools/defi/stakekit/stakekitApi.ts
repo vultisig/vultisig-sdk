@@ -43,6 +43,17 @@ function setCache(key: string, data: unknown, ttlMs: number) {
 
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+function apiKeyCacheScope(apiKey?: string): string {
+  if (!apiKey) return 'anon'
+
+  let hash = 2166136261
+  for (let i = 0; i < apiKey.length; i += 1) {
+    hash ^= apiKey.charCodeAt(i)
+    hash = Math.imul(hash, 16777619) >>> 0
+  }
+  return `key:${hash.toString(16)}`
+}
+
 // --- Types matching yield.xyz / stakek.it wire shapes ---
 
 export type YieldToken = {
@@ -207,7 +218,7 @@ export async function searchYields(params: {
   if (params.provider) query.set('provider', params.provider)
   if (params.limit) query.set('limit', String(params.limit))
 
-  const cacheKey = `yield:search:${query.toString()}`
+  const cacheKey = `yield:search:${apiKeyCacheScope(params.apiKey)}:${query.toString()}`
   const cached = getCached<YieldProduct[]>(cacheKey)
   if (cached) return cached
 
@@ -227,7 +238,7 @@ export async function searchYields(params: {
 }
 
 export async function getYield(yieldId: string, apiKey?: string): Promise<YieldProduct> {
-  const cacheKey = `yield:detail:${yieldId}`
+  const cacheKey = `yield:detail:${apiKeyCacheScope(apiKey)}:${yieldId}`
   const cached = getCached<YieldProduct>(cacheKey)
   if (cached) return cached
 
