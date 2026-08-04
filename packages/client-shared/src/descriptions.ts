@@ -46,7 +46,7 @@ export const swapQuote = {
 } as const
 
 export const swap = {
-  description: 'Swap tokens between chains. Previews by default — pass --confirm to execute.',
+  description: 'Swap tokens between chains. Previews by default — set confirmed: true to execute.',
   cliDescription:
     'Swap tokens between chains. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.',
   params: {
@@ -58,7 +58,7 @@ export const swap = {
 } as const
 
 export const send = {
-  description: 'Send tokens to an address. Previews by default — pass --confirm to execute.',
+  description: 'Send tokens to an address. Previews by default — set confirmed: true to execute.',
   cliDescription:
     'Send tokens to an address. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.',
   params: {

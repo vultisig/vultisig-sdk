@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest'
 
 const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'index.ts')
 const SUBPROCESS_TEST_TIMEOUT = 30_000
+// Must stay below SUBPROCESS_TEST_TIMEOUT: spawnSync blocks the worker, so a hung
+// CLI is only ever interrupted by this kill, never by vitest's own budget.
+const SPAWN_KILL_TIMEOUT = 20_000
 
 function run(args: string[]) {
   const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1' }
@@ -15,7 +18,7 @@ function run(args: string[]) {
   return spawnSync(process.execPath, ['--import', 'tsx', CLI_ENTRY, ...args], {
     input: '',
     encoding: 'utf8',
-    timeout: 120_000,
+    timeout: SPAWN_KILL_TIMEOUT,
     env,
   })
 }
