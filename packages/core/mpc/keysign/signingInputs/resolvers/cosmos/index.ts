@@ -4,7 +4,6 @@ import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasL
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import {
   getNativeSwapChainIdFromDenomPrefix,
   nativeSwapChainIds,
@@ -25,7 +24,7 @@ import { toTwAddress } from '../../../tw/toTwAddress'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
-import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
+import { CosmosChainSpecific, getCosmosChainSpecific, getCosmosFeeAmounts } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
 
 const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPayload>[0]) => {
@@ -508,35 +507,17 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return fee
     }
 
-    const getFeeAmounts = (feeAmount: bigint) => {
+    const getFeeAmounts = () => {
       if (chainKind !== 'ibcEnabled') return
 
-      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      const cosmosSpecific = getRecordUnionValue(chainSpecific, 'ibcEnabled')
 
-      const amounts: TW.Cosmos.Proto.Amount[] = [
-        TW.Cosmos.Proto.Amount.create({
-          amount: feeAmount.toString(),
-          denom: chainFeeDenom,
-        }),
-      ]
-
-      // Terra Classic stability-tax surcharge for USTC (uusd) sends.
-      // The burn-tax amount is pre-computed dynamically in getCosmosChainSpecific
-      // and stored in ibcDenomTraces.baseDenom so this sync path can use it.
-      // baseDenom is '' for all non-USTC chains; '0' when rate is zero.
-      if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-        const burnTaxAmount = BigInt(ibcDenomTraces?.baseDenom || '0')
-        if (burnTaxAmount > 0n) {
-          amounts.push(
-            TW.Cosmos.Proto.Amount.create({
-              denom: coin.id,
-              amount: burnTaxAmount.toString(),
-            })
-          )
-        }
-      }
-
-      return amounts
+      return getCosmosFeeAmounts({
+        chain,
+        coinId: coin.id,
+        chainSpecific: cosmosSpecific,
+        includeTerraClassicBurnTax: true,
+      }).map(({ amount, denom }) => TW.Cosmos.Proto.Amount.create({ amount: amount.toString(), denom }))
     }
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
@@ -553,7 +534,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
     return TW.Cosmos.Proto.Fee.create({
       gas: Long.fromBigInt(resolvedGasLimit),
-      amounts: getFeeAmounts(ibcSpecific?.gas ?? 0n),
+      amounts: getFeeAmounts(),
     })
   }
 
