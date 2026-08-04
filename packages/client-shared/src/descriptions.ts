@@ -19,6 +19,7 @@ export const portfolio = {
 
 export const address = {
   description: 'Show the wallet address for a specific chain',
+  cliDescription: 'Show wallet addresses',
   params: {
     chain: 'Chain name (e.g. Ethereum, Bitcoin)',
   },
@@ -46,6 +47,8 @@ export const swapQuote = {
 
 export const swap = {
   description: 'Swap tokens between chains. Previews by default — pass --confirm to execute.',
+  cliDescription:
+    'Swap tokens between chains. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.',
   params: {
     from: 'Source chain or chain:token (e.g. Ethereum or Ethereum:USDC)',
     to: 'Destination chain or chain:token',
@@ -56,6 +59,8 @@ export const swap = {
 
 export const send = {
   description: 'Send tokens to an address. Previews by default — pass --confirm to execute.',
+  cliDescription:
+    'Send tokens to an address. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.',
   params: {
     chain: 'Chain to send on (e.g. Ethereum)',
     to: 'Recipient address',
