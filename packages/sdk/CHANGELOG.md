@@ -1,5 +1,13 @@
 # @vultisig/sdk
 
+## 4.0.1
+
+### Patch Changes
+
+- [#1625](https://github.com/vultisig/vultisig-sdk/pull/1625) [`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4) Thanks [@neavra](https://github.com/neavra)! - Resolve tracked vault token IDs to their canonical asset IDs before fetching prices for balance and portfolio results.
+
+- [#1692](https://github.com/vultisig/vultisig-sdk/pull/1692) [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Re-encrypt successfully imported legacy vault backups with the salted PBKDF2 format before persistence and emit a typed security notice recommending password rotation and replacement of old backup files.
+
 ## 4.0.0
 
 ### Major Changes

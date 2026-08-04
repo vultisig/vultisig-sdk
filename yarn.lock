@@ -7044,7 +7044,7 @@ __metadata:
     tabtab: "npm:^3.0.2"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
-    viem: "npm:^2.53.1"
+    viem: "npm:^2.55.10"
     vitest: "npm:^4.1.8"
     ws: "npm:^8.21.1"
   bin:
@@ -7098,7 +7098,7 @@ __metadata:
     long: "npm:^5.3.2"
     ripple-address-codec: "npm:^5.0.1"
     tiny-secp256k1: "npm:^2.2.4"
-    viem: "npm:^2.53.1"
+    viem: "npm:^2.55.10"
     xrpl: "npm:^5.0.0"
   languageName: unknown
   linkType: soft
@@ -7132,7 +7132,7 @@ __metadata:
     buffer: "npm:^6.0.3"
     cosmjs-types: "npm:^0.11.0"
     long: "npm:^5.3.2"
-    viem: "npm:^2.53.1"
+    viem: "npm:^2.55.10"
   languageName: unknown
   linkType: soft
 
@@ -7231,8 +7231,8 @@ __metadata:
   dependencies:
     buffer: "npm:^6.0.3"
     long: "npm:^5.3.2"
-    tldts: "npm:^7.4.8"
-    viem: "npm:^2.53.1"
+    tldts: "npm:^7.4.10"
+    viem: "npm:^2.55.10"
   languageName: unknown
   linkType: soft
 
@@ -7303,7 +7303,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     vitest: "npm:^4.1.8"
   peerDependencies:
-    "@vultisig/sdk": ">=4.0.0"
+    "@vultisig/sdk": ">=4.0.1"
   languageName: unknown
   linkType: soft
 
@@ -7369,7 +7369,7 @@ __metadata:
     events: "npm:^3.3.0"
     fake-indexeddb: "npm:^6.2.5"
     i18next: "npm:^26.3.1"
-    i18next-http-backend: "npm:^4.0.0"
+    i18next-http-backend: "npm:^4.0.1"
     isomorphic-fetch: "npm:^3.0.0"
     node-fetch: "npm:^3.3.2"
     node-localstorage: "npm:^3.0.5"
@@ -7387,7 +7387,7 @@ __metadata:
     typescript: "npm:^6.0.3"
     util: "npm:^0.12.5"
     uuid: "npm:^14.0.1"
-    viem: "npm:^2.53.1"
+    viem: "npm:^2.55.10"
     vite-plugin-node-polyfills: "npm:^0.28.0"
     vite-plugin-wasm: "npm:^3.6.0"
     vitest: "npm:^4.1.8"
@@ -11446,10 +11446,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-uri@npm:3.1.4":
-  version: 3.1.4
-  resolution: "fast-uri@npm:3.1.4"
-  checksum: 10c0/f90948821ceb49980f64f89b8216ba498f5957f26035be813526a55b6145d26cbd63ef5618d5205a3292b31edc9c08589749350cd72bd86c7095eb434dceb757
+"fast-uri@npm:3.1.5":
+  version: 3.1.5
+  resolution: "fast-uri@npm:3.1.5"
+  checksum: 10c0/2bf60eb800dd610c65e17be436425dcb21c92aff3a87d442a8bccab0b7b071e88cf1a5d7d1ea946370b937e6fc0375c405c0296c10587e57de4f78be4646d1d0
   languageName: node
   linkType: hard
 
@@ -12607,10 +12607,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"i18next-http-backend@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "i18next-http-backend@npm:4.0.0"
-  checksum: 10c0/7342016415d128d7077da659804f277f10e2d1b943cf9c43926faaf71290e0b49a6a1facc90fe7b1b8a54d05e5d91170ab95bcc4773749858c5a50efce5fcbef
+"i18next-http-backend@npm:^4.0.1":
+  version: 4.0.1
+  resolution: "i18next-http-backend@npm:4.0.1"
+  checksum: 10c0/faf837f4260842cb43cd152ff4099ff1811e75c1b4a56a24d116a60f5b5d4ab2e189821f5f9ecf58df4927d91e77ca440ba44bd51220af347db850745da44346
   languageName: node
   linkType: hard
 
@@ -12807,10 +12807,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ip-address@npm:10.1.0, ip-address@npm:^10.0.1":
-  version: 10.1.0
-  resolution: "ip-address@npm:10.1.0"
-  checksum: 10c0/0103516cfa93f6433b3bd7333fa876eb21263912329bfa47010af5e16934eeeff86f3d2ae700a3744a137839ddfad62b900c7a445607884a49b5d1e32a3d7566
+"ip-address@npm:>=10.3.1":
+  version: 10.4.0
+  resolution: "ip-address@npm:10.4.0"
+  checksum: 10c0/d7b0bd2624fd861afbae6e49036a9b56f9506eaff7ff38592b7b4492dd5c272b53f5356dc8cc019e318acf29a96c90a3d1af1df761960267d23efa96858270fa
   languageName: node
   linkType: hard
 
@@ -15878,9 +15878,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ox@npm:0.14.29":
-  version: 0.14.29
-  resolution: "ox@npm:0.14.29"
+"ox@npm:0.14.33":
+  version: 0.14.33
+  resolution: "ox@npm:0.14.33"
   dependencies:
     "@adraffy/ens-normalize": "npm:^1.11.0"
     "@noble/ciphers": "npm:^1.3.0"
@@ -15895,7 +15895,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/bf36b2cd83d67bf43893b73876630554d0bd1748c7ad769607ceb8fe1aaf6afa6f9411a31e7e815de107a035811ebfa790c0af591aa403e363b83a1896acfc7b
+  checksum: 10c0/3fae8d41cc9e8d56112d7f6e5cc2e90ba8dc4d3764b01ead34798b8d2436a8009c1ccbe2731ae587e69cd31dba8e7fe9f08c586abc1eadb588a42a174e46d766
   languageName: node
   linkType: hard
 
@@ -19101,21 +19101,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tldts-core@npm:^7.4.8":
-  version: 7.4.8
-  resolution: "tldts-core@npm:7.4.8"
-  checksum: 10c0/94edee2a06cb1929fae4a26045628b01dd865ee8e28661df29128228522fb8dcf29c2f68ffa7286ee41a2a2c98da3e6814dbf49a1f6509de3fe2c9448e0db1b7
+"tldts-core@npm:^7.4.10":
+  version: 7.4.10
+  resolution: "tldts-core@npm:7.4.10"
+  checksum: 10c0/a5f42aad8aa8adfc57d33e9bd5c43094e9de226dce4851867ea7014d8679040b4c01c500b9947595ab22cdfe9783ea5d88a7c0be2092d19a14f75c7cd4671181
   languageName: node
   linkType: hard
 
-"tldts@npm:^7.4.8":
-  version: 7.4.8
-  resolution: "tldts@npm:7.4.8"
+"tldts@npm:^7.4.10":
+  version: 7.4.10
+  resolution: "tldts@npm:7.4.10"
   dependencies:
-    tldts-core: "npm:^7.4.8"
+    tldts-core: "npm:^7.4.10"
   bin:
     tldts: bin/cli.js
-  checksum: 10c0/438b379a43b105359311427b8ab9d73572244996b4f6dd1fbe9112bd274c308d4ffb33b6f644302e79c8bc60f2e2539463b00dd91ee1063b92d9fc8b10882b6c
+  checksum: 10c0/a9a85d260bd0bfd046794f140667aae0975da4a3aa805d180b0808b672a6fa7de0fc9f36110c3bdeed87ad780e961e1e5bb1ed8b41f8aa3ad5d5fb469e70ba38
   languageName: node
   linkType: hard
 
@@ -19519,10 +19519,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici@npm:^7.28.0":
-  version: 7.28.0
-  resolution: "undici@npm:7.28.0"
-  checksum: 10c0/fe781983a26098795e99bb1f64906cbb7d0bcaa029a26baade007b53ea67f2631d189b8f9671a31f4c8d0cb3773b7559608628ba54452fef51fec90e7c78bb0d
+"undici@npm:^7.29.0":
+  version: 7.29.0
+  resolution: "undici@npm:7.29.0"
+  checksum: 10c0/85ea96e91e7f3de24de678cbbc54230fdd641a3b0643005f2aef044af1f1a2db8fbecb88b28e6fa78bb41ffeafda4479b57075b6b6ab92beac4b7b5ab53f9b10
   languageName: node
   linkType: hard
 
@@ -19829,9 +19829,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.53.1":
-  version: 2.53.1
-  resolution: "viem@npm:2.53.1"
+"viem@npm:^2.55.10":
+  version: 2.55.10
+  resolution: "viem@npm:2.55.10"
   dependencies:
     "@noble/curves": "npm:1.9.1"
     "@noble/hashes": "npm:1.8.0"
@@ -19839,14 +19839,14 @@ __metadata:
     "@scure/bip39": "npm:1.6.0"
     abitype: "npm:1.2.3"
     isows: "npm:1.0.7"
-    ox: "npm:0.14.29"
-    ws: "npm:8.20.1"
+    ox: "npm:0.14.33"
+    ws: "npm:8.21.0"
   peerDependencies:
     typescript: ">=5.0.4"
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/fa6cfa2068d0681f21d5e8e596956bb48079e32a096c5cb27831707441f4006c6b696d3b9715861b73a15ffd65962abf23c32024259aef08f5568ea4a503a840
+  checksum: 10c0/8d77abf56da107a0fb41b81da82bf4e6f9c54ede8b3bf1bc6508ea324487c643b263adeea11049d10593ee80841c7f5fb876dab5837dafddeb34bfbe0cfd4a8a
   languageName: node
   linkType: hard
 
