@@ -1,3 +1,4 @@
+import { GrpcTypes, parseGrpcTransactionResponse } from '@mysten/sui/grpc'
 import { describe, expect, it } from 'vitest'
 
 import { describeSuiExecutionFailure, getSuiResultTransaction, isSuiExecutionSuccess } from './transactionResult'
@@ -52,6 +53,48 @@ describe('isSuiExecutionSuccess — fails closed (sdk#1398)', () => {
     ['null', null],
   ])('is false for %s', (_label, result) => {
     expect(isSuiExecutionSuccess(result)).toBe(false)
+  })
+})
+
+describe('isSuiExecutionSuccess — @mysten/sui parser contract', () => {
+  const parseTransaction = (success?: boolean) =>
+    parseGrpcTransactionResponse(
+      GrpcTypes.ExecutedTransaction.create({
+        digest: 'parsed-digest',
+        effects: GrpcTypes.TransactionEffects.create({
+          status:
+            success === undefined
+              ? undefined
+              : GrpcTypes.ExecutionStatus.create({
+                  success,
+                }),
+        }),
+      })
+    )
+
+  it('classifies the library parser output for success, failure, and missing status', () => {
+    const parsedSuccess = parseTransaction(true)
+    const parsedFailure = parseTransaction(false)
+    const parsedWithoutStatus = parseTransaction()
+
+    expect(parsedSuccess).toMatchObject({
+      $kind: 'Transaction',
+      Transaction: { status: { success: true, error: null } },
+    })
+    expect(parsedFailure).toMatchObject({
+      $kind: 'FailedTransaction',
+      FailedTransaction: { status: { success: false } },
+    })
+    expect(parsedWithoutStatus).toMatchObject({
+      $kind: 'FailedTransaction',
+      FailedTransaction: { status: { success: false } },
+    })
+
+    expect([
+      isSuiExecutionSuccess(parsedSuccess),
+      isSuiExecutionSuccess(parsedFailure),
+      isSuiExecutionSuccess(parsedWithoutStatus),
+    ]).toEqual([true, false, false])
   })
 })
 
