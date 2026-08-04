@@ -1,5 +1,9 @@
 import { encodeFunctionData, erc20Abi, getAddress, isAddress } from 'viem'
 
+import { parseUsdcAmount, USDC_DECIMALS } from '../../parse/usdcAmount'
+
+export { parseUsdcAmount } from '../../parse/usdcAmount'
+
 /**
  * 3Jane supplier-side mainnet addresses, pinned from the public docs:
  * https://docs.3jane.xyz/developers/addresses
@@ -23,7 +27,6 @@ export const THREE_JANE_ADDRESSES = {
 } as const
 
 const ETHEREUM_CHAIN_ID = 1
-const USDC_DECIMALS = 6
 /** Documented minimum supplier deposit: 1,000 USDC. */
 const MIN_DEPOSIT_RAW = 1_000n * 10n ** BigInt(USDC_DECIMALS)
 const MAX_UINT256 = (1n << 256n) - 1n
@@ -96,29 +99,6 @@ export type BuildThreeJaneSupplyUsdcResult = {
   minDepositUsdc: string
   /** Unsigned [approve, deposit] sequence. BUILD-ONLY — never signed/broadcast. */
   transactions: [ThreeJaneTxStep, ThreeJaneTxStep]
-}
-
-/** Parse a decimal USDC string into a raw 6-decimal bigint. */
-export function parseUsdcAmount(s: string): bigint {
-  const trimmed = s.trim()
-  if (trimmed === '') throw new Error('empty amount')
-  if (trimmed.startsWith('-')) throw new Error('negative amounts not allowed')
-
-  const dotIdx = trimmed.indexOf('.')
-  let wholePart = dotIdx === -1 ? trimmed : trimmed.slice(0, dotIdx)
-  let fracPart = dotIdx === -1 ? '' : trimmed.slice(dotIdx + 1)
-
-  if (fracPart.includes('.')) throw new Error(`invalid amount: multiple decimal points in ${s}`)
-  if (wholePart === '') wholePart = '0'
-  if (fracPart.length > USDC_DECIMALS) {
-    throw new Error(`too many decimal places (max ${USDC_DECIMALS} for USDC): ${s}`)
-  }
-  if (!/^\d+$/.test(wholePart)) throw new Error(`invalid integer part: ${wholePart}`)
-  if (fracPart !== '' && !/^\d+$/.test(fracPart)) throw new Error(`invalid fractional part: ${fracPart}`)
-
-  while (fracPart.length < USDC_DECIMALS) fracPart += '0'
-  const fracInt = fracPart === '' ? 0n : BigInt(fracPart)
-  return BigInt(wholePart) * 10n ** BigInt(USDC_DECIMALS) + fracInt
 }
 
 function formatUsdc(raw: bigint): string {
