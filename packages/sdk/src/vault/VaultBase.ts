@@ -1746,7 +1746,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     return { balances, totalValue: total.toFixed(2), currency }
   }
 
-  /** Send tokens. Use amount "max" to send entire balance minus fees. Set dryRun for fee estimate without signing. */
+  /** Send tokens. Use amount "max" for the native balance minus fees, or the full token balance when native gas is covered. Set dryRun for fee estimates without signing. */
   async send(params: {
     chain: Chain
     to: string
