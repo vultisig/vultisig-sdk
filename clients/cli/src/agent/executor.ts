@@ -574,7 +574,7 @@ export class AgentExecutor {
   private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
     if (coins && Array.isArray(coins)) {
-      const results: { chain: string; tokenId: string }[] = []
+      const results: { chain: string; tokenId: string; removed: boolean }[] = []
       for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
@@ -584,8 +584,10 @@ export class AgentExecutor {
             `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
           )
         }
-        await this.vault.removeToken(chain, tokenId)
-        results.push({ chain: chain.toString(), tokenId })
+        // Report per-coin what the SDK actually did — a coin that was never
+        // tracked must not be reported back to the model as removed.
+        const removed = await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId, removed })
       }
       return { removed: results }
     }
@@ -600,8 +602,8 @@ export class AgentExecutor {
     if (!tokenId) {
       throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
     }
-    await this.vault.removeToken(chain, tokenId)
-    return { chain: chain.toString(), removed: true }
+    const removed = await this.vault.removeToken(chain, tokenId)
+    return { chain: chain.toString(), removed }
   }
 
   async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {

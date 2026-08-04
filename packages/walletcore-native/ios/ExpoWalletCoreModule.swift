@@ -92,6 +92,7 @@ public class ExpoWalletCoreModule: Module {
                 "polygon": .polygon, "optimism": .optimism,
                 "cronosChain": .cronosChain, "blast": .blast,
                 "zksync": .zksync, "osmosis": .osmosis,
+                "robinhoodChain": .robinhoodChain,
                 "terraV2": .terraV2, "terra": .terra,
                 "noble": .noble, "kujira": .kujira,
                 "dydx": .dydx, "akash": .akash, "mantle": .mantle, "sei": .sei,
@@ -342,7 +343,13 @@ public class ExpoWalletCoreModule: Module {
                 throw NSError(domain: "ExpoWalletCore", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid HDWallet handle"])
             }
             let ct = try coinTypeFromValue(coinType)
-            let key = wallet.getKey(coin: ct, derivationPath: derivationPath)
+            guard let key = wallet.getKey(coin: ct, derivationPath: derivationPath) else {
+                throw NSError(
+                    domain: "ExpoWalletCore",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to derive PrivateKey for CoinType raw value \(coinType)"]
+                )
+            }
             return storePrivateKey(key)
         }
 
