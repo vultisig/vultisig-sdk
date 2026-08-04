@@ -17,6 +17,8 @@ import { describe, expect, it, vi } from 'vitest'
 // its allowance via the approve (allowance-is-obtainable), not merely that the
 // approve is skipped.
 const ONE_INCH_V6_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
+const ONE_INCH_CALLDATA_WITH_995_000_MINIMUM =
+  '0xa76dfc3b00000000000000000000000000000000000000000000000000000000000f2eb80000000000000000000000000000000000000000000000000000000000000000'
 
 const mocks = vi.hoisted(() => ({
   getChainSpecific: vi.fn(async () => ({
@@ -66,8 +68,20 @@ const cowSwapOrder = (overrides: { permitRequired?: true } = {}) => ({
 })
 
 const baseArgs = {
-  fromCoin: { chain: Chain.Ethereum, address: '0xsender', id: '0xusdc', ticker: 'USDC', decimals: 6 },
-  toCoin: { chain: Chain.Ethereum, address: '0xdai', id: '0xdai', ticker: 'DAI', decimals: 18 },
+  fromCoin: {
+    chain: Chain.Ethereum,
+    address: '0xsender',
+    id: '0xusdc',
+    ticker: 'USDC',
+    decimals: 6,
+  },
+  toCoin: {
+    chain: Chain.Ethereum,
+    address: '0xdai',
+    id: '0xdai',
+    ticker: 'DAI',
+    decimals: 18,
+  },
   amount: 990,
   vaultId: 'vault-id',
   localPartyId: 'local-party',
@@ -100,7 +114,11 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the a
     // sell token and the order silently never settles.
     expect(payload.erc20ApprovePayload?.spender).toBe(COW_VAULT_RELAYER_ADDRESS)
     expect(mocks.getErc20Allowance).toHaveBeenCalledWith(
-      expect.objectContaining({ chain: Chain.Ethereum, address: '0xsender', spender: COW_VAULT_RELAYER_ADDRESS })
+      expect.objectContaining({
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        spender: COW_VAULT_RELAYER_ADDRESS,
+      })
     )
   })
 
@@ -123,7 +141,11 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the a
     expect(payload.toAddress).toBe(COW_VAULT_RELAYER_ADDRESS)
     expect(payload.erc20ApprovePayload?.spender).toBe(COW_VAULT_RELAYER_ADDRESS)
     expect(mocks.getErc20Allowance).toHaveBeenCalledWith(
-      expect.objectContaining({ chain: Chain.Ethereum, address: '0xsender', spender: COW_VAULT_RELAYER_ADDRESS })
+      expect.objectContaining({
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        spender: COW_VAULT_RELAYER_ADDRESS,
+      })
     )
   })
 
@@ -135,7 +157,15 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the a
         general: {
           provider: '1inch',
           dstAmount: '1000000',
-          tx: { evm: { from: '0xsender', to: ONE_INCH_V6_ROUTER, data: '0xabc', value: '0' } },
+          maxSlippageBps: 50,
+          tx: {
+            evm: {
+              from: '0xsender',
+              to: ONE_INCH_V6_ROUTER,
+              data: ONE_INCH_CALLDATA_WITH_995_000_MINIMUM,
+              value: '0',
+            },
+          },
         },
       },
       discounts: [],
@@ -145,7 +175,11 @@ describe('buildSwapKeysignPayload — AGG-03: CowSwap permitRequired keeps the a
 
     expect(payload.erc20ApprovePayload?.spender).toBe(ONE_INCH_V6_ROUTER)
     expect(mocks.getErc20Allowance).toHaveBeenCalledWith(
-      expect.objectContaining({ chain: Chain.Ethereum, address: '0xsender', spender: ONE_INCH_V6_ROUTER })
+      expect.objectContaining({
+        chain: Chain.Ethereum,
+        address: '0xsender',
+        spender: ONE_INCH_V6_ROUTER,
+      })
     )
   })
 })

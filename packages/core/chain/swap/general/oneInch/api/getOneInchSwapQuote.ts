@@ -14,7 +14,6 @@ import { addQueryParams } from '@vultisig/lib-utils/query/addQueryParams'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { evmNativeCoinAddress } from '../../../../chains/evm/config'
-import { assertOneInchCalldataMinOut } from '../decodeMinReturn'
 
 export type OneInchAffiliateConfig = typeof oneInchAffiliateConfig
 
@@ -121,14 +120,10 @@ export const getOneInchSwapQuote = async ({
     )
   }
 
-  // Known-selector min-out bind. Unknown 1inch selectors stay signable so a
-  // router upgrade does not brick honest swaps; a decoded floor below the
-  // requested slippage is refused.
-  assertOneInchCalldataMinOut(tx.data, dstAmount, slippage)
-
   return {
     dstAmount,
     provider: '1inch',
+    maxSlippageBps: slippage * 100,
     tx: {
       evm: {
         ...tx,

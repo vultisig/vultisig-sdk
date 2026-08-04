@@ -86,6 +86,13 @@ export type GeneralSwapTx =
 export type GeneralSwapQuote = {
   dstAmount: string
   provider: GeneralSwapProvider
+  /**
+   * Exact maximum slippage, in basis points, used to request opaque EVM
+   * aggregator calldata. Required at keysign-build time for 1inch, Kyber, and
+   * LI.FI so the router-enforced minimum output can be checked against
+   * `dstAmount`. Other providers and non-EVM routes may omit it.
+   */
+  maxSlippageBps?: number
   routeProvider?: string
   /**
    * Signed price impact of the route as a FRACTION, not a percent: `0.0133`
