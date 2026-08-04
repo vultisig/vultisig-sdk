@@ -24,7 +24,7 @@ import { toTwAddress } from '../../../tw/toTwAddress'
 import { getKeysignChain } from '../../../utils/getKeysignChain'
 import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../../resolver'
-import { CosmosChainSpecific, getCosmosChainSpecific, getCosmosFeeAmounts } from './chainSpecific'
+import { CosmosChainSpecific, getCosmosChainSpecific } from './chainSpecific'
 import { getCosmosCoinAmount } from './coinAmount'
 
 const getNativeSwapPayload = (keysignPayload: Parameters<typeof getKeysignSwapPayload>[0]) => {
@@ -534,7 +534,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
       return fee
     }
 
-    const getFeeAmounts = () => {
+    const getFeeAmounts = (feeAmount: bigint) => {
       if (chainKind !== 'ibcEnabled') {
         // THORChain and MayaChain charge their native transaction fee inside
         // message processing, not from cosmos-sdk authInfo.fee.amount. Their
@@ -543,14 +543,25 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
         return
       }
 
-      const cosmosSpecific = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      // Terra Classic bank-denom sends (currently USTC / uusd) pay gas plus
+      // burn tax in the send denom itself. `CosmosSpecific.gas` already
+      // contains that complete amount, computed by the initiator, so emit one
+      // uusd fee coin exactly like the current Swift and Kotlin signers.
+      if (coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd') {
+        return [
+          TW.Cosmos.Proto.Amount.create({
+            amount: feeAmount.toString(),
+            denom: coin.id,
+          }),
+        ]
+      }
 
-      return getCosmosFeeAmounts({
-        chain,
-        coinId: coin.id,
-        chainSpecific: cosmosSpecific,
-        includeTerraClassicBurnTax: true,
-      }).map(({ amount, denom }) => TW.Cosmos.Proto.Amount.create({ amount: amount.toString(), denom }))
+      return [
+        TW.Cosmos.Proto.Amount.create({
+          amount: feeAmount.toString(),
+          denom: chainFeeDenom,
+        }),
+      ]
     }
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
@@ -567,7 +578,7 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
 
     return TW.Cosmos.Proto.Fee.create({
       gas: Long.fromBigInt(resolvedGasLimit),
-      amounts: getFeeAmounts(),
+      amounts: getFeeAmounts(ibcSpecific?.gas ?? 0n),
     })
   }
 
