@@ -292,10 +292,32 @@ assert.equal(typeof root.Vultisig, 'function', 'root exports Vultisig')
 assert.ok(root.Chain !== undefined, 'root exports Chain')
 assert.equal(typeof root.fiatToAmount, 'function', 'root exports fiatToAmount')
 assert.equal(typeof root.normalizeChain, 'function', 'root exports normalizeChain')
+assert.equal(root.evm.encodeErc20Approve, root.encodeErc20Approve, 'root exposes sdk.evm')
+assert.equal(root.token.resolveContract, root.resolveContract, 'root exposes sdk.token')
+assert.equal(
+  root.cosmos.gov.getCosmosGovernanceProposals,
+  root.getCosmosGovernanceProposals,
+  'root exposes sdk.cosmos.gov'
+)
+assert.equal(root.cosmos.gov.prepareCosmosVote, root.prepareCosmosVote, 'sdk.cosmos.gov keeps the flat vote helper')
 
 assert.equal(typeof node.Vultisig, 'function', '@vultisig/sdk/node exports Vultisig')
+assert.equal(node.evm.encodeErc20Approve, node.encodeErc20Approve, '@vultisig/sdk/node exposes sdk.evm')
+assert.equal(node.token.resolveContract, node.resolveContract, '@vultisig/sdk/node exposes sdk.token')
+assert.equal(
+  node.cosmos.gov.prepareCosmosVote,
+  node.prepareCosmosVote,
+  '@vultisig/sdk/node exposes sdk.cosmos.gov'
+)
 
 assert.ok(browser.Chain !== undefined, '@vultisig/sdk/browser resolves')
+assert.equal(browser.evm.encodeErc20Approve, browser.encodeErc20Approve, '@vultisig/sdk/browser exposes sdk.evm')
+assert.equal(browser.token.resolveContract, browser.resolveContract, '@vultisig/sdk/browser exposes sdk.token')
+assert.equal(
+  browser.cosmos.gov.prepareCosmosVote,
+  browser.prepareCosmosVote,
+  '@vultisig/sdk/browser exposes sdk.cosmos.gov'
+)
 assert.ok(vite && (vite.default || vite), '@vultisig/sdk/vite resolves')
 assert.equal(
   path.basename(electronMainEntry),
@@ -339,12 +361,16 @@ assert.ok(existsSync(electronMainDts), 'electron main types exist on disk')
       `import type { Chain } from '@vultisig/sdk'
 import type { Vultisig } from '@vultisig/sdk/node'
 import type { ElectronMainCrypto, Vultisig as ElectronMainVultisig } from '@vultisig/sdk/electron/main'
+import { cosmos, evm, token } from '@vultisig/sdk'
 import '@vultisig/sdk/browser'
 import '@vultisig/sdk/vite'
 export type X = Chain
 export type Y = Vultisig
 export type Z = ElectronMainVultisig
 export type ElectronCrypto = ElectronMainCrypto
+export type CosmosNamespace = typeof cosmos
+export type EvmNamespace = typeof evm
+export type TokenNamespace = typeof token
 `
     )
     run(process.execPath, [tscBin, '-p', path.join(consumer, 'tsconfig.json')], {

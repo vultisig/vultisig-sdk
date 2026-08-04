@@ -48,6 +48,9 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import * as cosmos from '../../tools/cosmos'
+import * as evm from '../../tools/evm'
+import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
 
@@ -195,6 +198,10 @@ export type {
 // from its real (pure-JS) npm package, and `tiny-secp256k1` is inlined
 // via the noble-backed shim at
 // src/platforms/react-native/shims/tiny-secp256k1.ts.
+
+// Public namespace handles documented by the SDK changelog. Keep these as
+// explicit module objects so Rollup preserves the nested `cosmos.gov` handle.
+export { cosmos, evm, token }
 
 // Vault-free prep helpers (KeysignPayload construction without an instantiated vault)
 export type {
