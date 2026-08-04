@@ -30,6 +30,11 @@ vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance', () => ({
 
 import { buildSwapKeysignPayload } from './build'
 
+const ONE_INCH_CALLDATA_WITH_995_000_MINIMUM =
+  '0xa76dfc3b00000000000000000000000000000000000000000000000000000000000f2eb80000000000000000000000000000000000000000000000000000000000000000'
+const ONE_INCH_CALLDATA_WITH_ONE_WEI_MINIMUM =
+  '0xa76dfc3b00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000'
+
 const publicKey = {
   data: () => new Uint8Array([1, 2, 3]),
 } as never
@@ -39,15 +44,34 @@ const swapQuote: SwapQuote = {
     general: {
       provider: '1inch',
       dstAmount: '1000000',
-      tx: { evm: { from: '0xsender', to: '0xrouter', data: '0xabc', value: '0' } },
+      maxSlippageBps: 50,
+      tx: {
+        evm: {
+          from: '0xsender',
+          to: '0xrouter',
+          data: ONE_INCH_CALLDATA_WITH_995_000_MINIMUM,
+          value: '0',
+        },
+      },
     },
   },
   discounts: [],
 } as never
 
 const buildInput = {
-  fromCoin: { chain: Chain.Ethereum, address: '0xsender', ticker: 'ETH', decimals: 18 },
-  toCoin: { chain: Chain.Ethereum, address: '0xdest', id: '0xusdc', ticker: 'USDC', decimals: 6 },
+  fromCoin: {
+    chain: Chain.Ethereum,
+    address: '0xsender',
+    ticker: 'ETH',
+    decimals: 18,
+  },
+  toCoin: {
+    chain: Chain.Ethereum,
+    address: '0xdest',
+    id: '0xusdc',
+    ticker: 'USDC',
+    decimals: 6,
+  },
   amount: 1,
   swapQuote,
   vaultId: 'vault-id',
@@ -60,7 +84,10 @@ const buildInput = {
 
 describe('buildSwapKeysignPayload gas limit override', () => {
   it('overwrites ethereumSpecific.gasLimit with the explicit override', async () => {
-    const payload = await buildSwapKeysignPayload({ ...buildInput, gasLimitOverride: 999_999n })
+    const payload = await buildSwapKeysignPayload({
+      ...buildInput,
+      gasLimitOverride: 999_999n,
+    })
 
     expect(getBlockchainSpecificValue(payload.blockchainSpecific, 'ethereumSpecific').gasLimit).toBe('999999')
     // the 1inch write-back re-reads the (now overridden) gas limit
@@ -76,8 +103,36 @@ describe('buildSwapKeysignPayload gas limit override', () => {
   })
 
   it('ignores a zero override', async () => {
-    const payload = await buildSwapKeysignPayload({ ...buildInput, gasLimitOverride: 0n })
+    const payload = await buildSwapKeysignPayload({
+      ...buildInput,
+      gasLimitOverride: 0n,
+    })
 
     expect(getBlockchainSpecificValue(payload.blockchainSpecific, 'ethereumSpecific').gasLimit).toBe('50000')
+  })
+
+  it('refuses to build a signing payload when aggregator calldata weakens the quoted minimum output', async () => {
+    const maliciousQuote: SwapQuote = {
+      quote: {
+        general: {
+          provider: '1inch',
+          dstAmount: '1000000',
+          maxSlippageBps: 50,
+          tx: {
+            evm: {
+              from: '0xsender',
+              to: '0xrouter',
+              data: ONE_INCH_CALLDATA_WITH_ONE_WEI_MINIMUM,
+              value: '0',
+            },
+          },
+        },
+      },
+      discounts: [],
+    } as never
+
+    await expect(buildSwapKeysignPayload({ ...buildInput, swapQuote: maliciousQuote })).rejects.toThrow(
+      'below the quote-bound floor'
+    )
   })
 })

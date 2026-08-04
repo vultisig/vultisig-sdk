@@ -188,6 +188,7 @@ export const getLifiSwapQuote = async ({
   return {
     dstAmount: estimate.toAmount,
     provider: 'li.fi',
+    ...(chainKind === 'evm' ? { maxSlippageBps: slippage * 10000 } : {}),
     tx: match<DeriveChainKind<LifiSwapEnabledChain>, GeneralSwapQuote['tx']>(chainKind, {
       solana: () => {
         const { gasCosts, feeCosts } = estimate

@@ -11,6 +11,7 @@ import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { COW_VAULT_RELAYER_ADDRESS } from '@vultisig/core-chain/swap/general/cowswap/config'
 import { encodeCowSwapKeysignData } from '@vultisig/core-chain/swap/general/cowswap/keysign/cowSwapKeysignData'
+import { assertAggregatorCalldataMinOutputBound } from '@vultisig/core-chain/swap/general/calldataMinOutput'
 import { GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { getSwapDestinationAddress } from '@vultisig/core-chain/swap/keysign/getSwapDestinationAddress'
 import { nativeSwapQuoteToSwapPayload } from '@vultisig/core-mpc/swap/native/utils/nativeSwapQuoteToSwapPayload'
@@ -214,6 +215,15 @@ export const buildSwapKeysignPayload = async ({
 
   keysignPayload.swapPayload = matchRecordUnion<SwapQuoteResult, KeysignPayload['swapPayload']>(swapQuote.quote, {
     general: quote => {
+      if ('evm' in quote.tx) {
+        assertAggregatorCalldataMinOutputBound({
+          provider: quote.provider,
+          data: quote.tx.evm.data,
+          quotedOutputAmount: quote.dstAmount,
+          maxSlippageBps: quote.maxSlippageBps,
+        })
+      }
+
       const transfer = matchRecordUnion<GeneralSwapTx, TransferSwapTx | undefined>(quote.tx, {
         evm: () => undefined,
         solana: () => undefined,

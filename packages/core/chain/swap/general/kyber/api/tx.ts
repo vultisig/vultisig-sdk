@@ -138,6 +138,7 @@ export const getKyberSwapTx = async ({
   return {
     dstAmount: amountOut,
     provider: 'kyber',
+    maxSlippageBps: slippageTolerance,
     tx: {
       evm: {
         from: from.address,

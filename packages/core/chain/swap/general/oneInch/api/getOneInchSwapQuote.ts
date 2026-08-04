@@ -123,6 +123,7 @@ export const getOneInchSwapQuote = async ({
   return {
     dstAmount,
     provider: '1inch',
+    maxSlippageBps: slippage * 100,
     tx: {
       evm: {
         ...tx,
