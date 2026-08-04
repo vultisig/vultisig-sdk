@@ -79,10 +79,11 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
   })
 
-  it('forwards token coin (with id) to getCoinBalance for ERC-20 max', async () => {
-    const balance = 5_000_000n
-    const fee = 1_500_000n
-    mockGetCoinBalance.mockResolvedValue(balance)
+  it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
+    const balance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 8_530_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? balance : nativeBalance))
     mockGetSendFeeEstimate.mockResolvedValue(fee)
 
     const tokenCoin = {
@@ -98,11 +99,80 @@ describe('getMaxSendAmountFromKeys', () => {
       receiver: '0xto',
     })
 
-    expect(mockGetCoinBalance).toHaveBeenCalledWith(tokenCoin)
-    expect(mockGetCoinBalance.mock.calls[0][0].id).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
     expect(result.balance).toBe(balance)
     expect(result.fee).toBe(fee)
-    expect(result.maxSendable).toBe(balance - fee)
+    expect(result.maxSendable).toBe(balance)
+    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(1, tokenCoin)
+    expect(mockGetCoinBalance).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ chain: Chain.Ethereum, address: '0xfrom', ticker: 'ETH' })
+    )
+    expect(mockGetCoinBalance.mock.calls[1][0].id).toBeUndefined()
+    expect(mockGetCoinBalance.mock.calls[0][0].id).toBe('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')
+  })
+
+  it('returns the full balance for an 18-decimal ERC-20 token', async () => {
+    const balance = 4_000_000_000_000_000_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 1_000_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? balance : nativeBalance))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin: {
+        chain: Chain.Ethereum,
+        address: '0xfrom',
+        id: '0x18decimaltoken',
+        decimals: 18,
+        ticker: 'TOKEN18',
+      } as any,
+      receiver: '0xto',
+    })
+
+    expect(result).toEqual({ balance, fee, maxSendable: balance })
+  })
+
+  it('rejects a token max-send when the native balance cannot cover gas', async () => {
+    const tokenBalance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    const nativeBalance = 10_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? tokenBalance : nativeBalance))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          decimals: 6,
+          ticker: 'USDC',
+        } as any,
+        receiver: '0xto',
+      })
+    ).rejects.toThrow(
+      'Insufficient native ETH balance for gas: 10000000000000000 available, 20000000000000000 required'
+    )
+  })
+
+  it('allows a token max-send when the native balance exactly covers gas', async () => {
+    const tokenBalance = 16_140_000n
+    const fee = 20_000_000_000_000_000n
+    mockGetCoinBalance.mockImplementation(async coin => (coin.id ? tokenBalance : fee))
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: {
+          chain: Chain.Ethereum,
+          address: '0xfrom',
+          id: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+          decimals: 6,
+          ticker: 'USDC',
+        } as any,
+        receiver: '0xto',
+      })
+    ).resolves.toEqual({ balance: tokenBalance, fee, maxSendable: tokenBalance })
   })
 
   it('returns maxSendable === 0n when fee exceeds balance', async () => {

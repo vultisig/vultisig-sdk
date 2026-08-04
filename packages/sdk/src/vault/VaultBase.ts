@@ -1125,10 +1125,17 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
     // wrapping all fire. The vault-free `getMaxSendAmountFromKeys` skips these
     // (no cache/events in the MCP / agent context); vault callers must not.
-    const balance = await this.balanceService.getBalance(params.coin.chain, params.coin.id)
+    const [balance, nativeBalance] = await Promise.all([
+      this.balanceService.getBalance(params.coin.chain, params.coin.id),
+      params.coin.id === undefined ? undefined : this.balanceService.getBalance(params.coin.chain),
+    ])
     return computeMaxSendFromBalance(
       vaultDataToIdentity(this.coreVault),
-      { ...params, balance: BigInt(balance.amount) },
+      {
+        ...params,
+        balance: BigInt(balance.amount),
+        nativeBalance: nativeBalance === undefined ? undefined : BigInt(nativeBalance.amount),
+      },
       walletCore
     )
   }
