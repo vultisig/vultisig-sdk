@@ -46,15 +46,31 @@ function inferFamily(input: DecodeFromToolResultInput, args: Record<string, unkn
   return undefined
 }
 
-/** Strip 0x and decode a hex string to bytes. */
+const STRICT_BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
+
+/** Strip 0x and decode a hex string to bytes. Reject malformed/truncated hex. */
 function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith('0x') || hex.startsWith('0X') ? hex.slice(2) : hex
-  return Uint8Array.from(Buffer.from(clean, 'hex'))
+  if (clean.length === 0) throw new Error('invalid hex payload: empty string')
+  if (clean.length % 2 !== 0) throw new Error('invalid hex payload: odd-length string')
+  if (!/^[0-9a-fA-F]+$/.test(clean)) throw new Error('invalid hex payload: non-hex characters')
+
+  const bytes = Buffer.from(clean, 'hex')
+  if (bytes.length * 2 !== clean.length || bytes.toString('hex').toLowerCase() !== clean.toLowerCase()) {
+    throw new Error('invalid hex payload: truncated or non-canonical input')
+  }
+  return Uint8Array.from(bytes)
 }
 
-/** Decode base64 to bytes. */
+/** Decode base64 to bytes. Reject malformed/non-canonical base64. */
 function base64ToBytes(b64: string): Uint8Array {
-  return Uint8Array.from(Buffer.from(b64, 'base64'))
+  if (b64.length === 0) throw new Error('invalid base64 payload: empty string')
+  if (!STRICT_BASE64_RE.test(b64)) throw new Error('invalid base64 payload: malformed input')
+
+  const bytes = Buffer.from(b64, 'base64')
+  if (bytes.length === 0) throw new Error('invalid base64 payload: empty decode')
+  if (bytes.toString('base64') !== b64) throw new Error('invalid base64 payload: non-canonical input')
+  return Uint8Array.from(bytes)
 }
 
 /**
@@ -67,19 +83,24 @@ function resolvePayload(
   family: ChainFamily,
   args: Record<string, unknown>
 ): Uint8Array | { error: string } {
-  if (input.payload !== undefined) {
-    if (input.payload instanceof Uint8Array) return input.payload
-    const p = input.payload
-    return family === 'evm' ? hexToBytes(p) : tryBase64ThenHex(p)
+  try {
+    if (input.payload !== undefined) {
+      if (input.payload instanceof Uint8Array) return input.payload
+      const p = input.payload
+      return family === 'evm' ? hexToBytes(p) : tryBase64ThenHex(p)
+    }
+    if (family === 'evm') {
+      const hex = args['unsigned_payload']
+      if (typeof hex === 'string' && hex.length > 0) return hexToBytes(hex)
+      return { error: 'evm: no payload — pass `payload` or args.unsigned_payload (hex)' }
+    }
+    const b64 = args['cosmos_payload'] ?? args['payload']
+    if (typeof b64 === 'string' && b64.length > 0) return tryBase64ThenHex(b64)
+    return { error: 'cosmos: no payload — pass `payload` or args.cosmos_payload (base64)' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { error: `${family}: ${message}` }
   }
-  if (family === 'evm') {
-    const hex = args['unsigned_payload']
-    if (typeof hex === 'string' && hex.length > 0) return hexToBytes(hex)
-    return { error: 'evm: no payload — pass `payload` or args.unsigned_payload (hex)' }
-  }
-  const b64 = args['cosmos_payload'] ?? args['payload']
-  if (typeof b64 === 'string' && b64.length > 0) return tryBase64ThenHex(b64)
-  return { error: 'cosmos: no payload — pass `payload` or args.cosmos_payload (base64)' }
 }
 
 /** Cosmos payloads are base64 in the wild, but tolerate hex too. */

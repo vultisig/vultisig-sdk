@@ -186,6 +186,18 @@ describe('decodeFromToolResult — EVM half (viem)', () => {
     expect(env.decoded).toBe(false)
     expect(env.decodeError).toContain('evm')
   })
+
+  it.each(['0x123', '123', '0g', 'zz'])('rejects malformed hex payload %s instead of coercing it', (payload: string) => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', payload })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('invalid hex payload')
+  })
+
+  it('rejects malformed hex in args.unsigned_payload instead of truncating it', () => {
+    const env = decodeFromToolResult({ family: 'evm', chain: 'ethereum', args: { unsigned_payload: '0x123' } })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toContain('invalid hex payload')
+  })
 })
 
 describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
@@ -274,6 +286,12 @@ describe('decodeFromToolResult — Cosmos half (cosmjs-types proto3)', () => {
       payload: Buffer.from('not a real tx').toString('base64'),
     })
     expect(env.decoded).toBe(false)
+  })
+
+  it.each(['AQ===', '@@@', '0x123', 'zz'])('rejects malformed cosmos payload %s instead of coercing it', (payload: string) => {
+    const env = decodeFromToolResult({ family: 'cosmos', chain: 'cosmoshub-4', payload })
+    expect(env.decoded).toBe(false)
+    expect(env.decodeError).toMatch(/invalid (base64|hex) payload/)
   })
 })
 
