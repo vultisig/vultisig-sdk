@@ -4,6 +4,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { RujiraErrorCode } from '../errors.js'
 import { RujiraOrderbook } from '../modules/orderbook.js'
 
 // Mock the client
@@ -282,6 +283,73 @@ describe('RujiraOrderbook', () => {
       expect(funds[0].amount).toBe('300000000')
       expect(msg.order[0][0][2]).toBe(funds[0].amount)
       expect(msg.order[0][0][0]).toBe('base')
+    })
+  })
+
+  describe('buildPlaceOrder() offer-asset resolution', () => {
+    const buyParams = {
+      pair: 'RUNE/BTC',
+      side: 'buy',
+      price: '0.000025',
+      amount: '100000000',
+    } as const
+
+    it('uses the quote asset proven by canonical contract config', async () => {
+      const mockClient = createMockClient({
+        denoms: ['rune', 'btc-btc'],
+        tick: 6,
+        fee_taker: '0.0015',
+        fee_maker: '0.00075',
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      const { funds } = await orderbook.buildPlaceOrder(buyParams as any)
+
+      expect(mockClient.queryContract).toHaveBeenCalledWith('thor1runebtc...', { config: {} })
+      expect(funds).toEqual([{ denom: 'btc-btc', amount: '2500' }])
+    })
+
+    it('fails closed when contract config cannot be loaded', async () => {
+      const mockClient = createMockClient()
+      mockClient.queryContract = vi.fn().mockRejectedValue(new Error('Query failed'))
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when canonical contract config omits the quote denom', async () => {
+      const mockClient = createMockClient({ denoms: ['rune'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when canonical contract config contains extra denoms', async () => {
+      const mockClient = createMockClient({ denoms: ['rune', 'btc-btc', 'eth-eth'] })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
+    })
+
+    it('fails closed when contract config names an unknown quote asset', async () => {
+      const mockClient = createMockClient({
+        denoms: { base: 'rune', quote: 'unknown-quote' },
+      })
+      const orderbook = new RujiraOrderbook(mockClient as any)
+
+      await expect(orderbook.buildPlaceOrder(buyParams as any)).rejects.toMatchObject({
+        code: RujiraErrorCode.INVALID_ASSET,
+        message: 'Could not determine offer asset for order',
+      })
     })
   })
 })

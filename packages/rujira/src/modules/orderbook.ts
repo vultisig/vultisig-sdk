@@ -129,21 +129,33 @@ export class RujiraOrderbook {
     try {
       const query: FinQueryMsg = { config: {} }
       const response = await this.client.queryContract<{
-        denoms: { base: string; quote: string }
-        tick?: string
+        denoms: string[] | { base: string; quote: string }
+        tick?: string | number
         fee?: { taker: string; maker: string }
+        fee_taker?: string
+        fee_maker?: string
         last_price?: string
       }>(contractAddress, query)
 
-      const base = this.denomToAsset(response.denoms.base)
-      const quote = this.denomToAsset(response.denoms.quote)
+      if (Array.isArray(response.denoms) && response.denoms.length !== 2) {
+        return { base: '', quote: '' }
+      }
+
+      const baseDenom = Array.isArray(response.denoms) ? response.denoms[0] : response.denoms?.base
+      const quoteDenom = Array.isArray(response.denoms) ? response.denoms[1] : response.denoms?.quote
+      if (!baseDenom || !quoteDenom) {
+        return { base: '', quote: '' }
+      }
+
+      const base = this.denomToAsset(baseDenom)
+      const quote = this.denomToAsset(quoteDenom)
 
       return {
         base,
         quote,
-        tick: response.tick,
-        takerFee: response.fee?.taker,
-        makerFee: response.fee?.maker,
+        tick: response.tick === undefined ? undefined : String(response.tick),
+        takerFee: response.fee?.taker ?? response.fee_taker,
+        makerFee: response.fee?.maker ?? response.fee_maker,
         lastPrice: response.last_price,
       }
     } catch {
@@ -480,7 +492,7 @@ export class RujiraOrderbook {
     const config = await this.getContractConfig(contractAddress)
 
     if (params.side === 'buy') {
-      return config.quote ? getAssetInfo(config.quote) : getAssetInfo('THOR.RUNE')
+      return config.quote ? getAssetInfo(config.quote) : undefined
     }
 
     return config.base ? getAssetInfo(config.base) : undefined
