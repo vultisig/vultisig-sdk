@@ -15,6 +15,9 @@ type BuildJettonTransferInput = {
   isActiveDestination: boolean
 }
 
+export const getTonJettonTransferAmount = (isActiveDestination: boolean): bigint =>
+  isActiveDestination ? tonConfig.jettonAmount : tonConfig.uninitializedJettonAmount
+
 export const buildJettonTransfer = ({
   keysignPayload,
   walletCore,
@@ -39,7 +42,7 @@ export const buildJettonTransfer = ({
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: jettonAddress,
-    amount: tonAmountToBytes(tonConfig.jettonAmount),
+    amount: tonAmountToBytes(getTonJettonTransferAmount(isActiveDestination)),
     bounceable: true,
     comment: toSafeComment(keysignPayload.memo ?? ''),
     mode,

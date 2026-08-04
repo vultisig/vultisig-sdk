@@ -11,6 +11,7 @@ import { getKeysignCoin } from '../../../utils/getKeysignCoin'
 import { GetChainSpecificResolver } from '../../resolver'
 
 const tonWalletStateUninitialized = 'uninit'
+const tonWalletStateActive = 'active'
 
 export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = async ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
@@ -74,8 +75,20 @@ export const getTonChainSpecific: GetChainSpecificResolver<'tonSpecific'> = asyn
     }
 
     if (receiver) {
-      const { data: destWalletState } = await attempt(getTonWalletState(receiver))
-      result.isActiveDestination = destWalletState !== tonWalletStateUninitialized
+      const { data: destinationJettonWallet } = await attempt(
+        getJettonWalletAddress({
+          ownerAddress: receiver,
+          jettonMasterAddress: coin.id,
+        })
+      )
+      const { data: destWalletState } = destinationJettonWallet
+        ? await attempt(getTonWalletState(destinationJettonWallet))
+        : { data: undefined }
+      // Only an authoritative `active` response selects the cheaper attachment.
+      // A missing recipient jetton wallet is the first-recipient deployment
+      // case; frozen/uninitialized wallets and RPC failures also need the
+      // conservative reservation.
+      result.isActiveDestination = destWalletState === tonWalletStateActive
     }
   }
 

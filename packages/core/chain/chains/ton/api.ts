@@ -1,5 +1,7 @@
+import { Cell, loadMessage } from '@ton/core'
 import { rootApiUrl } from '@vultisig/core-config'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
+import { Buffer } from 'buffer'
 
 import { tonAddressToRaw } from './address'
 
@@ -85,6 +87,81 @@ export const getTonWalletState = async (address: string): Promise<string> => {
   const response = await queryUrl<AddressInformationResponse>(url)
 
   return response.status
+}
+
+type TonFeeValue = number | string
+
+type TonFees = {
+  in_fwd_fee: TonFeeValue
+  storage_fee: TonFeeValue
+  gas_fee: TonFeeValue
+  fwd_fee: TonFeeValue
+}
+
+type TonEstimateFeeResponse = {
+  ok: boolean
+  result?: {
+    source_fees: TonFees
+    destination_fees?: TonFees[]
+  }
+  error?: string
+}
+
+const sumTonFees = ({ in_fwd_fee, storage_fee, gas_fee, fwd_fee }: TonFees): bigint =>
+  [in_fwd_fee, storage_fee, gas_fee, fwd_fee].reduce((total, fee) => {
+    const value = BigInt(fee)
+    if (value < 0n) {
+      throw new Error(`toncenter estimateFee returned a negative fee: ${value}`)
+    }
+    return total + value
+  }, 0n)
+
+/**
+ * Dry-runs a compiled TON external message through toncenter's v2
+ * `estimateFee` endpoint. The endpoint expects the external message body (and
+ * separate StateInit cells for a first outgoing transaction), not the full
+ * broadcast BoC, so extract those cells before making the request.
+ */
+export const estimateTonFee = async ({
+  address,
+  externalMessageBoc,
+}: {
+  address: string
+  externalMessageBoc: string
+}): Promise<bigint> => {
+  const [root] = Cell.fromBoc(Buffer.from(externalMessageBoc, 'base64'))
+  if (!root) {
+    throw new Error('TON fee estimate external message BoC is empty')
+  }
+
+  const message = loadMessage(root.beginParse())
+  if (message.info.type !== 'external-in') {
+    throw new Error(`TON fee estimate requires an external-in message, got ${message.info.type}`)
+  }
+
+  const response = await queryUrl<TonEstimateFeeResponse>(`${tonApiUrl}/v2/estimateFee`, {
+    body: {
+      address,
+      body: message.body.toBoc().toString('base64'),
+      init_code: message.init?.code?.toBoc().toString('base64'),
+      init_data: message.init?.data?.toBoc().toString('base64'),
+      ignore_chksig: true,
+    },
+  })
+
+  if (!response.ok || !response.result) {
+    throw new Error(`toncenter estimateFee failed: ${response.error ?? 'missing result'}`)
+  }
+
+  const total = [response.result.source_fees, ...(response.result.destination_fees ?? [])].reduce(
+    (sum, fees) => sum + sumTonFees(fees),
+    0n
+  )
+  if (total <= 0n) {
+    throw new Error(`toncenter estimateFee returned a non-positive total: ${total}`)
+  }
+
+  return total
 }
 
 type JettonContent = {
