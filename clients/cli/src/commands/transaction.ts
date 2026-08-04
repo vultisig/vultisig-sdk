@@ -4,7 +4,7 @@
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { Chain, recipientSanity, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
@@ -175,6 +175,23 @@ export async function sendTransaction(
     )
   }
   const destinationTag = params.destinationTag ?? rippleDestination.destinationTag
+
+  // Fund-safety: refuse null / burn / self-send / malformed-EVM recipients before
+  // any network call. bead vultisig-51exn: the shared recipientSanity helper was
+  // exported but not wired into the send prep — so a send to Solana's System
+  // Program (`11111111111111111111111111111111`), the EVM zero address, or the
+  // canonical `0x...dEaD` burn built silently. All are unrecoverable on-chain.
+  // Self-send is caught here rather than at broadcast because dry-run alone
+  // reads as "safe to sign" to a scripted caller.
+  const fromAddress = await vault.address(params.chain).catch(() => '')
+  const sanity = recipientSanity({ recipient: to, from: fromAddress })
+  if (sanity.flagged) {
+    const reasons: string[] = []
+    if (sanity.isNull) reasons.push('recipient is a null / burn address (funds would be unrecoverable)')
+    if (sanity.isSelfSend) reasons.push('recipient matches your own vault address')
+    if (sanity.isMalformedEvm) reasons.push('recipient looks like a malformed EVM address')
+    throw new Error(`Refusing send: ${reasons.join('; ')}. If this is intentional, re-run with a different recipient.`)
+  }
 
   // 1. Dry-run for preview
   const prepareSpinner = createSpinner('Preparing transaction...')
