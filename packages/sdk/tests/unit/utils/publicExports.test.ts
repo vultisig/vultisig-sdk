@@ -20,7 +20,7 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.ChainAmountParseError.prototype).toBeInstanceOf(Error)
   })
 
-  it('exports fromChainAmountExact and getBlockExplorerUrl', () => {
+  it('exports fromChainAmountExact, getBlockExplorerUrl, and the chain registry', () => {
     expect(typeof sdk.fromChainAmountExact).toBe('function')
     expect(sdk.fromChainAmountExact(123456789012345678901n, 18)).toBe('123.456789012345678901')
 
@@ -28,6 +28,10 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getBlockExplorerUrl({ chain: sdk.Chain.Ethereum, entity: 'address', value: '0xabc' })).toBe(
       'https://etherscan.io/address/0xabc'
     )
+
+    expect(Object.keys(sdk.chainRegistry).sort()).toEqual(Object.values(sdk.Chain).sort())
+    expect(typeof sdk.deriveFromChainRegistry).toBe('function')
+    expect(typeof sdk.extendChainRegistry).toBe('function')
   })
 
   it('exports tx-shape normalization primitives (normalizeTx, splitMultiTx)', () => {
