@@ -32,6 +32,16 @@ export const MAYA_SEND_FEE_BASE_UNITS = 2000000000n
  */
 export const TERRA_CLASSIC_ULUNA_BASE_GAS = 8_497_500n
 
+/**
+ * Terra Classic's `uusd` fee at the static 300k gas limit:
+ * `300_000 × 0.75 uusd/gas`. USTC bank-denom sends pay both gas and burn
+ * tax in `uusd`, so their base cannot reuse the native `uluna` amount.
+ *
+ * Matches iOS `TerraClassicTax.uusdBaseGas` and Android
+ * `TerraClassicTax.UUSD_BASE_GAS`.
+ */
+export const TERRA_CLASSIC_UUSD_BASE_GAS = 225_000n
+
 export const cosmosGasRecord: Record<IbcEnabledCosmosChain, bigint> = {
   [Chain.Cosmos]: COSMOS_SEND_FEE_DEFAULT,
   [Chain.Osmosis]: 9000n,

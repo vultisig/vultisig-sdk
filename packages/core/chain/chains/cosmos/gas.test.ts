@@ -10,6 +10,7 @@ import {
   getMinGasPriceForDenom,
   MAYA_SEND_FEE_BASE_UNITS,
   TERRA_CLASSIC_ULUNA_BASE_GAS,
+  TERRA_CLASSIC_UUSD_BASE_GAS,
 } from './gas'
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -328,5 +329,17 @@ describe('TERRA_CLASSIC_ULUNA_BASE_GAS', () => {
 
   it('matches iOS ulunaBaseGas / Android ULUNA_BASE_GAS', () => {
     expect(TERRA_CLASSIC_ULUNA_BASE_GAS).toBe(8_497_500n)
+  })
+})
+
+describe('TERRA_CLASSIC_UUSD_BASE_GAS', () => {
+  it('equals the TerraClassic static gas limit priced at 0.75 uusd/gas', () => {
+    const staticGasLimit = getCosmosGasLimit({ chain: Chain.TerraClassic, id: 'uusd' })
+
+    expect(TERRA_CLASSIC_UUSD_BASE_GAS).toBe((staticGasLimit * 75n) / 100n)
+  })
+
+  it('matches iOS uusdBaseGas / Android UUSD_BASE_GAS', () => {
+    expect(TERRA_CLASSIC_UUSD_BASE_GAS).toBe(225_000n)
   })
 })

@@ -151,6 +151,43 @@ describe('getCosmosSigningInputs gas limit', () => {
     expect(input.fee?.gas.toString()).toBe('321979')
   })
 
+  it('signs a TerraClassic USTC fee as one uusd coin, matching mobile signers', async () => {
+    const terraClassicSender = walletCore.AnyAddress.createWithPublicKey(
+      walletCore.PrivateKey.createWithData(new Uint8Array(32).fill(1)).getPublicKeySecp256k1(true),
+      walletCore.CoinType.terra
+    ).description()
+
+    const [input] = await getCosmosSigningInputs({
+      keysignPayload: create(KeysignPayloadSchema, {
+        coin: create(CoinSchema, {
+          chain: Chain.TerraClassic,
+          ticker: 'USTC',
+          address: terraClassicSender,
+          contractAddress: 'uusd',
+          decimals: 6,
+          isNativeToken: false,
+          hexPublicKey: publicKeyHex,
+        }),
+        toAddress: terraClassicSender,
+        toAmount: '200000000',
+        blockchainSpecific: {
+          case: 'cosmosSpecific',
+          value: create(CosmosSpecificSchema, {
+            accountNumber: 7n,
+            sequence: 3n,
+            gas: 1_225_000n,
+            transactionType: TransactionType.UNSPECIFIED,
+          }),
+        },
+      }),
+      walletCore,
+    })
+
+    expect(input.fee?.amounts).toHaveLength(1)
+    expect(input.fee?.amounts?.[0]).toMatchObject({ denom: 'uusd', amount: '1225000' })
+    expect(input.fee?.gas.toString()).toBe('300000')
+  })
+
   it('keeps vault-based Cosmos chains on their static gas limit', async () => {
     const [input] = await getCosmosSigningInputs({
       keysignPayload: create(KeysignPayloadSchema, {

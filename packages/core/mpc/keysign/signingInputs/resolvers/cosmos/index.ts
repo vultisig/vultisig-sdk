@@ -4,7 +4,6 @@ import { getCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/cosmosGasL
 import { resolveCosmosGasLimit } from '@vultisig/core-chain/chains/cosmos/resolveCosmosGasLimit'
 import { getCosmosChainKind } from '@vultisig/core-chain/chains/cosmos/utils/getCosmosChainKind'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import {
   getNativeSwapChainIdFromDenomPrefix,
   nativeSwapChainIds,
@@ -511,32 +510,25 @@ export const getCosmosSigningInputs: SigningInputsResolver<'cosmos'> = ({ keysig
     const getFeeAmounts = (feeAmount: bigint) => {
       if (chainKind !== 'ibcEnabled') return
 
-      const { ibcDenomTraces } = getRecordUnionValue(chainSpecific, 'ibcEnabled')
+      // Terra Classic bank-denom sends (currently USTC / uusd) pay gas plus
+      // burn tax in the send denom itself. `CosmosSpecific.gas` already
+      // contains that complete amount, computed by the initiator, so emit one
+      // uusd fee coin exactly like the current Swift and Kotlin signers.
+      if (coin.chain === Chain.TerraClassic && coin.id?.toLowerCase() === 'uusd') {
+        return [
+          TW.Cosmos.Proto.Amount.create({
+            amount: feeAmount.toString(),
+            denom: coin.id,
+          }),
+        ]
+      }
 
-      const amounts: TW.Cosmos.Proto.Amount[] = [
+      return [
         TW.Cosmos.Proto.Amount.create({
           amount: feeAmount.toString(),
           denom: chainFeeDenom,
         }),
       ]
-
-      // Terra Classic stability-tax surcharge for USTC (uusd) sends.
-      // The burn-tax amount is pre-computed dynamically in getCosmosChainSpecific
-      // and stored in ibcDenomTraces.baseDenom so this sync path can use it.
-      // baseDenom is '' for all non-USTC chains; '0' when rate is zero.
-      if (areEqualCoins(coin, { chain: Chain.TerraClassic, id: 'uusd' })) {
-        const burnTaxAmount = BigInt(ibcDenomTraces?.baseDenom || '0')
-        if (burnTaxAmount > 0n) {
-          amounts.push(
-            TW.Cosmos.Proto.Amount.create({
-              denom: coin.id,
-              amount: burnTaxAmount.toString(),
-            })
-          )
-        }
-      }
-
-      return amounts
     }
 
     const ibcSpecific = chainKind === 'ibcEnabled' ? getRecordUnionValue(chainSpecific, 'ibcEnabled') : undefined
