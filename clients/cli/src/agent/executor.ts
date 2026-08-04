@@ -403,11 +403,17 @@ export class AgentExecutor {
     const amount = labels.resolved_amount ?? p?.txArgs?.amount ?? '?'
     // Include the asset symbol so a confirmation prompt can never be ambiguous
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
-    // resolved_amount usually already embeds it; de-dup when both are set.
-    const symbol = labels.token_resolved || labels.token_symbol || ''
+    // token_resolved may be either a bare ticker or a richer label such as
+    // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
+    // the richer chain/contract disclosure as the summary suffix.
+    const tokenLabel = (labels.token_resolved || labels.token_symbol || '').trim()
+    const symbol = tokenLabel.split(/\s+/, 1)[0]
+    const tokenDetail = tokenLabel.slice(symbol.length).trim()
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
+    const contractDetail = tokenDetail.match(/(\([^()]+\))\s*$/)?.[1]
+    const location = `on ${stored.chain}${contractDetail ? ` ${contractDetail}` : ''}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
-    return `send ${amountWithSymbol} on ${stored.chain} to ${to}`
+    return `send ${amountWithSymbol} ${location} to ${to}`
   }
 
   /**

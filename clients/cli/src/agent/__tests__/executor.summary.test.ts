@@ -124,6 +124,62 @@ describe('AgentExecutor.getPendingSummary', () => {
     ).toBe(true)
     expect(executor.getPendingSummary()).toBe('send 0.5 USDC on Base to 0xRecipientAddr')
   })
+
+  it('renders rich token, native, and bare token labels without duplicated consent details', () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e on Polygon (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const tokenSummary = executor.getPendingSummary()!
+    expect(tokenSummary).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+    expect(tokenSummary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(tokenSummary.match(/Polygon/g)).toHaveLength(1)
+    expect(tokenSummary).toContain('(0x2791…4174)')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e',
+            token_resolved: 'USDC.e (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x58C4…5C35', value: '1' } },
+        resolved: { labels: { resolved_amount: '0.01 POL', recipient_echo: '0x58C4…5C35' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.01 POL on Polygon to 0x58C4…5C35')
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Base',
+        txArgs: { chain: 'Base', to: '0xRecipientAddr', amount: '500000', tx: { to: '0xUSDC', value: '0' } },
+        resolved: { labels: { token_resolved: 'USDC' } },
+      })
+    ).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 500000 USDC on Base to 0xRecipientAddr')
+  })
 })
 
 describe('AgentExecutor pending-state hygiene (decline path)', () => {
