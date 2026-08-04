@@ -220,4 +220,24 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
   })
+
+  it('exports documented balance/bridge/prep/swap namespace handles from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.balance).toBeDefined()
+    expect(typeof rn.balance.getSolBalance).toBe('function')
+    expect(typeof rn.balance.getCosmosBalance).toBe('function')
+
+    expect(rn.bridge).toBeDefined()
+    expect(typeof rn.bridge.buildCctpBridge).toBe('function')
+    expect(Array.isArray(rn.bridge.cctpSupportedChains)).toBe(true)
+
+    expect(rn.prep).toBeDefined()
+    expect(typeof rn.prep.prepareIbcTransfer).toBe('function')
+    expect(typeof rn.prep.prepareTrc20TransferFromKeys).toBe('function')
+
+    expect(rn.swap).toBeDefined()
+    expect(typeof rn.swap.acrossQuote).toBe('function')
+    expect(typeof rn.swap.runSkipSwap).toBe('function')
+  })
 })

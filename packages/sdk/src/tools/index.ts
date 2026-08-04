@@ -36,6 +36,10 @@ export {
 // Balance reads (pure decode + decimal-scale, no signing/broadcast)
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from './balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from './balance'
+import * as balance from './balance'
+// Namespace handle so callers can use the documented `sdk.balance.getSolBalance(...)`
+// ergonomic alongside the flat named exports.
+export { balance }
 
 // Canonical bytes oracle (calldata -> chain-agnostic Envelope)
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from './decode'
@@ -51,6 +55,24 @@ import * as gas from './gas'
 // Namespace handle so callers can use the documented `sdk.gas.compareCosts(...)`
 // ergonomic alongside the flat named exports.
 export { gas }
+
+// Bridge / transfer helpers (CCTP etc.)
+import * as bridge from './bridge'
+// Namespace handle so callers can use the documented `sdk.bridge.buildCctpBridge(...)`
+// ergonomic alongside the flat named exports.
+export { bridge }
+
+// Vault-free prep helpers (KeysignPayload construction)
+import * as prep from './prep'
+// Namespace handle so callers can use the documented `sdk.prep.prepareIbcTransfer(...)`
+// ergonomic alongside the flat named exports.
+export { prep }
+
+// Swap / quote helpers
+import * as swap from './swap'
+// Namespace handle so callers can use the documented `sdk.swap.acrossQuote(...)`
+// ergonomic alongside the flat named exports.
+export { swap }
 
 // Balance reads (per-chain, vault-free)
 export type { GetUtxoBalanceOptions, UtxoBalance, UtxoBalanceChain } from './balance'
