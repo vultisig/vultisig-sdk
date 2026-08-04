@@ -212,7 +212,11 @@ export function buildTonSendTx(opts: BuildTonSendOptions): TonTxBuilderResult {
           value: opts.amount,
           bounce: opts.bounceable,
           body: buildCommentBody(opts.memo),
-        })
+        }),
+        // WalletCore always stores the internal-message body as a reference.
+        // @ton/core otherwise inlines small bodies, which is semantically
+        // equivalent on-chain but produces a different signing-payload hash.
+        { forceRef: true }
       )
     )
     .endCell()
@@ -276,6 +280,9 @@ export type BuildTonJettonTransferOptions = {
   jettonWalletAddress: string
   /** Amount in Jetton minimal units (use the Jetton metadata's decimals). */
   amount: bigint
+  /** Whether the recipient account is initialized. Matches WalletCore's transfer context; defaults to true. */
+  isActiveDestination?: boolean
+  /** Optional UTF-8 comment; must fit WalletCore's inline Jetton forward_payload. */
   memo?: string
   seqno: number
   validUntil?: number
@@ -298,14 +305,21 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
     .storeAddress(destinationAddr)
     .storeAddress(wallet.address) // response_destination for excess TON
     .storeBit(false) // no custom_payload
-    .storeCoins(JETTON_FORWARD_AMOUNT_NANO)
+    .storeCoins((opts.isActiveDestination ?? true) ? JETTON_FORWARD_AMOUNT_NANO : 0n)
 
   if (opts.memo) {
     const commentCell = buildCommentBody(opts.memo)
     if (!commentCell) {
       throw new Error('TON jetton memo: buildCommentBody returned undefined unexpectedly')
     }
-    jettonBody = jettonBody.storeBit(true).storeRef(commentCell)
+    // WalletCore only supports the inline Either Cell representation here.
+    // Its remaining capacity varies with the already-encoded Jetton fields.
+    if (commentCell.bits.length + 1 > jettonBody.availableBits) {
+      throw new Error(
+        `TON jetton memo exceeds WalletCore inline forward_payload capacity (${commentCell.bits.length} bits, ${jettonBody.availableBits - 1} available)`
+      )
+    }
+    jettonBody = jettonBody.storeBit(false).storeSlice(commentCell.beginParse())
   } else {
     jettonBody = jettonBody.storeBit(false)
   }
@@ -320,7 +334,9 @@ export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): T
           value: JETTON_GAS_AMOUNT_NANO,
           bounce: true,
           body: bodyCell,
-        })
+        }),
+        // Match WalletCore's canonical cell shape for mixed-platform MPC.
+        { forceRef: true }
       )
     )
     .endCell()
