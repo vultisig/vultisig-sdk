@@ -10,7 +10,9 @@ import qrcode from 'qrcode-terminal'
 
 import type { CommandContext } from '../core'
 import { ensureVaultUnlocked } from '../core'
-import { createSpinner, info, isJsonOutput, isSilent, outputJson, printResult } from '../lib/output'
+import { ConfirmationRequiredError } from '../core/errors'
+import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult, warn } from '../lib/output'
+import { confirmTransaction } from '../ui'
 
 /**
  * Parameters for signing arbitrary bytes
@@ -19,6 +21,14 @@ export type SignBytesParams = {
   chain: Chain
   bytes: string // Base64-encoded pre-hashed data
   password?: string
+  /**
+   * Skip the interactive confirmation prompt. Required in non-interactive
+   * contexts (piped / redirected / CI) because signBytes produces a valid
+   * signature on ANY 32-byte input — a signed hash CAN be a tx digest that
+   * moves funds. Explicit opt-in is required so a script bug or shell
+   * injection cannot silently produce arbitrary sigs. bead vultisig-j2njo.
+   */
+  yes?: boolean
   signal?: AbortSignal
 }
 
@@ -51,6 +61,30 @@ export async function executeSignBytes(ctx: CommandContext, params: SignBytesPar
 export async function signBytes(vault: VaultBase, params: SignBytesParams): Promise<SignBytesResult> {
   // Decode base64 input to get the raw hash bytes
   const hashBytes = Buffer.from(params.bytes, 'base64')
+
+  // Fund-safety confirmation gate (bead vultisig-j2njo). signBytes produces a
+  // valid signature on ANY 32-byte input — a signed hash CAN be a tx digest
+  // that moves funds. Send and swap both gate on --yes + interactive prompt
+  // for exactly this reason; the sign primitive needs the same protection so
+  // a script bug, shell injection, or malicious CLI wrapper reaching --bytes
+  // cannot silently produce arbitrary sigs.
+  if (!params.yes) {
+    if (isNonInteractive()) {
+      throw new ConfirmationRequiredError(
+        'sign requires confirmation.',
+        'Pass --yes to confirm. signBytes produces a signature on ANY 32-byte input; be sure the bytes are what you intend to sign.'
+      )
+    }
+    const hashHex = hashBytes.toString('hex')
+    warn('\n⚠  You are about to sign 32 bytes with your MPC vault.')
+    warn(`   Chain:  ${params.chain}`)
+    warn(`   Bytes:  0x${hashHex}`)
+    warn(`   This is IRREVERSIBLE. If these bytes are a valid tx digest, funds CAN move.\n`)
+    const confirmed = await confirmTransaction()
+    if (!confirmed) {
+      throw new ConfirmationRequiredError('Sign declined at the confirmation prompt')
+    }
+  }
 
   // Pre-unlock vault before signing
   await ensureVaultUnlocked(vault, params.password)
