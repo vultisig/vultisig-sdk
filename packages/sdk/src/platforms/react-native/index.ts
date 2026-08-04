@@ -48,8 +48,12 @@ import { NativeWalletCore } from '@vultisig/walletcore-native'
 import { configureDefaultStorage } from '../../context/defaultStorage'
 import { configureWasm } from '../../context/wasmRuntime'
 import { configureCrypto } from '../../crypto'
+import * as balance from '../../tools/balance'
+import * as bridge from '../../tools/bridge'
 import * as cosmos from '../../tools/cosmos'
 import * as evm from '../../tools/evm'
+import * as prep from '../../tools/prep'
+import * as swap from '../../tools/swap'
 import * as token from '../../tools/token'
 import { ReactNativeCrypto } from './crypto'
 import { ReactNativeStorage } from './storage'
@@ -263,6 +267,9 @@ export type {
   UnsignedTrc20Transfer,
   VaultIdentity,
 } from '../../tools/prep'
+// Namespace handle so React Native consumers can mirror the documented root
+// ergonomic `sdk.prep.*` surface without maintaining their own wrappers.
+export { prep }
 
 // Pure cosmos staking msg-envelope builders. These depend only on bech32 +
 // buffer (RN-safe, no mpc/keysign), so unlike the other prep helpers they are
@@ -575,6 +582,14 @@ export {
   normalizeHexBytes,
   parseUsdcAmount,
 } from '../../tools/bridge'
+// Namespace handle so React Native consumers can call `sdk.bridge.*` just like
+// node/browser consumers.
+export { bridge }
+
+// Namespace handle so React Native consumers can call `sdk.swap.*` just like
+// node/browser consumers. We expose the lazy/pure helpers as a grouped object
+// even though the RN entry does not hand-curate every flat swap export.
+export { swap }
 
 // Noon USDC vault helpers. The root SDK entry already exports these canonicals,
 // but the RN allow-list omitted them, pushing first-party mobile consumers back
@@ -637,6 +652,9 @@ export { getCoinBalance } from './getCoinBalance'
 // RN-safe: uses only `fetch` + the already-RN-exported `getTokenMetadata`.
 export type { CosmosBalanceChain, CosmosBalanceEntry, CosmosBalanceResult } from '../../tools/balance'
 export { cosmosBalanceChains, getCosmosBalance, isCosmosBalanceChain } from '../../tools/balance'
+// Namespace handle so React Native consumers can call `sdk.balance.*` just like
+// node/browser consumers.
+export { balance }
 // Non-EVM / non-Cosmos balance reads (XRP / TRON / TON / Sui / Cardano /
 // Bittensor-TAO + token variants). Pure-crypto, fetch-based reads (bs58,
 // @noble/hashes, Buffer) — RN-safe, same shape as the cosmos-staking LCD

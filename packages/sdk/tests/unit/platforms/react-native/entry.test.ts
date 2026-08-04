@@ -387,6 +387,26 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.addLpMemo).toBe(thorLp.addLpMemo)
     expect(rn.removeLpMemo).toBe(thorLp.removeLpMemo)
   })
+
+  it('exports documented balance/bridge/prep/swap namespace handles from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.balance).toBeDefined()
+    expect(typeof rn.balance.getSolBalance).toBe('function')
+    expect(typeof rn.balance.getCosmosBalance).toBe('function')
+
+    expect(rn.bridge).toBeDefined()
+    expect(typeof rn.bridge.buildCctpBridge).toBe('function')
+    expect(Array.isArray(rn.bridge.cctpSupportedChains)).toBe(true)
+
+    expect(rn.prep).toBeDefined()
+    expect(typeof rn.prep.prepareIbcTransfer).toBe('function')
+    expect(typeof rn.prep.prepareTrc20TransferFromKeys).toBe('function')
+
+    expect(rn.swap).toBeDefined()
+    expect(typeof rn.swap.acrossQuote).toBe('function')
+    expect(typeof rn.swap.runSkipSwap).toBe('function')
+  })
 })
 
 describe('RN entry exposes canonical EIP-712 helpers', () => {
@@ -397,5 +417,3 @@ describe('RN entry exposes canonical EIP-712 helpers', () => {
     expect(rn.coerceEip712ChainId).toBe(eip712.coerceEip712ChainId)
     expect(rn.computeEip712Hash).toBe(eip712.computeEip712Hash)
     expect(rn.toCanonicalEvmSignature).toBe(eip712.toCanonicalEvmSignature)
-  })
-})
