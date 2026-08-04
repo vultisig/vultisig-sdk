@@ -10,10 +10,11 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API tools subpath exports', () => {
-  it('publishes dedicated export-map entries for parse, defi, and bridge', () => {
+  it('publishes dedicated export-map entries for parse, defi, bridge, and balance', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
     const bridgeExport = sdkPackageJson.exports['./tools/bridge']
+    const balanceExport = sdkPackageJson.exports['./tools/balance']
 
     expect(parseExport).toMatchObject({
       types: './dist/tools/parse/index.d.ts',
@@ -33,10 +34,17 @@ describe('public API tools subpath exports', () => {
       require: './dist/tools/bridge/index.cjs',
       default: './dist/tools/bridge/index.cjs',
     })
+    expect(balanceExport).toMatchObject({
+      types: './dist/tools/balance/index.d.ts',
+      import: './dist/tools/balance/index.js',
+      require: './dist/tools/balance/index.cjs',
+      default: './dist/tools/balance/index.cjs',
+    })
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(balanceExport)).not.toContain('dist/index.node')
   })
 
   it('keeps dedicated JS and d.ts bundle generation wired for all tool subpaths', () => {
@@ -46,6 +54,8 @@ describe('public API tools subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
     expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
+    expect(platformRollupConfig).toContain("input: './src/tools/balance/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/balance'")
 
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/parse/index.ts', 'dist/tools/parse/index.d.ts')"
@@ -55,6 +65,9 @@ describe('public API tools subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/balance/index.ts', 'dist/tools/balance/index.d.ts')"
     )
   })
 })
