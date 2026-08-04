@@ -190,8 +190,8 @@ function fromBase64(b64: string): Uint8Array {
 
 // ---------------------------------------------------------------------------
 // CoinType enum — numeric values matching TrustWallet's CoinType
-// Values sourced from TrustWallet wallet-core v4.2.9:
-// https://github.com/trustwallet/wallet-core/blob/v4.2.9/include/TrustWalletCore/TWCoinType.h
+// Values sourced from TrustWallet wallet-core v4.7.0:
+// https://github.com/trustwallet/wallet-core/blob/4.7.0/include/TrustWalletCore/TWCoinType.h
 // ---------------------------------------------------------------------------
 
 const CoinTypeValues: Record<string, number> = {
@@ -222,6 +222,7 @@ const CoinTypeValues: Record<string, number> = {
   cronosChain: 10000025,
   blast: 81457,
   zksync: 10000324,
+  robinhoodChain: 10004663,
   osmosis: 10000118,
   terraV2: 10000330,
   noble: 18000118,

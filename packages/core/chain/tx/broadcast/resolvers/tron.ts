@@ -21,7 +21,10 @@ export const broadcastTronTx: BroadcastTxResolver<OtherChain.Tron> = async ({ ch
       throw new Error(`Tron broadcast failed: ${msg}`)
     }
 
-    return result
+    // Return the tx hash string, consistent with the other broadcast resolvers (which return a hash
+    // or void) rather than the full RPC envelope. The SDK's BroadcastService discards this return and
+    // derives the hash itself, so no consumer reads the object — this is a shape-consistency fix.
+    return result.txid
   } catch (error) {
     await verifyBroadcastByHash({ chain, tx, error })
   }

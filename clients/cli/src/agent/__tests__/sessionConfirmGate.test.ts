@@ -180,6 +180,8 @@ describe('processMessageLoop — tool-output signing wiring through the gate', (
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      renderEchoedYieldOpportunitiesCard: (AgentSession.prototype as any).renderEchoedYieldOpportunitiesCard,
+      renderEchoedPolymarketMarketsCard: (AgentSession.prototype as any).renderEchoedPolymarketMarketsCard,
       // No `vault` here, so confirmBroadcastedTx early-returns — the broadcast
       // block still only emits the `pending` status this harness asserts.
       confirmBroadcastedTx: (AgentSession.prototype as any).confirmBroadcastedTx,
@@ -266,6 +268,8 @@ describe('processMessageLoop — balance_summary card rendering', () => {
       runPasswordGatedTool: (AgentSession.prototype as any).runPasswordGatedTool,
       dispatchClientSideTool: (AgentSession.prototype as any).dispatchClientSideTool,
       renderEchoedBalanceCard: (AgentSession.prototype as any).renderEchoedBalanceCard,
+      renderEchoedYieldOpportunitiesCard: (AgentSession.prototype as any).renderEchoedYieldOpportunitiesCard,
+      renderEchoedPolymarketMarketsCard: (AgentSession.prototype as any).renderEchoedPolymarketMarketsCard,
     }
     const run = () => (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'balances?', ui, 0)
     return { run, ui, streamRequests }
