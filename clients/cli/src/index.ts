@@ -1104,12 +1104,14 @@ program
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
+  .option('--slippage <percent>', 'Slippage tolerance in percent (0-50). Same flag as `swap`; preview how tolerance affects estimatedOutput before signing.', parseFloat)
   .addHelpText(
     'after',
     `
 Examples:
   vultisig swap-quote Ethereum Bitcoin 0.1
-  vultisig swap-quote Ethereum Bitcoin --max --output json`
+  vultisig swap-quote Ethereum Bitcoin --max --output json
+  vultisig swap-quote Ethereum Solana 1 --slippage 3`
   )
   .action(
     withExit(
@@ -1117,7 +1119,7 @@ Examples:
         fromChainStr: string,
         toChainStr: string,
         amountStr: string | undefined,
-        options: { max?: boolean; fromToken?: string; toToken?: string }
+        options: { max?: boolean; fromToken?: string; toToken?: string; slippage?: number }
       ) => {
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
@@ -1130,6 +1132,7 @@ Examples:
           amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
+          slippage: options.slippage,
         })
       }
     )

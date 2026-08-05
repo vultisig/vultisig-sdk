@@ -129,4 +129,29 @@ describe('CLI swap amount precision', () => {
       expect(swap).not.toHaveBeenCalled()
     }
   )
+
+  it('swap-quote threads --slippage through to the underlying quote request (bead zctj6)', async () => {
+    const { ctx, swap } = makeContext()
+
+    await executeSwapQuote(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1',
+      slippage: 3,
+    })
+
+    expect(swap).toHaveBeenCalledWith(expect.objectContaining({ amount: '1', slippageTolerance: 3, dryRun: true }))
+  })
+
+  it('swap-quote omits slippageTolerance when --slippage not passed (backward compatible)', async () => {
+    const { ctx, swap } = makeContext()
+
+    await executeSwapQuote(ctx, {
+      fromChain: Chain.Ethereum,
+      toChain: Chain.Bitcoin,
+      amount: '1',
+    })
+
+    expect(swap.mock.calls[0][0]).not.toHaveProperty('slippageTolerance')
+  })
 })
