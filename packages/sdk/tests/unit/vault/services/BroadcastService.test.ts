@@ -329,6 +329,38 @@ describe('BroadcastService', () => {
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
   })
 
+  it('bounds a never-resolving approval status request by the confirmation deadline', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
+    mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
+    mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
+    mockCoreBroadcastTx.mockResolvedValue(undefined)
+    mockGetTxHash.mockResolvedValue('0xapproval')
+    mockGetTxStatus.mockReturnValue(new Promise(() => {}))
+
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+      approvalConfirmationIntervalMs: 1,
+      approvalConfirmationTimeoutMs: 20,
+    })
+
+    await expect(
+      approvalService.broadcastTx({
+        chain: Chain.Ethereum,
+        keysignPayload: { erc20ApprovePayload: {} } as KeysignPayload,
+        signature,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('Approval tx not confirmed within 0.02s'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
+    })
+
+    expect(mockGetTxStatus).toHaveBeenCalledOnce()
+    expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
+  })
+
   it('does not wait between multiple inputs without an ERC-20 approval payload', async () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['first-input', 'second-input'])
     mockCoreBroadcastTx.mockResolvedValue(undefined)

@@ -242,9 +242,20 @@ export class BroadcastService {
     let lastError: unknown
 
     while (Date.now() <= deadline) {
-      const result = await getTxStatus({ chain, hash: txHash }).catch(error => {
-        lastError = error
-        return undefined
+      const requestBudgetMs = deadline - Date.now()
+      if (requestBudgetMs <= 0) break
+
+      let requestTimeout: number | ReturnType<typeof setTimeout> | undefined
+      const result = await Promise.race([
+        getTxStatus({ chain, hash: txHash }).catch(error => {
+          lastError = error
+          return undefined
+        }),
+        new Promise<undefined>(resolve => {
+          requestTimeout = setTimeout(resolve, requestBudgetMs)
+        }),
+      ]).finally(() => {
+        if (requestTimeout) clearTimeout(requestTimeout)
       })
 
       if (result?.status === 'success') return
