@@ -369,13 +369,27 @@ export {
 // tables, no chain-client deps, so safe as a static re-export.
 export { getEvmChainByChainId, getEvmChainId } from '@vultisig/core-chain/chains/evm/chainInfo'
 
-// Gas / fee primitives (read-only — uses global `fetch` + a type-only
-// `UtxoChain` import, no heavy chain client). The RN allow-list omitted
-// these so RN consumers (vultiagent-app) couldn't resolve a current
-// sat/vB rate for a UTXO send / consolidation and had to re-implement
-// the THORChain / MayaChain inbound fetch + halt gating by hand.
-export type { UtxoFeeRate } from '../../tools/gas'
-export { MAYACHAIN_NODE_URL, THORCHAIN_NODE_URL, utxoFeeRate } from '../../tools/gas'
+// Gas / fee primitives (read-only — uses global `fetch` + type-only imports,
+// no heavy chain client at module init). The RN allow-list omitted these so RN
+// consumers (vultiagent-app) couldn't resolve current UTXO sat/vB rates OR the
+// canonical multi-chain gas-cost comparison helper from the same SDK family.
+export type {
+  CompareCostsEntry,
+  CompareCostsParams,
+  CompareCostsResult,
+  CompareCostsSkipped,
+  GasTxType,
+  UtxoFeeRate,
+} from '../../tools/gas'
+export {
+  compareCosts,
+  DEFAULT_COMPARE_CHAINS,
+  GAS_UNITS,
+  getChainGasPriceGwei,
+  MAYACHAIN_NODE_URL,
+  THORCHAIN_NODE_URL,
+  utxoFeeRate,
+} from '../../tools/gas'
 
 // DeFi protocol primitives (unsigned calldata builders) — sdk.defi.*
 // Pure builders, RN-safe. Statically re-exported so RN consumers can reach
