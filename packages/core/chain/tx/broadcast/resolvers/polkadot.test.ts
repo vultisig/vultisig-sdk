@@ -14,6 +14,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 }))
 
 import { OtherChain } from '../../../Chain'
+import { BroadcastErrorCode } from '../resolver'
 import { broadcastPolkadotTx } from './polkadot'
 
 describe('broadcastPolkadotTx', () => {
@@ -24,10 +25,14 @@ describe('broadcastPolkadotTx', () => {
     vi.clearAllMocks()
   })
 
-  it('returns silently when the node accepts the extrinsic', async () => {
+  it('returns the standard accepted result when the node accepts the extrinsic', async () => {
     mocks.queryUrl.mockResolvedValue({ result: '0xdeadbeef' })
 
-    await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastPolkadotTx({ chain, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: '0xdeadbeef',
+    })
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
@@ -42,7 +47,7 @@ describe('broadcastPolkadotTx', () => {
         error: { code: 1013, message: 'Transaction Already Imported' },
       })
 
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted' })
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
     })
 
@@ -51,7 +56,7 @@ describe('broadcastPolkadotTx', () => {
         error: { code: 1013, message: 'Already known' },
       })
 
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted' })
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
     })
 
@@ -60,7 +65,7 @@ describe('broadcastPolkadotTx', () => {
         error: { code: 1013, message: 'TRANSACTION ALREADY IMPORTED' },
       })
 
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted' })
     })
   })
 
@@ -89,9 +94,12 @@ describe('broadcastPolkadotTx', () => {
       })
       // verifyBroadcastByHash decides whether to re-throw; here just assert
       // we DID call it (i.e. did not silently swallow a bad-signature error).
-      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+      mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-      await broadcastPolkadotTx({ chain, tx })
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toMatchObject({
+        status: 'accepted',
+        txHash: 'verified-hash',
+      })
 
       expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
       const callArg = mocks.verifyBroadcastByHash.mock.calls[0]![0]
@@ -114,7 +122,7 @@ describe('broadcastPolkadotTx', () => {
           data: 'Transaction is outdated',
         },
       })
-      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+      mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
       await broadcastPolkadotTx({ chain, tx })
 
@@ -128,7 +136,7 @@ describe('broadcastPolkadotTx', () => {
       mocks.queryUrl.mockResolvedValue({
         error: { code: 1010, message: 'Invalid Transaction' },
       })
-      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+      mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
       await broadcastPolkadotTx({ chain, tx })
 
@@ -148,13 +156,13 @@ describe('broadcastPolkadotTx', () => {
         },
       })
 
-      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toBeUndefined()
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toMatchObject({ status: 'accepted' })
       expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
     })
 
     it('routes the missing-result case through verifyBroadcastByHash', async () => {
       mocks.queryUrl.mockResolvedValue({})
-      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+      mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
       await broadcastPolkadotTx({ chain, tx })
 
@@ -166,12 +174,53 @@ describe('broadcastPolkadotTx', () => {
     it('routes network-level errors through verifyBroadcastByHash', async () => {
       const networkErr = new Error('ECONNRESET')
       mocks.queryUrl.mockRejectedValue(networkErr)
-      mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+      mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
       await broadcastPolkadotTx({ chain, tx })
 
       expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
       expect(mocks.verifyBroadcastByHash.mock.calls[0]![0]!.error).toBe(networkErr)
+    })
+
+    it('returns a definitive failure when a rejected extrinsic is not on chain', async () => {
+      const rejection = new Error('Polkadot broadcast failed: Invalid Transaction')
+      mocks.queryUrl.mockResolvedValue({
+        error: { code: 1010, message: 'Invalid Transaction' },
+      })
+      mocks.verifyBroadcastByHash.mockRejectedValue(rejection)
+
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toEqual({
+        status: 'failed',
+        code: BroadcastErrorCode.Rejected,
+        retryable: false,
+        cause: rejection,
+      })
+    })
+
+    it('returns a retryable failure when transport recovery cannot confirm the extrinsic', async () => {
+      const networkError = new Error('ECONNRESET')
+      mocks.queryUrl.mockRejectedValue(networkError)
+      mocks.verifyBroadcastByHash.mockRejectedValue(networkError)
+
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toEqual({
+        status: 'failed',
+        code: BroadcastErrorCode.Transport,
+        retryable: true,
+        cause: networkError,
+      })
+    })
+
+    it('does not label an ambiguous local failure as retryable', async () => {
+      const localError = new TypeError('Cannot read properties of undefined')
+      mocks.queryUrl.mockRejectedValue(localError)
+      mocks.verifyBroadcastByHash.mockRejectedValue(localError)
+
+      await expect(broadcastPolkadotTx({ chain, tx })).resolves.toEqual({
+        status: 'failed',
+        code: BroadcastErrorCode.Rejected,
+        retryable: false,
+        cause: localError,
+      })
     })
   })
 })

@@ -37,7 +37,11 @@ describe('broadcastCosmosTx', () => {
       rawLog: '',
     })
 
-    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'ABC123',
+    })
 
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -56,8 +60,9 @@ describe('broadcastCosmosTx', () => {
       rawLog: 'out of gas',
     })
 
-    await expect(broadcastCosmosTx({ chain, tx })).rejects.toThrow(/DEF456/)
-    await expect(broadcastCosmosTx({ chain, tx })).rejects.toThrow(/out of gas/)
+    const result = await broadcastCosmosTx({ chain, tx })
+    expect(result).toMatchObject({ status: 'failed', retryable: false })
+    expect(result).toHaveProperty('cause.message', expect.stringMatching(/DEF456.*out of gas/))
 
     // The response already proves the tx's on-chain outcome — no need to pay
     // for a redundant hash-verification round trip.
@@ -67,7 +72,7 @@ describe('broadcastCosmosTx', () => {
   it('treats a duplicate in-cache rejection as an idempotent success', async () => {
     mocks.broadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
 
-    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toEqual({ status: 'accepted', finality: 'pending' })
 
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -79,7 +84,10 @@ describe('broadcastCosmosTx', () => {
     )
     mocks.broadcastTx.mockRejectedValue(timeout)
 
-    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBe('ABC123')
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'ABC123',
+    })
 
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
@@ -87,9 +95,12 @@ describe('broadcastCosmosTx', () => {
   it('routes other broadcast errors through hash verification', async () => {
     const rpcError = new Error('request timed out')
     mocks.broadcastTx.mockRejectedValue(rpcError)
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('ABC123')
 
-    await expect(broadcastCosmosTx({ chain, tx })).resolves.toBeUndefined()
+    await expect(broadcastCosmosTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'ABC123',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({ chain, tx, error: rpcError })
   })

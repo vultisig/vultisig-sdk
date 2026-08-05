@@ -3,7 +3,7 @@ import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { polkadotRpcUrl } from '../../../chains/polkadot/client'
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 import { formatSubstrateRpcError, isIdempotentSubstrateBroadcastError, SubstrateRpcError } from './substrate'
 
@@ -31,9 +31,14 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
       // (string usually in `message`) or, less commonly, an Invalid
       // Transaction variant whose duplicate signal lives in `data`.
       if (isIdempotentSubstrateBroadcastError(response.error)) {
-        return
+        return broadcastAccepted()
       }
-      throw new Error(`Polkadot broadcast failed: ${formatSubstrateRpcError(response.error)}`)
+      const error = new Error(`Polkadot broadcast failed: ${formatSubstrateRpcError(response.error)}`)
+      try {
+        return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+      } catch (cause) {
+        return broadcastFailed(cause, false)
+      }
     }
 
     // Per JSON-RPC 2.0 a valid response must have exactly one of `result` /
@@ -42,7 +47,12 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
     if (!response.result) {
       throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
     }
+    return broadcastAccepted(response.result)
   } catch (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(error))
+    }
   }
 }
