@@ -7,6 +7,7 @@ import chalk from 'chalk'
 
 import type { CommandContext } from '../core'
 import { InvalidChainError } from '../core'
+import { suggestChainNames } from '../core/chain-resolver'
 import { createSpinner, info, isJsonOutput, outputJson, printResult, success } from '../lib/output'
 import { displayAddresses } from '../ui'
 
@@ -45,11 +46,19 @@ export async function executeChains(ctx: CommandContext, options: ChainsOptions 
     // then throw on every subsequent address derivation. Fail closed: nothing is
     // persisted for a chain that isn't supported.
     if (!SUPPORTED_CHAINS.includes(options.add)) {
+      // bead vultisig-7eymb: add did-you-mean hint so `chains --add Cronos` points
+      // to the SDK-enum name `CronosChain` instead of forcing the user to `vultisig
+      // chains` and grep.
+      const suggestions = suggestChainNames(String(options.add))
+      const hint =
+        suggestions.length > 0
+          ? `Did you mean: ${suggestions.join(', ')}? Or run "vultisig chains" to see the supported chains.`
+          : 'Run "vultisig chains" to see the supported chains, or check the spelling.'
       throw new InvalidChainError(
         `Unsupported chain: "${options.add}"`,
-        'Run "vultisig chains" to see the supported chains, or check the spelling.',
+        hint,
         undefined,
-        { chain: String(options.add) }
+        { chain: String(options.add), ...(suggestions.length > 0 ? { suggestions: suggestions.join(',') } : {}) }
       )
     }
     const alreadyActive = vault.chains.includes(options.add)
