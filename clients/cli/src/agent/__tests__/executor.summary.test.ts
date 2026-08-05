@@ -180,6 +180,34 @@ describe('AgentExecutor.getPendingSummary', () => {
     ).toBe(true)
     expect(executor.getPendingSummary()).toBe('send 500000 USDC on Base to 0xRecipientAddr')
   })
+
+  it('never drops label details it cannot parse — unexpected shapes stay verbatim', () => {
+    const executor = new AgentExecutor(createMockVault())
+    const store = (token_resolved: string) =>
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: { resolved_amount: '0.05 USDC.e', token_resolved, recipient_echo: '0x58C4…5C35' },
+        },
+      })
+
+    // Contract before the chain: the disclosure must survive re-ordering.
+    expect(store('USDC.e (0x2791…4174) on Polygon')).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+
+    // Trailing annotation after the contract: keep everything.
+    expect(store('USDC.e on Polygon (0x2791…4174) [bridged]')).toBe(true)
+    expect(executor.getPendingSummary()).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) [bridged] to 0x58C4…5C35')
+
+    // Label claims a different chain than the routed transaction: the routed
+    // chain anchors the summary, but the conflicting claim must stay visible.
+    expect(store('USDC.e on Ethereum (0xA0b8…eB48)')).toBe(true)
+    const mismatch = executor.getPendingSummary()!
+    expect(mismatch).toBe('send 0.05 USDC.e on Polygon on Ethereum (0xA0b8…eB48) to 0x58C4…5C35')
+    expect(mismatch).toContain('on Ethereum')
+    expect(mismatch).toContain('(0xA0b8…eB48)')
+  })
 })
 
 describe('AgentExecutor pending-state hygiene (decline path)', () => {

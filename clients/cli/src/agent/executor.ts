@@ -405,13 +405,21 @@ export class AgentExecutor {
     // between native and tokens (e.g. "send 100 on Base to …" — ETH? USDC?).
     // token_resolved may be either a bare ticker or a richer label such as
     // "USDC.e on Polygon (0x…)". De-dup against the ticker while preserving
-    // the richer chain/contract disclosure as the summary suffix.
+    // the richer chain/contract disclosure as the summary suffix. The label
+    // shape is an out-of-repo producer convention, so only remove the exact
+    // pieces this template re-renders (ticker, "on <routed chain>") and keep
+    // any remainder verbatim: an unrecognised shape must degrade to a
+    // redundant summary, never to one missing its contract — and a label
+    // claiming a different chain than the routed one must stay visible.
     const tokenLabel = (labels.token_resolved || labels.token_symbol || '').trim()
     const symbol = tokenLabel.split(/\s+/, 1)[0]
-    const tokenDetail = tokenLabel.slice(symbol.length).trim()
+    const escapedChain = String(stored.chain).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const tokenDetail = tokenLabel
+      .slice(symbol.length)
+      .replace(new RegExp(`(?:^|\\s)on ${escapedChain}(?=\\s|$)`), '')
+      .trim()
     const amountWithSymbol = symbol && !amount.endsWith(` ${symbol}`) ? `${amount} ${symbol}` : amount
-    const contractDetail = tokenDetail.match(/(\([^()]+\))\s*$/)?.[1]
-    const location = `on ${stored.chain}${contractDetail ? ` ${contractDetail}` : ''}`
+    const location = `on ${stored.chain}${tokenDetail ? ` ${tokenDetail}` : ''}`
     const to = (p?.txArgs?.to as string) || labels.recipient_echo || '?'
     return `send ${amountWithSymbol} ${location} to ${to}`
   }
