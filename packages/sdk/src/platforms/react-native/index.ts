@@ -624,6 +624,7 @@ export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/d
 // consumers (Station) couldn't format high-decimal balances exactly or link
 // out to a block explorer without deep-importing core-chain.
 export { computeNotificationVaultId } from '../../utils/computeNotificationVaultId'
+export { getTxStatus, isValidTxHash } from '../../tools'
 export type {
   AmountDirection,
   ConvertAmountParams,
