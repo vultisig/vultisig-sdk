@@ -340,9 +340,21 @@ describe('getThorchainMemoAssetSourceChain', () => {
     expect(getThorchainMemoAssetSourceChain(secured)).toBe(Chain.THORChain)
   })
 
-  // An asset with no separator is malformed, not native — assuming THORChain
-  // would let a garbage source resolve to a sendable chain.
-  it.each(['NOPE.NOPE', 'NOPE'])('returns undefined for the unroutable %s', asset => {
+  // A recognisable SHAPE is not a recognisable asset. Answering THORChain on the
+  // strength of a separator alone would let a garbage source asset pair
+  // successfully with a RUNE coin and reach a signer.
+  it.each(['NOPE-NOPE', 'NOPE/NOPE', 'NOPE~NOPE', 'NOPE.NOPE'])('returns undefined for the unroutable %s', asset => {
     expect(getThorchainMemoAssetSourceChain(asset)).toBeUndefined()
+  })
+
+  // A bare prefix carries no symbol, so it is not an asset — even though the
+  // home-chain lookup resolves it happily on its own.
+  it.each(['BTC', 'THOR', 'NOPE'])('returns undefined for the bare prefix %s', asset => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBeUndefined()
+  })
+
+  it('resolves a bare prefix as a home chain but never as a sending chain', () => {
+    expect(getThorchainMemoAssetChain('BTC')).toBe(Chain.Bitcoin)
+    expect(getThorchainMemoAssetSourceChain('BTC')).toBeUndefined()
   })
 })

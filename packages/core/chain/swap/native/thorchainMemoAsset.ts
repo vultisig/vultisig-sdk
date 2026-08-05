@@ -125,18 +125,29 @@ export const getThorchainMemoAssetChain = (asset: string): Chain | undefined => 
  * broadcasts successfully and is refunded without cancelling anything.
  *
  * `undefined` when the prefix is unroutable — treat as "unknown", and refuse.
+ * That holds for the THORChain-held flavours too: a recognisable SHAPE is not a
+ * recognisable asset, so `NOPE-NOPE` is unknown rather than THORChain-held.
+ * Answering THORChain on the strength of a separator alone would let a garbage
+ * source asset pair successfully with a RUNE coin and reach a signer.
  */
 export const getThorchainMemoAssetSourceChain = (asset: string): Chain | undefined => {
   const separatorIndex = findThorchainMemoAssetSeparatorIndex(asset)
 
-  // A non-dot first separator marks a THORChain-held flavour. No separator at
-  // all is not a valid asset, so it falls through to the prefix lookup and
-  // resolves to `undefined` rather than being assumed native.
-  if (separatorIndex !== -1 && asset[separatorIndex] !== '.') {
-    return Chain.THORChain
+  // A bare chain prefix carries no symbol, so it is not an asset — even though
+  // the prefix lookup would happily resolve `BTC` on its own.
+  if (separatorIndex === -1) {
+    return undefined
   }
 
-  return getThorchainMemoAssetChain(asset)
+  const homeChain = getThorchainMemoAssetChain(asset)
+  if (homeChain === undefined) {
+    return undefined
+  }
+
+  // Prefix resolved, so the separator can be trusted to mean what it says: a
+  // non-dot one marks a THORChain-HELD flavour, which sends from THORChain
+  // whatever chain it originates on.
+  return asset[separatorIndex] === '.' ? homeChain : Chain.THORChain
 }
 
 /**
