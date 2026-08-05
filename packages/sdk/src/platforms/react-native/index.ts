@@ -633,8 +633,30 @@ export async function fiatToAmount(...args: unknown[]) {
 }
 export type { ParseChainResult, ParseTickerResult } from '../../tools/parse'
 export { chainSchema, parseChain, parseTicker, tickerSchema } from '../../tools/parse'
-export type { NormalizeArgs, NormalizedTx } from '../../tx'
-export { normalizeTx, splitMultiTx, TxNormalizeError } from '../../tx'
+export type {
+  NormalizeArgs,
+  NormalizedTx,
+  SignableToolOutputPayload,
+  ToolOutputCandidate,
+  ToolOutputCandidateFailureReason,
+  ToolOutputCandidateResult,
+} from '../../tx'
+export {
+  buildTxReadyFromToolOutput,
+  buildTxReadyFromYieldOutput,
+  deriveToolOutputCandidate,
+  deriveToolOutputCandidateResult,
+  DIVERGENT_FIELD_TOOLS,
+  normalizeTx,
+  payloadLooksSignable,
+  POLYMARKET_DEPOSIT_TOOL,
+  POLYMARKET_SETUP_TRADING_TOOL,
+  SIGNABLE_FLAT_TOOLS,
+  SIGNABLE_PREP_TOOLS,
+  SIGNABLE_YIELD_TOOLS,
+  splitMultiTx,
+  TxNormalizeError,
+} from '../../tx'
 export { computePersonalSignHash, formatEcdsaSignature65 } from '../../utils/eip191'
 export {
   canonicalEvmContracts,

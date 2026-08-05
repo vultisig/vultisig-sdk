@@ -1,7 +1,7 @@
 /**
  * Design B — Polymarket flat-tx-builder output → signable tx_ready bridge.
  *
- * These tests pin the guard + wrapping contract that lets the headless CLI sign
+ * These tests pin the SDK guard + wrapping contract that lets clients sign
  * `polymarket_deposit` / `polymarket_setup_trading` outputs the way mobile does:
  *  - a valid flat envelope → wrapped `{chain,chain_id,tx:{…}}` (executor's
  *    `extractNestedTx` reads `tx`, NOT a bare top-level `{to,value,data}`);
@@ -19,11 +19,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTxReadyFromToolOutput,
   buildTxReadyFromYieldOutput,
-  CLI_SIGNABLE_FLAT_TOOLS,
   deriveToolOutputCandidate,
+  deriveToolOutputCandidateResult,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
-} from '../toolOutputSigning'
+  SIGNABLE_FLAT_TOOLS,
+} from '../../../src/tx/signableCandidate'
 
 const USDC_E = '0x2791bca1f2de4661ed88a30c99a7a9449aa84174'
 const ONRAMP = '0x1234567890abcdef1234567890abcdef12345678'
@@ -83,7 +84,7 @@ function depositWrapBundled() {
   }
 }
 
-describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
+describe('SIGNABLE_FLAT_TOOLS', () => {
   it('includes the flat Polymarket builders and the flat produces_calldata tools', () => {
     // Polymarket flat builders (no tx_ready) + flat produces_calldata tools that
     // DO emit tx_ready (erc20_approve) or a structurally-unsignable one
@@ -94,15 +95,15 @@ describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
       'erc20_approve',
       'build_custom_credit_topup',
     ]) {
-      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
+      expect(SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
     }
   })
 
   it('excludes EIP-712 / non-flat tools (signed via sign_typed_data)', () => {
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
+    expect(SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
+    expect(SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
     // execute_* are PREP (their own allowlist), NOT in the flat-enrichment allowlist.
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has('execute_swap')).toBe(false)
+    expect(SIGNABLE_FLAT_TOOLS.has('execute_swap')).toBe(false)
   })
 })
 
@@ -381,6 +382,17 @@ describe('buildTxReadyFromToolOutput — non-tx envelopes are NEVER signed (the 
 })
 
 describe('deriveToolOutputCandidate — flat vs prep, and the phantom-card guard', () => {
+  it('returns a fail-closed reason without exposing the raw output', () => {
+    expect(deriveToolOutputCandidateResult('get_balances', {})).toEqual({
+      candidate: null,
+      reason: 'unsupported-tool',
+    })
+    expect(deriveToolOutputCandidateResult('execute_send', { txArgs: {} })).toEqual({
+      candidate: null,
+      reason: 'unsafe-or-malformed-output',
+    })
+  })
+
   it('flat signable tool → candidate tagged source:flat', () => {
     const c = deriveToolOutputCandidate(POLYMARKET_SETUP_TRADING_TOOL, setupTradingApprove())
     expect(c?.source).toBe('flat')

@@ -1,5 +1,5 @@
 /**
- * Allowlist contract for the client-side tool-output signing layer.
+ * Allowlist contract for the SDK tool-output signing layer.
  *
  * The CLI holds NO tools/list cache, so `produces_calldata` (a tool-DEFINITION
  * `_meta` flag) is unavailable at runtime. Signable detection is therefore a
@@ -7,10 +7,10 @@
  * use. This test pins the two buckets and the documented exclusions so the
  * allowlist can't silently drift.
  *
- *  - CLI_SIGNABLE_FLAT_TOOLS: flat-output tools the CLI ENRICHES client-side.
+ *  - SIGNABLE_FLAT_TOOLS: flat-output tools the SDK enriches for clients.
  *    Includes the polymarket flat builders and the flat produces_calldata tools
  *    (erc20_approve, build_custom_* — divergent to_address/calldata).
- *  - CLI_SIGNABLE_PREP_TOOLS: execute_* prep tools — #927 Phase 2 signs these
+ *  - SIGNABLE_PREP_TOOLS: execute_* prep tools — #927 Phase 2 signs these
  *    from tool-output (the payload rides tool-output-available).
  *
  * Deliberately EXCLUDED from BOTH: EIP-712 tools (polymarket_place_bet,
@@ -19,18 +19,18 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  CLI_SIGNABLE_FLAT_TOOLS,
-  CLI_SIGNABLE_PREP_TOOLS,
-  CLI_SIGNABLE_YIELD_TOOLS,
   DIVERGENT_FIELD_TOOLS,
   POLYMARKET_DEPOSIT_TOOL,
   POLYMARKET_SETUP_TRADING_TOOL,
-} from '../toolOutputSigning'
+  SIGNABLE_FLAT_TOOLS,
+  SIGNABLE_PREP_TOOLS,
+  SIGNABLE_YIELD_TOOLS,
+} from '../../../src/tx/signableCandidate'
 
-describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
+describe('SIGNABLE_FLAT_TOOLS', () => {
   it('contains the polymarket flat builders (their calldata rides tool-output)', () => {
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has(POLYMARKET_DEPOSIT_TOOL)).toBe(true)
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has(POLYMARKET_SETUP_TRADING_TOOL)).toBe(true)
+    expect(SIGNABLE_FLAT_TOOLS.has(POLYMARKET_DEPOSIT_TOOL)).toBe(true)
+    expect(SIGNABLE_FLAT_TOOLS.has(POLYMARKET_SETUP_TRADING_TOOL)).toBe(true)
   })
 
   it('contains the flat produces_calldata tools (erc20_approve + the payments cards)', () => {
@@ -41,23 +41,23 @@ describe('CLI_SIGNABLE_FLAT_TOOLS', () => {
       'build_max_subscription_renewal',
       'build_pro_subscription_renewal',
     ]) {
-      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
+      expect(SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
     }
   })
 
   it('NEVER includes EIP-712 / typed-data tools', () => {
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
-    expect(CLI_SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
+    expect(SIGNABLE_FLAT_TOOLS.has('polymarket_place_bet')).toBe(false)
+    expect(SIGNABLE_FLAT_TOOLS.has('polymarket_setup_deposit_wallet')).toBe(false)
   })
 
   it('NEVER includes the execute_* prep tools (those are the prep allowlist)', () => {
-    for (const t of CLI_SIGNABLE_PREP_TOOLS) {
-      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(false)
+    for (const t of SIGNABLE_PREP_TOOLS) {
+      expect(SIGNABLE_FLAT_TOOLS.has(t)).toBe(false)
     }
   })
 })
 
-describe('CLI_SIGNABLE_FLAT_TOOLS — independent anchor vs the mcp-ts source of truth', () => {
+describe('SIGNABLE_FLAT_TOOLS — independent anchor vs the mcp-ts source of truth', () => {
   // Hand-mirrored from the mcp-ts sources (mcp-ts is a separate repo — this is a
   // MIRROR, not an import; keep it in sync by hand so a drift forces a conscious
   // reconciliation instead of a silent divergence). Sources:
@@ -79,25 +79,25 @@ describe('CLI_SIGNABLE_FLAT_TOOLS — independent anchor vs the mcp-ts source of
 
   it('equals exactly (mcp-ts flat produces_calldata) ∪ (BUILD_TX_EXACT flat no-tx_ready)', () => {
     const expected = new Set<string>([...MCP_TS_FLAT_PRODUCES_CALLDATA, ...MCP_TS_FLAT_NO_TX_READY])
-    expect(new Set(CLI_SIGNABLE_FLAT_TOOLS)).toEqual(expected)
+    expect(new Set(SIGNABLE_FLAT_TOOLS)).toEqual(expected)
   })
 })
 
-describe('CLI_SIGNABLE_PREP_TOOLS', () => {
+describe('SIGNABLE_PREP_TOOLS', () => {
   it('contains exactly the execute_* signer-ready prep tools', () => {
-    expect([...CLI_SIGNABLE_PREP_TOOLS].sort()).toEqual(['execute_contract_call', 'execute_send', 'execute_swap'])
+    expect([...SIGNABLE_PREP_TOOLS].sort()).toEqual(['execute_contract_call', 'execute_send', 'execute_swap'])
   })
 })
 
-describe('CLI_SIGNABLE_YIELD_TOOLS (bead vultisig-6rg2 — yield deposit/withdraw signing gap)', () => {
+describe('SIGNABLE_YIELD_TOOLS (bead vultisig-6rg2 — yield deposit/withdraw signing gap)', () => {
   it('contains exactly yield_enter + yield_exit', () => {
-    expect([...CLI_SIGNABLE_YIELD_TOOLS].sort()).toEqual(['yield_enter', 'yield_exit'])
+    expect([...SIGNABLE_YIELD_TOOLS].sort()).toEqual(['yield_enter', 'yield_exit'])
   })
 
   it('is disjoint from the flat and prep allowlists (a tool lives in ONE bucket)', () => {
-    for (const t of CLI_SIGNABLE_YIELD_TOOLS) {
-      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(false)
-      expect(CLI_SIGNABLE_PREP_TOOLS.has(t)).toBe(false)
+    for (const t of SIGNABLE_YIELD_TOOLS) {
+      expect(SIGNABLE_FLAT_TOOLS.has(t)).toBe(false)
+      expect(SIGNABLE_PREP_TOOLS.has(t)).toBe(false)
     }
   })
 })
@@ -105,7 +105,7 @@ describe('CLI_SIGNABLE_YIELD_TOOLS (bead vultisig-6rg2 — yield deposit/withdra
 describe('DIVERGENT_FIELD_TOOLS (to_address/calldata normalization surface)', () => {
   it('is a subset of the flat allowlist (every divergent tool is signable)', () => {
     for (const t of DIVERGENT_FIELD_TOOLS) {
-      expect(CLI_SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
+      expect(SIGNABLE_FLAT_TOOLS.has(t)).toBe(true)
     }
   })
 })

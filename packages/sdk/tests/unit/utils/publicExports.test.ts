@@ -36,6 +36,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.TxNormalizeError).toBe('function')
   })
 
+  it('exports tool-output signable-candidate derivation primitives', () => {
+    expect(typeof sdk.deriveToolOutputCandidate).toBe('function')
+    expect(typeof sdk.deriveToolOutputCandidateResult).toBe('function')
+    expect(typeof sdk.buildTxReadyFromToolOutput).toBe('function')
+    expect(typeof sdk.buildTxReadyFromYieldOutput).toBe('function')
+    expect(sdk.SIGNABLE_FLAT_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.SIGNABLE_PREP_TOOLS).toBeInstanceOf(Set)
+    expect(sdk.SIGNABLE_YIELD_TOOLS).toBeInstanceOf(Set)
+  })
+
   it('exports the knownContracts canonical registry + lookup helpers', () => {
     expect(typeof sdk.isKnownContract).toBe('function')
     expect(typeof sdk.isCanonicalEvmContract).toBe('function')

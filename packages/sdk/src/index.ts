@@ -119,8 +119,30 @@ export { parseThorSwapMemo } from './utils/thorSwapMemo'
 // multi-tx build results (approve+swap, generic transactions[]) into ordered
 // legs. Ports the normalize/split half of the agent-backend's
 // enrichBuildResult + splitMultiTx; SSE/Redis sequencing stays in the backend.
-export type { NormalizeArgs, NormalizedTx } from './tx'
-export { normalizeTx, splitMultiTx, TxNormalizeError } from './tx'
+export type {
+  NormalizeArgs,
+  NormalizedTx,
+  SignableToolOutputPayload,
+  ToolOutputCandidate,
+  ToolOutputCandidateFailureReason,
+  ToolOutputCandidateResult,
+} from './tx'
+export {
+  buildTxReadyFromToolOutput,
+  buildTxReadyFromYieldOutput,
+  deriveToolOutputCandidate,
+  deriveToolOutputCandidateResult,
+  DIVERGENT_FIELD_TOOLS,
+  normalizeTx,
+  payloadLooksSignable,
+  POLYMARKET_DEPOSIT_TOOL,
+  POLYMARKET_SETUP_TRADING_TOOL,
+  SIGNABLE_FLAT_TOOLS,
+  SIGNABLE_PREP_TOOLS,
+  SIGNABLE_YIELD_TOOLS,
+  splitMultiTx,
+  TxNormalizeError,
+} from './tx'
 
 // ============================================================================
 // PUBLIC API - Canonical Contract / Token Registry (knownContracts)
