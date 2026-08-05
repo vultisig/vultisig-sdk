@@ -105,6 +105,41 @@ export const getThorchainMemoAssetChain = (asset: string): Chain | undefined => 
 }
 
 /**
+ * The chain a transaction referencing this asset must be SENT FROM — what
+ * `Asset.GetChain()` resolves to on THORNode's side, which is a different
+ * question from {@link getThorchainMemoAssetChain}.
+ *
+ * The two diverge for every THORChain-HELD flavour. A secured `eth-usdc-0x…`
+ * originates on Ethereum but is custodied on THORChain, so a message referencing
+ * it must come from a THOR address; the same holds for synths (`BTC/BTC`) and
+ * trade assets (`ETH~ETH`). Only dotted layer-1 notation names a chain that also
+ * has to send.
+ *
+ * The separator IS the discriminator: THORNode's own flavour detection works the
+ * same way, and the first separator is the one that decides — a dotted asset's
+ * later `-` introduces a contract id, not a flavour.
+ *
+ * This is what `MsgModifyLimitSwap.ValidateBasic`'s
+ * `From.IsChain(Source.Asset.GetChain())` compares against, so a caller that
+ * pairs a signing coin with a memo must agree with this or the transaction
+ * broadcasts successfully and is refunded without cancelling anything.
+ *
+ * `undefined` when the prefix is unroutable — treat as "unknown", and refuse.
+ */
+export const getThorchainMemoAssetSourceChain = (asset: string): Chain | undefined => {
+  const separatorIndex = findThorchainMemoAssetSeparatorIndex(asset)
+
+  // A non-dot first separator marks a THORChain-held flavour. No separator at
+  // all is not a valid asset, so it falls through to the prefix lookup and
+  // resolves to `undefined` rather than being assumed native.
+  if (separatorIndex !== -1 && asset[separatorIndex] !== '.') {
+    return Chain.THORChain
+  }
+
+  return getThorchainMemoAssetChain(asset)
+}
+
+/**
  * Whether a chain can be encoded as a THORChain memo asset — i.e. whether it is
  * routable through THORChain at all.
  *

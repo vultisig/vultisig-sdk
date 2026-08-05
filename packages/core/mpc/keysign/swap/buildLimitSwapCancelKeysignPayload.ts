@@ -4,16 +4,16 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getThorchainInboundAddress } from '@vultisig/core-chain/chains/cosmos/thor/getThorchainInboundAddress'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
-import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
-import { areEqualCoins } from '@vultisig/core-chain/coin/Coin'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getLimitSwapCancelDust } from '@vultisig/core-chain/swap/native/limitSwapCancelDust'
 import {
   doesCancelLimitSwapMemoFit,
   isCancelLimitSwapMemo,
   isModifyLimitSwapMemo,
+  parseCancelLimitSwapMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 import { findLimitSwapInbound, shouldBlockRuneDeposit } from '@vultisig/core-chain/swap/native/limitSwapInbound'
+import { getThorchainMemoAssetSourceChain } from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
 
@@ -62,6 +62,12 @@ export type BuildLimitSwapCancelKeysignPayloadInput = {
  * - The memo must actually CANCEL. `m=<` with a non-zero final field re-prices a
  *   resting order instead of closing it, and must not be signed by a function
  *   whose callers believe they are cancelling.
+ * - The signing coin's chain must be the chain the memo says funded the order.
+ *   These arrive as independent parameters, so a caller reaching for "the
+ *   vault's ETH coin" while holding a BTC-sourced memo would otherwise get a
+ *   payload that broadcasts cleanly and is then refunded by THORChain's
+ *   `From.IsChain(Source.Asset.GetChain())` check — a successful-looking
+ *   transaction that cancels nothing.
  * - The memo must fit the source chain's per-transaction budget. A cancel cannot
  *   be shortened — its amounts define the bucket and its assets skip
  *   `fuzzyAssetMatch` — so an over-long one has to be refused here rather than
@@ -105,7 +111,35 @@ export const buildLimitSwapCancelKeysignPayload = async ({
     )
   }
 
-  const isThorchainSource = areEqualCoins(signingCoin, chainFeeCoin[Chain.THORChain])
+  // The coin and the memo arrive as independent parameters, and nothing above
+  // ties them together — so a caller that reaches for "the vault's ETH coin"
+  // while holding a BTC-sourced memo gets a payload that builds, signs and
+  // broadcasts cleanly. THORChain then refuses it at
+  // `MsgModifyLimitSwap.ValidateBasic`, which requires
+  // `From.IsChain(Source.Asset.GetChain())`, and refunds: a successful-looking
+  // transaction that cancels nothing, which is precisely the failure every other
+  // gate here exists to prevent.
+  //
+  // Derived from the memo rather than cross-checked against a second parameter,
+  // so there is one authority for which chain sends, and `GetChain()` semantics
+  // rather than the asset's home chain — a secured or synth source is custodied
+  // on THORChain and must be sent from a THOR address even though it originates
+  // elsewhere.
+  const sourceChain = getThorchainMemoAssetSourceChain(parseCancelLimitSwapMemo(memo).sourceAsset)
+
+  if (sourceChain === undefined) {
+    throw new Error(
+      `buildLimitSwapCancelKeysignPayload: cannot resolve which chain must send this cancel from its memo: ${JSON.stringify(memo)}`
+    )
+  }
+
+  if (sourceChain !== signingCoin.chain) {
+    throw new Error(
+      `buildLimitSwapCancelKeysignPayload: this order was funded on ${sourceChain}, so its cancel must be sent from ${sourceChain}, not ${signingCoin.chain}`
+    )
+  }
+
+  const isThorchainSource = sourceChain === Chain.THORChain
 
   if (!doesCancelLimitSwapMemoFit(memo, isChainOfKind(signingCoin.chain, 'utxo') ? 'utxo' : 'other')) {
     throw new Error(

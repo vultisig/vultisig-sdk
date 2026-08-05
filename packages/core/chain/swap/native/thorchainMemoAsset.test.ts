@@ -7,6 +7,7 @@ import {
   getThorchainCancelMemoAsset,
   getThorchainMemoAsset,
   getThorchainMemoAssetChain,
+  getThorchainMemoAssetSourceChain,
   isThorchainRoutable,
   isThorchainSecuredAssetId,
   thorchainAssetPrefixToChain,
@@ -304,5 +305,44 @@ describe('getThorchainMemoAssetChain', () => {
 
   it('returns undefined for a prefix this SDK cannot route', () => {
     expect(getThorchainMemoAssetChain('NOPE.NOPE')).toBeUndefined()
+  })
+})
+
+// `GetChain()` rather than `GetLayer1Asset().Chain` — this is what THORChain's
+// `From.IsChain(Source.Asset.GetChain())` compares a sender against, so getting
+// it wrong builds a transaction that broadcasts cleanly and is then refunded.
+describe('getThorchainMemoAssetSourceChain', () => {
+  it.each([
+    ['BTC.BTC', Chain.Bitcoin],
+    ['ETH.ETH', Chain.Ethereum],
+    [`ETH.USDC-${usdcContract.toUpperCase()}`, Chain.Ethereum],
+    ['THOR.RUNE', Chain.THORChain],
+    ['THOR.TCY', Chain.THORChain],
+  ])('sends a layer-1 %s from its own chain', (asset, expected) => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBe(expected)
+  })
+
+  // Every THORChain-HELD flavour must be sent from a THOR address even though it
+  // originates elsewhere — this is where the two chain questions diverge.
+  it.each([
+    ['xrp-xrp', Chain.Ripple],
+    ['eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', Chain.Ethereum],
+    ['BTC/BTC', Chain.Bitcoin],
+    ['ETH~ETH', Chain.Ethereum],
+  ])('sends the THORChain-held %s from THORChain, not %s', asset => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBe(Chain.THORChain)
+  })
+
+  it('reports the home chain and the sending chain differently for a secured asset', () => {
+    const secured = 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+
+    expect(getThorchainMemoAssetChain(secured)).toBe(Chain.Ethereum)
+    expect(getThorchainMemoAssetSourceChain(secured)).toBe(Chain.THORChain)
+  })
+
+  // An asset with no separator is malformed, not native — assuming THORChain
+  // would let a garbage source resolve to a sendable chain.
+  it.each(['NOPE.NOPE', 'NOPE'])('returns undefined for the unroutable %s', asset => {
+    expect(getThorchainMemoAssetSourceChain(asset)).toBeUndefined()
   })
 })

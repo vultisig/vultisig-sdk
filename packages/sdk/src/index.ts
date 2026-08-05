@@ -549,6 +549,7 @@ export {
 export {
   getThorchainCancelMemoAsset,
   getThorchainMemoAssetChain,
+  getThorchainMemoAssetSourceChain,
 } from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
 export type { KeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
 export { getKeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
