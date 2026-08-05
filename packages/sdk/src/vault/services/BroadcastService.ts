@@ -39,6 +39,39 @@ const extractResolverTxHash = (broadcastResult: unknown): string | undefined => 
   return undefined
 }
 
+type BroadcastPartialFailureInput = {
+  chain: Chain
+  broadcastedTxHashes: string[]
+  failedInputIndex: number
+  cause: unknown
+}
+
+type ApprovalConfirmationOptions = {
+  approvalConfirmationTimeoutMs?: number
+  approvalConfirmationIntervalMs?: number
+}
+
+export class BroadcastPartialFailureError extends Error {
+  readonly broadcastedTxHashes: string[]
+  readonly failedInputIndex: number
+  readonly originalError?: Error
+
+  constructor({ chain, broadcastedTxHashes, failedInputIndex, cause }: BroadcastPartialFailureInput) {
+    const errorMessage = cause instanceof Error ? cause.message : String(cause)
+    super(
+      `Broadcast failed on ${chain} input ${failedInputIndex + 1} after ${
+        broadcastedTxHashes.length
+      } transaction(s) were submitted: ${errorMessage}. Broadcasted transaction hashes: ${broadcastedTxHashes.join(
+        ', '
+      )}`
+    )
+    this.name = 'BroadcastPartialFailureError'
+    this.broadcastedTxHashes = broadcastedTxHashes
+    this.failedInputIndex = failedInputIndex
+    this.originalError = cause instanceof Error ? cause : new Error(String(cause))
+  }
+}
+
 /**
  * BroadcastService
  *
@@ -52,14 +85,23 @@ const extractResolverTxHash = (broadcastResult: unknown): string | undefined => 
  * - Extracts transaction hashes from signing outputs
  */
 export class BroadcastService {
+  private readonly broadcastTransaction: typeof coreBroadcastTx
+  private readonly confirmationOptions: ApprovalConfirmationOptions
+
   constructor(
     private extractMessageHashes: (keysignPayload: KeysignPayload) => Promise<string[]>,
     private wasmProvider: WasmProvider,
-    private confirmationOptions: {
-      approvalConfirmationTimeoutMs?: number
-      approvalConfirmationIntervalMs?: number
-    } = {}
-  ) {}
+    broadcastTransactionOrConfirmationOptions: typeof coreBroadcastTx | ApprovalConfirmationOptions = coreBroadcastTx,
+    confirmationOptions: ApprovalConfirmationOptions = {}
+  ) {
+    if (typeof broadcastTransactionOrConfirmationOptions === 'function') {
+      this.broadcastTransaction = broadcastTransactionOrConfirmationOptions
+      this.confirmationOptions = confirmationOptions
+    } else {
+      this.broadcastTransaction = coreBroadcastTx
+      this.confirmationOptions = broadcastTransactionOrConfirmationOptions
+    }
+  }
 
   /**
    * Broadcast a signed transaction to the blockchain network
@@ -131,7 +173,7 @@ export class BroadcastService {
       // Returns the hash of the last transaction, which is typically the primary one.
       let txHash = ''
       const shouldConfirmApprovalFirst = !!keysignPayload.erc20ApprovePayload && txInputsArray.length > 1
-
+      const broadcastedTxHashes: string[] = []
       for (const [index, txInputData] of txInputsArray.entries()) {
         const compiledTx = compileTx({
           publicKey,
@@ -147,16 +189,39 @@ export class BroadcastService {
         })
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
+        let broadcastResult: unknown
+        try {
+          broadcastResult = await this.broadcastTransaction({
+            chain,
+            tx: signingOutput,
+          })
+        } catch (error) {
+          if (broadcastedTxHashes.length > 0) {
+            throw new BroadcastPartialFailureError({
+              chain,
+              broadcastedTxHashes,
+              failedInputIndex: index,
+              cause: error,
+            })
+          }
+          throw error
+        }
 
-        const broadcastResult = await coreBroadcastTx({
-          chain,
-          tx: signingOutput,
-        })
-
-        txHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        const inputTxHash = extractResolverTxHash(broadcastResult) ?? (await getTxHash({ chain, tx: signingOutput }))
+        broadcastedTxHashes.push(inputTxHash)
+        txHash = inputTxHash
 
         if (shouldConfirmApprovalFirst && index === 0) {
-          await this.waitForConfirmation(chain, txHash)
+          try {
+            await this.waitForConfirmation(chain, txHash)
+          } catch (error) {
+            throw new BroadcastPartialFailureError({
+              chain,
+              broadcastedTxHashes,
+              failedInputIndex: index,
+              cause: error,
+            })
+          }
         }
       }
 

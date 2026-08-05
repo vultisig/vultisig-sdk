@@ -3,7 +3,7 @@ import type { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Signature } from '@/types'
-import { BroadcastService } from '@/vault/services/BroadcastService'
+import { BroadcastPartialFailureError, BroadcastService } from '@/vault/services/BroadcastService'
 import { VaultErrorCode } from '@/vault/VaultError'
 
 const {
@@ -194,6 +194,35 @@ describe('BroadcastService', () => {
     expect(mockGetTxHash).toHaveBeenCalledOnce()
   })
 
+  it('uses an injected broadcaster without calling the network broadcaster', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash').mockResolvedValueOnce('swap-local-hash')
+    const injectedBroadcaster = vi.fn().mockResolvedValue(undefined)
+    const injectedService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster)
+
+    await injectedService.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+
+    expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
+    expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
+  })
+
+  it('carries already-broadcast hashes when a later input fails', async () => {
+    mockGetEncodedSigningInputs.mockResolvedValue(['approve-input', 'swap-input'])
+    mockCoreBroadcastTx.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('swap rejected'))
+    mockGetTxHash.mockResolvedValueOnce('approve-local-hash')
+
+    const promise = service.broadcastTx({ chain: Chain.Ethereum, keysignPayload, signature })
+
+    await expect(promise).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['approve-local-hash'],
+        failedInputIndex: 1,
+      }),
+    })
+    await expect(promise).rejects.toHaveProperty('originalError', expect.any(BroadcastPartialFailureError))
+  })
+
   it('wraps a broadcast failure in a BroadcastFailed VaultError', async () => {
     mockCoreBroadcastTx.mockRejectedValue(new Error('network down'))
 
@@ -208,7 +237,7 @@ describe('BroadcastService', () => {
     mockGetEncodedSigningInputs.mockResolvedValue(['approval-input', 'swap-input'])
     mockCompileTx.mockImplementation(({ txInputData }) => txInputData)
     mockDecodeSigningOutput.mockImplementation((_chain, tx) => tx)
-    mockCoreBroadcastTx.mockImplementation(async () => {
+    const injectedBroadcaster = vi.fn(async () => {
       events.push('broadcast')
     })
     mockGetTxHash.mockImplementation(async ({ tx }) => (tx.includes('approval-input') ? '0xapproval' : '0xswap'))
@@ -217,7 +246,7 @@ describe('BroadcastService', () => {
       return { status: 'success' }
     })
 
-    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, {
+    const approvalService = new BroadcastService(extractMessageHashes, wasmProvider, injectedBroadcaster, {
       approvalConfirmationIntervalMs: 1,
       approvalConfirmationTimeoutMs: 100,
     })
@@ -230,6 +259,8 @@ describe('BroadcastService', () => {
 
     expect(txHash).toBe('0xswap')
     expect(events).toEqual(['broadcast', 'status:0xapproval', 'broadcast'])
+    expect(injectedBroadcaster).toHaveBeenCalledTimes(2)
+    expect(mockCoreBroadcastTx).not.toHaveBeenCalled()
     expect(mockGetTxStatus).toHaveBeenCalledWith({
       chain: Chain.Ethereum,
       hash: '0xapproval',
@@ -258,6 +289,10 @@ describe('BroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Approval tx failed'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
     })
 
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
@@ -285,6 +320,10 @@ describe('BroadcastService', () => {
     ).rejects.toMatchObject({
       code: VaultErrorCode.BroadcastFailed,
       message: expect.stringContaining('Approval tx not confirmed within 0s'),
+      originalError: expect.objectContaining({
+        broadcastedTxHashes: ['0xapproval'],
+        failedInputIndex: 0,
+      }),
     })
 
     expect(mockCoreBroadcastTx).toHaveBeenCalledOnce()
