@@ -265,20 +265,16 @@ export class RawBroadcastService {
       })
     )
 
-    let signature = sentSignature
-    let isDuplicate = false
     if (error) {
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        // "AlreadyProcessed" only proves the node has seen and executed this signature before -
-        // not that the original execution succeeded. It must go through the same on-chain-failure
-        // check below as a fresh send, not be handed back as a hash unconditionally.
-        signature = deriveSolanaRawTxSignature(rawTx)
-        isDuplicate = true
-      } else {
-        throw error
+        // Match the authoritative core resolver: the node already accepted this
+        // exact signed payload, while execution outcome remains status-layer work.
+        return deriveSolanaRawTxSignature(rawTx)
       }
+      throw error
     }
 
+    const signature = sentSignature
     if (!signature) throw new Error('No transaction signature returned')
 
     // sendRawTransaction only confirms the node ACCEPTED the payload into its queue - it is
@@ -290,9 +286,7 @@ export class RawBroadcastService {
     // this bounded, non-blocking status check catches that without adding real broadcast
     // latency: it never blocks/throws on "not yet confirmed" (the normal state right after
     // submission), only on an explicit on-chain error already attached to this signature.
-    // This also covers the "already been processed" idempotent-retry path above: a duplicate
-    // signature that already failed on-chain must still fail closed here, not report success.
-    const { data: statuses, error: statusError } = await attempt(
+    const { data: statuses } = await attempt(
       client.getSignatureStatuses([signature], { searchTransactionHistory: true })
     )
     const signatureStatus = statuses?.value?.[0]
@@ -300,16 +294,6 @@ export class RawBroadcastService {
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
         `Solana transaction was submitted but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
-      )
-    }
-
-    if (isDuplicate && !signatureStatus) {
-      const lookupMessage =
-        statusError instanceof Error ? statusError.message : String(statusError ?? 'transaction status not found')
-      throw new VaultError(
-        VaultErrorCode.BroadcastFailed,
-        `Solana transaction may already have been processed, but its execution result could not be verified: ${lookupMessage}`,
-        statusError instanceof Error ? statusError : new Error(lookupMessage)
       )
     }
 
