@@ -139,6 +139,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports the full River helper family from the root sdk surface', () => {
+    expect(typeof sdk.describeRiverMarket).toBe('function')
+    expect(typeof sdk.findRiverInsertHints).toBe('function')
+    expect(typeof sdk.formatRiverPercentWad).toBe('function')
+    expect(Array.isArray(sdk.RIVER_TROVE_STATUS_NAMES)).toBe(true)
+    expect(typeof sdk.riverStatusName).toBe('function')
+    expect(sdk.river.describeMarket).toBe(sdk.describeRiverMarket)
+    expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
+  })
+
   it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.getChainKind).toBe('function')

@@ -51,9 +51,9 @@ const EVM_CHAINS = new Set<string>([
 // Public RPC endpoints for refreshing gas estimates before signing.
 // Used as fallback to ensure maxFeePerGas covers current base fee.
 const EVM_GAS_RPC: Record<string, string> = {
-  Ethereum: 'https://eth.llamarpc.com',
+  Ethereum: 'https://ethereum-rpc.publicnode.com',
   BSC: 'https://bsc-dataseed.binance.org',
-  Polygon: 'https://polygon-rpc.com',
+  Polygon: 'https://polygon-bor-rpc.publicnode.com',
   Avalanche: 'https://api.avax.network/ext/bc/C/rpc',
   Arbitrum: 'https://arb1.arbitrum.io/rpc',
   Optimism: 'https://mainnet.optimism.io',
@@ -869,52 +869,24 @@ export class AgentExecutor {
    * destination chain + asset, look up the corresponding `Chain` enum,
    * then call `vault.swap` which builds the MsgDeposit internally.
    *
-   * IMPORTANT — destination address handling: `vault.swap` re-derives the
-   * destination address from `vault.address(toChain)` when fetching the
-   * native swap quote (see `findSwapQuote` → `getNativeSwapQuote` —
-   * `destination: to.address`). It does NOT honor the destination address
-   * encoded in the envelope's memo. As a fund-safety guard we therefore
-   * require the memo's destination address to match the vault's own
-   * destination address (self-swap) and throw otherwise — see Phase D
-   * review F1. Cross-account routing must wait on a Phase E SDK extension
-   * that lets `vault.swap` accept a user-supplied destination.
+   * The destination encoded in the server-issued memo is forwarded through
+   * `vault.swap({ recipient })`. The SDK uses the same recipient both for the
+   * destination coin and the THORChain/MayaChain quote request, so an explicit
+   * cross-account route cannot be silently replaced with the vault's address.
+   * An omitted destination keeps the existing self-swap default.
    */
   private async signThorMsgDepositSwap(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
     const txArgs = serverTxData?.txArgs ?? {}
     const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
     const parsed = parseThorSwapMemo(memo)
-    const toChain = parsed.toChain
-
-    // Fund-safety: require memo destination to equal the vault's own
-    // destination address. vault.swap silently substitutes the vault's
-    // address into the broadcast memo, so any mismatch here would misroute
-    // funds without warning. Phase D self-swaps remain supported (BTC
-    // tests confirmed 3.565 XRP arrived at the vault's own XRP address).
-    //
-    // **Empty `destAddress` semantics** (PR #439 review finding 2):
-    // THORChain treats an empty DEST in a swap memo as "refund to source"
-    // — the chain substitutes its own record of the user's address on the
-    // destination chain. The leading-truthiness check intentionally skips
-    // the equality assertion in that case: vault.swap's substitution will
-    // land at the vault's own dest address (which IS the right address),
-    // so there's nothing to compare against. A malicious party can't
-    // exploit this because the substitution is constrained to addresses
-    // THORChain associates with the source signer (i.e. the vault).
-    const vaultDestAddress = await this.vault.address(toChain)
-    // EVM addresses are case-insensitive on-chain — TrustWallet wallet-core
-    // returns EIP-55 checksummed form, but THORChain memos can carry either
-    // case depending on quote source. Normalize both sides for EVM
-    // destinations to avoid false-positive rejections on legitimate
-    // self-swaps. Non-EVM chains use case-sensitive base58/bech32/etc.
-    // encodings — leave those untouched.
-    const normalizeForCompare = (addr: string): string => (EVM_CHAINS.has(toChain) ? addr.toLowerCase() : addr)
-    if (parsed.destAddress && normalizeForCompare(parsed.destAddress) !== normalizeForCompare(vaultDestAddress)) {
+    if (/\s/.test(parsed.destAddress)) {
       throw new VaultError(
-        VaultErrorCode.NotImplemented,
-        `signThorMsgDepositSwap: memo destination '${parsed.destAddress}' does not match vault address '${vaultDestAddress}' on ${toChain}. ` +
-          `Phase D only supports self-swaps; cross-account routing requires a Phase E SDK extension that passes the user-supplied destination through to vault.swap.`
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositSwap: destination address in memo '${memo}' must not contain whitespace.`
       )
     }
+
+    const toChain = parsed.toChain
 
     // From-asset: derived from the source chain's native ticker (RUNE on
     // THORChain, CACAO on MayaChain).
@@ -943,6 +915,7 @@ export class AgentExecutor {
       toChain,
       toSymbol: parsed.destAsset,
       amount: amountDecimal,
+      ...(parsed.destAddress && { recipient: parsed.destAddress }),
     })
 
     if (result.dryRun) {
@@ -1502,15 +1475,19 @@ export class AgentExecutor {
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
       if (pendingNonce === null && nonceGap > 3n) {
-        if (this.verbose)
-          process.stderr.write(
-            `[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`
-          )
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
+        )
         this.stateStore.clearEvmState(chain)
         return
       }
 
       bs.value.nonce = nextNonce
+      if (pendingNonce === null) {
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
+        )
+      }
       if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
     }
   }
@@ -1542,7 +1519,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      const baseFee = BigInt(data.result?.baseFeePerGas || '0')
+      if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
+        throw new Error(`Failed to fetch current base fee for ${chain}`)
+      }
+      const baseFee = BigInt(data.result.baseFeePerGas)
       if (baseFee === 0n) return
 
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
@@ -1562,7 +1542,9 @@ export class AgentExecutor {
       }
     } catch {
       // Non-fatal — keep the original gas estimate
-      if (this.verbose) process.stderr.write(`[gas] Failed to refresh base fee for ${chain}, keeping original\n`)
+      process.stderr.write(
+        `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
+      )
     }
   }
 
@@ -1588,7 +1570,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      return BigInt(data.result || '0')
+      if (!res.ok || data?.error || data?.result === undefined || data?.result === null) {
+        return null
+      }
+      return BigInt(data.result)
     } catch {
       return null
     }
