@@ -869,11 +869,17 @@ export async function executeCreateFromSeedphraseFast(
   ctx: CommandContext,
   options: CreateFromSeedphraseFastOptions
 ): Promise<VaultBase> {
-  // This flow has no two-step mode: it always ends in an interactive email-OTP
-  // prompt. Refuse up-front in a non-interactive session so no server-side vault
-  // state is created before the prompt chokepoint would reject anyway.
-  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
   const { mnemonic, name, password, email, discoverChains, chains, signal, usePhantomSolanaPath } = options
+
+  // bead vultisig-wxbbp: validate the seedphrase BEFORE the interactive-required
+  // check. A user with a mistyped or garbage mnemonic previously hit
+  // "requires interactive email-OTP entry; run it in a terminal" first and never
+  // learned the real problem was the mnemonic. Diagnostic ordering: give the
+  // most-common failure mode's error first, and only reach the terminal-
+  // requirement gate once the input we're going to send to the OTP flow is
+  // known-valid. No server-side vault state is created by validateSeedphrase
+  // (SDK-local check), so this reorder does NOT weaken the "refuse up-front so
+  // nothing gets provisioned before the interactive chokepoint" property.
 
   // jscpd:ignore-start
   // 1. Validate seedphrase first
@@ -887,6 +893,13 @@ export async function executeCreateFromSeedphraseFast(
     throw new Error(validation.error || 'Invalid mnemonic phrase')
   }
   validateSpinner.succeed(`Valid ${validation.wordCount}-word seedphrase`)
+
+  // Interactive-required check runs AFTER mnemonic validation for better UX
+  // (see comment above). This flow has no two-step mode: it always ends in an
+  // interactive email-OTP prompt. Refuse up-front in a non-interactive session
+  // so no server-side vault state is created before the prompt chokepoint
+  // would reject anyway.
+  requireInteractive('Seedphrase fast-vault import requires interactive email-OTP entry; run it in a terminal.')
 
   // 2. Optional chain discovery (runs if --discover-chains is set)
   // Track if Phantom Solana path should be used (auto-detected during discovery)
