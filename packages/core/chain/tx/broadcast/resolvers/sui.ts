@@ -1,16 +1,21 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getSuiClient } from '@vultisig/core-chain/chains/sui/client'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 export const broadcastSuiTx: BroadcastTxResolver<OtherChain.Sui> = async ({ chain, tx }) => {
   try {
-    return await getSuiClient().executeTransactionBlock({
+    const response = await getSuiClient().executeTransactionBlock({
       transactionBlock: tx.unsignedTx,
       signature: [tx.signature],
     })
+    return broadcastAccepted(response.digest)
   } catch (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, isRetryableBroadcastCause(error))
+    }
   }
 }

@@ -113,12 +113,20 @@ export class BroadcastService {
 
         const signingOutput = decodeSigningOutput(chain, compiledTx)
 
-        await coreBroadcastTx({
+        const broadcastResult = await coreBroadcastTx({
           chain,
           tx: signingOutput,
         })
 
-        txHash = await getTxHash({ chain, tx: signingOutput })
+        if (broadcastResult.status === 'failed') {
+          const cause =
+            broadcastResult.cause instanceof Error ? broadcastResult.cause : new Error(String(broadcastResult.cause))
+          throw new Error(`${broadcastResult.code} (retryable=${broadcastResult.retryable}): ${cause.message}`, {
+            cause,
+          })
+        }
+
+        txHash = broadcastResult.txHash ?? (await getTxHash({ chain, tx: signingOutput }))
       }
 
       return txHash

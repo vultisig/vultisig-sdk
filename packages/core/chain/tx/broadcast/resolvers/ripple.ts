@@ -1,7 +1,7 @@
 import { OtherChain } from '@vultisig/core-chain/Chain'
 import { getRippleClient } from '@vultisig/core-chain/chains/ripple/client'
 
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver, isRetryableBroadcastCause } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 /**
@@ -28,7 +28,12 @@ import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 const PEER_RACE_ENGINE_RESULTS = new Set(['tefALREADY', 'tefPAST_SEQ'])
 
 export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async ({ chain, tx }) => {
-  const client = await getRippleClient()
+  let client
+  try {
+    client = await getRippleClient()
+  } catch (cause) {
+    return broadcastFailed(cause, isRetryableBroadcastCause(cause))
+  }
 
   // RPC-level errors (network blip, connection drop) get the safety-net
   // verify-by-hash path: another peer's broadcast may have landed the tx.
@@ -39,14 +44,17 @@ export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async (
       tx_blob: Buffer.from(tx.encoded).toString('hex'),
     })
   } catch (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
-    return
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, true)
+    }
   }
 
   const engineResultCode = response?.result?.engine_result_code
   if (typeof engineResultCode !== 'number' || engineResultCode === 0) {
     // tesSUCCESS (applied / queued for next ledger). All good.
-    return
+    return broadcastAccepted(response?.result?.tx_json?.hash)
   }
 
   const engineResult = response.result.engine_result ?? 'unknown'
@@ -58,11 +66,14 @@ export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async (
   if (PEER_RACE_ENGINE_RESULTS.has(engineResult)) {
     // Duplicate / past-sequence: fast MPC peer's broadcast may have
     // already landed the tx. Verify before swallowing.
-    await verifyBroadcastByHash({ chain, tx, error })
-    return
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, false)
+    }
   }
 
   // Authoritative rejection at preflight (tem*/tec*/tel*/ter*/remaining tef*).
-  // Propagate so the caller sees the real failure instead of a fake hash.
-  throw error
+  // Return it through the shared contract so callers never receive a raw throw.
+  return broadcastFailed(error, false)
 }

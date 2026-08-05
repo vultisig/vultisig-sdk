@@ -3,7 +3,7 @@ import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
 
 import { polkadotRpcUrl } from '../../../chains/polkadot/client'
-import { BroadcastTxResolver } from '../resolver'
+import { broadcastAccepted, broadcastFailed, BroadcastTxResolver } from '../resolver'
 import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
 
 type RpcResponse = {
@@ -68,9 +68,14 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
       // Transaction variant whose duplicate signal lives in `data`.
       const errorText = `${response.error.message ?? ''} ${response.error.data ?? ''}`
       if (isIdempotentBroadcastError(errorText)) {
-        return
+        return broadcastAccepted()
       }
-      throw new Error(`Polkadot broadcast failed: ${formatRpcError(response.error)}`)
+      const error = new Error(`Polkadot broadcast failed: ${formatRpcError(response.error)}`)
+      try {
+        return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+      } catch (cause) {
+        return broadcastFailed(cause, false)
+      }
     }
 
     // Per JSON-RPC 2.0 a valid response must have exactly one of `result` /
@@ -79,7 +84,12 @@ export const broadcastPolkadotTx: BroadcastTxResolver<OtherChain.Polkadot> = asy
     if (!response.result) {
       throw new Error('Polkadot broadcast failed: missing extrinsic hash in RPC response')
     }
+    return broadcastAccepted(response.result)
   } catch (error) {
-    await verifyBroadcastByHash({ chain, tx, error })
+    try {
+      return broadcastAccepted(await verifyBroadcastByHash({ chain, tx, error }))
+    } catch (cause) {
+      return broadcastFailed(cause, true)
+    }
   }
 }

@@ -26,6 +26,7 @@ vi.mock('../verifyBroadcastByHash', () => ({
 
 import { OtherChain } from '@vultisig/core-chain/Chain'
 
+import { BroadcastErrorCode } from '../resolver'
 import { broadcastCardanoTx } from './cardano'
 
 const txWithTtl = (ttl: number) =>
@@ -45,7 +46,11 @@ describe('broadcastCardanoTx', () => {
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ txHash: 'cardano-hash' })
 
-    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBe('cardano-hash')
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'cardano-hash',
+    })
 
     expect(mocks.submitCardanoCbor).toHaveBeenCalledWith(Buffer.from(tx.encoded).toString('hex'))
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
@@ -55,7 +60,12 @@ describe('broadcastCardanoTx', () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(940n)
 
-    await expect(broadcastCardanoTx({ chain, tx })).rejects.toThrow(/TTL is expired or too close to expiry/)
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: expect.objectContaining({ message: expect.stringMatching(/TTL is expired or too close to expiry/) }),
+    })
 
     expect(mocks.submitCardanoCbor).not.toHaveBeenCalled()
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
@@ -66,7 +76,12 @@ describe('broadcastCardanoTx', () => {
       encoded: encode([new Map(), new Map(), true, null]),
     } as any
 
-    await expect(broadcastCardanoTx({ chain, tx })).rejects.toThrow(/Invalid Cardano transaction TTL/)
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: expect.objectContaining({ message: expect.stringMatching(/Invalid Cardano transaction TTL/) }),
+    })
 
     expect(mocks.getCardanoCurrentSlot).not.toHaveBeenCalled()
     expect(mocks.submitCardanoCbor).not.toHaveBeenCalled()
@@ -76,9 +91,13 @@ describe('broadcastCardanoTx', () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'request timed out' })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      finality: 'pending',
+      txHash: 'verified-hash',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledWith({
@@ -97,7 +116,12 @@ describe('broadcastCardanoTx', () => {
     mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'request timed out' })
     mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
 
-    await expect(broadcastCardanoTx({ chain, tx })).rejects.toBe(verifyError)
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Transport,
+      retryable: true,
+      cause: verifyError,
+    })
   })
 
   it('routes an "already known" duplicate through hash verification instead of blanket-swallowing it (false-success fix)', async () => {
@@ -107,9 +131,12 @@ describe('broadcastCardanoTx', () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'txn-mempool-conflict' })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'verified-hash',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
   })
@@ -123,16 +150,24 @@ describe('broadcastCardanoTx', () => {
     // own contract in verifyBroadcastByHash.ts.
     mocks.verifyBroadcastByHash.mockRejectedValue(verifyError)
 
-    await expect(broadcastCardanoTx({ chain, tx })).rejects.toBe(verifyError)
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toEqual({
+      status: 'failed',
+      code: BroadcastErrorCode.Rejected,
+      retryable: false,
+      cause: verifyError,
+    })
   })
 
   it('still succeeds on a genuine MPC-race "already known" when hash verification confirms the tx IS on chain', async () => {
     const tx = txWithTtl(1_000)
     mocks.getCardanoCurrentSlot.mockResolvedValue(939n)
     mocks.submitCardanoCbor.mockResolvedValue({ errorMessage: 'already known' })
-    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+    mocks.verifyBroadcastByHash.mockResolvedValue('verified-hash')
 
-    await expect(broadcastCardanoTx({ chain, tx })).resolves.toBeNull()
+    await expect(broadcastCardanoTx({ chain, tx })).resolves.toMatchObject({
+      status: 'accepted',
+      txHash: 'verified-hash',
+    })
 
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledTimes(1)
   })

@@ -23,12 +23,12 @@ describe('verifyBroadcastByHash', () => {
     vi.clearAllMocks()
   })
 
-  it("swallows error when status is 'pending'", async () => {
+  it("returns the canonical hash when status is 'pending'", async () => {
     const originalError = new Error('duplicate tx')
     getTxHashMock.mockResolvedValue('0xdeadbeef')
     getTxStatusMock.mockResolvedValue({ status: 'pending' })
 
-    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBeUndefined()
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBe('0xdeadbeef')
 
     expect(getTxHashMock).toHaveBeenCalledTimes(1)
     expect(getTxHashMock).toHaveBeenCalledWith({ chain, tx })
@@ -47,12 +47,12 @@ describe('verifyBroadcastByHash', () => {
     await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).rejects.toBe(originalError)
   })
 
-  it("swallows error when status is 'success'", async () => {
+  it("returns the canonical hash when status is 'success'", async () => {
     const originalError = new Error('duplicate tx')
     getTxHashMock.mockResolvedValue('0xabc')
     getTxStatusMock.mockResolvedValue({ status: 'success' })
 
-    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBeUndefined()
+    await expect(verifyBroadcastByHash({ chain, tx, error: originalError })).resolves.toBe('0xabc')
   })
 
   it("rethrows original error when status is 'error'", async () => {
