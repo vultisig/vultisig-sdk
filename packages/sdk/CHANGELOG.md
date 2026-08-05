@@ -1,5 +1,27 @@
 # @vultisig/sdk
 
+## 4.0.2
+
+### Patch Changes
+
+- [#1580](https://github.com/vultisig/vultisig-sdk/pull/1580) [`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publish `@vultisig/sdk/tools/bridge` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1578](https://github.com/vultisig/vultisig-sdk/pull/1578) [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the full River helper family from `@vultisig/sdk/react-native`, including market/hint helpers and trove-status canonicals.
+
+- [#1576](https://github.com/vultisig/vultisig-sdk/pull/1576) [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix the Astroport swap builder to use a React Native / Hermes-safe fetch timeout instead of `AbortSignal.timeout()`.
+
+- [#1698](https://github.com/vultisig/vultisig-sdk/pull/1698) [`9dfd76c`](https://github.com/vultisig/vultisig-sdk/commit/9dfd76c617812418521c820e65a07a02003d5e5e) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Wire `assertSafeDestination` into `prepareSendTxFromKeys` so every send that goes through the keys path (vault-CLI, agent-backend) is guarded against known-dangerous contract addresses. Adds an own-token-contract guard that rejects sends to the token's own contract address, which is a common drain-wallet vector. Mirrors the existing destination guard on the vault path.
+
+- [#1720](https://github.com/vultisig/vultisig-sdk/pull/1720) [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Carry caller-supplied THORChain and MayaChain swap destinations through agent MsgDeposit execution, preserve the existing self-swap default, and reject quote memos that substitute another destination.
+
+## 4.0.1
+
+### Patch Changes
+
+- [#1625](https://github.com/vultisig/vultisig-sdk/pull/1625) [`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4) Thanks [@neavra](https://github.com/neavra)! - Resolve tracked vault token IDs to their canonical asset IDs before fetching prices for balance and portfolio results.
+
+- [#1692](https://github.com/vultisig/vultisig-sdk/pull/1692) [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Re-encrypt successfully imported legacy vault backups with the salted PBKDF2 format before persistence and emit a typed security notice recommending password rotation and replacement of old backup files.
+
 ## 4.0.0
 
 ### Major Changes

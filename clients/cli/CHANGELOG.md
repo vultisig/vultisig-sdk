@@ -1,5 +1,32 @@
 # @vultisig/cli
 
+## 4.0.2
+
+### Patch Changes
+
+- [#1580](https://github.com/vultisig/vultisig-sdk/pull/1580) [`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publish `@vultisig/sdk/tools/bridge` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1641](https://github.com/vultisig/vultisig-sdk/pull/1641) [`199507d`](https://github.com/vultisig/vultisig-sdk/commit/199507da2be585e8b8414d7d12077174c80afb7b) Thanks [@neavra](https://github.com/neavra)! - Replace unavailable Ethereum and Polygon gas-refresh RPC endpoints, warn when pre-sign gas or nonce refreshes fail, and preserve nonce-gap safeguards when a pending-nonce lookup fails. Ethereum and Polygon pending-nonce checks now share the vault address and request timing with PublicNode.
+
+- [#1578](https://github.com/vultisig/vultisig-sdk/pull/1578) [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the full River helper family from `@vultisig/sdk/react-native`, including market/hint helpers and trove-status canonicals.
+
+- [#1576](https://github.com/vultisig/vultisig-sdk/pull/1576) [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix the Astroport swap builder to use a React Native / Hermes-safe fetch timeout instead of `AbortSignal.timeout()`.
+
+- [#1720](https://github.com/vultisig/vultisig-sdk/pull/1720) [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Carry caller-supplied THORChain and MayaChain swap destinations through agent MsgDeposit execution, preserve the existing self-swap default, and reject quote memos that substitute another destination.
+
+- Updated dependencies [[`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e), [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b), [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554), [`9dfd76c`](https://github.com/vultisig/vultisig-sdk/commit/9dfd76c617812418521c820e65a07a02003d5e5e), [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc)]:
+  - @vultisig/sdk@4.0.2
+  - @vultisig/core-chain@2.31.1
+
+## 4.0.1
+
+### Patch Changes
+
+- [#1561](https://github.com/vultisig/vultisig-sdk/pull/1561) [`38be8ef`](https://github.com/vultisig/vultisig-sdk/commit/38be8eff97b061d241c7ac1c1616b48115fbb974) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Render `yield_opportunities` and `polymarket_markets` agent surfaces as prose instead of leaking raw `{"surface":...}` JSON into the terminal. The CLI only advertised `balance_summary`/`turn_outcome` in `supported_surfaces`, so any other surface fell back to the backend's legacy verbatim-echo path. Adds parsers, prose renderers, and a legacy-echo fallback for both surfaces, mirroring the existing `balance_summary` handling, and wires them through the TUI, pipe mode, and `agent ask`.
+
+- Updated dependencies [[`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4), [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623)]:
+  - @vultisig/sdk@4.0.1
+
 ## 4.0.0
 
 ### Minor Changes
