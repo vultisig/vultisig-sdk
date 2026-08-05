@@ -323,21 +323,17 @@ describe('getThorchainMemoAssetSourceChain', () => {
   })
 
   // Every THORChain-HELD flavour must be sent from a THOR address even though it
-  // originates elsewhere — this is where the two chain questions diverge.
+  // originates elsewhere. Each row asserts BOTH answers, so it pins the
+  // divergence itself rather than one side of it — this is the whole reason the
+  // two resolvers exist separately.
   it.each([
     ['xrp-xrp', Chain.Ripple],
     ['eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', Chain.Ethereum],
     ['BTC/BTC', Chain.Bitcoin],
     ['ETH~ETH', Chain.Ethereum],
-  ])('sends the THORChain-held %s from THORChain, not %s', asset => {
+  ])('sends the THORChain-held %s from THORChain though it originates on %s', (asset, homeChain) => {
+    expect(getThorchainMemoAssetChain(asset)).toBe(homeChain)
     expect(getThorchainMemoAssetSourceChain(asset)).toBe(Chain.THORChain)
-  })
-
-  it('reports the home chain and the sending chain differently for a secured asset', () => {
-    const secured = 'eth-usdc-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
-
-    expect(getThorchainMemoAssetChain(secured)).toBe(Chain.Ethereum)
-    expect(getThorchainMemoAssetSourceChain(secured)).toBe(Chain.THORChain)
   })
 
   // A recognisable SHAPE is not a recognisable asset. Answering THORChain on the
