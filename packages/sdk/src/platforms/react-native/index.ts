@@ -660,6 +660,11 @@ export async function parseKeygenQR(...args: unknown[]) {
 }
 export { ValidationHelpers } from '../../utils/validation'
 
+// Pure, platform-neutral signable-transaction contract. Keep this explicit in
+// the curated React Native entry point so mobile consumers receive the same v1
+// schema and canonical hashes as Node/browser/desktop clients.
+export * from '../../signable-transaction'
+
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
 // XRP. Pure address-string matching (no chain-client deps), so RN-safe as a

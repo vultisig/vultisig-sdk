@@ -325,6 +325,11 @@ export type {
 // Swap type guards
 export { isAccountCoin, isSimpleCoinInput, KeysignPayloadSchema } from './types'
 
+// Versioned, SDK-owned "what you see is what you sign" contract. This is a
+// pure boundary: builders/clients supply chain-family decoders while the SDK
+// owns canonical actions, hashing, approval binding and verification fences.
+export * from './signable-transaction'
+
 // Swap explorer URL helper (parity with iOS ExplorerLinkBuilder /
 // Android ExplorerLinkRepository.getSwapProgressLink). Use this instead of
 // chain-only explorer URLs when rendering swap tx history.
