@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   assembleAstroportSwap,
   ASTROPORT_ROUTER,
+  buildAstroportSwap,
   type BuildAstroportSwapParams,
   classifyAstroportAsset,
   computeAstroportMinReceive,
@@ -34,6 +35,19 @@ const base: BuildAstroportSwapParams = {
   askAssetDenom: ASTRO_CW20,
   slippageTolerance: 0.01,
 }
+
+const originalFetch = globalThis.fetch
+const originalAbortSignalTimeout = AbortSignal.timeout
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+  Object.defineProperty(AbortSignal, 'timeout', {
+    configurable: true,
+    writable: true,
+    value: originalAbortSignalTimeout,
+  })
+  vi.restoreAllMocks()
+})
 
 describe('classifyAstroportAsset', () => {
   it('classifies a native bank denom as native_token', () => {
@@ -202,5 +216,33 @@ describe('assembleAstroportSwap validation', () => {
 
   it('rejects slippage above the 5% cap', () => {
     expect(() => assembleAstroportSwap({ ...base, slippageTolerance: 0.1 }, '500000')).toThrow(/slippageTolerance/)
+  })
+})
+
+describe('buildAstroportSwap RN timeout compatibility', () => {
+  it('still builds when AbortSignal.timeout is unavailable', async () => {
+    Object.defineProperty(AbortSignal, 'timeout', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    })
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.method).toBe('GET')
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+
+      return {
+        ok: true,
+        json: async () => ({ data: { amount: '500000' } }),
+      } satisfies Partial<Response> as Response
+    })
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const result = await buildAstroportSwap(base)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(result.contractAddress).toBe(ASTROPORT_ROUTER_LITERAL)
+    expect(result.funds).toEqual([{ denom: 'uluna', amount: '1000000' }])
+    expect(JSON.parse(result.executeMsg).execute_swap_operations.minimum_receive).toBe('495000')
   })
 })

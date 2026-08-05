@@ -111,6 +111,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     })
   })
 
+  it('re-exports the root River helper family on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const river = await import('../../../../src/tools/defi/river')
+
+    expect(rn.describeRiverMarket).toBe(river.describeRiverMarket)
+    expect(rn.findRiverInsertHints).toBe(river.findRiverInsertHints)
+    expect(rn.formatRiverPercentWad).toBe(river.formatRiverPercentWad)
+    expect(rn.RIVER_TROVE_STATUS_NAMES).toBe(river.RIVER_TROVE_STATUS_NAMES)
+    expect(rn.riverStatusName).toBe(river.riverStatusName)
+  })
+
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
