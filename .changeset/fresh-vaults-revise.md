@@ -1,5 +1,6 @@
 ---
-'@vultisig/sdk': patch
+'@vultisig/sdk': minor
 ---
 
-Prevent stale vault instances from overwriting newer storage updates, with explicit conflict errors and a narrow metadata merge retry.
+Prevent stale vault instances from overwriting newer storage updates. `vault.save()` now rejects stale writes with
+`VaultConflictError`; pass `{ conflictStrategy: 'merge-metadata' }` to retry a non-overlapping metadata edit.

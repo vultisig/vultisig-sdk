@@ -246,6 +246,7 @@ export class VaultManager {
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
+      const persistedVaultData = await this.storage.get<VaultData>(`vault:${vaultId}`)
 
       // Determine vault type from parsed vault
       const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
@@ -263,10 +264,17 @@ export class VaultManager {
           persistedVultContent,
           parsedVault,
           fastSigningService,
-          vaultContext
+          vaultContext,
+          persistedVaultData ?? undefined
         )
       } else {
-        vaultInstance = SecureVault.fromImport(vaultId, persistedVultContent, parsedVault, vaultContext)
+        vaultInstance = SecureVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          vaultContext,
+          persistedVaultData ?? undefined
+        )
       }
 
       // Cache password if provided (for encrypted vaults)

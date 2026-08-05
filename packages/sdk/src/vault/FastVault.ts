@@ -452,9 +452,12 @@ export class FastVault extends VaultBase {
     vultContent: string,
     parsedVault: CoreVault,
     fastSigningService: FastSigningService,
-    context: VaultContext
+    context: VaultContext,
+    persistedVaultData?: VaultData
   ): FastVault {
-    return new FastVault(vaultId, parsedVault.name, vultContent, fastSigningService, context, parsedVault)
+    const vault = new FastVault(vaultId, parsedVault.name, vultContent, fastSigningService, context, parsedVault)
+    if (persistedVaultData) vault.setPersistedBaseline(persistedVaultData)
+    return vault
   }
 
   /**

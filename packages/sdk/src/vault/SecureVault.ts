@@ -514,8 +514,16 @@ export class SecureVault extends VaultBase {
    * @param context - Vault context with dependencies
    * @internal Used by VaultManager.importVault()
    */
-  static fromImport(vaultId: string, vultContent: string, parsedVault: CoreVault, context: VaultContext): SecureVault {
-    return new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+  static fromImport(
+    vaultId: string,
+    vultContent: string,
+    parsedVault: CoreVault,
+    context: VaultContext,
+    persistedVaultData?: VaultData
+  ): SecureVault {
+    const vault = new SecureVault(vaultId, parsedVault.name, vultContent, context, parsedVault)
+    if (persistedVaultData) vault.setPersistedBaseline(persistedVaultData)
+    return vault
   }
 
   /**

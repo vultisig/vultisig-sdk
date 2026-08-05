@@ -953,6 +953,14 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     this.hasPersistedRecord = persisted
   }
 
+  /** @internal Retains a current storage snapshot as the CAS baseline for an explicit import overwrite. */
+  protected setPersistedBaseline(vaultData: VaultData): void {
+    const snapshot = cloneVaultData(vaultData)
+    getVaultRevision(snapshot)
+    this.persistedVaultData = snapshot
+    this.hasPersistedRecord = true
+  }
+
   private async saveUnlocked(key: string, localData: VaultData, options: VaultSaveOptions): Promise<void> {
     const currentStored = await this.storage.get<VaultData>(key)
     const currentData = currentStored ? cloneVaultData(currentStored) : null

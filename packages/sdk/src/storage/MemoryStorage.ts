@@ -1,7 +1,11 @@
 import { Storage, STORAGE_VERSION, StorageMetadata, StoredValue } from './types'
 
 function cloneStoredValue<T>(value: T): T {
-  return structuredClone(value)
+  if (typeof globalThis.structuredClone === 'function') {
+    return globalThis.structuredClone(value)
+  }
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 /**
