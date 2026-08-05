@@ -112,8 +112,16 @@ export async function executeTokens(ctx: CommandContext, options: TokensOptions)
 export async function addToken(ctx: CommandContext, options: AddTokenOptions): Promise<void> {
   const vault = await ctx.ensureActiveVault()
 
+  // bead vultisig-sb7ub: tokenId must be the raw contract address to match how
+  // discovery + storage key tokens across the SDK. Previously this used
+  // `${chain}-${contractAddress}` which produced an id shape ('Ethereum-0x...')
+  // that (a) rendered as a double-prefix 'Ethereum:Ethereum-0x...' in the
+  // balances map, and (b) prevented removal — `vault.removeToken(chain, '0x...')`
+  // normalises to the raw address and never matched the stored prefixed id, so
+  // a manually-added token was orphaned in the vault with no CLI-side removal
+  // path.
   await vault.addToken(options.chain, {
-    id: `${options.chain}-${options.contractAddress}`,
+    id: options.contractAddress,
     contractAddress: options.contractAddress,
     symbol: options.symbol,
     name: options.name,
