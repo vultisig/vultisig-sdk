@@ -359,9 +359,13 @@ export class SwapService {
     const { quote: quoteData } = swapQuote
     const isNative = 'native' in quoteData
 
-    // Calculate expiry
-    const expiresIn = isNative ? quoteData.native.expiry * 1000 - Date.now() : DEFAULT_QUOTE_EXPIRY_MS
-    const expiresAt = Date.now() + Math.min(expiresIn, DEFAULT_QUOTE_EXPIRY_MS)
+    // Preserve the raw quote's receive-time expiry. Native quotes also keep the
+    // SDK's existing 60-second maximum presentation window.
+    // `formatQuoteResult` only receives canonical `findSwapQuote` results. The
+    // base type keeps these fields optional so legacy/manual quote fixtures stay
+    // source-compatible; the vault-free builder still validates them at runtime.
+    const quoteExpiresAt = swapQuote.expiresAt as number
+    const expiresAt = isNative ? Math.min(quoteExpiresAt, Date.now() + DEFAULT_QUOTE_EXPIRY_MS) : quoteExpiresAt
 
     // Native swap APIs report output in their protocol precision. SDK consumers
     // expect the destination coin's base units, matching general provider quotes.
