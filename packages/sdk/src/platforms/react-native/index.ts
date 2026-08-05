@@ -168,7 +168,7 @@ export type {
 // Solana bridge type surface — pure primitive reimplementation that does NOT
 // pull @solana/web3.js (and therefore avoids the rpc-websockets / ws cascade
 // that hangs Hermes at module init).
-export type { BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
+export type { BroadcastSolanaTxOptions, BuildSolanaSendOptions, SolanaTxBuilderResult } from './chains/solana'
 
 // TON bridge type surface — reimplementation built on @ton/core only, which
 // is Hermes-safe (uses jssha via @ton/crypto peer dep, not crypto.subtle).
