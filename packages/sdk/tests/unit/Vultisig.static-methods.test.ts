@@ -202,6 +202,7 @@ describe('Vultisig static methods', () => {
           ticker: 'USDC',
           decimals: 6,
           logo: 'usdc.png',
+          priceProviderId: 'usd-coin',
           isHidden: true,
         },
         {
@@ -229,6 +230,7 @@ describe('Vultisig static methods', () => {
           ticker: 'USDC',
           decimals: 6,
           logo: 'usdc.png',
+          priceProviderId: 'usd-coin',
           isHidden: true,
         },
         {

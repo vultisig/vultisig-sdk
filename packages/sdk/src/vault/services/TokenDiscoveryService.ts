@@ -24,6 +24,7 @@ export class TokenDiscoveryService {
           ticker: coin.ticker,
           decimals: coin.decimals,
           logo: coin.logo,
+          ...(coin.priceProviderId === undefined ? {} : { priceProviderId: coin.priceProviderId }),
           ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
         }
       })
