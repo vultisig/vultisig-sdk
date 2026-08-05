@@ -80,6 +80,16 @@ describe('isAddressValidForChain', () => {
     expect(isAddressValidForChain(ADDR.osmo, 'osmosis')).toBe(true)
     expect(isAddressValidForChain(ADDR.osmo, 'osmo')).toBe(true)
   })
+  it('accepts normalizeChain aliases and chain ids instead of failing open', () => {
+    expect(isAddressValidForChain(ADDR.cosmos, 'gaia')).toBe(true)
+    expect(isAddressValidForChain(ADDR.cosmos, 'cosmoshub-4')).toBe(true)
+    expect(isAddressValidForChain(ADDR.eth, 'binancesmartchain')).toBe(true)
+    expect(isAddressValidForChain(ADDR.eth, 'Cronos Chain')).toBe(true)
+  })
+  it('accepts spaced / hyphenated Bitcoin Cash aliases instead of treating them as unknown', () => {
+    expect(isAddressValidForChain('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'Bitcoin Cash')).toBe(true)
+    expect(isAddressValidForChain('bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'Bitcoin-Cash')).toBe(true)
+  })
   it('returns undefined for a chain with no FORMAT rule', () => {
     expect(isAddressValidForChain(ADDR.eth, 'madeupchain')).toBeUndefined()
   })
