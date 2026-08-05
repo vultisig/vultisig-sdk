@@ -1813,7 +1813,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     const fromToken = this.resolveTokenInfo(fromChain, fromSymbol)
     const toToken = this.resolveTokenInfo(toChain, toSymbol)
     const [fromAddress, defaultToAddress] = await Promise.all([this.address(fromChain), this.address(toChain)])
-    const toAddress = recipient ?? defaultToAddress
+    const normalizedRecipient = recipient?.trim() || undefined
+    const toAddress = normalizedRecipient ?? defaultToAddress
     const fromCoin = this.buildAccountCoin(fromChain, fromAddress, fromToken)
     const toCoin = this.buildAccountCoin(toChain, toAddress, toToken)
 
@@ -1829,7 +1830,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       fromCoin,
       toCoin,
       amount: normalizedAmount,
-      recipient,
+      recipient: normalizedRecipient,
       slippageTolerance,
       excludeProviders,
     })
