@@ -227,7 +227,8 @@ export async function sendTransaction(
       params.chain,
       preview.memo,
       preview.destinationTag,
-      gas
+      gas,
+      dryResult.contractAddress
     )
   }
 

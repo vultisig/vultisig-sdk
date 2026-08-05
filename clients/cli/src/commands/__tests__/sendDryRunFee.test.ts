@@ -142,6 +142,10 @@ describe('send --dry-run preview', () => {
 
     expect(result.fee).toBe('0.0021')
     expect(result.total).toBe('1.0021')
+    // Assert on the returned object, not JSON output: JSON.stringify drops
+    // undefined-valued keys, so only this catches an unguarded
+    // `contractAddress: undefined` leaking into the native-send result.
+    expect(result).not.toHaveProperty('contractAddress')
   })
 
   it('carries fee and total into the JSON envelope, not just the human preview', async () => {
