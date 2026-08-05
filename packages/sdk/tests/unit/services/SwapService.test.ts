@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { getSwapQuoteSafetyFingerprint } from '@vultisig/core-chain/swap/quote/getSwapQuoteSafetyFingerprint'
 import { SwapError, SwapErrorCode } from '@vultisig/core-chain/swap/SwapError'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -345,6 +346,7 @@ describe('SwapService', () => {
     it('should fetch a swap quote for ERC-20 token requiring approval', async () => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
       const { getErc20Allowance } = await import('@vultisig/core-chain/chains/evm/erc20/getErc20Allowance')
+      const expiresAt = Date.now() + 45_000
 
       const mockQuote = {
         quote: {
@@ -363,6 +365,8 @@ describe('SwapService', () => {
           },
         },
         discounts: [],
+        requestedAmount: 100_000_000n,
+        expiresAt,
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote)
@@ -387,6 +391,7 @@ describe('SwapService', () => {
 
       expect(result).toBeDefined()
       expect(result.provider).toBe('1inch')
+      expect(result.expiresAt).toBe(expiresAt)
       expect(result.requiresApproval).toBe(true)
       expect(result.approvalInfo).toBeDefined()
       expect(result.approvalInfo?.spender).toBe('0x1111111254fb6c44bAC0beD2854e76F90643097d')
@@ -840,6 +845,8 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 1_000_000_000_000_000_000n,
+          expiresAt: Date.now() + 60_000,
         },
         estimatedOutput: 1000000000n,
         provider: '1inch',
@@ -857,6 +864,24 @@ describe('SwapService', () => {
         balance: 10n ** 18n,
         maxSwapable: 10n ** 18n,
       }
+      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
+        expiresAt: mockQuoteResult.quote.expiresAt as number,
+        quote: mockQuoteResult.quote.quote,
+      })
 
       const result = await service.prepareSwapTx({
         fromCoin: {
@@ -907,6 +932,8 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 100_000_000n,
+          expiresAt: Date.now() + 60_000,
         },
         estimatedOutput: 1000000000n,
         provider: 'thorchain',
@@ -972,6 +999,8 @@ describe('SwapService', () => {
             },
           },
           discounts: [],
+          requestedAmount: 100_000_000n,
+          expiresAt: Date.now() + 60_000,
         },
         estimatedOutput: 1000000000000000000n,
         provider: '1inch',
@@ -994,6 +1023,24 @@ describe('SwapService', () => {
         balance: 10n ** 18n,
         maxSwapable: 10n ** 18n,
       }
+      mockQuoteResult.quote.safetyFingerprint = getSwapQuoteSafetyFingerprint({
+        from: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          id: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+          ticker: 'USDC',
+          decimals: 6,
+        },
+        to: {
+          chain: Chain.Ethereum,
+          address: '0x1234567890abcdef1234567890abcdef12345678',
+          ticker: 'ETH',
+          decimals: 18,
+        },
+        requestedAmount: mockQuoteResult.quote.requestedAmount as bigint,
+        expiresAt: mockQuoteResult.quote.expiresAt as number,
+        quote: mockQuoteResult.quote.quote,
+      })
 
       await service.prepareSwapTx({
         fromCoin: {
