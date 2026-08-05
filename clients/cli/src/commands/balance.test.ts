@@ -369,6 +369,40 @@ describe('executePortfolio partial-failure reporting', () => {
     expect(joined).toContain('Bitcoin')
     expect(joined).toContain('btc unreachable')
   })
+
+  it('does NOT persist --currency to the vault preference (bead v1n9u)', async () => {
+    // Regression guard: `portfolio --currency EUR` previously called
+    // vault.setCurrency('eur') as a side effect, silently persisting EUR as
+    // the vault's default. --currency is a DISPLAY option — vault preference
+    // only changes via the dedicated `currency <X>` command.
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      balance: async () => makeBalance('ETH'),
+      getValue: async () => makeValue('100.00'),
+    })
+    const vault = await ctx.ensureActiveVault()
+
+    await captureJson(() => executePortfolio(ctx, { currency: 'eur' }))
+
+    // The mock's setCurrency was NOT called — --currency stayed display-only.
+    expect((vault as unknown as { setCurrency: ReturnType<typeof vi.fn> }).setCurrency).not.toHaveBeenCalled()
+  })
+
+  it('passes --currency through to getValues without touching vault.currency', async () => {
+    // The requested currency reaches the pricing layer via the explicit
+    // getValues(chain, currency) arg — no vault mutation needed.
+    const getValues = vi.fn(async (chain: Chain, _currency: FiatCurrency) => ({ native: makeValue('50.00') }))
+    const ctx = makeCtx({
+      chains: [Chain.Ethereum],
+      balance: async () => makeBalance('ETH'),
+      getValue: async () => makeValue('50.00'),
+      getValues,
+    })
+
+    await captureJson(() => executePortfolio(ctx, { currency: 'gbp' }))
+
+    expect(getValues).toHaveBeenCalledWith(Chain.Ethereum, 'gbp')
+  })
 })
 
 describe('executeBalance honours --tokens on a single chain', () => {
