@@ -167,6 +167,19 @@ function toDryRunResult(options: SwapOptions, quote: SwapQuoteResult, fromAmount
   if (quote.estimatedOutputFiat != null) result.estimatedOutputFiat = parseFloat(quote.estimatedOutputFiat.toFixed(2))
   if (quote.requiresApproval) result.requiresApproval = true
   if (quote.warnings?.length) result.warnings = [...quote.warnings]
+
+  // bead vultisig-ehedh: --slippage 0 built silently even though a 0% tolerance
+  // guarantees revert on any price movement between the quote timestamp and the
+  // on-chain execution (bridges take ~15s+, price always moves). Explicit warn
+  // in the dry-run makes the risk visible instead of surfacing at the moment
+  // the tx reverts. Range guard for negative / >50 already rejects at the
+  // SDK layer (Received "-5" / "100"), so this only fires on the exactly-0
+  // case that slips through as a "successful" build.
+  if (options.slippage === 0) {
+    const warning = 'Slippage=0% guarantees revert on any price movement between quote and execution — consider >= 0.1%'
+    result.warnings = result.warnings ? [...result.warnings, warning] : [warning]
+  }
+
   return result
 }
 
