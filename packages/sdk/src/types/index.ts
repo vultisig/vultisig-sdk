@@ -618,6 +618,8 @@ export type SendResult =
   | { dryRun: false; txHash: string; chain: Chain }
   | {
       dryRun: true
+      /** Resolved token contract address / chain-specific asset id. Omitted for native sends. */
+      contractAddress?: string
       /** Network fee, denominated in the chain's native asset (`feeSymbol`). */
       fee: string
       /** Ticker of the asset the fee is paid in — always the chain's native asset. */
