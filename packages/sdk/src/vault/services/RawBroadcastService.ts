@@ -267,9 +267,23 @@ export class RawBroadcastService {
 
     if (error) {
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        // Match the authoritative core resolver: the node already accepted this
-        // exact signed payload, while execution outcome remains status-layer work.
-        return deriveSolanaRawTxSignature(rawTx)
+        const signature = deriveSolanaRawTxSignature(rawTx)
+
+        // A duplicate error proves that the node has seen this exact signed payload, but it
+        // does not prove successful execution. Reject only when the node already exposes an
+        // explicit failure; an unavailable or not-yet-indexed status remains accepted.
+        const { data: statuses } = await attempt(
+          client.getSignatureStatuses([signature], { searchTransactionHistory: true })
+        )
+        const signatureStatus = statuses?.value?.[0]
+        if (signatureStatus?.err) {
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Solana transaction was already processed but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
+          )
+        }
+
+        return signature
       }
       throw error
     }

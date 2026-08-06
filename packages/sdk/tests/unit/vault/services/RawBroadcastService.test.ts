@@ -221,10 +221,33 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe('sol-signature')
   })
 
-  it('treats duplicate-style Solana broadcast errors as acceptance without requiring a status lookup', async () => {
+  it('rejects a duplicate Solana transaction with an explicit on-chain failure', async () => {
     const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
     const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
     mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] } }],
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Solana,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+    expect(mockGetSolanaSignatureStatuses).toHaveBeenCalledWith([base58.encode(signature)], {
+      searchTransactionHistory: true,
+    })
+  })
+
+  it('accepts a duplicate Solana transaction when its status is not indexed yet', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
 
     const hash = await service.broadcastRawTx({
       chain: Chain.Solana,
@@ -232,7 +255,20 @@ describe('RawBroadcastService', () => {
     })
 
     expect(hash).toBe(base58.encode(signature))
-    expect(mockGetSolanaSignatureStatuses).not.toHaveBeenCalled()
+  })
+
+  it('accepts a duplicate Solana transaction when its best-effort status lookup is unavailable', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
+    })
+
+    expect(hash).toBe(base58.encode(signature))
   })
 
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
