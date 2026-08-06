@@ -391,7 +391,7 @@ describe('executePortfolio partial-failure reporting', () => {
   it('passes --currency through to getValues without touching vault.currency', async () => {
     // The requested currency reaches the pricing layer via the explicit
     // getValues(chain, currency) arg — no vault mutation needed.
-    const getValues = vi.fn(async (chain: Chain, _currency: FiatCurrency) => ({ native: makeValue('50.00') }))
+    const getValues = vi.fn(async (_chain: Chain, _currency: FiatCurrency) => ({ native: makeValue('50.00') }))
     const ctx = makeCtx({
       chains: [Chain.Ethereum],
       balance: async () => makeBalance('ETH'),
