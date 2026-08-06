@@ -591,6 +591,11 @@
       "import": "./dist/keysign/swap/build.js",
       "default": "./dist/keysign/swap/build.js"
     },
+    "./keysign/swap/buildLimitSwapCancelKeysignPayload": {
+      "types": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.d.ts",
+      "import": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js",
+      "default": "./dist/keysign/swap/buildLimitSwapCancelKeysignPayload.js"
+    },
     "./keysign/swap/buildLimitSwapKeysignPayload": {
       "types": "./dist/keysign/swap/buildLimitSwapKeysignPayload.d.ts",
       "import": "./dist/keysign/swap/buildLimitSwapKeysignPayload.js",
@@ -600,6 +605,11 @@
       "types": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.d.ts",
       "import": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js",
       "default": "./dist/keysign/swap/cowswap/buildCowSwapApprovalSigningInput.js"
+    },
+    "./keysign/swap/getKeysignLimitSwapCancel": {
+      "types": "./dist/keysign/swap/getKeysignLimitSwapCancel.d.ts",
+      "import": "./dist/keysign/swap/getKeysignLimitSwapCancel.js",
+      "default": "./dist/keysign/swap/getKeysignLimitSwapCancel.js"
     },
     "./keysign/swap/getKeysignLimitSwapOrder": {
       "types": "./dist/keysign/swap/getKeysignLimitSwapOrder.d.ts",
