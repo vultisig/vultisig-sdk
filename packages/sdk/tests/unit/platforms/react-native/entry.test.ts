@@ -30,7 +30,7 @@ vi.mock('@vultisig/walletcore-native', () => ({
 
 describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
   it('registers crypto + storage on module load so Vultisig({}) does not throw', async () => {
-    await import('../../../../src/platforms/react-native/index')
+    const rn = await import('../../../../src/platforms/react-native/index')
     const { randomUUID } = await import('../../../../src/crypto')
     const { getDefaultStorage } = await import('../../../../src/context/defaultStorage')
 
@@ -38,6 +38,15 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     const storage = getDefaultStorage()
     expect(storage).toBeDefined()
     expect(typeof storage.get).toBe('function')
+    expect(rn.DEFAULT_CHAINS).toBe(rn.defaultChains)
+  })
+
+  it('exports default chain canonicals on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(rn.defaultChains)).toBe(true)
+    expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
   it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
@@ -47,6 +56,52 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uatom')).toBe(true)
     expect(rn.isCosmosFeeDenomAllowed(rn.Chain.Cosmos, 'uusdc')).toBe(false)
     expect(rn.resolveChainReference('8453')).toBe(rn.Chain.Base)
+  })
+
+  it('exports the canonical IBC Cosmos send-fee floors from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.Cosmos)).toBe(7500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.MayaChain)).toBe(2_000_000_000n)
+    expect(rn.getCosmosSendFeeBaseUnits(rn.Chain.THORChain)).toBeUndefined()
+  })
+
+  it('keeps Robinhood derivation native-compatible on the exported RN surface', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const deriveAddressFromPublicKey = vi.fn(() => '0x1234')
+    const walletCore = {
+      CoinType: { ethereum: 60, robinhoodChain: 10_004_663 },
+      CoinTypeExt: { deriveAddressFromPublicKey },
+    } as unknown as import('@vultisig/walletcore-native').WalletCoreLike
+    const publicKey = { _handle: 7 }
+
+    const coinType = rn.getCoinType({ chain: rn.Chain.Robinhood, walletCore })
+    const robinhoodAddress = rn.deriveAddress({ chain: rn.Chain.Robinhood, publicKey, walletCore })
+    const ethereumAddress = rn.deriveAddress({ chain: rn.Chain.Ethereum, publicKey, walletCore })
+
+    expect(coinType).toBe(10_004_663)
+    expect(Number.isInteger(coinType)).toBe(true)
+    expect(robinhoodAddress).toBe(ethereumAddress)
+    expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(1, 10_004_663, publicKey)
+    expect(deriveAddressFromPublicKey).toHaveBeenNthCalledWith(2, 60, publicKey)
+  })
+
+  // sdk#1538 - the memo-cap family was already exported from the root SDK
+  // entrypoint but omitted from the RN allow-list, pushing mobile consumers
+  // toward local memo-cap tables. An over-long memo signs fine but gets
+  // rejected (or silently truncated by an intermediary) at broadcast, so
+  // drift here is a money/UX bug, not just a lint nit.
+  it('exports the canonical Cosmos memo-cap helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(rn.COSMOS_MEMO_DEFAULT_MAX_BYTES).toBe(256)
+    expect(rn.getCosmosMemoMaxBytes(rn.Chain.Cosmos)).toBe(512)
+    expect(rn.getCosmosMemoMaxBytes(rn.Chain.Osmosis)).toBe(256)
+    expect(rn.getCosmosMemoMaxBytesByChainId('phoenix-1')).toBe(512)
+    expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(256))).toBe(true)
+    expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
@@ -63,6 +118,17 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
       type: 'wasm/MsgExecuteContract',
       value: '{"sender":"thor1sender","contract":"thor1contract","msg":{"swap":{"minimum_output":"123"}},"funds":[]}',
     })
+  })
+
+  it('re-exports the root River helper family on the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const river = await import('../../../../src/tools/defi/river')
+
+    expect(rn.describeRiverMarket).toBe(river.describeRiverMarket)
+    expect(rn.findRiverInsertHints).toBe(river.findRiverInsertHints)
+    expect(rn.formatRiverPercentWad).toBe(river.formatRiverPercentWad)
+    expect(rn.RIVER_TROVE_STATUS_NAMES).toBe(river.RIVER_TROVE_STATUS_NAMES)
+    expect(rn.riverStatusName).toBe(river.riverStatusName)
   })
 
   it('re-exports XRPL issued-currency canonicals on the RN entrypoint', async () => {
@@ -163,5 +229,39 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.clampEvmPriorityFee(rn.Chain.Base as Parameters<typeof rn.clampEvmPriorityFee>[0], 75n * 1_000_000_000n)).toBe(
       50n * 1_000_000_000n,
     )
+  })
+
+  it('exports the canonical gas comparison helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gas = await import('../../../../src/tools/gas')
+
+    expect(rn.compareCosts).toBe(gas.compareCosts)
+    expect(rn.DEFAULT_COMPARE_CHAINS).toBe(gas.DEFAULT_COMPARE_CHAINS)
+    expect(rn.GAS_UNITS).toBe(gas.GAS_UNITS)
+    expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
+  })
+
+  it('exports canonical chain-kind helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const chainKind = await import('@vultisig/core-chain/ChainKind')
+
+    expect(rn.getChainKind).toBe(chainKind.getChainKind)
+    expect(rn.isChainOfKind).toBe(chainKind.isChainOfKind)
+    expect(rn.getChainKind(rn.Chain.Ethereum)).toBe('evm')
+    expect(rn.isChainOfKind(rn.Chain.Solana, 'solana')).toBe(true)
+  })
+
+  it('re-exports root-public pure helpers needed by React Native consumers', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.parseChain).toBe('function')
+    expect(rn.parseChain('cosmos')).toEqual({ success: true, chain: 'Cosmos' })
+
+    expect(typeof rn.parseTicker).toBe('function')
+    expect(rn.parseTicker('USDC')).toEqual({ success: true, ticker: 'USDC' })
+
+    expect(typeof rn.isKnownContract).toBe('function')
+    expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
+    expect(typeof rn.knownContracts.isKnownContract).toBe('function')
   })
 })

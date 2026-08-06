@@ -62,13 +62,17 @@ export function formatSignature(
     format: signatureFormat,
   }
 
-  // For UTXO chains with multiple inputs, include all signatures
+  // Preserve per-message metadata for UTXO inputs and bundled transactions.
   if (messages.length > 1) {
-    signature.signatures = messages.map(msg => ({
-      r: signatureResults[msg].r,
-      s: signatureResults[msg].s,
-      der: signatureResults[msg].der_signature,
-    }))
+    signature.signatures = messages.map(msg => {
+      const result = signatureResults[msg]
+      return {
+        r: result.r,
+        s: result.s,
+        der: result.der_signature,
+        ...(result.recovery_id ? { recovery: parseInt(result.recovery_id) } : {}),
+      }
+    })
   }
 
   return signature

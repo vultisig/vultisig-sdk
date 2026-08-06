@@ -139,18 +139,33 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
+  it('exports the full River helper family from the root sdk surface', () => {
+    expect(typeof sdk.describeRiverMarket).toBe('function')
+    expect(typeof sdk.findRiverInsertHints).toBe('function')
+    expect(typeof sdk.formatRiverPercentWad).toBe('function')
+    expect(Array.isArray(sdk.RIVER_TROVE_STATUS_NAMES)).toBe(true)
+    expect(typeof sdk.riverStatusName).toBe('function')
+    expect(sdk.river.describeMarket).toBe(sdk.describeRiverMarket)
+    expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
+  })
+
   it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.getChainKind).toBe('function')
     expect(typeof sdk.isChainOfKind).toBe('function')
     expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
     expect(typeof sdk.VaultBase).toBe('function')
+    expect(typeof sdk.BroadcastPartialFailureError).toBe('function')
   })
 
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
     expect(typeof sdk.getChainKind).toBe('function')
     expect(sdk.getChainKind(sdk.Chain.Ethereum)).toBe('evm')
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
+  })
+
+  it('exports the THOR/Maya swap-memo parser for downstream consumers', () => {
+    expect(typeof sdk.parseThorSwapMemo).toBe('function')
   })
 
   it('exports canonical EVM chain-id helpers and the priority-fee sanity clamp from the root sdk surface', () => {
@@ -164,10 +179,38 @@ describe('@vultisig/sdk public exports', () => {
     )
   })
 
+  it('exports gas comparison helpers from the root sdk surface', () => {
+    expect(typeof sdk.compareCosts).toBe('function')
+    expect(Array.isArray(sdk.DEFAULT_COMPARE_CHAINS)).toBe(true)
+    expect(sdk.GAS_UNITS.transfer).toBe(21000)
+    expect(typeof sdk.getChainGasPriceGwei).toBe('function')
+  })
+
+  it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
+    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
+    expect(Array.isArray(sdk.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(sdk.defaultChains)).toBe(true)
+    expect(sdk.DEFAULT_CHAINS).toBe(sdk.defaultChains)
+    expect(sdk.DEFAULT_CHAINS).toEqual([
+      sdk.Chain.Bitcoin,
+      sdk.Chain.Ethereum,
+      sdk.Chain.THORChain,
+      sdk.Chain.Solana,
+      sdk.Chain.BSC,
+    ])
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
