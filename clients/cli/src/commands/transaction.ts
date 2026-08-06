@@ -185,12 +185,28 @@ export async function sendTransaction(
   // reads as "safe to sign" to a scripted caller.
   const fromAddress = await vault.address(params.chain).catch(() => '')
   const sanity = recipientSanity({ recipient: to, from: fromAddress })
-  if (sanity.flagged) {
-    const reasons: string[] = []
-    if (sanity.isNull) reasons.push('recipient is a null / burn address (funds would be unrecoverable)')
-    if (sanity.isSelfSend) reasons.push('recipient matches your own vault address')
-    if (sanity.isMalformedEvm) reasons.push('recipient looks like a malformed EVM address')
-    throw new Error(`Refusing send: ${reasons.join('; ')}. If this is intentional, re-run with a different recipient.`)
+  // REVIEW FIX (51exn): the three flags are NOT the same kind of problem, so they no longer get
+  // identical treatment.
+  //   isNull        - funds are unrecoverable. Hard refuse.
+  //   isMalformedEvm - the send would fail downstream anyway. Refusing early is strictly better.
+  //   isSelfSend    - the money lands in the user's OWN vault. Nothing is ever lost.
+  // The upstream this helper ports (self_send_warning.go:detectSelfSendTurn) calls self-send a
+  // WARNING, and refusing it turns ordinary operations into a wall with no way past: UTXO
+  // consolidation (`send bitcoin <my-own-address> <amount>`) and a 0-value EVM self-send to replace
+  // a stuck nonce are both legitimate and both have no workaround, because the advice "re-run with
+  // a different recipient" is wrong when the recipient IS what they meant.
+  const refusals: string[] = []
+  if (sanity.isNull) refusals.push('recipient is a null / burn address (funds would be unrecoverable)')
+  if (sanity.isMalformedEvm) refusals.push('recipient looks like a malformed EVM address')
+  if (refusals.length > 0) {
+    throw new Error(`Refusing send: ${refusals.join('; ')}. If this is intentional, re-run with a different recipient.`)
+  }
+  // Self-send: warn loudly and let the existing consent gate below decide. A scripted caller passing
+  // --yes has already asserted intent, which is exactly the distinction the hard throw erased.
+  if (sanity.isSelfSend) {
+    warn('\n⚠  The recipient matches your own vault address for this chain.')
+    warn('   This is a SELF-SEND: the funds stay in your vault, minus the network fee.')
+    warn('   Legitimate for UTXO consolidation or replacing a stuck nonce - otherwise re-check the recipient.\n')
   }
 
   // 1. Dry-run for preview
