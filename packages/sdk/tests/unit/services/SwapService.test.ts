@@ -763,7 +763,11 @@ describe('SwapService', () => {
     it.each([
       [SwapErrorCode.NoRoutesFound, 'No swap route found between these tokens', 'no routes'],
       [SwapErrorCode.AllProvidersFailed, 'No swap route found between these tokens', 'all providers failed'],
-      [SwapErrorCode.AmountTooSmall, 'Swap amount too small', 'below dust'],
+      [
+        SwapErrorCode.AmountTooSmall,
+        'Swap amount too small: Please increase the amount to proceed.',
+        'Please increase the amount to proceed.',
+      ],
       [SwapErrorCode.AmountBelowMinimum, 'Minimum amount is 0.5 BTC', 'Minimum amount is 0.5 BTC'],
       [SwapErrorCode.InvalidConfig, 'Swap configuration error', 'mixed-case THORName'],
     ])('maps SwapError(%s) to its own VaultError message', async (code, expectedMessage, rawMessage) => {
@@ -771,13 +775,25 @@ describe('SwapService', () => {
 
       vi.mocked(findSwapQuote).mockRejectedValue(new SwapError(code, rawMessage))
 
-      await expect(
-        service.getQuote({
+      const error = await service
+        .getQuote({
           fromCoin: { chain: Chain.Ethereum },
           toCoin: { chain: Chain.Bitcoin },
           amount: 0.001,
         })
-      ).rejects.toThrow(expectedMessage)
+        .then(
+          () => {
+            throw new Error('Expected getQuote to reject')
+          },
+          error => error as Error
+        )
+
+      if (code === SwapErrorCode.AmountTooSmall) {
+        expect(error.message).toBe(expectedMessage)
+        expect(error.message.match(/Swap amount too small/g)).toHaveLength(1)
+      } else {
+        expect(error.message).toContain(expectedMessage)
+      }
     })
   })
 

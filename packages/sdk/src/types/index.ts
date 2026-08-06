@@ -479,6 +479,11 @@ export type VaultData = {
   order: number // Mutable - user can reorder vaults
   folderId?: string // Mutable - user can move to different folder
   lastModified: number // Mutable - updated on every change
+  /**
+   * Monotonic persisted-record revision used to reject stale full-record writes.
+   * Legacy vault records omit this field and are treated as revision 0.
+   */
+  revision?: number
 
   // === User Preferences (mutable, SDK-managed) ===
   currency: string // Mutable - user's preferred fiat currency
