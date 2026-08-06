@@ -210,6 +210,24 @@ describe('fast-vault flows honor the shared non-interactive definition (not stdi
       })
     )
   })
+
+  // wxbbp round 2: a BAD mnemonic in a non-interactive session must STILL fail closed with
+  // ConfirmationRequiredError. The UX fix for wxbbp is a pure, ctx-free word-count precheck that
+  // runs before the terminal gate - this pins that it stays ctx-free. A future attempt to move the
+  // full `ctx.sdk.validateSeedphrase()` above `requireInteractive` would touch the poisoned ctx and
+  // trip this with the trap error instead of the typed refusal, which is exactly the regression the
+  // first cut of that PR shipped.
+  it('import-seedphrase (fast) with a BAD mnemonic still fails closed, not on a ctx access', async () => {
+    await expectFailsClosed(() =>
+      executeCreateFromSeedphraseFast(makeCtx(), {
+        // 11 words - wrong count, so the pure precheck would reject it on shape alone.
+        mnemonic: 'abandon '.repeat(10) + 'about',
+        name: 'v',
+        password: 'p',
+        email: 'e@x.io',
+      })
+    )
+  })
 })
 
 // Regression for PR #1034 round 3: the prompt-bound signing/confirmation flows
