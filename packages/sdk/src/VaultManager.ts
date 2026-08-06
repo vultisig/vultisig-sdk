@@ -233,6 +233,19 @@ export class VaultManager {
 
     let vaultPersisted = false
 
+    // ROLLBACK SCOPE (review fix): the vault write and the active-pointer write have very different
+    // recovery costs, so they must not share a try. A pointer failure previously rolled the vault
+    // record back out - discarding a durable save to undo a trivially recoverable one.
+    //
+    // Concretely: on the legacy path the record being discarded has already been re-encrypted with
+    // salted 600k PBKDF2 by encryptVaultBackupWithPassword, and the migration notice that tells the
+    // user their derivation changed sits downstream of the throw, so it never fired either. The
+    // message also claimed 'The previous local state was restored', which on a first-ever import
+    // means it restored the ABSENCE of a vault.
+    //
+    // The pointer is recoverable by the user simply selecting a vault. The record is not. So the
+    // rollback stays on the vault write, and a pointer failure surfaces WITHOUT touching what has
+    // already committed.
     try {
       vaultPersisted = await compareAndSet(vaultKey, existing, vault.data)
       if (!vaultPersisted) {
@@ -241,7 +254,6 @@ export class VaultManager {
           'The local vault changed during import; no data was overwritten. Retry against the current record.'
         )
       }
-      await this.storage.set('activeVaultId', vault.id)
     } catch (error) {
       if (error instanceof VaultImportError && !vaultPersisted) {
         throw error
@@ -268,6 +280,11 @@ export class VaultManager {
         error as Error
       )
     }
+
+    // The vault record is committed at this point. A failure setting the active pointer must NOT
+    // undo it - it propagates as-is so the caller sees the real cause, and the downstream migration
+    // notice still fires for the record that genuinely persisted.
+    await this.storage.set('activeVaultId', vault.id)
   }
 
   /**
