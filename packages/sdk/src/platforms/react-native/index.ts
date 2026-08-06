@@ -615,6 +615,28 @@ export { getSolBalance, getSplTokenBalance } from '../../tools/balance/solana'
 // Pure helpers — no chain client deps
 export type { AssetRef, ChainFamily, DecodeFromToolResultInput, Envelope, EnvelopeKind } from '../../tools/decode'
 export { decodeCosmosTx, decodeEvmTx, decodeFromToolResult } from '../../tools/decode'
+export {
+  amountMatches,
+  computeEvmFee,
+  decimalsFor,
+  feeMatches,
+  isValidTokenSymbolFormat,
+  normalizeTokenSymbol,
+  scaleHumanToRaw,
+  scaleRawToHuman,
+  tokenDecimals,
+  ValidateNormalizerError,
+} from '../../utils/validateNormalizers'
+export {
+  canonicalChainTag,
+  classifyAddress,
+  isAddressValidForChain,
+  isSolanaAddress,
+  supportedChainTags,
+} from '../../utils/addressFormat'
+export type { AddressFamily, AddressRole, ChainPrefixResult } from '../../utils/addressValidation'
+export { address, validate } from '../../utils/addressValidation'
+export { checkChainPrefix } from '../../utils/chainPrefix'
 //
 // Exact base-units -> human decimal-string conversion (pure bigint string
 // arithmetic, no float64 round-trip) and the chain-native block explorer URL

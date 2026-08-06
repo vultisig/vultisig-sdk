@@ -241,4 +241,28 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.isKnownContract('0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')).toBe(true)
     expect(typeof rn.knownContracts.isKnownContract).toBe('function')
   })
+
+  it('re-exports the root validation and address-format canonicals from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const validateNormalizers = await import('../../../../src/utils/validateNormalizers')
+    const addressFormat = await import('../../../../src/utils/addressFormat')
+    const addressValidation = await import('../../../../src/utils/addressValidation')
+    const chainPrefix = await import('../../../../src/utils/chainPrefix')
+
+    expect(rn.amountMatches).toBe(validateNormalizers.amountMatches)
+    expect(rn.feeMatches).toBe(validateNormalizers.feeMatches)
+    expect(rn.normalizeTokenSymbol).toBe(validateNormalizers.normalizeTokenSymbol)
+    expect(rn.tokenDecimals).toBe(validateNormalizers.tokenDecimals)
+    expect(rn.scaleHumanToRaw('1.25', 6)).toBe(1_250_000n)
+
+    expect(rn.classifyAddress).toBe(addressFormat.classifyAddress)
+    expect(rn.isAddressValidForChain).toBe(addressFormat.isAddressValidForChain)
+    expect(rn.canonicalChainTag).toBe(addressFormat.canonicalChainTag)
+    expect(rn.supportedChainTags).toBe(addressFormat.supportedChainTags)
+    expect(rn.address).toBe(addressValidation.address)
+    expect(rn.validate).toBe(addressValidation.validate)
+    expect(rn.checkChainPrefix).toBe(chainPrefix.checkChainPrefix)
+    expect(rn.classifyAddress('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080')).toBe('btc')
+    expect(rn.isAddressValidForChain('cosmos1skjwj5whet0l2ca4s4w3me8lrx6v4p8nq0n6dd', rn.Chain.Cosmos)).toBe(true)
+  })
 })
