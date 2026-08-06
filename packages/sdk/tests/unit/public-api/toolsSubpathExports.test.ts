@@ -10,9 +10,10 @@ const platformRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.platforms.c
 const typesRollupConfig = readFileSync(path.join(sdkRoot, 'rollup.types.config.js'), 'utf8')
 
 describe('public API tools subpath exports', () => {
-  it('publishes dedicated export-map entries for parse, defi, and token', () => {
+    it('publishes dedicated export-map entries for parse, defi, bridge, and token', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
+    const bridgeExport = sdkPackageJson.exports['./tools/bridge']
     const tokenExport = sdkPackageJson.exports['./tools/token']
 
     expect(parseExport).toMatchObject({
@@ -27,6 +28,12 @@ describe('public API tools subpath exports', () => {
       require: './dist/tools/defi/index.cjs',
       default: './dist/tools/defi/index.cjs',
     })
+    expect(bridgeExport).toMatchObject({
+      types: './dist/tools/bridge/index.d.ts',
+      import: './dist/tools/bridge/index.js',
+      require: './dist/tools/bridge/index.cjs',
+      default: './dist/tools/bridge/index.cjs',
+    })
     expect(tokenExport).toMatchObject({
       types: './dist/tools/token/index.d.ts',
       import: './dist/tools/token/index.js',
@@ -36,6 +43,7 @@ describe('public API tools subpath exports', () => {
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(tokenExport)).not.toContain('dist/index.node')
   })
 
@@ -44,6 +52,8 @@ describe('public API tools subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/parse'")
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
+    expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
     expect(platformRollupConfig).toContain("input: './src/tools/token/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/token'")
 
@@ -52,6 +62,9 @@ describe('public API tools subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/token/index.ts', 'dist/tools/token/index.d.ts')"

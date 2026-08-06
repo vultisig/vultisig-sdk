@@ -40,7 +40,7 @@ describe('clampEvmPriorityFee', () => {
     }
   )
 
-  it('clamps a chain without an explicit ceiling entry using the generous default', () => {
+  it('clamps a chain with the explicitly selected generous default ceiling', () => {
     const absurd = gwei(1_000_000)
 
     expect(clampEvmPriorityFee(EvmChain.Sei, absurd)).toBe(500n * 1_000_000_000n)
@@ -54,5 +54,32 @@ describe('clampEvmPriorityFee', () => {
     const oneOverCeiling = gwei(500) + 1n
 
     expect(clampEvmPriorityFee(EvmChain.Ethereum, oneOverCeiling)).toBe(gwei(500))
+  })
+
+  it.each([
+    ['near-zero quiet-market suggestion', 398_220n], // ~0.0004 gwei, observed live on api.vultisig.com/eth
+    ['zero', 0n],
+    ['one wei below the floor', gwei(1) - 1n],
+  ])('floors an Ethereum tip too low to be mined (%s) to 1 gwei', (_label, fee) => {
+    expect(clampEvmPriorityFee(EvmChain.Ethereum, fee)).toBe(gwei(1))
+  })
+
+  it('floors a Polygon tip below the validator-enforced minimum to 30 gwei', () => {
+    expect(clampEvmPriorityFee(EvmChain.Polygon, gwei(1))).toBe(gwei(30))
+  })
+
+  it('never floors a fee that sits exactly at the floor', () => {
+    expect(clampEvmPriorityFee(EvmChain.Ethereum, gwei(1))).toBe(gwei(1))
+  })
+
+  it.each([
+    ['Arbitrum', EvmChain.Arbitrum],
+    ['Base', EvmChain.Base],
+    ['Optimism', EvmChain.Optimism],
+    ['Zksync', EvmChain.Zksync],
+  ])('passes a near-zero %s tip through unchanged (rollup sequencers ignore tips)', (_label, chain) => {
+    const nearZero = 398_220n
+
+    expect(clampEvmPriorityFee(chain, nearZero)).toBe(nearZero)
   })
 })

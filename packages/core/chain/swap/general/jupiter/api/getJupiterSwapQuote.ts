@@ -131,6 +131,7 @@ export const getJupiterSwapQuote = async ({
   // amount before touching the fee account.
   const swapFeeAmount = BigInt(quoteResponse.platformFee?.amount ?? '0')
   const chargesFee = requestsPlatformFee && swapFeeAmount > 0n
+  const quoteForSwap = chargesFee ? quoteResponse : { ...quoteResponse, platformFee: undefined }
 
   // The fee mint is the OUTPUT mint (ExactIn). Derive the fee ATA up front so
   // it can be sent to /swap and so we know which program owns it for the
@@ -141,7 +142,7 @@ export const getJupiterSwapQuote = async ({
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
-      quoteResponse,
+      quoteResponse: quoteForSwap,
       userPublicKey: from.address,
       wrapAndUnwrapSol: true,
       dynamicComputeUnitLimit: true,

@@ -32,7 +32,7 @@ export const buildQBTCAuthInfo = ({ pubKeyData, sequence, gasLimit, fee }: Build
   // Proto field 7 is `optional uint64`: an unset limit arrives as `undefined`, but a producer could
   // also relay a nonsensical 0n (or negative). Both must fall back to the static default - NOT flow
   // through as-is, because `protoVarint(2, 0n)` elides the field entirely (proto3 default-elision),
-  // which would omit gas_limit and sign an invalid zero-gas tx. Mirrors resolveCosmosGasFee's
+  // which would omit gas_limit and sign an invalid zero-gas tx. Mirrors resolveCosmosGasLimit's
   // `relayedGasLimit && relayedGasLimit > 0n` guard so QBTC and standard cosmos treat 0/unset alike.
   const effectiveGasLimit = gasLimit && gasLimit > 0n ? gasLimit : defaultGasLimit
   const feeBytes = concatBytes(feeCoin, protoVarint(2, effectiveGasLimit))

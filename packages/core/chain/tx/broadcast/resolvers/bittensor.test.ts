@@ -19,44 +19,94 @@ describe('broadcastBittensorTx', () => {
 
   beforeEach(() => vi.clearAllMocks())
 
-  it('returns silently when the node accepts the extrinsic (result present)', async () => {
-    mocks.queryUrl.mockResolvedValue({ result: '0xhash' })
+  it('returns silently when the node accepts the extrinsic', async () => {
+    mocks.queryUrl.mockResolvedValue({ result: '0xdeadbeef' })
+
     await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
-  it('swallows the idempotent "Already Imported" peer-race error', async () => {
-    mocks.queryUrl.mockResolvedValue({ error: { code: 1013, message: 'Transaction Already Imported' } })
+  it('accepts case-variant duplicate import errors', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      error: { code: 1013, message: 'TRANSACTION ALREADY IMPORTED' },
+    })
+
     await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
     expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
-  it('verifies by hash on a genuine error', async () => {
-    mocks.queryUrl.mockResolvedValue({ error: { code: 1010, message: 'Invalid Transaction' } })
-    await broadcastBittensorTx({ chain, tx })
-    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+  it('recognizes an idempotent signal carried in error data', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      error: { code: 1010, message: 'Invalid Transaction', data: 'Already known' },
+    })
+
+    await expect(broadcastBittensorTx({ chain, tx })).resolves.toBeUndefined()
+    expect(mocks.verifyBroadcastByHash).not.toHaveBeenCalled()
   })
 
-  // The gap: a malformed/truncated body with neither error nor result used to return undefined = success.
-  it('does NOT assume success on a malformed response (neither error nor result) — verifies by hash', async () => {
-    mocks.queryUrl.mockResolvedValue({})
+  it('hash-verifies ambiguous temporarily-banned responses', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      error: { code: 1010, message: 'Transaction is temporarily banned' },
+    })
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
     await broadcastBittensorTx({ chain, tx })
+
     expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+    expect((mocks.verifyBroadcastByHash.mock.calls[0]![0].error as Error).message).toBe(
+      'Bittensor broadcast failed: Transaction is temporarily banned'
+    )
   })
 
-  // #1430-class retry-interlock: bittensor runs inside `withTransientBroadcastRetry`
-  // (index.ts hasResolverOwnedRetry = evm|solana only). When hash verification
-  // cannot confirm the tx, verifyBroadcastByHash rethrows the original error and
-  // it escapes to the retry wrapper. That error MUST be classified non-transient
-  // so a genuinely-failed/unconfirmed broadcast is not silently re-sent up to 3×.
-  it('surfaces the malformed-response failure as a NON-transient error (must not be re-broadcast)', async () => {
+  it('preserves error data when routing a genuine rejection through verification', async () => {
+    mocks.queryUrl.mockResolvedValue({
+      error: {
+        code: 1010,
+        message: 'Invalid Transaction',
+        data: 'Transaction has a bad signature',
+      },
+    })
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await broadcastBittensorTx({ chain, tx })
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+    expect((mocks.verifyBroadcastByHash.mock.calls[0]![0].error as Error).message).toBe(
+      'Bittensor broadcast failed: Invalid Transaction: Transaction has a bad signature'
+    )
+  })
+
+  it('routes a response without a result or error through verification', async () => {
     mocks.queryUrl.mockResolvedValue({})
-    // Simulate verification unable to confirm the tx on-chain → rethrow.
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await broadcastBittensorTx({ chain, tx })
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+    expect((mocks.verifyBroadcastByHash.mock.calls[0]![0].error as Error).message).toContain('missing extrinsic hash')
+  })
+
+  it('surfaces an unconfirmed malformed response as non-transient', async () => {
+    mocks.queryUrl.mockResolvedValue({})
     mocks.verifyBroadcastByHash.mockImplementation(async ({ error }) => {
       throw error
     })
-    await expect(broadcastBittensorTx({ chain, tx })).rejects.toThrow(/missing extrinsic hash/)
-    const err = await broadcastBittensorTx({ chain, tx }).catch(e => e)
-    expect(isTransientBroadcastError(err)).toBe(false)
+
+    const error = await broadcastBittensorTx({ chain, tx }).catch(caught => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toHaveProperty('message', 'Bittensor broadcast failed: missing extrinsic hash in RPC response')
+    expect(isTransientBroadcastError(error)).toBe(false)
+  })
+
+  it('routes transport failures through verification', async () => {
+    const error = new Error('ECONNRESET')
+    mocks.queryUrl.mockRejectedValue(error)
+    mocks.verifyBroadcastByHash.mockResolvedValue(undefined)
+
+    await broadcastBittensorTx({ chain, tx })
+
+    expect(mocks.verifyBroadcastByHash).toHaveBeenCalledOnce()
+    expect(mocks.verifyBroadcastByHash.mock.calls[0]![0].error).toBe(error)
   })
 })
