@@ -147,6 +147,22 @@ export type SignBytesOptions = {
    * - Derivation path (chain-specific BIP-44 path)
    */
   chain: Chain
+
+  /**
+   * Optional BIP-32 derivation path for the signing key.
+   *
+   * When omitted, the SDK uses the chain's default derivation path. External
+   * wallet coordinators should provide the exact path associated with the
+   * address or UTXO being signed.
+   */
+  derivePath?: string
+}
+
+export type ExtendedPublicKeyOptions = {
+  /** Vultisig derivation path whose node should be serialized. */
+  derivePath: string
+  /** Selects xpub (mainnet) or tpub (testnet) serialization. */
+  network: 'mainnet' | 'testnet'
 }
 
 /**

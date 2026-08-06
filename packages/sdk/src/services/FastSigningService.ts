@@ -107,6 +107,7 @@ export class FastSigningService {
     options: {
       messageHashes: string[]
       chain: Chain
+      derivePath?: string
     },
     vaultPassword: string,
     onProgress?: (step: SigningStep) => void,
@@ -145,7 +146,12 @@ export class FastSigningService {
       vault,
       messages: options.messageHashes,
       password: vaultPassword,
-      payload: { chain: options.chain, transaction: null, messageHashes: options.messageHashes },
+      payload: {
+        chain: options.chain,
+        derivePath: options.derivePath,
+        transaction: null,
+        messageHashes: options.messageHashes,
+      },
       walletCore,
       signal,
       onProgress: reportProgress,

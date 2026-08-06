@@ -93,8 +93,9 @@ vi.mock('@vultisig/core-mpc/mldsa/mldsaKeygen', () => ({
   }),
 }))
 
-const queryUrlMock = vi.hoisted(() =>
-  vi.fn(
+const { queryUrlMock, completionSignalControl } = vi.hoisted(() => {
+  const completionSignalControl = { shouldHang: false }
+  const queryUrlMock = vi.fn(
     async (
       url: string | URL,
       options?: { body?: unknown; responseType?: string; method?: string }
@@ -106,6 +107,13 @@ const queryUrlMock = vi.hoisted(() =>
       if (u.includes('/complete/') && method === 'GET') {
         return ['server-test-id']
       }
+      if (
+        completionSignalControl.shouldHang &&
+        u.includes('/complete/') &&
+        options?.responseType === 'none'
+      ) {
+        return new Promise<never>(() => {})
+      }
       if (method === 'GET' && u.includes('relay.test') && !u.includes('/start/') && !u.includes('/complete/')) {
         return ['sdk-test-id', 'server-test-id']
       }
@@ -115,7 +123,8 @@ const queryUrlMock = vi.hoisted(() =>
       return undefined
     }
   )
-)
+  return { queryUrlMock, completionSignalControl }
+})
 
 vi.mock('@vultisig/lib-utils/query/queryUrl', () => ({
   queryUrl: (...args: unknown[]) => queryUrlMock(...(args as Parameters<typeof queryUrlMock>)),
@@ -128,6 +137,7 @@ describe('ServerManager — TSS batching wiring', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    completionSignalControl.shouldHang = false
     randomUuidSpy = vi.spyOn(sdkCrypto, 'randomUUID').mockReturnValue('fixed-session')
   })
 
@@ -175,6 +185,22 @@ describe('ServerManager — TSS batching wiring', () => {
       })
       expect(createVaultWithServerMock).toHaveBeenCalledTimes(1)
       expect(setupVaultWithServerMock).not.toHaveBeenCalled()
+    })
+
+    it('can return without awaiting a hanging completion response', async () => {
+      const mgr = new ServerManager({ messageRelay: relay, fastVault })
+      completionSignalControl.shouldHang = true
+
+      await mgr.createFastVault({
+        name: 'Vault',
+        email: 'a@b.c',
+        password: 'pw',
+        waitForServerKeygenComplete: false,
+      })
+
+      const completionCalls = queryUrlMock.mock.calls.filter(([url]) => String(url).includes('/complete/'))
+      expect(completionCalls).toHaveLength(1)
+      expect(completionCalls[0]?.[1]).toMatchObject({ responseType: 'none' })
     })
   })
 

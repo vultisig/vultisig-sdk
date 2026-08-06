@@ -363,6 +363,7 @@ export class ServerManager {
     onLog?: (msg: string) => void
     onProgress?: (u: KeygenProgressUpdate) => void
     tssBatching?: boolean
+    waitForServerKeygenComplete?: boolean
   }): Promise<{
     vault: CoreVault
     vaultId: string
@@ -500,20 +501,31 @@ export class ServerManager {
       throw new Error('Operation aborted')
     }
 
-    // Signal keygen completion to all participants
-    await setKeygenComplete({
+    const completionSignal = setKeygenComplete({
       serverURL: this.config.messageRelay,
       sessionId,
       localPartyId,
     })
 
-    // Wait for all participants to complete
-    const peers = devices.filter(d => d !== localPartyId)
-    await waitForKeygenComplete({
-      serverURL: this.config.messageRelay,
-      sessionId,
-      peers,
-    })
+    // Waiting remains the default. In signal-only mode the request is started
+    // but its empty response is intentionally not awaited: some React Native
+    // fetch implementations deliver the POST to the relay yet never resolve a
+    // zero-body response. The caller must use an independent readiness signal
+    // (for example, a locally logged OTP emitted after the server backup is
+    // durable) before verification or signing.
+    if (options.waitForServerKeygenComplete !== false) {
+      await completionSignal
+      const peers = devices.filter(d => d !== localPartyId)
+      await waitForKeygenComplete({
+        serverURL: this.config.messageRelay,
+        sessionId,
+        peers,
+      })
+    } else {
+      void completionSignal.catch(error => {
+        log(`Failed to signal keygen completion: ${String(error)}`)
+      })
+    }
 
     // Create real vault from keygen results
     const vault: CoreVault = {
