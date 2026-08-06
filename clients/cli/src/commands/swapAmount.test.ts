@@ -142,6 +142,11 @@ describe('CLI swap amount precision', () => {
     })
 
     expect(result).toMatchObject({ dryRun: true })
+    // executeSwap returns SwapDryRunResult | { txHash, quote }; TS cannot narrow that from the
+    // dryRun:true argument, and `warnings` only exists on the dry-run arm. Narrow on the
+    // discriminant rather than casting, so a future broadcast-shaped return fails here loudly
+    // instead of being silently asserted against.
+    if (!('dryRun' in result)) throw new Error('expected a dry-run result, got a broadcast result')
     expect(result.warnings).toEqual(
       expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert|revert.*slippage.*0/i)])
     )
@@ -156,9 +161,8 @@ describe('CLI swap amount precision', () => {
       amount: '1',
       dryRun: true,
     })
-    expect(r1.warnings ?? []).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)])
-    )
+    if (!('dryRun' in r1)) throw new Error('expected a dry-run result, got a broadcast result')
+    expect(r1.warnings ?? []).not.toEqual(expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)]))
 
     const r2 = await executeSwap(ctx, {
       fromChain: Chain.Ethereum,
@@ -167,8 +171,7 @@ describe('CLI swap amount precision', () => {
       slippage: 1,
       dryRun: true,
     })
-    expect(r2.warnings ?? []).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)])
-    )
+    if (!('dryRun' in r2)) throw new Error('expected a dry-run result, got a broadcast result')
+    expect(r2.warnings ?? []).not.toEqual(expect.arrayContaining([expect.stringMatching(/slippage.*0.*revert/i)]))
   })
 })
