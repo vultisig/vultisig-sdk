@@ -1,5 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
-import { hyperliquidBlockExplorerUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
+import { hyperliquidBlockExplorerUrl, robinhoodBlockExplorerUrl } from '@vultisig/core-chain/chains/evm/chainInfo'
 import { match } from '@vultisig/lib-utils/match'
 
 type ChainEntity = 'address' | 'tx'
@@ -50,6 +50,7 @@ const blockExplorerBaseUrl: Record<Chain, string> = {
   [Chain.Mantle]: 'https://explorer.mantle.xyz',
   [Chain.Hyperliquid]: hyperliquidBlockExplorerUrl,
   [Chain.Sei]: 'https://seiscan.io',
+  [Chain.Robinhood]: robinhoodBlockExplorerUrl,
   [Chain.QBTC]: 'https://explorer.qbtc.net/qbtc',
 }
 
@@ -95,6 +96,7 @@ export const getBlockExplorerUrl = ({ chain, entity, value }: GetBlockExplorerUr
         [Chain.Mantle]: () => `${baseUrl}/address/${value}`,
         [Chain.Hyperliquid]: () => `${baseUrl}/address/${value}`,
         [Chain.Sei]: () => `${baseUrl}/address/${value}`,
+        [Chain.Robinhood]: () => `${baseUrl}/address/${value}`,
         [Chain.QBTC]: () => `${baseUrl}/account/${value}`,
       }),
     tx: () =>
@@ -136,6 +138,7 @@ export const getBlockExplorerUrl = ({ chain, entity, value }: GetBlockExplorerUr
         [Chain.Mantle]: () => `${baseUrl}/tx/${value}`,
         [Chain.Hyperliquid]: () => `${baseUrl}/tx/${value}`,
         [Chain.Sei]: () => `${baseUrl}/tx/${value}`,
+        [Chain.Robinhood]: () => `${baseUrl}/tx/${value}`,
         [Chain.QBTC]: () => `${baseUrl}/tx/${value}`,
       }),
   })

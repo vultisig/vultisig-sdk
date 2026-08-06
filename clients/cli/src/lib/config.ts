@@ -3,9 +3,9 @@
  *
  * Handles CLI configuration files and environment variables
  */
+import { getVultisigConfigDir } from '@vultisig/client-shared'
 import { FileStorage } from '@vultisig/sdk/node'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
@@ -42,11 +42,7 @@ const DEFAULT_CONFIG: CLIConfig = {
  * Get the configuration directory path
  */
 export function getConfigDir(): string {
-  // Treat an empty/whitespace-only VULTISIG_CONFIG_DIR as unset. `??` alone only
-  // catches null/undefined, so `VULTISIG_CONFIG_DIR=` would otherwise resolve to
-  // '' and make every config.json / vault storage op fail on `mkdir('')`.
-  const override = process.env.VULTISIG_CONFIG_DIR?.trim()
-  return override ? override : join(homedir(), '.vultisig')
+  return getVultisigConfigDir()
 }
 
 /**
@@ -71,8 +67,13 @@ export function createVaultStorage(): FileStorage {
  */
 export function ensureConfigDir(): void {
   const configDir = getConfigDir()
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true })
+  const createdDir = mkdirSync(configDir, { recursive: true, mode: 0o700 })
+  if (createdDir === undefined) {
+    try {
+      chmodSync(configDir, 0o700)
+    } catch {
+      // Some filesystems do not support POSIX permissions.
+    }
   }
 }
 

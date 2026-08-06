@@ -62,6 +62,11 @@ const ONE_INCH_V6_STANDARD_ROUTER = '0x111111125421ca6dc452d289314280a0f8842a65'
 // v6.0 quote request returning this address (NOT the standard one above).
 const ONE_INCH_V6_ZKSYNC_ROUTER = '0x6fd4383cb451173d5f9304f041c7bcbf27d561ff'
 
+// V6 on Robinhood (4663) ONLY — the second chain-specific 1inch deployment after zkSync.
+// Live-confirmed 2026-07-27: /approve/spender AND a real v6.0 /swap both return this
+// address (NOT the standard one), and eth_getCode on 4663 shows 24,542 bytes deployed.
+const ONE_INCH_V6_ROBINHOOD_ROUTER = '0x5a705de8982235a7fa45bb83dcacf03a211389c7'
+
 // KyberSwap MetaAggregationRouterV2 — same address confirmed live 2026-07-08 on every
 // kyberSwapEnabledChains chain through aggregator-api.kyberswap.com's /routes
 // (Ethereum, BSC, Arbitrum, Optimism, Avalanche, Base, Polygon).
@@ -193,7 +198,9 @@ export function assertKnownAggregatorRouter(provider: EnforcedRouterProvider, ad
           isOneOf(chain, cowSwapSupportedChains) && normalized === COW_VAULT_RELAYER_ADDRESS.toLowerCase()
         : chain === Chain.Zksync
           ? normalized === ONE_INCH_V6_ZKSYNC_ROUTER
-          : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER
+          : chain === Chain.Robinhood
+            ? normalized === ONE_INCH_V6_ROBINHOOD_ROUTER
+            : normalized === ONE_INCH_V5_ROUTER || normalized === ONE_INCH_V6_STANDARD_ROUTER
 
   if (!isKnown) {
     throw new Error(
