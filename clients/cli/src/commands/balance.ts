@@ -73,7 +73,25 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
     const perChainResults = await Promise.all(
       chainsToFetch.map(async chain => {
         try {
-          const chainBalances = await vault.balances([chain], options.includeTokens)
+          // REVIEW FIX (mvvry): `vault.balances()` does NOT throw on a chain failure -
+          // BalanceService.getBalances fans out per chain and swallows each error with a
+          // console.warn, returning a PARTIAL record. So the catch below never fired and `failures`
+          // was always empty: the sweep silently rendered fewer chains with no indication anything
+          // broke, which is the same invisible-failure the bead is about.
+          //
+          // The absence of a chain in the result cannot be used to infer failure either - a chain
+          // that legitimately holds nothing looks identical. So the SDK now takes an additive,
+          // optional `onChainError` callback and this passes one. The try/catch is kept as cheap
+          // redundancy in case a future change makes the call throw for real.
+          let chainError: unknown
+          const chainBalances = await vault.balances([chain], options.includeTokens, (_chain, err) => {
+            chainError = err
+          })
+          if (chainError !== undefined) {
+            const message = chainError instanceof Error ? chainError.message : String(chainError)
+            const clean = message.split('\n')[0].replace(/file:\/\/[^\s)]+/g, '<path>')
+            return { chain, error: { message: clean } }
+          }
           return { chain, balances: chainBalances }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
@@ -93,11 +111,7 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
       if (result.balances) Object.assign(balances, result.balances)
       if (result.error) failures.push({ chain: result.chain, error: result.error })
     }
-    spinner.succeed(
-      failures.length === 0
-        ? 'Balances loaded'
-        : `Balances loaded (${failures.length} chain(s) failed)`
-    )
+    spinner.succeed(failures.length === 0 ? 'Balances loaded' : `Balances loaded (${failures.length} chain(s) failed)`)
 
     if (isJsonOutput()) {
       outputJson(failures.length === 0 ? { balances } : { balances, failures })
