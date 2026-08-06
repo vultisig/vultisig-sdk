@@ -32,6 +32,7 @@ import {
 import { Erc20ApprovePayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/erc20_approve_payload_pb'
 import { KeysignPayload, KeysignPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { SwapKitSwapPayloadSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/swapkit_swap_payload_pb'
+import { SignSuiSchema } from '@vultisig/core-mpc/types/vultisig/keysign/v1/wasm_execute_contract_payload_pb'
 import { matchRecordUnion } from '@vultisig/lib-utils/matchRecordUnion'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -62,10 +63,6 @@ const isSwapKitBitcoinPsbt = (fromCoin: AccountCoin, transfer: TransferSwapTx) =
   fromCoin.chain === Chain.Bitcoin && transfer.txType?.toUpperCase() === 'PSBT'
 
 const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
-  if (fromCoin.chain !== Chain.Bitcoin) {
-    return { case: undefined }
-  }
-
   if (!isSwapKitBitcoinPsbt(fromCoin, transfer)) {
     throw new Error('SwapKit Bitcoin transfer routes must include PSBT txType and txPayload.')
   }
@@ -90,6 +87,50 @@ const getSwapKitBitcoinSignData = (fromCoin: AccountCoin, transfer: TransferSwap
     case: 'signBitcoin',
     value: signBitcoin,
   }
+}
+
+/**
+ * Stage SwapKit's pre-built Sui programmable transaction block for signing.
+ *
+ * The PTB already encodes coins, gas and recipients, so it is forwarded to the
+ * existing `signSui` path (WalletCore `SignDirect`) verbatim rather than being
+ * reconstructed as a Pay / PaySui input. Re-encoding to base64 here is
+ * deliberate: `SwapKitSwapPayload.txPayload` stays raw bytes so a cosigning iOS
+ * or Android peer rebuilds byte-identical signing input, while `SignSui`'s wire
+ * contract is a base64 string.
+ */
+const getSwapKitSuiSignData = (transfer: TransferSwapTx): KeysignPayload['signData'] => {
+  // Deliberately NOT gated on `txType`: SwapKit renames base64 tx types on the
+  // wire without versioning (see `buildTransferTx`), so the source chain — which
+  // the caller has already matched on — is the only reliable discriminator.
+  if (!transfer.txPayload?.length) {
+    throw new Error('SwapKit Sui PTB payload is empty.')
+  }
+
+  return {
+    case: 'signSui',
+    value: create(SignSuiSchema, {
+      unsignedTxMsg: Buffer.from(transfer.txPayload).toString('base64'),
+    }),
+  }
+}
+
+/**
+ * Route a SwapKit transfer route to the chain-specific pre-built signing
+ * payload it needs. Chains whose SwapKit wire shape is a plain native send
+ * (TON, XRP, ADA deposits) carry no pre-built bytes and sign through the
+ * normal per-chain builder, so they get an empty `signData`.
+ */
+const getSwapKitSignData = (fromCoin: AccountCoin, transfer: TransferSwapTx): KeysignPayload['signData'] => {
+  if (fromCoin.chain === Chain.Bitcoin) {
+    return getSwapKitBitcoinSignData(fromCoin, transfer)
+  }
+
+  if (fromCoin.chain === Chain.Sui) {
+    return getSwapKitSuiSignData(transfer)
+  }
+
+  return { case: undefined }
 }
 
 /**
@@ -181,7 +222,7 @@ export const buildSwapKeysignPayload = async ({
       })
 
       if (quote.provider === 'swapkit' && transfer) {
-        keysignPayload.signData = getSwapKitBitcoinSignData(fromCoin, transfer)
+        keysignPayload.signData = getSwapKitSignData(fromCoin, transfer)
 
         return {
           case: 'swapkitSwapPayload',
