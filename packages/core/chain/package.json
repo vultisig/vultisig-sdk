@@ -830,6 +830,11 @@
       "import": "./dist/chains/sui/listAllCoins.js",
       "default": "./dist/chains/sui/listAllCoins.js"
     },
+    "./chains/sui/prebuiltGasData": {
+      "types": "./dist/chains/sui/prebuiltGasData.d.ts",
+      "import": "./dist/chains/sui/prebuiltGasData.js",
+      "default": "./dist/chains/sui/prebuiltGasData.js"
+    },
     "./chains/sui/sign": {
       "types": "./dist/chains/sui/sign.d.ts",
       "import": "./dist/chains/sui/sign.js",
