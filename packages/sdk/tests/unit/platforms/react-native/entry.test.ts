@@ -46,13 +46,7 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
 
     expect(Array.isArray(rn.DEFAULT_CHAINS)).toBe(true)
     expect(Array.isArray(rn.defaultChains)).toBe(true)
-    expect(rn.DEFAULT_CHAINS).toEqual([
-      'Bitcoin',
-      'Ethereum',
-      'THORChain',
-      'Solana',
-      'BSC',
-    ])
+    expect(rn.DEFAULT_CHAINS).toEqual(['Bitcoin', 'Ethereum', 'THORChain', 'Solana', 'BSC'])
   })
 
   it('exports the canonical Cosmos fee-denom helpers from the RN entry', async () => {
