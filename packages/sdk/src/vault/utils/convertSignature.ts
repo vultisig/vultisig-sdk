@@ -74,7 +74,7 @@ export function convertToKeysignSignatures(
   const result: Record<string, KeysignSignature> = {}
 
   if (signature.signatures && signature.signatures.length > 0) {
-    // UTXO multi-signature case (multiple inputs)
+    // Multi-message case (UTXO inputs, bundled approvals, and similar flows)
     signature.signatures.forEach((sig, index) => {
       const messageHash = messageHashes[index]
       if (!messageHash) {
@@ -86,7 +86,7 @@ export function convertToKeysignSignatures(
         r: sig.r,
         s: sig.s,
         der_signature: sig.der,
-        recovery_id: signature.recovery?.toString(),
+        recovery_id: (sig.recovery ?? signature.recovery)?.toString(),
       }
     })
   } else {

@@ -193,5 +193,17 @@ describe('config-store', () => {
       // coupled by the test, not by a hand-copied path expression.
       expect(path.dirname(getConfigPath())).toBe(path.dirname(getCredentialsPath()))
     })
+
+    it('treats an empty/whitespace override as unset for both registry and credentials', () => {
+      const expectedDir = path.join(os.homedir(), '.vultisig')
+
+      process.env[ENV_KEY] = ''
+      expect(path.dirname(getConfigPath())).toBe(expectedDir)
+      expect(path.dirname(getCredentialsPath())).toBe(expectedDir)
+
+      process.env[ENV_KEY] = '   '
+      expect(path.dirname(getConfigPath())).toBe(expectedDir)
+      expect(path.dirname(getCredentialsPath())).toBe(expectedDir)
+    })
   })
 })

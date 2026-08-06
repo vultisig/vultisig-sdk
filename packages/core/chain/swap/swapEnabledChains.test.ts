@@ -43,9 +43,18 @@ describe('kyberSwapEnabledChains (sdk#1151)', () => {
     expect(chains.has(Chain.Blast)).toBe(false)
   })
 
-  it('keeps the 7 verified-live chains', () => {
+  it('keeps the 8 verified-live chains', () => {
     expect([...kyberSwapEnabledChains].sort()).toEqual(
-      [Chain.Ethereum, Chain.BSC, Chain.Arbitrum, Chain.Polygon, Chain.Optimism, Chain.Avalanche, Chain.Base].sort()
+      [
+        Chain.Ethereum,
+        Chain.BSC,
+        Chain.Arbitrum,
+        Chain.Polygon,
+        Chain.Optimism,
+        Chain.Avalanche,
+        Chain.Base,
+        Chain.Robinhood,
+      ].sort()
     )
   })
 })

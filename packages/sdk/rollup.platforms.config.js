@@ -103,9 +103,11 @@ const onwarn = (warning, warn) => {
 // eventually resolves to the same file. One mapping, all callsites covered.
 //
 // The overrides exist because the real modules would evaluate Hermes-hostile
-// deps (`@solana/web3.js`, `@mysten/sui/jsonRpc`, `@lifi/sdk`) at module-init
+// deps (`@solana/web3.js`, `@mysten/sui/grpc`, `@lifi/sdk`) at module-init
 // time. The RN-specific versions defer those imports to inside async function
-// bodies so the module graph stays cold until the first real call.
+// bodies so the module graph stays cold until the first real call. The Sui
+// override additionally swaps gRPC for GraphQL RPC: grpc-web needs
+// `Response.body` streaming, which Hermes' fetch does not provide.
 const rnOverrideMap = {
   'packages/core/chain/chains/solana/client.ts': 'src/platforms/react-native/overrides/solanaClient.ts',
   'packages/core/chain/chains/sui/client.ts': 'src/platforms/react-native/overrides/suiClient.ts',
@@ -325,6 +327,10 @@ const configs = {
     ...createToolsSubpathConfigs({
       input: './src/tools/defi/index.ts',
       distBase: 'tools/defi',
+    }),
+    ...createToolsSubpathConfigs({
+      input: './src/tools/bridge/index.ts',
+      distBase: 'tools/bridge',
     }),
   ],
   browser: {
