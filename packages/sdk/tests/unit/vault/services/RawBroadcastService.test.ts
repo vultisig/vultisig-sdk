@@ -1,11 +1,29 @@
+import { sha256 } from '@noble/hashes/sha2'
+import { bytesToHex } from '@noble/hashes/utils'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { bittensorRpcUrl } from '@vultisig/core-chain/chains/bittensor/client'
 import { polkadotRpcUrl } from '@vultisig/core-chain/chains/polkadot/client'
 import { tronRpcUrl } from '@vultisig/core-chain/chains/tron/config'
+import base58 from 'bs58'
+import { encode as xrplEncode } from 'ripple-binary-codec'
+import { keccak256 } from 'viem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { hashes as xrplHashes } from 'xrpl'
 
 import { RawBroadcastService } from '@/vault/services/RawBroadcastService'
 import { VaultError, VaultErrorCode } from '@/vault/VaultError'
+
+const makeRippleRawTx = () =>
+  xrplEncode({
+    TransactionType: 'Payment',
+    Account: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+    Destination: 'rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh',
+    Amount: '1',
+    Fee: '10',
+    Sequence: 1,
+    SigningPubKey: '',
+    TxnSignature: '',
+  })
 
 const {
   mockQueryUrl,
@@ -15,6 +33,7 @@ const {
   mockGetSolanaSignatureStatuses,
   mockGetCosmosClient,
   mockCosmosBroadcastTx,
+  mockCosmosGetTx,
   mockExecuteSuiTx,
   mockRippleRequest,
 } = vi.hoisted(() => ({
@@ -25,6 +44,7 @@ const {
   mockGetSolanaSignatureStatuses: vi.fn(),
   mockGetCosmosClient: vi.fn(),
   mockCosmosBroadcastTx: vi.fn(),
+  mockCosmosGetTx: vi.fn(),
   mockExecuteSuiTx: vi.fn(),
   mockRippleRequest: vi.fn(),
 }))
@@ -54,7 +74,7 @@ vi.mock('@vultisig/core-chain/chains/cosmos/client', () => ({
 
 vi.mock('@vultisig/core-chain/chains/sui/client', () => ({
   getSuiClient: () => ({
-    executeTransactionBlock: mockExecuteSuiTx,
+    executeTransaction: mockExecuteSuiTx,
   }),
 }))
 
@@ -74,14 +94,24 @@ describe('RawBroadcastService', () => {
     mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
     mockGetCosmosClient.mockResolvedValue({
       broadcastTx: mockCosmosBroadcastTx,
+      getTx: mockCosmosGetTx,
     })
-    mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash' })
+    mockCosmosBroadcastTx.mockResolvedValue({ transactionHash: 'cosmos-hash', code: 0 })
+    mockCosmosGetTx.mockResolvedValue(null)
     mockExecuteSuiTx.mockResolvedValue({
-      digest: 'sui-digest',
-      effects: { status: { status: 'success' } },
+      $kind: 'Transaction',
+      Transaction: {
+        digest: 'sui-digest',
+        status: { success: true, error: null },
+        effects: { transactionDigest: 'sui-digest' },
+      },
     })
     mockRippleRequest.mockResolvedValue({
-      result: { tx_json: { hash: 'xrp-hash' } },
+      result: {
+        engine_result: 'tesSUCCESS',
+        engine_result_code: 0,
+        tx_json: { hash: 'xrp-hash' },
+      },
     })
   })
 
@@ -191,6 +221,56 @@ describe('RawBroadcastService', () => {
     expect(hash).toBe('sol-signature')
   })
 
+  it('rejects a duplicate Solana transaction with an explicit on-chain failure', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({
+      value: [{ err: { InstructionError: [0, 'Custom'] } }],
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Solana,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+    expect(mockGetSolanaSignatureStatuses).toHaveBeenCalledWith([base58.encode(signature)], {
+      searchTransactionHistory: true,
+    })
+  })
+
+  it('accepts a duplicate Solana transaction when its status is not indexed yet', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockResolvedValue({ value: [null] })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
+    })
+
+    expect(hash).toBe(base58.encode(signature))
+  })
+
+  it('accepts a duplicate Solana transaction when its best-effort status lookup is unavailable', async () => {
+    const signature = Uint8Array.from({ length: 64 }, (_, index) => index + 1)
+    const rawTx = Buffer.from(Uint8Array.from([1, ...signature, 0])).toString('base64')
+    mockSendSolanaRawTx.mockRejectedValue(new Error('AlreadyProcessed'))
+    mockGetSolanaSignatureStatuses.mockRejectedValue(new Error('rpc down'))
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Solana,
+      rawTx,
+    })
+
+    expect(hash).toBe(base58.encode(signature))
+  })
+
   it('broadcasts Cosmos tx when rawTx is JSON with tx_bytes', async () => {
     const txB64 = Buffer.from([1, 2, 3]).toString('base64')
     const hash = await service.broadcastRawTx({
@@ -232,6 +312,71 @@ describe('RawBroadcastService', () => {
     })
   })
 
+  it('treats duplicate-style Cosmos broadcast errors as idempotent success', async () => {
+    const txBytes = Buffer.from([1, 2, 3])
+    const rawTx = txBytes.toString('base64')
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue({
+      hash: bytesToHex(sha256(txBytes)).toUpperCase(),
+      code: 0,
+    })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Cosmos,
+      rawTx,
+    })
+
+    expect(hash).toBe(bytesToHex(sha256(txBytes)).toUpperCase())
+  })
+
+  it('fails closed when a duplicate Cosmos transaction already failed execution', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue({
+      hash: 'failed-hash',
+      code: 5,
+      rawLog: 'out of gas',
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('execution failed'),
+    })
+  })
+
+  it('fails closed when a duplicate Cosmos transaction cannot be verified on-chain', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('tx already exists in cache'))
+    mockCosmosGetTx.mockResolvedValue(null)
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
+  })
+
+  it('fails closed on an ambiguous Cosmos account sequence mismatch', async () => {
+    mockCosmosBroadcastTx.mockRejectedValue(new Error('account sequence mismatch'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Cosmos,
+        rawTx: Buffer.from([1, 2, 3]).toString('base64'),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('account sequence mismatch'),
+    })
+  })
+
   it('rejects Sui payload missing unsignedTx or signature', async () => {
     await expect(
       service.broadcastRawTx({
@@ -247,27 +392,50 @@ describe('RawBroadcastService', () => {
   it('broadcasts Sui transaction from JSON payload', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Sui,
-      rawTx: JSON.stringify({ unsignedTx: 'tx-block', signature: 'sig-bytes' }),
+      // base64 of 'tx-block' — the raw path decodes it to BCS bytes for the unified client.
+      rawTx: JSON.stringify({ unsignedTx: 'dHgtYmxvY2s=', signature: 'sig-bytes' }),
     })
     expect(hash).toBe('sui-digest')
-    expect(mockExecuteSuiTx).toHaveBeenCalledWith({
-      transactionBlock: 'tx-block',
-      signature: ['sig-bytes'],
-      options: { showEffects: true },
+
+    const request = mockExecuteSuiTx.mock.calls[0]?.[0]
+    expect(request.transaction).toBeInstanceOf(Uint8Array)
+    expect(new TextDecoder().decode(request.transaction)).toBe('tx-block')
+    expect(request.signatures).toEqual(['sig-bytes'])
+    expect(request.include).toEqual({ effects: true })
+  })
+
+  it('falls back to the effects digest when the response omits the top-level one', async () => {
+    mockExecuteSuiTx.mockResolvedValue({
+      $kind: 'Transaction',
+      Transaction: {
+        status: { success: true, error: null },
+        effects: { transactionDigest: 'effects-digest' },
+      },
     })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({ unsignedTx: 'dHgtYmxvY2s=', signature: 'sig-bytes' }),
+      })
+    ).resolves.toBe('effects-digest')
   })
 
   it('rejects finalized Sui transactions with failed execution effects', async () => {
     mockExecuteSuiTx.mockResolvedValue({
-      digest: 'sui-digest',
-      effects: { status: { status: 'failure', error: 'MoveAbort(42)' } },
+      $kind: 'FailedTransaction',
+      FailedTransaction: {
+        digest: 'sui-digest',
+        status: { success: false, error: { message: 'MoveAbort(42)' } },
+        effects: { transactionDigest: 'sui-digest' },
+      },
     })
 
     await expect(
       service.broadcastRawTx({
         chain: Chain.Sui,
         rawTx: JSON.stringify({
-          unsignedTx: 'tx-block',
+          unsignedTx: 'dHgtYmxvY2s=',
           signature: 'sig-bytes',
         }),
       })
@@ -277,25 +445,25 @@ describe('RawBroadcastService', () => {
     })
   })
 
-  it.each([{ digest: 'sui-digest' }, { digest: 'sui-digest', effects: { status: {} } }])(
-    'rejects Sui responses without explicit successful execution effects',
-    async response => {
-      mockExecuteSuiTx.mockResolvedValue(response)
+  it.each([
+    { $kind: 'Transaction', Transaction: { digest: 'sui-digest' } },
+    { $kind: 'Transaction', Transaction: { digest: 'sui-digest', effects: { transactionDigest: 'sui-digest' } } },
+  ])('rejects Sui responses without explicit successful execution status', async response => {
+    mockExecuteSuiTx.mockResolvedValue(response)
 
-      await expect(
-        service.broadcastRawTx({
-          chain: Chain.Sui,
-          rawTx: JSON.stringify({
-            unsignedTx: 'tx-block',
-            signature: 'sig-bytes',
-          }),
-        })
-      ).rejects.toMatchObject({
-        code: VaultErrorCode.BroadcastFailed,
-        message: expect.stringContaining('no effects status returned'),
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Sui,
+        rawTx: JSON.stringify({
+          unsignedTx: 'dHgtYmxvY2s=',
+          signature: 'sig-bytes',
+        }),
       })
-    }
-  )
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('no execution status returned'),
+    })
+  })
 
   it('broadcasts TON BOC via root API', async () => {
     mockQueryUrl.mockResolvedValue({ result: { hash: 'ton-hash' } })
@@ -320,6 +488,41 @@ describe('RawBroadcastService', () => {
       rawTx: '02f8',
     })
     expect(hash).toBe('0xevmhash')
+  })
+
+  it('treats duplicate-style EVM broadcast errors as idempotent success', async () => {
+    mockGetEvmClient.mockReturnValue({
+      sendRawTransaction: vi.fn().mockRejectedValue(new Error('already known')),
+    })
+
+    const rawTx = '0x01'
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Base,
+      rawTx,
+    })
+
+    expect(hash).toBe(keccak256(rawTx))
+  })
+
+  it.each([
+    'nonce too low',
+    'transaction is temporarily banned',
+    'future transaction tries to replace pending',
+    'could not replace existing tx',
+  ])('fails closed on ambiguous EVM rejection: %s', async errorMessage => {
+    mockGetEvmClient.mockReturnValue({
+      sendRawTransaction: vi.fn().mockRejectedValue(new Error(errorMessage)),
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Base,
+        rawTx: '0x01',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining(errorMessage),
+    })
   })
 
   it('broadcasts Polkadot extrinsic via JSON-RPC', async () => {
@@ -393,8 +596,8 @@ describe('RawBroadcastService', () => {
 
   it('maps Tron duplicate transaction to BroadcastFailed', async () => {
     mockQueryUrl.mockResolvedValue({
-      code: 'ERROR',
-      message: 'DUPLICATE_TRANSACTION',
+      code: 'DUP_TRANSACTION_ERROR',
+      message: Buffer.from('Transaction already exists').toString('hex'),
     })
 
     await expect(
@@ -422,6 +625,105 @@ describe('RawBroadcastService', () => {
     ).rejects.toThrow(/Tron broadcast failed/)
   })
 
+  it('returns the derived Tron txID for duplicate transaction responses', async () => {
+    const rawDataHex =
+      '0a02f69b22087d4a3b02495f232040b888e6eaa5335a67080112630a2d747970652e676f6f676c65617069732e636f6d2f70726f746f636f6c2e5472616e73666572436f6e747261637412320a15411320a6fb4dcd4ff8e91392a8cb98378633cf7dd81215414c8967080d86f3d0e1352a42f9213c7b9dd03b0f18c0843d7080cae2eaa533'
+    const expectedHash = '6db783c4142b3749a4b598db4644155455c9206e2eca4b31efbd48e46773d9d5'
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({
+        id: expectedHash,
+        blockNumber: 12345,
+        receipt: { result: 'SUCCESS' },
+      })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Tron,
+      rawTx: JSON.stringify({
+        txID: expectedHash.toUpperCase(),
+        raw_data_hex: rawDataHex,
+      }),
+    })
+
+    expect(hash).toBe(expectedHash)
+    expect(bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))).toBe(expectedHash)
+  })
+
+  it('fails closed when a duplicate Tron response carries a mismatched txID', async () => {
+    mockQueryUrl.mockResolvedValue({
+      code: 'DUP_TRANSACTION_ERROR',
+      message: Buffer.from('Transaction already exists').toString('hex'),
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: '00'.repeat(32),
+          raw_data_hex: '010203',
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('already been submitted'),
+    })
+  })
+
+  it('fails closed when a duplicate Tron response is only an unverified RPC cache hit', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({})
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: expectedHash,
+          raw_data_hex: rawDataHex,
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
+  })
+
+  it('fails closed when a duplicate Tron transaction already failed on-chain', async () => {
+    const rawDataHex = '010203'
+    const expectedHash = bytesToHex(sha256(Buffer.from(rawDataHex, 'hex')))
+    mockQueryUrl
+      .mockResolvedValueOnce({
+        code: 'DUP_TRANSACTION_ERROR',
+        message: Buffer.from('Transaction already exists').toString('hex'),
+      })
+      .mockResolvedValueOnce({
+        id: expectedHash,
+        blockNumber: 12345,
+        receipt: { result: 'REVERT' },
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Tron,
+        rawTx: JSON.stringify({
+          txID: expectedHash,
+          raw_data_hex: rawDataHex,
+        }),
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
   it('broadcasts Ripple tx blob', async () => {
     const hash = await service.broadcastRawTx({
       chain: Chain.Ripple,
@@ -431,6 +733,121 @@ describe('RawBroadcastService', () => {
     expect(mockRippleRequest).toHaveBeenCalledWith({
       command: 'submit',
       tx_blob: '1200aa',
+    })
+  })
+
+  it('treats duplicate-style Ripple broadcast errors as idempotent success', async () => {
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tesSUCCESS' },
+        },
+      })
+
+    const hash = await service.broadcastRawTx({
+      chain: Chain.Ripple,
+      rawTx,
+    })
+
+    expect(hash).toBe(xrplHashes.hashSignedTx(rawTx))
+  })
+
+  it('fails closed when a duplicate Ripple transaction finalized with a tec failure', async () => {
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockResolvedValueOnce({
+        result: {
+          validated: true,
+          meta: { TransactionResult: 'tecUNFUNDED_PAYMENT' },
+        },
+      })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('failed on-chain'),
+    })
+  })
+
+  it('fails closed when a duplicate Ripple transaction cannot be found by hash', async () => {
+    const rawTx = makeRippleRawTx()
+    mockRippleRequest
+      .mockResolvedValueOnce({
+        result: {
+          engine_result: 'tefALREADY',
+          engine_result_code: -198,
+          engine_result_message: 'The transaction was already applied.',
+        },
+      })
+      .mockRejectedValueOnce(new Error('txnNotFound'))
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx,
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('could not be verified'),
+    })
+  })
+
+  it('fails closed on an ambiguous Ripple past-sequence response', async () => {
+    mockRippleRequest.mockResolvedValue({
+      result: {
+        engine_result: 'tefPAST_SEQ',
+        engine_result_code: -190,
+        engine_result_message: 'This sequence number has already passed.',
+        tx_json: { hash: 'misleading-hash' },
+      },
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx: '1200aa',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('tefPAST_SEQ'),
+    })
+  })
+
+  it('fails closed on an ambiguous Ripple response even when it includes a transaction hash', async () => {
+    mockRippleRequest.mockResolvedValue({
+      result: {
+        tx_json: { hash: 'misleading-hash' },
+      },
+    })
+
+    await expect(
+      service.broadcastRawTx({
+        chain: Chain.Ripple,
+        rawTx: '1200aa',
+      })
+    ).rejects.toMatchObject({
+      code: VaultErrorCode.BroadcastFailed,
+      message: expect.stringContaining('engine result'),
     })
   })
 })

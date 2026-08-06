@@ -13,6 +13,8 @@ export const blockaidEvmChain = {
   [EvmChain.Polygon]: 'polygon',
   [EvmChain.Sei]: 'sei',
   [EvmChain.Zksync]: 'zksync',
+  // Robinhood (4663) deliberately absent: Blockaid does not list the chain
+  // yet (same posture as CronosChain). Recheck when Blockaid adds support.
 } as const
 
 export type BlockaidSupportedEvmChain = keyof typeof blockaidEvmChain

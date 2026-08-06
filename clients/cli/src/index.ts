@@ -630,13 +630,13 @@ Examples:
 // Command: Send transaction
 program
   .command('send <chain> <to> [amount]')
-  .description(descriptions.send.description)
+  .description(descriptions.send.cliDescription)
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
   .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
@@ -903,7 +903,7 @@ Examples:
 // Command: Show addresses
 program
   .command('addresses')
-  .description(descriptions.address.description)
+  .description(descriptions.address.cliDescription)
   .addHelpText(
     'after',
     `
@@ -1038,10 +1038,14 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
-  .option('--discover', 'Auto-discover tokens with balances on the chain')
+  .option('--discover', 'Find tokens with balances on the chain and save them to this vault')
   .addHelpText(
     'after',
     `
+--discover writes to the vault: every token it finds is saved to the tracked
+list, so it also changes what portfolio and balance --tokens report. Use
+--remove <tokenId> to stop tracking one.
+
 Examples:
   vultisig tokens Ethereum
   vultisig tokens Ethereum --discover --output json
@@ -1123,7 +1127,7 @@ Examples:
         await executeSwapQuote(context, {
           fromChain,
           toChain,
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -1134,13 +1138,13 @@ Examples:
 // Command: Execute swap
 program
   .command('swap <fromChain> <toChain> [amount]')
-  .description(descriptions.swap.description)
+  .description(descriptions.swap.cliDescription)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')
@@ -1179,7 +1183,7 @@ See also: swap-quote, swap-chains, balance`
         await executeSwap(context, {
           fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
           toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
           slippage: options.slippage ? parseFloat(options.slippage) : undefined,

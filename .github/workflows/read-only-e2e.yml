@@ -1,0 +1,95 @@
+name: Read-Only E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: read-only-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=8192"
+
+jobs:
+  read-only-e2e:
+    name: Read-only SDK e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TEST_VAULT_PATH: /tmp/e2e-test-vault.vult
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v4
+        with:
+          node-version: "20"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare Yarn
+        run: corepack prepare yarn@4.16.0 --activate
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build shared packages
+        run: yarn build:shared
+
+      - name: Build packages
+        run: yarn build:all
+
+      - name: Write test vault fixture
+        env:
+          VAULT_B64_1: ${{ secrets.E2E_TEST_VAULT_FILE_B64_1 }}
+          VAULT_B64_2: ${{ secrets.E2E_TEST_VAULT_FILE_B64_2 }}
+          VAULT_B64_3: ${{ secrets.E2E_TEST_VAULT_FILE_B64_3 }}
+          VAULT_B64_4: ${{ secrets.E2E_TEST_VAULT_FILE_B64_4 }}
+          VAULT_B64_5: ${{ secrets.E2E_TEST_VAULT_FILE_B64_5 }}
+          VAULT_B64_6: ${{ secrets.E2E_TEST_VAULT_FILE_B64_6 }}
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: |
+          if [ -z "$TEST_VAULT_PASSWORD" ] ||
+             [ -z "$VAULT_B64_1" ] || [ -z "$VAULT_B64_2" ] ||
+             [ -z "$VAULT_B64_3" ] || [ -z "$VAULT_B64_4" ] ||
+             [ -z "$VAULT_B64_5" ] || [ -z "$VAULT_B64_6" ]; then
+            echo "::error::The dedicated E2E vault fixture is incomplete; refusing to report a green read-only run with skipped suites."
+            exit 1
+          fi
+          printf '%s' "$VAULT_B64_1$VAULT_B64_2$VAULT_B64_3$VAULT_B64_4$VAULT_B64_5$VAULT_B64_6" |
+            base64 -d > "$TEST_VAULT_PATH"
+          chmod 600 "$TEST_VAULT_PATH"
+
+      - name: Run swap quote e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: yarn test:e2e:swap-quotes
+
+      - name: Run balance e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: yarn test:e2e:balance
+
+      - name: Run gas e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: yarn test:e2e:gas
+
+      - name: Run prepare-send e2e
+        env:
+          TEST_VAULT_PASSWORD: ${{ secrets.E2E_TEST_VAULT_PASSWORD }}
+        run: yarn test:e2e:prepare-send
+
+      - name: Remove test vault fixture
+        if: always()
+        run: rm -f "$TEST_VAULT_PATH"

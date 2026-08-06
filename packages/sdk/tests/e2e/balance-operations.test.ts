@@ -124,7 +124,7 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Balance Operations (Production)',
       expect(balance.decimals).toBeDefined()
       expect(balance.amount).toBeTypeOf('string')
       expect(balance.chainId).toBe(Chain.Ethereum)
-      expect(balance.tokenId).toBe(USDC_ADDRESS)
+      expect(balance.tokenId?.toLowerCase()).toBe(USDC_ADDRESS.toLowerCase())
 
       console.log(`💰 USDC: ${balance.amount} ${balance.symbol}`)
     })
@@ -142,7 +142,7 @@ describe.skipIf(!HAS_TEST_VAULT_FIXTURE)('E2E: Balance Operations (Production)',
       expect(balance.decimals).toBeDefined()
       expect(balance.amount).toBeTypeOf('string')
       expect(balance.chainId).toBe(Chain.Ethereum)
-      expect(balance.tokenId).toBe(USDT_ADDRESS)
+      expect(balance.tokenId?.toLowerCase()).toBe(USDT_ADDRESS.toLowerCase())
 
       console.log(`💰 USDT: ${balance.amount} ${balance.symbol}`)
     })

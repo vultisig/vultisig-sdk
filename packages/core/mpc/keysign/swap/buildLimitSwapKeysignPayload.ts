@@ -15,7 +15,7 @@ import {
   isLimitSwapDestinationHalted,
   shouldBlockRuneDeposit,
 } from '@vultisig/core-chain/swap/native/limitSwapInbound'
-import { assertLimitSwapMemo } from '@vultisig/core-chain/swap/native/limitSwapMemo'
+import { parseLimitSwapMemo } from '@vultisig/core-chain/swap/native/limitSwapMemo'
 import { getNativeSwapDecimals } from '@vultisig/core-chain/swap/native/utils/getNativeSwapDecimals'
 import { WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
@@ -54,13 +54,15 @@ export type BuildLimitSwapKeysignPayloadInput = {
   libType: KeysignLibType
   walletCore: WalletCore
   /**
-   * The order's guaranteed-minimum output (the memo's LIM) in the target's
-   * smallest units, for cross-device "you receive" display only. Never
-   * influences signing.
+   * Optional cross-check of the caller's own "you receive" figure, in
+   * THORChain's 1e8 fixed point — the same scale the memo's LIM uses, and what
+   * `getNativeSwapDecimals` formats a THORChain swap's output with.
    *
-   * Taken as a chain amount rather than a decimal so it is formatted the same
-   * way the market path formats its expected output — `Number#toString()` would
-   * emit scientific notation for dust values and render as `1e-8` on a co-signer.
+   * Not used to build the payload: the displayed minimum is always taken from
+   * the memo's LIM, so it cannot disagree with the order being signed. Supplying
+   * it asserts the caller's display math agrees with the memo, which catches a
+   * caller that rescaled to the target coin's own decimals — the LIM would still
+   * sign correctly while the co-signer saw a wrong figure.
    */
   expectedToAmount?: bigint
   /** Epoch milliseconds; parameterised so the router expiry is deterministic under test. */
@@ -84,6 +86,20 @@ export type BuildLimitSwapKeysignPayloadInput = {
  *   *without* a swap payload would fall through to a plain ERC20 transfer,
  *   dropping the memo and stranding the tokens on the router — so it must carry
  *   one.
+ *
+ * The swap payload is deliberately NOT attached to the first two branches, even
+ * though it would give co-signers the market path's swap review for free
+ * (sdk#1611). It is not display metadata: every signing-input resolver re-routes
+ * on its presence — UTXO takes both amount and destination from it, EVM and Tron
+ * take the destination from `vaultAddress`, and the Cosmos resolver drops the
+ * tx-body memo (`txMemo: swapPayload ? '' : memo`). Attaching one would change
+ * signed bytes on a working path to improve a display, and for RUNE it would
+ * additionally make `assertNativeSwapReadyForBroadcast` resolve a `THOR` inbound
+ * row that THORChain's own inbound list does not contain, failing the broadcast
+ * guard outright. Joining devices get the order terms from
+ * `getKeysignLimitSwapOrder` instead, which reads the memo that every branch
+ * already carries — and which, being the string THORChain executes, cannot
+ * disagree with what is signed.
  *
  * Fund-safety gates, all fail-closed:
  * - The `EnableAdvSwapQueue` mimir is re-checked here, at sign time. Placement
@@ -116,10 +132,17 @@ export const buildLimitSwapKeysignPayload = async ({
   toPublicKey,
   libType,
   walletCore,
-  expectedToAmount = 0n,
+  expectedToAmount,
   now = Date.now(),
 }: BuildLimitSwapKeysignPayloadInput) => {
-  assertLimitSwapMemo(memo)
+  const order = parseLimitSwapMemo(memo)
+
+  if (expectedToAmount !== undefined && expectedToAmount !== order.limit) {
+    throw new Error(
+      `buildLimitSwapKeysignPayload: expectedToAmount ${expectedToAmount} disagrees with the memo's LIM ${order.limit}. ` +
+        "It must be the LIM in THORChain's 1e8 fixed point, not rescaled to the target coin's decimals."
+    )
+  }
 
   if (amount <= 0n) {
     throw new Error('buildLimitSwapKeysignPayload: amount must be greater than 0')
@@ -184,7 +207,7 @@ export const buildLimitSwapKeysignPayload = async ({
         fromAmount: amount.toString(),
         // Display-only, for the co-signer's "you receive" row. The order's real
         // floor is the LIM inside the memo; these fields are never read here.
-        toAmountDecimal: fromChainAmountDisplay(expectedToAmount, getNativeSwapDecimals(toCoin)),
+        toAmountDecimal: fromChainAmountDisplay(order.limit, getNativeSwapDecimals(toCoin)),
         toAmountLimit: '0',
         streamingInterval: '0',
         streamingQuantity: '0',

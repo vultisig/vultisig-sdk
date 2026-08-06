@@ -3,11 +3,13 @@ import { getChainKind } from '@vultisig/core-chain/ChainKind'
 import { type AccountCoinKey, accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { getEvmChainBalances } from '@vultisig/core-chain/coin/balance/getEvmChainBalances'
+import { normalizeTokenId } from '@vultisig/core-chain/utils/isValidTokenId'
 import type { Address } from 'viem'
 
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
+import { resolveTokenRef } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -35,6 +37,15 @@ export class BalanceService {
    * Uses CacheService with automatic TTL-based caching
    */
   async getBalance(chain: Chain, tokenId?: string): Promise<Balance> {
+    return this.getBalanceForAsset(chain, tokenId)
+  }
+
+  private async getBalanceForAsset(
+    chain: Chain,
+    tokenId?: string,
+    knownAssetId?: string,
+    knownToken?: Token
+  ): Promise<Balance> {
     const key = `${chain.toLowerCase()}:${tokenId ?? 'native'}`
 
     // Check scoped cache (uses configured TTL)
@@ -43,6 +54,11 @@ export class BalanceService {
 
     let address: string | undefined
     try {
+      // User-facing refs are resolved at the VaultBase boundary. This service
+      // receives an already-canonical asset id; resolving it again could treat
+      // a contract address as an untrusted sibling token's symbol.
+      const assetId = knownAssetId ?? tokenId
+
       address = await this.getAddress(chain)
 
       // Core handles balance fetching for ALL chains
@@ -50,11 +66,11 @@ export class BalanceService {
       const rawBalance = await getCoinBalance({
         chain,
         address,
-        id: tokenId, // Token ID (contract address for ERC-20, etc.)
+        id: assetId, // Contract address / chain-level asset id, never the vault's storage key
       })
 
       // Format using adapter
-      const tokens = this.getTokensRecord()
+      const tokens = knownToken ? { [chain]: [knownToken] } : this.getTokensRecord()
       const balance = formatBalance(rawBalance, chain, tokenId, tokens)
 
       // Cache with configured TTL
@@ -129,8 +145,11 @@ export class BalanceService {
     if (includeTokens) {
       const tokens = this.getTokens(chain)
       for (const token of tokens) {
+        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
         balanceRequests.push(
-          this.getBalance(chain, token.id).then(balance => [`${chain}:${token.id}`, balance] as const)
+          this.getBalanceForAsset(chain, token.id, assetId, token).then(
+            balance => [`${chain}:${token.id}`, balance] as const
+          )
         )
       }
     }
@@ -152,16 +171,23 @@ export class BalanceService {
       resultKey: string
       cacheKey: string
       tokenId?: string
+      token?: Token
     }
 
     const requests: CoinRequest[] = [
       { coinKey: { chain, address }, resultKey: chain, cacheKey: `${chain.toLowerCase()}:native` },
-      ...tokens.map(token => ({
-        coinKey: { chain, id: token.id, address } as AccountCoinKey<EvmChain>,
-        resultKey: `${chain}:${token.id}`,
-        cacheKey: `${chain.toLowerCase()}:${token.id}`,
-        tokenId: token.id,
-      })),
+      ...tokens.map(token => {
+        // This record is already selected. Use its own chain-level asset id
+        // instead of resolving its storage key against sibling symbols.
+        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
+        return {
+          coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
+          resultKey: `${chain}:${token.id}`,
+          cacheKey: `${chain.toLowerCase()}:${token.id}`,
+          tokenId: token.id,
+          token,
+        }
+      }),
     ]
 
     const entries: Array<readonly [string, Balance]> = []
@@ -195,7 +221,8 @@ export class BalanceService {
       // aggregate IS a real balance and is kept); a missing key falls through uncached + unemitted so the
       // next call refetches. It's still returned for this call so the shape is complete.
       const present = rawBalance !== undefined
-      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, tokensRecord)
+      const formatTokens = request.token ? { [chain]: [request.token] } : tokensRecord
+      const balance = formatBalance(present ? rawBalance : 0n, chain, request.tokenId, formatTokens)
 
       if (present) {
         await this.cacheService.setScoped(request.cacheKey, CacheScope.BALANCE, balance)
@@ -274,29 +301,43 @@ export class BalanceService {
    * @param chain Chain to add token to
    * @param token Token to add
    *
-   * @important ATOMICITY WARNING: This method currently mutates state before
-   * calling saveVault(). It is SAFE because there is no async validation
-   * between mutation and save. However, if you add ANY async validation
-   * (e.g., checking token contract existence on-chain), you MUST move that
-   * validation BEFORE the state mutation to prevent partial state corruption.
-   * See addChain() in PreferencesService for the correct pattern.
+   * @important ATOMICITY: `getAllTokens()` hands back live vault state, so the
+   * new token is applied as a fresh record/array rather than pushed in place —
+   * that keeps the pre-add state intact as a rollback target. If saveVault()
+   * fails the previous state is restored and the error rethrown, matching
+   * removeToken(). Any async validation you add must still run BEFORE the state
+   * is applied; see addChain() in PreferencesService for the same pattern.
    */
   async addToken(chain: Chain, token: Token): Promise<void> {
     const allTokens = this.getAllTokens()
+    const chainTokens = allTokens[chain] ?? []
 
-    if (!allTokens[chain]) {
-      allTokens[chain] = []
-    }
+    // Canonicalise the id (and matching contractAddress) before the token enters
+    // persisted state, so a manually added token — e.g. a Ripple issued currency
+    // entered by its human ticker `RLUSD.<issuer>` — dedupes against the on-ledger
+    // id discovery stores (`524C…<issuer>`) instead of being kept as a second,
+    // distinct token. A no-op for chains whose ids are already canonical.
+    const id = normalizeTokenId({ chain, id: token.id })
+    const normalizedToken: Token =
+      token.contractAddress === undefined
+        ? { ...token, id }
+        : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
 
     // Check if token already exists
-    if (!allTokens[chain].find(t => t.id === token.id)) {
-      // State mutation - SAFE only because no async validation follows
-      allTokens[chain].push(token)
-      this.setAllTokens(allTokens)
-      await this.saveVault()
+    if (!chainTokens.find(t => t.id === normalizedToken.id)) {
+      this.setAllTokens({ ...allTokens, [chain]: [...chainTokens, normalizedToken] })
+
+      try {
+        await this.saveVault()
+      } catch (error) {
+        // Persistence failed — drop the optimistic add so a later successful
+        // save can't quietly persist a token the caller was told failed.
+        this.setAllTokens(allTokens)
+        throw error
+      }
 
       // Emit token added event
-      this.emitTokenAdded({ chain, token })
+      this.emitTokenAdded({ chain, token: normalizedToken })
     }
   }
 
@@ -307,32 +348,83 @@ export class BalanceService {
    * @param chain Chain to remove token from
    * @param tokenId Token ID (contract address) to remove
    */
-  async removeToken(chain: Chain, tokenId: string): Promise<void> {
+  async removeToken(chain: Chain, tokenId: string): Promise<boolean> {
     const allTokens = this.getAllTokens()
+    const tokens = allTokens[chain]
 
-    if (allTokens[chain]) {
-      const tokenExists = allTokens[chain].some(t => t.id === tokenId)
+    // Match the canonical id addToken persisted, so a raw id — e.g. a Ripple
+    // human-ticker `RLUSD.<issuer>` — still removes the stored token.
+    const id = normalizeTokenId({ chain, id: tokenId })
 
-      if (tokenExists) {
-        // Store original state for rollback
-        const originalTokens = { ...allTokens }
+    if (!tokens) return false
 
-        // Optimistically remove token
-        allTokens[chain] = allTokens[chain].filter(t => t.id !== tokenId)
-        this.setAllTokens(allTokens)
+    // Preserve the pre-existing escape hatch for malformed tracked records
+    // whose stored id is empty. The shared resolver interprets an empty ref as
+    // native, but the exact empty storage id was removable before this method
+    // adopted resolver-based matching.
+    let tokenIndex = id === '' ? tokens.findIndex(token => token.id === '') : -1
 
-        try {
-          // Attempt to persist changes
-          await this.saveVault()
-
-          // Emit token removed event only after successful save
-          this.emitTokenRemoved({ chain, tokenId })
-        } catch (error) {
-          // Rollback on failure to maintain consistency
-          this.setAllTokens(originalTokens)
-          throw error
-        }
+    if (id !== '') {
+      // Resolve first. The resolver is the single definition of what a token
+      // reference means, and removal must not disagree with the asset that
+      // `send`/`swap` would pick for the same reference.
+      let resolved
+      try {
+        resolved = resolveTokenRef(chain, id, tokens)
+      } catch {
+        return false
       }
+
+      if (!resolved.contractAddress) return false
+
+      // Select the record the RESOLVER selected, by mirroring its own user-token
+      // lookup order (tokenRef.ts): symbol first, then contract address or stored
+      // id. Reconstructing the choice from the resolved asset id instead is not
+      // equivalent — a vault can hold two records for one contract under
+      // different symbols, or a ticker-keyed id (`id: 'usdc'`) alongside the
+      // address-keyed record, and then "which record" and "which asset" are
+      // different questions. Removal must mean the same record every other
+      // surface means for that reference.
+      const upper = id.toUpperCase()
+      const lower = id.toLowerCase()
+      tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
+      if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(
+          token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
+        )
+      }
+      if (tokenIndex === -1) {
+        // The ref resolved through the well-known registry rather than a stored
+        // record. Fall back to the asset id, using the same `||` fallback the
+        // resolver applies — a token stored with an empty `contractAddress` is
+        // identified by its `id`, and `??` would compare it against `''` and
+        // leave it permanently unremovable.
+        const resolvedAssetId = resolved.contractAddress.toLowerCase()
+        tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+      }
+    }
+
+    if (tokenIndex === -1) return false
+
+    // Store original state for rollback
+    const originalTokens = { ...allTokens }
+    const removedToken = tokens[tokenIndex]
+
+    // Optimistically remove the resolved token
+    allTokens[chain] = tokens.filter((_, index) => index !== tokenIndex)
+    this.setAllTokens(allTokens)
+
+    try {
+      // Attempt to persist changes
+      await this.saveVault()
+
+      // Emit token removed event only after successful save
+      this.emitTokenRemoved({ chain, tokenId: removedToken.id })
+      return true
+    } catch (error) {
+      // Rollback on failure to maintain consistency
+      this.setAllTokens(originalTokens)
+      throw error
     }
   }
 }

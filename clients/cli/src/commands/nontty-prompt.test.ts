@@ -1,3 +1,4 @@
+import { descriptions } from '@vultisig/client-shared'
 import type { VaultBase } from '@vultisig/sdk'
 import { Chain } from '@vultisig/sdk'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -224,11 +225,17 @@ describe('confirmation-bound flows refuse before any stdout preview (non-interac
     await expectFailsClosed(() =>
       executeSend(makeTrapVaultCtx(), { chain: Chain.Bitcoin, to: 'bc1qexampleaddress', amount: '1' })
     )
+    expect(descriptions.send.cliDescription).toBe(
+      'Send tokens to an address. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.'
+    )
   })
 
   it('swap refuses before vault.swap / preview', async () => {
     await expectFailsClosed(() =>
       executeSwap(makeTrapVaultCtx(), { fromChain: Chain.Ethereum, toChain: Chain.Bitcoin, amount: 1 })
+    )
+    expect(descriptions.swap.cliDescription).toBe(
+      'Swap tokens between chains. Interactive sessions preview by default; non-interactive sessions require --dry-run to preview or --confirm to execute.'
     )
   })
 
