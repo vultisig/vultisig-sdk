@@ -104,6 +104,28 @@ describe('RN entry wires configureCrypto and configureDefaultStorage', () => {
     expect(rn.isCosmosMemoWithinCap(rn.Chain.Osmosis, 'a'.repeat(257))).toBe(false)
   })
 
+  it('re-exports recipientSanity from the RN entrypoint', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+
+    expect(typeof rn.recipientSanity).toBe('function')
+    expect(typeof rn.isNullAddress).toBe('function')
+    expect(typeof rn.isSelfSend).toBe('function')
+    expect(typeof rn.isMalformedEvmAddress).toBe('function')
+    expect(rn.recipientSanity({ recipient: '0x0000000000000000000000000000000000000000' })).toMatchObject({
+      flagged: true,
+      isNull: true,
+    })
+    expect(
+      rn.recipientSanity({
+        from: '0xAbC0000000000000000000000000000000000000',
+        recipient: '0xabc0000000000000000000000000000000000000',
+      })
+    ).toMatchObject({
+      flagged: true,
+      isSelfSend: true,
+    })
+  })
+
   it('exports the generic CosmWasm execute message builder from the RN root surface', async () => {
     const sdk = await import('../../../../src/platforms/react-native/index')
 

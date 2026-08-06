@@ -681,6 +681,12 @@ export async function parseKeygenQR(...args: unknown[]) {
 }
 export { ValidationHelpers } from '../../utils/validation'
 
+// Recipient sanity helpers (null/self-send/malformed-EVM) live on the root SDK
+// surface already; re-export them here so React Native consumers can delete
+// local copies instead of routing around the canonical tool family.
+export type { RecipientSanityFlag, RecipientSanityInput, RecipientSanityResult } from '../../tools/validate'
+export { isMalformedEvmAddress, isNullAddress, isSelfSend, recipientSanity } from '../../tools/validate'
+
 // Dangerous/burn-address guard. Single source of truth for "is this destination
 // a burn/black-hole address that no key controls?" across EVM, Solana, UTXO and
 // XRP. Pure address-string matching (no chain-client deps), so RN-safe as a
