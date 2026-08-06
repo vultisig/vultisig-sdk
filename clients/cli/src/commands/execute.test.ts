@@ -21,7 +21,7 @@ const makeCtx = (): CommandContext =>
 //  - vultisig-5ze6w: execute --funds accepted negative amounts silently. Now
 //    parseFunds rejects anything not matching `/^\d+$/`.
 describe('executeExecute — msg validation (bead b0ome)', () => {
-  const baseParams = { chain: Chain.THORChain as const, contract: 'thor1abc', dryRun: true }
+  const baseParams = { chain: Chain.THORChain, contract: 'thor1abc', dryRun: true }
 
   it('rejects malformed JSON with typed InvalidInputError (was UNKNOWN_ERROR / exit 7)', async () => {
     try {
@@ -69,7 +69,7 @@ describe('executeExecute — msg validation (bead b0ome)', () => {
 
 describe('executeExecute — funds validation (bead 5ze6w)', () => {
   const baseParams = {
-    chain: Chain.THORChain as const,
+    chain: Chain.THORChain,
     contract: 'thor1abc',
     msg: '{"swap":{}}',
     dryRun: true,
