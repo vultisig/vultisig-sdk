@@ -38,18 +38,21 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { findCoins } from '@vultisig/core-chain/coin/find'
 import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 
+import type { Token } from '../../../../src/types'
 import { TokenDiscoveryService } from '../../../../src/vault/services/TokenDiscoveryService'
 import { resolveTokenRef } from '../../../../src/vault/tokenRef'
 import { VaultError, VaultErrorCode } from '../../../../src/vault/VaultError'
 
 describe('TokenDiscoveryService', () => {
   let service: TokenDiscoveryService
+  let storedTokens: Token[]
   const mockGetAddress = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
+    storedTokens = []
     mockGetAddress.mockResolvedValue('0x1234567890abcdef1234567890abcdef12345678')
-    service = new TokenDiscoveryService(mockGetAddress)
+    service = new TokenDiscoveryService(mockGetAddress, () => storedTokens)
   })
 
   describe('discoverTokens', () => {
@@ -107,6 +110,87 @@ describe('TokenDiscoveryService', () => {
       expect(resolveTokenRef(Chain.Polygon, discovered.ticker, [storedToken])).toMatchObject({
         ticker: 'USDC.e',
         contractAddress: contractAddress.toLowerCase(),
+      })
+    })
+
+    it('strips an upstream numeric suffix when its base symbol is unique', async () => {
+      vi.mocked(findCoins).mockResolvedValue([
+        {
+          chain: Chain.Ethereum,
+          id: '0x00000000000000000000000000000000000000aa',
+          ticker: 'WIDGET_7',
+          decimals: 18,
+        },
+      ] as any)
+
+      const [discovered] = await service.discoverTokens(Chain.Ethereum)
+
+      expect(discovered.ticker).toBe('WIDGET')
+    })
+
+    it('replaces colliding discovery-order suffixes with address-derived names accepted as input', async () => {
+      const firstContract = '0x000000000000000000000000000000001deadbeef'
+      const secondContract = '0x000000000000000000000000000000002deadbeef'
+      vi.mocked(findCoins).mockResolvedValue([
+        { chain: Chain.Ethereum, id: firstContract, ticker: 'WIDGET', decimals: 6 },
+        { chain: Chain.Ethereum, id: secondContract, ticker: 'WIDGET_1', decimals: 18 },
+      ] as any)
+
+      const discovered = await service.discoverTokens(Chain.Ethereum)
+      const stored = discovered.map(token => ({
+        id: token.tokenId!,
+        contractAddress: token.contractAddress,
+        symbol: token.ticker,
+        name: token.ticker,
+        decimals: token.decimals,
+        chainId: Chain.Ethereum,
+        isNative: false,
+      }))
+
+      expect(discovered.map(token => token.ticker)).toEqual(['WIDGET@1deadbeef', 'WIDGET@2deadbeef'])
+      expect(resolveTokenRef(Chain.Ethereum, discovered[0].ticker, stored)).toMatchObject({
+        contractAddress: firstContract,
+      })
+      expect(resolveTokenRef(Chain.Ethereum, discovered[1].ticker, stored)).toMatchObject({
+        contractAddress: secondContract,
+      })
+    })
+
+    it('keeps a discriminator when a newly discovered base symbol is already stored for another contract', async () => {
+      const existingContract = '0x00000000000000000000000000000000000000aa'
+      const discoveredContract = '0x00000000000000000000000000000000000000bb'
+      storedTokens = [
+        {
+          id: `${Chain.Ethereum}-${existingContract}`,
+          contractAddress: existingContract,
+          symbol: 'WIDGET',
+          name: 'Existing widget',
+          decimals: 6,
+          chainId: Chain.Ethereum,
+          isNative: false,
+        },
+      ]
+      vi.mocked(findCoins).mockResolvedValue([
+        { chain: Chain.Ethereum, id: discoveredContract, ticker: 'WIDGET_4', decimals: 18 },
+      ] as any)
+
+      const [discovered] = await service.discoverTokens(Chain.Ethereum)
+      const newlyStored = {
+        id: discovered.contractAddress,
+        contractAddress: discovered.contractAddress,
+        symbol: discovered.ticker,
+        name: discovered.ticker,
+        decimals: discovered.decimals,
+        chainId: Chain.Ethereum,
+        isNative: false,
+      }
+
+      expect(discovered.ticker).toBe('WIDGET@000000bb')
+      expect(() => resolveTokenRef(Chain.Ethereum, 'WIDGET', [...storedTokens, newlyStored])).toThrow(
+        /ambiguous.*contract address/i
+      )
+      expect(resolveTokenRef(Chain.Ethereum, discovered.ticker, [...storedTokens, newlyStored])).toMatchObject({
+        contractAddress: discoveredContract,
       })
     })
 

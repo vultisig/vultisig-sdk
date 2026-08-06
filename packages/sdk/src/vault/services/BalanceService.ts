@@ -330,8 +330,12 @@ export class BalanceService {
         ? { ...token, id }
         : { ...token, id, contractAddress: normalizeTokenId({ chain, id: token.contractAddress }) }
 
-    // Check if token already exists
-    if (!chainTokens.find(t => t.id === normalizedToken.id)) {
+    // Check if this chain-level asset already exists. Older CLI versions stored
+    // `<Chain>-<address>` ids, so exact-id comparison can create a second record
+    // when that same contract is added again under its canonical bare id.
+    const normalizedAssetId = normalizedToken.contractAddress || normalizedToken.id
+    const tokenAlreadyExists = chainTokens.some(t => tokenIdsMatch(chain, t.contractAddress || t.id, normalizedAssetId))
+    if (!tokenAlreadyExists) {
       this.setAllTokens({ ...allTokens, [chain]: [...chainTokens, normalizedToken] })
 
       try {

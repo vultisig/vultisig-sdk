@@ -42,6 +42,17 @@ export function tokenIdsMatch(chain: Chain, left: string | undefined, right: str
   )
 }
 
+/** Remove discovery-only disambiguators when checking whether a bare symbol is ambiguous. */
+function tokenSymbolBase(symbol: string | undefined): string | undefined {
+  return symbol?.replace(/@[a-z0-9]{8,}$/iu, '').replace(/_\d+$/u, '')
+}
+
+function tokenAssetId(chain: Chain, token: Token): string {
+  return stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id).toLowerCase()
+}
+
+class AmbiguousTokenRefError extends VaultError {}
+
 /**
  * Resolve a token ref to its ticker, decimals and contract address.
  *
@@ -59,11 +70,23 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
 
   const upper = ref.toUpperCase()
   const lower = ref.toLowerCase()
+  const symbolMatches = userTokens.filter(t => t.symbol?.toUpperCase() === upper)
+  const baseSymbolMatches = userTokens.filter(t => tokenSymbolBase(t.symbol)?.toUpperCase() === upper)
+  const distinctSymbolAssets = new Map([...symbolMatches, ...baseSymbolMatches].map(t => [tokenAssetId(chain, t), t]))
+
+  if (distinctSymbolAssets.size > 1) {
+    const contractAddresses = [...distinctSymbolAssets.values()].map(t => tokenAssetId(chain, t)).join(', ')
+    throw new AmbiguousTokenRefError(
+      VaultErrorCode.InvalidConfig,
+      `Token symbol "${ref}" is ambiguous on ${chain}; it matches multiple contract addresses (${contractAddresses}). Pass the intended contract address instead.`
+    )
+  }
+
   // 1. The user's configured tokens — by symbol first, then by contract address
   //    or stored id. Legacy `<Chain>-<address>` ids and canonical bare ids are
   //    treated as the same storage identity.
   const token =
-    userTokens.find(t => t.symbol?.toUpperCase() === upper) ??
+    symbolMatches[0] ??
     userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower) ??
     userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref))
   if (token) {
@@ -100,7 +123,8 @@ export function resolveTokenRefId(chain: Chain, ref: string | undefined, userTok
   if (!ref) return undefined
   try {
     return resolveTokenRef(chain, ref, userTokens).contractAddress
-  } catch {
+  } catch (error) {
+    if (error instanceof AmbiguousTokenRefError) throw error
     return ref
   }
 }

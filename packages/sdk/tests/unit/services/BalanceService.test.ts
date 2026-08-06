@@ -218,6 +218,15 @@ describe('BalanceService', () => {
     )
   })
 
+  it('does not duplicate a legacy-stored contract when it is re-added with its canonical id', async () => {
+    const { service, getTokens, saveVault } = makeMutableService([addedToken])
+
+    await service.addToken(Chain.Ethereum, { ...addedToken, id: USDC })
+
+    expect(getTokens(Chain.Ethereum)).toEqual([addedToken])
+    expect(saveVault).not.toHaveBeenCalled()
+  })
+
   it('uses the token asset id for the non-EVM per-coin balance path', async () => {
     const mint = 'So11111111111111111111111111111111111111112'
     const secondMint = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -362,7 +371,7 @@ describe('BalanceService', () => {
     expect(emitTokenRemoved).toHaveBeenCalledWith({ chain: Chain.Ethereum, tokenId: addedToken.id })
   })
 
-  it('removes the asset the resolver picks when a stored id collides with another token symbol', async () => {
+  it('refuses an ambiguous symbol when two tracked contracts share it', async () => {
     // A vault following the users guide stores USDT with `id: 'usdt'`. If it
     // also tracks a bridged USDT, the ref 'USDT' is both an exact id of one
     // record and the symbol of another. Removal must agree with the resolver —
@@ -388,11 +397,9 @@ describe('BalanceService', () => {
     }
     const { service, getTokens } = makeMutableService([bridged, canonical])
 
-    await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(true)
+    await expect(service.removeToken(Chain.Ethereum, 'USDT')).resolves.toBe(false)
 
-    // resolveTokenRef matches by symbol first and returns the FIRST symbol
-    // match, so 'USDT' means the bridged token on every surface — including here.
-    expect(getTokens(Chain.Ethereum)).toEqual([canonical])
+    expect(getTokens(Chain.Ethereum)).toEqual([bridged, canonical])
   })
 
   it('removes the record carrying the named symbol when one asset is tracked twice', async () => {
