@@ -329,6 +329,10 @@ const configs = {
       distBase: 'tools/defi',
     }),
     ...createSubpathConfigs({
+      input: './src/tools/bridge/index.ts',
+      distBase: 'tools/bridge',
+    }),
+    ...createSubpathConfigs({
       input: './src/chains/tron/index.ts',
       distBase: 'chains/tron',
     }),

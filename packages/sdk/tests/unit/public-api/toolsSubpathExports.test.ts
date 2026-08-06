@@ -13,6 +13,7 @@ describe('public API subpath exports', () => {
   it('publishes dedicated export-map entries for tool and chain subpaths', () => {
     const parseExport = sdkPackageJson.exports['./tools/parse']
     const defiExport = sdkPackageJson.exports['./tools/defi']
+    const bridgeExport = sdkPackageJson.exports['./tools/bridge']
     const tronExport = sdkPackageJson.exports['./chains/tron']
     const utxoExport = sdkPackageJson.exports['./chains/utxo']
 
@@ -27,6 +28,12 @@ describe('public API subpath exports', () => {
       import: './dist/tools/defi/index.js',
       require: './dist/tools/defi/index.cjs',
       default: './dist/tools/defi/index.cjs',
+    })
+    expect(bridgeExport).toMatchObject({
+      types: './dist/tools/bridge/index.d.ts',
+      import: './dist/tools/bridge/index.js',
+      require: './dist/tools/bridge/index.cjs',
+      default: './dist/tools/bridge/index.cjs',
     })
     expect(tronExport).toMatchObject({
       types: './dist/chains/tron/index.d.ts',
@@ -43,6 +50,7 @@ describe('public API subpath exports', () => {
 
     expect(JSON.stringify(parseExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(defiExport)).not.toContain('dist/index.node')
+    expect(JSON.stringify(bridgeExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(tronExport)).not.toContain('dist/index.node')
     expect(JSON.stringify(utxoExport)).not.toContain('dist/index.node')
   })
@@ -52,6 +60,8 @@ describe('public API subpath exports', () => {
     expect(platformRollupConfig).toContain("distBase: 'tools/parse'")
     expect(platformRollupConfig).toContain("input: './src/tools/defi/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'tools/defi'")
+    expect(platformRollupConfig).toContain("input: './src/tools/bridge/index.ts'")
+    expect(platformRollupConfig).toContain("distBase: 'tools/bridge'")
     expect(platformRollupConfig).toContain("input: './src/chains/tron/index.ts'")
     expect(platformRollupConfig).toContain("distBase: 'chains/tron'")
     expect(platformRollupConfig).toContain("input: './src/chains/utxo/index.ts'")
@@ -62,6 +72,9 @@ describe('public API subpath exports', () => {
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/tools/defi/index.ts', 'dist/tools/defi/index.d.ts')"
+    )
+    expect(typesRollupConfig).toContain(
+      "createSubpathTypesConfig('src/tools/bridge/index.ts', 'dist/tools/bridge/index.d.ts')"
     )
     expect(typesRollupConfig).toContain(
       "createSubpathTypesConfig('src/chains/tron/index.ts', 'dist/chains/tron/index.d.ts')"
