@@ -1,5 +1,221 @@
 # @vultisig/cli
 
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`7d2a91d`](https://github.com/vultisig/vultisig-sdk/commit/7d2a91de80a297c6db6b2fe2e9db41ace609c822), [`0bd1a2d`](https://github.com/vultisig/vultisig-sdk/commit/0bd1a2dfcfc723c77a684be62cc4a676824dc217), [`37d7044`](https://github.com/vultisig/vultisig-sdk/commit/37d7044e33d475ddce93b91ff6295d55490052b4)]:
+  - @vultisig/core-chain@2.32.0
+  - @vultisig/sdk@4.1.0
+  - @vultisig/rujira@60.0.0
+
+## 4.0.3
+
+### Patch Changes
+
+- [#1588](https://github.com/vultisig/vultisig-sdk/pull/1588) [`74cc529`](https://github.com/vultisig/vultisig-sdk/commit/74cc52912f007c6e2afe3c5b9471b6610d39f3fc) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the canonical gas comparison helpers from `@vultisig/sdk/react-native`.
+
+- [#1717](https://github.com/vultisig/vultisig-sdk/pull/1717) [`c109ff4`](https://github.com/vultisig/vultisig-sdk/commit/c109ff4f6504b9458454bad9b392f2682a51992a) Thanks [@neavra](https://github.com/neavra)! - Create keyshare temp files exclusively and keep credential and CLI config directories owner-only.
+
+- [#1718](https://github.com/vultisig/vultisig-sdk/pull/1718) [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9) Thanks [@neavra](https://github.com/neavra)! - Make transaction help accurately distinguish interactive previews from non-interactive confirmation requirements, describe the addresses command without advertising an unsupported argument, and remove duplicated wording from amount-too-small swap errors.
+
+- Updated dependencies [[`a6ba6b4`](https://github.com/vultisig/vultisig-sdk/commit/a6ba6b4688027d6abf4ce0eb3385d6e141f5ef57), [`67667fe`](https://github.com/vultisig/vultisig-sdk/commit/67667fe61a8dd85d40c1b91978da5414987cab6c), [`fbc5b44`](https://github.com/vultisig/vultisig-sdk/commit/fbc5b4445e102534eb434d7cabcd6fe8d633b391), [`74cc529`](https://github.com/vultisig/vultisig-sdk/commit/74cc52912f007c6e2afe3c5b9471b6610d39f3fc), [`c49a3f2`](https://github.com/vultisig/vultisig-sdk/commit/c49a3f2bdff6d220960c3609d08b6c848961ed9f), [`c109ff4`](https://github.com/vultisig/vultisig-sdk/commit/c109ff4f6504b9458454bad9b392f2682a51992a), [`fb601d5`](https://github.com/vultisig/vultisig-sdk/commit/fb601d5ad6f6e6a7089ca449ee24bc5c1d7b82f9), [`82ea0b7`](https://github.com/vultisig/vultisig-sdk/commit/82ea0b7526ef7033605aeed461bb156416e4c012)]:
+  - @vultisig/sdk@4.0.3
+  - @vultisig/core-chain@2.31.2
+  - @vultisig/client-shared@0.3.3
+
+## 4.0.2
+
+### Patch Changes
+
+- [#1580](https://github.com/vultisig/vultisig-sdk/pull/1580) [`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Publish `@vultisig/sdk/tools/bridge` as a real package subpath with dedicated JS and declaration bundles.
+
+- [#1641](https://github.com/vultisig/vultisig-sdk/pull/1641) [`199507d`](https://github.com/vultisig/vultisig-sdk/commit/199507da2be585e8b8414d7d12077174c80afb7b) Thanks [@neavra](https://github.com/neavra)! - Replace unavailable Ethereum and Polygon gas-refresh RPC endpoints, warn when pre-sign gas or nonce refreshes fail, and preserve nonce-gap safeguards when a pending-nonce lookup fails. Ethereum and Polygon pending-nonce checks now share the vault address and request timing with PublicNode.
+
+- [#1578](https://github.com/vultisig/vultisig-sdk/pull/1578) [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Export the full River helper family from `@vultisig/sdk/react-native`, including market/hint helpers and trove-status canonicals.
+
+- [#1576](https://github.com/vultisig/vultisig-sdk/pull/1576) [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix the Astroport swap builder to use a React Native / Hermes-safe fetch timeout instead of `AbortSignal.timeout()`.
+
+- [#1720](https://github.com/vultisig/vultisig-sdk/pull/1720) [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Carry caller-supplied THORChain and MayaChain swap destinations through agent MsgDeposit execution, preserve the existing self-swap default, and reject quote memos that substitute another destination.
+
+- Updated dependencies [[`1a87e08`](https://github.com/vultisig/vultisig-sdk/commit/1a87e080449b37475434f38c99212cc877fd5a4e), [`9ff1eb2`](https://github.com/vultisig/vultisig-sdk/commit/9ff1eb22030cf2551269b4195155e395d624223b), [`7ca8c40`](https://github.com/vultisig/vultisig-sdk/commit/7ca8c406a718624a701b8616a3cee1bbab6c5554), [`9dfd76c`](https://github.com/vultisig/vultisig-sdk/commit/9dfd76c617812418521c820e65a07a02003d5e5e), [`413423b`](https://github.com/vultisig/vultisig-sdk/commit/413423b70655e6e4d7faf9cb9f10b63f601e42dc)]:
+  - @vultisig/sdk@4.0.2
+  - @vultisig/core-chain@2.31.1
+
+## 4.0.1
+
+### Patch Changes
+
+- [#1561](https://github.com/vultisig/vultisig-sdk/pull/1561) [`38be8ef`](https://github.com/vultisig/vultisig-sdk/commit/38be8eff97b061d241c7ac1c1616b48115fbb974) Thanks [@NeOMakinG](https://github.com/NeOMakinG)! - Render `yield_opportunities` and `polymarket_markets` agent surfaces as prose instead of leaking raw `{"surface":...}` JSON into the terminal. The CLI only advertised `balance_summary`/`turn_outcome` in `supported_surfaces`, so any other surface fell back to the backend's legacy verbatim-echo path. Adds parsers, prose renderers, and a legacy-echo fallback for both surfaces, mirroring the existing `balance_summary` handling, and wires them through the TUI, pipe mode, and `agent ask`.
+
+- Updated dependencies [[`3767033`](https://github.com/vultisig/vultisig-sdk/commit/3767033f51804f3fff5088098c767280577bd4a4), [`68df301`](https://github.com/vultisig/vultisig-sdk/commit/68df301134b8000187a11cf92b9427e8200d4623)]:
+  - @vultisig/sdk@4.0.1
+
+## 4.0.0
+
+### Minor Changes
+
+- [#1608](https://github.com/vultisig/vultisig-sdk/pull/1608) [`791d344`](https://github.com/vultisig/vultisig-sdk/commit/791d344c2dacc289c9fb7fbcbc38488aeeb47542) Thanks [@neavra](https://github.com/neavra)! - Fix tracked token balance fetching and make token removal report the truth.
+
+  A token added with `tokens --add` is stored under an id of the form `<Chain>-<address>`. That id was passed to the RPC as if it were a contract address; the RPC rejected it, the throw was swallowed per-chain, and the **whole chain's balances disappeared** — native asset included — leaving only a `console.warn`. Balance lookups now resolve a stored token reference to its real contract address / chain-level asset id before both the per-coin and batched calls. What is written to the vault file is unchanged, and balance result keys still use the stored id.
+
+  **Behavior change — `tokens --remove` now fails when nothing was removed.** Removal previously matched on an exact id comparison, so removing by symbol (or by contract address for a token added under the prefixed id form) matched nothing while the command still printed `Removed token …` and exited 0. Removal now goes through the shared token resolver, and a reference that matches no tracked token raises the existing not-found error and exits **5** (`RESOURCE_NOT_FOUND`) instead of exiting 0. A script that removed an untracked token and relied on a zero exit will now see a failure. Removal by symbol and by contract address, which previously silently no-op'd, now work.
+
+  **Behavior change — the agent `vault_coin remove` tool reports per-coin outcomes.** It previously returned `removed: true` unconditionally; it now returns the SDK's actual result, so the model is told when a coin was not tracked. Batch removals return `{ chain, tokenId, removed }` per coin rather than `{ chain, tokenId }`.
+
+  **Breaking SDK API change — `VaultBase.removeToken` now returns `Promise<boolean>` instead of `Promise<void>`.** It resolves to `true` when a tracked token was removed and persisted, and `false` when the reference matched nothing. Consumers with callbacks, interfaces, or overrides typed to the previous `Promise<void>` signature must update those types.
+
+### Patch Changes
+
+- [#1642](https://github.com/vultisig/vultisig-sdk/pull/1642) [`ac5becb`](https://github.com/vultisig/vultisig-sdk/commit/ac5becb7939bc8c6b45d04cd00067e0d2caf6297) Thanks [@neavra](https://github.com/neavra)! - Show the user-visible memo and XRP destination tag from the signable transaction payload in both send dry-run and pre-signing confirmation previews, with terminal-safe dry-run rendering.
+
+- Updated dependencies [[`b9f81af`](https://github.com/vultisig/vultisig-sdk/commit/b9f81af9065a5c0bfc2f86f8fb20aa51e670ab77), [`c0e260f`](https://github.com/vultisig/vultisig-sdk/commit/c0e260f89d159d14b170384864b24b101b23dfb0), [`2ef8f3f`](https://github.com/vultisig/vultisig-sdk/commit/2ef8f3f42f5d44673568b39a91c42bd0fe410311), [`791d344`](https://github.com/vultisig/vultisig-sdk/commit/791d344c2dacc289c9fb7fbcbc38488aeeb47542)]:
+  - @vultisig/core-chain@2.31.0
+  - @vultisig/sdk@4.0.0
+  - @vultisig/client-shared@0.3.2
+  - @vultisig/rujira@59.0.0
+
+## 3.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`645e291`](https://github.com/vultisig/vultisig-sdk/commit/645e2917aa1b6cd58c5599ddb32b1c89fa73e20e), [`9436de6`](https://github.com/vultisig/vultisig-sdk/commit/9436de627b4d123d7f9bb76e4981722cd84266d1)]:
+  - @vultisig/core-chain@2.30.0
+  - @vultisig/sdk@3.1.0
+  - @vultisig/rujira@58.0.0
+
+## 3.0.0
+
+### Minor Changes
+
+- [#1606](https://github.com/vultisig/vultisig-sdk/pull/1606) [`c593ba0`](https://github.com/vultisig/vultisig-sdk/commit/c593ba0693f6a02402aac0912a97d9e36e8efad0) Thanks [@neavra](https://github.com/neavra)! - Make token references resolve consistently across the vault and CLI surfaces.
+
+  **`@vultisig/sdk` — consumer-visible behaviour change on `send`, `swap` and `balance`:**
+
+  - A token reference (the `symbol` on `send`/`swap`, the `tokenId` on `balance`)
+    now resolves by contract address / stored vault token id as well as by symbol
+    or well-known ticker, through one shared resolver. Previously `send` matched
+    by symbol only while `balance` treated the same value as a raw contract
+    address, so no single value worked on both paths and an ERC-20 send could not
+    be built at all.
+  - The change is additive. Symbol/ticker is still matched first and the vault's
+    own tokens still shadow the well-known registry, so every reference that
+    resolved before resolves to the same token and produces the same signed
+    payload. Only references that previously threw now resolve. A reference
+    matching nothing is still passed through to the balance layer untouched.
+  - `send({ dryRun: true })` gains `feeSymbol` and reports the network fee in the
+    chain's native asset. For a token send, `fee` was previously formatted with
+    the token's decimals and `total` was amount + fee — both meaningless when the
+    fee is paid in a different asset. `total` is now denominated in the asset
+    being sent. Native sends are unaffected.
+  - A `Balance` for a token is labelled by the same resolution. Previously the
+    token was found by an exact match against the vault's stored token id, so a
+    well-known token the vault does not track — or one added with an id that is
+    not its bare contract address — fell through to a default of 18 decimals with
+    the raw id as `symbol`. `formatBalance` now resolves the same way everything
+    else does; a token in no registry still falls back as before.
+
+  **`@vultisig/cli`:**
+
+  - `send --token` works with either a contract address or a symbol, and its
+    dry-run preview quotes the fee in the native asset. The preview also warns
+    separately when the native balance cannot cover the fee — a token send draws
+    its fee from a different balance than the one `total` is checked against.
+  - `portfolio`'s total now equals the sum of the breakdown printed under it, with
+    each held token itemized as its own row (`chainBalances[].tokens`).
+  - `balance <chain> --tokens` returns token balances instead of silently
+    ignoring the flag; without the flag the output is unchanged.
+  - `tokens --discover` documents that it saves discovered tokens to the vault.
+
+### Patch Changes
+
+- [#1174](https://github.com/vultisig/vultisig-sdk/pull/1174) [`0d73d9f`](https://github.com/vultisig/vultisig-sdk/commit/0d73d9f5d08b10e52b9461678d7d700afba52e01) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Fix CLI shell completion so vault suggestions read the SDK's real storage layout and honor `VULTISIG_CONFIG_DIR`.
+
+- [#1163](https://github.com/vultisig/vultisig-sdk/pull/1163) [`286e342`](https://github.com/vultisig/vultisig-sdk/commit/286e342962e8fa63525c8de25bed84295fd468cd) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Promote THOR/Maya swap-memo parsing into the public SDK API and update the CLI executor to consume the shared helper.
+
+- [#1165](https://github.com/vultisig/vultisig-sdk/pull/1165) [`f3fd265`](https://github.com/vultisig/vultisig-sdk/commit/f3fd2654b8d90f5d5aaa3c578fcd5fad752203d3) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Re-export the RN-safe `parseChain`, `parseTicker`, and `knownContracts` helpers from `@vultisig/sdk/platforms/react-native` so mobile consumers can use the SDK's canonical public helpers without maintaining local copies or reaching into non-RN entrypoints.
+
+- [#1171](https://github.com/vultisig/vultisig-sdk/pull/1171) [`a24771a`](https://github.com/vultisig/vultisig-sdk/commit/a24771afba7c210423c586f9492d3531cdcd47f5) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Make the SDK's default Node/Electron `FileStorage` honor `VULTISIG_CONFIG_DIR` so default vault storage stays co-located with the CLI config, credentials, cache, and broadcast journal paths.
+
+- [#1168](https://github.com/vultisig/vultisig-sdk/pull/1168) [`e40aab2`](https://github.com/vultisig/vultisig-sdk/commit/e40aab24e02c46fd2c3fe95873b14aad4fd2fe6d) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Consolidate `VULTISIG_CONFIG_DIR` resolution into a shared helper so empty or whitespace-only overrides consistently fall back to the default config directory across credentials, config storage, token cache, and broadcast journal paths.
+
+- Updated dependencies [[`8061f30`](https://github.com/vultisig/vultisig-sdk/commit/8061f3072cc299196894b3c118bf7046eff8a004), [`4c76c50`](https://github.com/vultisig/vultisig-sdk/commit/4c76c507df970c6bbb1542c72a7ab0e06d039e65), [`bb752e2`](https://github.com/vultisig/vultisig-sdk/commit/bb752e25dc318488a72d9b6b7aa8d484c568dbaa), [`0d73d9f`](https://github.com/vultisig/vultisig-sdk/commit/0d73d9f5d08b10e52b9461678d7d700afba52e01), [`ec4aac7`](https://github.com/vultisig/vultisig-sdk/commit/ec4aac78e96db00cae283fe8a506983a30c42412), [`286e342`](https://github.com/vultisig/vultisig-sdk/commit/286e342962e8fa63525c8de25bed84295fd468cd), [`c593ba0`](https://github.com/vultisig/vultisig-sdk/commit/c593ba0693f6a02402aac0912a97d9e36e8efad0), [`d1ed4bb`](https://github.com/vultisig/vultisig-sdk/commit/d1ed4bbd459bfed006cf9f319d9e39356ffe25b9), [`648d932`](https://github.com/vultisig/vultisig-sdk/commit/648d932b7e3c6f3c30ff7007f3c4e4387879ba38), [`f3fd265`](https://github.com/vultisig/vultisig-sdk/commit/f3fd2654b8d90f5d5aaa3c578fcd5fad752203d3), [`a24771a`](https://github.com/vultisig/vultisig-sdk/commit/a24771afba7c210423c586f9492d3531cdcd47f5), [`6763ddb`](https://github.com/vultisig/vultisig-sdk/commit/6763ddbd382bd71cdf9f24bbd3bde0116a694906), [`e40aab2`](https://github.com/vultisig/vultisig-sdk/commit/e40aab24e02c46fd2c3fe95873b14aad4fd2fe6d), [`259837f`](https://github.com/vultisig/vultisig-sdk/commit/259837f482717624d6422797e088a9341d4f1a23)]:
+  - @vultisig/core-chain@2.29.2
+  - @vultisig/sdk@3.0.0
+  - @vultisig/client-shared@0.3.1
+  - @vultisig/rujira@57.0.0
+
+## 2.23.0
+
+### Patch Changes
+
+- [#1262](https://github.com/vultisig/vultisig-sdk/pull/1262) [`10164ae`](https://github.com/vultisig/vultisig-sdk/commit/10164ae94af2183a63e908318ed4e675d2fe1e6e) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Preserve exact decimal swap amounts from CLI input through preview and execution.
+
+- Updated dependencies [[`23563f4`](https://github.com/vultisig/vultisig-sdk/commit/23563f41da7b142e5ae9d34d4287eaaaa3fef701), [`859ab28`](https://github.com/vultisig/vultisig-sdk/commit/859ab287d3574c508b4abce5950e8e42c17f8198)]:
+  - @vultisig/sdk@2.23.0
+  - @vultisig/core-chain@2.29.1
+  - @vultisig/rujira@56.0.0
+
+## 2.22.0
+
+### Patch Changes
+
+- [#1583](https://github.com/vultisig/vultisig-sdk/pull/1583) [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27) Thanks [@Toby1009](https://github.com/Toby1009)! - Move every Sui read, simulation and broadcast off JSON-RPC.
+
+  Sui is retiring JSON-RPC: shutdown on Foundation mainnet full nodes began the
+  week of 2026-07-27 and full decommission (code removal) lands mid-October 2026,
+  after which no provider can serve it. This is a scheduled migration ahead of
+  that date, NOT a fix for a live outage — as of 2026-07-27 both
+  `sui-rpc.publicnode.com` and `fullnode.mainnet.sui.io` still answer JSON-RPC.
+
+  - `getSuiClient()` now returns a `SuiGrpcClient` pointed at
+    `https://fullnode.mainnet.sui.io:443` (gRPC-web over HTTPS).
+  - React Native uses `SuiGraphQLClient` against
+    `https://graphql.mainnet.sui.io/graphql` instead: grpc-web needs
+    `Response.body` streaming, which Hermes' fetch does not provide. Both clients
+    implement the same unified transport interface, so callsites are identical.
+  - Balance, coin metadata, coin listing, tx hash, tx status, broadcast and
+    keysign gas refinement moved to `getBalance` / `getCoinMetadata` / `listCoins`
+    / `simulateTransaction` / `getTransaction` / `executeTransaction`.
+  - The dependency-free `@vultisig/sdk` balance tools (`getSuiBalance`,
+    `getSuiTokenBalance`, `getSuiAllBalances`) now POST Sui GraphQL and follow the
+    paginated `balances` connection to completion, returning `tokens_unavailable`
+    rather than a silently truncated portfolio.
+
+  Broadcast-error classification follows the transport. A gRPC failure carries the
+  grpc-status NAME in `code` (not a JSON-RPC number) and a percent-encoded message,
+  so both classifiers were re-pointed:
+
+  - `isTransientBroadcastError` retries `UNAVAILABLE` / `DEADLINE_EXCEEDED` /
+    `RESOURCE_EXHAUSTED` and decodes the message before pattern-matching. A
+    grpc-web response is HTTP 200 with the real status in the trailer, so the
+    existing 5xx branch never saw a busy or restarting node.
+  - The CLI's permanent-vs-retryable gate matches `INVALID_ARGUMENT` instead of
+    the numeric `-32002`. Left unchanged, that gate would have gone dead and every
+    permanent Sui rejection would have been re-broadcast as if transient.
+
+  Breaking for direct consumers: `assertSuiTxSucceeded` now takes the unified
+  client's transaction result (`{ $kind, Transaction | FailedTransaction }`)
+  instead of a JSON-RPC effects object.
+
+- Updated dependencies [[`4b14790`](https://github.com/vultisig/vultisig-sdk/commit/4b14790fb5f0fa5b9a58f6fe5575ad4c2bab3867), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`98ec3bf`](https://github.com/vultisig/vultisig-sdk/commit/98ec3bfdcf0831df00ceec6618c796dbfa2c4d13), [`bb5b62c`](https://github.com/vultisig/vultisig-sdk/commit/bb5b62c60ca298d0aa98614e8c2b01eeef0d8bdb), [`d7fd8fd`](https://github.com/vultisig/vultisig-sdk/commit/d7fd8fd891d2bb9f007b3feff5b31cc961bae497), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`f99133d`](https://github.com/vultisig/vultisig-sdk/commit/f99133dc7a99f44bbe78ba43fa59e7ec761c73e1), [`3cf9cdc`](https://github.com/vultisig/vultisig-sdk/commit/3cf9cdc14f0069f231f2ea0cede3cec155af95d5), [`6142529`](https://github.com/vultisig/vultisig-sdk/commit/6142529abc39bb548be8b1f32453f0207584c4e2), [`028b3ce`](https://github.com/vultisig/vultisig-sdk/commit/028b3cec5e56e5ab41de5eeb66f6837af9e1dd27), [`70f4583`](https://github.com/vultisig/vultisig-sdk/commit/70f4583a359f988460633b44046bf5811c9c0f74), [`e76ba9b`](https://github.com/vultisig/vultisig-sdk/commit/e76ba9ba78ec52f30f3678ef4acc933ef5712cdc), [`4777264`](https://github.com/vultisig/vultisig-sdk/commit/47772647b90336ae3297d208777523592f69dde4), [`89410fb`](https://github.com/vultisig/vultisig-sdk/commit/89410fbb0abf3ad05919fb38d1abc74a5acf9a6b), [`787e755`](https://github.com/vultisig/vultisig-sdk/commit/787e755d230d1e0fa012583d6edd8b7fa5aad88d)]:
+  - @vultisig/core-chain@2.29.0
+  - @vultisig/sdk@2.22.0
+  - @vultisig/rujira@55.0.0
+
+## 2.21.1
+
+### Patch Changes
+
+- [#1435](https://github.com/vultisig/vultisig-sdk/pull/1435) [`69e2fc2`](https://github.com/vultisig/vultisig-sdk/commit/69e2fc2f92c053294b0276440306be5871988be9) Thanks [@rcoderdev](https://github.com/rcoderdev)! - Keep browser vault storage on the backend selected during initialization. IndexedDB failures and quota errors now surface without silently switching to a partial localStorage or in-memory view, while legacy localStorage vaults retain their backend across reloads.
+
+- [#1179](https://github.com/vultisig/vultisig-sdk/pull/1179) [`0c80a06`](https://github.com/vultisig/vultisig-sdk/commit/0c80a062bde65c4938a29ce8c1fb6052028615e1) Thanks [@gomesalexandre](https://github.com/gomesalexandre)! - Route the CLI version cache, version output, and VaultStateStore local state through `VULTISIG_CONFIG_DIR` so they stay co-located with SDK vault storage and other shared CLI state.
+
+- Updated dependencies [[`69e2fc2`](https://github.com/vultisig/vultisig-sdk/commit/69e2fc2f92c053294b0276440306be5871988be9), [`0c80a06`](https://github.com/vultisig/vultisig-sdk/commit/0c80a062bde65c4938a29ce8c1fb6052028615e1), [`1292e83`](https://github.com/vultisig/vultisig-sdk/commit/1292e83b1d370eff35ecd95b94e83689b724ca36), [`aa47b4a`](https://github.com/vultisig/vultisig-sdk/commit/aa47b4a03c7391d13c738cba68b13a1526d1c502), [`b8d0639`](https://github.com/vultisig/vultisig-sdk/commit/b8d063904673890f0a956a56f6474d678ceaba3c), [`32e5d36`](https://github.com/vultisig/vultisig-sdk/commit/32e5d369ae4723299a6cb8f694da1782dbf207c2)]:
+  - @vultisig/sdk@2.21.1
+  - @vultisig/client-shared@0.3.0
+  - @vultisig/core-chain@2.28.0
+
 ## 2.21.0
 
 ### Minor Changes

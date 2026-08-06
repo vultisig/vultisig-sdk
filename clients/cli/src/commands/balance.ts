@@ -34,6 +34,23 @@ export async function executeBalance(ctx: CommandContext, options: BalanceOption
   const raw = options.raw ?? false
 
   if (options.chain) {
+    // `--tokens` used to be accepted and then dropped on this branch: the flag
+    // is documented for `balance <chain>`, but only the all-chains branch below
+    // ever passed it on, so `balance Ethereum --tokens` silently returned the
+    // native balance alone. Same call, same result shape as all-chains, scoped
+    // to one chain.
+    if (options.includeTokens) {
+      const balances = await vault.balances([options.chain], true)
+      spinner.succeed('Balances loaded')
+
+      if (isJsonOutput()) {
+        outputJson({ chain: options.chain, balances })
+        return
+      }
+      displayBalancesTable(balances, raw)
+      return
+    }
+
     const balance = await vault.balance(options.chain)
     spinner.succeed('Balance loaded')
 
@@ -80,16 +97,22 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
   const currencyName = fiatCurrencyNameRecord[currency]
   const spinner = createSpinner(`Loading portfolio in ${currencyName}...`)
 
-  const totalValue = await vault.getTotalValue(currency)
   const chains = vault.chains
 
   // Fetch each chain independently and honestly: a chain that throws is recorded
   // in `failures` instead of rejecting the whole command or silently losing data.
   // `chains` order is preserved across both the kept entries and the failures.
-  //   - balance() fails  → no entry, failure { stage: 'balance' }
-  //   - getValue() fails → entry kept without value, failure { stage: 'value' }
+  //   - balance() fails → no entry, failure { stage: 'balance' }
+  //   - value lookup fails → entry kept without value, failure { stage: 'value' }
+  //
+  // Values come from getValues(), which prices the native asset AND every token
+  // the vault tracks on the chain. The total below is the sum of exactly these
+  // rows. It used to come from a separate vault.getTotalValue() call that
+  // included token value while the breakdown listed native value only, so the
+  // headline figure contradicted the rows printed under it (and the gap grew
+  // silently as `tokens --discover` added tokens).
   type ChainResult = {
-    entry?: { chain: Chain; balance: Balance; value?: Value }
+    entry?: PortfolioSummary['chainBalances'][number]
     failure?: ChainFailure
   }
 
@@ -101,13 +124,45 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
       } catch (err) {
         return { failure: { chain, stage: 'balance', error: conciseError(err) } }
       }
+
+      let values: Record<string, Value>
       try {
-        const value = await vault.getValue(chain, undefined, currency)
-        return { entry: { chain, balance, value } }
+        values = await vault.getValues(chain, currency)
       } catch (err) {
         // Balance succeeded but the fiat value did not — keep the balance and
         // flag the missing value rather than swallowing it as "no value".
         return { entry: { chain, balance }, failure: { chain, stage: 'value', error: conciseError(err) } }
+      }
+
+      const { native, ...tokenValues } = values
+      if (!native) {
+        // getValues() logs and drops a per-asset failure rather than throwing.
+        // Ask again for just the native value so the failure we report carries
+        // the real error instead of a generic "unavailable".
+        try {
+          const retried = await vault.getValue(chain, undefined, currency)
+          return { entry: { chain, balance, value: retried, tokens: await withAmounts(tokenValues) } }
+        } catch (err) {
+          return {
+            entry: { chain, balance, tokens: await withAmounts(tokenValues) },
+            failure: { chain, stage: 'value', error: conciseError(err) },
+          }
+        }
+      }
+
+      return { entry: { chain, balance, value: native, tokens: await withAmounts(tokenValues) } }
+
+      // Pair each priced token with its held amount. getValues() has already
+      // fetched (and cached) these balances, so this does not re-hit the RPC;
+      // a token whose balance is somehow unavailable still shows its value.
+      async function withAmounts(byTokenId: Record<string, Value>) {
+        return Promise.all(
+          Object.entries(byTokenId).map(async ([tokenId, value]) => ({
+            tokenId,
+            value,
+            balance: await vault.balance(chain, tokenId).catch(() => undefined),
+          }))
+        )
       }
     })
   )
@@ -131,6 +186,17 @@ export async function executePortfolio(ctx: CommandContext, options: PortfolioOp
       ['Check your internet connection', 'Retry in a few moments']
     )
   }
+
+  // The total is the sum of the rows above — nothing else — so a reader can add
+  // up the breakdown and land on it.
+  const total = chainBalances.reduce(
+    (sum, entry) =>
+      sum +
+      parseFloat(entry.value?.amount ?? '0') +
+      (entry.tokens ?? []).reduce((tokenSum, token) => tokenSum + parseFloat(token.value.amount), 0),
+    0
+  )
+  const totalValue: Value = { amount: total.toFixed(2), currency, lastUpdated: Date.now() }
 
   const portfolio: PortfolioSummary = { totalValue, chainBalances }
 

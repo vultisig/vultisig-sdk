@@ -9,7 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { IdempotencyKeyReusedError, IdempotentTurnDuplicateError } from '../core/errors'
 import { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode } from './agentErrors'
 import { parseTurnOutcome, type TurnOutcome } from './cards'
-import { CLI_SIGNABLE_FLAT_TOOLS, CLI_SIGNABLE_PREP_TOOLS, deriveToolOutputCandidate } from './toolOutputSigning'
+import {
+  CLI_SIGNABLE_FLAT_TOOLS,
+  CLI_SIGNABLE_PREP_TOOLS,
+  CLI_SIGNABLE_YIELD_TOOLS,
+  deriveToolOutputCandidate,
+  type ToolOutputCandidate,
+} from './toolOutputSigning'
 import type {
   AuthTokenRequest,
   AuthTokenResponse,
@@ -121,12 +127,24 @@ type StreamCallbacks = {
   // the CLI doesn't consume). `source` distinguishes a flat enrichment
   // (polymarket / build_custom_* / erc20_approve) from an `execute_*` prep
   // passthrough; both sign. The session buffers it into the executor.
-  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: 'flat' | 'prep') => void
+  onToolOutputTx?: (payload: TxReadyPayload, toolName: string, source: ToolOutputCandidate['source']) => void
   // Fired for the `data-balance_summary` SSE part the backend emits when the
   // client advertised "balance_summary" in supported_surfaces. Carries the raw
   // card envelope; the consumer validates + renders it. Replaces the legacy
   // verbatim-echo path where the card arrived as raw JSON in message content.
   onBalanceSummary?: (card: unknown) => void
+  // Forward-compat wiring for a `data-yield_opportunities` / `data-polymarket_markets`
+  // typed SSE part (rj3p) — NOT live today: agent-backend-ts gates these two
+  // envelopes on catalog/intent presence (keywords/catalog), not on
+  // `supported_surfaces`, and emits no such typed writer (verified against
+  // agent-backend-ts src/mastra/agent.ts + uiStream.ts). The envelope actually
+  // arrives via the legacy verbatim-echo path today, which is why
+  // extractYieldOpportunitiesFromText / extractPolymarketMarketsFromText exist
+  // as the real fallback. Same contract as onBalanceSummary once/if the backend
+  // adds the typed writer: carries the raw envelope, the consumer validates +
+  // renders it as prose instead of letting the raw card JSON reach message content.
+  onYieldOpportunities?: (card: unknown) => void
+  onPolymarketMarkets?: (card: unknown) => void
   // Fired for the `data-turn_outcome` SSE part the backend emits at turn end when
   // the client advertised "turn_outcome" in supported_surfaces (a2a-02). Carries
   // the typed { kind, code?, detail? } discriminator so a headless caller can tell
@@ -719,6 +737,16 @@ export class AgentClient {
           callbacks.onBalanceSummary?.(card)
           break
         }
+        case 'yield_opportunities': {
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onYieldOpportunities?.(card)
+          break
+        }
+        case 'polymarket_markets': {
+          const card = v1Data ?? parsed.data ?? parsed
+          callbacks.onPolymarketMarkets?.(card)
+          break
+        }
         case 'turn_outcome': {
           // a2a-02: typed turn-outcome discriminator (envelope under `.data`).
           // parseTurnOutcome drops a malformed payload so it can never flip an
@@ -894,7 +922,12 @@ export class AgentClient {
     // resting on a null-check three calls away.
     if (v1Type === 'tool-output-error') return
     if (status !== 'done' || !toolName || !callbacks.onToolOutputTx) return
-    if (!CLI_SIGNABLE_FLAT_TOOLS.has(toolName) && !CLI_SIGNABLE_PREP_TOOLS.has(toolName)) return
+    if (
+      !CLI_SIGNABLE_FLAT_TOOLS.has(toolName) &&
+      !CLI_SIGNABLE_PREP_TOOLS.has(toolName) &&
+      !CLI_SIGNABLE_YIELD_TOOLS.has(toolName)
+    )
+      return
     const candidate = deriveToolOutputCandidate(toolName, output)
     if (!candidate) return
     if (this.verbose)
@@ -978,6 +1011,10 @@ export class AgentClient {
         return 'suggestions'
       case 'data-balance_summary':
         return 'balance_summary'
+      case 'data-yield_opportunities':
+        return 'yield_opportunities'
+      case 'data-polymarket_markets':
+        return 'polymarket_markets'
       case 'data-turn_outcome':
         return 'turn_outcome'
       case 'data-message':

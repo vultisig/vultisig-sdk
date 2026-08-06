@@ -124,6 +124,21 @@ describe('sdk.defi.stakekit', () => {
   })
 
   describe('stakekitSearch', () => {
+    it('normalizes public network aliases at the StakeKit request boundary', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      await stakekitSearch({ network: 'BSC' })
+
+      const requestUrl = String(fetchMock.mock.calls[0]?.[0])
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('binance')
+    })
+
     it('returns rows with YieldDiscoverOpportunity-compatible shape: apy is fraction, provider nested in metadata, id present', async () => {
       const product = makeProduct()
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -511,6 +526,25 @@ describe('sdk.defi.stakekit', () => {
   })
 
   describe('stakekitBalances', () => {
+    it('uses the same canonical network aliases as search', async () => {
+      const fetchMock = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: [], hasNextPage: false }),
+        text: async () => '',
+      } as Response)
+      globalThis.fetch = fetchMock
+
+      const result = await stakekitBalances({
+        address: '0x1234567890123456789012345678901234567890',
+        network: 'AVAX',
+      })
+
+      expect(result).toEqual([])
+      const requestUrl = String(fetchMock.mock.calls[0]?.[0])
+      expect(new URL(requestUrl).searchParams.get('network')).toBe('avalanche-c')
+    })
+
     it('returns null on 403 (restricted endpoint)', async () => {
       // searchYields (to enumerate integration IDs)
       globalThis.fetch = vi

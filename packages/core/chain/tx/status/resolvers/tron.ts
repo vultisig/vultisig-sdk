@@ -10,6 +10,14 @@ import { TxStatusResolver } from '../resolver'
 // Protobuf3 JSON serializes non-default enum values by name: successful TRC20 calls emit
 // receipt.result="SUCCESS" (non-default, value=1). Native TRX transfers emit no receipt at all.
 // Known failure codes verified against Tron protocol and live mainnet responses.
+//
+// sdk#1505 should-fix (S1): the allowlist-inversion below correctly means an UNKNOWN result
+// never reads as false-success, but an unlisted contractResult still resolves 'pending' until
+// the poll times out rather than promptly 'error'. The codes below complete the documented
+// core/Tron.proto contractResult enum (every non-DEFAULT, non-SUCCESS member: values 2-16) so
+// every KNOWN failure surfaces immediately instead of waiting out the poll. Kept in exact
+// parity with the app's TRON_TERMINAL_FAILURE_RESULTS (vultiagent-app txVerifier.ts, app#2198)
+// so a Tron failure buckets identically in the SDK resolver and the app tx-verifier.
 const TRON_RECEIPT_FAILURE_RESULTS = new Set([
   'FAILED',
   'OUT_OF_ENERGY',
@@ -17,6 +25,17 @@ const TRON_RECEIPT_FAILURE_RESULTS = new Set([
   'OUT_OF_TIME',
   'BANDWIDTH_ERROR',
   'ACCOUNT_FREEZED',
+  'TRANSFER_FAILED',
+  'BAD_JUMP_DESTINATION',
+  'OUT_OF_MEMORY',
+  'STACK_OVERFLOW',
+  'STACK_TOO_SMALL',
+  'STACK_TOO_LARGE',
+  'ILLEGAL_OPERATION',
+  'PRECOMPILED_CONTRACT',
+  'JVM_STACK_OVER_FLOW',
+  'UNKNOWN',
+  'INVALID_CODE',
 ])
 
 type TronTxInfoResponse = {
@@ -70,11 +89,6 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
     return { status: 'pending', isKnown: true }
   }
 
-  // 3. receipt.result in terminal failure set → error
-  //    receipt.result == null → success (native TRX send, no contract result)
-  //    receipt.result == 'SUCCESS' → success (TRC20/smart-contract success, protobuf3 non-default enum)
-  //    receipt.result unknown → treat as success (safer than false-failure for user)
-  const status = tx.receipt.result != null && TRON_RECEIPT_FAILURE_RESULTS.has(tx.receipt.result) ? 'error' : 'success'
   const feeCoin = chainFeeCoin[Chain.Tron]
   const receipt =
     tx.fee != null
@@ -85,5 +99,22 @@ export const getTronTxStatus: TxStatusResolver<OtherChain.Tron> = async ({ hash 
         }
       : undefined
 
-  return { status, receipt }
+  // 3. receipt.result decides success vs failure vs unknown - an ALLOWLIST, not a deny-list:
+  //    - in the known terminal failure set → error
+  //    - null → success (native TRX send, no contract result)
+  //    - 'SUCCESS' → success (TRC20/smart-contract success, protobuf3 non-default enum;
+  //      pinned against NeO's live mainnet tx 1540b1b3, see tron.test.ts)
+  //    - anything else (a receipt.result value we've never seen) → pending, NEVER success.
+  //      The block is already final at this point, so this isn't "still processing" - it's an
+  //      unrecognized terminal outcome, and a new Tron enum value must not be silently narrated
+  //      as a successful fund movement just because it isn't on the known-failure list.
+  if (tx.receipt.result != null && TRON_RECEIPT_FAILURE_RESULTS.has(tx.receipt.result)) {
+    return { status: 'error', receipt }
+  }
+
+  if (tx.receipt.result == null || tx.receipt.result === 'SUCCESS') {
+    return { status: 'success', receipt }
+  }
+
+  return { status: 'pending', isKnown: true, receipt }
 }

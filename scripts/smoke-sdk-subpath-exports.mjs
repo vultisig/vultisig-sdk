@@ -83,6 +83,7 @@ try {
       "assert.equal(swap.PriceImpactTooHighError.name, 'PriceImpactTooHighError')",
       "assert.equal(typeof prep.prepareSendTxFromKeys, 'function')",
       "assert.equal(typeof prep.prepareIbcTransfer, 'function')",
+      "assert.equal(typeof bridge.getCctpChain, 'function')",
       'console.log(JSON.stringify({ parsePath, defiPath, bridgePath, gasPath, policyPath, swapPath, prepPath, parseOk: true, defiOk: true, bridgeOk: true, gasOk: true, policyOk: true, swapOk: true, prepOk: true }))',
       '',
     ].join('\n')
@@ -92,7 +93,7 @@ try {
     [
       "import { parseChain, type ParseChainResult } from '@vultisig/sdk/tools/parse'",
       "import { defi, type Defi } from '@vultisig/sdk/tools/defi'",
-      "import { buildCctpBridge, type BuildCctpBridgeParams } from '@vultisig/sdk/tools/bridge'",
+      "import { buildCctpBridge, type BuildCctpBridgeParams, type CctpChainConfig } from '@vultisig/sdk/tools/bridge'",
       "import { utxoFeeRate, type UtxoFeeRate } from '@vultisig/sdk/tools/gas'",
       "import { policy, type Verdict } from '@vultisig/sdk/tools/policy'",
       "import { MAX_PRICE_IMPACT_PCT, PriceImpactTooHighError, type SwapQuote } from '@vultisig/sdk/tools/swap'",
@@ -106,6 +107,8 @@ try {
       'void bridgeBuilder',
       'const bridgeParams = null as unknown as BuildCctpBridgeParams',
       'void bridgeParams',
+      'const chainConfig = null as unknown as CctpChainConfig',
+      'void chainConfig',
       'const gasHelper: typeof utxoFeeRate = utxoFeeRate',
       'void gasHelper',
       'const utxoRate = null as unknown as UtxoFeeRate',
