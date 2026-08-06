@@ -11,12 +11,27 @@ export { AgentErrorCode, inferAgentErrorCodeFromMessage, isAgentErrorCode, norma
 export type { AskResult } from './ask'
 export { AskInterface } from './ask'
 export { authenticateVault } from './auth'
-export type { BalanceSummaryAccount, BalanceSummaryCard, BalanceSummaryToken } from './cards'
+export type {
+  BalanceSummaryAccount,
+  BalanceSummaryCard,
+  BalanceSummaryToken,
+  PolymarketMarket,
+  PolymarketMarketsCard,
+  PolymarketOutcome,
+  YieldOpportunitiesCard,
+  YieldOpportunity,
+} from './cards'
 export {
   CLI_SUPPORTED_SURFACES,
   extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
   parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
+  parseYieldOpportunitiesEnvelope,
   renderBalanceSummaryCard,
+  renderPolymarketMarketsCard,
+  renderYieldOpportunitiesCard,
 } from './cards'
 export { AgentClient } from './client'
 export { buildMessageContext, buildMinimalContext } from './context'
