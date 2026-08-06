@@ -92,6 +92,10 @@ export class SwapService {
         amount: chainAmount,
         referral: params.referral,
         vultDiscountTier,
+        // Per-provider affiliate overrides (sdk#1150): forward the consumer's
+        // config so tenants (e.g. Station) can supply their own fee owners.
+        // Omitted -> core falls back to the vultisig-0 defaults, unchanged.
+        affiliateConfig: params.affiliateConfig,
         recipient: params.recipient,
         slippageTolerance: params.slippageTolerance,
         excludeProviders: params.excludeProviders,
@@ -329,7 +333,7 @@ export class SwapService {
   private getSpenderFromQuote(quoteData: SwapQuote['quote']): string | undefined {
     if ('general' in quoteData && quoteData.general.tx) {
       if ('evm' in quoteData.general.tx) {
-        return quoteData.general.tx.evm.to
+        return quoteData.general.tx.evm.approvalAddress ?? quoteData.general.tx.evm.to
       }
       // UTXO/Cosmos deposit-channel swaps: no ERC-20 spender approval needed.
       if ('transfer' in quoteData.general.tx) {
@@ -464,10 +468,13 @@ export class SwapService {
     // Solana has explicit fees in the quote
     if ('solana' in tx) {
       const networkFee = tx.solana.networkFee
-      const swapFee = tx.solana.swapFee.amount
+      const swapFee = tx.solana.swapFee
+      // SwapFees is native-denominated. Preserve a non-native swap fee on the
+      // raw quote without mixing its units into the native network-fee total.
+      const nativeSwapFee = swapFee.chain === fromChain && swapFee.id === undefined ? swapFee.amount : 0n
       return {
         network: networkFee,
-        total: networkFee + swapFee,
+        total: networkFee + nativeSwapFee,
       }
     }
 

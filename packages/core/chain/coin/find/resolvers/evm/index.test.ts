@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getErc20BalanceMock = vi.hoisted(() => vi.fn())
+const getEvmChainBalancesMock = vi.hoisted(() => vi.fn())
 const getEvmTokenMetadataMock = vi.hoisted(() => vi.fn())
 const queryOneInchMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@vultisig/core-chain/chains/evm/erc20/getErc20Balance', () => ({
   getErc20Balance: (...args: unknown[]) => getErc20BalanceMock(...args),
+}))
+
+vi.mock('@vultisig/core-chain/coin/balance/getEvmChainBalances', () => ({
+  getEvmChainBalances: (...args: unknown[]) => getEvmChainBalancesMock(...args),
 }))
 
 vi.mock('@vultisig/core-chain/coin/find/resolvers/evm/queryOneInch', () => ({
@@ -17,6 +22,8 @@ vi.mock('@vultisig/core-chain/coin/token/metadata/resolvers/evm', () => ({
 }))
 
 import { EvmChain } from '@vultisig/core-chain/Chain'
+import { accountCoinKeyToString } from '@vultisig/core-chain/coin/AccountCoin'
+import { knownTokens } from '@vultisig/core-chain/coin/knownTokens'
 import { NoDataError } from '@vultisig/lib-utils/error/NoDataError'
 
 import { findEvmCoins } from './index'
@@ -182,6 +189,61 @@ describe('findEvmCoins', () => {
     const urls = queryOneInchMock.mock.calls.map(c => String(c[0]))
     expect(urls.some(u => u.includes('/balance/v1.2/324/'))).toBe(true)
     expect(urls.some(u => u.includes('/token/v1.2/324/custom'))).toBe(true)
+  })
+
+  it('unions 1inch discoveries with curated catalog holdings on Robinhood (hybrid)', async () => {
+    // AAPL appears in both sources with conflicting metadata; a 1inch-only extra
+    // (PEPE) is also present. The union must surface both while deduplicating AAPL
+    // and retaining the curated entry's hand-verified metadata.
+    const address = '0x1111111111111111111111111111111111111111'
+    const aaplCatalog = knownTokens[EvmChain.Robinhood].find(c => c.ticker === 'AAPL')!
+    const aaplId = aaplCatalog.id!
+    const pepeAddress = '0x2222222222222222222222222222222222222222'
+
+    queryOneInchMock.mockResolvedValueOnce({ [aaplId.toLowerCase()]: '3', [pepeAddress]: '5' }).mockResolvedValueOnce({
+      [aaplId.toLowerCase()]: {
+        address: aaplId,
+        symbol: 'AAPL',
+        decimals: 6,
+        name: 'Conflicting 1inch Apple',
+        eip2612: false,
+        tags: [],
+        providers: ['1inch'],
+      },
+      [pepeAddress]: {
+        address: pepeAddress,
+        symbol: 'PEPE',
+        decimals: 18,
+        name: 'Pepe',
+        eip2612: false,
+        tags: [],
+        providers: ['CoinGecko'],
+      },
+    })
+    getEvmTokenMetadataMock.mockRejectedValue(new NoDataError())
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Robinhood, id: aaplId, address })]: 3n,
+    })
+
+    const coins = await findEvmCoins({ chain: EvmChain.Robinhood, address })
+
+    const tickers = coins.map(c => c.ticker).sort()
+    expect(tickers).toEqual(['AAPL', 'PEPE'])
+    expect(coins.filter(c => c.ticker === 'AAPL')).toHaveLength(1)
+    const aapl = coins.find(c => c.ticker === 'AAPL')!
+    expect(aapl).toEqual({ ...aaplCatalog, address })
+  })
+
+  it('still surfaces curated Robinhood holdings when 1inch is down entirely', async () => {
+    const address = '0x1111111111111111111111111111111111111111'
+    const aaplCatalog = knownTokens[EvmChain.Robinhood].find(c => c.ticker === 'AAPL')!
+
+    queryOneInchMock.mockRejectedValue(new NoDataError())
+    getEvmChainBalancesMock.mockResolvedValue({
+      [accountCoinKeyToString({ chain: EvmChain.Robinhood, id: aaplCatalog.id!, address })]: 10n,
+    })
+
+    await expect(findEvmCoins({ chain: EvmChain.Robinhood, address })).resolves.toEqual([{ ...aaplCatalog, address }])
   })
 
   it('skips a token whose on-chain metadata lookup fails transiently, keeping the rest', async () => {

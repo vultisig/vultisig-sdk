@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { fromBinary } from '@bufbuild/protobuf'
 import { TW, WalletCore } from '@trustwallet/wallet-core'
 import { PublicKey } from '@trustwallet/wallet-core/dist/src/wallet-core'
+import base58 from 'bs58'
 
 import { Chain } from '@vultisig/core-chain/Chain'
 import { getChainKind } from '@vultisig/core-chain/ChainKind'
@@ -16,6 +17,7 @@ import { buildSignedCardanoTx } from './cardano/buildSignedCardanoTx'
 import { getBlockchainSpecificValue } from '../../keysign/chainSpecific/KeysignChainSpecific'
 import { KeysignSignature } from '../../keysign/KeysignSignature'
 import { decodeBittensorTxInput } from '../../keysign/signingInputs/resolvers/bittensor'
+import { spliceSolanaSignature } from '../../keysign/signingInputs/resolvers/solana/rawTx'
 import { KeysignPayload, KeysignPayloadSchema } from '../../types/vultisig/keysign/v1/keysign_message_pb'
 import { getPreSigningHashes } from '../preSigningHashes'
 import { generateSignature } from '../signature/generateSignature'
@@ -79,6 +81,39 @@ export const compileTx = ({
 
   const chainKind = getChainKind(chain)
   const signatureFormat = signatureFormats[chainKind]
+
+  // dApp-supplied raw Solana transaction (sdk#1204): txInputData is the
+  // ORIGINAL serialized transaction and hashes[0] is its wire-format message
+  // (see getPreSigningHashes). Splice the 64-byte signature into the original
+  // bytes at signer index 0 instead of letting TransactionCompiler assemble
+  // from a WalletCore re-encode that may not match what was signed
+  // (ios#4419 / android#5223 parity).
+  if (chainKind === 'solana' && keysignPayload?.signData.case === 'signSolana') {
+    const message = hashes[0]
+
+    const signature = generateSignature({
+      walletCore,
+      signature: keysignSignatures[Buffer.from(message).toString('hex')],
+      signatureFormat,
+    })
+
+    assertSignature({
+      publicKey,
+      message,
+      signature,
+      signatureFormat,
+    })
+
+    const signedTx = spliceSolanaSignature(txInputData, new Uint8Array(signature))
+
+    return TW.Solana.Proto.SigningOutput.encode(
+      TW.Solana.Proto.SigningOutput.create({
+        // WalletCore's Solana SigningOutput.encoded is base58 — the broadcast
+        // resolver (`broadcastSolanaTx`) and Blockaid inputs decode it as such.
+        encoded: base58.encode(signedTx),
+      })
+    ).finish()
+  }
 
   if (chain === Chain.Bittensor) {
     const hash = hashes[0]

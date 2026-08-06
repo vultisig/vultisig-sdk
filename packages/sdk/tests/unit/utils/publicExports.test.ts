@@ -3,12 +3,21 @@ import { describe, expect, it } from 'vitest'
 import * as sdk from '../../../src/index'
 
 describe('@vultisig/sdk public exports', () => {
-  it('exports fiatToAmount and chain-reference normalization utilities', () => {
+  it('exports fiatToAmount, toChainAmount, and chain-reference normalization utilities', () => {
     expect(typeof sdk.fiatToAmount).toBe('function')
+    expect(typeof sdk.toChainAmount).toBe('function')
     expect(typeof sdk.normalizeChain).toBe('function')
     expect(typeof sdk.resolveChainReference).toBe('function')
     expect(typeof sdk.FiatToAmountError).toBe('function')
+    expect(typeof sdk.ChainAmountParseError).toBe('function')
     expect(typeof sdk.UnknownChainError).toBe('function')
+  })
+
+  it('exports the hardened toChainAmount helper and error class with scientific-notation support', () => {
+    expect(sdk.toChainAmount('1.2345e-3', 8)).toBe(123450n)
+
+    expect(() => sdk.toChainAmount('   ', 8)).toThrow(sdk.ChainAmountParseError)
+    expect(sdk.ChainAmountParseError.prototype).toBeInstanceOf(Error)
   })
 
   it('exports fromChainAmountExact and getBlockExplorerUrl', () => {
@@ -58,6 +67,31 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.JUPITER_AFFILIATE_FEE_OWNER).toBe('8iqhrtBzMcYLR6c6FkzeoMHibedYDkHvLKnX2ArNie5z')
   })
 
+  it('exports XRPL issued-currency canonicals from the root SDK entrypoint', () => {
+    expect(typeof sdk.toXrplCurrencyCode).toBe('function')
+    expect(typeof sdk.rippleTokenId).toBe('function')
+    expect(typeof sdk.parseRippleTokenId).toBe('function')
+    expect(typeof sdk.isValidXrplCurrencyCode).toBe('function')
+    expect(typeof sdk.parseIssuedCurrencyValue).toBe('function')
+    expect(typeof sdk.formatIssuedCurrencyValue).toBe('function')
+    expect(sdk.rippleIssuedCurrencyDecimals).toBe(15)
+    expect(sdk.rippleOwnerReserveDrops).toBe(200000n)
+    // Identity pin, not just a shape check: an XRPL `USD`/`RLUSD` is only unique
+    // per ISSUER, so a substituted (or dropped) issuer would silently publish a
+    // worthless lookalike token carrying the real ticker, logo and price feed.
+    // `Array.isArray(...)` alone stays green through both mutations.
+    expect(sdk.rippleKnownIssuedTokens.map(token => token.id)).toEqual([
+      '524C555344000000000000000000000000000000.rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De',
+    ])
+    expect(sdk.rippleTokenId({ currency: 'RLUSD', issuer: 'rIssuer' })).toBe(
+      '524C555344000000000000000000000000000000.rIssuer'
+    )
+    expect(sdk.parseRippleTokenId('524C555344000000000000000000000000000000.rIssuer')).toEqual({
+      currency: '524C555344000000000000000000000000000000',
+      issuer: 'rIssuer',
+    })
+  })
+
   it('exports prepareTrc20TransferFromKeys (pure-crypto TRC-20 builder for mcp-ts/backend)', () => {
     expect(typeof sdk.prepareTrc20TransferFromKeys).toBe('function')
     expect(sdk.TRC20_TRANSFER_SELECTOR).toBe('transfer(address,uint256)')
@@ -105,9 +139,23 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.defi.arkis.ARKIS_OFFICIAL_ADDRESSES.dispatcher).toBe('0x2f01D7CFfe62673B3D2b680295A2D047F3848e4c')
   })
 
-  it('exports Chain enum and VaultBase class (VaultBase carries the prep-only primitives)', () => {
+  it('exports the full River helper family from the root sdk surface', () => {
+    expect(typeof sdk.describeRiverMarket).toBe('function')
+    expect(typeof sdk.findRiverInsertHints).toBe('function')
+    expect(typeof sdk.formatRiverPercentWad).toBe('function')
+    expect(Array.isArray(sdk.RIVER_TROVE_STATUS_NAMES)).toBe(true)
+    expect(typeof sdk.riverStatusName).toBe('function')
+    expect(sdk.river.describeMarket).toBe(sdk.describeRiverMarket)
+    expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
+  })
+
+  it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
+    expect(typeof sdk.getChainKind).toBe('function')
+    expect(typeof sdk.isChainOfKind).toBe('function')
+    expect(sdk.chainFeeCoin.Ethereum.ticker).toBe('ETH')
     expect(typeof sdk.VaultBase).toBe('function')
+    expect(typeof sdk.BroadcastPartialFailureError).toBe('function')
   })
 
   it('exports chain kind and native fee coin metadata for client boundary consumers', () => {
@@ -116,10 +164,49 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.chainFeeCoin[sdk.Chain.Ethereum]?.ticker).toBe('ETH')
   })
 
+  it('exports the THOR/Maya swap-memo parser for downstream consumers', () => {
+    expect(typeof sdk.parseThorSwapMemo).toBe('function')
+  })
+
+  it('exports canonical EVM chain-id helpers from the root sdk surface', () => {
+    expect(typeof sdk.getEvmChainId).toBe('function')
+    expect(typeof sdk.getEvmChainByChainId).toBe('function')
+    expect(sdk.getEvmChainId(sdk.Chain.Mantle)).toBe('0x1388')
+    expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
+  })
+
+  it('exports gas comparison helpers from the root sdk surface', () => {
+    expect(typeof sdk.compareCosts).toBe('function')
+    expect(Array.isArray(sdk.DEFAULT_COMPARE_CHAINS)).toBe(true)
+    expect(sdk.GAS_UNITS.transfer).toBe(21000)
+    expect(typeof sdk.getChainGasPriceGwei).toBe('function')
+  })
+
+  it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
+    expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.TerraClassic)).toBe(8_497_500n)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.MayaChain)).toBe(sdk.MAYA_SEND_FEE_BASE_UNITS)
+    expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.THORChain)).toBeUndefined()
+  })
+
   it('exports seedphrase import chain support policy for consumers', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
+    expect(Array.isArray(sdk.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(sdk.defaultChains)).toBe(true)
+    expect(sdk.DEFAULT_CHAINS).toBe(sdk.defaultChains)
+    expect(sdk.DEFAULT_CHAINS).toEqual([
+      sdk.Chain.Bitcoin,
+      sdk.Chain.Ethereum,
+      sdk.Chain.THORChain,
+      sdk.Chain.Solana,
+      sdk.Chain.BSC,
+    ])
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
