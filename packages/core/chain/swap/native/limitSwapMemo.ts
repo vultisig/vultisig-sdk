@@ -195,12 +195,26 @@ const isSolanaAddress = (address: string): boolean => {
   }
 }
 
-const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) => boolean>> = {
+type LimitSwapDestinationValidator = (address: string) => boolean
+
+// Keep this exhaustive even though unsupported chains deliberately map to
+// `undefined`: adding a Chain must force an explicit decision about whether
+// THORChain limit swaps can safely validate destinations for it.
+const limitSwapDestinationValidators: Record<Chain, LimitSwapDestinationValidator | undefined> = {
   [Chain.Arbitrum]: isEvmAddress,
-  [Chain.Avalanche]: isEvmAddress,
   [Chain.Base]: isEvmAddress,
+  [Chain.Blast]: undefined,
+  [Chain.Optimism]: undefined,
+  [Chain.Zksync]: undefined,
+  [Chain.Mantle]: undefined,
+  [Chain.Robinhood]: undefined,
+  [Chain.Avalanche]: isEvmAddress,
+  [Chain.CronosChain]: undefined,
   [Chain.BSC]: isEvmAddress,
   [Chain.Ethereum]: isEvmAddress,
+  [Chain.Polygon]: undefined,
+  [Chain.Hyperliquid]: undefined,
+  [Chain.Sei]: undefined,
 
   [Chain.Bitcoin]: address =>
     new RegExp(`^(bc1[ac-hj-np-z02-9]{11,71}|[13][${base58AddressChars}]{25,34})$`, 'i').test(address),
@@ -212,15 +226,26 @@ const limitSwapDestinationValidators: Partial<Record<Chain, (address: string) =>
     new RegExp(`^(ltc1[ac-hj-np-z02-9]{11,71}|[LM3][${base58AddressChars}]{25,34})$`, 'i').test(address),
   [Chain.Zcash]: address => new RegExp(`^t[13][${base58AddressChars}]{33}$`).test(address),
 
-  [Chain.Solana]: isSolanaAddress,
-
   [Chain.Cosmos]: address => isBech32Address(address, 'cosmos'),
+  [Chain.Osmosis]: undefined,
+  [Chain.Dydx]: undefined,
   [Chain.Kujira]: address => isBech32Address(address, 'kujira'),
-  [Chain.THORChain]: address => isBech32Address(address, 'thor'),
+  [Chain.Terra]: undefined,
+  [Chain.TerraClassic]: undefined,
   [Chain.Noble]: address => isBech32Address(address, 'noble'),
+  [Chain.Akash]: undefined,
+  [Chain.THORChain]: address => isBech32Address(address, 'thor'),
+  [Chain.MayaChain]: undefined,
 
+  [Chain.Sui]: undefined,
+  [Chain.Solana]: isSolanaAddress,
+  [Chain.Polkadot]: undefined,
+  [Chain.Bittensor]: undefined,
+  [Chain.Ton]: undefined,
   [Chain.Ripple]: address => new RegExp(`^r[${base58AddressChars}]{24,34}$`).test(address),
   [Chain.Tron]: address => new RegExp(`^T[${base58AddressChars}]{33}$`).test(address),
+  [Chain.Cardano]: undefined,
+  [Chain.QBTC]: undefined,
 }
 
 const assertValidLimitSwapDestinationAddress = (targetChain: Chain, address: string): void => {
@@ -233,11 +258,15 @@ const assertValidLimitSwapDestinationAddress = (targetChain: Chain, address: str
   }
 }
 
+const assertValidLimitSwapDestination = (targetAsset: string, address: string): void => {
+  const targetChain = getSupportedThorchainAssetChain(targetAsset, 'target_asset')
+  assertMemoSegmentSafe(address, 'dest_addr')
+  assertValidLimitSwapDestinationAddress(targetChain, address)
+}
+
 export const validateLimitSwapInputs = (inputs: LimitSwapMemoInput): void => {
   getSupportedThorchainAssetChain(inputs.source_asset, 'source_asset')
-  const targetChain = getSupportedThorchainAssetChain(inputs.target_asset, 'target_asset')
-  assertMemoSegmentSafe(inputs.dest_addr, 'dest_addr')
-  assertValidLimitSwapDestinationAddress(targetChain, inputs.dest_addr)
+  assertValidLimitSwapDestination(inputs.target_asset, inputs.dest_addr)
 
   parsePositiveInteger(inputs.source_amount, 'source_amount')
   parsePositiveDecimal(inputs.target_price, 'target_price')
@@ -337,6 +366,8 @@ export const parseLimitSwapMemo = (memo: string): ParsedLimitSwapMemo => {
       throw new Error(`limit-swap memo affiliate bps must be an integer, got ${JSON.stringify(affiliateBps)}`)
     }
   }
+
+  assertValidLimitSwapDestination(targetAsset, destAddress)
 
   return {
     targetAsset,

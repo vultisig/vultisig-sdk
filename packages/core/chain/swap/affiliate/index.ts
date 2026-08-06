@@ -3,7 +3,7 @@ import { getLastItem } from '@vultisig/lib-utils/array/getLastItem'
 import { order } from '@vultisig/lib-utils/array/order'
 import { toEntries } from '@vultisig/lib-utils/record/toEntries'
 
-import { fromChainAmount } from '../../amount/fromChainAmount'
+import { toChainAmount } from '../../amount/toChainAmount'
 import { baseAffiliateBps, VultDiscountTier, vultDiscountTierBps, vultDiscountTierMinBalances } from './config'
 
 export type { VultDiscountTier }
@@ -17,11 +17,9 @@ export const getVultDiscountTier = ({
   vultBalance,
   thorguardNftBalance,
 }: GetVultDiscountTierInput): VultDiscountTier | null => {
-  const balance = fromChainAmount(vultBalance, vult.decimals)
-
   const descendingTiers = order(toEntries(vultDiscountTierMinBalances), ({ value }) => value, 'desc')
 
-  const baseTier = descendingTiers.find(({ value }) => balance >= value)?.key
+  const baseTier = descendingTiers.find(({ value }) => vultBalance >= toChainAmount(value, vult.decimals))?.key
 
   if (thorguardNftBalance === 0n) {
     return baseTier ?? null

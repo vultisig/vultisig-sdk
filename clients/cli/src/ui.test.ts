@@ -1,8 +1,15 @@
+import { Chain } from '@vultisig/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ConfirmationRequiredError } from './core/errors'
 import { resetOutput, setNonInteractive } from './lib/output'
-import { confirmSwap, confirmTransaction, formatBalanceAmount, formatBigintAmount } from './ui'
+import {
+  confirmSwap,
+  confirmTransaction,
+  displayTransactionPreview,
+  formatBalanceAmount,
+  formatBigintAmount,
+} from './ui'
 
 afterEach(() => {
   resetOutput()
@@ -29,6 +36,22 @@ describe('confirm prompts fail closed in non-interactive mode', () => {
 
     await expect(confirmSwap()).rejects.toBeInstanceOf(ConfirmationRequiredError)
     expect(stdoutSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('displayTransactionPreview', () => {
+  it('escapes terminal control bytes in the confirmation memo', () => {
+    const memo = `literal\\x0A${String.fromCharCode(0, 10, 13, 27, 127, 155)}tail`
+    const logs: string[] = []
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(' '))
+    })
+
+    displayTransactionPreview('from', 'to', '1', 'XRP', Chain.Ripple, memo)
+
+    const memoLine = logs.find(line => line.includes('Memo:'))
+    expect(memoLine).toContain('literal\\\\x0A\\x00\\x0A\\x0D\\x1B\\x7F\\x9Btail')
+    expect(memoLine).not.toContain(memo)
   })
 })
 
