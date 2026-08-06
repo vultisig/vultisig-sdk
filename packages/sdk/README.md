@@ -863,11 +863,13 @@ Sign arbitrary bytes (not a blockchain transaction).
 
 #### `Vultisig.getKnownTokens(chain): TokenInfo[]`
 
-Get all known tokens for a chain from the built-in registry.
+Get all known tokens for a chain from the built-in registry. Each token exposes
+its canonical chain-specific `tokenId`; `contractAddress` remains as a
+deprecated compatibility alias.
 
-#### `Vultisig.getKnownToken(chain, contractAddress): TokenInfo | null`
+#### `Vultisig.getKnownToken(chain, tokenId): TokenInfo | null`
 
-Look up a specific token by contract address (case-insensitive). Returns null if not found.
+Look up a specific token by its canonical chain-specific ID (case-insensitive). Returns null if not found. `TokenInfo.contractAddress` remains as a deprecated alias for `tokenId`.
 
 #### `Vultisig.getFeeCoin(chain): FeeCoinInfo`
 
@@ -901,9 +903,9 @@ Scan a website URL for malicious content via Blockaid.
 
 Discover tokens with non-zero balances at this vault's address. Supported: EVM (via 1inch), Solana (via Jupiter), Cosmos (via RPC).
 
-#### `vault.resolveToken(chain, contractAddress): Promise<TokenInfo>`
+#### `vault.resolveToken(chain, tokenId): Promise<TokenInfo>`
 
-Resolve token metadata by contract address. Checks known tokens registry first, then resolves from chain APIs.
+Resolve token metadata by canonical chain-specific token ID. Checks known tokens registry first, then resolves from chain APIs.
 
 #### `vault.getBuyUrl(chain, ticker?): Promise<string | null>`
 

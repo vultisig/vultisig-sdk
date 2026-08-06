@@ -381,7 +381,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       // Try loading from disk (two-step flow)
       const pendingData = await this.context.storage.get<VaultData>(`pending:${vaultId}`)
       if (pendingData) {
-        pendingVault = this.vaultManager.createVaultInstance(pendingData) as FastVault
+        pendingVault = this.vaultManager.createVaultInstance(pendingData, false) as FastVault
       }
     }
 
@@ -969,7 +969,9 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
    */
   async importVault(vultContent: string, password?: string): Promise<VaultBase> {
     await this.ensureInitialized()
-    const vault = await this.vaultManager.importVault(vultContent, password)
+    const { vault } = await this.vaultManager.importVaultWithResult(vultContent, password, notice => {
+      this.emit('legacyVaultBackupMigrated', notice)
+    })
 
     // VaultManager already handles storage, just emit event
     this.emit('vaultChanged', { vaultId: vault.id })
@@ -1280,13 +1282,19 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
       address: params.address,
       chain: params.chain,
     })
-    return coins.map(coin => ({
-      chain: coin.chain,
-      contractAddress: coin.id ?? '',
-      ticker: coin.ticker,
-      decimals: coin.decimals,
-      logo: coin.logo,
-    }))
+    return coins.map(coin => {
+      const tokenId = coin.id ?? ''
+
+      return {
+        chain: coin.chain,
+        tokenId,
+        contractAddress: tokenId,
+        ticker: coin.ticker,
+        decimals: coin.decimals,
+        logo: coin.logo,
+        ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),
+      }
+    })
   }
 
   /**
@@ -1297,6 +1305,7 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   static getKnownTokens(chain: Chain): TokenInfo[] {
     return (knownTokens[chain] ?? []).map(coin => ({
       chain: coin.chain,
+      tokenId: coin.id,
       contractAddress: coin.id,
       ticker: coin.ticker,
       decimals: coin.decimals,
@@ -1306,16 +1315,17 @@ export class Vultisig extends UniversalEventEmitter<SdkEvents> {
   }
 
   /**
-   * Look up a specific token by contract address in the known tokens registry.
+   * Look up a specific token by its canonical chain-specific token ID.
    * @param chain - The blockchain chain
-   * @param contractAddress - The token's contract address
+   * @param tokenId - The token's canonical chain-specific identifier
    * @returns Token metadata or null if not found
    */
-  static getKnownToken(chain: Chain, contractAddress: string): TokenInfo | null {
-    const coin = knownTokensIndex[chain]?.[contractAddress.toLowerCase()]
+  static getKnownToken(chain: Chain, tokenId: string): TokenInfo | null {
+    const coin = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
     if (!coin) return null
     return {
       chain,
+      tokenId: coin.id,
       contractAddress: coin.id,
       ticker: coin.ticker,
       decimals: coin.decimals,

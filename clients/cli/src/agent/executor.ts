@@ -12,6 +12,7 @@ import {
   chainFeeCoin,
   getChainKind,
   getEvmRpcUrl,
+  parseThorSwapMemo,
   resolveChainReference,
   VaultError,
   VaultErrorCode,
@@ -30,60 +31,6 @@ import {
   reserveBroadcast,
 } from './broadcastJournal'
 import type { RecentAction } from './types'
-
-/**
- * THORChain swap-memo chain codes → SDK Chain enum. Used to resolve the
- * destination chain encoded in `=:CHAIN.ASSET:DEST::v0:slippage` memos
- * back to a Chain enum so vault.swap can dispatch.
- *
- * Reference: https://docs.thorchain.org/concepts/memos
- * Maya uses similar codes — additions here cover both ecosystems.
- */
-const THOR_MEMO_CHAIN_TO_ENUM: Record<string, Chain> = {
-  BTC: Chain.Bitcoin,
-  ETH: Chain.Ethereum,
-  BSC: Chain.BSC,
-  AVAX: Chain.Avalanche,
-  BASE: Chain.Base, // L2 — THORChain routinely quotes Base destinations (PR #439 review finding 1)
-  ARB: Chain.Arbitrum, // L1-via-bridge path (PR #439 review finding 1)
-  BCH: Chain.BitcoinCash,
-  LTC: Chain.Litecoin,
-  DOGE: Chain.Dogecoin,
-  GAIA: Chain.Cosmos,
-  THOR: Chain.THORChain,
-  RUNE: Chain.THORChain,
-  XRP: Chain.Ripple,
-  DASH: Chain.Dash,
-  ZEC: Chain.Zcash,
-  MAYA: Chain.MayaChain,
-  CACAO: Chain.MayaChain,
-}
-
-/**
- * THORChain abbreviated asset shortcuts → expanded `CHAIN.ASSET`. THORChain
- * memos accept both full (`XRP.XRP`) and abbreviated (`x`) notation for
- * common native assets to fit within the 250-byte memo limit when paired
- * with long destination addresses. Reference:
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- */
-const THOR_MEMO_ASSET_SHORTCUTS: Record<string, string> = {
-  b: 'BTC.BTC',
-  e: 'ETH.ETH',
-  s: 'BSC.BNB',
-  a: 'AVAX.AVAX',
-  c: 'BCH.BCH',
-  l: 'LTC.LTC',
-  d: 'DOGE.DOGE',
-  g: 'GAIA.ATOM',
-  r: 'THOR.RUNE',
-  x: 'XRP.XRP',
-  cacao: 'MAYA.CACAO',
-  dash: 'DASH.DASH',
-  zec: 'ZEC.ZEC',
-  // BASE / ARB don't have documented single-letter shortcuts; THORChain
-  // emits these as the full CHAIN.ASSET form in memos. Listed in
-  // THOR_MEMO_CHAIN_TO_ENUM only.
-}
 
 // EVM chains that use nonce-based transaction ordering
 const EVM_CHAINS = new Set<string>([
@@ -390,6 +337,17 @@ export class AgentExecutor {
   }
 
   /**
+   * The chain the currently-buffered server tx targets, or null when nothing is
+   * buffered. Read alongside {@link getPendingSummary} so a declined signing can
+   * report the proposed transaction as a machine-readable surface — a read-safe
+   * `agent ask` (no `--yes`) is documented to REPORT the proposed transaction,
+   * and a prose summary alone is not something an integrator can branch on.
+   */
+  getPendingChain(): string | null {
+    return this.pendingPayloads.get('latest')?.chain ?? null
+  }
+
+  /**
    * Human-readable one-line summary of the currently-buffered server tx
    * (set by storeServerTransaction), for the pre-sign confirmation prompt.
    * Returns null when nothing is buffered (e.g. sign_typed_data, which has
@@ -610,7 +568,7 @@ export class AgentExecutor {
   private async removeCoinImpl(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const coins = (params.coins as any[] | undefined) ?? (params.tokens as any[] | undefined)
     if (coins && Array.isArray(coins)) {
-      const results: { chain: string; tokenId: string }[] = []
+      const results: { chain: string; tokenId: string; removed: boolean }[] = []
       for (const t of coins) {
         const chain = resolveChain(t.chain)
         if (!chain) throw new Error(`Unknown chain: ${t.chain}`)
@@ -620,8 +578,10 @@ export class AgentExecutor {
             `vault_coin remove: missing contract_address for ${t.ticker || t.symbol || 'coin'} on ${t.chain}`
           )
         }
-        await this.vault.removeToken(chain, tokenId)
-        results.push({ chain: chain.toString(), tokenId })
+        // Report per-coin what the SDK actually did — a coin that was never
+        // tracked must not be reported back to the model as removed.
+        const removed = await this.vault.removeToken(chain, tokenId)
+        results.push({ chain: chain.toString(), tokenId, removed })
       }
       return { removed: results }
     }
@@ -636,8 +596,8 @@ export class AgentExecutor {
     if (!tokenId) {
       throw new Error(`vault_coin remove: missing contract_address for coin on ${chainName}`)
     }
-    await this.vault.removeToken(chain, tokenId)
-    return { chain: chain.toString(), removed: true }
+    const removed = await this.vault.removeToken(chain, tokenId)
+    return { chain: chain.toString(), removed }
   }
 
   async removeChain(_toolCallId: string, input: Record<string, unknown>): Promise<RecentAction> {
@@ -903,59 +863,24 @@ export class AgentExecutor {
    * destination chain + asset, look up the corresponding `Chain` enum,
    * then call `vault.swap` which builds the MsgDeposit internally.
    *
-   * IMPORTANT — destination address handling: `vault.swap` re-derives the
-   * destination address from `vault.address(toChain)` when fetching the
-   * native swap quote (see `findSwapQuote` → `getNativeSwapQuote` —
-   * `destination: to.address`). It does NOT honor the destination address
-   * encoded in the envelope's memo. As a fund-safety guard we therefore
-   * require the memo's destination address to match the vault's own
-   * destination address (self-swap) and throw otherwise — see Phase D
-   * review F1. Cross-account routing must wait on a Phase E SDK extension
-   * that lets `vault.swap` accept a user-supplied destination.
+   * The destination encoded in the server-issued memo is forwarded through
+   * `vault.swap({ recipient })`. The SDK uses the same recipient both for the
+   * destination coin and the THORChain/MayaChain quote request, so an explicit
+   * cross-account route cannot be silently replaced with the vault's address.
+   * An omitted destination keeps the existing self-swap default.
    */
   private async signThorMsgDepositSwap(serverTxData: any, chain: Chain): Promise<Record<string, unknown>> {
     const txArgs = serverTxData?.txArgs ?? {}
     const memo: string = typeof txArgs.memo === 'string' ? txArgs.memo : ''
     const parsed = parseThorSwapMemo(memo)
-
-    const toChain = THOR_MEMO_CHAIN_TO_ENUM[parsed.destChainCode]
-    if (!toChain) {
+    if (/\s/.test(parsed.destAddress)) {
       throw new VaultError(
-        VaultErrorCode.UnsupportedChain,
-        `signThorMsgDepositSwap: unsupported destination chain code '${parsed.destChainCode}' in memo '${memo}'.`
+        VaultErrorCode.InvalidConfig,
+        `signThorMsgDepositSwap: destination address in memo '${memo}' must not contain whitespace.`
       )
     }
 
-    // Fund-safety: require memo destination to equal the vault's own
-    // destination address. vault.swap silently substitutes the vault's
-    // address into the broadcast memo, so any mismatch here would misroute
-    // funds without warning. Phase D self-swaps remain supported (BTC
-    // tests confirmed 3.565 XRP arrived at the vault's own XRP address).
-    //
-    // **Empty `destAddress` semantics** (PR #439 review finding 2):
-    // THORChain treats an empty DEST in a swap memo as "refund to source"
-    // — the chain substitutes its own record of the user's address on the
-    // destination chain. The leading-truthiness check intentionally skips
-    // the equality assertion in that case: vault.swap's substitution will
-    // land at the vault's own dest address (which IS the right address),
-    // so there's nothing to compare against. A malicious party can't
-    // exploit this because the substitution is constrained to addresses
-    // THORChain associates with the source signer (i.e. the vault).
-    const vaultDestAddress = await this.vault.address(toChain)
-    // EVM addresses are case-insensitive on-chain — TrustWallet wallet-core
-    // returns EIP-55 checksummed form, but THORChain memos can carry either
-    // case depending on quote source. Normalize both sides for EVM
-    // destinations to avoid false-positive rejections on legitimate
-    // self-swaps. Non-EVM chains use case-sensitive base58/bech32/etc.
-    // encodings — leave those untouched.
-    const normalizeForCompare = (addr: string): string => (EVM_CHAINS.has(toChain) ? addr.toLowerCase() : addr)
-    if (parsed.destAddress && normalizeForCompare(parsed.destAddress) !== normalizeForCompare(vaultDestAddress)) {
-      throw new VaultError(
-        VaultErrorCode.NotImplemented,
-        `signThorMsgDepositSwap: memo destination '${parsed.destAddress}' does not match vault address '${vaultDestAddress}' on ${toChain}. ` +
-          `Phase D only supports self-swaps; cross-account routing requires a Phase E SDK extension that passes the user-supplied destination through to vault.swap.`
-      )
-    }
+    const toChain = parsed.toChain
 
     // From-asset: derived from the source chain's native ticker (RUNE on
     // THORChain, CACAO on MayaChain).
@@ -984,6 +909,7 @@ export class AgentExecutor {
       toChain,
       toSymbol: parsed.destAsset,
       amount: amountDecimal,
+      ...(parsed.destAddress && { recipient: parsed.destAddress }),
     })
 
     if (result.dryRun) {
@@ -1543,15 +1469,19 @@ export class AgentExecutor {
       // assume local state is stale rather than risk a large nonce gap
       const nonceGap = nextNonce - rpcNonce
       if (pendingNonce === null && nonceGap > 3n) {
-        if (this.verbose)
-          process.stderr.write(
-            `[nonce] Large nonce gap for ${chain} (${nonceGap}) and couldn't verify pending txs — using on-chain nonce ${rpcNonce}\n`
-          )
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with on-chain nonce ${rpcNonce} because the local gap is ${nonceGap}\n`
+        )
         this.stateStore.clearEvmState(chain)
         return
       }
 
       bs.value.nonce = nextNonce
+      if (pendingNonce === null) {
+        process.stderr.write(
+          `[nonce] Warning: pending nonce was not verified for ${chain}; signing will continue with local nonce ${nextNonce}\n`
+        )
+      }
       if (this.verbose) process.stderr.write(`[nonce] Patched ${chain} nonce: ${rpcNonce} → ${nextNonce}\n`)
     }
   }
@@ -1582,7 +1512,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      const baseFee = BigInt(data.result?.baseFeePerGas || '0')
+      if (!res.ok || data?.error || data?.result?.baseFeePerGas === undefined || data?.result?.baseFeePerGas === null) {
+        throw new Error(`Failed to fetch current base fee for ${chain}`)
+      }
+      const baseFee = BigInt(data.result.baseFeePerGas)
       if (baseFee === 0n) return
 
       const currentPriorityFee = BigInt(bs.value.priorityFee || '0')
@@ -1602,7 +1535,9 @@ export class AgentExecutor {
       }
     } catch {
       // Non-fatal — keep the original gas estimate
-      if (this.verbose) process.stderr.write(`[gas] Failed to refresh base fee for ${chain}, keeping original\n`)
+      process.stderr.write(
+        `[gas] Warning: gas estimate was not refreshed for ${chain}; signing will continue with the original estimate\n`
+      )
     }
   }
 
@@ -1627,7 +1562,10 @@ export class AgentExecutor {
         signal: AbortSignal.timeout(5000),
       })
       const data = (await res.json()) as any
-      return BigInt(data.result || '0')
+      if (!res.ok || data?.error || data?.result === undefined || data?.result === null) {
+        return null
+      }
+      return BigInt(data.result)
     } catch {
       return null
     }
@@ -2082,73 +2020,6 @@ export function parseNonEvmEnvelope(serverTxData: any, chain: Chain): NonEvmSend
   const memo: string | undefined = typeof txArgs.memo === 'string' && txArgs.memo.length > 0 ? txArgs.memo : undefined
 
   return { chain, to, amount: amountDecimal, symbol, memo }
-}
-
-/**
- * Parsed shape of a THORChain swap memo (`=:CHAIN.ASSET:DEST[::v0:slippage]`).
- *
- * - `destChainCode` is the raw memo chain prefix (`XRP`, `ETH`, ...).
- *   Caller is responsible for mapping it to a `Chain` enum via
- *   `THOR_MEMO_CHAIN_TO_ENUM` and rejecting unsupported codes.
- * - `destAsset` is the asset ticker only — any ERC-20 contract suffix
- *   (`USDC-0X...`) is stripped because vault.swap takes the ticker.
- * - `destAddress` is the user-supplied destination on the destination
- *   chain. May be empty when the memo omits it (THORChain treats this
- *   as "refund to source"); callers should still validate against the
- *   vault's own destination address before broadcasting since vault.swap
- *   silently substitutes its own address into the broadcast memo.
- */
-export type ParsedThorSwapMemo = {
-  destChainCode: string
-  destAsset: string
-  destAddress: string
-}
-
-/**
- * Parse a THORChain swap memo into its destination-routing components.
- *
- * Accepts the shorthand notation documented at
- * https://docs.thorchain.org/concepts/asset-notation#asset-shorthand
- * (`x` → `XRP.XRP`, `e` → `ETH.ETH`, ...) — common shortcuts let memos
- * fit inside THORChain's 250-byte limit when paired with long EVM
- * destination addresses.
- *
- * Throws `VaultError(NotImplemented)` for non-swap memos (anything that
- * doesn't start with the `=:` swap prefix — e.g. LP `+:POOL` or `-:POOL`,
- * which are deferred to Phase E). Throws `VaultError(InvalidConfig)`
- * when the swap memo is structurally malformed (no CHAIN.ASSET segment).
- */
-export function parseThorSwapMemo(memo: string): ParsedThorSwapMemo {
-  if (!memo.startsWith('=:')) {
-    throw new VaultError(
-      VaultErrorCode.NotImplemented,
-      `parseThorSwapMemo: only swap memos (=:CHAIN.ASSET:DEST...) supported on this path; got memo='${memo}'. ` +
-        `LP memos (+:/-:) route through signThorMsgDepositLp; loan / validator ops out of scope.`
-    )
-  }
-
-  const memoBody = memo.slice(2) // strip leading '=:'
-  const parts = memoBody.split(':')
-
-  let chainAsset = parts[0]
-  if (chainAsset && !chainAsset.includes('.')) {
-    const expanded = THOR_MEMO_ASSET_SHORTCUTS[chainAsset.toLowerCase()]
-    if (expanded) chainAsset = expanded
-  }
-  if (!chainAsset || !chainAsset.includes('.')) {
-    throw new VaultError(
-      VaultErrorCode.InvalidConfig,
-      `parseThorSwapMemo: malformed swap memo '${memo}': missing CHAIN.ASSET in first segment.`
-    )
-  }
-
-  const [destChainCode, destAssetRaw] = chainAsset.split('.')
-  // The destAsset can carry an ERC-20 contract suffix ("ETH.USDC-0X...");
-  // for vault.swap we only need the ticker (part before `-`).
-  const destAsset = destAssetRaw?.split('-')[0] ?? ''
-  const destAddress = typeof parts[1] === 'string' ? parts[1] : ''
-
-  return { destChainCode, destAsset, destAddress }
 }
 
 /**

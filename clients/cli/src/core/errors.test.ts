@@ -636,11 +636,47 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
+    // Sui is retiring JSON-RPC: broadcasts go over gRPC, so the rejection carries a
+    // grpc-status NAME (string) instead of the old numeric -32002, and grpc-web
+    // percent-encodes the message trailer. Both fixtures below are verbatim mainnet
+    // captures from `fullnode.mainnet.sui.io`.
     it('maps a Sui transaction-execution client rejection to non-retryable input', () => {
-      const rpcError = Object.assign(new Error('Invalid user signature: cryptographic signature verification failed'), {
-        code: -32002,
+      const rpcError = Object.assign(new Error('Invalid user signature: Expect 1 signer signatures but got 0'), {
+        code: 'INVALID_ARGUMENT',
       })
       expectPermanent(
+        new VaultError(
+          VaultErrorCode.BroadcastFailed,
+          `Failed to broadcast transaction on Sui: ${rpcError.message}`,
+          rpcError
+        )
+      )
+    })
+
+    it.each([
+      [
+        'malformed signature',
+        'invalid%20signature:%20error%20converting%20from%20protobuf:%20field:%20bcs%20reason:%20FIELD_INVALID%20description:%20missing%20signature%20scheme%20flag',
+      ],
+      ['no signatures', 'Invalid%20user%20signature:%20Expect%201%20signer%20signatures%20but%20got%200'],
+      [
+        'malformed transaction bytes',
+        'invalid%20transaction:%20error%20converting%20from%20protobuf:%20field:%20bcs%20reason:%20FIELD_INVALID',
+      ],
+    ])('decodes the percent-encoded grpc-message trailer (%s)', (_label, encoded) => {
+      // A regex with literal spaces never matches the raw wire text — without decoding,
+      // every permanent Sui rejection would be misread as retryable and re-broadcast.
+      const rpcError = Object.assign(new Error(encoded), { code: 'INVALID_ARGUMENT' })
+      expectPermanent(
+        new VaultError(VaultErrorCode.BroadcastFailed, `Failed to broadcast transaction on Sui: ${encoded}`, rpcError)
+      )
+    })
+
+    it('keeps a Sui rejection retryable when the grpc status is not INVALID_ARGUMENT', () => {
+      // UNAVAILABLE / NOT_FOUND / DEADLINE_EXCEEDED are node-or-network conditions; the
+      // identical signed bytes can still land on a retry.
+      const rpcError = Object.assign(new Error('invalid%20signature:%20whatever'), { code: 'UNAVAILABLE' })
+      expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
           `Failed to broadcast transaction on Sui: ${rpcError.message}`,
@@ -658,8 +694,8 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    it('keeps a Sui server-busy JSON-RPC failure retryable', () => {
-      const rpcError = Object.assign(new Error('Server busy'), { code: -32604 })
+    it('keeps a Sui server-busy failure retryable', () => {
+      const rpcError = Object.assign(new Error('Server busy'), { code: 'UNAVAILABLE' })
       expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
@@ -669,11 +705,12 @@ describe('anticipated CLI taxonomy regressions', () => {
       )
     })
 
-    it('keeps a Sui -32002 rejection retryable when the message is not a recognized permanent signal', () => {
-      // -32002 (TransactionExecutionClientError) is a broad bucket covering more than
-      // signature failures — an unrecognized message under that code must not be
-      // blanket-matched to permanent.
-      const rpcError = Object.assign(new Error('Insufficient gas budget for this transaction'), { code: -32002 })
+    it('keeps a Sui INVALID_ARGUMENT rejection retryable when the message is not a recognized permanent signal', () => {
+      // INVALID_ARGUMENT is still a bucket covering more than signature/decode failures —
+      // an unrecognized message under that status must not be blanket-matched to permanent.
+      const rpcError = Object.assign(new Error('Insufficient gas budget for this transaction'), {
+        code: 'INVALID_ARGUMENT',
+      })
       expectTransient(
         new VaultError(
           VaultErrorCode.BroadcastFailed,
