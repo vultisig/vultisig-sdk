@@ -218,6 +218,16 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.getEvmChainByChainId('0x1')).toBe(rn.Chain.Ethereum)
   })
 
+  it('exports the canonical gas comparison helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const gas = await import('../../../../src/tools/gas')
+
+    expect(rn.compareCosts).toBe(gas.compareCosts)
+    expect(rn.DEFAULT_COMPARE_CHAINS).toBe(gas.DEFAULT_COMPARE_CHAINS)
+    expect(rn.GAS_UNITS).toBe(gas.GAS_UNITS)
+    expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
+  })
+
   it('re-exports root-public pure helpers needed by React Native consumers', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 

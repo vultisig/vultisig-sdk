@@ -52,4 +52,26 @@ describe('getVultDiscountTier (sdk#1677)', () => {
 
     expect(getSwapAffiliateBps(tier)).toBe(15)
   })
+
+  it('does not round one wei below bronze up into the bronze tier', () => {
+    const bronzeThreshold = toVultBalance(vultDiscountTierMinBalances.bronze)
+
+    expect(getVultDiscountTier({ vultBalance: bronzeThreshold - 1n, thorguardNftBalance: 0n })).toBeNull()
+  })
+
+  it('preserves the Thorguard upgrade rules', () => {
+    expect(getVultDiscountTier({ vultBalance: 0n, thorguardNftBalance: 1n })).toBe('bronze')
+    expect(
+      getVultDiscountTier({
+        vultBalance: toVultBalance(vultDiscountTierMinBalances.gold),
+        thorguardNftBalance: 1n,
+      })
+    ).toBe('platinum')
+    expect(
+      getVultDiscountTier({
+        vultBalance: toVultBalance(vultDiscountTierMinBalances.platinum),
+        thorguardNftBalance: 1n,
+      })
+    ).toBe('platinum')
+  })
 })

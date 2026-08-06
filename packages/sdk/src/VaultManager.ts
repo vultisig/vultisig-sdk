@@ -95,7 +95,7 @@ export class VaultManager {
    * Internal helper for consistent vault instantiation
    * Returns appropriate subclass based on vault type
    */
-  createVaultInstance(vaultData: VaultData): VaultBase {
+  createVaultInstance(vaultData: VaultData, persisted = true): VaultBase {
     // Fail early if vault is encrypted but no password callback provided
     if (vaultData.isEncrypted && !this.context.config.onPasswordRequired) {
       throw new VaultError(
@@ -111,9 +111,9 @@ export class VaultManager {
     // Factory pattern - return appropriate subclass based on vault type
     if (vaultData.type === 'fast') {
       const fastSigningService = new FastSigningService(this.context.serverManager, this.context.wasmProvider)
-      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext)
+      return FastVault.fromStorage(vaultData, fastSigningService, vaultContext, persisted)
     } else {
-      return SecureVault.fromStorage(vaultData, vaultContext)
+      return SecureVault.fromStorage(vaultData, vaultContext, persisted)
     }
   }
 
@@ -246,6 +246,7 @@ export class VaultManager {
 
       // Use ECDSA public key as vault ID
       const vaultId = parsedVault.publicKeys.ecdsa
+      const persistedVaultData = await this.storage.get<VaultData>(`vault:${vaultId}`)
 
       // Determine vault type from parsed vault
       const vaultType = parsedVault.signers.some((s: string) => s.startsWith('Server-')) ? 'fast' : 'secure'
@@ -263,10 +264,17 @@ export class VaultManager {
           persistedVultContent,
           parsedVault,
           fastSigningService,
-          vaultContext
+          vaultContext,
+          persistedVaultData ?? undefined
         )
       } else {
-        vaultInstance = SecureVault.fromImport(vaultId, persistedVultContent, parsedVault, vaultContext)
+        vaultInstance = SecureVault.fromImport(
+          vaultId,
+          persistedVultContent,
+          parsedVault,
+          vaultContext,
+          persistedVaultData ?? undefined
+        )
       }
 
       // Cache password if provided (for encrypted vaults)
