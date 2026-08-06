@@ -125,6 +125,37 @@ describe('AgentExecutor.getPendingSummary', () => {
     expect(executor.getPendingSummary()).toBe('send 0.5 USDC on Base to 0xRecipientAddr')
   })
 
+  // The tokenLabel guard in executor.ts is ONLY load-bearing when resolved_amount carries the FULL
+  // rich label rather than the bare ticker. The sibling case below uses '0.05 USDC.e', for which
+  // `amount.endsWith(' ' + symbol)` already short-circuits - so it passes with the guard REMOVED and
+  // pins nothing. This is the shape that regressed: narrowing `symbol` to the first word made the
+  // endsWith miss, and the whole label was appended a second time.
+  //
+  //   without the guard: 'send 0.05 USDC.e on Polygon (0x2791...4174) USDC.e to ...'
+  it('does not re-append the ticker when resolved_amount already carries the FULL rich label', () => {
+    const executor = new AgentExecutor(createMockVault())
+
+    expect(
+      executor.storeServerTransaction({
+        chain: 'Polygon',
+        txArgs: { chain: 'Polygon', tx: { to: '0x2791…4174', value: '0' } },
+        resolved: {
+          labels: {
+            resolved_amount: '0.05 USDC.e on Polygon (0x2791…4174)',
+            token_resolved: 'USDC.e on Polygon (0x2791…4174)',
+            recipient_echo: '0x58C4…5C35',
+          },
+        },
+      })
+    ).toBe(true)
+    const summary = executor.getPendingSummary()!
+    expect(summary).toBe('send 0.05 USDC.e on Polygon (0x2791…4174) to 0x58C4…5C35')
+    // The assertion that actually catches the regression: exactly one occurrence of each.
+    expect(summary.match(/USDC\.e/g)).toHaveLength(1)
+    expect(summary.match(/Polygon/g)).toHaveLength(1)
+    expect(summary.match(/0x2791…4174/g)).toHaveLength(1)
+  })
+
   it('renders rich token, native, and bare token labels without duplicated consent details', () => {
     const executor = new AgentExecutor(createMockVault())
 
