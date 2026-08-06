@@ -33,7 +33,7 @@ import {
   normalizeAgentError,
 } from '../agent/agentErrors'
 import type { AskResult } from '../agent/ask'
-import { renderBalanceSummaryCard } from '../agent/cards'
+import { renderBalanceSummaryCard, renderPolymarketMarketsCard, renderYieldOpportunitiesCard } from '../agent/cards'
 import type { CommandContext } from '../core'
 import { ExitCode } from '../core/errors'
 import { isJsonOutput, outputErrorJson, outputJson, printResult, setSilentMode } from '../lib/output'
@@ -315,6 +315,13 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
   for (const card of result.cards) {
     process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
   }
+  // Yield / Polymarket cards (rendered as prose instead of raw JSON, rj3p)
+  for (const card of result.yieldCards) {
+    process.stdout.write(`\n${renderYieldOpportunitiesCard(card)}\n`)
+  }
+  for (const card of result.polymarketCards) {
+    process.stdout.write(`\n${renderPolymarketMarketsCard(card)}\n`)
+  }
   // Response text
   if (result.response) {
     process.stdout.write(`\n${result.response}\n`)
@@ -354,6 +361,8 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       tool_calls: result.toolCalls,
       transactions: result.transactions,
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
+      ...(result.yieldCards.length > 0 ? { yield_cards: result.yieldCards } : {}),
+      ...(result.polymarketCards.length > 0 ? { polymarket_cards: result.polymarketCards } : {}),
       ...(result.warnings.length > 0 ? { warnings: result.warnings } : {}),
       // a2a-02: the typed turn ending (success | blocked | refusal | error) at
       // `data.outcome` — the same relative slot as on the error envelope. Present

@@ -13,7 +13,7 @@
  */
 import type { AgentErrorCode } from './agentErrors'
 import { isTerminalAgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, TurnOutcome } from './cards'
+import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
 import type { AgentSession } from './session'
 import type { ProposedTransaction, ProtocolWarning, Suggestion, TxLifecycleStatus, UICallbacks } from './types'
 
@@ -40,6 +40,10 @@ export type AskResult = {
   }>
   /** Server-built balance_summary cards rendered this turn. */
   cards: BalanceSummaryCard[]
+  /** Server-built yield_opportunities cards rendered this turn (rj3p). */
+  yieldCards: YieldOpportunitiesCard[]
+  /** Server-built polymarket_markets cards rendered this turn (rj3p). */
+  polymarketCards: PolymarketMarketsCard[]
   warnings: ProtocolWarning[]
   /**
    * Set when a backend/stream `error` frame arrived mid-turn. Unlike an HTTP
@@ -76,6 +80,8 @@ export class AskInterface {
   private toolCalls: AskResult['toolCalls'] = []
   private transactions: AskResult['transactions'] = []
   private cards: BalanceSummaryCard[] = []
+  private yieldCards: YieldOpportunitiesCard[] = []
+  private polymarketCards: PolymarketMarketsCard[] = []
   private warnings: ProtocolWarning[] = []
   private outcome: TurnOutcome | undefined
   private proposedTransaction: ProposedTransaction | undefined
@@ -143,6 +149,14 @@ export class AskInterface {
 
       onBalanceSummary: (card: BalanceSummaryCard) => {
         this.cards.push(card)
+      },
+
+      onYieldOpportunities: (card: YieldOpportunitiesCard) => {
+        this.yieldCards.push(card)
+      },
+
+      onPolymarketMarkets: (card: PolymarketMarketsCard) => {
+        this.polymarketCards.push(card)
       },
 
       onTurnOutcome: (outcome: TurnOutcome) => {
@@ -231,6 +245,8 @@ export class AskInterface {
     this.toolCalls = []
     this.transactions = []
     this.cards = []
+    this.yieldCards = []
+    this.polymarketCards = []
     this.warnings = []
     this.outcome = undefined
     this.proposedTransaction = undefined
@@ -259,6 +275,8 @@ export class AskInterface {
       toolCalls: this.toolCalls,
       transactions: this.transactions,
       cards: this.cards,
+      yieldCards: this.yieldCards,
+      polymarketCards: this.polymarketCards,
       warnings: this.warnings,
       error: this.error,
       ...(this.outcome ? { outcome: this.outcome } : {}),

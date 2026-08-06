@@ -7,7 +7,7 @@
 import type { Vultisig } from '@vultisig/sdk'
 
 import type { AgentErrorCode } from './agentErrors'
-import type { BalanceSummaryCard, TurnOutcome } from './cards'
+import type { BalanceSummaryCard, PolymarketMarketsCard, TurnOutcome, YieldOpportunitiesCard } from './cards'
 
 export type ProtocolWarning = {
   code: 'PROTOCOL_DRIFT'
@@ -448,6 +448,8 @@ export type PipeOutputEvent =
     }
   | { type: 'assistant'; content: string }
   | { type: 'balance_summary'; card: BalanceSummaryCard }
+  | { type: 'yield_opportunities'; card: YieldOpportunitiesCard }
+  | { type: 'polymarket_markets'; card: PolymarketMarketsCard }
   | { type: 'suggestions'; suggestions: Suggestion[] }
   // Emitted when the SSE stream dropped mid-turn and the CLI is polling
   // /messages/since to recover the answer — lets an agent consumer
@@ -481,6 +483,12 @@ export type UICallbacks = {
   /** Render a server-built balance_summary card (data-balance_summary SSE part,
    *  or the legacy verbatim-echo fallback parsed from message content). */
   onBalanceSummary?: (card: BalanceSummaryCard) => void
+  /** Render a server-built yield_opportunities card (data-yield_opportunities SSE
+   *  part, or the legacy verbatim-echo fallback parsed from message content). */
+  onYieldOpportunities?: (card: YieldOpportunitiesCard) => void
+  /** Render a server-built polymarket_markets card (data-polymarket_markets SSE
+   *  part, or the legacy verbatim-echo fallback parsed from message content). */
+  onPolymarketMarkets?: (card: PolymarketMarketsCard) => void
   /** Typed turn-outcome discriminator (data-turn_outcome SSE part, a2a-02). Fired
    *  once at turn end when the client advertised the `turn_outcome` surface. */
   onTurnOutcome?: (outcome: TurnOutcome) => void

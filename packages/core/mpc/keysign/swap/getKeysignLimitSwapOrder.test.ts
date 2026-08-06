@@ -59,15 +59,11 @@ describe('getKeysignLimitSwapOrder', () => {
     ['a missing trade target', `=<:ETH.ETH:${evmAddress}`],
     ['a non-numeric LIM', `=<:ETH.ETH:${evmAddress}:abc/14400/0`],
     ['an empty destination', '=<:ETH.ETH::100/14400/0'],
+    ['a malformed destination', '=<:ETH.ETH:0xnot-an-address:100/14400/0'],
+    ['a destination for a different chain', `=<:BTC.BTC:${evmAddress}:100/14400/0`],
+    ['an unroutable asset prefix', `=<:XYZ.XYZ:${evmAddress}:100/14400/0`],
   ])('reports %s as not a limit order rather than throwing', (_label, value) => {
     expect(getKeysignLimitSwapOrder({ memo: value })).toBeUndefined()
-  })
-
-  it('leaves the target chain undefined for an unroutable asset prefix', () => {
-    const order = getKeysignLimitSwapOrder({ memo: `=<:XYZ.XYZ:${evmAddress}:100/14400/0` })
-
-    expect(order?.targetAsset).toBe('XYZ.XYZ')
-    expect(order?.targetChain).toBeUndefined()
   })
 
   it('leaves expiry undefined for an interval this SDK does not build', () => {

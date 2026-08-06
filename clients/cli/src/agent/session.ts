@@ -16,7 +16,15 @@ import { cachePassword, clearCachedPassword, resolvePasswordNonInteractive } fro
 import { AgentErrorCode } from './agentErrors'
 import { authenticateVault } from './auth'
 import { recordResolution } from './broadcastJournal'
-import { CLI_SUPPORTED_SURFACES, extractBalanceSummaryFromText, parseBalanceSummaryEnvelope } from './cards'
+import {
+  CLI_SUPPORTED_SURFACES,
+  extractBalanceSummaryFromText,
+  extractPolymarketMarketsFromText,
+  extractYieldOpportunitiesFromText,
+  parseBalanceSummaryEnvelope,
+  parsePolymarketMarketsEnvelope,
+  parseYieldOpportunitiesEnvelope,
+} from './cards'
 import { AgentClient, createTurnIdempotencyKey, type SSEStreamResult } from './client'
 import { buildMessageContext, buildMinimalContext } from './context'
 import { AgentExecutor, resolveChain } from './executor'
@@ -24,6 +32,7 @@ import {
   type AgentTokenCacheScope,
   clearCachedToken,
   getCachedTokenEntry,
+  getTokenCachePath,
   loadCachedToken,
   saveCachedToken,
 } from './tokenCache'
@@ -706,12 +715,15 @@ export class AgentSession {
       toolName: string
       source: ToolOutputCandidate['source']
     } | null = null
-    // Whether a balance_summary card was rendered from the SSE data part this
-    // turn. When true, the message-content fallback still runs to STRIP any
-    // leftover echoed JSON from the displayed text, but does not render a second
-    // card (guards against a misbehaving backend emitting both the typed part
-    // and a verbatim echo).
+    // Whether a balance_summary / yield_opportunities / polymarket_markets card
+    // was rendered from the SSE data part this turn. When true, the
+    // message-content fallback still runs to STRIP any leftover echoed JSON
+    // from the displayed text, but does not render a second card (guards
+    // against a misbehaving backend emitting both the typed part and a
+    // verbatim echo).
     let balanceCardRendered = false
+    let yieldCardRendered = false
+    let polymarketCardRendered = false
     const pendingDispatches: Promise<void>[] = []
     // Serialize client-side tool dispatches in SSE arrival order. Without
     // this, ordering-sensitive flows (vault_chain add → vault_coin add) race
@@ -768,6 +780,20 @@ export class AgentSession {
         if (card) {
           balanceCardRendered = true
           ui.onBalanceSummary?.(card)
+        }
+      },
+      onYieldOpportunities: (raw: unknown) => {
+        const card = parseYieldOpportunitiesEnvelope(raw)
+        if (card) {
+          yieldCardRendered = true
+          ui.onYieldOpportunities?.(card)
+        }
+      },
+      onPolymarketMarkets: (raw: unknown) => {
+        const card = parsePolymarketMarketsEnvelope(raw)
+        if (card) {
+          polymarketCardRendered = true
+          ui.onPolymarketMarkets?.(card)
         }
       },
       onTurnOutcome: outcome => {
@@ -850,6 +876,8 @@ export class AgentSession {
 
     if (displayText) {
       displayText = this.renderEchoedBalanceCard(displayText, balanceCardRendered, ui)
+      displayText = this.renderEchoedYieldOpportunitiesCard(displayText, yieldCardRendered, ui)
+      displayText = this.renderEchoedPolymarketMarketsCard(displayText, polymarketCardRendered, ui)
     }
 
     if (displayText) {
@@ -1260,6 +1288,34 @@ export class AgentSession {
   }
 
   /**
+   * Legacy-path fallback for echoed yield_opportunities cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedYieldOpportunitiesCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractYieldOpportunitiesFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onYieldOpportunities?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
+   * Legacy-path fallback for echoed polymarket_markets cards (rj3p). Mirrors
+   * {@link renderEchoedBalanceCard} — strips a verbatim-echoed envelope from
+   * the displayed text and renders it, unless the typed SSE part already fired.
+   */
+  private renderEchoedPolymarketMarketsCard(displayText: string, alreadyRendered: boolean, ui: UICallbacks): string {
+    const extracted = extractPolymarketMarketsFromText(displayText)
+    if (!extracted) return displayText
+    if (!alreadyRendered) {
+      ui.onPolymarketMarkets?.(extracted.card)
+    }
+    return extracted.remainingText
+  }
+
+  /**
    * Wrap a per-tool dispatch with the password-prompt gate (for tools in
    * {@link PASSWORD_REQUIRED_TOOLS}) and `ui.onToolCall` /
    * `ui.onToolResult` lifecycle events. Returns the `RecentAction` produced
@@ -1536,3 +1592,7 @@ export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err ?? '')
   return /\b(401|403)\b/.test(msg)
 }
+// Re-exported for callers/tests that resolve the agent token-cache path
+// through the session module (the cache itself now lives in ./tokenCache,
+// scoped by vault/backend/profile rather than bare publicKey).
+export { getTokenCachePath }
