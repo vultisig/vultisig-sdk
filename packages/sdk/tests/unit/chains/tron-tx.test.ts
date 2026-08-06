@@ -5,7 +5,10 @@
  *  - `encodeInt64Varint` for negative values (MUST be 10 bytes, two's-complement)
  *  - `buildTronSendTx` / `buildTrc20TransferTx` byte-level shape
  */
-import { describe, expect, it } from 'vitest'
+import { initWasm, TW, type WalletCore } from '@trustwallet/wallet-core'
+import { Buffer } from 'buffer'
+import Long from 'long'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 import { encodeInt64Varint, encodeVarint } from '../../../src/chains/tron/proto'
 import {
@@ -27,6 +30,17 @@ function bytesToHex(b: Uint8Array): string {
   let s = ''
   for (let i = 0; i < b.length; i++) s += b[i]!.toString(16).padStart(2, '0')
   return s
+}
+
+// A plain `hex.includes(needle)` can false-positive on a needle that
+// straddles a byte boundary (e.g. '52' matching the tail of one byte and the
+// head of the next) even though no actual 0x52 byte is present at a tag
+// position. Only match at even (byte-aligned) offsets.
+function containsAlignedHex(hex: string, needle: string): boolean {
+  for (let i = 0; i <= hex.length - needle.length; i += 2) {
+    if (hex.slice(i, i + needle.length) === needle) return true
+  }
+  return false
 }
 
 describe('tron / encodeVarint', () => {
@@ -182,9 +196,9 @@ describe('tron / buildTrc20TransferTx', () => {
   })
 })
 
-describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
-  // Baseline: no memo → field 12 must be absent (back-compat guarantee).
-  it('no memo → field 12 tag 0x62 is absent from raw_data bytes', () => {
+describe('tron / buildTronSendTx memo / data field (proto field 10)', () => {
+  // Baseline: no memo → field 10 must be absent (back-compat guarantee).
+  it('no memo → field 10 tag 0x52 is absent from raw_data bytes', () => {
     const tx = buildTronSendTx({
       from: FROM,
       to: TO,
@@ -194,11 +208,13 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
       expiration: 1_700_000_000_000n,
       timestamp: 1_699_999_940_000n,
     })
-    // 0x62 is the tag for field 12 wire type 2; must be absent when no memo.
-    expect(tx.unsignedRawHex).not.toContain('62')
+    // 0x52 is the tag for field 10 wire type 2; must be absent when no memo.
+    // Byte-aligned check — a plain substring search can false-positive on a
+    // '52' that straddles two unrelated bytes (see `containsAlignedHex`).
+    expect(containsAlignedHex(tx.unsignedRawHex, '52')).toBe(false)
   })
 
-  it('empty Uint8Array memo → treated as absent, no field 12', () => {
+  it('empty Uint8Array memo → treated as absent, no field 10', () => {
     const tx = buildTronSendTx({
       from: FROM,
       to: TO,
@@ -209,10 +225,10 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
       timestamp: 1_699_999_940_000n,
       data: new Uint8Array(0),
     })
-    expect(tx.unsignedRawHex).not.toContain('62')
+    expect(containsAlignedHex(tx.unsignedRawHex, '52')).toBe(false)
   })
 
-  it('THORChain swap memo → field 12 present with UTF-8 encoded bytes', () => {
+  it('THORChain swap memo → field 10 (the real Tron memo field) present with UTF-8 encoded bytes', () => {
     const memo = 'SWAP:BTC.BTC:bc1qabcdef1234567890:1000000'
     const memoBytes = new TextEncoder().encode(memo)
     const tx = buildTronSendTx({
@@ -225,10 +241,10 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
       timestamp: 1_699_999_940_000n,
       data: memoBytes,
     })
-    // field 12 tag = 0x62, length varint = memo.length (< 128 so 1 byte), then data.
+    // field 10 tag = 0x52, length varint = memo.length (< 128 so 1 byte), then data.
     const expectedLen = memoBytes.length.toString(16).padStart(2, '0')
     const expectedMemoHex = bytesToHex(memoBytes)
-    expect(tx.unsignedRawHex).toContain('62' + expectedLen + expectedMemoHex)
+    expect(tx.unsignedRawHex).toContain('52' + expectedLen + expectedMemoHex)
   })
 
   it('memo changes the signing hash (pre-signing hash stability check)', () => {
@@ -268,8 +284,8 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
     // canonical value, then it fails on any deviation. The test itself asserts
     // length (64 hex chars = 32 bytes = SHA-256) and stability across runs.
     expect(tx.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
-    // Pinned value established from first correct run:
-    expect(tx.signingHashHex).toBe('5f14bf8b2f6681f04a433beb93084b85f2d003ce337a2d72ea013d307a4e7841')
+    // Pinned value established from first correct run after the field-10 fix:
+    expect(tx.signingHashHex).toBe('e9b2b75390c656f9135f9379bae5a27e14dbfb6e9a2857004bf6d4f51ff30c12')
   })
 
   it('long memo (100+ bytes) is encoded correctly with varint length prefix', () => {
@@ -291,7 +307,7 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
     // varint(130) = 0x82 0x01 (two bytes: 130 & 0x7f | 0x80 = 0x82, then 1).
     const expectedVarint = '8201'
     const expectedMemoHex = bytesToHex(memoBytes)
-    expect(tx.unsignedRawHex).toContain('62' + expectedVarint + expectedMemoHex)
+    expect(tx.unsignedRawHex).toContain('52' + expectedVarint + expectedMemoHex)
     expect(tx.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
   })
 
@@ -321,37 +337,38 @@ describe('tron / buildTronSendTx memo / data field (proto field 12)', () => {
 
     it('127-byte memo → 1-byte varint length prefix (0x7f)', () => {
       const memo = memoOf(127)
-      const expected = '62' + '7f' + bytesToHex(memo)
+      const expected = '52' + '7f' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('128-byte memo → 2-byte varint length prefix (0x8001)', () => {
       const memo = memoOf(128)
-      const expected = '62' + '8001' + bytesToHex(memo)
+      const expected = '52' + '8001' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('16383-byte memo → 2-byte varint length prefix (0xff7f)', () => {
       const memo = memoOf(16383)
-      const expected = '62' + 'ff7f' + bytesToHex(memo)
+      const expected = '52' + 'ff7f' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('16384-byte memo → 3-byte varint length prefix (0x808001)', () => {
       const memo = memoOf(16384)
-      const expected = '62' + '808001' + bytesToHex(memo)
+      const expected = '52' + '808001' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
   })
 })
 
-describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () => {
+describe('tron / buildTrc20TransferTx memo / data field (proto field 10)', () => {
   // TRC-20 path mirrors the native send path: memo goes on the *wrapping*
-  // Transaction's raw_data.data (field 12), NOT the inner contract-call
-  // data (which is the ABI-encoded transfer payload). Exchanges that
-  // require user-tag memos to credit TRC-20 USDT deposits (Binance, OKX,
-  // KuCoin) rely on this field being present and correctly encoded.
-  it('no memo → field 12 tag 0x62 is absent from raw_data bytes', () => {
+  // Transaction's raw_data.data (field 10, the real Tron memo field), NOT
+  // the inner contract-call data (which is the ABI-encoded transfer
+  // payload). Exchanges that require user-tag memos to credit TRC-20 USDT
+  // deposits (Binance, OKX, KuCoin) rely on this field being present and
+  // correctly encoded.
+  it('no memo → field 10 tag 0x52 is absent from raw_data bytes', () => {
     const tx = buildTrc20TransferTx({
       from: FROM,
       to: TO,
@@ -363,29 +380,25 @@ describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () =>
       expiration: 1_700_000_000_000n,
       timestamp: 1_699_999_940_000n,
     })
-    // 0x62 is the field-12 tag (12<<3|2 = 0x62). When absent it must not
+    // 0x52 is the field-10 tag (10<<3|2 = 0x52). When absent it must not
     // appear in the tail of the raw bytes. The inner contract data lives
     // under a different tag (field 4 of TriggerSmartContract = 0x22)
     // wrapped inside Any(field 2)→Contract(field 2)→Raw(field 11), so
-    // 0x62 is only emitted when field 12 itself is set.
+    // 0x52 is only emitted when field 10 itself is set.
     const rawHex = tx.unsignedRawHex
     // Field 18 (fee_limit) tag = 18<<3|0 = 0x90 0x01. Locate it as a
-    // boundary marker; everything after must be the feeLimit varint, no
-    // stray 0x62 tag.
+    // boundary marker to confirm the tail of the tx is well-formed.
     const feeLimitIdx = rawHex.indexOf('900180c2d72f')
     expect(feeLimitIdx).toBeGreaterThan(-1)
-    // The bytes preceding fee_limit are: timestamp tag (0x70) + varint.
-    // The bytes preceding timestamp would be field 12 if present. Assert
-    // the timestamp tag follows directly after the contract block by
-    // checking no 0x62-tag-prefixed length-delimited block sits between
-    // contract end and timestamp tag — simplest signal is just length.
-    // Match what the native-send "no memo" assertion does: scan for the
-    // 0x62 tag. The contract value never legitimately ends with 0x62
-    // followed by a valid varint length so this is a tight check.
-    expect(rawHex).not.toContain('6204') // any short memo wouldn't appear
+    // Scan for the 0x52 tag anywhere in the raw bytes (byte-aligned — a plain
+    // substring search can false-positive on a '52' straddling two unrelated
+    // bytes, see `containsAlignedHex`). The contract value never legitimately
+    // produces a 0x52-tag-prefixed length-delimited block, so this is a
+    // tight check for field-10 absence.
+    expect(containsAlignedHex(rawHex, '5204')).toBe(false) // any short memo wouldn't appear
   })
 
-  it('empty Uint8Array memo → treated as absent, no field 12 emitted', () => {
+  it('empty Uint8Array memo → treated as absent, no field 10 emitted', () => {
     const tx = buildTrc20TransferTx({
       from: FROM,
       to: TO,
@@ -398,10 +411,10 @@ describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () =>
       timestamp: 1_699_999_940_000n,
       data: new Uint8Array(0),
     })
-    expect(tx.unsignedRawHex).not.toContain('6204')
+    expect(containsAlignedHex(tx.unsignedRawHex, '5204')).toBe(false)
   })
 
-  it('exchange deposit memo → field 12 present with UTF-8 encoded bytes', () => {
+  it('exchange deposit memo → field 10 (the real Tron memo field) present with UTF-8 encoded bytes', () => {
     // Binance-style TRC-20 USDT deposit memo (numeric user tag).
     const memo = '103456789'
     const memoBytes = new TextEncoder().encode(memo)
@@ -419,7 +432,7 @@ describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () =>
     })
     const expectedLen = memoBytes.length.toString(16).padStart(2, '0')
     const expectedMemoHex = bytesToHex(memoBytes)
-    expect(tx.unsignedRawHex).toContain('62' + expectedLen + expectedMemoHex)
+    expect(tx.unsignedRawHex).toContain('52' + expectedLen + expectedMemoHex)
   })
 
   it('memo changes the signing hash vs no-memo TRC-20 (pre-signing stability)', () => {
@@ -443,7 +456,7 @@ describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () =>
     expect(withMemo.unsignedRawHex).not.toBe(noMemo.unsignedRawHex)
   })
 
-  // Same boundary set as the native path — TRC-20 must encode field 12
+  // Same boundary set as the native path — TRC-20 must encode field 10
   // length prefix identically. The two builders share `buildRawData` so
   // the test guards against future divergence (e.g. someone routing TRC-20
   // through a different encoder).
@@ -471,25 +484,25 @@ describe('tron / buildTrc20TransferTx memo / data field (proto field 12)', () =>
 
     it('127-byte memo → 1-byte varint length prefix (0x7f)', () => {
       const memo = memoOf(127)
-      const expected = '62' + '7f' + bytesToHex(memo)
+      const expected = '52' + '7f' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('128-byte memo → 2-byte varint length prefix (0x8001)', () => {
       const memo = memoOf(128)
-      const expected = '62' + '8001' + bytesToHex(memo)
+      const expected = '52' + '8001' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('16383-byte memo → 2-byte varint length prefix (0xff7f)', () => {
       const memo = memoOf(16383)
-      const expected = '62' + 'ff7f' + bytesToHex(memo)
+      const expected = '52' + 'ff7f' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
 
     it('16384-byte memo → 3-byte varint length prefix (0x808001)', () => {
       const memo = memoOf(16384)
-      const expected = '62' + '808001' + bytesToHex(memo)
+      const expected = '52' + '808001' + bytesToHex(memo)
       expect(rawHexFor(memo)).toContain(expected)
     })
   })
@@ -599,5 +612,120 @@ describe('tron / buildTronTxFromRawData (prebuilt raw_data signing)', () => {
   it('finalize rejects a sig that is not 65 bytes', () => {
     const out = buildTronTxFromRawData('0a024010')
     expect(() => out.finalize('aa'.repeat(64))).toThrow(/65-byte/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// WalletCore cross-check — the durable guard against this class of bug.
+// ---------------------------------------------------------------------------
+//
+// The bug this file fixes (memo written to field 12 instead of field 10) was
+// invisible to the golden-vector suite because that suite hand-transcribed
+// the SAME wrong field number as its "independent" reference. A second
+// encoding of the same wrong assumption catches typos, not wrong assumptions.
+//
+// This block asserts the hand-rolled `raw_data` bytes are BYTE-IDENTICAL to
+// what WalletCore itself produces for an equivalent transaction — WalletCore
+// is a genuinely different implementation (used by the iOS/Android/Windows
+// co-signers), so it cannot silently share this encoder's mistake. If the RN
+// builder ever again diverges from WalletCore on field placement, ordering,
+// or memo encoding, this test fails.
+describe('tron / WalletCore cross-check (fund-safety net)', () => {
+  let walletCore: WalletCore
+
+  beforeAll(async () => {
+    walletCore = await initWasm()
+  })
+
+  const SENDER_PRIVATE_KEY = new Uint8Array(32).fill(7)
+  const RECIPIENT_PRIVATE_KEY = new Uint8Array(32).fill(8)
+  const AMOUNT = 250_000_000n
+  const EXPIRATION = 1_700_000_060_000n
+  const TIMESTAMP = 1_700_000_000_000n
+
+  function buildWalletCoreSignedOutput(memo: string) {
+    const senderPrivateKey = walletCore.PrivateKey.createWithData(SENDER_PRIVATE_KEY)
+    const senderPublicKey = senderPrivateKey.getPublicKeySecp256k1(false)
+    const sender = walletCore.AnyAddress.createWithPublicKey(senderPublicKey, walletCore.CoinType.tron).description()
+
+    const recipientPrivateKey = walletCore.PrivateKey.createWithData(RECIPIENT_PRIVATE_KEY)
+    const recipientPublicKey = recipientPrivateKey.getPublicKeySecp256k1(false)
+    const recipient = walletCore.AnyAddress.createWithPublicKey(
+      recipientPublicKey,
+      walletCore.CoinType.tron
+    ).description()
+
+    const signingInput = TW.Tron.Proto.SigningInput.create({
+      transaction: TW.Tron.Proto.Transaction.create({
+        transfer: TW.Tron.Proto.TransferContract.create({
+          ownerAddress: sender,
+          toAddress: recipient,
+          amount: Long.fromString(AMOUNT.toString()),
+        }),
+        timestamp: Long.fromString(TIMESTAMP.toString()),
+        blockHeader: TW.Tron.Proto.BlockHeader.create({
+          timestamp: Long.fromString(TIMESTAMP.toString()),
+          number: Long.fromNumber(56_000_000),
+          version: 31,
+          txTrieRoot: new Uint8Array(32).fill(0x01),
+          parentHash: new Uint8Array(32).fill(0x02),
+          witnessAddress: new Uint8Array(21).fill(0x03),
+        }),
+        expiration: Long.fromString(EXPIRATION.toString()),
+        memo,
+      }),
+    })
+
+    const output = TW.Tron.Proto.SigningOutput.decode(
+      walletCore.AnySigner.sign(
+        TW.Tron.Proto.SigningInput.encode({
+          ...signingInput,
+          privateKey: senderPrivateKey.data(),
+        }).finish(),
+        walletCore.CoinType.tron
+      )
+    )
+
+    return { output, sender, recipient }
+  }
+
+  it("a THORChain-swap-memo'd native TRX send matches WalletCore's raw_data byte-for-byte", () => {
+    const memo = 'SWAP:THOR.RUNE:thor1zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:0'
+    const { output, sender, recipient } = buildWalletCoreSignedOutput(memo)
+    const walletCoreRawDataHex = (JSON.parse(output.json) as { raw_data_hex: string }).raw_data_hex
+
+    const ours = buildTronSendTx({
+      from: sender,
+      to: recipient,
+      amount: AMOUNT,
+      refBlockBytes: output.refBlockBytes,
+      refBlockHash: output.refBlockHash,
+      expiration: EXPIRATION,
+      timestamp: TIMESTAMP,
+      data: new TextEncoder().encode(memo),
+    })
+
+    // Sanity: the memo bytes must actually be present in WalletCore's own
+    // output (field 10, `data`) — this is what proves field 10 is correct,
+    // not an assumption baked into both sides.
+    expect(walletCoreRawDataHex).toContain(Buffer.from(memo, 'utf8').toString('hex'))
+    expect(ours.unsignedRawHex).toBe(walletCoreRawDataHex)
+  })
+
+  it("a no-memo native TRX send still matches WalletCore's raw_data byte-for-byte (regression guard)", () => {
+    const { output, sender, recipient } = buildWalletCoreSignedOutput('')
+    const walletCoreRawDataHex = (JSON.parse(output.json) as { raw_data_hex: string }).raw_data_hex
+
+    const ours = buildTronSendTx({
+      from: sender,
+      to: recipient,
+      amount: AMOUNT,
+      refBlockBytes: output.refBlockBytes,
+      refBlockHash: output.refBlockHash,
+      expiration: EXPIRATION,
+      timestamp: TIMESTAMP,
+    })
+
+    expect(ours.unsignedRawHex).toBe(walletCoreRawDataHex)
   })
 })

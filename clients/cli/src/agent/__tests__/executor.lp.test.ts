@@ -306,7 +306,11 @@ describe('AgentExecutor — LP MsgDeposit dispatch (Phase E)', () => {
     expect(executor.storeServerTransaction(envelope)).toBe(true)
     const recent = await executor.signTxFromBuffer('call-swap-regress')
     expect(recent.success).toBe(true)
-    expect((vault as any).swap).toHaveBeenCalledTimes(1)
+    expect((vault as any).swap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipient: 'bc1qzmsk98gqtfvxhfrye8p7xkxlj6g9q6a2yj3yj2',
+      })
+    )
     expect((vault as any).signMsgDeposit).not.toHaveBeenCalled()
   })
 })

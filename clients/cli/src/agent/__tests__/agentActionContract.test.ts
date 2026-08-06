@@ -39,4 +39,8 @@ describe('agent action contract (AGENTS.md curated list)', () => {
     expect(documented.has('sign_typed_data')).toBe(true)
     expect(documented.has('sign_tx')).toBe(true)
   })
+
+  it('does not revive retired backend actions', () => {
+    expect(DOCUMENTED_AGENT_ACTION_TYPES).not.toContain('get_portfolio')
+  })
 })

@@ -1,7 +1,7 @@
 import { bech32 } from 'bech32'
 
 import type { CosmosMsgInput } from '../../types/cosmos'
-import { CosmosMsgType } from '../../types/cosmos-msg'
+import { buildCosmosWasmExecuteMsg } from './cosmosWasmExecute'
 
 /**
  * Pure-crypto builder for an UNSIGNED CosmWasm CW-20 token transfer message.
@@ -54,6 +54,7 @@ import { CosmosMsgType } from '../../types/cosmos-msg'
  */
 
 const VALIDATOR_HRP_SUFFIXES = ['valoper', 'valcons'] as const
+const CW20_UINT128_MAX = (1n << 128n) - 1n
 
 const isValidatorHrp = (prefix: string): boolean => VALIDATOR_HRP_SUFFIXES.some(suffix => prefix.endsWith(suffix))
 
@@ -141,8 +142,12 @@ const validateBaseUnitAmount = (value: string): string => {
   if (!/^\d+$/.test(trimmed)) {
     throw new Error(`invalid amount: expected a positive integer base-unit string, got "${value}"`)
   }
-  if (BigInt(trimmed) <= 0n) {
+  const amount = BigInt(trimmed)
+  if (amount <= 0n) {
     throw new Error('invalid amount: must be greater than zero')
+  }
+  if (amount > CW20_UINT128_MAX) {
+    throw new Error('invalid amount: exceeds CW20 Uint128 maximum')
   }
   // Return the trimmed string UNCHANGED for byte-parity with mcp-ts's shared
   // `validateBaseUnitAmount` (src/lib/validateBaseUnitAmount.ts). The amount is
@@ -180,7 +185,7 @@ export const buildCw20TransferMsg = (params: BuildCw20TransferMsgParams): BuildC
 
   // Amino `MsgExecuteContract` value. `msg` here is the CW-20 execute object;
   // `funds: []` (a pure transfer carries no attached coins).
-  const value = JSON.stringify({
+  const msg = buildCosmosWasmExecuteMsg({
     sender,
     contract,
     msg: { transfer: { recipient, amount } },
@@ -188,7 +193,7 @@ export const buildCw20TransferMsg = (params: BuildCw20TransferMsgParams): BuildC
   })
 
   return {
-    msg: { type: CosmosMsgType.MsgExecuteContract, value },
+    msg,
     recipient,
     contract,
     sender,

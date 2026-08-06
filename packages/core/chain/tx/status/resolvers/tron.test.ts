@@ -89,6 +89,31 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('error')
   })
 
+  // sdk#1505 should-fix (S1): completes the documented core/Tron.proto contractResult enum
+  // (every non-DEFAULT, non-SUCCESS member) so every KNOWN failure resolves promptly to 'error'
+  // instead of falling to the allowlist's 'pending' branch and waiting out the poll timeout.
+  // Names are the exact protobuf enum spellings (PRECOMPILED_CONTRACT, not *_ERROR) and stay in
+  // parity with the app's TRON_TERMINAL_FAILURE_RESULTS. 'UNKNOWN' here is the enum member
+  // (value 14) — distinct from a genuinely unrecognized code, which still buckets pending below.
+  it.each([
+    'TRANSFER_FAILED',
+    'BAD_JUMP_DESTINATION',
+    'OUT_OF_MEMORY',
+    'STACK_OVERFLOW',
+    'STACK_TOO_SMALL',
+    'STACK_TOO_LARGE',
+    'ILLEGAL_OPERATION',
+    'PRECOMPILED_CONTRACT',
+    'JVM_STACK_OVER_FLOW',
+    'UNKNOWN',
+    'INVALID_CODE',
+  ])('returns error for %s (completed contractResult allowlist)', async result => {
+    mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result } })
+
+    const status = await getTronTxStatus({ chain: OtherChain.Tron, hash })
+    expect(status.status).toBe('error')
+  })
+
   // NeO's live mainnet canary: real USDT TRC20 transfer emits receipt.result='SUCCESS'.
   // protobuf3 serializes non-default contractResult enum values by name — value=1 (SUCCESS) is
   // non-default so it appears as "SUCCESS" in the JSON response. Must NOT be treated as error.
@@ -99,11 +124,14 @@ describe('getTronTxStatus', () => {
     expect(result.status).toBe('success')
   })
 
-  it('returns success for unknown receipt.result value (future-proof: unknown codes treated as success)', async () => {
+  // Inverted from a deny-list to an allowlist: an unrecognized receipt.result must never be
+  // narrated as success just because it isn't on the known-failure list. SUCCESS/absent still
+  // resolve to success (see tests above); a truly unknown code now falls to pending instead.
+  it('returns pending (never success) for an unrecognized receipt.result value', async () => {
     mocks.queryUrl.mockResolvedValue({ id: hash, blockNumber: 12345, receipt: { result: 'UNKNOWN_FUTURE_CODE' } })
 
     const result = await getTronTxStatus({ chain: OtherChain.Tron, hash })
-    expect(result.status).toBe('success')
+    expect(result).toEqual({ status: 'pending', isKnown: true })
   })
 
   it('returns error when top-level result is FAILED and receipt is absent (iOS parity)', async () => {

@@ -1,6 +1,7 @@
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
+import { getChainDangerousReason, getEvmDangerousReason } from '@vultisig/core-chain/security/dangerousAddresses'
 import { getSwapAffiliateBps, VultDiscountTier } from '@vultisig/core-chain/swap/affiliate'
 import { SwapDiscount } from '@vultisig/core-chain/swap/discount/SwapDiscount'
 import { getCowSwapQuote } from '@vultisig/core-chain/swap/general/cowswap/api/getCowSwapQuote'
@@ -507,7 +508,12 @@ const assertValidSlippageTolerance = (slippageTolerance: number | undefined): vo
 }
 
 // Matches a checksummed or lowercase EVM address: 0x followed by exactly 40 hex chars.
-const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(address)
+// Case-insensitive on the `0x` prefix too (`/i`) so a `0X…`-prefixed burn can't slip the
+// gate: without it, `0X…dead` failed this shape check, skipped the zero/burn branch, and —
+// on a native THOR/Maya cross-chain route where the CowSwap path is unreachable — passed
+// straight through as the swap destination (an unspendable sink). The burn comparison below
+// already lowercases, so tolerating the uppercase prefix only closes the bypass.
+const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/i.test(address)
 
 // Validate a custom swap recipient is a properly-formatted EVM address before it
 // reaches CowSwap. CowSwap lowercases the receiver but does zero format validation —
@@ -518,23 +524,30 @@ const isEvmAddress = (address: string): boolean => /^0x[0-9a-fA-F]{40}$/.test(ad
 // THOR/Maya pairs the node validates the destination downstream, so a malformed
 // non-EVM address fails there and the EVM check is skipped. Extracted from
 // findSwapQuote to keep that function's cognitive complexity within the gate.
-// The zero address and the canonical `…dEaD` burn sink — a swap output routed here is
-// unrecoverably destroyed. Never a legit payout target for ANY route, so reject up front
-// (a well-formed but merely WRONG non-burn recipient is the caller's grounding responsibility).
-const ZERO_EVM_ADDRESS = '0x0000000000000000000000000000000000000000'
-const BURN_EVM_ADDRESS = '0x000000000000000000000000000000000000dead'
-
+// Burn sinks — a swap output routed here is unrecoverably destroyed. Never a legit payout target for
+// ANY route, so reject up front (a well-formed but merely WRONG non-burn recipient is the caller's
+// grounding responsibility). Routed through the canonical shared table so it can't drift from the other
+// guards: the EVM check now covers all three canonical burns (incl. the `0xdead…42069` variant it used to
+// miss) and the non-EVM check adds the Solana / UTXO / XRP family burn addresses (base58 it used to miss).
 const assertValidCustomRecipient = (recipient: string | undefined, from: AccountCoin, to: AccountCoin): void => {
   if (recipient === undefined) return
   if (isEvmAddress(recipient)) {
-    const lower = recipient.toLowerCase()
-    if (lower === ZERO_EVM_ADDRESS || lower === BURN_EVM_ADDRESS) {
+    const evmReason = getEvmDangerousReason(recipient)
+    if (evmReason) {
       throw new SwapError(
         SwapErrorCode.InvalidConfig,
-        `recipient "${recipient}" is a zero/burn address — the swap output would be unrecoverable.`
+        `recipient "${recipient}" is a ${evmReason} — the swap output would be unrecoverable.`
       )
     }
     return
+  }
+  // Non-EVM recipient: reject a family-specific burn / black-hole on the destination chain.
+  const chainReason = getChainDangerousReason(to.chain, recipient)
+  if (chainReason) {
+    throw new SwapError(
+      SwapErrorCode.InvalidConfig,
+      `recipient "${recipient}" is a ${chainReason} — the swap output would be unrecoverable.`
+    )
   }
   const cowSwapPathReachable =
     isChainOfKind(from.chain, 'evm') &&
@@ -969,7 +982,7 @@ export const findSwapQuote = async ({
       isInError(result.reason, 'dust threshold') ||
       isInError(result.reason, 'amount less than')
     ) {
-      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
+      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Please increase the amount to proceed.')
     }
 
     if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {

@@ -7,22 +7,13 @@
  * Primary use case: Execute FIN swaps on Rujira DEX
  */
 import type { CosmosChain, VaultBase } from '@vultisig/sdk'
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { buildCosmosWasmExecuteMsg, Chain, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, TransactionResult } from '../core'
 import { ensureVaultUnlocked } from '../core'
 import { ConfirmationRequiredError } from '../core/errors'
-import {
-  createSpinner,
-  info,
-  isJsonOutput,
-  isNonInteractive,
-  isSilent,
-  outputJson,
-  printResult,
-  warn,
-} from '../lib/output'
+import { createSpinner, info, isJsonOutput, isNonInteractive, isSilent, outputJson, printResult } from '../lib/output'
 import { confirmTransaction, displayTransactionResult } from '../ui'
 
 /**
@@ -97,7 +88,9 @@ export async function executeExecute(ctx: CommandContext, params: ExecuteParams)
   const chainConfig = COSMOS_CHAIN_CONFIG[params.chain]
   if (!chainConfig) {
     throw new Error(
-      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(COSMOS_CHAIN_CONFIG).join(', ')}`
+      `Chain ${params.chain} does not support CosmWasm execute. Supported chains: ${Object.keys(
+        COSMOS_CHAIN_CONFIG
+      ).join(', ')}`
     )
   }
 
@@ -202,8 +195,10 @@ async function executeContractTransaction(
   if (!params.yes) {
     const confirmed = await confirmTransaction()
     if (!confirmed) {
-      warn('Transaction cancelled')
-      throw new Error('Transaction cancelled by user')
+      // Same contract as `send`: an interactive decline exits 12
+      // CONFIRMATION_REQUIRED (matching the non-interactive refusal), never the
+      // old swallowed exit 0.
+      throw new ConfirmationRequiredError('Transaction declined at the confirmation prompt')
     }
   }
 
@@ -257,17 +252,12 @@ async function executeContractTransaction(
       ticker: chainConfig.denom.toUpperCase(),
     }
 
-    // Build MsgExecuteContract in Amino format
-    // The type URL follows standard CosmWasm naming convention
-    const executeContractMsg = {
-      type: 'wasm/MsgExecuteContract',
-      value: JSON.stringify({
-        sender: address,
-        contract: params.contract,
-        msg: msg,
-        funds: funds.map(f => ({ denom: f.denom, amount: f.amount })),
-      }),
-    }
+    const executeContractMsg = buildCosmosWasmExecuteMsg({
+      sender: address,
+      contract: params.contract,
+      msg,
+      funds,
+    })
 
     // Build fee (THORChain has zero fees for CosmWasm)
     const fee = {

@@ -22,7 +22,9 @@ import {
 } from 'viem/chains'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
-export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io'
+// HyperEVM transactions and addresses live under hypurrscan's `/evm/` section.
+// The bare `https://hypurrscan.io/tx/<hash>` path returns a server error.
+export const hyperliquidBlockExplorerUrl = 'https://hypurrscan.io/evm'
 const hyperliquidNativeCoin = chainFeeCoin[EvmChain.Hyperliquid]
 
 export const hyperliquid = defineChain({
@@ -43,6 +45,28 @@ export const hyperliquid = defineChain({
   },
 })
 
+const robinhoodRpcUrl = 'https://rpc.mainnet.chain.robinhood.com'
+export const robinhoodBlockExplorerUrl = 'https://robinhoodchain.blockscout.com'
+const robinhoodNativeCoin = chainFeeCoin[EvmChain.Robinhood]
+
+export const robinhood = defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  network: 'robinhood',
+  nativeCurrency: {
+    name: 'Ether',
+    symbol: robinhoodNativeCoin.ticker,
+    decimals: robinhoodNativeCoin.decimals,
+  },
+  rpcUrls: {
+    default: { http: [robinhoodRpcUrl] },
+    public: { http: [robinhoodRpcUrl] },
+  },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: robinhoodBlockExplorerUrl },
+  },
+})
+
 const evmChainRpcUrls: Record<EvmChain, string> = {
   [EvmChain.Ethereum]: `${rootApiUrl}/eth/`,
   [EvmChain.Base]: `${rootApiUrl}/base/`,
@@ -57,6 +81,7 @@ const evmChainRpcUrls: Record<EvmChain, string> = {
   [EvmChain.Mantle]: `${rootApiUrl}/mantle/`,
   [EvmChain.Hyperliquid]: hyperliquidRpcUrl,
   [EvmChain.Sei]: `https://evm-rpc.sei-apis.com`,
+  [EvmChain.Robinhood]: robinhoodRpcUrl,
 }
 
 const evmDefaultChainInfo: Record<EvmChain, ViemChain> = {
@@ -73,6 +98,7 @@ const evmDefaultChainInfo: Record<EvmChain, ViemChain> = {
   [EvmChain.Mantle]: mantle,
   [EvmChain.Hyperliquid]: hyperliquid,
   [EvmChain.Sei]: sei,
+  [EvmChain.Robinhood]: robinhood,
 }
 
 const evmChainId: Record<EvmChain, string> = recordMap(evmDefaultChainInfo, chain => numberToHex(chain.id))
