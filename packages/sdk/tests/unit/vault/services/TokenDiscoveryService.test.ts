@@ -67,6 +67,7 @@ describe('TokenDiscoveryService', () => {
       expect(tokens).toHaveLength(2)
       expect(tokens[0]).toEqual({
         chain: Chain.Ethereum,
+        tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         contractAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         ticker: 'USDC',
         decimals: 6,
@@ -107,6 +108,7 @@ describe('TokenDiscoveryService', () => {
 
       const tokens = await service.discoverTokens(Chain.Ethereum)
 
+      expect(tokens[0].tokenId).toBe('')
       expect(tokens[0].contractAddress).toBe('')
     })
 
@@ -132,6 +134,7 @@ describe('TokenDiscoveryService', () => {
 
       expect(token).toEqual({
         chain: Chain.Ethereum,
+        tokenId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         contractAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
         ticker: 'USDC',
         decimals: 6,
@@ -162,6 +165,7 @@ describe('TokenDiscoveryService', () => {
 
       expect(token).toEqual({
         chain: Chain.Ethereum,
+        tokenId: '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
         contractAddress: '0x6982508145454Ce325dDbE47a25d4ec3d2311933',
         ticker: 'PEPE',
         decimals: 18,

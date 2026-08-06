@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getSuiClient: vi.fn(),
-  getTransactionBlock: vi.fn(),
+  getTransaction: vi.fn(),
   queryUrl: vi.fn(),
 }))
 
@@ -28,18 +28,27 @@ describe('status resolver isKnown contract', () => {
     vi.clearAllMocks()
     vi.unstubAllGlobals()
     mocks.getSuiClient.mockReturnValue({
-      getTransactionBlock: mocks.getTransactionBlock,
+      getTransaction: mocks.getTransaction,
     })
   })
 
   it('marks Sui lookup failures and unknown hashes as not known', async () => {
-    mocks.getTransactionBlock.mockRejectedValueOnce(new Error('not found'))
+    // The unified client REJECTS on an unknown digest ("missing digest") rather
+    // than resolving to null — both must land in the not-known branch.
+    mocks.getTransaction.mockRejectedValueOnce(new Error('missing digest'))
     await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: false,
     })
 
-    mocks.getTransactionBlock.mockResolvedValueOnce(null)
+    mocks.getTransaction.mockResolvedValueOnce(null)
+    await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
+      status: 'pending',
+      isKnown: false,
+    })
+
+    // A result union with neither arm populated carries no transaction at all.
+    mocks.getTransaction.mockResolvedValueOnce({})
     await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
       status: 'pending',
       isKnown: false,
@@ -47,7 +56,8 @@ describe('status resolver isKnown contract', () => {
   })
 
   it('marks non-terminal Sui responses as known pending', async () => {
-    mocks.getTransactionBlock.mockResolvedValueOnce({ effects: { status: { status: 'pending' } } })
+    // Indexed, but no terminal execution status yet.
+    mocks.getTransaction.mockResolvedValueOnce({ $kind: 'Transaction', Transaction: { digest: hash } })
 
     await expect(getSuiTxStatus({ chain: OtherChain.Sui, hash })).resolves.toEqual({
       status: 'pending',

@@ -860,7 +860,7 @@ export class ShellSession {
     const [fromChainStr, toChainStr, amountStr, ...rest] = args
     const fromChain = findChainByName(fromChainStr) || (fromChainStr as Chain)
     const toChain = findChainByName(toChainStr) || (toChainStr as Chain)
-    const amount = parseFloat(amountStr)
+    const amount = amountStr
 
     let fromToken: string | undefined
     let toToken: string | undefined
@@ -891,7 +891,7 @@ export class ShellSession {
     const [fromChainStr, toChainStr, amountStr, ...rest] = args
     const fromChain = findChainByName(fromChainStr) || (fromChainStr as Chain)
     const toChain = findChainByName(toChainStr) || (toChainStr as Chain)
-    const amount = parseFloat(amountStr)
+    const amount = amountStr
 
     let fromToken: string | undefined
     let toToken: string | undefined

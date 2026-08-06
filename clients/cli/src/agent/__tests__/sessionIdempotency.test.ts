@@ -52,6 +52,8 @@ describe('AgentSession turn idempotency key lifetime', () => {
       reportDeferredSignable: vi.fn(),
       selectAndBufferSignable: vi.fn(() => false),
       renderEchoedBalanceCard: vi.fn((text: string) => text),
+      renderEchoedYieldOpportunitiesCard: vi.fn((text: string) => text),
+      renderEchoedPolymarketMarketsCard: vi.fn((text: string) => text),
     }
 
     await (AgentSession.prototype as any).processMessageLoop.call(fakeThis, 'first', makeUi(), 0)

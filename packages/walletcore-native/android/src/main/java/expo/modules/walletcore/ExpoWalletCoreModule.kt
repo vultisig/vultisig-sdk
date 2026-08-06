@@ -65,6 +65,7 @@ class ExpoWalletCoreModule : Module() {
                 "cronosChain" to CoinType.CRONOSCHAIN,
                 "blast" to CoinType.BLAST,
                 "zksync" to CoinType.ZKSYNC,
+                "robinhoodChain" to CoinType.ROBINHOODCHAIN,
                 "osmosis" to CoinType.OSMOSIS,
                 "terraV2" to CoinType.TERRAV2,
                 "noble" to CoinType.NOBLE,

@@ -19,6 +19,7 @@ const feeCoinTransferGasLimit: Record<EvmChain, bigint> = {
   [EvmChain.Mantle]: mantleTransferGasLimit,
   [EvmChain.Hyperliquid]: 23000n,
   [EvmChain.Sei]: 30_000n,
+  [EvmChain.Robinhood]: 120000n,
 }
 
 const defaultErc20TransferGasLimit = 120_000n
@@ -37,6 +38,7 @@ const erc20TransferGasLimit: Record<EvmChain, bigint> = {
   [EvmChain.Mantle]: mantleTransferGasLimit,
   [EvmChain.Hyperliquid]: defaultErc20TransferGasLimit,
   [EvmChain.Sei]: defaultErc20TransferGasLimit,
+  [EvmChain.Robinhood]: defaultErc20TransferGasLimit,
 }
 
 type DeriveEvmGasLimitInput = {

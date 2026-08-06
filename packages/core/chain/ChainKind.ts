@@ -14,6 +14,7 @@ const chainKindRecord = {
   [EvmChain.Mantle]: 'evm',
   [EvmChain.Hyperliquid]: 'evm',
   [EvmChain.Sei]: 'evm',
+  [EvmChain.Robinhood]: 'evm',
 
   [UtxoChain.Bitcoin]: 'utxo',
   [UtxoChain.BitcoinCash]: 'utxo',
