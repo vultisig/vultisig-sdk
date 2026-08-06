@@ -159,7 +159,7 @@ export type BroadcastRawTxParams = {
   chain: Chain
 
   /**
-   * Hex-encoded signed transaction (with or without 0x prefix)
+   * Signed transaction in the chain family's own encoding: hex (evm/utxo), base58 or base64 (solana), base64 protobuf (cosmos), a JSON envelope (sui), base64 BOC (ton). NOT hex-only. Hex accepts an optional 0x prefix.
    */
   rawTx: string
 }

@@ -4,7 +4,7 @@
  * Used for broadcasting transactions that were signed externally or assembled
  * from signatures obtained via the `sign` command.
  */
-import { Chain, Vultisig } from '@vultisig/sdk'
+import { Chain, getChainKind, Vultisig } from '@vultisig/sdk'
 
 import type { CommandContext } from '../core'
 import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
@@ -16,7 +16,7 @@ import { confirmTransaction } from '../ui'
  */
 export type BroadcastRawParams = {
   chain: Chain
-  rawTx: string // Hex-encoded signed transaction
+  rawTx: string // Signed transaction in the chain family's own encoding: hex (evm/utxo), base58-or-base64 (solana), base64 protobuf (cosmos), JSON envelope (sui), base64 BOC (ton)
   /**
    * Skip the interactive confirmation prompt. Required in non-interactive
    * contexts because broadcastRawTx sends the pre-signed payload straight
@@ -50,12 +50,22 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
   // misclassified as EXTERNAL_SERVICE (retryable:true, suggests "Retry the
   // transaction" — which loops the same bad input forever).
   const rawTx = params.rawTx?.trim() ?? ''
-  const hex = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
-  if (hex.length === 0) {
-    throw new InvalidInputError('Empty raw transaction — pass a hex-encoded signed tx via --raw-tx')
+  if (rawTx.length === 0) {
+    throw new InvalidInputError('Empty raw transaction — pass the signed tx via --raw-tx')
   }
-  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) {
-    throw new InvalidInputError(`Malformed raw transaction — expected hex bytes, got: ${rawTx.slice(0, 20)}${rawTx.length > 20 ? '…' : ''}`)
+  // REVIEW FIX (aq5ku): broadcastRawTx is NOT hex-only, so a blanket hex test refuses every
+  // non-hex family. RawBroadcastService fans out per kind and each decoder takes a different
+  // encoding: solana is base58-or-base64 (decodeSolanaRawTx even sniffs it), cosmos is base64
+  // protobuf, sui is a JSON envelope so `{` is the first byte of every valid payload, ton is a
+  // base64 BOC passed verbatim. Only evm and utxo are hex. The docstring above claimed hex for
+  // all of them - the doc was wrong and the code was right, so the doc is corrected too.
+  const chainKind = getChainKind(params.chain)
+  const isHexFamily = chainKind === 'evm' || chainKind === 'utxo'
+  const hex = rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx
+  if (isHexFamily && (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0)) {
+    throw new InvalidInputError(
+      `Malformed raw transaction — expected hex bytes for ${params.chain}, got: ${rawTx.slice(0, 20)}${rawTx.length > 20 ? '…' : ''}`
+    )
   }
 
   // bead vultisig-aq5ku: broadcastRawTx moves funds immediately with no
@@ -71,7 +81,13 @@ export async function executeBroadcast(ctx: CommandContext, params: BroadcastRaw
     }
     warn('\n⚠  You are about to broadcast a pre-signed transaction.')
     warn(`   Chain:  ${params.chain}`)
-    warn(`   Raw tx: 0x${hex.slice(0, 20)}…${hex.slice(-20)} (${Math.floor(hex.length / 2)} bytes)`)
+    // Show the payload in its OWN encoding. Rendering a base58/base64/JSON payload with a `0x`
+    // prefix and a hex-derived byte count would misdescribe exactly the thing the operator is
+    // being asked to confirm.
+    const shown = isHexFamily ? `0x${hex}` : rawTx
+    const size = isHexFamily ? `${Math.floor(hex.length / 2)} bytes` : `${rawTx.length} chars`
+    const preview = shown.length > 44 ? `${shown.slice(0, 22)}…${shown.slice(-20)}` : shown
+    warn(`   Raw tx: ${preview} (${size})`)
     warn(`   This is IRREVERSIBLE. If the payload is a valid signed transaction, funds WILL move.\n`)
     const confirmed = await confirmTransaction()
     if (!confirmed) {

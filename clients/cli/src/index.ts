@@ -770,7 +770,10 @@ program
   .command('broadcast')
   .description('Broadcast a pre-signed raw transaction. Previews by default — pass --yes to confirm.')
   .requiredOption('--chain <chain>', 'Target blockchain')
-  .requiredOption('--raw-tx <hex>', 'Hex-encoded signed transaction')
+  .requiredOption(
+    '--raw-tx <payload>',
+    "Signed tx in the chain's own encoding (hex for evm/utxo, base58/base64 for solana, base64 protobuf for cosmos, JSON for sui, base64 BOC for ton)"
+  )
   .option('-y, --yes', 'Confirm broadcast without an interactive prompt (required in non-interactive contexts)')
   .action(
     withExit(async (options: { chain: string; rawTx: string; yes?: boolean }) => {
