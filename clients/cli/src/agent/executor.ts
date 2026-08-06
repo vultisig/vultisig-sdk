@@ -354,6 +354,17 @@ export class AgentExecutor {
   }
 
   /**
+   * The chain the currently-buffered server tx targets, or null when nothing is
+   * buffered. Read alongside {@link getPendingSummary} so a declined signing can
+   * report the proposed transaction as a machine-readable surface — a read-safe
+   * `agent ask` (no `--yes`) is documented to REPORT the proposed transaction,
+   * and a prose summary alone is not something an integrator can branch on.
+   */
+  getPendingChain(): string | null {
+    return this.pendingPayloads.get('latest')?.chain ?? null
+  }
+
+  /**
    * Human-readable one-line summary of the currently-buffered server tx
    * (set by storeServerTransaction), for the pre-sign confirmation prompt.
    * Returns null when nothing is buffered (e.g. sign_typed_data, which has

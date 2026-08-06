@@ -982,7 +982,7 @@ export const findSwapQuote = async ({
       isInError(result.reason, 'dust threshold') ||
       isInError(result.reason, 'amount less than')
     ) {
-      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Swap amount too small. Please increase the amount to proceed.')
+      throw new SwapError(SwapErrorCode.AmountTooSmall, 'Please increase the amount to proceed.')
     }
 
     if (isBelowMinimumMsg(msg) && !belowMinimumByProvider.has(fetchers[i].providerName)) {

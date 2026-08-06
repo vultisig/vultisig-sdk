@@ -196,6 +196,19 @@ describe('@vultisig/sdk public exports', () => {
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
   })
 
+  it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
+    expect(Array.isArray(sdk.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(sdk.defaultChains)).toBe(true)
+    expect(sdk.DEFAULT_CHAINS).toBe(sdk.defaultChains)
+    expect(sdk.DEFAULT_CHAINS).toEqual([
+      sdk.Chain.Bitcoin,
+      sdk.Chain.Ethereum,
+      sdk.Chain.THORChain,
+      sdk.Chain.Solana,
+      sdk.Chain.BSC,
+    ])
+  })
+
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
     expect(typeof sdk.buildCosmosWasmExecuteMsg).toBe('function')
     expect(typeof sdk.buildCosmosWasmExecuteTx).toBe('function')

@@ -40,7 +40,7 @@ describe('clampEvmPriorityFee', () => {
     }
   )
 
-  it('clamps a chain without an explicit ceiling entry using the generous default', () => {
+  it('clamps a chain with the explicitly selected generous default ceiling', () => {
     const absurd = gwei(1_000_000)
 
     expect(clampEvmPriorityFee(EvmChain.Sei, absurd)).toBe(500n * 1_000_000_000n)
