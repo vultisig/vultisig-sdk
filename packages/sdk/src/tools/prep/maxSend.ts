@@ -4,6 +4,7 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { isValidAddress } from '@vultisig/core-chain/utils/isValidAddress'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
@@ -85,7 +86,7 @@ export const computeMaxSendFromBalance = async (
     feeSettings: params.feeSettings,
   })
 
-  const isTokenSend = params.coin.id !== undefined
+  const isTokenSend = !isFeeCoin(params.coin)
   if (isTokenSend) {
     const native = chainFeeCoin[params.coin.chain]
     const nativeBalance = shouldBePresent(params.nativeBalance, `Native ${native.ticker} balance for token max-send`)
@@ -124,9 +125,8 @@ export const getMaxSendAmountFromKeys = async (
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.
   const balance = await getCoinBalance(params.coin)
-  const nativeBalance =
-    params.coin.id === undefined
-      ? undefined
-      : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
+  const nativeBalance = isFeeCoin(params.coin)
+    ? undefined
+    : await getCoinBalance({ ...chainFeeCoin[params.coin.chain], address: params.coin.address })
   return computeMaxSendFromBalance(identity, { ...params, balance, nativeBalance }, walletCore)
 }

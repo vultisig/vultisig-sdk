@@ -79,6 +79,34 @@ describe('getMaxSendAmountFromKeys', () => {
     expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
   })
 
+  it('treats a coin with an empty id as native', async () => {
+    const balance = 1_000_000_000_000_000_000n
+    const fee = 20_000_000_000_000_000n
+    mockGetCoinBalance.mockResolvedValue(balance)
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Ethereum,
+      address: '0xfrom',
+      id: '',
+      decimals: 18,
+      ticker: 'ETH',
+    } as any
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: '0xto',
+    })
+
+    expect(result).toEqual({
+      balance,
+      fee,
+      maxSendable: balance - fee,
+    })
+    expect(mockGetCoinBalance).toHaveBeenCalledTimes(1)
+    expect(mockGetCoinBalance).toHaveBeenCalledWith(coin)
+  })
+
   it('returns the full 6-decimal ERC-20 balance and checks the native gas balance', async () => {
     const balance = 16_140_000n
     const fee = 20_000_000_000_000_000n
