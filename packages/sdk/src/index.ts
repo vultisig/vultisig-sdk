@@ -17,12 +17,13 @@
 export { Vultisig } from './Vultisig'
 
 // Vault management
-export type { VaultConfig } from './vault'
+export type { VaultConfig, VaultSaveOptions } from './vault'
 export {
   BroadcastPartialFailureError,
   FastVault,
   SecureVault,
   VaultBase,
+  VaultConflictError,
   VaultError,
   VaultErrorCode,
   VaultImportError,
