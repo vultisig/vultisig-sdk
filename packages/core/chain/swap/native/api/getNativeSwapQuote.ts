@@ -1,5 +1,6 @@
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
@@ -94,7 +95,9 @@ const requestNativeSwapQuote = async ({
 
 const assertOkQuote = (
   result: NativeSwapQuoteResponse | NativeSwapQuoteErrorResponse,
-  from: AccountCoin
+  from: AccountCoin,
+  to: AccountCoin,
+  destination: string
 ): NativeSwapQuoteResponse => {
   if ('error' in result) {
     if (isInError(result.error, 'not enough asset to pay for fees')) {
@@ -103,6 +106,15 @@ const assertOkQuote = (
     }
     throw new Error(result.error)
   }
+
+  const memoDestination = typeof result.memo === 'string' ? result.memo.split(':')[2] : undefined
+  const normalizeDestination = (value: string): string => (isChainOfKind(to.chain, 'evm') ? value.toLowerCase() : value)
+  if (!memoDestination || normalizeDestination(memoDestination) !== normalizeDestination(destination)) {
+    throw new Error(
+      `Native swap quote destination mismatch: requested "${destination}", but executable memo routes to "${memoDestination ?? ''}".`
+    )
+  }
+
   return result
 }
 
@@ -164,7 +176,7 @@ export const getNativeSwapQuote = async ({
     })
 
     return {
-      ...assertOkQuote(result, from),
+      ...assertOkQuote(result, from, to, destination),
       swapChain,
       liquidity_tolerance_bps: slippageToleranceBps,
     }
@@ -184,7 +196,7 @@ export const getNativeSwapQuote = async ({
     nativeAffiliateConfig,
   })
 
-  const rapid = assertOkQuote(rapidResult, from)
+  const rapid = assertOkQuote(rapidResult, from, to, destination)
 
   const totalBps = rapid.fees.total_bps
   if (totalBps === undefined || totalBps <= THORCHAIN_STREAMING_SLIPPAGE_THRESHOLD_BPS) {
@@ -212,7 +224,7 @@ export const getNativeSwapQuote = async ({
       referral,
       nativeAffiliateConfig,
     })
-    streaming = assertOkQuote(streamingRes, from)
+    streaming = assertOkQuote(streamingRes, from, to, destination)
   } catch (error) {
     console.warn('[thorchain] streaming quote failed after elevated rapid slippage; using rapid quote', error)
     return { ...rapid, swapChain, liquidity_tolerance_bps: slippageToleranceBps }

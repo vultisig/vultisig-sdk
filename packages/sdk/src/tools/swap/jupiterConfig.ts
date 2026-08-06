@@ -1,3 +1,4 @@
+import type { JupiterFeeAccount } from '@vultisig/core-chain/swap/general/jupiter/api/jupiterFeeAta'
 import { jupiterFeeOwnerAddress } from '@vultisig/core-chain/swap/general/jupiter/config'
 
 /** SOL native mint address (used when no SPL token contract is specified). */
@@ -42,33 +43,26 @@ export const JUPITER_API_BASE_URL = 'https://api.vultisig.com/jup'
  */
 export const JUPITER_DEFAULT_SLIPPAGE_BPS = 50
 
-/**
- * Pre-created SPL Token ATAs owned by `JUPITER_AFFILIATE_FEE_OWNER`, keyed
- * by output mint. Each value MUST be the canonical associated-token-account
- * for that mint+owner pair AND must already exist on-chain (Jupiter's
- * post-swap transfer reverts with SPL Token program error 0x17
- * InvalidAccountData if the destination ATA is not initialised).
- *
- * Empty today: no ATAs created at the treasury yet, so the affiliate fee is
- * OFF on every Solana output until at least one entry lands here. Solana →
- * Solana swaps still route through Jupiter direct; they just do not collect
- * the 50 bps fee yet. Add an entry only after `spl-token create-account
- * <mint>` lands against the treasury keypair and the on-chain ATA is
- * verified (mint + owner match).
- */
+/** @deprecated Jupiter fee accounts are derived and prepended per swap. */
 export const JUPITER_AFFILIATE_FEE_ATAS: Readonly<Record<string, string>> = {}
 
 /**
- * Resolve the affiliate fee account for a given output mint. Returns the
- * pre-configured ATA when one exists for that mint, or `null` when the
- * affiliate path is not yet wired for that mint (treasury ATA not created).
- *
- * Callers MUST treat `null` as "skip affiliate fee on this swap" — that
- * means omitting BOTH `platformFeeBps` from the /quote request AND
- * `feeAccount` from the /swap request body. Passing `platformFeeBps`
- * without a valid `feeAccount` would have Jupiter quote a route the user
- * cannot actually execute (the route accounting includes a fee transfer
- * with nowhere to go).
+ * Resolve the affiliate fee account for a given output mint.
+ * The fee ATA is derived for `(JUPITER_AFFILIATE_FEE_OWNER, outputMint)` and
+ * later prepended as an idempotent create instruction, so callers do not need
+ * a pre-created treasury ATA.
  */
-export const resolveJupiterFeeAccount = (outputMint: string): string | null =>
-  JUPITER_AFFILIATE_FEE_ATAS[outputMint] ?? null
+export const resolveJupiterFeeAccount = async (outputMint: string): Promise<JupiterFeeAccount> => {
+  // Lazy: `jupiterFeeAta` statically pulls `@solana/web3.js` and `getSolanaClient`.
+  // This module is on the eager RN path, so importing it at module init would
+  // drag Hermes-hostile Solana client initialization into the RN bundle - the
+  // exact thing splitting the config off `jupiter.ts` exists to avoid.
+  const { deriveJupiterFeeAccount } = await import(
+    '@vultisig/core-chain/swap/general/jupiter/api/jupiterFeeAta'
+  )
+
+  return deriveJupiterFeeAccount({
+    outputMint,
+    feeOwner: JUPITER_AFFILIATE_FEE_OWNER,
+  })
+}

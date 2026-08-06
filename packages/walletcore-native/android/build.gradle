@@ -61,7 +61,7 @@ repositories {
 dependencies {
     implementation project(':expo-modules-core')
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${safeExtGet('kotlinVersion', '1.8.10')}"
-    implementation 'com.trustwallet:wallet-core:4.3.22'
+    implementation 'com.trustwallet:wallet-core:4.7.0'
 }
 
 def safeExtGet(prop, fallback) {

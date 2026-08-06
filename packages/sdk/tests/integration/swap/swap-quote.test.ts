@@ -313,7 +313,14 @@ describe('Integration: Swap Quote', () => {
       console.log(`✅ Quote requires approval for ${quote.approvalInfo?.requiredAmount} units`)
     })
 
-    it('should forward recipient, slippageTolerance, and excludeProviders to the core quote resolver', async () => {
+    it.each([
+      { scenario: 'self-swap default', recipient: undefined },
+      { scenario: 'blank recipient self-swap default', recipient: '   ' },
+      {
+        scenario: 'cross-account override',
+        recipient: 'bc1qrecipienttest0000000000000000000000000000',
+      },
+    ])('should keep the destination consistent for $scenario', async ({ recipient }) => {
       const { findSwapQuote } = await import('@vultisig/core-chain/swap/quote/findSwapQuote')
 
       const mockQuote = {
@@ -332,6 +339,11 @@ describe('Integration: Swap Quote', () => {
       }
 
       vi.mocked(findSwapQuote).mockResolvedValue(mockQuote as any)
+      vi.mocked(findSwapQuote).mockClear()
+
+      const ownDestination = await vault.address(Chain.Bitcoin)
+      const expectedRecipient = recipient?.trim() || undefined
+      const expectedDestination = expectedRecipient ?? ownDestination
 
       const result = await vault.swap({
         fromChain: Chain.Ethereum,
@@ -339,7 +351,7 @@ describe('Integration: Swap Quote', () => {
         toChain: Chain.Bitcoin,
         toSymbol: 'BTC',
         amount: '1',
-        recipient: 'bc1qrecipienttest0000000000000000000000000000',
+        ...(recipient && { recipient }),
         slippageTolerance: 2.5,
         excludeProviders: ['CowSwap', 'KyberSwap'],
         dryRun: true,
@@ -348,7 +360,8 @@ describe('Integration: Swap Quote', () => {
       expect(result.dryRun).toBe(true)
       expect(vi.mocked(findSwapQuote)).toHaveBeenCalledWith(
         expect.objectContaining({
-          recipient: 'bc1qrecipienttest0000000000000000000000000000',
+          to: expect.objectContaining({ address: expectedDestination }),
+          recipient: expectedRecipient,
           slippageTolerance: 2.5,
           excludeProviders: ['CowSwap', 'KyberSwap'],
         })
