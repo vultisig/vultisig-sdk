@@ -15,7 +15,7 @@ Adds `toBoundedLong` (`@vultisig/lib-utils/bigint/toBoundedLong`), which range-c
 against the signed `[-2^63, 2^63-1]` or unsigned `[0, 2^64-1]` 64-bit range before
 converting, throwing a `RangeError` on overflow. It also rejects non-decimal input
 strings (`''`, `'0x10'`, whitespace-padded) that a bare `BigInt()` would otherwise
-coerce — importantly `''`, which proto3 uses for an unset `toAmount` and which would
+coerce - importantly `''`, which proto3 uses for an unset `toAmount` and which would
 otherwise silently build a zero-amount transfer.
 
 Wired into every fund-relevant transfer-amount `Long.fromString` call across the Sui,

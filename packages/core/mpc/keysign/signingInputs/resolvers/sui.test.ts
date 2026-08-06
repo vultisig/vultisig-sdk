@@ -259,7 +259,7 @@ describe('getSuiSigningInputs — native send', () => {
     expect(input.paySui?.amounts?.[0]?.toString()).toBe('1000000000')
   })
 
-  it('accepts a uint64 amount in the (2^63-1, 2^64-1] range — no false reject (#1138)', async () => {
+  it('accepts a uint64 amount in the (2^63-1, 2^64-1] range - no false reject (#1138)', async () => {
     // Sui `Pay`/`PaySui` `amounts` is proto uint64. A value above the signed-64
     // ceiling but within uint64 is a legitimate large send; bounding it as
     // `unsigned` must NOT throw. (Regression: an earlier `{ unsigned: false }`
@@ -291,7 +291,7 @@ describe('getSuiSigningInputs — native send', () => {
   })
 
   it('rejects an unset/empty toAmount instead of building a zero-amount send (#1138)', () => {
-    // proto3 defaults an unset `toAmount` to '' — must fail closed, not build 0.
+    // proto3 defaults an unset `toAmount` to '' - must fail closed, not build 0.
     expect(() => getSuiSigningInputs({ keysignPayload: buildNativeSendPayload(''), walletCore })).toThrow(RangeError)
   })
 })

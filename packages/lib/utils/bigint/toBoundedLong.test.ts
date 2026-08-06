@@ -58,7 +58,7 @@ describe('toBoundedLong', () => {
   })
 
   it('rejects non-decimal strings that raw BigInt() would otherwise widen in', () => {
-    // `BigInt('0x10') === 16n`, `BigInt(' 5 ') === 5n` — both would silently
+    // `BigInt('0x10') === 16n`, `BigInt(' 5 ') === 5n` - both would silently
     // widen the accepted input space of a guard whose job is to tighten it.
     expect(BigInt('0x10')).toBe(16n)
     for (const bad of ['0x10', ' 5 ', '5 ', '1e3', '1.0', '+5', 'abc', '-', '']) {
