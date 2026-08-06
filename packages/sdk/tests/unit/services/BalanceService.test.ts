@@ -184,10 +184,10 @@ describe('BalanceService', () => {
     )
   })
 
-  it('keeps an EVM chain in --tokens results after adding a token with a prefixed vault id', async () => {
+  it('keeps an EVM chain in --tokens results with a legacy prefixed vault id', async () => {
     const { service, getTokens } = makeMutableService()
 
-    // This is the exact token shape written by the CLI's `tokens --add` path.
+    // This is the legacy token shape written by the old CLI `tokens --add` path.
     await service.addToken(Chain.Ethereum, addedToken)
     expect(getTokens(Chain.Ethereum)[0]).toMatchObject({
       id: `${Chain.Ethereum}-${USDC}`,
@@ -210,7 +210,7 @@ describe('BalanceService', () => {
     const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
 
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
-    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.formattedAmount).toBe('5')
     expect(getEvmChainBalances).toHaveBeenCalledWith(
       expect.objectContaining({
         coins: expect.arrayContaining([expect.objectContaining({ id: USDC })]),
@@ -266,7 +266,7 @@ describe('BalanceService', () => {
     // against the whole list would fetch WSOL twice and label one as USDC.
     expect(vi.mocked(getCoinBalance).mock.calls.map(([input]) => input.id)).toEqual([undefined, mint, secondMint])
     expect(result[Chain.Solana]).toBeDefined()
-    expect(result[`${Chain.Solana}:${solanaToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Solana}:${mint}`]?.formattedAmount).toBe('5')
     expect(result[`${Chain.Solana}:${collidingToken.id}`]?.formattedAmount).toBe('7')
   })
 
@@ -488,8 +488,22 @@ describe('BalanceService', () => {
     const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
 
     expect(result[Chain.Ethereum]?.formattedAmount).toBe('1')
-    expect(result[`${Chain.Ethereum}:${addedToken.id}`]?.formattedAmount).toBe('5')
+    expect(result[`${Chain.Ethereum}:${USDC}`]?.formattedAmount).toBe('5')
     expect(result[`${Chain.Ethereum}:${daiToken.id}`]?.formattedAmount).toBe('7')
+  })
+
+  it('renders a legacy prefixed token id once, using its bare contract address', async () => {
+    const address = `${Chain.Ethereum}-address`
+    const service = makeReadService([addedToken])
+    vi.mocked(getEvmChainBalances).mockResolvedValue({
+      [accountCoinKeyToString({ chain: Chain.Ethereum, address })]: 1_000_000_000_000_000_000n,
+      [accountCoinKeyToString({ chain: Chain.Ethereum, id: USDC, address })]: 5_000_000n,
+    })
+
+    const result = await service.getBalances({ chains: Chain.Ethereum, includeTokens: true })
+
+    expect(result).toHaveProperty(`${Chain.Ethereum}:${USDC}`)
+    expect(result).not.toHaveProperty(`${Chain.Ethereum}:${addedToken.id}`)
   })
 
   it('batches native + token balances for an EVM chain into a single multicall', async () => {

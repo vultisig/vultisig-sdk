@@ -79,6 +79,22 @@ describe('resolveTokenRef', () => {
     })
   })
 
+  it('resolves a legacy prefixed id by both its stored and bare forms', () => {
+    const customAddress = '0x00000000000000000000000000000000000000ff'
+    const legacy = {
+      ...storedUsdc,
+      id: `${Chain.Ethereum}-${customAddress}`,
+      contractAddress: undefined,
+    } as Token
+
+    for (const ref of [legacy.id, customAddress]) {
+      expect(resolveTokenRef(Chain.Ethereum, ref, [legacy])).toMatchObject({
+        ticker: 'USDC',
+        contractAddress: customAddress,
+      })
+    }
+  })
+
   it('falls back to the well-known registry by ticker — pre-existing behaviour', () => {
     expect(resolveTokenRef(Chain.Ethereum, 'USDC', [])).toEqual({
       ticker: 'USDC',

@@ -9,7 +9,7 @@ import type { Address } from 'viem'
 import { formatBalance } from '../../adapters/formatBalance'
 import { CacheScope, type CacheService } from '../../services/CacheService'
 import type { Balance, Token } from '../../types'
-import { resolveTokenRef } from '../tokenRef'
+import { resolveTokenRef, stripLegacyTokenIdPrefix, tokenIdsMatch } from '../tokenRef'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 /**
@@ -145,10 +145,14 @@ export class BalanceService {
     if (includeTokens) {
       const tokens = this.getTokens(chain)
       for (const token of tokens) {
-        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
+        const assetId = normalizeTokenId({
+          chain,
+          id: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
+        })
+        const resultId = stripLegacyTokenIdPrefix(chain, token.id)
         balanceRequests.push(
           this.getBalanceForAsset(chain, token.id, assetId, token).then(
-            balance => [`${chain}:${token.id}`, balance] as const
+            balance => [`${chain}:${resultId}`, balance] as const
           )
         )
       }
@@ -179,10 +183,13 @@ export class BalanceService {
       ...tokens.map(token => {
         // This record is already selected. Use its own chain-level asset id
         // instead of resolving its storage key against sibling symbols.
-        const assetId = normalizeTokenId({ chain, id: token.contractAddress || token.id })
+        const assetId = normalizeTokenId({
+          chain,
+          id: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
+        })
         return {
           coinKey: { chain, id: assetId, address } as AccountCoinKey<EvmChain>,
-          resultKey: `${chain}:${token.id}`,
+          resultKey: `${chain}:${stripLegacyTokenIdPrefix(chain, token.id)}`,
           cacheKey: `${chain.toLowerCase()}:${token.id}`,
           tokenId: token.id,
           token,
@@ -386,11 +393,16 @@ export class BalanceService {
       // different questions. Removal must mean the same record every other
       // surface means for that reference.
       const upper = id.toUpperCase()
-      const lower = id.toLowerCase()
       tokenIndex = tokens.findIndex(token => token.symbol?.toUpperCase() === upper)
       if (tokenIndex === -1) {
+        const lower = id.toLowerCase()
         tokenIndex = tokens.findIndex(
           token => token.contractAddress?.toLowerCase() === lower || token.id?.toLowerCase() === lower
+        )
+      }
+      if (tokenIndex === -1) {
+        tokenIndex = tokens.findIndex(
+          token => tokenIdsMatch(chain, token.contractAddress, id) || tokenIdsMatch(chain, token.id, id)
         )
       }
       if (tokenIndex === -1) {
@@ -399,8 +411,8 @@ export class BalanceService {
         // resolver applies — a token stored with an empty `contractAddress` is
         // identified by its `id`, and `??` would compare it against `''` and
         // leave it permanently unremovable.
-        const resolvedAssetId = resolved.contractAddress.toLowerCase()
-        tokenIndex = tokens.findIndex(token => (token.contractAddress || token.id)?.toLowerCase() === resolvedAssetId)
+        const resolvedAssetId = resolved.contractAddress
+        tokenIndex = tokens.findIndex(token => tokenIdsMatch(chain, token.contractAddress || token.id, resolvedAssetId))
       }
     }
 

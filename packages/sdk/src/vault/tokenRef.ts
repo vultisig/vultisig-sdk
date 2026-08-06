@@ -28,6 +28,20 @@ export type ResolvedTokenInfo = {
   contractAddress?: string
 }
 
+/** Strip the chain prefix written by older CLI `tokens --add` versions. */
+export function stripLegacyTokenIdPrefix(chain: Chain, id: string): string {
+  const prefix = `${chain}-`
+  return id.toLowerCase().startsWith(prefix.toLowerCase()) ? id.slice(prefix.length) : id
+}
+
+/** Compare bare and legacy-prefixed storage ids without changing symbol lookup. */
+export function tokenIdsMatch(chain: Chain, left: string | undefined, right: string): boolean {
+  return (
+    left !== undefined &&
+    stripLegacyTokenIdPrefix(chain, left).toLowerCase() === stripLegacyTokenIdPrefix(chain, right).toLowerCase()
+  )
+}
+
 /**
  * Resolve a token ref to its ticker, decimals and contract address.
  *
@@ -45,24 +59,27 @@ export function resolveTokenRef(chain: Chain, ref: string | undefined, userToken
 
   const upper = ref.toUpperCase()
   const lower = ref.toLowerCase()
-
   // 1. The user's configured tokens — by symbol first, then by contract address
-  //    or stored id (the CLI's `--add` writes id as `<Chain>-<address>`, token
-  //    discovery writes the bare address, so both are checked).
+  //    or stored id. Legacy `<Chain>-<address>` ids and canonical bare ids are
+  //    treated as the same storage identity.
   const token =
     userTokens.find(t => t.symbol?.toUpperCase() === upper) ??
-    userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower)
+    userTokens.find(t => t.contractAddress?.toLowerCase() === lower || t.id?.toLowerCase() === lower) ??
+    userTokens.find(t => tokenIdsMatch(chain, t.contractAddress, ref) || tokenIdsMatch(chain, t.id, ref))
   if (token) {
     return {
       ticker: token.symbol ?? token.contractAddress ?? token.id,
       decimals: token.decimals,
-      contractAddress: token.contractAddress || token.id,
+      contractAddress: stripLegacyTokenIdPrefix(chain, token.contractAddress || token.id),
     }
   }
 
   // 2. Well-known token registry (no network call) — ticker first, then id.
   const known = knownTokens[chain] ?? []
-  const match = known.find(t => t.ticker.toUpperCase() === upper) ?? known.find(t => t.id?.toLowerCase() === lower)
+  const match =
+    known.find(t => t.ticker.toUpperCase() === upper) ??
+    known.find(t => t.id?.toLowerCase() === lower) ??
+    known.find(t => tokenIdsMatch(chain, t.id, ref))
   if (match) return { ticker: match.ticker, decimals: match.decimals, contractAddress: match.id }
 
   throw new VaultError(

@@ -16,12 +16,17 @@ export class TokenDiscoveryService {
       const coins = await findCoins({ address, chain })
       return coins.map(coin => {
         const tokenId = coin.id ?? ''
+        const knownToken = knownTokensIndex[chain]?.[tokenId.toLowerCase()]
 
         return {
           chain: coin.chain,
           tokenId,
           contractAddress: tokenId,
-          ticker: coin.ticker,
+          // Upstream indexes add order-dependent suffixes such as `USDC_1`
+          // when two contracts share a symbol. Prefer the curated ecosystem
+          // ticker for known contracts; callers already display the contract
+          // address when they need to disambiguate same-symbol assets.
+          ticker: knownToken?.ticker ?? coin.ticker.replace(/_\d+$/u, ''),
           decimals: coin.decimals,
           logo: coin.logo,
           ...(coin.isHidden === undefined ? {} : { isHidden: coin.isHidden }),

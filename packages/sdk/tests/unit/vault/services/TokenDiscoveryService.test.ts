@@ -6,6 +6,7 @@ vi.mock('@vultisig/core-chain/coin/find', () => ({
 }))
 
 vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
+  knownTokens: {},
   knownTokensIndex: {
     Ethereum: {
       '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': {
@@ -15,6 +16,15 @@ vi.mock('@vultisig/core-chain/coin/knownTokens', () => ({
         decimals: 6,
         logo: 'usdc.png',
         priceProviderId: 'usd-coin',
+      },
+    },
+    Polygon: {
+      '0x2791bca1f2de4661ed88a30c99a7a9449aa84174': {
+        chain: 'Polygon',
+        id: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+        ticker: 'USDC.e',
+        decimals: 6,
+        logo: 'usdc.png',
       },
     },
   },
@@ -29,6 +39,7 @@ import { findCoins } from '@vultisig/core-chain/coin/find'
 import { getTokenMetadata } from '@vultisig/core-chain/coin/token/metadata'
 
 import { TokenDiscoveryService } from '../../../../src/vault/services/TokenDiscoveryService'
+import { resolveTokenRef } from '../../../../src/vault/tokenRef'
 import { VaultError, VaultErrorCode } from '../../../../src/vault/VaultError'
 
 describe('TokenDiscoveryService', () => {
@@ -72,6 +83,30 @@ describe('TokenDiscoveryService', () => {
         ticker: 'USDC',
         decimals: 6,
         logo: 'usdc.png',
+      })
+    })
+
+    it('uses the Polygon ecosystem ticker and accepts that displayed ticker as input', async () => {
+      const contractAddress = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
+      vi.mocked(findCoins).mockResolvedValue([
+        { chain: Chain.Polygon, id: contractAddress, ticker: 'USDC_1', decimals: 6 },
+      ] as any)
+
+      const [discovered] = await service.discoverTokens(Chain.Polygon)
+      const storedToken = {
+        id: contractAddress.toLowerCase(),
+        contractAddress: contractAddress.toLowerCase(),
+        symbol: discovered.ticker,
+        name: discovered.ticker,
+        decimals: discovered.decimals,
+        chainId: Chain.Polygon,
+        isNative: false,
+      }
+
+      expect(discovered.ticker).toBe('USDC.e')
+      expect(resolveTokenRef(Chain.Polygon, discovered.ticker, [storedToken])).toMatchObject({
+        ticker: 'USDC.e',
+        contractAddress: contractAddress.toLowerCase(),
       })
     })
 

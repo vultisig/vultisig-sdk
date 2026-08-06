@@ -1049,10 +1049,10 @@ list, so it also changes what portfolio and balance --tokens report. Use
 Examples:
   vultisig tokens Ethereum
   vultisig tokens Ethereum --discover --output json
-  vultisig tokens Ethereum --add 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --symbol USDC --decimals 6`
+  vultisig tokens Ethereum --add 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --symbol USDC --name "USD Coin" --decimals 6`
   )
   .option('--symbol <symbol>', 'Token symbol (for --add)')
-  .option('--name <name>', 'Token name (for --add)')
+  .option('--name <name>', 'Token name (required with --add)')
   .option('--decimals <decimals>', 'Token decimals (for --add)', '18')
   .action(
     withExit(
