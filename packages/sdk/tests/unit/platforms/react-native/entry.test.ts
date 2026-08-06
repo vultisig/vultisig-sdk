@@ -237,6 +237,16 @@ describe('RN entry exposes toChainAmount + ChainAmountParseError', () => {
     expect(rn.getChainGasPriceGwei).toBe(gas.getChainGasPriceGwei)
   })
 
+  it('exports canonical chain-kind helpers from the RN entry', async () => {
+    const rn = await import('../../../../src/platforms/react-native/index')
+    const chainKind = await import('@vultisig/core-chain/ChainKind')
+
+    expect(rn.getChainKind).toBe(chainKind.getChainKind)
+    expect(rn.isChainOfKind).toBe(chainKind.isChainOfKind)
+    expect(rn.getChainKind(rn.Chain.Ethereum)).toBe('evm')
+    expect(rn.isChainOfKind(rn.Chain.Solana, 'solana')).toBe(true)
+  })
+
   it('re-exports root-public pure helpers needed by React Native consumers', async () => {
     const rn = await import('../../../../src/platforms/react-native/index')
 
