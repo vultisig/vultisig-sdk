@@ -30,6 +30,21 @@ export type ProposedTransaction = {
   chain?: string
 }
 
+/**
+ * Audit record emitted when a signing request passes the confirmation gate.
+ * It captures the exact one-line summary that was authorized before the
+ * signing body runs; transaction hashes and lifecycle status are reported
+ * separately once available.
+ */
+export type SigningRecord = {
+  /** The signing tool that passed the gate (`sign_tx` / `sign_typed_data`). */
+  tool: string
+  /** One-line audit rendering of the summary presented to the confirmation policy. */
+  summary: string
+  /** Chain the buffered transaction targets, when one is available. */
+  chain?: string
+}
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -446,6 +461,7 @@ export type PipeOutputEvent =
       status: TxLifecycleStatus
       explorer_url?: string
     }
+  | { type: 'signing_record'; record: SigningRecord }
   | { type: 'assistant'; content: string }
   | { type: 'balance_summary'; card: BalanceSummaryCard }
   | { type: 'yield_opportunities'; card: YieldOpportunitiesCard }
@@ -497,6 +513,8 @@ export type UICallbacks = {
    *  read-safe path's actual result — `agent ask` without `--yes` is documented
    *  to report the proposed transaction rather than sign it. */
   onProposedTransaction?: (proposed: ProposedTransaction) => void
+  /** Fired after a signing request is approved and immediately before signing proceeds. */
+  onSigningRecord?: (record: SigningRecord) => void
   onSuggestions: (suggestions: Suggestion[]) => void
   onTxStatus: (txHash: string, chain: string, status: TxLifecycleStatus, explorerUrl?: string) => void
   onError: (message: string, code: AgentErrorCode) => void

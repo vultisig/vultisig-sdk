@@ -145,6 +145,16 @@ export type AgentAskOptions = {
  * when non-empty, so the catch path (auth/init failure, no broadcast) keeps the
  * lean `{message,code,conversation_id}` error shape.
  */
+function signingRecordsField(result: AskResult | undefined): { signing_records?: AskResult['signingRecords'] } {
+  return result?.signingRecords.length ? { signing_records: result.signingRecords } : {}
+}
+
+function writeSigningRecordLines(records: AskResult['signingRecords'], write: (line: string) => unknown): void {
+  for (const record of records) {
+    write(`signing-record:${record.summary}\n`)
+  }
+}
+
 function outputAskError(
   wantsJson: boolean,
   message: string,
@@ -155,6 +165,7 @@ function outputAskError(
   if (wantsJson) {
     const data: Record<string, unknown> = {}
     if (result?.transactions.length) data.transactions = result.transactions
+    Object.assign(data, signingRecordsField(result))
     if (result?.toolCalls.length) data.tool_calls = result.toolCalls
     if (result?.response) data.response = result.response
     if (result?.warnings.length) data.warnings = result.warnings
@@ -187,6 +198,7 @@ function outputAskError(
         process.stderr.write('confirmation-required:pass --yes to authorize signing\n')
         process.stderr.write(`proposed:${result.proposedTransaction.summary}\n`)
       }
+      writeSigningRecordLines(result.signingRecords, line => process.stderr.write(line))
     }
     process.stderr.write(`Error: ${message} [${code}]\n`)
   }
@@ -256,6 +268,7 @@ function outputPostBroadcastFailure(
   if (wantsJson) {
     const data: Record<string, unknown> = {
       transactions: result.transactions,
+      ...signingRecordsField(result),
       tool_calls: result.toolCalls,
       response: result.response,
       ...(result.warnings.length ? { warnings: result.warnings } : {}),
@@ -287,6 +300,7 @@ function outputPostBroadcastFailure(
     process.stderr.write(`status:${tx.status ?? 'unknown'}\n`)
     if (tx.explorerUrl) process.stderr.write(`explorer:${tx.explorerUrl}\n`)
   }
+  writeSigningRecordLines(result.signingRecords, line => process.stderr.write(line))
   process.stderr.write(
     'WARNING: DO NOT blindly retry. Verify each transaction hash and continue only the incomplete step.\n'
   )
@@ -311,6 +325,7 @@ function outputAskHuman(result: AskResult, confirmationRequired: boolean, propos
       process.stdout.write(`proposed:${proposed}\n`)
     }
   }
+  writeSigningRecordLines(result.signingRecords, line => process.stdout.write(line))
   // Balance cards (rendered as a table instead of raw JSON)
   for (const card of result.cards) {
     process.stdout.write(`\n${renderBalanceSummaryCard(card)}\n`)
@@ -360,6 +375,7 @@ function outputAskSuccess(wantsJson: boolean, result: AskResult, conversationId:
       response: result.response,
       tool_calls: result.toolCalls,
       transactions: result.transactions,
+      ...signingRecordsField(result),
       ...(result.cards.length > 0 ? { cards: result.cards } : {}),
       ...(result.yieldCards.length > 0 ? { yield_cards: result.yieldCards } : {}),
       ...(result.polymarketCards.length > 0 ? { polymarket_cards: result.polymarketCards } : {}),

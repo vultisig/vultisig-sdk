@@ -255,6 +255,10 @@ export class ChatTUI {
         }
       },
 
+      onSigningRecord: record => {
+        console.log(`  ${chalk.green('✓')} ${chalk.bold('Signing approved')}: ${record.summary}`)
+      },
+
       onError: (message: string, code: AgentErrorCode) => {
         if (this.isStreaming) {
           process.stdout.write('\n')

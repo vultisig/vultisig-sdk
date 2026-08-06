@@ -47,6 +47,7 @@ import type {
   ConversationMessage,
   MessageContext,
   RecentAction,
+  SigningRecord,
   TxReadyPayload,
   UICallbacks,
 } from './types'
@@ -119,11 +120,14 @@ export const CLIENT_SIDE_DISPATCH_TOOL_NAMES: ReadonlySet<string> = new Set<stri
 // 2x the backend's 8-iteration cap — belt-and-suspenders against runaway loops.
 const MAX_MESSAGE_LOOP_DEPTH = 16
 
-// ProposedTransaction.summary is documented as a ONE-LINE human summary, and it reaches
-// stdout/stderr and the JSON envelope. For sign_tx it is exactly that; for sign_typed_data the
-// gate falls back to JSON.stringify(input), which is an arbitrarily large typed-data blob. Cap it
-// so a declined typed-data signature can't dump its whole payload into a one-line field.
+// Signing audit summaries reach stdout/stderr and the JSON envelope. For sign_tx they are already
+// one line; for sign_typed_data the gate falls back to JSON.stringify(input), which is an
+// arbitrarily large typed-data blob. Keep every emitted audit record bounded.
 const PROPOSED_SUMMARY_MAX_CHARS = 500
+
+function capSigningSummary(summary: string): string {
+  return summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+}
 
 // Mid-turn disconnect recovery (matches the app's 2s poller / ~3min ceiling).
 // On a dropped SSE stream the session polls /messages/since this many times,
@@ -188,8 +192,7 @@ function reportDeclinedSigning(
   // conflicting representations of it. Nothing is lost — this is a display summary of a
   // transaction that was NOT authorized; the authoritative payload is the request the caller
   // re-issues with `--yes`.
-  const proposed =
-    summary.length > PROPOSED_SUMMARY_MAX_CHARS ? `${summary.slice(0, PROPOSED_SUMMARY_MAX_CHARS)}…` : summary
+  const proposed = capSigningSummary(summary)
   const declined: RecentAction = {
     tool: toolName,
     success: false,
@@ -1329,6 +1332,7 @@ export class AgentSession {
     body: () => Promise<RecentAction>,
     input?: Record<string, unknown>
   ): Promise<RecentAction> {
+    let signingRecord: SigningRecord | undefined
     // Confirmation gate: a signable tool (sign_tx / sign_typed_data) must be
     // explicitly approved before it signs + broadcasts. This is the single
     // chokepoint for BOTH the tx_ready path and client-side dispatch, so one
@@ -1348,6 +1352,8 @@ export class AgentSession {
       if (!approved) {
         return reportDeclinedSigning(this.executor, toolName, toolCallId, summary, input, ui)
       }
+      const chain = ui.onSigningRecord && toolName === 'sign_tx' ? this.executor.getPendingChain() : null
+      signingRecord = { tool: toolName, summary: capSigningSummary(summary), ...(chain ? { chain } : {}) }
     }
 
     // Gate signing on whether a password is actually NEEDED, not on the
@@ -1402,6 +1408,7 @@ export class AgentSession {
       }
     }
 
+    if (signingRecord) ui.onSigningRecord?.(signingRecord)
     ui.onToolCall(toolCallId, toolName, input)
     let recent: RecentAction
     try {

@@ -98,9 +98,9 @@ describe('agent ask --json output contract', () => {
     resetOutput()
   })
 
-  async function runAsk(json = true): Promise<{ exitCode: number }> {
+  async function runAsk(json = true, autoApprove = false): Promise<{ exitCode: number }> {
     try {
-      await executeAgentAsk(ctx, 'hello', { json })
+      await executeAgentAsk(ctx, 'hello', { json, autoApprove })
       return { exitCode: 0 }
     } catch (e) {
       if (e instanceof ExitError) return { exitCode: e.exitCode }
@@ -128,6 +128,35 @@ describe('agent ask --json output contract', () => {
 
     // The structured envelope must NOT leak onto stderr (the wrong-stream bug).
     expect(stderr.join('')).not.toContain('"success"')
+  })
+
+  it('--yes token send includes the contract-bearing signing record in JSON without verbose output', async () => {
+    const summary =
+      'send 0.05 USDC.e on Polygon (0x2791bca1f2de4661ed88a30c99a7a9449aa84174) to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon' })
+      cb.onTxStatus('0xtoken', 'Polygon', 'pending')
+    }
+
+    const { exitCode } = await runAsk(true, true)
+    expect(exitCode).toBe(0)
+    const envelope = JSON.parse(stdout.join(''))
+    expect(envelope.data.signing_records).toEqual([{ tool: 'sign_tx', summary, chain: 'Polygon' }])
+    expect(envelope.data.signing_records[0].summary).toContain('0x2791bca1f2de4661ed88a30c99a7a9449aa84174')
+  })
+
+  it('--yes token send includes the contract-bearing signing record in human output without verbose output', async () => {
+    const summary =
+      'send 0.05 USDC.e on Polygon (0x2791bca1f2de4661ed88a30c99a7a9449aa84174) to 0x58c4000000000000000000000000000000005c35'
+    driver.run = async cb => {
+      const approved = await cb.requestConfirmation(summary)
+      if (approved) cb.onSigningRecord?.({ tool: 'sign_tx', summary, chain: 'Polygon' })
+    }
+
+    const { exitCode } = await runAsk(false, true)
+    expect(exitCode).toBe(0)
+    expect(stdout.join('')).toContain(`signing-record:${summary}`)
   })
 
   // The read-safe path: `agent ask` WITHOUT --yes is documented to "report the
