@@ -312,10 +312,16 @@ export type Base64Binary = string
  * FIN contract ExecuteMsg variants
  * @internal
  */
-export type FinExecuteMsg =
-  | { swap: SwapRequest }
-  | { order: [OrderTarget[], CallbackData | null] }
-  | { arb: { then?: Base64Binary } }
+export type FinExecuteMsg = { swap: SwapRequest } | FinOrderExecuteMsg | { arb: { then?: Base64Binary } }
+
+/**
+ * The `order` variant of FinExecuteMsg, used to place/cancel limit orders.
+ * Named separately so callers that only ever build order messages (e.g.
+ * buildPlaceOrder/buildCancelOrder) can return this narrower type instead of
+ * the full FinExecuteMsg union.
+ * @internal
+ */
+export type FinOrderExecuteMsg = { order: [OrderTarget[], CallbackData | null] }
 
 /**
  * Swap request variants

@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // IMPORTANT: Mocks must be defined BEFORE imports
 vi.mock('@vultisig/core-chain/coin/price/getCoinPrices')
 vi.mock('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+vi.mock('@vultisig/core-chain/coin/price/resolveTokenPriceId', () => ({
+  resolveTokenPriceId: vi.fn(),
+}))
+vi.mock('@vultisig/core-chain/chains/cosmos/cosmosFeeCoinDenom', () => ({
+  cosmosFeeCoinDenom: { TerraClassic: 'uluna' },
+}))
 vi.mock('@vultisig/core-chain/coin/utils/getCoinValue')
 vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
   chainFeeCoin: {
@@ -26,6 +32,11 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
       ticker: 'MATIC',
       decimals: 18,
       priceProviderId: 'matic-network',
+    },
+    TerraClassic: {
+      ticker: 'LUNC',
+      decimals: 6,
+      priceProviderId: 'terra-luna',
     },
   },
 }))
@@ -120,6 +131,23 @@ describe('FiatValueService', () => {
       })
     })
 
+    for (const chain of [Chain.BSC, Chain.Zksync, Chain.Hyperliquid]) {
+      it(`should route ${chain} tokens through the EVM price API`, async () => {
+        const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+        const tokenAddress = '0xA0b86991c6218b36c1d19d4a2e9Eb0cE3606eB48'
+        vi.mocked(getErc20Prices).mockResolvedValue({
+          [tokenAddress.toLowerCase()]: 1,
+        })
+
+        await expect(service.getPrice(chain, tokenAddress)).resolves.toBe(1)
+        expect(getErc20Prices).toHaveBeenCalledWith({
+          ids: [tokenAddress],
+          chain,
+          fiatCurrency: 'usd',
+        })
+      })
+    }
+
     it('should support different fiat currencies', async () => {
       const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
       vi.mocked(getCoinPrices).mockResolvedValue({
@@ -212,6 +240,54 @@ describe('FiatValueService', () => {
 
       // Should only call API once (for batch fetch)
       expect(getCoinPrices).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('getValues', () => {
+    it('batches all token prices for a chain into a single getErc20Prices call', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { getErc20Prices } = await import('@vultisig/core-chain/coin/price/evm/getErc20Prices')
+      const { getCoinValue } = await import('@vultisig/core-chain/coin/utils/getCoinValue')
+
+      const usdc = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+      const dai = '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+
+      getTokens = vi.fn(() => ({
+        [Chain.Ethereum]: [
+          { id: usdc, symbol: 'USDC', name: 'USD Coin', decimals: 6, chainId: Chain.Ethereum, contractAddress: usdc },
+          { id: dai, symbol: 'DAI', name: 'Dai', decimals: 18, chainId: Chain.Ethereum, contractAddress: dai },
+        ],
+      }))
+      getBalance = vi.fn(async (_chain: Chain, tokenId?: string) => ({
+        amount: '1000000',
+        formattedAmount: '1',
+        decimals: 6,
+        symbol: tokenId ? 'TOKEN' : 'ETH',
+        chainId: Chain.Ethereum,
+        tokenId,
+      }))
+      service = new FiatValueService(cache, getCurrency, getTokens, getChains, getBalance)
+
+      vi.mocked(getCoinPrices).mockResolvedValue({ ethereum: 3000 })
+      vi.mocked(getErc20Prices).mockResolvedValue({
+        [usdc.toLowerCase()]: 1.0,
+        [dai.toLowerCase()]: 1.0,
+      })
+      vi.mocked(getCoinValue).mockReturnValue(1)
+
+      const values = await service.getValues(Chain.Ethereum)
+
+      // ONE batched price call for both tokens, not one per token.
+      expect(getErc20Prices).toHaveBeenCalledTimes(1)
+      expect(getErc20Prices).toHaveBeenCalledWith({
+        ids: [usdc, dai],
+        chain: Chain.Ethereum,
+        fiatCurrency: 'usd',
+      })
+
+      expect(values.native).toBeDefined()
+      expect(values[usdc]).toBeDefined()
+      expect(values[dai]).toBeDefined()
     })
   })
 
@@ -428,10 +504,33 @@ describe('FiatValueService', () => {
       await expect(service.getPrice(Chain.Ethereum, '0xInvalidToken')).rejects.toThrow('Price not found for token')
     })
 
-    it('should return 0 for token pricing on non-EVM chains', async () => {
-      // Bitcoin is not an EVM chain — returns 0 instead of throwing
-      const price = await service.getPrice(Chain.Bitcoin, '0xSomeToken')
-      expect(price).toBe(0)
+    it('should fetch known non-EVM token prices through the canonical registry id', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      const solanaUsdc = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+      vi.mocked(resolveTokenPriceId).mockReturnValue('usd-coin')
+      vi.mocked(getCoinPrices).mockResolvedValue({ 'usd-coin': 1 })
+
+      const price = await service.getPrice(Chain.Solana, solanaUsdc)
+
+      expect(price).toBe(1)
+      expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['usd-coin'], fiatCurrency: 'usd' })
+    })
+
+    it('should price a Cosmos native fee denom passed as a token identifier', async () => {
+      const { getCoinPrices } = await import('@vultisig/core-chain/coin/price/getCoinPrices')
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      vi.mocked(resolveTokenPriceId).mockReturnValue('terra-luna')
+      vi.mocked(getCoinPrices).mockResolvedValue({ 'terra-luna': 0.000062 })
+
+      await expect(service.getPrice(Chain.TerraClassic, ' uluna ')).resolves.toBe(0.000062)
+      expect(getCoinPrices).toHaveBeenCalledWith({ ids: ['terra-luna'], fiatCurrency: 'usd' })
+    })
+
+    it('should preserve zero pricing for unknown non-EVM token identifiers', async () => {
+      const { resolveTokenPriceId } = await import('@vultisig/core-chain/coin/price/resolveTokenPriceId')
+      vi.mocked(resolveTokenPriceId).mockReturnValue(undefined)
+      await expect(service.getPrice(Chain.Bitcoin, 'not-a-known-token')).resolves.toBe(0)
     })
   })
 

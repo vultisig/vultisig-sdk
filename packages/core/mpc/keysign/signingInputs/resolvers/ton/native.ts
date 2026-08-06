@@ -1,9 +1,7 @@
 import { Buffer } from 'buffer'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
-import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
 import { numberToEvenHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { TW } from '@trustwallet/wallet-core'
-import Long from 'long'
 
 type BuildNativeTonTransferFromMessageInput = {
   to: string
@@ -39,6 +37,35 @@ export const validateTonComment = (memo: string): void => {
   }
 }
 
+const tonUnsignedDecimalRegex = /^\d+$/
+const tonMaxAmount = (1n << 120n) - 1n
+const tonMaxAmountDecimal = tonMaxAmount.toString()
+
+export const tonAmountToBytes = (amount: string | bigint): Buffer => {
+  if (typeof amount === 'string' && !tonUnsignedDecimalRegex.test(amount)) {
+    throw new Error('TON amount must be a non-negative integer')
+  }
+
+  const normalizedAmount = typeof amount === 'string' ? amount.replace(/^0+(?=\d)/, '') : amount
+  if (
+    typeof normalizedAmount === 'string' &&
+    (normalizedAmount.length > tonMaxAmountDecimal.length ||
+      (normalizedAmount.length === tonMaxAmountDecimal.length && normalizedAmount > tonMaxAmountDecimal))
+  ) {
+    throw new Error('TON amount exceeds the VarUInteger 16 maximum')
+  }
+
+  const value = typeof normalizedAmount === 'bigint' ? normalizedAmount : BigInt(normalizedAmount)
+  if (value < 0n) {
+    throw new Error('TON amount must be a non-negative integer')
+  }
+  if (value > tonMaxAmount) {
+    throw new Error('TON amount exceeds the VarUInteger 16 maximum')
+  }
+
+  return Buffer.from(numberToEvenHex(value), 'hex')
+}
+
 export const buildNativeTonTransfer = ({
   keysignPayload,
   bounceable,
@@ -50,11 +77,11 @@ export const buildNativeTonTransfer = ({
       : TW.TheOpenNetwork.Proto.SendMode.PAY_FEES_SEPARATELY) |
     TW.TheOpenNetwork.Proto.SendMode.IGNORE_ACTION_PHASE_ERRORS
 
-  const amount = sendMaxAmount ? Long.ZERO : toBoundedLong(keysignPayload.toAmount, { unsigned: false })
+  const amount = sendMaxAmount ? 0n : keysignPayload.toAmount
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: keysignPayload.toAddress,
-    amount: Buffer.from(numberToEvenHex(amount), 'hex'),
+    amount: tonAmountToBytes(amount),
     bounceable,
     comment: toSafeComment(keysignPayload.memo || ''),
     mode,
@@ -73,7 +100,7 @@ export const buildNativeTonTransferFromMessage = ({
 
   return TW.TheOpenNetwork.Proto.Transfer.create({
     dest: to,
-    amount: Buffer.from(numberToEvenHex(toBoundedLong(amount, { unsigned: false })), 'hex'),
+    amount: tonAmountToBytes(amount),
     bounceable,
     comment: '',
     customPayload: payload || undefined,

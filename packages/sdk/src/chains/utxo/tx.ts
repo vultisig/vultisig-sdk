@@ -22,6 +22,7 @@
  *     `signingHashesHex[]`, `unsignedRawHex`, and `finalize(sigHexes)`.
  *   - `getSighashBIP143(opts)` — standalone BIP143 segwit sighash.
  *   - `getSighashLegacy(opts)` — standalone legacy P2PKH / BCH / Zcash sighash.
+ *   - `getSighashZcash(...)` — standalone ZIP-243 Zcash transparent sighash.
  *   - `decodeAddressToPubKeyHash(addr, chain)` — address → {pubKeyHash, type}.
  */
 import { secp256k1 as secp } from '@noble/curves/secp256k1.js'
@@ -489,7 +490,30 @@ function blake2b256(data: Uint8Array, personalization: Uint8Array): Uint8Array {
   return blake2b(data, { dkLen: 32, personalization })
 }
 
-function getSighashZcash(
+/**
+ * ZIP-243 sighash for Zcash's v4 Sapling-framed transparent send path
+ * (BLAKE2b personalization, consensus-branch-id-parametrized). Exported
+ * (alongside `getSighashBIP143` / `getSighashLegacy`) so golden-vector tests
+ * can pin it directly against an authoritative reference implementation,
+ * independent of `buildUtxoSendTx`'s fee/address-decoding logic.
+ *
+ * NARROW CONTRACT — this is a public primitive with NO input validation, and
+ * `buildUtxoSendTx` (not this function) is what enforces the preconditions
+ * below. Calling it outside them yields a deterministic but WRONG digest, i.e.
+ * a signature over a message the network will reject (or, worse, a signature
+ * the caller believes it verified). It hardcodes:
+ *   - transparent-only v4/Sapling framing (no JoinSplit/Sapling/Orchard bundle)
+ *   - `nHashType = SIGHASH_ALL` (1) — no NONE/SINGLE/ANYONECANPAY
+ *   - `nLockTime = 0`, `nExpiryHeight = 0`, `valueBalance = 0`
+ *   - `nSequence = 0xffffffff` on every input
+ *   - a P2PKH `scriptCode` built from `pubKeyHash` — a P2SH/P2WPKH input hash
+ *     silently produces an unspendable sighash (see the `p2sh` guard in
+ *     `buildUtxoSendTx`)
+ * `outputsRaw` MUST be the bare concatenation of serialized txouts with NO
+ * leading varint count (that's `outputsWithCount`, a different value).
+ * `inputIndex` MUST be in range for `inputs`.
+ */
+export function getSighashZcash(
   inputs: UtxoInput[],
   outputsRaw: Uint8Array,
   inputIndex: number,

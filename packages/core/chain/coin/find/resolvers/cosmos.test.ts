@@ -58,6 +58,26 @@ describe('findCosmosCoins', () => {
     ])
   })
 
+  // ybRUNE (`x/staking-x/brune`) is the auto-compounding staking receipt for
+  // bonded RUNE. Like the sTCY share denom, it must be filtered out of wallet
+  // discovery so it never surfaces as a bogus fallback-ticker coin ("STAKING").
+  it('excludes the ybRUNE staking receipt denom from THORChain discovery', async () => {
+    getAllBalancesMock.mockResolvedValue([
+      { denom: 'rune', amount: '1' },
+      { denom: 'x/staking-x/brune', amount: '9' },
+      { denom: 'tcy', amount: '2' },
+    ])
+    getCosmosTokenMetadataMock.mockRejectedValue(new Error('no metadata'))
+
+    const coins = await findCosmosCoins({
+      address: 'thor1address',
+      chain: Chain.THORChain,
+    })
+
+    expect(coins.some(coin => coin.id === 'x/staking-x/brune')).toBe(false)
+    expect(coins).toEqual([expect.objectContaining({ id: 'tcy', ticker: 'TCY' })])
+  })
+
   // #428: factory/{addr}/{subdenom} shaped denoms must resolve to the
   // subdenom as the ticker, NOT the creator address. The previous
   // [1]?.toUpperCase() picked the second segment (the address), so we'd

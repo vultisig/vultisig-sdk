@@ -8,7 +8,6 @@ import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
 import { Chain, parseKeygenQR, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { InvalidArgumentError, program } from 'commander'
-import inquirer from 'inquirer'
 
 import { CLIContext, withExit } from './adapters'
 import {
@@ -56,9 +55,10 @@ import {
   executeTxStatus,
   executeVaults,
   executeVerify,
+  resolveTxStatusParams,
 } from './commands'
-import { cachePassword, createPasswordCallback, loadActiveVaultSafely } from './core'
-import { EXIT_CODE_DESCRIPTIONS, InvalidInputError } from './core/errors'
+import { cachePassword, createPasswordCallback, loadActiveVaultSafely, resolveChainOrThrow } from './core'
+import { EXIT_CODE_DESCRIPTIONS, ExitCode, InvalidInputError } from './core/errors'
 import { parseServerEndpointOverridesFromArgv, resolveServerEndpoints } from './core/server-endpoints'
 import { findChainByName } from './interactive'
 import { ShellSession } from './interactive'
@@ -77,6 +77,7 @@ import {
   outputJson,
   printResult,
   requireInteractive,
+  resolveNonInteractive,
   setFields,
   setNonInteractive,
   setQuiet,
@@ -84,6 +85,7 @@ import {
   setupUserAgent,
   warn,
 } from './lib'
+import { prompt } from './lib/prompt'
 import { setupVaultEvents } from './ui'
 
 // Set User-Agent header on all outgoing fetch requests (must run before any SDK calls)
@@ -138,13 +140,16 @@ program
         .map(([k, v]) => `  ${k}  ${v}`)
         .join('\n') +
       '\n\nEnvironment variables:\n' +
-      '  VAULT_PASSWORD          Vault password for signing (bypasses prompt)\n' +
-      '  VULTISIG_PASSWORD       Alias for VAULT_PASSWORD\n' +
-      '  VAULT_PASSWORDS         Space-separated VaultName:password pairs\n' +
+      '  VAULT_PASSWORD          Single fallback; unlocks the vault for reads and signing\n' +
+      '  VULTISIG_PASSWORD       Alias during normal unlock/signing (not auth setup)\n' +
+      '  VAULT_PASSWORDS         JSON object or space-separated key:password pairs\n' +
+      '  VAULT_DECRYPT_PASSWORD  Decrypt an encrypted .vult file during auth setup\n' +
+      '  VULTISIG_CREDENTIALS_PASSPHRASE  Encrypt credentials on disk without a keyring\n' +
       '  VULTISIG_VAULT          Default vault name or ID\n' +
       '  VULTISIG_CONFIG_DIR     Override config directory (~/.vultisig)\n' +
       '  VULTISIG_SILENT         Set to 1 for silent mode\n' +
       '  VULTISIG_HTTP_TIMEOUT_MS  Agent-backend request timeout in ms (default 30000)\n' +
+      '  VULTISIG_SSE_IDLE_TIMEOUT_MS  Agent SSE frame-idle timeout in ms (default 60000)\n' +
       '  NO_COLOR                Disable colored output'
   )
   .hook('preAction', thisCommand => {
@@ -158,7 +163,9 @@ program
     }
     initOutputMode({ silent: opts.silent, output: opts.output })
     setQuiet(!!opts.quiet)
-    setNonInteractive(!!opts.nonInteractive)
+    // A piped/redirected stdout is the machine-output channel — an interactive
+    // prompt would corrupt it — so treat non-TTY stdout as non-interactive too.
+    setNonInteractive(resolveNonInteractive(!!opts.nonInteractive))
     const fields = opts.fields as string | undefined
     setFields(
       fields
@@ -362,7 +369,7 @@ async function promptSeedphrase(): Promise<string> {
   info('\nEnter your 12 or 24-word recovery phrase.')
   info('Words will be hidden as you type.\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'password',
       name: 'mnemonic',
@@ -389,7 +396,7 @@ async function promptQrPayload(): Promise<string> {
   info('\nEnter the QR code payload from the initiator device.')
   info('The payload starts with "vultisig://".\n')
 
-  const answer = await inquirer.prompt([
+  const answer = await prompt([
     {
       type: 'input',
       name: 'qrPayload',
@@ -556,7 +563,10 @@ joinCmd
 
         let mnemonic = options.mnemonic
         if (qrParams.libType === 'KEYIMPORT' && !mnemonic) {
-          // Seedphrase-based session requires mnemonic
+          // Seedphrase-based session requires mnemonic. Refuse before the
+          // guidance line below writes to stdout in a non-interactive session
+          // (promptSeedphrase re-checks, but only after the info()).
+          requireInteractive('Use --mnemonic flag to provide seedphrase non-interactively.')
           info('\nThis session requires a seedphrase to join.')
           mnemonic = await promptSeedphrase()
         }
@@ -583,12 +593,10 @@ program
     withExit(
       async (vaultId: string, options: { resend?: boolean; code?: string; email?: string; password?: string }) => {
         const context = await init(program.opts().vault)
-        const verified = await executeVerify(context, vaultId, options)
-        if (!verified) {
-          const err: any = new Error('Verification failed')
-          err.exitCode = 1
-          throw err
-        }
+        // executeVerify throws a typed error on failure; it no longer signals
+        // failure via a `false` return that this had to re-throw (which produced a
+        // second JSON document on stdout).
+        await executeVerify(context, vaultId, options)
       }
     )
   )
@@ -622,12 +630,13 @@ Examples:
 // Command: Send transaction
 program
   .command('send <chain> <to> [amount]')
-  .description(descriptions.send.description)
+  .description(descriptions.send.cliDescription)
   .option('--max', 'Send maximum amount (balance minus fees)')
   .option('--token <tokenId>', 'Token to send (default: native)')
   .option('--memo <memo>', 'Transaction memo')
+  .option('--destination-tag <tag>', 'XRP DestinationTag (0 to 4294967295)')
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast tx)')
   .option('--password <password>', 'Vault password for signing')
@@ -641,7 +650,7 @@ Examples:
 
 Environment variables:
   VAULT_PASSWORD    Vault password (bypasses prompt)
-  VAULT_PASSWORDS   Space-separated VaultName:password pairs
+  VAULT_PASSWORDS   JSON object or space-separated key:password pairs
 
 See also: balance, tx-status`
   )
@@ -655,6 +664,7 @@ See also: balance, tx-status`
           max?: boolean
           token?: string
           memo?: string
+          destinationTag?: string
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -664,26 +674,35 @@ See also: balance, tx-status`
       ) => {
         if (!amount && !options.max) throw new Error('Provide an amount or use --max')
         if (amount && options.max) throw new Error('Cannot specify both amount and --max')
-        const context = await init(program.opts().vault)
-        try {
-          await executeSend(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
-            to,
-            amount: amount ?? 'max',
-            tokenId: options.token,
-            memo: options.memo,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
+        const chain = findChainByName(chainStr) || (chainStr as Chain)
+        if (options.destinationTag !== undefined && chain !== Chain.Ripple) {
+          throw new Error('--destination-tag is only supported for XRP')
         }
+        const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
+        if (
+          options.destinationTag !== undefined &&
+          (!/^(0|[1-9]\d*)$/.test(options.destinationTag) ||
+            !Number.isSafeInteger(destinationTag) ||
+            destinationTag > 4294967295)
+        ) {
+          throw new Error('Invalid XRP DestinationTag: expected an integer from 0 to 4294967295')
+        }
+        const context = await init(program.opts().vault)
+        // A decline throws ConfirmationRequiredError (exit 12), which withExit
+        // surfaces as a success:false envelope — the interactive twin of the
+        // non-interactive refusal. No local swallow (which used to force exit 0).
+        await executeSend(context, {
+          chain,
+          to,
+          amount: amount ?? 'max',
+          tokenId: options.token,
+          memo: options.memo,
+          destinationTag,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -713,24 +732,17 @@ Examples:
         options: { funds?: string; memo?: string; dryRun?: boolean; yes?: boolean; password?: string }
       ) => {
         const context = await init(program.opts().vault, options.password)
-        try {
-          await executeExecute(context, {
-            chain: findChainByName(chainStr) || (chainStr as Chain),
-            contract,
-            msg,
-            funds: options.funds,
-            memo: options.memo,
-            dryRun: options.dryRun,
-            yes: options.yes,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Transaction cancelled by user') {
-            warn('\nx Transaction cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeExecute(context, {
+          chain: findChainByName(chainStr) || (chainStr as Chain),
+          contract,
+          msg,
+          funds: options.funds,
+          memo: options.memo,
+          dryRun: options.dryRun,
+          yes: options.yes,
+          password: options.password,
+        })
       }
     )
   )
@@ -772,7 +784,7 @@ program
 // Command: Check transaction status
 program
   .command('tx-status')
-  .description('Check the status of a transaction (polls until confirmed)')
+  .description('Check transaction status (polls until terminal or timeout)')
   .requiredOption('--chain <chain>', 'Target blockchain')
   .requiredOption('--tx-hash <hash>', 'Transaction hash to check')
   .option('--no-wait', 'Return immediately without waiting for confirmation')
@@ -780,6 +792,9 @@ program
   .addHelpText(
     'after',
     `
+Statuses: pending, not_found, confirmed, failed
+Malformed hashes fail with INVALID_HASH (exit 4).
+
 Examples:
   vultisig tx-status --chain Ethereum --tx-hash 0xabc...
   vultisig tx-status --chain Ethereum --tx-hash 0xabc... --timeout 300
@@ -787,19 +802,20 @@ Examples:
   )
   .action(
     withExit(async (options: { chain: string; txHash: string; wait: boolean; timeout?: string }) => {
-      const context = await init(program.opts().vault)
       const timeoutSec = options.timeout !== undefined ? Number(options.timeout) : undefined
       if (timeoutSec !== undefined && (!Number.isFinite(timeoutSec) || timeoutSec < 0)) {
         throw new InvalidInputError(
           `Invalid --timeout: "${options.timeout}" (expected a non-negative number of seconds)`
         )
       }
-      await executeTxStatus(context, {
+      const params = resolveTxStatusParams({
         chain: findChainByName(options.chain) || (options.chain as Chain),
         txHash: options.txHash,
         noWait: !options.wait,
         timeoutSec,
       })
+      const context = await init(program.opts().vault)
+      await executeTxStatus(context, params)
     })
   )
 
@@ -887,7 +903,7 @@ Examples:
 // Command: Show addresses
 program
   .command('addresses')
-  .description(descriptions.address.description)
+  .description(descriptions.address.cliDescription)
   .addHelpText(
     'after',
     `
@@ -1022,10 +1038,14 @@ program
   .description('List and manage tokens for a chain')
   .option('--add <contractAddress>', 'Add a token by contract address')
   .option('--remove <tokenId>', 'Remove a token by ID')
-  .option('--discover', 'Auto-discover tokens with balances on the chain')
+  .option('--discover', 'Find tokens with balances on the chain and save them to this vault')
   .addHelpText(
     'after',
     `
+--discover writes to the vault: every token it finds is saved to the tracked
+list, so it also changes what portfolio and balance --tokens report. Use
+--remove <tokenId> to stop tracking one.
+
 Examples:
   vultisig tokens Ethereum
   vultisig tokens Ethereum --discover --output json
@@ -1047,9 +1067,10 @@ Examples:
           decimals?: string
         }
       ) => {
+        const chain = resolveChainOrThrow(chainStr)
         const context = await init(program.opts().vault)
         await executeTokens(context, {
-          chain: findChainByName(chainStr) || (chainStr as Chain),
+          chain,
           add: options.add,
           remove: options.remove,
           discover: options.discover,
@@ -1100,11 +1121,13 @@ Examples:
       ) => {
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
+        const fromChain = resolveChainOrThrow(fromChainStr, 'source chain')
+        const toChain = resolveChainOrThrow(toChainStr, 'destination chain')
         const context = await init(program.opts().vault)
         await executeSwapQuote(context, {
-          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-          amount: options.max ? 'max' : parseFloat(amountStr!),
+          fromChain,
+          toChain,
+          amount: options.max ? 'max' : amountStr!,
           fromToken: options.fromToken,
           toToken: options.toToken,
         })
@@ -1115,13 +1138,13 @@ Examples:
 // Command: Execute swap
 program
   .command('swap <fromChain> <toChain> [amount]')
-  .description(descriptions.swap.description)
+  .description(descriptions.swap.cliDescription)
   .option('--max', 'Swap maximum amount (full balance minus fees for native)')
   .option('--from-token <address>', 'Token address to swap from (default: native)')
   .option('--to-token <address>', 'Token address to swap to (default: native)')
   .option('--slippage <percent>', 'Slippage tolerance in percent', '1')
   .option('--dry-run', 'Preview swap without signing or broadcasting')
-  .option('--confirm', 'Confirm and broadcast (without this flag, runs as a preview)')
+  .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
   .option('--force', 'Bypass the duplicate-broadcast guard (re-send an identical, recently-broadcast swap)')
   .option('--password <password>', 'Vault password for signing')
@@ -1156,26 +1179,19 @@ See also: swap-quote, swap-chains, balance`
         if (!amountStr && !options.max) throw new Error('Provide an amount or use --max')
         if (amountStr && options.max) throw new Error('Cannot specify both amount and --max')
         const context = await init(program.opts().vault)
-        try {
-          await executeSwap(context, {
-            fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
-            toChain: findChainByName(toChainStr) || (toChainStr as Chain),
-            amount: options.max ? 'max' : parseFloat(amountStr!),
-            fromToken: options.fromToken,
-            toToken: options.toToken,
-            slippage: options.slippage ? parseFloat(options.slippage) : undefined,
-            dryRun: options.dryRun,
-            yes: options.yes || options.confirm,
-            force: options.force,
-            password: options.password,
-          })
-        } catch (err: any) {
-          if (err.message === 'Swap cancelled by user') {
-            warn('\nx Swap cancelled')
-            return
-          }
-          throw err
-        }
+        // A decline throws ConfirmationRequiredError (exit 12) — see `send` above.
+        await executeSwap(context, {
+          fromChain: findChainByName(fromChainStr) || (fromChainStr as Chain),
+          toChain: findChainByName(toChainStr) || (toChainStr as Chain),
+          amount: options.max ? 'max' : amountStr!,
+          fromToken: options.fromToken,
+          toToken: options.toToken,
+          slippage: options.slippage ? parseFloat(options.slippage) : undefined,
+          dryRun: options.dryRun,
+          yes: options.yes || options.confirm,
+          force: options.force,
+          password: options.password,
+        })
       }
     )
   )
@@ -1345,6 +1361,10 @@ const agentCmd = program
   .option('--session-id <id>', 'Resume an existing session')
   .option('--notification-url <url>', 'Notification service URL for push notifications')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Without this flag, the CLI signs when confirmed but strips submit authorization.'
+  )
   .action(
     async (options: {
       viaAgent?: boolean
@@ -1355,6 +1375,7 @@ const agentCmd = program
       sessionId?: string
       notificationUrl?: string
       profile?: string
+      allowAutoSubmit?: boolean
     }) => {
       // Resolve password TTL: explicit flag > 24h for --via-agent > default 5min
       // Note: setTimeout uses 32-bit int, so Infinity gets clamped to 1ms. Use 24h instead.
@@ -1380,6 +1401,7 @@ const agentCmd = program
         sessionId: options.sessionId,
         notificationUrl: options.notificationUrl,
         profile: options.profile,
+        allowAutoSubmit: options.allowAutoSubmit,
       })
     }
   )
@@ -1397,6 +1419,10 @@ agentCmd
   .option('--verbose', 'Show tool calls and debug info on stderr')
   .option('--json', 'Output structured JSON (deprecated: use --output json)')
   .option('--profile <api_id>', 'Billing profile slug sent as X-Vultisig-Abe-Profile header')
+  .option(
+    '--allow-auto-submit',
+    'Allow the backend to submit signed Polymarket orders. Requires --yes for unattended signing.'
+  )
   .option(
     '--yes',
     'Auto-approve signing/broadcast. Required for unattended signing; default is to NOT broadcast and report the proposed transaction instead.'
@@ -1418,6 +1444,9 @@ Signing safety:
   transaction so a read-only prompt can't move funds. Pass --yes to opt in to
   unattended signing.
 
+  Signed Polymarket orders are NOT submitted by the backend unless
+  --allow-auto-submit is also passed.
+
   A local journal (~/.vultisig/broadcasts.jsonl) records every broadcast. If an
   identical transaction intent was broadcast in the last 10 min and hasn't
   definitively failed, a re-send is refused (exit 9) to prevent a double-spend
@@ -1434,7 +1463,12 @@ Exit codes:
   7  unknown/unexpected error
   8  ACK_FAILED — broadcast succeeded but the post-broadcast report failed; the
      emitted tx hash IS VALID, do NOT blindly retry (that risks a double-spend)
-  9  duplicate-broadcast refused — nothing was sent; retry with --force`
+  9  duplicate-broadcast refused — nothing was sent; retry with --force
+  10 agent turn blocked by a fund-safety guardrail
+  11 model refusal or clarifying question; no action taken
+  12 non-interactive confirmation/input required
+  13 BROADCAST_COMMITTED — a transaction was submitted but the overall request may
+     be incomplete; inspect every emitted hash and DO NOT blindly retry`
   )
   .action(
     async (
@@ -1448,6 +1482,7 @@ Exit codes:
         profile?: string
         yes?: boolean
         force?: boolean
+        allowAutoSubmit?: boolean
       }
     ) => {
       const parentOpts = agentCmd.opts()
@@ -1460,6 +1495,7 @@ Exit codes:
         profile: options.profile ?? parentOpts.profile,
         autoApprove: options.yes,
         force: options.force,
+        allowAutoSubmit: options.allowAutoSubmit ?? parentOpts.allowAutoSubmit,
       })
     }
   )
@@ -1555,14 +1591,14 @@ program
   )
 
 // ============================================================================
-// Auth Commands (keyring credential management)
+// Auth Commands (stored credential management)
 // ============================================================================
 
-const authCmd = program.command('auth').description('Manage keyring-stored vault credentials')
+const authCmd = program.command('auth').description('Manage stored vault credentials')
 
 authCmd
   .command('setup')
-  .description('Discover .vult files, prompt for passwords, and store credentials in the OS keyring')
+  .description('Import a .vult file and store credentials in the OS keyring or encrypted file')
   .option('--vault-file <path>', 'Path to a specific .vult file')
   .option('--non-interactive', 'Fail instead of prompting (use env vars)')
   .addHelpText(
@@ -1571,7 +1607,13 @@ authCmd
 Examples:
   vultisig auth setup
   vultisig auth setup --vault-file ~/vault.vult
-  VAULT_PASSWORD=secret VAULT_DECRYPT_PASSWORD=pass vultisig auth setup --non-interactive`
+
+Keychain-less Docker/CI:
+  VULTISIG_CONFIG_DIR=/data/vultisig \\
+  VAULT_DECRYPT_PASSWORD=backup-password \\
+  VAULT_PASSWORD=server-password \\
+  VULTISIG_CREDENTIALS_PASSPHRASE=file-passphrase \\
+  vultisig auth setup --non-interactive --vault-file /vaults/vault.vult`
   )
   .action(
     withExit(async (options: { vaultFile?: string; nonInteractive?: boolean }) => {
@@ -1677,6 +1719,13 @@ process.on('SIGINT', () => {
 })
 
 if (isInteractiveMode) {
+  // The interactive shell drives a readline UI on stdin/stdout; it bypasses the
+  // preAction non-interactive gate. Refuse to start it when either stream is
+  // redirected — otherwise its prompts would land on a piped stdout.
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    error('Interactive mode (-i/--interactive) requires a TTY on both stdin and stdout.')
+    process.exit(ExitCode.CONFIRMATION_REQUIRED)
+  }
   startInteractiveMode().catch(err => {
     error(`Failed to start interactive mode: ${err.message}`)
     process.exit(1)

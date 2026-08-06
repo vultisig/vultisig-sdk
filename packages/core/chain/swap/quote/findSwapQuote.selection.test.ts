@@ -117,6 +117,16 @@ function minimalCowSwapQuote(dstAmount: string, sellAmount = '100000000000000000
   }
 }
 
+async function expectRejectedWithExactMessage(promise: Promise<unknown>, expectedMessage: string): Promise<void> {
+  try {
+    await promise
+    throw new Error('Expected promise to reject')
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).toBe(expectedMessage)
+  }
+}
+
 function minimalNativeQuote(swapChain: Chain, expected_amount_out: string): NativeSwapQuote {
   return {
     swapChain: swapChain as NativeSwapQuote['swapChain'],
@@ -222,8 +232,9 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native unavailable'))
     vi.mocked(getSwapKitQuote).mockRejectedValue(new SwapKitAmountBelowMinimumError(Chain.Ethereum, Chain.Ethereum))
 
-    await expect(findSwapQuote({ ...evmSameChainCoins, amount: 1n })).rejects.toThrow(
-      'Swap amount too small. Please increase the amount to proceed.'
+    await expectRejectedWithExactMessage(
+      findSwapQuote({ ...evmSameChainCoins, amount: 1n }),
+      'Please increase the amount to proceed.'
     )
   })
 
@@ -323,6 +334,31 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('Expected general quote')
     }
     expect(quote.quote.general.provider).toBe('kyber')
+  })
+
+  it('forwards a native-ETH destination to 1inch as toCoinId=undefined, not a ticker string (bug: 1inch requires the 0xEeee sentinel)', async () => {
+    vi.mocked(getLifiSwapQuote).mockRejectedValue(new Error('skip lifi'))
+    vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('skip swapkit'))
+    vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
+    vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('skip native'))
+    vi.mocked(getOneInchSwapQuote).mockResolvedValue(minimalGeneralQuote('200', '1inch'))
+
+    const nativeEthDestination = {
+      chain: Chain.Ethereum,
+      address: '0xsender',
+      decimals: 18,
+      ticker: 'ETH',
+    } as const
+
+    await findSwapQuote({
+      from: evmSameChainCoins.from,
+      to: nativeEthDestination,
+      amount: 1n,
+    })
+
+    expect(getOneInchSwapQuote).toHaveBeenCalledWith(
+      expect.objectContaining({ toCoinId: undefined, fromCoinId: '0xsrc' })
+    )
   })
 
   it('tie-break: SwapKit wins over 1inch on equal output by declared provider preference', async () => {
@@ -668,12 +704,13 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('maya fail')
     })
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   it('maps dust threshold on any provider to the user-facing message (Maya in this setup)', async () => {
@@ -688,12 +725,13 @@ describe('findSwapQuote parallel selection', () => {
       throw new Error('quote below dust threshold')
     })
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   it('maps dust threshold from an earlier provider (not only the last) to the user-facing message', async () => {
@@ -703,12 +741,13 @@ describe('findSwapQuote parallel selection', () => {
     vi.mocked(getSwapKitQuote).mockRejectedValue(new Error('swapkit fail'))
     vi.mocked(getNativeSwapQuote).mockRejectedValue(new Error('native fail'))
 
-    await expect(
+    await expectRejectedWithExactMessage(
       findSwapQuote({
         ...evmSameChainCoins,
         amount: 1n,
-      })
-    ).rejects.toThrow('Swap amount too small. Please increase the amount to proceed.')
+      }),
+      'Please increase the amount to proceed.'
+    )
   })
 
   // --- Proactive THORChain minimum (#604) ---

@@ -2,6 +2,7 @@ import { Buffer } from 'buffer'
 import { fromCardanoAssetId } from '@vultisig/core-chain/chains/cardano/asset/cardanoAssetId'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
 import { toBoundedLong } from '@vultisig/lib-utils/bigint/toBoundedLong'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { stripHexPrefix } from '@vultisig/lib-utils/hex/stripHexPrefix'
 import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
@@ -22,6 +23,21 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
 
   const coin = shouldBePresent(keysignPayload.coin)
   const isTokenSend = coin.contractAddress !== ''
+
+  // Send-max fee convergence (sdk#1382). WalletCore's Cardano planner IGNORES
+  // `forceFee` whenever `useMaxAmount` is set — it returns TransactionPlan{ amount:
+  // <full input>, fee: 0 }, an unbroadcastable zero-fee tx (nodes require
+  // fee >= minFeeA + minFeeB*txSize). So we never take that path: a max send is
+  // built as an EXPLICIT transfer of (totalInput - fee) with the converged fee
+  // forced and `useMaxAmount: false`, which the planner honors (fee > 0, change
+  // consumed to 0). The fee itself is converged by getCardanoChainSpecific, whose
+  // loop calls back into this resolver — so it now prices the real fee-bearing
+  // body instead of the fee=0 one. `useMaxAmount` without `forceFee` is not an
+  // option: the planner aborts (uncatchable WASM assert) with no forced fee.
+  const isSendMax = sendMaxAmount && !isTokenSend
+  const sendAmount = isSendMax
+    ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount)) - byteFee
+    : BigInt(keysignPayload.toAmount)
 
   // CIP-20 memo: hand the already-CBOR-encoded auxiliary data to WalletCore,
   // which commits its Blake2b-256 hash into the tx body (key 7) and embeds the
@@ -48,8 +64,8 @@ export const getCardanoSigningInputs: SigningInputsResolver<'cardano'> = ({ keys
     transferMessage: TW.Cardano.Proto.Transfer.create({
       toAddress: keysignPayload.toAddress,
       changeAddress: coin.address,
-      amount: toBoundedLong(keysignPayload.toAmount, { unsigned: true }),
-      useMaxAmount: sendMaxAmount,
+      amount: toBoundedLong(sendAmount, { unsigned: true }),
+      useMaxAmount: false,
       tokenAmount: tokenBundle,
       forceFee: Long.fromString(byteFee.toString()),
     }),

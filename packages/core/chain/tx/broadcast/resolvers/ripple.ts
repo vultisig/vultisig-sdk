@@ -13,9 +13,13 @@ import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
  *   consumed this sequence.
  *
  * For these we go through `verifyBroadcastByHash` to confirm the tx is
- * actually on-chain before swallowing the duplicate error. Any OTHER
- * non-success engine result (`tem*` malformed, `tec*` claim failures,
- * `tel*` local-policy rejections, `ter*` retry-later, the remaining
+ * actually on-chain before swallowing the duplicate error.
+ *
+ * `terQUEUED` is different from other `ter*` retry-later results: XRPL
+ * accepted the transaction into the transaction queue, so it is in flight.
+ *
+ * Any OTHER non-success engine result (`tem*` malformed, `tec*` claim failures,
+ * `tel*` local-policy rejections, remaining `ter*` retry-later, remaining
  * `tef*` failures) is the chain's authoritative "no" at preflight —
  * propagate directly so the caller sees the real failure.
  *
@@ -26,6 +30,8 @@ import { verifyBroadcastByHash } from '../verifyBroadcastByHash'
  * where rejected txs are never on-chain).
  */
 const PEER_RACE_ENGINE_RESULTS = new Set(['tefALREADY', 'tefPAST_SEQ'])
+
+export const isRippleInFlightEngineResult = (engineResult: string): boolean => engineResult === 'terQUEUED'
 
 export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async ({ chain, tx }) => {
   const client = await getRippleClient()
@@ -62,7 +68,11 @@ export const broadcastRippleTx: BroadcastTxResolver<OtherChain.Ripple> = async (
     return
   }
 
-  // Authoritative rejection at preflight (tem*/tec*/tel*/ter*/remaining tef*).
+  if (isRippleInFlightEngineResult(engineResult)) {
+    return
+  }
+
+  // Authoritative rejection at preflight (tem*/tec*/tel*/remaining ter*/remaining tef*).
   // Propagate so the caller sees the real failure instead of a fake hash.
   throw error
 }

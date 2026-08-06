@@ -7,10 +7,10 @@
  * - Lock/unlock support
  */
 import type { VaultBase, Vultisig } from '@vultisig/sdk'
-import inquirer from 'inquirer'
 
 import { BaseCommandContext, DEFAULT_PASSWORD_CACHE_TTL } from '../core/command-context'
 import { getPasswordFromEnv } from '../core/password-manager'
+import { prompt } from '../lib/prompt'
 
 /**
  * Shell-specific implementation of CommandContext
@@ -82,7 +82,7 @@ export class ShellContext extends BaseCommandContext {
 
     // Prompt for password
     const displayName = vaultName || vaultId
-    const { password } = await inquirer.prompt([
+    const { password } = await prompt([
       {
         type: 'password',
         name: 'password',

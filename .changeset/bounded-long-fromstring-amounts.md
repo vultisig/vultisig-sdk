@@ -19,9 +19,14 @@ coerce — importantly `''`, which proto3 uses for an unset `toAmount` and which
 otherwise silently build a zero-amount transfer.
 
 Wired into every fund-relevant transfer-amount `Long.fromString` call across the Sui,
-Tron, Ripple, TON and Cardano keysign signing-input resolvers (including Tron's native
+Tron, Ripple and Cardano keysign signing-input resolvers (including Tron's native
 TRX transfers and freeze/unfreeze amounts, which previously only rejected `<= 0` after
 the wrap had already happened). Signedness matches each proto field type: Sui
 (`Pay`/`PaySui.amounts`) and Cardano (`Transfer.amount`) are proto `uint64`, so they
 use `{ unsigned: true }` and correctly accept the legitimate `(2^63, 2^64)` range;
 Tron and Ripple amounts are proto `int64`, so they use `{ unsigned: false }`.
+
+TON is deliberately not in that list: its `Transfer.amount` is a VarUInteger16 byte
+field rather than a proto 64-bit integer, and `tonAmountToBytes` already bounds it at
+the protocol-correct `(1 << 120) - 1` while rejecting empty and negative input. A
+64-bit bound there would be both too tight and structurally wrong.

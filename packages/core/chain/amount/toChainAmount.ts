@@ -86,6 +86,11 @@ const expandScientificNotationToDecimalString = (s: string): string => {
   return absResult
 }
 
+const formatNumberAmount = (amount: number): string => {
+  const str = amount.toString()
+  return /[eE]/.test(str) ? expandScientificNotationToDecimalString(str) : str
+}
+
 /**
  * Truncate a plain decimal string to at most `decimals` fractional digits so
  * parseUnits cannot round up. viem's parseUnits rounds half-up at decimals=0
@@ -114,7 +119,5 @@ export const toChainAmount = (amount: string | number, decimals: number) => {
     }
     return parseUnits(truncateToDecimals(trimmed, decimals), decimals)
   }
-  const str = amount.toString()
-  const value = /[eE]/.test(str) ? amount.toFixed(decimals) : str
-  return parseUnits(truncateToDecimals(value, decimals), decimals)
+  return parseUnits(truncateToDecimals(formatNumberAmount(amount), decimals), decimals)
 }
