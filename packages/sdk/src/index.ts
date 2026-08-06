@@ -531,6 +531,7 @@ export {
 export type {
   LimitSwapCancelInputs,
   LimitSwapCancelMemoError,
+  ParsedLimitSwapCancelMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
 export {
   assertPositiveLimitSwapCancelAmounts,
@@ -543,7 +544,18 @@ export {
   LimitSwapCancelMemoBuildError,
   limitSwapCancelMemoErrors,
   modifyLimitSwapMemoPrefix,
+  parseCancelLimitSwapMemo,
 } from '@vultisig/core-chain/swap/native/limitSwapCancelMemo'
+// A cancel memo spells its assets in FULL: `ModifyLimitSwapMemo` is the one
+// inbound memo type THORChain does not run through `fuzzyAssetMatch`, so the
+// placement spelling's abbreviated contract would address an empty bucket.
+export {
+  getThorchainCancelMemoAsset,
+  getThorchainMemoAssetChain,
+  getThorchainMemoAssetSourceChain,
+} from '@vultisig/core-chain/swap/native/thorchainMemoAsset'
+export type { KeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
+export { getKeysignLimitSwapCancel } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapCancel'
 export type { KeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 export { getKeysignLimitSwapOrder } from '@vultisig/core-mpc/keysign/swap/getKeysignLimitSwapOrder'
 
