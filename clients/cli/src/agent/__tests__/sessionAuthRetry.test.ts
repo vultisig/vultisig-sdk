@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentErrorCode } from '../agentErrors'
 import { authenticateVault } from '../auth'
 import { AgentSession, isAuthError } from '../session'
+import { tokenCacheKey } from '../tokenCache'
 
 vi.mock('../auth', () => ({
   authenticateVault: vi.fn(async () => ({ token: 'reauth-tok', expiresAt: 9_999_999_999, refreshToken: 'rt' })),
@@ -48,8 +49,9 @@ function makeFakeThis(over: { config?: any; client?: any } = {}) {
       ...over.client,
     },
     vault: { isEncrypted: false, publicKeys: { ecdsa: 'pk' } },
-    config: { askMode: true, ...over.config },
+    config: { askMode: true, backendUrl: '', ...over.config },
     publicKey: 'pk',
+    tokenCacheScope: { publicKey: 'pk', backendUrl: '', profile: '' },
     executor: { setPassword: vi.fn() },
     conversationId: null as string | null,
     historyMessages: [] as any[],
@@ -71,7 +73,9 @@ beforeEach(() => {
   // Isolate the token cache so clear/saveCachedToken never touch ~/.vultisig.
   prevConfigDir = process.env.VULTISIG_CONFIG_DIR
   process.env.VULTISIG_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'vulti-auth-'))
-  vi.mocked(authenticateVault).mockClear()
+  vi.mocked(authenticateVault)
+    .mockReset()
+    .mockResolvedValue({ token: 'reauth-tok', expiresAt: 9_999_999_999, refreshToken: 'rt' })
 })
 
 afterEach(() => {
@@ -113,12 +117,49 @@ describe('initialize — fresh-conversation path (finding a)', () => {
 })
 
 describe('initialize — resume fallback + signal (findings b/c)', () => {
+  it('fails closed in ask mode instead of executing the intent in a fresh conversation', async () => {
+    const getConversation = vi.fn(async () => {
+      throw new Error('conversation not found')
+    })
+    const createConversation = vi.fn(async () => ({ id: 'must-not-run' }))
+    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+
+    await expect(initialize.call(ft, makeUi())).rejects.toMatchObject({
+      code: AgentErrorCode.SESSION_NOT_FOUND,
+    })
+    expect(createConversation).not.toHaveBeenCalled()
+    expect(ft.conversationId).toBeNull()
+  })
+
+  it('ask mode: an auth failure surviving retry fails closed as AUTH_FAILED (exit 2), not SESSION_NOT_FOUND', async () => {
+    // A persistent 401 at resume is an AUTH problem, not a missing session — it must
+    // classify to AUTH_FAILED (→ exit 2) so a headless caller re-auths rather than
+    // treating the (valid) session id as stale (→ exit 5). Still fails closed: no new
+    // conversation, nothing dispatched.
+    const getConversation = vi.fn(async () => {
+      throw authError()
+    })
+    const createConversation = vi.fn(async () => ({ id: 'must-not-run' }))
+    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+
+    await expect(initialize.call(ft, makeUi())).rejects.toMatchObject({
+      code: AgentErrorCode.AUTH_FAILED,
+    })
+    expect(getConversation).toHaveBeenCalledTimes(2) // original + one auth retry
+    expect(authenticateVault).toHaveBeenCalled()
+    expect(createConversation).not.toHaveBeenCalled()
+    expect(ft.conversationId).toBeNull()
+  })
+
   it('falls back to a new conversation and emits SESSION_NOT_FOUND on a non-auth resume error', async () => {
     const getConversation = vi.fn(async () => {
       throw new Error('conversation not found')
     })
     const createConversation = vi.fn(async () => ({ id: 'conv-fallback' }))
-    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+    const ft = makeFakeThis({
+      config: { askMode: false, sessionId: 'stale-id' },
+      client: { getConversation, createConversation },
+    })
     const ui = makeUi()
 
     await initialize.call(ft, ui)
@@ -134,7 +175,10 @@ describe('initialize — resume fallback + signal (findings b/c)', () => {
       throw authError()
     })
     const createConversation = vi.fn(async () => ({ id: 'conv-after-401' }))
-    const ft = makeFakeThis({ config: { sessionId: 'stale-id' }, client: { getConversation, createConversation } })
+    const ft = makeFakeThis({
+      config: { askMode: false, sessionId: 'stale-id' },
+      client: { getConversation, createConversation },
+    })
     const ui = makeUi()
 
     await initialize.call(ft, ui)
@@ -181,8 +225,9 @@ describe('recoverDisconnectedTurn — revoked token during the recovery poll (fi
     return {
       conversationId: 'conv-1',
       publicKey: 'pk',
+      tokenCacheScope: { publicKey: 'pk', backendUrl: '', profile: '' },
       vault: { isEncrypted: false, publicKeys: { ecdsa: 'pk' } },
-      config: { verbose: false },
+      config: { verbose: false, backendUrl: '' },
       recoveryMaxPolls: 4,
       recoveryPollIntervalMs: 0,
       client: { messagesSince, ...client },
@@ -294,7 +339,8 @@ describe('withAuthRetry / isAuthError', () => {
     // MPC re-sign comes back WITHOUT a refreshToken, the prior one must survive —
     // the clear-before-save must not strand it. Red before capture-before-clear.
     const storePath = join(process.env.VULTISIG_CONFIG_DIR!, 'agent-tokens.json')
-    const seeded = { pk: { token: 'stale-tok', expiresAt: 9_999_999_999, refreshToken: 'old-rt' } }
+    const key = tokenCacheKey({ publicKey: 'pk', backendUrl: '', profile: '' })
+    const seeded = { [key]: { token: 'stale-tok', expiresAt: 9_999_999_999, refreshToken: 'old-rt' } }
     writeFileSync(storePath, JSON.stringify(seeded))
     // Re-auth succeeds but omits refreshToken (backend stopped returning one).
     vi.mocked(authenticateVault).mockResolvedValueOnce({ token: 'reauth-tok', expiresAt: 9_999_999_999 } as any)
@@ -310,7 +356,7 @@ describe('withAuthRetry / isAuthError', () => {
     await expect((AgentSession.prototype as any).withAuthRetry.call(ft, request)).resolves.toBe('ok')
 
     const persisted = JSON.parse(readFileSync(storePath, 'utf-8'))
-    expect(persisted.pk.token).toBe('reauth-tok')
-    expect(persisted.pk.refreshToken).toBe('old-rt') // preserved, not dropped
+    expect(persisted[key].token).toBe('reauth-tok')
+    expect(persisted[key].refreshToken).toBe('old-rt') // preserved, not dropped
   })
 })

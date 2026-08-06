@@ -3,6 +3,7 @@ import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
+import { usdc } from '@vultisig/core-chain/coin/knownTokens'
 import { GeneralSwapQuote, GeneralSwapTx } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import { logUnenforcedAggregatorDestination } from '@vultisig/core-chain/swap/general/knownAggregatorRouters'
 import { getSwapKitConfig } from '@vultisig/core-chain/swap/general/swapkit/config'
@@ -16,6 +17,7 @@ import {
   normalizeSwapKitProvider,
   swapKitExcludedProviders,
 } from '@vultisig/core-chain/swap/general/swapkit/SwapKitProviders'
+import { SwapFee } from '@vultisig/core-chain/swap/SwapFee'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
 import { withoutUndefinedFields } from '@vultisig/lib-utils/record/withoutUndefinedFields'
 import { TransferDirection } from '@vultisig/lib-utils/TransferDirection'
@@ -135,9 +137,25 @@ type SwapKitQuoteResponse = {
   message?: string
 }
 
+type SwapKitFee = {
+  type?: string
+  amount?: string
+  asset?: string
+  chain?: string
+}
+
 type SwapKitSwapResponse = {
   expectedBuyAmount?: string
   tx?: unknown
+  // SwapKit returns a ready-made ERC-20 approve tx for EVM routes whose executor
+  // pulls the token via transferFrom from a spender that is NOT `tx.to` (e.g. the
+  // 1inch executor behind the THORChain aggregator). Its `data` is approve(spender,
+  // amount); the spender is the REAL allowance target. We thread that spender onto
+  // GeneralSwapTx.evm.approvalAddress so the consumer (mcp-ts execute_swap) emits
+  // the approve to the correct address. On-chain proof of the gap this closes:
+  // tx 0xa3aadf17 reverted "ERC20: transfer amount exceeds allowance" — vault had
+  // allowance to tx.to (Diamond 0x9025B8ff…) but 0 to the 1inch executor.
+  approvalTx?: { to?: string; data?: string }
   targetAddress?: string
   depositAddress?: string
   inboundAddress?: string
@@ -146,7 +164,7 @@ type SwapKitSwapResponse = {
   swapId?: string
   providers?: string[]
   legs?: { provider?: string }[]
-  fees?: { type?: string; amount?: string }[]
+  fees?: SwapKitFee[]
   meta?: {
     txType?: string
   }
@@ -308,7 +326,9 @@ const postSwapKit = async <T>(path: string, body: Record<string, unknown>): Prom
   return data as T
 }
 
-const toSwapKitAsset = ({ chain, id, ticker }: AccountCoin<SwapKitEnabledChain>) => {
+type SwapKitAssetCoin = Pick<AccountCoin<SwapKitEnabledChain>, 'chain' | 'decimals' | 'id' | 'ticker'>
+
+const toSwapKitAsset = ({ chain, id, ticker }: Pick<SwapKitAssetCoin, 'chain' | 'id' | 'ticker'>) => {
   const chainId = swapKitChainId[chain]
   const symbol = id ? ticker : chainFeeCoin[chain].ticker
 
@@ -341,7 +361,28 @@ const safeBigInt = (value: string | number | bigint | undefined): bigint | undef
   return BigInt(value)
 }
 
-const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
+// Decode the spender from a SwapKit-provided approve() calldata
+// (approve(address spender, uint256 amount) — selector 0x095ea7b3). Returns the
+// 20-byte spender address, or undefined if the calldata is missing/not an approve.
+const decodeApproveSpender = (data: string | undefined): string | undefined => {
+  if (typeof data !== 'string' || !data.startsWith('0x095ea7b3') || data.length < 74) {
+    return undefined
+  }
+  const spender = `0x${data.slice(34, 74)}`
+  if (!/^0x[0-9a-fA-F]{40}$/.test(spender)) {
+    return undefined
+  }
+  // Mirror LiFi's zero-address omit: an approve() to the zero address is never
+  // a real allowance target, so surface nothing and let the consumer keep the
+  // tx.to fallback instead of emitting a spurious zero-address approval.
+  return spender === '0x0000000000000000000000000000000000000000' ? undefined : spender
+}
+
+const buildEvmTx = (
+  tx: unknown,
+  fromAddress: string,
+  approvalTx?: SwapKitSwapResponse['approvalTx']
+): GeneralSwapTx => {
   if (!isRecord(tx)) {
     throw new Error('SwapKit EVM route did not return a transaction object.')
   }
@@ -359,6 +400,11 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
 
   const gas = evmTx.gasLimit ?? evmTx.gas
 
+  // When SwapKit hands back a ready-made approve tx, its spender is the REAL
+  // allowance target (often an inner executor != tx.to). Surface it so the
+  // consumer approves the correct contract instead of the router.
+  const approvalAddress = decodeApproveSpender(approvalTx?.data)
+
   return {
     evm: {
       from: evmTx.from ?? fromAddress,
@@ -366,38 +412,127 @@ const buildEvmTx = (tx: unknown, fromAddress: string): GeneralSwapTx => {
       data: evmTx.data ?? '0x',
       value: bigintString(evmTx.value),
       gasLimit: safeBigInt(gas),
+      ...(approvalAddress ? { approvalAddress } : {}),
     },
   }
 }
 
 const getSwapKitFeeAmount = (fees: SwapKitSwapResponse['fees'], type: string, decimals: number): bigint => {
-  const fee = fees?.find(fee => fee.type?.toLowerCase() === type)
-
-  if (!fee?.amount) {
-    return 0n
-  }
-
-  return toChainAmount(fee.amount, decimals)
+  return (fees ?? [])
+    .filter(fee => fee.type?.toLowerCase() === type && fee.amount)
+    .reduce((total, fee) => total + toChainAmount(fee.amount!, decimals), 0n)
 }
 
-const buildSolanaTx = (tx: unknown, fees: SwapKitSwapResponse['fees']): GeneralSwapTx => {
+const isZeroFeeAmount = (amount: string) => /^[+-]?(?:0+(?:\.0*)?|\.0+)$/.test(amount.trim())
+
+const sameSwapFeeCoin = (one: SwapFee, another: SwapFee) =>
+  one.chain === another.chain &&
+  one.decimals === another.decimals &&
+  (one.id ?? '').toLowerCase() === (another.id ?? '').toLowerCase()
+
+const chainflipStableFeeCoin = {
+  chain: Chain.Ethereum,
+  decimals: usdc.decimals,
+  id: usdc.id.toLowerCase(),
+  ticker: usdc.ticker,
+} satisfies SwapKitAssetCoin
+
+const isChainflipProvider = (provider: string | undefined) =>
+  provider === 'CHAINFLIP' || provider === 'CHAINFLIP_STREAMING'
+
+const matchesSwapKitFeeChain = (feeChain: string | undefined, coinChain: SwapKitEnabledChain) => {
+  if (!feeChain) {
+    return true
+  }
+
+  const normalized = feeChain.toLowerCase()
+
+  return normalized === coinChain.toLowerCase() || normalized === swapKitChainId[coinChain].toLowerCase()
+}
+
+const getSwapKitSwapFee = (
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
+): SwapFee => {
+  const feeCoins: SwapKitAssetCoin[] = [
+    from,
+    to,
+    ...(isChainflipProvider(routeProvider) ? [chainflipStableFeeCoin] : []),
+  ]
+  const candidates = feeCoins.map(coin => ({
+    coin,
+    asset: toSwapKitAsset(coin).toLowerCase(),
+  }))
+  let result: SwapFee | undefined
+
+  for (const fee of fees ?? []) {
+    const type = fee.type?.toLowerCase()
+
+    if ((type !== 'affiliate' && type !== 'service') || !fee.amount || isZeroFeeAmount(fee.amount)) {
+      continue
+    }
+
+    if (!fee.asset) {
+      throw new Error(`SwapKit ${type} fee is missing its asset.`)
+    }
+
+    const candidate = candidates.find(
+      ({ asset, coin }) => asset === fee.asset!.toLowerCase() && matchesSwapKitFeeChain(fee.chain, coin.chain)
+    )
+
+    if (!candidate) {
+      throw new Error(`SwapKit ${type} fee uses unsupported asset ${fee.asset}.`)
+    }
+
+    const current: SwapFee = {
+      amount: toChainAmount(fee.amount, candidate.coin.decimals),
+      chain: candidate.coin.chain,
+      id: candidate.coin.id,
+      decimals: candidate.coin.decimals,
+    }
+
+    if (current.amount < 0n) {
+      throw new Error(`SwapKit ${type} fee amount cannot be negative.`)
+    }
+
+    if (result && !sameSwapFeeCoin(result, current)) {
+      throw new Error('SwapKit affiliate and service fees use different assets.')
+    }
+
+    result = result ? { ...result, amount: result.amount + current.amount } : current
+  }
+
+  return (
+    result ?? {
+      amount: 0n,
+      chain: from.chain,
+      id: from.id,
+      decimals: from.decimals,
+    }
+  )
+}
+
+const buildSolanaTx = (
+  tx: unknown,
+  fees: SwapKitSwapResponse['fees'],
+  from: AccountCoin<SwapKitSourceChain>,
+  to: AccountCoin<SwapKitEnabledChain>,
+  routeProvider: string | undefined
+): GeneralSwapTx => {
   if (typeof tx !== 'string') {
     throw new Error('SwapKit Solana route did not return a serialized transaction string.')
   }
 
   const decimals = chainFeeCoin[Chain.Solana].decimals
   const networkFee = getSwapKitFeeAmount(fees, 'network', decimals)
-  const swapFee = getSwapKitFeeAmount(fees, 'affiliate', decimals) + getSwapKitFeeAmount(fees, 'service', decimals)
 
   return {
     solana: {
       data: tx,
       networkFee,
-      swapFee: {
-        amount: swapFee,
-        decimals,
-        chain: Chain.Solana,
-      },
+      swapFee: getSwapKitSwapFee(fees, from, to, routeProvider),
     },
   }
 }
@@ -575,17 +710,19 @@ const SWAP_SOURCE_TX_BUILD_UNSUPPORTED: ReadonlySet<SwapKitSourceChain> = new Se
 const buildSwapKitTx = (
   response: SwapKitSwapResponse,
   from: AccountCoin<SwapKitSourceChain>,
-  amount: bigint
+  to: AccountCoin<SwapKitEnabledChain>,
+  amount: bigint,
+  routeProvider: string | undefined
 ): GeneralSwapTx => {
   if (from.chain === Chain.Solana) {
-    return buildSolanaTx(response.tx, response.fees)
+    return buildSolanaTx(response.tx, response.fees, from, to, routeProvider)
   }
 
   if (shouldUseTransferTx(from.chain)) {
     return buildTransferTx(response, from, amount)
   }
 
-  return buildEvmTx(response.tx, from.address)
+  return buildEvmTx(response.tx, from.address, response.approvalTx)
 }
 
 const routeExpectedBuyAmount = (route: SwapKitQuoteRoute, decimals: number): bigint | null => {
@@ -770,11 +907,12 @@ export const getSwapKitQuote = async ({
       disableBuildTx: shouldUseTransferTx(from.chain) && from.chain !== Chain.Bitcoin ? true : undefined,
     })
   )
+  const routeProvider = getRouteProviderName(swapResponse) ?? getRouteProviderName(route)
 
   return {
     dstAmount: parseExpectedBuyAmount(swapResponse.expectedBuyAmount ?? route.expectedBuyAmount, to.decimals),
     provider: 'swapkit',
-    routeProvider: getRouteProviderName(swapResponse) ?? getRouteProviderName(route),
-    tx: buildSwapKitTx(swapResponse, from, amount),
+    routeProvider,
+    tx: buildSwapKitTx(swapResponse, from, to, amount, routeProvider),
   }
 }

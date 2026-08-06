@@ -71,6 +71,19 @@ function memoSendPayload(to: string, amountBaseUnits: string, memo: string): Key
   } as unknown as KeysignPayload
 }
 
+function rippleSendPayload(to: string, amountBaseUnits: string, destinationTag: number): KeysignPayload {
+  return {
+    coin: { isNativeToken: true, ticker: 'XRP', contractAddress: '', chain: 'Ripple', address: 'rSender' },
+    toAddress: to,
+    toAmount: amountBaseUnits,
+    memo: destinationTag.toString(),
+    blockchainSpecific: {
+      case: 'rippleSpecific',
+      value: { destinationTag },
+    },
+  } as unknown as KeysignPayload
+}
+
 function tokenSendPayload(to: string, amountBaseUnits: string, contract: string): KeysignPayload {
   return {
     coin: { isNativeToken: false, ticker: 'USDC', contractAddress: contract, chain: 'Ethereum', address: '0xsender' },
@@ -260,7 +273,7 @@ describe('send — broadcast dedupe guard', () => {
   it('includes an XRP DestinationTag in a dry-run result', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rRecipient', '1000000'),
+      payload: rippleSendPayload('rRecipient', '1000000', 123),
       txHash: 'xrp-dry-run',
       realSends,
     })
@@ -280,7 +293,7 @@ describe('send — broadcast dedupe guard', () => {
   it('normalizes an XRP X-address and previews its embedded DestinationTag', async () => {
     const realSends = { count: 0 }
     const vault = makeSendVault({
-      payload: nativeSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000'),
+      payload: rippleSendPayload('rPEPPER7kfTD9w2To4CQk6UCfuHM9c6GDY', '1000000', 495),
       txHash: 'xrp-x-address-dry-run',
       realSends,
     })
@@ -694,6 +707,26 @@ describe('swap — broadcast dedupe guard', () => {
   const ctxFor = (vault: VaultBase) => ({ ensureActiveVault: async () => vault }) as never
   const opts = { fromChain: Chain.Ethereum, toChain: Chain.Bitcoin, amount: 0.1, yes: true } as const
 
+  it('forwards CLI slippage into vault.swap preview and execution requests', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xslippage', realSwaps })
+
+    const result = await executeSwap(ctxFor(vault), { ...opts, slippage: 2.5, dryRun: true })
+
+    expect(result).toMatchObject({ dryRun: true, provider: 'thorchain' })
+    expect(vault.swap).toHaveBeenCalledTimes(1)
+    expect(vault.swap).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromChain: Chain.Ethereum,
+        toChain: Chain.Bitcoin,
+        amount: '0.1',
+        slippageTolerance: 2.5,
+        dryRun: true,
+      })
+    )
+    expect(realSwaps.count).toBe(0)
+  })
+
   it('refuses an identical second swap (no second broadcast)', async () => {
     const realSwaps = { count: 0 }
     const vault = makeSwapVault({ txHash: '0xswap1', realSwaps })
@@ -705,6 +738,19 @@ describe('swap — broadcast dedupe guard', () => {
     const err = await executeSwap(ctxFor(vault), { ...opts }).catch(e => e)
     expect(err.code).toBe(AgentErrorCode.DUPLICATE_BROADCAST)
     expect(classifyError(err).exitCode).toBe(ExitCode.DUPLICATE_BROADCAST) // exit 9 parity with send
+    expect(realSwaps.count).toBe(1)
+  })
+
+  it('refuses amounts equivalent at the source token precision', async () => {
+    const realSwaps = { count: 0 }
+    const vault = makeSwapVault({ txHash: '0xswap-precision', realSwaps })
+
+    await executeSwap(ctxFor(vault), { ...opts, amount: '1' })
+    expect(vault.swap).toHaveBeenLastCalledWith(expect.objectContaining({ amount: '1' }))
+
+    await expect(executeSwap(ctxFor(vault), { ...opts, amount: '1.0000000000000000009' })).rejects.toMatchObject({
+      code: AgentErrorCode.DUPLICATE_BROADCAST,
+    })
     expect(realSwaps.count).toBe(1)
   })
 

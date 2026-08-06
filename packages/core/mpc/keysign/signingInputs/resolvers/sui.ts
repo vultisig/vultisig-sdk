@@ -4,10 +4,15 @@ import { TW } from '@trustwallet/wallet-core'
 import Long from 'long'
 
 import { getBlockchainSpecificValue } from '../../chainSpecific/KeysignChainSpecific'
+import {
+  isNativeSuiCoin,
+  isSameSuiCoinType,
+  selectSuiGasObject,
+  selectSuiInputCoins,
+  suiNativeCoinType,
+} from '../../suiCoinSelection'
 import { getKeysignCoin } from '../../utils/getKeysignCoin'
 import { SigningInputsResolver } from '../resolver'
-
-const suiContractAddress = '0x2::sui::SUI'
 
 export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPayload }) => {
   const coin = getKeysignCoin(keysignPayload)
@@ -40,7 +45,7 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
     'suicheSpecific'
   )
 
-  const coinType = coin.id || suiContractAddress
+  const coinType = coin.id || suiNativeCoinType
 
   const createObjectRef = (coin: SuiCoin) =>
     TW.Sui.Proto.ObjectRef.create({
@@ -49,22 +54,29 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       version: Long.fromString(coin.version),
     })
 
-  const gasCoins = coins.filter(c => c.coinType === suiContractAddress).map(createObjectRef)
+  const gasBudgetAmount = gasBudget ? BigInt(gasBudget) : suiGasBudget
 
   const baseInput = {
     referenceGasPrice: Long.fromString(referenceGasPrice),
     signer: coin.address,
-    gasBudget: gasBudget ? Long.fromString(gasBudget) : Long.fromBigInt(suiGasBudget),
+    gasBudget: Long.fromString(gasBudgetAmount.toString()),
   }
 
-  const inputCoins = coins.filter(c => c.coinType === coinType).map(createObjectRef)
+  const amount = BigInt(keysignPayload.toAmount || '0')
 
   if (coin.id) {
+    const tokenCoins = coins.filter(c => isSameSuiCoinType(c.coinType, coinType))
+    const inputCoins = selectSuiInputCoins(tokenCoins, amount).map(createObjectRef)
+    const gasObject = selectSuiGasObject(coins, gasBudgetAmount)
+    if (!gasObject) {
+      throw new Error('Non-native Sui token transaction requires at least one SUI coin for gas fees')
+    }
+
     return [
       TW.Sui.Proto.SigningInput.create({
         ...baseInput,
         pay: TW.Sui.Proto.Pay.create({
-          gas: gasCoins[0],
+          gas: createObjectRef(gasObject),
           inputCoins: inputCoins,
           recipients: [keysignPayload.toAddress],
           amounts: [Long.fromString(keysignPayload.toAmount)],
@@ -72,6 +84,8 @@ export const getSuiSigningInputs: SigningInputsResolver<'sui'> = ({ keysignPaylo
       }),
     ]
   }
+
+  const inputCoins = selectSuiInputCoins(coins.filter(isNativeSuiCoin), amount + gasBudgetAmount).map(createObjectRef)
 
   return [
     TW.Sui.Proto.SigningInput.create({

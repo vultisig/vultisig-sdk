@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer'
 import { ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { WalletCore } from '@trustwallet/wallet-core'
@@ -44,6 +45,20 @@ export const signingInputResolversByChainKind: Record<ChainKind, SigningInputsRe
 export const getEncodedSigningInputs = async (input: Input): Promise<Uint8Array[]> => {
   const chain = getKeysignChain(input.keysignPayload)
   const chainKind = getChainKind(chain)
+
+  // dApp-supplied raw Solana transactions bypass TW SigningInput entirely
+  // (sdk#1204): the txInputData IS the original serialized transaction, and
+  // getPreSigningHashes / compileTx have matching signSolana branches that
+  // sign the original message bytes verbatim and splice the signature back
+  // in. Routing these through TransactionDecoder + SigningInput.rawMessage
+  // made WalletCore RE-ENCODE the message, which is not guaranteed
+  // byte-identical for v0+ALT transactions and broke mixed-vault co-signing
+  // (iOS/Android already sign the original bytes — ios#4419, android#5223).
+  if (chainKind === 'solana' && input.keysignPayload.signData.case === 'signSolana') {
+    return input.keysignPayload.signData.value.rawTransactions.map(
+      transaction => new Uint8Array(Buffer.from(transaction, 'base64'))
+    )
+  }
 
   const signingInputs = await signingInputResolversByChainKind[chainKind](input as any)
 

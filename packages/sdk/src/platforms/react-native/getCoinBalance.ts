@@ -1,9 +1,12 @@
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { type ChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
 import type { CoinBalanceResolverInput } from '@vultisig/core-chain/coin/balance/resolver'
 
 type BalanceResolver = (input: CoinBalanceResolverInput) => Promise<bigint>
 
-const resolverLoaders: Record<string, () => Promise<BalanceResolver>> = {
+// sdk#1372: key this by ChainKind (not string) so a new kind added to core BREAKS the RN build too -
+// core keys its own dispatch as Record<ChainKind, ...>, but the RN re-declaration as Record<string, ...>
+// meant a new kind compiled fine on RN and only threw at runtime (the platform users are actually on).
+const resolverLoaders: Record<ChainKind, () => Promise<BalanceResolver>> = {
   bittensor: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/bittensor').then(
       m => m.getBittensorCoinBalance as BalanceResolver
@@ -20,8 +23,7 @@ const resolverLoaders: Record<string, () => Promise<BalanceResolver>> = {
     ),
   qbtc: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/qbtc').then(m => m.getQbtcCoinBalance as BalanceResolver),
-  ripple: () =>
-    import('@vultisig/core-chain/coin/balance/resolvers/ripple').then(m => m.getRippleCoinBalance as BalanceResolver),
+  ripple: () => import('./chains/ripple/balance').then(m => m.getRippleCoinBalance as BalanceResolver),
   solana: () =>
     import('@vultisig/core-chain/coin/balance/resolvers/solana').then(m => m.getSolanaCoinBalance as BalanceResolver),
   sui: () =>
