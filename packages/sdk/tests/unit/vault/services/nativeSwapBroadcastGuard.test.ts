@@ -175,11 +175,11 @@ describe('assertNativeSwapReadyForBroadcast', () => {
     expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
+  // sdk#1726 changed the non-exempt observable: THOR-source routes no longer run the
+  // vault-address check (RUNE deposits have no inbound vault), so a lookalike payload that fails
+  // the secured-withdrawal detection is now caught by the expiry check its exemption would skip.
   it('does not exempt a secure-memo payload that carries an inbound vault', async () => {
-    const getInboundAddresses = vi.fn(async nativeChain => {
-      expect(nativeChain).toBe(Chain.THORChain)
-      return [makeInbound('THOR', 'thor1active')]
-    })
+    const getInboundAddresses = vi.fn()
 
     await expect(
       assertNativeSwapReadyForBroadcast({
@@ -187,36 +187,30 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         keysignPayload: makeSecuredAssetWithdrawalPayload({
           vaultAddress: 'thor1stale',
           memo: 'secure-:bc1qdestination',
-          expirationTime: 1_700_000_100n,
         }),
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/inbound vault address changed/)
+    ).rejects.toThrow(/missing or invalid expiration/)
 
-    expect(getInboundAddresses).toHaveBeenCalledOnce()
+    expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
   it('does not treat a standard liquidity-withdraw memo as a secured-asset withdrawal', async () => {
-    const getInboundAddresses = vi.fn(async nativeChain => {
-      expect(nativeChain).toBe(Chain.THORChain)
-      return [makeInbound('THOR', 'thor1active')]
-    })
+    const getInboundAddresses = vi.fn()
 
     await expect(
       assertNativeSwapReadyForBroadcast({
         chain: Chain.THORChain,
         keysignPayload: makeSecuredAssetWithdrawalPayload({
-          vaultAddress: 'thor1stale',
           memo: '-:BTC.BTC:10000',
-          expirationTime: 1_700_000_100n,
         }),
         getInboundAddresses,
         now: () => 1_700_000_000_000,
       })
-    ).rejects.toThrow(/inbound vault address changed/)
+    ).rejects.toThrow(/missing or invalid expiration/)
 
-    expect(getInboundAddresses).toHaveBeenCalledOnce()
+    expect(getInboundAddresses).not.toHaveBeenCalled()
   })
 
   it('rejects expired Maya native swap payloads before fetching inbound addresses', async () => {
@@ -398,6 +392,98 @@ describe('assertNativeSwapReadyForBroadcast', () => {
         now: () => 1_700_000_000_000,
       })
     ).resolves.toBeUndefined()
+  })
+
+  // sdk#1726: a RUNE/CACAO-source swap is a MsgDeposit with no inbound vault, and the
+  // /inbound_addresses feed never lists the protocol's own chain - the guard must not demand an
+  // inbound entry (or a vault-address match) for those routes, or every native-source swap is
+  // refused before broadcast.
+  it('allows a RUNE-source THORChain swap even though the feed has no THOR entry', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: '', toChain: Chain.Ethereum }),
+        getInboundAddresses: async () => [makeInbound('ETH', '0xactive')],
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('allows a CACAO-source MayaChain swap even though the feed has no MAYA entry', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.MayaChain,
+        keysignPayload: makeMayachainSwapPayload({ vaultAddress: '' }),
+        getInboundAddresses: async () => [makeInbound('DASH', 'dash1active')],
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('still rejects a RUNE-source swap when the destination chain is halted', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: '', toChain: Chain.Ethereum }),
+        getInboundAddresses: async () => [makeInbound('ETH', '0xactive', { halted: true })],
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/trading is halted for ETH/)
+  })
+
+  it('still rejects a RUNE-source swap when global trading is paused', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: '', toChain: Chain.Ethereum }),
+        getInboundAddresses: async () => [makeInbound('ETH', '0xactive', { global_trading_paused: true })],
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/trading is halted/)
+  })
+
+  it('still rejects an expired RUNE-source swap quote before fetching inbound addresses', async () => {
+    const getInboundAddresses = vi.fn()
+
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({
+          vaultAddress: '',
+          expirationTime: 1_700_000_000n,
+          toChain: Chain.Ethereum,
+        }),
+        getInboundAddresses,
+        now: () => 1_700_000_001_000,
+      })
+    ).rejects.toThrow(/expired/)
+
+    expect(getInboundAddresses).not.toHaveBeenCalled()
+  })
+
+  it('skips the vault-address comparison for a RUNE-source swap even if the feed lists THOR', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeThorchainSwapPayload({ vaultAddress: '', toChain: Chain.Ethereum }),
+        getInboundAddresses: async () => [makeInbound('THOR', 'thor1unexpected'), makeInbound('ETH', '0xactive')],
+        now: () => 1_700_000_000_000,
+      })
+    ).resolves.toBeUndefined()
+  })
+
+  it('still validates the inbound vault when RUNE is the source of a MayaChain swap', async () => {
+    await expect(
+      assertNativeSwapReadyForBroadcast({
+        chain: Chain.THORChain,
+        keysignPayload: makeMayachainSwapPayload({ vaultAddress: 'thor1old' }),
+        getInboundAddresses: async nativeChain => {
+          expect(nativeChain).toBe(Chain.MayaChain)
+          return [makeInbound('THOR', 'thor1active')]
+        },
+        now: () => 1_700_000_000_000,
+      })
+    ).rejects.toThrow(/MayaChain inbound vault address changed/)
   })
 
   it('rejects when global_trading_paused is set on any inbound entry, not only the source', async () => {

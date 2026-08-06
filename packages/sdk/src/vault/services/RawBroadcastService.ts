@@ -23,10 +23,10 @@ import { extractErrorMsg } from '@vultisig/lib-utils/error/extractErrorMsg'
 import { isInError } from '@vultisig/lib-utils/error/isInError'
 import { ensureHexPrefix } from '@vultisig/lib-utils/hex/ensureHexPrefix'
 import { queryUrl } from '@vultisig/lib-utils/query/queryUrl'
-import base58 from 'bs58'
 import { keccak256 } from 'viem'
 import { hashes as xrplHashes } from 'xrpl'
 
+import { decodeSolanaRawTx, deriveSolanaRawTxSignature } from '../../chains/solana/rawTx'
 import { VaultError, VaultErrorCode } from '../VaultError'
 
 type BlockchairBroadcastResponse =
@@ -54,28 +54,6 @@ const getCosmosRawTxBytes = (rawTx: string): Uint8Array => {
 }
 
 const deriveCosmosRawTxHash = (rawTx: string): string => bytesToHex(sha256(getCosmosRawTxBytes(rawTx))).toUpperCase()
-
-const deriveSolanaRawTxSignature = (rawTx: string): string => {
-  const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
-  const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
-  let offset = 0
-  let signatureCount = 0
-  let shift = 0
-
-  while (offset < txBytes.length) {
-    const byte = txBytes[offset]
-    signatureCount |= (byte & 0x7f) << shift
-    offset += 1
-    if ((byte & 0x80) === 0) break
-    shift += 7
-  }
-
-  if (signatureCount < 1 || txBytes.length < offset + 64) {
-    throw new Error('Solana raw transaction does not contain a primary signature')
-  }
-
-  return base58.encode(txBytes.subarray(offset, offset + 64))
-}
 
 const deriveRippleRawTxHash = (rawTx: string): string =>
   xrplHashes.hashSignedTx(rawTx.startsWith('0x') ? rawTx.slice(2) : rawTx)
@@ -277,9 +255,7 @@ export class RawBroadcastService {
   private async broadcastSolanaRawTx(rawTx: string): Promise<string> {
     const client = getSolanaClient()
 
-    // Detect format: base58 (no padding, no +/) vs base64 (may have = padding or +/)
-    const isBase64 = rawTx.includes('=') || /[+/]/.test(rawTx)
-    const txBytes = isBase64 ? Buffer.from(rawTx, 'base64') : base58.decode(rawTx)
+    const txBytes = decodeSolanaRawTx(rawTx)
 
     const { data: sentSignature, error } = await attempt(
       client.sendRawTransaction(txBytes, {
@@ -289,20 +265,30 @@ export class RawBroadcastService {
       })
     )
 
-    let signature = sentSignature
-    let isDuplicate = false
     if (error) {
       if (isInError(error, 'already been processed', 'AlreadyProcessed')) {
-        // "AlreadyProcessed" only proves the node has seen and executed this signature before -
-        // not that the original execution succeeded. It must go through the same on-chain-failure
-        // check below as a fresh send, not be handed back as a hash unconditionally.
-        signature = deriveSolanaRawTxSignature(rawTx)
-        isDuplicate = true
-      } else {
-        throw error
+        const signature = deriveSolanaRawTxSignature(rawTx)
+
+        // A duplicate error proves that the node has seen this exact signed payload, but it
+        // does not prove successful execution. Reject only when the node already exposes an
+        // explicit failure; an unavailable or not-yet-indexed status remains accepted.
+        const { data: statuses } = await attempt(
+          client.getSignatureStatuses([signature], { searchTransactionHistory: true })
+        )
+        const signatureStatus = statuses?.value?.[0]
+        if (signatureStatus?.err) {
+          throw new VaultError(
+            VaultErrorCode.BroadcastFailed,
+            `Solana transaction was already processed but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
+          )
+        }
+
+        return signature
       }
+      throw error
     }
 
+    const signature = sentSignature
     if (!signature) throw new Error('No transaction signature returned')
 
     // sendRawTransaction only confirms the node ACCEPTED the payload into its queue - it is
@@ -314,9 +300,7 @@ export class RawBroadcastService {
     // this bounded, non-blocking status check catches that without adding real broadcast
     // latency: it never blocks/throws on "not yet confirmed" (the normal state right after
     // submission), only on an explicit on-chain error already attached to this signature.
-    // This also covers the "already been processed" idempotent-retry path above: a duplicate
-    // signature that already failed on-chain must still fail closed here, not report success.
-    const { data: statuses, error: statusError } = await attempt(
+    const { data: statuses } = await attempt(
       client.getSignatureStatuses([signature], { searchTransactionHistory: true })
     )
     const signatureStatus = statuses?.value?.[0]
@@ -324,16 +308,6 @@ export class RawBroadcastService {
       throw new VaultError(
         VaultErrorCode.BroadcastFailed,
         `Solana transaction was submitted but failed on-chain: ${JSON.stringify(signatureStatus.err)}`
-      )
-    }
-
-    if (isDuplicate && !signatureStatus) {
-      const lookupMessage =
-        statusError instanceof Error ? statusError.message : String(statusError ?? 'transaction status not found')
-      throw new VaultError(
-        VaultErrorCode.BroadcastFailed,
-        `Solana transaction may already have been processed, but its execution result could not be verified: ${lookupMessage}`,
-        statusError instanceof Error ? statusError : new Error(lookupMessage)
       )
     }
 

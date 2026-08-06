@@ -146,6 +146,16 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.buildBalancerV3SwapCalldata).toBe(sdk.defi.balancer.buildBalancerV3SwapCalldata)
   })
 
+  it('exports the full River helper family from the root sdk surface', () => {
+    expect(typeof sdk.describeRiverMarket).toBe('function')
+    expect(typeof sdk.findRiverInsertHints).toBe('function')
+    expect(typeof sdk.formatRiverPercentWad).toBe('function')
+    expect(Array.isArray(sdk.RIVER_TROVE_STATUS_NAMES)).toBe(true)
+    expect(typeof sdk.riverStatusName).toBe('function')
+    expect(sdk.river.describeMarket).toBe(sdk.describeRiverMarket)
+    expect(sdk.river.findInsertHints).toBe(sdk.findRiverInsertHints)
+  })
+
   it('exports Chain enum, chain helpers, and VaultBase class for first-party consumers', () => {
     expect(sdk.Chain).toBeDefined()
     expect(typeof sdk.getChainKind).toBe('function')
@@ -172,6 +182,13 @@ describe('@vultisig/sdk public exports', () => {
     expect(sdk.getEvmChainByChainId('0x3e7')).toBe(sdk.Chain.Hyperliquid)
   })
 
+  it('exports gas comparison helpers from the root sdk surface', () => {
+    expect(typeof sdk.compareCosts).toBe('function')
+    expect(Array.isArray(sdk.DEFAULT_COMPARE_CHAINS)).toBe(true)
+    expect(sdk.GAS_UNITS.transfer).toBe(21000)
+    expect(typeof sdk.getChainGasPriceGwei).toBe('function')
+  })
+
   it('exports canonical Cosmos send-fee floors for first-party consumers', () => {
     expect(sdk.COSMOS_SEND_FEE_DEFAULT).toBe(7500n)
     expect(sdk.getCosmosSendFeeBaseUnits(sdk.Chain.Cosmos)).toBe(7500n)
@@ -184,6 +201,19 @@ describe('@vultisig/sdk public exports', () => {
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_SUPPORTED_CHAINS)).toBe(true)
     expect(Array.isArray(sdk.SEEDPHRASE_IMPORT_UNSUPPORTED_CHAINS)).toBe(true)
     expect(typeof sdk.isSeedphraseImportSupportedChain).toBe('function')
+  })
+
+  it('exports canonical defaultChains helpers for app onboarding/import parity', () => {
+    expect(Array.isArray(sdk.DEFAULT_CHAINS)).toBe(true)
+    expect(Array.isArray(sdk.defaultChains)).toBe(true)
+    expect(sdk.DEFAULT_CHAINS).toBe(sdk.defaultChains)
+    expect(sdk.DEFAULT_CHAINS).toEqual([
+      sdk.Chain.Bitcoin,
+      sdk.Chain.Ethereum,
+      sdk.Chain.THORChain,
+      sdk.Chain.Solana,
+      sdk.Chain.BSC,
+    ])
   })
 
   it('exports generic CosmWasm amino and protobuf execute builders', () => {
